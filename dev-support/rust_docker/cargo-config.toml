@@ -1,0 +1,5 @@
+[build]
+target = "x86_64-unknown-linux-gnu"
+# It's non-trivial to use musl-libc with g++ which is required by RocksDB.
+# Target musl-libc by default when running Cargo.
+#target = "x86_64-unknown-linux-musl"

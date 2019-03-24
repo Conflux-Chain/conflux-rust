@@ -1,0 +1,20 @@
+[package]
+name = "primitives"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+cfx-types = { path = "../cfx_types" }
+cfx-bytes = { path = "../cfx_bytes" }
+fixed-hash = "0.2"
+keccak-hash = "0.1.2"
+keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+rlp = "0.3.0"
+rlp_derive = { git = "https://github.com/paritytech/parity-ethereum" }
+unexpected = { git = "https://github.com/paritytech/parity-ethereum" }
+heapsize = "0.4"
+log = "0.3"
+lru = "0.1"
+byteorder = "1.2.7"
+rand = "0.5"
+siphasher = "0.3"

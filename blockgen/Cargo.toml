@@ -1,0 +1,25 @@
+[package]
+description = "Conflux blockgen library"
+homepage = "http://www.conflux-chain.io"
+license = "GPL-3.0"
+name = "blockgen"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+clap = "2"
+cfxcore = { path = "../core" }
+cfx-types = { path = "../cfx_types" }
+keccak-hash = "0.1.2"
+primitives = { path = "../primitives" }
+parking_lot = "0.6"
+rlp = "0.3.0"
+rand = "0.5"
+keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+txgen = { path = "../transactiongen"}
+log = "0.4"
+db = { path = "../db" }
+network = { path = "../network" }
+kvdb-rocksdb = "0.1.3"
+secret-store = { path = "../secret_store" }
+toml = "0.4"

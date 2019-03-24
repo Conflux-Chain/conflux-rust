@@ -1,0 +1,18 @@
+[package]
+description = "Conflux IO library"
+homepage = "http://conflux-chain.io"
+license = "GPL-3.0"
+name = "io"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+fnv = "1.0"
+mio = { version = "0.6.8" }
+crossbeam = "0.3"
+parking_lot = "0.6"
+log = "0.3"
+slab = "0.4"
+num_cpus = "1.8"
+timer = "0.2"
+time = "0.1"

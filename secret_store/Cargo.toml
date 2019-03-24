@@ -1,0 +1,17 @@
+[package]
+description = "Conflux secret key management library"
+homepage = "http://www.conflux-chain.io"
+license = "GPL-3.0"
+name = "secret-store"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+ethereum-types = "0.4"
+keccak-hash = "0.1.2"
+primitives = { path = "../primitives" }
+parking_lot = "0.6"
+rlp = "0.3.0"
+rand = "0.5"
+keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+rustc-hex = "1.0"

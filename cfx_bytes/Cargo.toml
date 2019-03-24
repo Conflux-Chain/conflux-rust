@@ -1,0 +1,8 @@
+[package]
+name = "cfx-bytes"
+version = "0.1.0"
+license = "GPL-3.0"
+description = "Conflux bytes"
+
+[dependencies]
+ethcore-bytes = "0.1.1"

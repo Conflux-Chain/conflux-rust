@@ -1,0 +1,16 @@
+unstable_features = true
+max_width = 80
+comment_width = 80
+wrap_comments = true
+tab_spaces = 4
+trailing_comma = "Vertical"
+format_strings = false
+error_on_line_overflow = false
+fn_args_density = "Compressed"
+fn_single_line = true
+where_single_line = true
+reorder_imports = true
+reorder_modules = true
+reorder_impl_items = true
+merge_imports = true
+struct_lit_single_line = true

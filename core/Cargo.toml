@@ -1,0 +1,44 @@
+[package]
+description = "Conflux core library"
+homepage = "http://www.conflux-chain.org"
+license = "GPL-3.0"
+name = "cfxcore"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+keccak-hash = "0.1.2"
+cfx-types = { path = "../cfx_types" }
+cfx-bytes = { path = "../cfx_bytes" }
+primitives = { path = "../primitives" }
+parking_lot = "0.6"
+network = { path = "../network" }
+io = { path = "../util/io" }
+log = "0.3"
+rlp = "0.3.0"
+lazy_static = "1.1.0"
+keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+secret-store = { path = "../secret_store" }
+rand = "0.5"
+message = { path = "../message" }
+error-chain = { version = "0.12", default-features = false }
+slab = "0.4"
+kvdb = "0.1"
+db = { path = "../db" }
+bit-set = "0.4"
+heapsize = "0.4"
+memory-cache = { git = "https://github.com/paritytech/parity-ethereum" }
+unexpected = { git = "https://github.com/paritytech/parity-ethereum" }
+elastic-array = "0.10"
+byteorder = "1.0"
+num = "0.2"
+parity-crypto = "0.3.0"
+bn = { git = "https://github.com/paritytech/bn", default-features = false }
+lru = "0.1.11"
+threadpool = "1.0"
+rayon = "1.0"
+link-cut-tree = { path = "../util/link-cut-tree" }
+
+[dev-dependencies]
+rustc-hex = "1.0"
+criterion = "0.2"

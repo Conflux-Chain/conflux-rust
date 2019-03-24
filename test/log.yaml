@@ -1,0 +1,27 @@
+refresh_rate: 30 seconds
+
+appenders:
+  stdout:
+    kind: console
+
+  logfile:
+    kind: file
+    path: "./conflux.log"
+
+root:
+  level: info
+  appenders:
+    - stdout
+    - logfile
+
+loggers:
+    network:
+        level: trace
+    core:
+        level: trace
+    rpc:
+        level: trace
+    discovery:
+        level: trace
+    sync:
+        level: trace
