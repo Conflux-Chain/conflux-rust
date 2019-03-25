@@ -1005,7 +1005,6 @@ impl SynchronizationGraph {
 
         // Post-processing invalid blocks.
         self.process_invalid_blocks(inner.deref_mut(), &invalid_set);
-        self.persist_terminals();
         if self.consensus.db.key_value().flush().is_err() {
             warn!("db error when flushing block data");
             insert_success = false;
