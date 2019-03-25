@@ -241,7 +241,6 @@ fn main() {
                 "db",
                 "keymgr",
                 "network",
-                "rpc",
                 "txgen",
                 "client",
                 "primitives",

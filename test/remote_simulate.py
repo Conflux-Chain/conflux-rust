@@ -15,14 +15,20 @@ from test_framework.util import *
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 9
-        self.conf_parameters = {"generate-tx": "true", "generate-tx-period-ms": "3", "log-level": "\"info\"",
+        self.num_nodes = 8
+        self.rpc_timewait = 3600
+        self.conf_parameters = {"generate-tx": "true", "generate-tx-period-ms": "3", "log-level": "\"debug\"",
                                 "storage-cache-size": "20_000_000",
                                 "storage-cache-start-size": "20_000_000",
                                 "storage-node-map-size": "100_000_000",
                                 "tx-pool-size": "500000",
                                 "jsonrpc-tcp-port": "12536",
                                 "jsonrpc-http-port": "12537",
+                                "fast-recover": "true",
+                                # "enable-discovery": "true",
+                                # "node-table-timeout": "10",
+                                # "node-table-promotion-timeout": "10",
+                                # "bootnodes": "\'cfxnode://1df4ae87c56832cf1e60cc225cc5cf7f651e6ad9c1b814cc0e70043e48adc549b72ba32af04b2176457c85b8e00e7eec71a148c6a087e50df82fa911ccad1fc7@172.31.5.28:11890\'",
                                 # "start-mining": "true",
                                 # "test-mode": "false",
                                 }

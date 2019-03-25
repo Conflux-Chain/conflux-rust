@@ -41,7 +41,7 @@ impl BlockTransactions {
                         Transaction::from_signed(
                             x,
                             consensus_inner
-                                .transaction_address_by_hash(&x.hash),
+                                .transaction_address_by_hash(&x.hash, false),
                         )
                     })
                     .collect(),
