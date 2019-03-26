@@ -15,6 +15,7 @@ use crate::{
     storage::{state::StateTrait, StorageManager, StorageManagerTrait},
     sync::SynchronizationGraphInner,
     transaction_pool::SharedTransactionPool,
+    verification::VerificationConfig,
     vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
 };
@@ -692,8 +693,14 @@ impl ConsensusGraphInner {
         debug!("Process rewards and fees for {:?}", pivot_hash);
         let difficulty = self.arena[pivot_index].difficulty;
         let mut rewards: Vec<(Address, U256)> = Vec::new();
+
+        // Tx fee for each block in this epoch
         let mut tx_fee = HashMap::new();
+        // Author of each block in this epoch
         let mut authors = HashMap::new();
+
+        // Compute tx_fee of each block based on gas_used and gas_price of every
+        // tx
         let indices_in_epoch =
             self.indices_in_epochs.get(&pivot_index).unwrap().clone();
         for index in &indices_in_epoch {
@@ -762,6 +769,12 @@ impl ConsensusGraphInner {
                 if self.arena[*index].pow_quality >= difficulty {
                     BASE_MINING_REWARD.into()
                 } else {
+                    debug!(
+                        "Block {} pow_quality {} is less than difficulty {}!",
+                        self.arena[*index].hash,
+                        self.arena[*index].pow_quality,
+                        difficulty
+                    );
                     0.into()
                 };
 
@@ -792,6 +805,7 @@ impl ConsensusGraphInner {
                     / U512::from(ANTICONE_PENALTY_RATIO);
 
                 if penalty > reward {
+                    debug!("Block {} penalty {} larger than reward {}! anticone_difficulty={}", self.arena[*index].hash, penalty, reward, anticone_difficulty);
                     reward = 0.into();
                 } else {
                     reward -= penalty;
@@ -1389,7 +1403,7 @@ impl ConsensusGraph {
         let block = self.db.key_value().get(COL_BLOCKS, hash)
             .expect("Low level database error when fetching block. Some issue with disk?")?;
         let rlp = Rlp::new(&block);
-        let block = Block::decode_with_tx_public(&rlp)
+        let mut block = Block::decode_with_tx_public(&rlp)
             .expect("Wrong block rlp format!");
         debug!("Finish constructing block {} from db", hash);
         //let mut block = rlp.as_val::<Block>().expect("Wrong block rlp
@@ -1400,6 +1414,7 @@ impl ConsensusGraph {
         //    &*self.worker_pool.lock(),
         //)
         //.expect("Failed to recover public!");
+        VerificationConfig::compute_header_pow_quality(&mut block.block_header);
         Some(block)
     }
 

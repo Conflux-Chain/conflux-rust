@@ -6,6 +6,7 @@ use crate::{
     error::{BlockError, Error},
     pow,
 };
+use cfx_types::H256;
 use primitives::{Block, BlockHeader};
 use std::{
     collections::HashSet,
@@ -31,11 +32,15 @@ impl VerificationConfig {
         }
     }
 
-    pub fn verify_pow(&self, header: &mut BlockHeader) -> Result<(), Error> {
-        let boundary = pow::difficulty_to_boundary(header.difficulty());
+    pub fn compute_header_pow_quality(header: &mut BlockHeader) -> H256 {
         let pow_hash = pow::compute(header.nonce(), &header.problem_hash());
         header.pow_quality = pow::boundary_to_difficulty(&pow_hash);
+        pow_hash
+    }
 
+    pub fn verify_pow(&self, header: &mut BlockHeader) -> Result<(), Error> {
+        let pow_hash = Self::compute_header_pow_quality(header);
+        let boundary = pow::difficulty_to_boundary(header.difficulty());
         if pow_hash >= boundary {
             warn!("block {} has invalid proof of work. boundary: {}, pow_hash: {}", header.hash(), boundary.clone(), pow_hash.clone());
             return Err(From::from(BlockError::InvalidProofOfWork(
