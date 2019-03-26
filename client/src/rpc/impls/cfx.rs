@@ -140,7 +140,10 @@ impl RpcImpl {
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|_| {
-                if let Some(block) = self.consensus.block_by_hash(&block_hash, false) {
+                if let Some(block) =
+                    self.consensus.block_by_hash(&block_hash, false)
+                {
+                    debug!("Build RpcBlock {}", block.hash());
                     let result_block = RpcBlock::new(&*block, inner, true);
                     Ok(result_block)
                 } else {

@@ -210,6 +210,9 @@ impl TransactionGenerator {
                 .or_insert(sender_balance.unwrap());
             if *sender_balance < 42000.into() {
                 secret_store.remove_keypair(sender_index);
+                if secret_store.count() == 0 {
+                    break;
+                }
                 continue;
             }
 
@@ -275,5 +278,6 @@ impl TransactionGenerator {
             }
             thread::sleep(tx_config.period);
         }
+        Ok(())
     }
 }

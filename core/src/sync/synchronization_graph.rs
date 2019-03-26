@@ -586,6 +586,9 @@ impl SynchronizationGraph {
                 let parent = block.block_header.parent_hash().clone();
                 let referees = block.block_header.referee_hashes().clone();
 
+                // TODO Avoid reading blocks from db twice,
+                // TODO possible by inserting blocks in topological order
+                // TODO Read only headers from db
                 // This is necessary to construct consensus graph.
                 self.insert_block(block, true, false, true);
 
@@ -603,42 +606,7 @@ impl SynchronizationGraph {
             }
         }
 
-        // Construct consensus graph without deciding pivot
-        let mut queue = VecDeque::new();
-        let mut visited = HashSet::new();
         let inner = self.inner.read();
-
-        queue.push_back(inner.genesis_block_index);
-        while let Some(index) = queue.pop_front() {
-            visited.insert(index);
-
-            let children: Vec<usize> =
-                inner.arena[index].children.iter().map(|x| *x).collect();
-            for child in children {
-                if (inner.arena[child].graph_status == BLOCK_GRAPH_READY)
-                    && !visited.contains(&child)
-                {
-                    queue.push_back(child);
-                }
-            }
-            let referrers: Vec<usize> =
-                inner.arena[index].referrers.iter().map(|x| *x).collect();
-            for referrer in referrers {
-                if (inner.arena[referrer].graph_status == BLOCK_GRAPH_READY)
-                    && !visited.contains(&referrer)
-                {
-                    queue.push_back(referrer);
-                }
-            }
-
-            if index != inner.genesis_block_index {
-                // Insert to consensus graph
-                self.consensus.on_new_block_construction_only(
-                    &inner.arena[index].block_header.hash(),
-                );
-            }
-        }
-
         self.consensus.construct_pivot(&*inner);
     }
 
@@ -986,7 +954,9 @@ impl SynchronizationGraph {
         queue.push_back(me);
 
         let block = Arc::new(block);
-        if inner.arena[me].graph_status != BLOCK_INVALID {
+        // If we are rebuilding the graph from db, we do not insert all blocks
+        // into memory
+        if inner.arena[me].graph_status != BLOCK_INVALID && !sync_graph_only {
             // Here we always build a new compact block because we should not
             // reuse the nonce
             self.insert_compact_block(block.to_compact());
@@ -1006,11 +976,13 @@ impl SynchronizationGraph {
             } else if inner.new_to_be_block_graph_ready(index) {
                 inner.arena[index].graph_status = BLOCK_GRAPH_READY;
 
+                let h = inner.arena[index].block_header.hash();
                 if !sync_graph_only {
-                    let h = inner.arena[index].block_header.hash();
                     // Make Consensus Worker handle the block in order
                     // asynchronously
                     self.consensus_sender.lock().send(h).expect("Cannot fail");
+                } else {
+                    self.consensus.on_new_block_construction_only(&h);
                 }
 
                 for child in &inner.arena[index].children {
