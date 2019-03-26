@@ -169,7 +169,10 @@ class ConfluxTestFramework:
             self.options.tmpdir = os.path.abspath(self.options.tmpdir)
             os.makedirs(self.options.tmpdir, exist_ok=True)
         else:
-            self.options.tmpdir = tempfile.mkdtemp(prefix="conflux_test_")
+            self.options.tmpdir = os.getenv(
+                "CONFLUX_TESTS_LOG_DIR",
+                default=tempfile.mkdtemp(prefix="conflux_test_"))
+        
         self._start_logging()
         self.log.info("PortSeed.n=" + str(PortSeed.n))
 
