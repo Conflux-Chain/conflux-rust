@@ -13,5 +13,5 @@ primitives = { path = "../primitives" }
 parking_lot = "0.6"
 rlp = "0.3.0"
 rand = "0.5"
-keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
 rustc-hex = "1.0"
