@@ -66,6 +66,7 @@ build_config! {
         (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 100_000)
+        (mining_author, (Option<String>), None)
     }
     {
         (

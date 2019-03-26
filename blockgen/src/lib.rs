@@ -31,6 +31,7 @@ enum MiningState {
 /// The interface for a conflux block generator
 pub struct BlockGenerator {
     pow_config: ProofOfWorkConfig,
+    mining_author: Address,
     graph: SharedSynchronizationGraph,
     txpool: SharedTransactionPool,
     txgen: SharedTransactionGenerator,
@@ -117,11 +118,12 @@ impl BlockGenerator {
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, txgen: SharedTransactionGenerator,
-        pow_config: ProofOfWorkConfig,
+        pow_config: ProofOfWorkConfig, mining_author: Address,
     ) -> Self
     {
         BlockGenerator {
             pow_config,
+            mining_author,
             graph,
             txpool,
             txgen,
@@ -170,14 +172,14 @@ impl BlockGenerator {
                     .as_secs(),
             )
             //            .with_timestamp(0)
-            .with_author(Address::default()) //TODO: get author
-            .with_deferred_state_root(deferred_state_root) //TODO: get deferred state root
+            .with_author(self.mining_author)
+            .with_deferred_state_root(deferred_state_root)
             .with_deferred_receipts_root(deferred_receipts_root)
             .with_difficulty(
                 self.graph.inner.read().expected_difficulty(&parent_hash),
             )
             .with_referee_hashes(referee)
-            .with_nonce(0) // TODO: gen nonce from pow
+            .with_nonce(0)
             .with_gas_limit(DEFAULT_MAX_BLOCK_GAS_LIMIT.into())
             .build();
 

@@ -32,6 +32,7 @@ use cfxcore::{
 use crate::rpc::{
     impls::cfx::RpcImpl, setup_debug_rpc_apis, setup_public_rpc_apis, RpcBlock,
 };
+use cfx_types::Address;
 use ctrlc::CtrlC;
 use db::SystemDB;
 use parking_lot::{Condvar, Mutex};
@@ -42,6 +43,7 @@ use std::{
     fs::File,
     io::BufReader,
     path::Path,
+    str::FromStr,
     sync::{Arc, Weak},
     thread,
     time::{Duration, Instant},
@@ -219,14 +221,19 @@ impl Client {
             }
         }
 
+        let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(BlockGenerator::new(
             sync_graph.clone(),
             txpool.clone(),
             sync.clone(),
             txgen.clone(),
             pow_config.clone(),
+            maybe_author.clone().unwrap_or_default(),
         ));
         if conf.raw_conf.start_mining {
+            if maybe_author.is_none() {
+                panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
+            }
             let bg = blockgen.clone();
             info!("Start mining with pow config: {:?}", pow_config);
             thread::Builder::new()
