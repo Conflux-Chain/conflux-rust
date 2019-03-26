@@ -2112,15 +2112,18 @@ impl ConsensusGraph {
                     < new_pivot_chain.len()
                         - DEFERRED_STATE_EPOCH_COUNT as usize
             {
+                // This block's deferred block is pivot_index, so the
+                // deferred_receipts_root in its header is the
+                // receipts_root of pivot_index
+                let future_block_hash = inner.arena[new_pivot_chain
+                    [pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize]]
+                    .hash
+                    .clone();
                 inner.block_receipts_root.insert(
                     new_pivot_chain[pivot_index],
                     self.block_headers
                         .read()
-                        .get(
-                            &inner.arena[new_pivot_chain[pivot_index
-                                + DEFERRED_STATE_EPOCH_COUNT as usize]]
-                                .hash,
-                        )
+                        .get(&future_block_hash)
                         .unwrap()
                         .deferred_receipts_root()
                         .clone(),
