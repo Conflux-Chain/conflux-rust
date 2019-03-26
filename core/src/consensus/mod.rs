@@ -566,9 +566,11 @@ impl ConsensusGraphInner {
                     unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
                 {
-                    let mut need_to_record_transaction_address = true;
                     let mut transaction_logs = Vec::new();
                     let r = ex.transact(transaction);
+                    // TODO Store fine-grained output status in receipts.
+                    // Note now NotEnoughCash has outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
+                    // but its nonce is increased, which might need fixing.
                     match r {
                         Err(ExecutionError::NotEnoughBaseGas {
                             required: _,
@@ -595,7 +597,6 @@ impl ConsensusGraphInner {
                                 to_pending.push(transaction.clone());
                             }
                             tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
-                            need_to_record_transaction_address = false;
                         }
                         Ok(executed) => {
                             last_cumulative_gas_used =
@@ -624,7 +625,7 @@ impl ConsensusGraphInner {
                             block_hash: block.hash(),
                             index: idx,
                         };
-                        if need_to_record_transaction_address {
+                        if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
                             self.insert_transaction_address_to_kv(
                                 &hash, &tx_addr,
                             );
