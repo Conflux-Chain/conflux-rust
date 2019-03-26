@@ -559,13 +559,13 @@ impl ConsensusGraphInner {
             let mut n_invalid_nonce = 0;
             let mut n_ok = 0;
             let mut n_other = 0;
-            let mut tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
             let mut last_cumulative_gas_used = U256::zero();
             {
                 let mut unexecuted_transaction_addresses =
                     unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
                 {
+                    let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                     let mut transaction_logs = Vec::new();
                     let r = ex.transact(transaction);
                     // TODO Store fine-grained output status in receipts.
@@ -582,7 +582,6 @@ impl ConsensusGraphInner {
                                     "tx execution error: transaction={:?}, err={:?}",
                                     transaction, r
                                 );
-                            tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                         }
                         Err(ExecutionError::InvalidNonce { expected, got }) => {
                             n_invalid_nonce += 1;
@@ -596,7 +595,6 @@ impl ConsensusGraphInner {
                                     );
                                 to_pending.push(transaction.clone());
                             }
-                            tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                         }
                         Ok(executed) => {
                             last_cumulative_gas_used =
@@ -605,9 +603,9 @@ impl ConsensusGraphInner {
                             trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                             accumulated_fee += executed.fee;
                             transaction_logs = executed.logs;
+                            tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
                         }
                         _ => {
-                            tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                             n_other += 1;
                             trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
                         }
