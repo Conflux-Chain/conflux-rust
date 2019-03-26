@@ -221,7 +221,7 @@ impl Client {
             }
         }
 
-        let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 20-digit hex string without 0x prefix"));
+        let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(BlockGenerator::new(
             sync_graph.clone(),
             txpool.clone(),
@@ -232,7 +232,7 @@ impl Client {
         ));
         if conf.raw_conf.start_mining {
             if maybe_author.is_none() {
-                warn!("Start mining without setting mining-author, you'll not get mining rewards!");
+                panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
             }
             let bg = blockgen.clone();
             info!("Start mining with pow config: {:?}", pow_config);
