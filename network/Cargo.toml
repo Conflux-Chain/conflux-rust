@@ -27,6 +27,6 @@ enum-map = "0.4.0"
 enum-map-derive = "0.4.0"
 strum = "0.11.0"
 strum_macros = "0.11.0"
-keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
 lazy_static = "1.2.0"
 byte-unit = "1.1.0"
