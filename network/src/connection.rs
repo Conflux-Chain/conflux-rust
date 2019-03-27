@@ -43,10 +43,23 @@ pub struct GenericConnection<Socket: GenericSocket, Sizer: PacketSizer> {
     token: StreamToken,
     socket: Socket,
     recv_buf: Bytes,
-    send_queue: VecDeque<(Vec<u8>, u64)>,
+    send_queue: VecDeque<(Vec<u8>, usize)>,
     interest: Ready,
     registered: AtomicBool,
     phantom: PhantomData<Sizer>,
+}
+
+impl<Socket: GenericSocket, Sizer: PacketSizer> Drop
+    for GenericConnection<Socket, Sizer>
+{
+    fn drop(&mut self) {
+        let mut service = THROTTLING_SERVICE.write();
+        while let Some((packet, pos)) = self.send_queue.pop_front() {
+            if pos < packet.len() {
+                service.on_dequeue(packet.len() - pos);
+            }
+        }
+    }
 }
 
 impl<Socket: GenericSocket, Sizer: PacketSizer>
@@ -91,7 +104,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
                 None => return Ok(WriteStatus::Complete),
             };
             let len = buf.0.len();
-            let pos = buf.1 as usize;
+            let pos = buf.1;
             if pos >= len {
                 warn!(target: "network", "Unexpected connection data");
                 return Ok(WriteStatus::Complete);
@@ -101,7 +114,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
                     THROTTLING_SERVICE.write().on_dequeue(size);
 
                     if pos + size < len {
-                        buf.1 += size as u64;
+                        buf.1 += size;
                         Ok(WriteStatus::Ongoing)
                     } else {
                         trace!(target: "network", "Wrote {} bytes token={:?}", len, self.token);
