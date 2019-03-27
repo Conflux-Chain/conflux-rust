@@ -6,7 +6,9 @@ use crate::rpc::types::{Transaction, H160, H256, U256};
 use cfxcore::consensus::ConsensusGraphInner;
 use jsonrpc_core::Error as RpcError;
 use primitives::{
+    receipt::{TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS},
     Block as PrimitiveBlock, BlockHeaderBuilder, SignedTransaction,
+    TransactionAddress,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -137,6 +139,47 @@ impl Block {
         include_txs: bool,
     ) -> Self
     {
+        let transactions = match include_txs {
+            false => {
+                BlockTransactions::new(&b.transactions, false, consensus_inner)
+            }
+            true => {
+                let tx_vec = match consensus_inner
+                    .block_receipts_by_hash(&b.hash(), false)
+                {
+                    Some(receipts) => b
+                        .transactions
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, tx)| {
+                            match receipts.get(idx).unwrap().outcome_status {
+                                TRANSACTION_OUTCOME_SUCCESS => {
+                                    Transaction::from_signed(
+                                        tx,
+                                        Some(TransactionAddress {
+                                            block_hash: b.hash(),
+                                            index: idx,
+                                        }),
+                                    )
+                                }
+                                TRANSACTION_OUTCOME_EXCEPTION => {
+                                    Transaction::from_signed(tx, None)
+                                }
+                                _ => {
+                                    unreachable!();
+                                }
+                            }
+                        })
+                        .collect(),
+                    None => b
+                        .transactions
+                        .iter()
+                        .map(|x| Transaction::from_signed(x, None))
+                        .collect(),
+                };
+                BlockTransactions::Full(tx_vec)
+            }
+        };
         Block {
             hash: H256::from(b.block_header.hash().clone()),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
@@ -170,11 +213,7 @@ impl Block {
                 .map(|x| H256::from(*x))
                 .collect(),
             nonce: b.block_header.nonce().into(),
-            transactions: BlockTransactions::new(
-                &b.transactions,
-                include_txs,
-                consensus_inner,
-            ),
+            transactions,
             size: Some(b.size().into()),
         }
     }

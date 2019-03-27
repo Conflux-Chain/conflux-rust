@@ -39,8 +39,8 @@ class P2PTest(DefaultConfluxTestFramework):
             self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
                            value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
             self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
-            time.sleep(random.random() / 10)
-        block_gen_thread = BlockGenThread(self.nodes, self.log)
+            time.sleep(random.random() / 100)
+        block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=0.2)
         block_gen_thread.start()
         for k in balance_map:
             self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
@@ -50,7 +50,7 @@ class P2PTest(DefaultConfluxTestFramework):
         '''Test Random Transactions'''
         all_txs = []
         tx_n = 1000
-        self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/10/2)
+        self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/100/2)
         for i in range(tx_n):
             sender_key = random.choice(list(balance_map))
             nonce = nonce_map[sender_key]
@@ -75,7 +75,7 @@ class P2PTest(DefaultConfluxTestFramework):
             self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d nonce:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
                           value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk], nonce)
             self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
-            time.sleep(random.random() / 10)
+            time.sleep(random.random() / 100)
         for k in balance_map:
             self.log.info("Account %s with balance:%s", bytes_to_int(k), balance_map[k])
         for tx in all_txs:

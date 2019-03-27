@@ -97,6 +97,7 @@ pub struct ConsensusGraphInner {
     pub pivot_chain: Vec<usize>,
     pub block_receipts_root: HashMap<usize, H256>,
     pub block_receipts: HashMap<usize, BlockReceiptsInfo>,
+    // FIXME add log_blooms to BlockReceiptsInfo
     pub block_log_blooms: HashMap<usize, Bloom>,
     pub transaction_addresses: HashMap<H256, TransactionAddress>,
     pub terminal_hashes: HashSet<H256>,
@@ -241,6 +242,7 @@ impl ConsensusGraphInner {
                         .block_receipts_by_hash_with_epoch(
                             &self.arena[i].hash.clone(),
                             &self.arena[epoch_index].hash.clone(),
+                            true,
                         )
                         .is_none()
                     {
@@ -560,16 +562,19 @@ impl ConsensusGraphInner {
             let mut n_invalid_nonce = 0;
             let mut n_ok = 0;
             let mut n_other = 0;
-            let mut tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
             let mut last_cumulative_gas_used = U256::zero();
             {
                 let mut unexecuted_transaction_addresses =
                     unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
                 {
-                    let mut need_to_record_transaction_address = true;
+                    let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                     let mut transaction_logs = Vec::new();
                     let r = ex.transact(transaction);
+                    // TODO Store fine-grained output status in receipts.
+                    // Note now NotEnoughCash has
+                    // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
+                    // but its nonce is increased, which might need fixing.
                     match r {
                         Err(ExecutionError::NotEnoughBaseGas {
                             required: _,
@@ -581,7 +586,6 @@ impl ConsensusGraphInner {
                                     "tx execution error: transaction={:?}, err={:?}",
                                     transaction, r
                                 );
-                            tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                         }
                         Err(ExecutionError::InvalidNonce { expected, got }) => {
                             n_invalid_nonce += 1;
@@ -595,8 +599,6 @@ impl ConsensusGraphInner {
                                     );
                                 to_pending.push(transaction.clone());
                             }
-                            tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
-                            need_to_record_transaction_address = false;
                         }
                         Ok(executed) => {
                             last_cumulative_gas_used =
@@ -605,9 +607,9 @@ impl ConsensusGraphInner {
                             trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                             accumulated_fee += executed.fee;
                             transaction_logs = executed.logs;
+                            tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
                         }
                         _ => {
-                            tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                             n_other += 1;
                             trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
                         }
@@ -625,7 +627,7 @@ impl ConsensusGraphInner {
                             block_hash: block.hash(),
                             index: idx,
                         };
-                        if need_to_record_transaction_address {
+                        if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
                             self.insert_transaction_address_to_kv(
                                 &hash, &tx_addr,
                             );
@@ -708,9 +710,11 @@ impl ConsensusGraphInner {
             let block = get_block(&block_hash).expect("exist");
             authors.insert(*index, block.block_header.author().clone());
 
-            let receipts = match self
-                .block_receipts_by_hash_with_epoch(&block_hash, &pivot_hash)
-            {
+            let receipts = match self.block_receipts_by_hash_with_epoch(
+                &block_hash,
+                &pivot_hash,
+                true,
+            ) {
                 Some(receipts) => receipts,
                 None => {
                     debug_assert!(!on_latest);
@@ -722,6 +726,7 @@ impl ConsensusGraphInner {
                     self.block_receipts_by_hash_with_epoch(
                         &block_hash,
                         &pivot_hash,
+                        true,
                     )
                     .unwrap()
                 }
@@ -1090,6 +1095,7 @@ impl ConsensusGraphInner {
     pub fn block_receipts_by_hash_from_db(
         &self, hash: &H256,
     ) -> Option<(H256, Vec<Receipt>)> {
+        trace!("Read receipts from db {}", hash);
         let block_receipts = self.db.key_value().get(COL_BLOCK_RECEIPTS, hash)
             .expect("Low level database error when fetching block receipts. Some issue with disk?")?;
         let rlp = Rlp::new(&block_receipts);
@@ -1101,7 +1107,7 @@ impl ConsensusGraphInner {
     /// Return None if receipts for corresponding epoch is not computed before
     /// or has been overwritten by another new pivot chain in db
     pub fn block_receipts_by_hash_with_epoch(
-        &mut self, hash: &H256, assumed_epoch: &H256,
+        &mut self, hash: &H256, assumed_epoch: &H256, update_cache: bool,
     ) -> Option<Arc<Vec<Receipt>>> {
         let index = self.indices.get(hash)?;
         let assumed_pivot_index = self.indices.get(assumed_epoch)?;
@@ -1123,25 +1129,27 @@ impl ConsensusGraphInner {
             return None;
         }
         let block_receipts = Arc::new(block_receipts);
-        self.block_receipts
-            .entry(*index)
-            .or_insert(BlockReceiptsInfo::default())
-            .insert_receipts_at_epoch(
-                *assumed_pivot_index,
-                block_receipts.clone(),
-            );
-
-        self.cache_man
-            .lock()
-            .note_used(CacheId::BlockReceipts(*index));
+        if update_cache {
+            self.block_receipts
+                .entry(*index)
+                .or_insert(BlockReceiptsInfo::default())
+                .insert_receipts_at_epoch(
+                    *assumed_pivot_index,
+                    block_receipts.clone(),
+                );
+            self.cache_man
+                .lock()
+                .note_used(CacheId::BlockReceipts(*index));
+        }
         Some(block_receipts)
     }
 
     pub fn block_receipts_by_hash(
-        &mut self, hash: &H256,
+        &mut self, hash: &H256, update_cache: bool,
     ) -> Option<Arc<Vec<Receipt>>> {
         self.get_epoch_hash_for_block(hash).and_then(|epoch| {
-            self.block_receipts_by_hash_with_epoch(hash, &epoch)
+            trace!("Block {} is in epoch {}", hash, epoch);
+            self.block_receipts_by_hash_with_epoch(hash, &epoch, update_cache)
         })
     }
 
@@ -1191,17 +1199,16 @@ impl ConsensusGraphInner {
             .expect("crash for db failure");
     }
 
-    pub fn get_transaction_receipt(&mut self, hash: &H256) -> Option<Receipt> {
-        let address = self.transaction_address_by_hash(hash, false)?;
+    pub fn get_transaction_receipt(
+        &mut self, tx_hash: &H256,
+    ) -> Option<Receipt> {
+        trace!("Get receipt {}", tx_hash);
+        let address = self.transaction_address_by_hash(tx_hash, false)?;
+        trace!("Got address {:?}", address);
         // receipts should never be None if address is not None because
-        let receipts = self
-            .get_epoch_hash_for_block(&address.block_hash)
-            .and_then(|epoch| {
-                self.block_receipts_by_hash_with_epoch(
-                    &address.block_hash,
-                    &epoch,
-                )
-            })?;
+        let receipts =
+            self.block_receipts_by_hash(&address.block_hash, false)?;
+        trace!("Get receipts");
         receipts.get(address.index).map(Clone::clone)
     }
 
@@ -1313,6 +1320,34 @@ impl ConsensusGraphInner {
             return Err("Error: pivot chain assumption failed".to_owned());
         }
         Ok(())
+    }
+
+    pub fn recover_executed_tx_address(
+        &mut self, epoch_blocks: &Vec<Arc<Block>>, epoch_hash: &H256,
+    ) {
+        for block in epoch_blocks {
+            let block_hash = block.hash();
+            let receipts = self
+                .block_receipts_by_hash_with_epoch(
+                    &block_hash,
+                    epoch_hash,
+                    true,
+                )
+                .expect("receipts of skipped pivot block should exist");
+            for (idx, tx) in block.transactions.iter().enumerate() {
+                if receipts.get(idx).unwrap().outcome_status
+                    == TRANSACTION_OUTCOME_SUCCESS
+                {
+                    self.insert_transaction_address_to_kv(
+                        &tx.hash,
+                        &TransactionAddress {
+                            block_hash,
+                            index: idx,
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -2171,6 +2206,7 @@ impl ConsensusGraph {
                         .block_receipts_by_hash_with_epoch(
                             &inner.arena[i].hash.clone(),
                             &pivot_hash,
+                            true,
                         )
                         .unwrap(),
                 );
@@ -2413,6 +2449,20 @@ impl ConsensusGraph {
 
         // Apply transactions in the determined total order
         while state_at < to_state_pos {
+            let pivot_hash = inner.arena[new_pivot_chain[state_at]].hash;
+            let reversed_indices = inner
+                .indices_in_epochs
+                .get(&new_pivot_chain[state_at])
+                .unwrap();
+            let mut epoch_blocks = Vec::new();
+            {
+                for idx in reversed_indices {
+                    let block = self
+                        .block_by_hash(&inner.arena[*idx].hash, true)
+                        .expect("Exist");
+                    epoch_blocks.push(block);
+                }
+            }
             // FIXME Cannot skip executing if in-memory data are missing
             // (Recovering) Using block_receipts may fail to skip
             // some executed epoch if it's evicted from mem
@@ -2423,37 +2473,21 @@ impl ConsensusGraph {
                     .block_receipts
                     .contains_key(&new_pivot_chain[state_at])
             {
-                debug!(
-                    "Try to compute epoch={:?}",
-                    inner.arena[new_pivot_chain[state_at]].hash
-                );
+                debug!("Try to compute epoch={:?}", pivot_hash);
                 if inner.epoch_executed(new_pivot_chain[state_at]) {
-                    state_at += 1;
-                    debug!(
-                        "Skip epoch {:?}",
-                        inner.arena[new_pivot_chain[state_at]].hash
+                    debug!("Skip epoch {:?}", pivot_hash);
+                    inner.recover_executed_tx_address(
+                        &epoch_blocks,
+                        &pivot_hash,
                     );
+                    state_at += 1;
                     continue;
-                }
-            }
-            let reversed_indices = inner
-                .indices_in_epochs
-                .get(&new_pivot_chain[state_at])
-                .unwrap();
-
-            let mut epoch_blocks = Vec::new();
-            {
-                for idx in reversed_indices {
-                    let block = self
-                        .block_by_hash(&inner.arena[*idx].hash, true)
-                        .expect("Exist");
-                    epoch_blocks.push(block);
                 }
             }
             info!(
                 "Process tx epoch_id={}, block_count={}",
                 inner.arena[new_pivot_chain[state_at]].hash,
-                reversed_indices.len()
+                epoch_blocks.len()
             );
             let mut state = State::new(
                 StateDb::new(
@@ -2563,7 +2597,7 @@ impl ConsensusGraph {
     pub fn block_receipts_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<Vec<Receipt>>> {
-        self.inner.write().block_receipts_by_hash(hash)
+        self.inner.write().block_receipts_by_hash(hash, false)
     }
 
     pub fn transaction_address_by_hash(
