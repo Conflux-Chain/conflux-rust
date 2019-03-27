@@ -8,10 +8,10 @@ cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 fixed-hash = "0.2"
 keccak-hash = "0.1.2"
-keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
 rlp = "0.3.0"
-rlp_derive = { git = "https://github.com/paritytech/parity-ethereum" }
-unexpected = { git = "https://github.com/paritytech/parity-ethereum" }
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 heapsize = "0.4"
 log = "0.3"
 lru = "0.1"
