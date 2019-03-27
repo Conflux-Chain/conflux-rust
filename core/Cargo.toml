@@ -17,7 +17,7 @@ io = { path = "../util/io" }
 log = "0.3"
 rlp = "0.3.0"
 lazy_static = "1.1.0"
-keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
 secret-store = { path = "../secret_store" }
 rand = "0.5"
 message = { path = "../message" }
@@ -27,8 +27,8 @@ kvdb = "0.1"
 db = { path = "../db" }
 bit-set = "0.4"
 heapsize = "0.4"
-memory-cache = { git = "https://github.com/paritytech/parity-ethereum" }
-unexpected = { git = "https://github.com/paritytech/parity-ethereum" }
+memory-cache = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 elastic-array = "0.10"
 byteorder = "1.0"
 num = "0.2"

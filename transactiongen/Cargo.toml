@@ -18,7 +18,7 @@ rlp = "0.3.0"
 rand = "0.5"
 secret-store = { path = "../secret_store" }
 network = { path = "../network" }
-keylib = { git = "https://github.com/paritytech/parity-ethereum", package = "ethkey" }
+keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
 log = "0.4"
 db = { path = "../db" }
 kvdb-rocksdb = "0.1.3"
