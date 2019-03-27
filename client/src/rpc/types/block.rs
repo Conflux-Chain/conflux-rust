@@ -145,7 +145,7 @@ impl Block {
             }
             true => {
                 let tx_vec = match consensus_inner
-                    .block_receipts_by_hash(&b.hash())
+                    .block_receipts_by_hash(&b.hash(), false)
                 {
                     Some(receipts) => b
                         .transactions
