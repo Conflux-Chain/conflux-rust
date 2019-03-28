@@ -120,7 +120,7 @@ impl Default for NetworkConfiguration {
 impl NetworkConfiguration {
     pub fn new() -> Self {
         NetworkConfiguration {
-            config_path: Some("./config".to_string()),
+            config_path: Some("./net_config".to_string()),
             listen_address: None,
             public_address: None,
             udp_port: None,

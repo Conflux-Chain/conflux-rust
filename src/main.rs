@@ -108,6 +108,13 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("network-secret-key")
+                .long("net-key")
+                .value_name("SECRET_KEY")
+                .help("Sets a custom secret key to generate unique node id")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("ledger-cache-size")
                 .short("lcs")
                 .long("ledger-cache-size")
