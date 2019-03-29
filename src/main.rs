@@ -220,6 +220,15 @@ fn main() {
                 .default_value("64")
                 .validator(from_str_validator::<usize>),
         )
+        .arg(
+            Arg::with_name("p2p_nodes_per_ip")
+                .long("p2p_nodes_per_ip")
+                .value_name("VALUE")
+                .help("Sets maximum number of P2P nodes for one IP address. Set 0 to allow unlimited nodes.")
+                .takes_value(true)
+                .default_value("1")
+                .validator(from_str_validator::<usize>),
+        )
         .get_matches_from(std::env::args().collect::<Vec<_>>());
 
     THROTTLING_SERVICE.write().initialize(

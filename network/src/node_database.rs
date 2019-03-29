@@ -2,13 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 use crate::{
-    node_table::{
-        Node, NodeContact, NodeEndpoint, NodeEntry, NodeId, NodeTable,
-    },
+    node_table::{Node, NodeContact, NodeEntry, NodeId, NodeTable},
     IpFilter,
 };
 use io::StreamToken;
-use std::{collections::HashMap, net::IpAddr, str::FromStr, time::Duration};
+use std::{collections::HashMap, net::IpAddr, time::Duration};
 
 /// Node database maintains all P2P nodes in trusted and untrusted node tables,
 /// and support to limit the number of nodes for the same IP address.
@@ -247,18 +245,6 @@ impl NodeDatabase {
     }
 }
 
-fn new_node(addr: &str) -> Node {
-    Node::new(NodeId::random(), NodeEndpoint::from_str(addr).unwrap())
-}
-
-fn new_ip(ip: &str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
-
-fn new_entry(id: Option<NodeId>, addr: &str) -> NodeEntry {
-    let id = id.or_else(|| Some(NodeId::random())).unwrap();
-    let endpoint = NodeEndpoint::from_str(addr).unwrap();
-    NodeEntry { id, endpoint }
-}
-
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum InsertResult {
     Added,
@@ -380,248 +366,283 @@ impl NodeIpLimit {
 }
 
 #[cfg(test)]
-mod ip_limit_tests {
-    use super::{new_entry, new_ip, new_node, InsertResult, NodeIpLimit};
-    use crate::node_table::{Node, NodeEndpoint, NodeEntry, NodeId, NodeTable};
+mod tests {
+    use crate::node_table::{Node, NodeEndpoint, NodeEntry, NodeId};
     use std::{net::IpAddr, str::FromStr};
 
-    #[test]
-    fn test_enabled() {
-        assert_eq!(NodeIpLimit::new(0).is_enabled(), false);
-        assert_eq!(NodeIpLimit::new(1).is_enabled(), true);
-        assert_eq!(NodeIpLimit::new(4).is_enabled(), true);
+    fn new_node(addr: &str) -> Node {
+        Node::new(NodeId::random(), NodeEndpoint::from_str(addr).unwrap())
     }
 
-    #[test]
-    fn test_init() {
-        let mut table = NodeTable::new(None, true);
-        table.add_node(new_node("127.0.0.1:777"), false);
-        table.add_node(new_node("127.0.0.1:888"), false);
-        table.add_node(new_node("192.168.0.100:777"), false);
+    fn new_ip(ip: &str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
 
-        // not enabled
-        let mut limit = NodeIpLimit::new(0);
-        limit.init(&table);
-        assert_eq!(limit.ip_to_nodes.len(), 0);
-
-        // enabled
-        let mut limit = NodeIpLimit::new(1);
-        limit.init(&table);
-        assert_eq!(limit.ip_to_nodes.len(), 2);
-        assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 2);
-        assert_eq!(limit.ip_to_nodes[&new_ip("192.168.0.100")], 1);
+    fn new_entry(id: Option<NodeId>, addr: &str) -> NodeEntry {
+        let id = id.or_else(|| Some(NodeId::random())).unwrap();
+        let endpoint = NodeEndpoint::from_str(addr).unwrap();
+        NodeEntry { id, endpoint }
     }
 
-    #[test]
-    fn test_on_add() {
-        let mut limit = NodeIpLimit::new(2);
-        assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-        assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-        assert_eq!(limit.on_add(new_ip("127.0.0.1")), false);
-        assert_eq!(limit.on_add(new_ip("127.0.0.1")), false);
+    #[cfg(test)]
+    mod ip_limit_tests {
+        use super::{
+            super::{InsertResult, NodeIpLimit},
+            new_entry, new_ip, new_node,
+        };
+        use crate::node_table::NodeTable;
+
+        #[test]
+        fn test_enabled() {
+            assert_eq!(NodeIpLimit::new(0).is_enabled(), false);
+            assert_eq!(NodeIpLimit::new(1).is_enabled(), true);
+            assert_eq!(NodeIpLimit::new(4).is_enabled(), true);
+        }
+
+        #[test]
+        fn test_init() {
+            let mut table = NodeTable::new(None, true);
+            table.add_node(new_node("127.0.0.1:777"), false);
+            table.add_node(new_node("127.0.0.1:888"), false);
+            table.add_node(new_node("192.168.0.100:777"), false);
+
+            // not enabled
+            let mut limit = NodeIpLimit::new(0);
+            limit.init(&table);
+            assert_eq!(limit.ip_to_nodes.len(), 0);
+
+            // enabled
+            let mut limit = NodeIpLimit::new(1);
+            limit.init(&table);
+            assert_eq!(limit.ip_to_nodes.len(), 2);
+            assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 2);
+            assert_eq!(limit.ip_to_nodes[&new_ip("192.168.0.100")], 1);
+        }
+
+        #[test]
+        fn test_on_add() {
+            let mut limit = NodeIpLimit::new(2);
+            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
+            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
+            assert_eq!(limit.on_add(new_ip("127.0.0.1")), false);
+            assert_eq!(limit.on_add(new_ip("127.0.0.1")), false);
+        }
+
+        #[test]
+        fn test_on_update() {
+            let mut limit = NodeIpLimit::new(1);
+            let ip1 = new_ip("127.0.0.1");
+            let ip2 = new_ip("127.0.0.2");
+            assert_eq!(limit.on_add(ip1), true);
+            assert_eq!(limit.on_add(ip2), true);
+
+            // same ip allowed
+            assert_eq!(limit.on_update(ip1, ip1), true);
+            // exist ip not allowed
+            assert_eq!(limit.on_update(ip1, ip2), false);
+
+            // new ip allowed
+            let ip3 = new_ip("127.0.0.3");
+            assert_eq!(limit.on_update(ip1, ip3), true);
+            assert_eq!(limit.ip_to_nodes.contains_key(&ip1), false);
+            assert_eq!(limit.ip_to_nodes.contains_key(&ip3), true);
+        }
+
+        #[test]
+        fn test_on_delete() {
+            let mut limit = NodeIpLimit::new(2);
+            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
+            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
+            assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 2);
+            limit.on_delete(new_ip("127.0.0.1"));
+            assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 1);
+            limit.on_delete(new_ip("127.0.0.1"));
+            assert_eq!(
+                limit.ip_to_nodes.contains_key(&new_ip("127.0.0.1")),
+                false
+            );
+        }
+
+        #[test]
+        fn test_validate_insertion() {
+            let mut table = NodeTable::new(None, true);
+            let node = new_node("127.0.0.1:777");
+            table.add_node(node.clone(), false);
+
+            let mut limit = NodeIpLimit::new(1);
+            limit.init(&table);
+
+            // new node id of same ip
+            let entry = new_entry(None, "127.0.0.1:999");
+            assert_eq!(
+                limit.validate_insertion(&table, &entry),
+                InsertResult::IpLimited
+            );
+
+            // new node id of new ip
+            let entry = new_entry(None, "127.0.0.2:999");
+            assert_eq!(
+                limit.validate_insertion(&table, &entry),
+                InsertResult::Added
+            );
+
+            // same node id of same ip
+            let entry = new_entry(Some(node.id.clone()), "127.0.0.1:777");
+            assert_eq!(
+                limit.validate_insertion(&table, &entry),
+                InsertResult::Updated
+            );
+
+            // same node id of exist ip
+            let entry = new_entry(Some(node.id.clone()), "127.0.0.2:777");
+            assert_eq!(
+                limit.validate_insertion(&table, &entry),
+                InsertResult::IpLimited
+            );
+
+            // same node id of new ip
+            let entry = new_entry(Some(node.id.clone()), "127.0.0.3:777");
+            assert_eq!(
+                limit.validate_insertion(&table, &entry),
+                InsertResult::Updated
+            );
+        }
     }
 
-    #[test]
-    fn test_on_update() {
-        let mut limit = NodeIpLimit::new(1);
-        let ip1 = new_ip("127.0.0.1");
-        let ip2 = new_ip("127.0.0.2");
-        assert_eq!(limit.on_add(ip1), true);
-        assert_eq!(limit.on_add(ip2), true);
+    #[cfg(test)]
+    mod node_database_tests {
+        use super::{
+            super::{InsertResult, NodeDatabase},
+            new_entry,
+        };
+        use crate::node_table::NodeId;
 
-        // same ip allowed
-        assert_eq!(limit.on_update(ip1, ip1), true);
-        // exist ip not allowed
-        assert_eq!(limit.on_update(ip1, ip2), false);
+        #[test]
+        fn test_insert_with_token() {
+            let mut db = NodeDatabase::new(None, 1);
 
-        // new ip allowed
-        let ip3 = new_ip("127.0.0.3");
-        assert_eq!(limit.on_update(ip1, ip3), true);
-        assert_eq!(limit.ip_to_nodes.contains_key(&ip1), false);
-        assert_eq!(limit.ip_to_nodes.contains_key(&ip3), true);
-    }
+            // add a trusted node
+            let entry = new_entry(None, "127.0.0.1:999");
+            assert_eq!(
+                db.insert_trusted(entry.clone()),
+                Some(InsertResult::Added)
+            );
 
-    #[test]
-    fn test_on_delete() {
-        let mut limit = NodeIpLimit::new(2);
-        assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-        assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-        assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 2);
-        limit.on_delete(new_ip("127.0.0.1"));
-        assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 1);
-        limit.on_delete(new_ip("127.0.0.1"));
-        assert_eq!(limit.ip_to_nodes.contains_key(&new_ip("127.0.0.1")), false);
-    }
+            // update trusted node
+            assert_eq!(
+                db.insert_with_token(entry.clone(), 3),
+                InsertResult::Updated
+            );
+            let node = db.get(&entry.id, true);
+            assert_eq!(node.is_some(), true);
+            assert_eq!(node.unwrap().stream_token, Some(3));
 
-    #[test]
-    fn test_validate_insertion() {
-        let mut table = NodeTable::new(None, true);
-        let node = new_node("127.0.0.1:777");
-        table.add_node(node.clone(), false);
+            // update trusted node, but endpoint changed
+            let entry = new_entry(Some(entry.id.clone()), "127.0.0.1:888");
+            assert_eq!(
+                db.insert_with_token(entry.clone(), 4),
+                InsertResult::EndpointChanged
+            );
+            assert_eq!(db.get(&entry.id, true).unwrap().stream_token, Some(3));
 
-        let mut limit = NodeIpLimit::new(1);
-        limit.init(&table);
+            // add untrusted node
+            let entry = new_entry(None, "127.0.0.2:999");
+            assert_eq!(
+                db.insert_with_token(entry.clone(), 5),
+                InsertResult::Added
+            );
+            assert_eq!(db.get(&entry.id, true), None);
+            assert_eq!(db.get(&entry.id, false).unwrap().stream_token, Some(5));
 
-        // new node id of same ip
-        let entry = new_entry(None, "127.0.0.1:999");
-        assert_eq!(
-            limit.validate_insertion(&table, &entry),
-            InsertResult::IpLimited
-        );
+            // update untrusted node, change endpoint and stream token
+            let entry = new_entry(Some(entry.id), "127.0.0.2:888");
+            assert_eq!(
+                db.insert_with_token(entry.clone(), 6),
+                InsertResult::Updated
+            );
+            assert_eq!(db.get(&entry.id, true), None);
+            let node = db.get(&entry.id, false).unwrap();
+            assert_eq!(node.endpoint, entry.endpoint); // endpoint updated
+            assert_eq!(node.stream_token, Some(6)); // stream token updated
+        }
 
-        // new node id of new ip
-        let entry = new_entry(None, "127.0.0.2:999");
-        assert_eq!(
-            limit.validate_insertion(&table, &entry),
-            InsertResult::Added
-        );
+        #[test]
+        fn test_insert_with_promotion() {
+            let mut db = NodeDatabase::new(None, 1);
 
-        // same node id of same ip
-        let entry = new_entry(Some(node.id.clone()), "127.0.0.1:777");
-        assert_eq!(
-            limit.validate_insertion(&table, &entry),
-            InsertResult::Updated
-        );
+            // add untrusted node
+            let entry = new_entry(None, "127.0.0.1:999");
+            assert_eq!(
+                db.insert_with_promotion(entry.clone(), false),
+                InsertResult::Added
+            );
+            assert_eq!(db.get(&entry.id, true), None);
+            assert_eq!(db.get(&entry.id, false).is_some(), true);
 
-        // same node id of exist ip
-        let entry = new_entry(Some(node.id.clone()), "127.0.0.2:777");
-        assert_eq!(
-            limit.validate_insertion(&table, &entry),
-            InsertResult::IpLimited
-        );
+            // update node and promote
+            assert_eq!(
+                db.insert_with_promotion(entry.clone(), true),
+                InsertResult::Updated
+            );
+            assert_eq!(db.get(&entry.id, true).is_some(), true);
+        }
 
-        // same node id of new ip
-        let entry = new_entry(Some(node.id.clone()), "127.0.0.3:777");
-        assert_eq!(
-            limit.validate_insertion(&table, &entry),
-            InsertResult::Updated
-        );
-    }
-}
+        #[test]
+        fn test_insert_trusted() {
+            let mut db = NodeDatabase::new(None, 1);
 
-#[cfg(test)]
-mod node_database_tests {
-    use super::{new_entry, InsertResult, NodeDatabase};
-    use crate::node_table::NodeId;
+            // new added
+            let entry = new_entry(None, "127.0.0.1:999");
+            assert_eq!(
+                db.insert_trusted(entry.clone()),
+                Some(InsertResult::Added)
+            );
+            assert_eq!(db.get(&entry.id, true).is_some(), true);
 
-    #[test]
-    fn test_insert_with_token() {
-        let mut db = NodeDatabase::new(None, 1);
+            // already exists
+            assert_eq!(db.insert_trusted(entry.clone()), None);
 
-        // add a trusted node
-        let entry = new_entry(None, "127.0.0.1:999");
-        assert_eq!(db.insert_trusted(entry.clone()), Some(InsertResult::Added));
+            // prepare untrusted node to promote
+            let entry = new_entry(None, "127.0.0.2:999");
+            assert_eq!(
+                db.insert_with_promotion(entry.clone(), false),
+                InsertResult::Added
+            );
+            assert_eq!(db.get(&entry.id, true), None);
+            assert_eq!(db.get(&entry.id, false).is_some(), true);
 
-        // update trusted node
-        assert_eq!(
-            db.insert_with_token(entry.clone(), 3),
-            InsertResult::Updated
-        );
-        let node = db.get(&entry.id, true);
-        assert_eq!(node.is_some(), true);
-        assert_eq!(node.unwrap().stream_token, Some(3));
+            // add trusted node to promote
+            assert_eq!(
+                db.insert_trusted(entry.clone()),
+                Some(InsertResult::Updated)
+            );
+            assert_eq!(db.get(&entry.id, true).is_some(), true);
+        }
 
-        // update trusted node, but endpoint changed
-        let entry = new_entry(Some(entry.id.clone()), "127.0.0.1:888");
-        assert_eq!(
-            db.insert_with_token(entry.clone(), 4),
-            InsertResult::EndpointChanged
-        );
-        assert_eq!(db.get(&entry.id, true).unwrap().stream_token, Some(3));
+        #[test]
+        fn test_remove() {
+            let mut db = NodeDatabase::new(None, 1);
 
-        // add untrusted node
-        let entry = new_entry(None, "127.0.0.2:999");
-        assert_eq!(db.insert_with_token(entry.clone(), 5), InsertResult::Added);
-        assert_eq!(db.get(&entry.id, true), None);
-        assert_eq!(db.get(&entry.id, false).unwrap().stream_token, Some(5));
+            // add trusted node
+            let entry1 = new_entry(None, "127.0.0.1:999");
+            assert_eq!(
+                db.insert_trusted(entry1.clone()),
+                Some(InsertResult::Added)
+            );
 
-        // update untrusted node, change endpoint and stream token
-        let entry = new_entry(Some(entry.id), "127.0.0.2:888");
-        assert_eq!(
-            db.insert_with_token(entry.clone(), 6),
-            InsertResult::Updated
-        );
-        assert_eq!(db.get(&entry.id, true), None);
-        let node = db.get(&entry.id, false).unwrap();
-        assert_eq!(node.endpoint, entry.endpoint); // endpoint updated
-        assert_eq!(node.stream_token, Some(6)); // stream token updated
-    }
+            // add untrusted node
+            let entry2 = new_entry(None, "127.0.0.2:999");
+            assert_eq!(
+                db.insert_with_token(entry2.clone(), 9),
+                InsertResult::Added
+            );
 
-    #[test]
-    fn test_insert_with_promotion() {
-        let mut db = NodeDatabase::new(None, 1);
+            assert_eq!(db.ip_limit.ip_to_nodes.len(), 2);
 
-        // add untrusted node
-        let entry = new_entry(None, "127.0.0.1:999");
-        assert_eq!(
-            db.insert_with_promotion(entry.clone(), false),
-            InsertResult::Added
-        );
-        assert_eq!(db.get(&entry.id, true), None);
-        assert_eq!(db.get(&entry.id, false).is_some(), true);
+            // delete nodes
+            assert_eq!(db.remove(&NodeId::random()), None);
+            assert_eq!(db.remove(&entry1.id).is_some(), true);
+            assert_eq!(db.remove(&entry2.id).is_some(), true);
 
-        // update node and promote
-        assert_eq!(
-            db.insert_with_promotion(entry.clone(), true),
-            InsertResult::Updated
-        );
-        assert_eq!(db.get(&entry.id, true).is_some(), true);
-    }
-
-    #[test]
-    fn test_insert_trusted() {
-        let mut db = NodeDatabase::new(None, 1);
-
-        // new added
-        let entry = new_entry(None, "127.0.0.1:999");
-        assert_eq!(db.insert_trusted(entry.clone()), Some(InsertResult::Added));
-        assert_eq!(db.get(&entry.id, true).is_some(), true);
-
-        // already exists
-        assert_eq!(db.insert_trusted(entry.clone()), None);
-
-        // prepare untrusted node to promote
-        let entry = new_entry(None, "127.0.0.2:999");
-        assert_eq!(
-            db.insert_with_promotion(entry.clone(), false),
-            InsertResult::Added
-        );
-        assert_eq!(db.get(&entry.id, true), None);
-        assert_eq!(db.get(&entry.id, false).is_some(), true);
-
-        // add trusted node to promote
-        assert_eq!(
-            db.insert_trusted(entry.clone()),
-            Some(InsertResult::Updated)
-        );
-        assert_eq!(db.get(&entry.id, true).is_some(), true);
-    }
-
-    #[test]
-    fn test_remove() {
-        let mut db = NodeDatabase::new(None, 1);
-
-        // add trusted node
-        let entry1 = new_entry(None, "127.0.0.1:999");
-        assert_eq!(
-            db.insert_trusted(entry1.clone()),
-            Some(InsertResult::Added)
-        );
-
-        // add untrusted node
-        let entry2 = new_entry(None, "127.0.0.2:999");
-        assert_eq!(
-            db.insert_with_token(entry2.clone(), 9),
-            InsertResult::Added
-        );
-
-        assert_eq!(db.ip_limit.ip_to_nodes.len(), 2);
-
-        // delete nodes
-        assert_eq!(db.remove(&NodeId::random()), None);
-        assert_eq!(db.remove(&entry1.id).is_some(), true);
-        assert_eq!(db.remove(&entry2.id).is_some(), true);
-
-        assert_eq!(db.ip_limit.ip_to_nodes.len(), 0);
+            assert_eq!(db.ip_limit.ip_to_nodes.len(), 0);
+        }
     }
 }
