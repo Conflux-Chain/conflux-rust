@@ -27,8 +27,8 @@ use txgen::TransactionGeneratorConfig;
 /// override the configuration file if the parameter is given in both.
 build_config! {
     {
-        (port, (Option<u16>), None)
-        (udp_port, (Option<u16>), None)
+        (port, (Option<u16>), Some(32323))
+        (udp_port, (Option<u16>), Some(32323))
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
@@ -38,15 +38,16 @@ build_config! {
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
         (bootnodes, (Option<String>), None)
-        (netconf_dir, (Option<String>), None)
+        (netconf_dir, (Option<String>), Some("./net_config".to_string()))
+        (net_key, (Option<String>), None)
         (public_address, (Option<String>), None)
-        (ledger_cache_size, (Option<usize>), None)
-        (enable_discovery, (bool), false)
-        (node_table_timeout, (Option<u64>), None)
-        (node_table_promotion_timeout, (Option<u64>), None)
-        (fast_recover, (bool), false)
+        (ledger_cache_size, (Option<usize>), Some(2048))
+        (enable_discovery, (bool), true)
+        (node_table_timeout, (Option<u64>), Some(300))
+        (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
+        (fast_recover, (bool), true)
         (test_mode, (bool), false)
-        (db_cache_size, (Option<usize>), None)
+        (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
         (db_dir, (Option<String>), Some("./db".to_string()))
         (generate_tx, (bool), false)
@@ -55,7 +56,7 @@ build_config! {
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
         (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
-        (storage_node_map_size, (u32), storage::defaults::DEFAULT_NODE_MAP_SIZE)
+        (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (send_tx_period_ms, (u64), 1300)
         (check_request_period_ms, (u64), 5000)
         (block_cache_gc_period_ms, (u64), 5000)
@@ -65,7 +66,7 @@ build_config! {
         (load_test_chain, (Option<String>), None)
         (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
-        (tx_pool_size, (usize), 100_000)
+        (tx_pool_size, (usize), 500_000)
         (mining_author, (Option<String>), None)
     }
     {
@@ -116,6 +117,7 @@ impl Configuration {
         if self.raw_conf.netconf_dir.is_some() {
             network_config.config_path = self.raw_conf.netconf_dir.clone();
         }
+        network_config.use_secret = self.raw_conf.net_key.clone().map(|sec_str| sec_str.parse().expect("net_key is not a valid secret string"));
         if let Some(addr) = self.raw_conf.public_address.clone() {
             network_config.public_address = match addr
                 .to_socket_addrs()

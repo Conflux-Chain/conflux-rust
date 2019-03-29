@@ -17,6 +17,8 @@ pub mod defaults {
         NodeMemoryManagerDeltaMpt::R_LFU_FACTOR;
     pub const DEFAULT_IDLE_SIZE: u32 =
         NodeMemoryManagerDeltaMpt::MAX_DIRTY_AND_TEMPORARY_TRIE_NODES;
+    pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 =
+        NodeMemoryManagerDeltaMpt::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER;
 
     use super::multi_version_merkle_patricia_trie::node_memory_manager::NodeMemoryManagerDeltaMpt;
 }
