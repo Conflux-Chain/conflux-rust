@@ -68,6 +68,9 @@ build_config! {
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
         (mining_author, (Option<String>), None)
+        (egress_queue_capacity, (usize), 256)
+        (egress_min_throttle, (usize), 10)
+        (egress_max_throttle, (usize), 64)
         (p2p_nodes_per_ip, (usize), 1)
     }
     {
