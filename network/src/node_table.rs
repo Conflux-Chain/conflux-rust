@@ -799,6 +799,15 @@ impl NodeTable {
             }
         }
     }
+
+    pub fn visit<F>(&self, mut visitor: F)
+    where F: FnMut(&H512) -> bool {
+        for key in self.node_index.keys() {
+            if !visitor(key) {
+                break;
+            }
+        }
+    }
 }
 
 impl Drop for NodeTable {

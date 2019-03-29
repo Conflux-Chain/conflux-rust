@@ -39,6 +39,7 @@ mod connection;
 mod discovery;
 mod error;
 mod ip_utils;
+mod node_database;
 pub mod node_table;
 mod service;
 mod session;
