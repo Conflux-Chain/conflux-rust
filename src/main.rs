@@ -115,6 +115,20 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("start-mining")
+                .long("start-mining")
+                .value_name("BOOLEAN")
+                .help("start mining if set to true. Ensure that mining-author is set")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("mining-author")
+                .long("mining-author")
+                .value_name("ADDRESS")
+                .help("Set the address to receive mining rewards")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("ledger-cache-size")
                 .short("lcs")
                 .long("ledger-cache-size")
