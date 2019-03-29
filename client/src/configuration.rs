@@ -64,7 +64,7 @@ build_config! {
         (headers_request_timeout_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 120_000)
         (load_test_chain, (Option<String>), None)
-        (start_mining, (bool), true)
+        (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
         (mining_author, (Option<String>), None)
