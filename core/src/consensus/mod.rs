@@ -53,7 +53,10 @@ pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
 const REWARD_EPOCH_COUNT: u64 = 12;
 const ANTICONE_PENALTY_UPPER_EPOCH_COUNT: u64 = 10;
 const ANTICONE_PENALTY_RATIO: u64 = 100;
-const BASE_MINING_REWARD: u64 = 1000000;
+/// 900 Conflux tokens
+const BASE_MINING_REWARD: u64 = 900;
+/// The unit of one Conflux token: 10 ** 18
+const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
 const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
 const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
@@ -772,7 +775,7 @@ impl ConsensusGraphInner {
 
             let mut reward: U512 =
                 if self.arena[*index].pow_quality >= difficulty {
-                    BASE_MINING_REWARD.into()
+                    U512::from(BASE_MINING_REWARD) * U512::from(CONFLUX_TOKEN)
                 } else {
                     debug!(
                         "Block {} pow_quality {} is less than difficulty {}!",

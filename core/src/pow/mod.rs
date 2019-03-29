@@ -9,7 +9,7 @@ use rlp::RlpStream;
 pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 200;
 // Time unit is micro-second (usec)
 pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 5000000;
-pub const INITIAL_DIFFICULTY: u64 = 10000;
+pub const INITIAL_DIFFICULTY: u64 = 100_000_000;
 
 //FIXME: May be better to place in other place.
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;
