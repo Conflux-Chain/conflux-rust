@@ -762,9 +762,7 @@ impl SynchronizationGraph {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
-                self.verification_config
-                    .verify_pow(header)
-                    .expect("Inserted but not invalid, so pow should pass");
+                VerificationConfig::compute_header_pow_quality(header);
             }
             return (true, Vec::new());
         }
@@ -954,13 +952,15 @@ impl SynchronizationGraph {
         queue.push_back(me);
 
         let block = Arc::new(block);
-        // If we are rebuilding the graph from db, we do not insert all blocks
-        // into memory
-        if inner.arena[me].graph_status != BLOCK_INVALID && !sync_graph_only {
-            // Here we always build a new compact block because we should not
-            // reuse the nonce
-            self.insert_compact_block(block.to_compact());
-            self.insert_block_to_kv(block, persistent);
+        if inner.arena[me].graph_status != BLOCK_INVALID {
+            // If we are rebuilding the graph from db, we do not insert all
+            // blocks into memory
+            if !sync_graph_only {
+                // Here we always build a new compact block because we should
+                // not reuse the nonce
+                self.insert_compact_block(block.to_compact());
+                self.insert_block_to_kv(block, persistent);
+            }
         } else {
             insert_success = false;
         }

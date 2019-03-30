@@ -75,7 +75,8 @@ fn test_mining_10_epochs() {
     );
     conf.raw_conf.port = Some(13001);
     conf.raw_conf.jsonrpc_http_port = Some(18001);
-    conf.raw_conf.mining_author = Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
+    conf.raw_conf.mining_author =
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handle = Client::start(conf, exit.clone()).unwrap();

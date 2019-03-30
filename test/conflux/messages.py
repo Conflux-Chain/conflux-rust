@@ -349,7 +349,8 @@ class CompactBlock(rlp.Serializable):
 class GetCompactBlocksResponse(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
-        ("blocks", CountableList(CompactBlock))
+        ("compact_blocks", CountableList(CompactBlock)),
+        ("blocks", CountableList(Block))
     ]
 
 

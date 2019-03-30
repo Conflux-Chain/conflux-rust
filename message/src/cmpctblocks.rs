@@ -3,14 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{Message, MsgId, RequestId};
-use primitives::block::CompactBlock;
+use primitives::{block::CompactBlock, Block};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetCompactBlocksResponse {
     pub request_id: RequestId,
-    pub blocks: Vec<CompactBlock>,
+    pub compact_blocks: Vec<CompactBlock>,
+    pub blocks: Vec<Block>,
 }
 
 impl Message for GetCompactBlocksResponse {
@@ -30,8 +31,9 @@ impl DerefMut for GetCompactBlocksResponse {
 impl Encodable for GetCompactBlocksResponse {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.request_id)
+            .append_list(&self.compact_blocks)
             .append_list(&self.blocks);
     }
 }
@@ -40,7 +42,8 @@ impl Decodable for GetCompactBlocksResponse {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(GetCompactBlocksResponse {
             request_id: rlp.val_at(0)?,
-            blocks: rlp.list_at(1)?,
+            compact_blocks: rlp.list_at(1)?,
+            blocks: rlp.list_at(2)?,
         })
     }
 }

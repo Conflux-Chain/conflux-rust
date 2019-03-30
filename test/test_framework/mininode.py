@@ -410,7 +410,7 @@ class P2PInterface(P2PConnection):
         self.send_protocol_msg(resp)
 
     def on_get_compact_blocks(self, msg):
-        resp = GetCompactBlocksResponse(reqid=msg.reqid, blocks=[])
+        resp = GetCompactBlocksResponse(reqid=msg.reqid, compact_blocks=[], blocks=[])
         self.send_protocol_msg(resp)
 
     def on_get_blocktxn(self, msg):
