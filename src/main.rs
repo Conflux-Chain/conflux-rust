@@ -108,7 +108,7 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("network-secret-key")
+            Arg::with_name("net-key")
                 .long("net-key")
                 .value_name("SECRET_KEY")
                 .help("Sets a custom secret key to generate unique node id")
@@ -117,7 +117,7 @@ fn main() {
         .arg(
             Arg::with_name("start-mining")
                 .long("start-mining")
-                .value_name("BOOLEAN")
+                .value_name("BOOL")
                 .help("start mining if set to true. Ensure that mining-author is set")
                 .takes_value(true),
         )
