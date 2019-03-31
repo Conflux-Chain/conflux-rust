@@ -80,7 +80,7 @@ macro_rules! build_config{
 
                     let config_value = config_str.parse::<toml::Value>().unwrap();
                     $(
-                        if let Some(value) = config_value.get(underscore_to_hyphen!(stringify!($name))) {
+                        if let Some(value) = config_value.get(stringify!($name)) {
                             config.$name = if_option!(
                                 $($type)+,
                                 THEN{ Some(value.clone().try_into().map_err(|_| concat!("Invalid ", stringify!($name)).to_owned())?) }
@@ -89,7 +89,7 @@ macro_rules! build_config{
                         }
                     )*
                     $(
-                        if let Some(value) = config_value.get(underscore_to_hyphen!(stringify!($c_name))) {
+                        if let Some(value) = config_value.get(stringify!($c_name)) {
                             config.$c_name = if_option!(
                                 $($c_type)+,
                                 THEN{ Some($converter(value.as_str().unwrap())?) }

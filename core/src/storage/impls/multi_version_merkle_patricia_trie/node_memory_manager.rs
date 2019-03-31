@@ -594,7 +594,7 @@ impl<
             .cache_algorithm
             .log_usage(&"trie node cache ".into());
         let allocator_ref = self.get_allocator();
-        info!("trie node allocator: max allowed size: {}, configured idle_size: {}, size: {}, allocated: {}", self.size_limit, self.idle_size, allocator_ref.capacity(), allocator_ref.len());
+        debug!("trie node allocator: max allowed size: {}, configured idle_size: {}, size: {}, allocated: {}", self.size_limit, self.idle_size, allocator_ref.capacity(), allocator_ref.len());
     }
 }
 

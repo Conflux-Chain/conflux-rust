@@ -16,7 +16,6 @@ class P2PTest(DefaultConfluxTestFramework):
         self.delay_factor = 1
         self.setup_clean_chain = True
         self.num_nodes = 20
-        self.conf_parameters = {"log-level":"\"debug\""}
 
     def setup_network(self):
         self.log.info("setup nodes ...")

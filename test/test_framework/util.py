@@ -256,14 +256,14 @@ def initialize_datadir(dirname, n, conf_parameters):
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
         local_conf = {"port": str(p2p_port(n)),
-                        "jsonrpc-local-http-port": str(rpc_port(n)),
-                        "log-file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
-                        "test-mode": "true",
-                        "log-level": "\"trace\"",
-                        "storage-cache-size": "200000",
-                        "storage-cache-start-size": "200000",
-                        "storage-node-map-size": "200000",
-                        "start-mining":"false",
+                        "jsonrpc_local_http_port": str(rpc_port(n)),
+                        "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
+                        "test_mode": "true",
+                        "log_level": "\"trace\"",
+                        "storage_cache_size": "200000",
+                        "storage_cache_start_size": "200000",
+                        "storage_node_map_size": "200000",
+                        "start_mining":"false",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]
