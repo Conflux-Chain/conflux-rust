@@ -49,7 +49,7 @@ build_config! {
         (test_mode, (bool), false)
         (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
-        (db_dir, (Option<String>), Some("./db".to_string()))
+        (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (generate_tx, (bool), false)
         (generate_tx_period_ms, (Option<u64>), Some(100))
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
