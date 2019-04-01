@@ -531,7 +531,7 @@ impl NetworkServiceInner {
             let nodes = self
                 .node_db
                 .read()
-                .sample_nodes(DISCOVER_NODES_COUNT, &allow_ips);
+                .sample_trusted_nodes(DISCOVER_NODES_COUNT, &allow_ips);
             discovery.try_ping_nodes(
                 &UdpIoContext::new(&self.udp_channel, &self.node_db),
                 nodes,
@@ -624,7 +624,7 @@ impl NetworkServiceInner {
             samples = self
                 .node_db
                 .read()
-                .sample_node_ids(egress_attempt_count, &allow_ips);
+                .sample_trusted_node_ids(egress_attempt_count, &allow_ips);
         }
         let reserved_nodes = self.reserved_nodes.read();
         // Try to connect all reserved peers and trusted peers

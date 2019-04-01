@@ -313,7 +313,7 @@ impl Discovery {
         let neighbors = uio
             .node_db
             .read()
-            .sample_nodes(DISCOVER_NODES_COUNT, &self.ip_filter);
+            .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter);
         let mut packets: Vec<Vec<u8>> = {
             let limit = (MAX_DATAGRAM_SIZE - (1 + 109)) / 90;
             let chunks = neighbors.chunks(limit);
@@ -473,7 +473,7 @@ impl Discovery {
             let discover_targets = uio
                 .node_db
                 .read()
-                .sample_nodes(DISCOVER_NODES_COUNT, &self.ip_filter)
+                .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter)
                 .into_iter();
             let discover_targets = discover_targets
                 .filter(|x| !self.discovery_nodes.contains(&x.id))

@@ -1,6 +1,7 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+
 use crate::{
     node_table::{Node, NodeContact, NodeEntry, NodeId, NodeTable},
     IpFilter,
@@ -185,13 +186,13 @@ impl NodeDatabase {
         })
     }
 
-    pub fn sample_nodes(
+    pub fn sample_trusted_nodes(
         &self, count: u32, filter: &IpFilter,
     ) -> Vec<NodeEntry> {
         self.trusted_nodes.sample_nodes(count, filter)
     }
 
-    pub fn sample_node_ids(
+    pub fn sample_trusted_node_ids(
         &self, count: u32, filter: &IpFilter,
     ) -> Vec<NodeId> {
         self.trusted_nodes.sample_node_ids(count, filter)
