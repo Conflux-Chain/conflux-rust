@@ -308,11 +308,6 @@ impl Session {
                 InsertResult::IpLimited => {
                     return Err(self.disconnect(io, DisconnectReason::IpLimited));
                 }
-                InsertResult::EndpointChanged => {
-                    return Err(
-                        self.disconnect(io, DisconnectReason::EndpointChanged)
-                    );
-                }
                 _ => {}
             }
         }

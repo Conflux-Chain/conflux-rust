@@ -256,7 +256,7 @@ impl Discovery {
         } else if !self.is_allowed(&entry) {
             debug!("Address not allowed: {:?}", entry);
         } else {
-            uio.node_db.write().insert_with_promotion(entry, false);
+            uio.node_db.write().insert(entry);
         }
         Ok(())
     }
@@ -293,7 +293,7 @@ impl Discovery {
         };
 
         if let Some(node) = expected_node {
-            uio.node_db.write().insert_with_promotion(node, true);
+            uio.node_db.write().insert_with_promotion(node);
             Ok(())
         } else {
             debug!("Got unexpected Pong from {:?} ; request not found", &from);

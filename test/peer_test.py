@@ -69,7 +69,7 @@ class AutoDiscovery(ConfluxTestFramework):
         p2p = IpLimitedNode()
         self.limited_node.add_p2p_connection(p2p)
         network_thread_start()
-        wait_until(lambda: p2p.disconnect_reason == 4)
+        wait_until(lambda: p2p.disconnect_reason == 3)
 
 
 if __name__ == "__main__":

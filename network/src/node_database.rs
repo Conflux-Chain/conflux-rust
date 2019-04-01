@@ -33,14 +33,17 @@ impl NodeDatabase {
         }
     }
 
-    /// add or update a node, and update the node information.
+    /// add or update a node with the specified `entry` and `stream_token`.
     pub fn insert_with_token(
         &mut self, entry: NodeEntry, stream_token: StreamToken,
     ) -> InsertResult {
-        if let Some(result) =
-            self.try_update_trusted_node(&entry, Some(stream_token))
-        {
-            return result;
+        if self.trusted_nodes.contains(&entry.id) {
+            self.trusted_nodes.note_success(
+                &entry.id,
+                true,
+                Some(stream_token),
+            );
+            return InsertResult::Updated;
         }
 
         match self
@@ -62,34 +65,33 @@ impl NodeDatabase {
         }
     }
 
-    fn try_update_trusted_node(
-        &mut self, entry: &NodeEntry, stream_token: Option<StreamToken>,
-    ) -> Option<InsertResult> {
-        let old_node = self.trusted_nodes.get(&entry.id)?;
+    /// Add or update a node with the specified `entry`.
+    pub fn insert(&mut self, entry: NodeEntry) -> InsertResult {
+        if self.trusted_nodes.contains(&entry.id) {
+            self.trusted_nodes.note_success(&entry.id, false, None);
+            return InsertResult::Updated;
+        }
 
-        // TODO handle the case of node endpoint changed:
-        // 1. Different TCP connections should have distinct node ids.
-        // 2. Allow endpoint change in case of no TCP connection.
-        // 3. Check number of nodes limitation per IP address.
-
-        if old_node.endpoint != entry.endpoint {
-            Some(InsertResult::EndpointChanged)
-        } else {
-            self.trusted_nodes.note_success(
-                &entry.id,
-                stream_token.is_some(),
-                stream_token,
-            );
-            Some(InsertResult::Updated)
+        match self
+            .ip_limit
+            .validate_insertion(&self.untrusted_nodes, &entry)
+        {
+            result @ InsertResult::Added | result @ InsertResult::Updated => {
+                let mut node = Node::new(entry.id, entry.endpoint);
+                node.last_contact = Some(NodeContact::success());
+                self.untrusted_nodes.update_last_contact(node);
+                result
+            }
+            result @ _ => result,
         }
     }
 
-    /// Add or update a node, and promote untrusted node if specified.
-    pub fn insert_with_promotion(
-        &mut self, entry: NodeEntry, promote: bool,
-    ) -> InsertResult {
-        if let Some(result) = self.try_update_trusted_node(&entry, None) {
-            return result;
+    /// Add or update a node with the specified `entry`, and promote the node to
+    /// trusted if it is untrusted.
+    pub fn insert_with_promotion(&mut self, entry: NodeEntry) -> InsertResult {
+        if self.trusted_nodes.contains(&entry.id) {
+            self.trusted_nodes.note_success(&entry.id, false, None);
+            return InsertResult::Updated;
         }
 
         match self
@@ -100,18 +102,14 @@ impl NodeDatabase {
                 let mut node = Node::new(entry.id, entry.endpoint);
                 node.last_contact = Some(NodeContact::success());
 
-                if promote {
-                    if let Some(old_node) =
-                        self.untrusted_nodes.remove_with_id(&entry.id)
-                    {
-                        node.last_connected = old_node.last_connected;
-                        node.stream_token = old_node.stream_token;
-                    }
-
-                    self.trusted_nodes.add_node(node, false);
-                } else {
-                    self.untrusted_nodes.update_last_contact(node);
+                if let Some(old_node) =
+                    self.untrusted_nodes.remove_with_id(&entry.id)
+                {
+                    node.last_connected = old_node.last_connected;
+                    node.stream_token = old_node.stream_token;
                 }
+
+                self.trusted_nodes.add_node(node, false);
 
                 result
             }
@@ -252,8 +250,6 @@ pub enum InsertResult {
     Updated,
     // the number of nodes reaches the maximum value for one IP address.
     IpLimited,
-    // node endpoint changed and not allow to update in trusted node table.
-    EndpointChanged,
 }
 
 /// IP address limitation for P2P nodes.
@@ -545,14 +541,6 @@ mod tests {
             assert_eq!(node.is_some(), true);
             assert_eq!(node.unwrap().stream_token, Some(3));
 
-            // update trusted node, but endpoint changed
-            let entry = new_entry(Some(entry.id.clone()), "127.0.0.1:888");
-            assert_eq!(
-                db.insert_with_token(entry.clone(), 4),
-                InsertResult::EndpointChanged
-            );
-            assert_eq!(db.get(&entry.id, true).unwrap().stream_token, Some(3));
-
             // add untrusted node
             let entry = new_entry(None, "127.0.0.2:999");
             assert_eq!(
@@ -580,16 +568,13 @@ mod tests {
 
             // add untrusted node
             let entry = new_entry(None, "127.0.0.1:999");
-            assert_eq!(
-                db.insert_with_promotion(entry.clone(), false),
-                InsertResult::Added
-            );
+            assert_eq!(db.insert(entry.clone()), InsertResult::Added);
             assert_eq!(db.get(&entry.id, true), None);
             assert_eq!(db.get(&entry.id, false).is_some(), true);
 
             // update node and promote
             assert_eq!(
-                db.insert_with_promotion(entry.clone(), true),
+                db.insert_with_promotion(entry.clone()),
                 InsertResult::Updated
             );
             assert_eq!(db.get(&entry.id, true).is_some(), true);
@@ -612,10 +597,7 @@ mod tests {
 
             // prepare untrusted node to promote
             let entry = new_entry(None, "127.0.0.2:999");
-            assert_eq!(
-                db.insert_with_promotion(entry.clone(), false),
-                InsertResult::Added
-            );
+            assert_eq!(db.insert(entry.clone()), InsertResult::Added);
             assert_eq!(db.get(&entry.id, true), None);
             assert_eq!(db.get(&entry.id, false).is_some(), true);
 
