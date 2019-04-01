@@ -11,6 +11,14 @@ Conflux-rust is a rust-based implementation of Conflux protocol, it is fast and 
 4. Install clang for compiling rocksdb.
 5. Install other dependencies for rocksdb. Instruction can be found in https://github.com/facebook/rocksdb/blob/master/INSTALL.md
 
+# Run Instructing
+
+1. Build the project.
+2. Enter directory `run`.
+3. Edit `default.toml` and set `public_address` according to your public IP.
+4. Execute the command
+        ../target/release/conflux --config default.toml
+
 # Test Instruction
 
 1. Install solc to compile solidity.

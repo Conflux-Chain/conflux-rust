@@ -212,7 +212,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapDeltaMpt<CacheAlgoDataT> {
     }
 
     pub fn log_usage(&self) {
-        info!(
+        debug!(
             "node_ref_map.old_nodes_map: #elements: {}",
             self.old_nodes_map.len(),
         );
