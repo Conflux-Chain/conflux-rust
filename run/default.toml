@@ -21,10 +21,11 @@ bootnodes='cfxnode://337c2a5cc9c251cef4cac4b0212e4c66a4439756acd8b1a085bf32b8d54
 #
 # udp_port=32323
 
-# `start_mining` controls whether a thread is started to mine new blocks. If the
-# value is true, `mining_author` must be set.
+# `start_mining` controls whether a thread is started to mine new blocks.
+# If not set, the node will not start mining blocks.
+# If the value is true, `mining_author` must be set.
 #
-# start_mining=false
+start_mining=true
 
 # `mining_author` is the address to receive mining rewards.
 # The value is a 40-digit hex string without 0x prefix.

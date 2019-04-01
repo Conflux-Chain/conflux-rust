@@ -14,11 +14,12 @@ Conflux-rust is a rust-based implementation of Conflux protocol, it is fast and 
 # Run Instruction
 
 1. Build the project.
-2. Edit `run/default.toml`: 
+2. Enter directory `run`.
+2. Edit `default.toml`: 
     * Set `public_address` according to your public IP.
     * Set `mining_author` to the account address to receive mining reward.
 3. Execute the command
-        ./target/release/conflux --config default.toml
+        `./../target/release/conflux --config default.toml`
 
 # Test Instruction
 
