@@ -611,7 +611,7 @@ impl NetworkServiceInner {
         }
 
         let self_id = meta.id().clone();
-        let max_outgoing_peers = self.config.max_outgoing_peers;
+        let max_outgoing_peers = self.config.max_outgoing_peers as usize;
         //let max_incoming_peers = self.config.max_incoming_peers;
         let max_handshakes = self.config.max_handshakes;
         let allow_ips = self.config.ip_filter.clone();
@@ -620,11 +620,15 @@ impl NetworkServiceInner {
             self.session_count();
         let samples;
         {
-            let egress_attempt_count = max_outgoing_peers - egress_count as u32;
-            samples = self
-                .node_db
-                .read()
-                .sample_trusted_node_ids(egress_attempt_count, &allow_ips);
+            let egress_attempt_count = if max_outgoing_peers > egress_count {
+                max_outgoing_peers - egress_count
+            } else {
+                0
+            };
+            samples = self.node_db.read().sample_trusted_node_ids(
+                egress_attempt_count as u32,
+                &allow_ips,
+            );
         }
         let reserved_nodes = self.reserved_nodes.read();
         // Try to connect all reserved peers and trusted peers

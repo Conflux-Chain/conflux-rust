@@ -49,7 +49,7 @@ build_config! {
         (test_mode, (bool), false)
         (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
-        (db_dir, (Option<String>), Some("./db".to_string()))
+        (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (generate_tx, (bool), false)
         (generate_tx_period_ms, (Option<u64>), Some(100))
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
@@ -121,7 +121,12 @@ impl Configuration {
         if self.raw_conf.netconf_dir.is_some() {
             network_config.config_path = self.raw_conf.netconf_dir.clone();
         }
-        network_config.use_secret = self.raw_conf.net_key.clone().map(|sec_str| sec_str.parse().expect("net_key is not a valid secret string"));
+        network_config.use_secret =
+            self.raw_conf.net_key.clone().map(|sec_str| {
+                sec_str
+                    .parse()
+                    .expect("net_key is not a valid secret string")
+            });
         if let Some(addr) = self.raw_conf.public_address.clone() {
             network_config.public_address = match addr
                 .to_socket_addrs()
@@ -250,9 +255,9 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
                     "Failed to resolve hostname of a boot node: {}",
                     s
                 )),
-                Some(_) => Err(format!(
-                    "Invalid node address format given for a boot node: {}",
-                    s
+                Some(e) => Err(format!(
+                    "Invalid node address format given for a boot node: {} err={:?}",
+                    s, e
                 )),
             })
             .collect(),

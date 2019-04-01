@@ -87,7 +87,7 @@ pub fn setup_public_rpc_apis(rpc_impl: Arc<RpcImpl>) -> IoHandler {
     let mut handler = IoHandler::new();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
-//    handler.extend_with(TestRpcImpl::new(rpc_impl.clone()).to_delegate());
+    //    handler.extend_with(TestRpcImpl::new(rpc_impl.clone()).to_delegate());
     handler.extend_with(CfxHandler::new(rpc_impl.clone()).to_delegate());
 
     handler

@@ -55,6 +55,7 @@ pub const MAX_BLOCKS_TO_SEND: u64 = 256;
 const MIN_PEERS_PROPAGATION: usize = 4;
 const MAX_PEERS_PROPAGATION: usize = 128;
 const DEFAULT_GET_HEADERS_NUM: u64 = 1;
+const DEFAULT_GET_PARENT_HEADERS_NUM: u64 = 100;
 const REQUEST_START_WAITING_TIME_SECONDS: u64 = 1;
 //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
 
@@ -264,19 +265,19 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let req: GetCompactBlocks = rlp.as_val()?;
         let mut compact_blocks = Vec::with_capacity(req.hashes.len());
+        let mut blocks = Vec::new();
         debug!("on_get_compact_blocks, msg=:{:?}", req);
         for hash in &req.hashes {
             if let Some(compact_block) = self.graph.compact_block_by_hash(hash)
             {
-                compact_blocks.push(compact_block);
+                if (compact_blocks.len() as u64) < MAX_HEADERS_TO_SEND {
+                    compact_blocks.push(compact_block);
+                }
             } else if let Some(block) = self.graph.block_by_hash(hash) {
                 debug!("Have complete block but no compact block, return complete block instead");
-                let block_resp = GetBlocksResponse {
-                    request_id: req.request_id,
-                    blocks: vec![block.as_ref().clone()],
-                };
-                self.send_message(io, peer, &block_resp)?;
-                return Ok(());
+                if (blocks.len() as u64) < MAX_BLOCKS_TO_SEND {
+                    blocks.push(block);
+                }
             } else {
                 warn!(
                     "Peer {} requested non-existent compact block {}",
@@ -286,7 +287,8 @@ impl SynchronizationProtocolHandler {
         }
         let resp = GetCompactBlocksResponse {
             request_id: req.request_id,
-            blocks: compact_blocks,
+            compact_blocks,
+            blocks: blocks.iter().map(|b| b.as_ref().clone()).collect(),
         };
         self.send_message(io, peer, &resp)?;
         Ok(())
@@ -309,7 +311,7 @@ impl SynchronizationProtocolHandler {
                 return Err(ErrorKind::UnexpectedResponse.into());
             }
         };
-        for mut cmpct in resp.blocks {
+        for mut cmpct in resp.compact_blocks {
             let hash = cmpct.hash();
             if !requested_blocks.remove(&hash) {
                 warn!("Response has not requested compact block {:?}", hash);
@@ -380,6 +382,7 @@ impl SynchronizationProtocolHandler {
                 }
             }
         }
+        self.on_blocks_inner(resp.blocks, &mut requested_blocks, io)?;
 
         // Request full block if reconstruction fails
         if !failed_blocks.is_empty() {
@@ -823,6 +826,7 @@ impl SynchronizationProtocolHandler {
         }
 
         let mut parent_hash = H256::default();
+        let mut parent_height = 0;
         let mut hashes = Vec::default();
         let mut dependent_hashes = Vec::new();
         let mut need_to_relay = Vec::new();
@@ -862,6 +866,7 @@ impl SynchronizationProtocolHandler {
                     return Err(ErrorKind::Invalid.into());
                 }
                 parent_hash = header.parent_hash().clone();
+                parent_height = header.height();
             }
         }
         dependent_hashes.push(parent_hash);
@@ -886,12 +891,23 @@ impl SynchronizationProtocolHandler {
             if *past_hash != H256::default()
                 && !self.graph.contains_block_header(past_hash)
             {
-                self.request_block_headers(
-                    io,
-                    peer,
-                    past_hash,
-                    DEFAULT_GET_HEADERS_NUM,
-                );
+                let num = if *past_hash == parent_hash {
+                    let current_height =
+                        self.graph.consensus.best_epoch_number() as u64;
+                    // Without fork, we only need to request missing blocks
+                    // since current_height
+                    if parent_height > current_height {
+                        cmp::min(
+                            DEFAULT_GET_PARENT_HEADERS_NUM,
+                            parent_height - current_height,
+                        )
+                    } else {
+                        DEFAULT_GET_HEADERS_NUM
+                    }
+                } else {
+                    DEFAULT_GET_HEADERS_NUM
+                };
+                self.request_block_headers(io, peer, past_hash, num);
             }
         }
         if !hashes.is_empty() {
@@ -943,9 +959,28 @@ impl SynchronizationProtocolHandler {
         };
         let mut requested_blocks: HashSet<H256> =
             req_hashes_vec.into_iter().collect();
+        self.on_blocks_inner(blocks.blocks, &mut requested_blocks, io)?;
 
+        // Request missing blocks from another random peer
+        if !requested_blocks.is_empty() {
+            let chosen_peer = self.choose_peer_after_failure(peer);
+            self.request_blocks(
+                io,
+                chosen_peer,
+                requested_blocks.into_iter().collect(),
+            );
+        }
+
+        Ok(())
+    }
+
+    fn on_blocks_inner(
+        &self, blocks: Vec<Block>, requested_blocks: &mut HashSet<H256>,
+        io: &NetworkContext,
+    ) -> Result<(), Error>
+    {
         let mut need_to_relay = Vec::new();
-        for mut block in blocks.blocks {
+        for mut block in blocks {
             let hash = block.hash();
             if !requested_blocks.contains(&hash) {
                 warn!("Response has not requested block {:?}", hash);
@@ -979,6 +1014,7 @@ impl SynchronizationProtocolHandler {
                 self.graph.insert_block(block, true, true, false);
             if success {
                 // The requested block is correctly received
+                self.blocks_in_flight.lock().remove(&hash);
                 self.block_request_waittime.lock().remove(&hash);
                 requested_blocks.remove(&hash);
             }
@@ -998,17 +1034,6 @@ impl SynchronizationProtocolHandler {
                 new_block_hash_msg.as_ref(),
             )?;
         }
-
-        // Request missing blocks from another random peer
-        if !requested_blocks.is_empty() {
-            let chosen_peer = self.choose_peer_after_failure(peer);
-            self.request_blocks(
-                io,
-                chosen_peer,
-                requested_blocks.into_iter().collect(),
-            );
-        }
-
         Ok(())
     }
 
@@ -1067,15 +1092,14 @@ impl SynchronizationProtocolHandler {
             warn!("Unexpected message from unrecognized peer: peer={:?} msg=NEW_BLOCK", peer);
             return Ok(());
         }
-
-        let mut new_block = rlp.as_val::<NewBlock>()?;
+        let new_block = rlp.as_val::<NewBlock>()?;
+        let mut block = new_block.block;
         Self::recover_public(
-            &mut new_block.block,
+            &mut block,
             &mut *self.get_transaction_pool().transaction_pubkey_cache.write(),
             &mut *self.graph.cache_man.lock(),
             &*self.get_transaction_pool().worker_pool.lock(),
         )?;
-        let block = new_block.block;
         debug!(
             "on_new_block, header={:?} tx_number={}",
             block.block_header,
@@ -1124,7 +1148,6 @@ impl SynchronizationProtocolHandler {
                 new_block_hash_msg.as_ref(),
             )?;
         }
-
         Ok(())
     }
 

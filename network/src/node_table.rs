@@ -432,8 +432,8 @@ impl NodeTable {
         &self, count: u32, _filter: &IpFilter,
     ) -> Vec<NodeId> {
         let mut node_id_set: HashSet<NodeId> = HashSet::new();
+        let mut rng = rand::thread_rng();
         for _i in 0..count {
-            let mut rng = rand::thread_rng();
             let node_rep_idx = rng.gen::<usize>() % NODE_REPUTATION_LEVEL_COUNT;
             let node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
             let node_rep_vec = &self.node_reputation_table[node_rep];

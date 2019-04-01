@@ -501,7 +501,7 @@ class DefaultConfluxTestFramework(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
-        self.conf_parameters = {"log-level":"\"debug\""}
+        self.conf_parameters = {"log_level":"\"debug\""}
 
     def setup_network(self):
         self.log.info("setup nodes ...")

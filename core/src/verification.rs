@@ -40,6 +40,13 @@ impl VerificationConfig {
 
     pub fn verify_pow(&self, header: &mut BlockHeader) -> Result<(), Error> {
         let pow_hash = Self::compute_header_pow_quality(header);
+        if header.difficulty().is_zero() {
+            return Err(BlockError::InvalidDifficulty(Mismatch {
+                expected: 0.into(),
+                found: 0.into(),
+            })
+            .into());
+        }
         let boundary = pow::difficulty_to_boundary(header.difficulty());
         if pow_hash >= boundary {
             warn!("block {} has invalid proof of work. boundary: {}, pow_hash: {}", header.hash(), boundary.clone(), pow_hash.clone());

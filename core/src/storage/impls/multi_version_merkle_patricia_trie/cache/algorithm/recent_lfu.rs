@@ -530,7 +530,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     fn log_usage(&self, prefix: &String) {
         self.frequency_lru
             .log_usage(&"{} recent_lfu#frequency ".into());
-        info!(
+        debug!(
             "{}recent_lfu: capacity {}, size {}",
             prefix,
             self.capacity,

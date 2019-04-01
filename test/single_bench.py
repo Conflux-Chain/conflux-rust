@@ -14,7 +14,6 @@ class MessageTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
-        self.conf_parameters = {"log-level":"\"debug\""}
 
     def setup_network(self):
         # self.setup_nodes(binary=[os.path.join(
