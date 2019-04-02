@@ -3,13 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    Bytes, H160 as RpcH160, H256 as RpcH256, U256 as RpcU256,
+    receipt::Receipt, Bytes, H160 as RpcH160, H256 as RpcH256, U256 as RpcU256,
 };
 use keylib::Error;
 use primitives::{
     transaction::Action, SignedTransaction,
-    Transaction as PrimitiveTransaction, TransactionAddress,
-    TransactionWithSignature,
+    Transaction as PrimitiveTransaction, TransactionWithSignature,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,6 +23,8 @@ pub struct Transaction {
     pub value: RpcU256,
     pub gas_price: RpcU256,
     pub gas: RpcU256,
+    pub output: Option<Bytes>,
+    pub contracts_created: Option<Vec<RpcH160>>,
     pub data: Bytes,
     /// The standardised V field of the signature.
     pub v: RpcU256,
@@ -35,17 +36,20 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn from_signed(
-        t: &SignedTransaction, transaction_address: Option<TransactionAddress>,
+        t: &SignedTransaction, receipt: Option<Receipt>,
     ) -> Transaction {
         Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
-            block_hash: transaction_address
-                .clone()
-                .map(|x| x.block_hash.into()),
-            transaction_index: transaction_address
-                .clone()
-                .map(|x| x.index.into()),
+            block_hash: receipt.clone().map(|x| x.block_hash.into()),
+            transaction_index: receipt.clone().map(|x| x.index.into()),
+            contracts_created: receipt.clone().map(|x| {
+                x.contracts_created
+                    .iter()
+                    .map(|x| x.clone().into())
+                    .collect()
+            }),
+            output: receipt.clone().map(|x| x.output.into()),
             from: t.sender().into(),
             to: match t.action {
                 Action::Create => None,

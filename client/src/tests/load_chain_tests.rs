@@ -44,7 +44,7 @@ fn test_load_chain() {
     let handle = Client::start(conf, exit.clone()).unwrap();
 
     let expected =
-        "0xacd38c6ceffb7a8f2677e31212ccc2373526e1759d9569c1e7b1a3ab97e3a418";
+        "0xc727ae34801683d2d063b2c925287af0ee07f5a65431c9d51b43430aa23eceb8";
     let best_block_hash: H256 =
         serde_json::from_str(&format!("{:?}", expected)).unwrap();
     let max_timeout = Duration::from_secs(60);

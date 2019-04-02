@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    bytes::Bytes,
     cache_manager::{CacheId, CacheManager},
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_MISC, COL_TX_ADDRESS},
     executive::{ExecutionError, Executive},
@@ -573,6 +574,9 @@ impl ConsensusGraphInner {
                 {
                     let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                     let mut transaction_logs = Vec::new();
+                    let mut contracts_created = Vec::new();
+                    let mut output = Bytes::new();
+
                     let r = ex.transact(transaction);
                     // TODO Store fine-grained output status in receipts.
                     // Note now NotEnoughCash has
@@ -611,6 +615,8 @@ impl ConsensusGraphInner {
                             accumulated_fee += executed.fee;
                             transaction_logs = executed.logs;
                             tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                            contracts_created = executed.contracts_created;
+                            output = executed.output;
                         }
                         _ => {
                             n_other += 1;
@@ -621,6 +627,8 @@ impl ConsensusGraphInner {
                         tx_outcome_status,
                         last_cumulative_gas_used,
                         transaction_logs,
+                        contracts_created,
+                        output,
                     );
                     receipts.push(receipt);
 
@@ -872,7 +880,7 @@ impl ConsensusGraphInner {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction,
-    ) -> Result<Vec<u8>, ExecutionError> {
+    ) -> Result<(Vec<u8>, U256), ExecutionError> {
         let spec = Spec::new_spec();
         let machine = new_machine();
         let mut state = State::new(
@@ -895,7 +903,7 @@ impl ConsensusGraphInner {
         let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
         let r = ex.transact(tx);
         trace!("Execution result {:?}", r);
-        r.map(|r| r.output)
+        r.map(|r| (r.output, r.gas_used))
     }
 
     pub fn recompute_states<F>(&mut self, pivot_index: usize, get_block: &F)
@@ -1213,6 +1221,17 @@ impl ConsensusGraphInner {
             self.block_receipts_by_hash(&address.block_hash, false)?;
         trace!("Get receipts");
         receipts.get(address.index).map(Clone::clone)
+    }
+
+    pub fn get_transaction_receipt_with_address(
+        &mut self, tx_hash: &H256,
+    ) -> Option<(Receipt, TransactionAddress)> {
+        trace!("Get receipt with address {}", tx_hash);
+        let address = self.transaction_address_by_hash(tx_hash, false)?;
+        // receipts should never be None if address is not None because
+        let receipts =
+            self.block_receipts_by_hash(&address.block_hash, false)?;
+        Some((receipts.get(address.index).unwrap().clone(), address))
     }
 
     pub fn insert_block_receipts_to_kv(
@@ -2593,6 +2612,14 @@ impl ConsensusGraph {
         self.inner.write().get_transaction_receipt(hash)
     }
 
+    pub fn get_transaction_receipt_with_address(
+        &self, hash: &H256,
+    ) -> Option<(Receipt, TransactionAddress)> {
+        self.inner
+            .write()
+            .get_transaction_receipt_with_address(hash)
+    }
+
     pub fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
         self.inner.read().get_epoch_hash_for_block(hash)
     }
@@ -2624,7 +2651,19 @@ impl ConsensusGraph {
     pub fn call_virtual(
         &self, tx: &SignedTransaction,
     ) -> Result<Vec<u8>, ExecutionError> {
-        self.inner.write().call_virtual(tx)
+        self.inner
+            .write()
+            .call_virtual(tx)
+            .map(|(output, _)| output)
+    }
+
+    pub fn estimate_gas(
+        &self, tx: &SignedTransaction,
+    ) -> Result<U256, ExecutionError> {
+        self.inner
+            .write()
+            .call_virtual(tx)
+            .map(|(_, gas_used)| gas_used)
     }
 
     pub fn persist_terminals(&self) {

@@ -3,9 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Account, Block, Bytes, EpochNumber, Receipt as RpcReceipt,
-    Status as RpcStatus, Transaction, Transaction as RpcTransaction,
-    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Block, Bytes, EpochNumber, Receipt as RpcReceipt, Status as RpcStatus,
+    Transaction, Transaction as RpcTransaction, H160 as RpcH160,
+    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use cfx_types::H256;
 use cfxcore::PeerInfo;
@@ -113,15 +113,15 @@ build_rpc_trait! {
         #[rpc(name = "cfx_getTransactionByHash")]
         fn transaction_by_hash(&self, RpcH256) -> RpcResult<Option<Transaction>>;
 
-        /// Returns the JSON of whole chain
-        #[rpc(name = "cfx_getChain")]
-        fn chain(&self) -> RpcResult<Vec<Block>>;
+
+        #[rpc(name = "cfx_estimateGas")]
+        fn estimate_gas(&self, RpcTransaction) -> RpcResult<RpcU256>;
 
         #[rpc(name = "cfx_getBlocksByEpoch")]
         fn blocks_by_epoch(&self, EpochNumber) -> RpcResult<Vec<RpcH256>>;
 
-        #[rpc(name = "cfx_getAccount")]
-        fn account(&self, RpcH160, bool, RpcU64, Trailing<EpochNumber>) -> RpcResult<Account>;
+//        #[rpc(name = "cfx_getAccount")]
+//        fn account(&self, RpcH160, bool, RpcU64, Trailing<EpochNumber>) -> RpcResult<Account>;
 
 //        /// Returns transaction at given block hash and index.
 //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
@@ -166,6 +166,10 @@ build_rpc_trait! {
 
         #[rpc(name = "getpeerinfo")]
         fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>>;
+
+        /// Returns the JSON of whole chain
+        #[rpc(name = "cfx_getChain")]
+        fn chain(&self) -> RpcResult<Vec<Block>>;
 
         #[rpc(name = "stop")]
         fn stop(&self) -> RpcResult<()>;
