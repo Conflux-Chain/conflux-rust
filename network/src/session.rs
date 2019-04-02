@@ -8,7 +8,8 @@ use crate::{
         SendQueueStatus, MAX_PAYLOAD_SIZE,
     },
     hash::keccak,
-    node_table::{Node, NodeContact, NodeEndpoint, NodeEntry, NodeId},
+    node_database::InsertResult,
+    node_table::{NodeEndpoint, NodeEntry, NodeId},
     service::NetworkServiceInner,
     Capability, DisconnectReason, Error, ErrorKind, ProtocolId,
     SessionMetadata,
@@ -290,29 +291,24 @@ impl Session {
         };
 
         let entry = NodeEntry {
-            id: *id,
+            id: id.clone(),
             endpoint: ping_to.clone(),
         };
         if !entry.endpoint.is_valid() {
             debug!(target: "network", "Got bad address: {:?}", entry);
+            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
         } else if !(entry.endpoint.is_allowed(host.get_ip_filter())
             && entry.id != *host_meta.id())
         {
             debug!(target: "network", "Address not allowed: {:?}", entry);
+            return Err(self.disconnect(io, DisconnectReason::IpLimited));
         } else {
             debug!(target: "network", "Receive valid endpoint {:?}", entry);
-            let mut trusted = host.trusted_nodes.write();
-            let mut untrusted = host.untrusted_nodes.write();
-
-            if trusted.contains(&entry.id) {
-                debug_assert!(!untrusted.contains(&entry.id));
-                trusted.note_success(&entry.id, true, Some(self.token()));
-            } else {
-                let mut node = Node::new(entry.id, entry.endpoint);
-                node.last_contact = Some(NodeContact::success());
-                node.last_connected = Some(NodeContact::success());
-                node.stream_token = Some(self.token());
-                untrusted.add_node(node, false);
+            match host.node_db.write().insert_with_token(entry, self.token()) {
+                InsertResult::IpLimited => {
+                    return Err(self.disconnect(io, DisconnectReason::IpLimited));
+                }
+                _ => {}
             }
         }
 

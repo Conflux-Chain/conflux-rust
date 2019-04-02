@@ -73,7 +73,7 @@ impl Discovery {
         key: &KeyPair, public: NodeEndpoint, ip_filter: IpFilter,
     ) -> Discovery {
         Discovery {
-            id: *key.public(),
+            id: key.public().clone(),
             id_hash: keccak(key.public()),
             secret: key.secret().clone(),
             public_endpoint: public,
@@ -141,7 +141,7 @@ impl Discovery {
         )?;
 
         self.in_flight_pings.insert(
-            node.id,
+            node.id.clone(),
             PingRequest {
                 sent_at: Instant::now(),
                 node: node.clone(),
@@ -247,25 +247,16 @@ impl Discovery {
         self.send_packet(uio, PACKET_PONG, from, &response.drain())?;
 
         let entry = NodeEntry {
-            id: *node_id,
+            id: node_id.clone(),
             endpoint: pong_to.clone(),
         };
+        // TODO handle the error before sending pong
         if !entry.endpoint.is_valid() {
             debug!("Got bad address: {:?}", entry);
         } else if !self.is_allowed(&entry) {
             debug!("Address not allowed: {:?}", entry);
         } else {
-            let mut trusted = uio.trusted_nodes.write();
-            let mut untrusted = uio.untrusted_nodes.write();
-
-            if trusted.contains(&entry.id) {
-                debug_assert!(!untrusted.contains(&entry.id));
-                trusted.note_success(&entry.id, false, None);
-            } else {
-                let mut node = Node::new(entry.id, entry.endpoint);
-                node.last_contact = Some(NodeContact::success());
-                untrusted.update_last_contact(node);
-            }
+            uio.node_db.write().insert(entry);
         }
         Ok(())
     }
@@ -302,7 +293,7 @@ impl Discovery {
         };
 
         if let Some(node) = expected_node {
-            uio.discover_trusted_node(&node);
+            uio.node_db.write().insert_with_promotion(node);
             Ok(())
         } else {
             debug!("Got unexpected Pong from {:?} ; request not found", &from);
@@ -320,9 +311,9 @@ impl Discovery {
         self.check_timestamp(timestamp)?;
 
         let neighbors = uio
-            .trusted_nodes
+            .node_db
             .read()
-            .sample_nodes(DISCOVER_NODES_COUNT, &self.ip_filter);
+            .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter);
         let mut packets: Vec<Vec<u8>> = {
             let limit = (MAX_DATAGRAM_SIZE - (1 + 109)) / 90;
             let chunks = neighbors.chunks(limit);
@@ -454,7 +445,7 @@ impl Discovery {
     }
 
     fn expire_node_request(&mut self, uio: &UdpIoContext, node_id: NodeId) {
-        uio.trusted_nodes.write().note_failure(&node_id, false);
+        uio.node_db.write().note_failure(&node_id, false, true);
     }
 
     fn update_new_nodes(&mut self, uio: &UdpIoContext) {
@@ -480,9 +471,9 @@ impl Discovery {
         let mut tried_count = 0;
         {
             let discover_targets = uio
-                .trusted_nodes
+                .node_db
                 .read()
-                .sample_nodes(DISCOVER_NODES_COUNT, &self.ip_filter)
+                .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter)
                 .into_iter();
             let discover_targets = discover_targets
                 .filter(|x| !self.discovery_nodes.contains(&x.id))
@@ -522,7 +513,7 @@ impl Discovery {
         )?;
 
         self.in_flight_find_nodes.insert(
-            node.id,
+            node.id.clone(),
             FindNodeRequest {
                 sent_at: Instant::now(),
                 response_count: 0,

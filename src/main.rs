@@ -199,7 +199,6 @@ fn main() {
                 .value_name("MB")
                 .help("Sets egress queue capacity of P2P network.")
                 .takes_value(true)
-                .default_value("256")
                 .validator(from_str_validator::<usize>),
         )
         .arg(
@@ -208,7 +207,6 @@ fn main() {
                 .value_name("MB")
                 .help("Sets minimum throttling queue size of egress.")
                 .takes_value(true)
-                .default_value("10")
                 .validator(from_str_validator::<usize>),
         )
         .arg(
@@ -217,18 +215,25 @@ fn main() {
                 .value_name("MB")
                 .help("Sets maximum throttling queue size of egress.")
                 .takes_value(true)
-                .default_value("64")
+                .validator(from_str_validator::<usize>),
+        )
+        .arg(
+            Arg::with_name("p2p-nodes-per-ip")
+                .long("p2p-nodes-per-ip")
+                .value_name("VALUE")
+                .help("Sets maximum number of P2P nodes for one IP address. Set 0 to allow unlimited nodes.")
+                .takes_value(true)
                 .validator(from_str_validator::<usize>),
         )
         .get_matches_from(std::env::args().collect::<Vec<_>>());
 
-    THROTTLING_SERVICE.write().initialize(
-        value_from_str(&matches, "egress-queue-capacity"),
-        value_from_str(&matches, "egress-min-throttle"),
-        value_from_str(&matches, "egress-max-throttle"),
-    );
-
     let conf = Configuration::parse(&matches).unwrap();
+
+    THROTTLING_SERVICE.write().initialize(
+        conf.raw_conf.egress_queue_capacity,
+        conf.raw_conf.egress_min_throttle,
+        conf.raw_conf.egress_max_throttle,
+    );
 
     // If log_conf is provided, use it for log configuration and ignore
     // log_file and log_level. Otherwise, set stdout to INFO and set
@@ -296,12 +301,4 @@ fn from_str_validator<T: FromStr>(arg: String) -> Result<(), String> {
         Ok(_) => Ok(()),
         Err(_) => Err(arg),
     }
-}
-
-fn value_from_str<T, S>(matches: &clap::ArgMatches, name: S) -> T
-where
-    T: FromStr,
-    S: AsRef<str>,
-{
-    matches.value_of(name).unwrap().parse::<T>().ok().unwrap()
 }

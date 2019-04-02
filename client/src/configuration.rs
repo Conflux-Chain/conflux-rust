@@ -68,6 +68,10 @@ build_config! {
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
         (mining_author, (Option<String>), None)
+        (egress_queue_capacity, (usize), 256)
+        (egress_min_throttle, (usize), 10)
+        (egress_max_throttle, (usize), 64)
+        (p2p_nodes_per_ip, (usize), 1)
     }
     {
         (
@@ -145,6 +149,7 @@ impl Configuration {
                 Duration::from_secs(nt_promotion_timeout);
         }
         network_config.test_mode = self.raw_conf.test_mode;
+        network_config.nodes_per_ip = self.raw_conf.p2p_nodes_per_ip;
         network_config
     }
 

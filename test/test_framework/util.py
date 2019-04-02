@@ -264,6 +264,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "storage_cache_start_size": "200000",
                         "storage_node_map_size": "200000",
                         "start_mining":"false",
+                        "p2p_nodes_per_ip": "0",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]

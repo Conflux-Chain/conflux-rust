@@ -6,6 +6,7 @@ use crate::{
     discovery::{Discovery, DISCOVER_NODES_COUNT},
     io::*,
     ip_utils::{map_external_address, select_public_address},
+    node_database::NodeDatabase,
     node_table::*,
     session::{self, Session, SessionData},
     Capability, DisconnectReason, Error, IpFilter, NetworkConfiguration,
@@ -100,21 +101,14 @@ impl UdpChannel {
 
 pub struct UdpIoContext<'a> {
     pub channel: &'a RwLock<UdpChannel>,
-    pub trusted_nodes: &'a RwLock<NodeTable>,
-    pub untrusted_nodes: &'a RwLock<NodeTable>,
+    pub node_db: &'a RwLock<NodeDatabase>,
 }
 
 impl<'a> UdpIoContext<'a> {
     pub fn new(
-        channel: &'a RwLock<UdpChannel>, trusted_nodes: &'a RwLock<NodeTable>,
-        untrusted_nodes: &'a RwLock<NodeTable>,
-    ) -> UdpIoContext<'a>
-    {
-        UdpIoContext {
-            channel,
-            trusted_nodes,
-            untrusted_nodes,
-        }
+        channel: &'a RwLock<UdpChannel>, node_db: &'a RwLock<NodeDatabase>,
+    ) -> UdpIoContext<'a> {
+        UdpIoContext { channel, node_db }
     }
 
     pub fn send(&self, payload: Bytes, address: SocketAddr) {
@@ -122,25 +116,6 @@ impl<'a> UdpIoContext<'a> {
             .write()
             .send_queue
             .push_back(Datagram { payload, address });
-    }
-
-    // Discover trusted peer from discovery protocol.
-    pub fn discover_trusted_node(&self, node: &NodeEntry) {
-        let mut trusted = self.trusted_nodes.write();
-        let mut untrusted = self.untrusted_nodes.write();
-
-        if trusted.contains(&node.id) {
-            trusted.note_success(&node.id, false, None);
-            debug_assert!(!untrusted.contains(&node.id));
-        } else {
-            let mut trusted_node = Node::new(node.id, node.endpoint.clone());
-            trusted_node.last_contact = Some(NodeContact::success());
-            if let Some(removed_node) = untrusted.remove_with_id(&node.id) {
-                trusted_node.last_connected = removed_node.last_connected;
-                trusted_node.stream_token = removed_node.stream_token;
-            }
-            trusted.add_node(trusted_node, false);
-        }
     }
 }
 
@@ -186,7 +161,7 @@ impl NetworkService {
     /// Add a P2P peer to the client as a trusted node
     pub fn add_peer(&self, node: NodeEntry) -> Result<(), Error> {
         if let Some(ref x) = self.inner {
-            x.add_trusted_node_with_entry(node);
+            x.node_db.write().insert_trusted(node);
             Ok(())
         } else {
             Err("Network service not started yet!".into())
@@ -312,9 +287,7 @@ pub struct NetworkServiceInner {
     handlers: RwLock<HashMap<ProtocolId, Arc<NetworkProtocolHandler + Sync>>>,
     timers: RwLock<HashMap<TimerToken, ProtocolTimer>>,
     timer_counter: RwLock<usize>,
-    /// Two disk backed table storing the trusted and untrusted nodes
-    pub trusted_nodes: RwLock<NodeTable>,
-    pub untrusted_nodes: RwLock<NodeTable>,
+    pub node_db: RwLock<NodeDatabase>,
     reserved_nodes: RwLock<HashSet<NodeId>>,
     nodes: RwLock<HashMap<NodeId, NodeEntry>>,
     dropped_nodes: RwLock<HashSet<StreamToken>>,
@@ -450,7 +423,7 @@ impl NetworkServiceInner {
 
         let nodes_path = config.config_path.clone();
 
-        let inner = NetworkServiceInner {
+        let mut inner = NetworkServiceInner {
             metadata: RwLock::new(HostMetadata {
                 keys,
                 capabilities: Vec::new(),
@@ -470,11 +443,10 @@ impl NetworkServiceInner {
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
             timer_counter: RwLock::new(HANDLER_TIMER),
-            trusted_nodes: RwLock::new(NodeTable::new(
-                nodes_path.clone(),
-                true,
+            node_db: RwLock::new(NodeDatabase::new(
+                nodes_path,
+                config.nodes_per_ip,
             )),
-            untrusted_nodes: RwLock::new(NodeTable::new(nodes_path, false)),
             reserved_nodes: RwLock::new(HashSet::new()),
             nodes: RwLock::new(HashMap::new()),
             dropped_nodes: RwLock::new(HashSet::new()),
@@ -482,7 +454,7 @@ impl NetworkServiceInner {
         };
 
         for n in &config.boot_nodes {
-            inner.add_trusted_node(n);
+            inner.add_boot_node(n);
         }
 
         let reserved_nodes = config.reserved_nodes.clone();
@@ -526,13 +498,13 @@ impl NetworkServiceInner {
 
     pub fn get_ip_filter(&self) -> &IpFilter { &self.config.ip_filter }
 
-    pub fn add_trusted_node(&self, id: &str) {
+    fn add_boot_node(&self, id: &str) {
         match Node::from_str(id) {
             Err(e) => {
                 debug!(target: "network", "Could not add node {}: {:?}", id, e);
             }
             Ok(n) => {
-                self.add_trusted_node_with_entry(NodeEntry {
+                self.node_db.write().insert_trusted(NodeEntry {
                     id: n.id,
                     endpoint: n.endpoint.clone(),
                 });
@@ -540,27 +512,10 @@ impl NetworkServiceInner {
         }
     }
 
-    pub fn add_trusted_node_with_entry(&self, entry: NodeEntry) {
-        let mut trusted = self.trusted_nodes.write();
-        let mut untrusted = self.untrusted_nodes.write();
-
-        if !trusted.contains(&entry.id) {
-            let mut trusted_node = Node::new(entry.id, entry.endpoint.clone());
-            if let Some(removed_node) = untrusted.remove_with_id(&entry.id) {
-                trusted_node.last_connected = removed_node.last_connected;
-                trusted_node.stream_token = removed_node.stream_token;
-                trusted_node.last_contact = removed_node.last_contact;
-            }
-            trusted.add_node(trusted_node, false);
-        } else {
-            debug_assert!(!untrusted.contains(&entry.id));
-        }
-    }
-
-    pub fn add_reserved_node(&self, id: &str) -> Result<(), Error> {
+    fn add_reserved_node(&mut self, id: &str) -> Result<(), Error> {
         let n = Node::from_str(id)?;
-        self.add_trusted_node_with_entry(NodeEntry {
-            id: n.id,
+        self.node_db.write().insert_trusted(NodeEntry {
+            id: n.id.clone(),
             endpoint: n.endpoint.clone(),
         });
         self.reserved_nodes.write().insert(n.id);
@@ -574,15 +529,11 @@ impl NetworkServiceInner {
         if let Some(discovery) = self.discovery.lock().as_mut() {
             let allow_ips = self.config.ip_filter.clone();
             let nodes = self
-                .trusted_nodes
+                .node_db
                 .read()
-                .sample_nodes(DISCOVER_NODES_COUNT, &allow_ips);
+                .sample_trusted_nodes(DISCOVER_NODES_COUNT, &allow_ips);
             discovery.try_ping_nodes(
-                &UdpIoContext::new(
-                    &self.udp_channel,
-                    &self.trusted_nodes,
-                    &self.untrusted_nodes,
-                ),
+                &UdpIoContext::new(&self.udp_channel, &self.node_db),
                 nodes,
             );
             io.register_timer(
@@ -603,28 +554,6 @@ impl NetworkServiceInner {
         Ok(())
     }
 
-    fn note_failure(&self, id: &NodeId, by_connection: bool) {
-        {
-            let mut trusted_nodes = self.trusted_nodes.write();
-            if trusted_nodes.contains(id) {
-                trusted_nodes.note_failure(id, by_connection);
-            }
-        }
-        {
-            let mut untrusted_nodes = self.untrusted_nodes.write();
-            if untrusted_nodes.contains(id) {
-                untrusted_nodes.note_failure(id, by_connection);
-            }
-        }
-    }
-
-    fn note_trusted_failure(&self, id: &NodeId, by_connection: bool) {
-        let mut trusted_nodes = self.trusted_nodes.write();
-        if trusted_nodes.contains(id) {
-            trusted_nodes.note_failure(id, by_connection);
-        }
-    }
-
     fn try_promote_untrusted(&self) {
         // Get NodeIds from incoming connections
         let mut incoming_ids: Vec<NodeId> = Vec::new();
@@ -638,31 +567,13 @@ impl NetworkServiceInner {
                 }
             }
         }
+
         // Check each live connection for its lifetime.
         // Promote the peers with live connection for a threshold period
-        let mut trusted = self.trusted_nodes.write();
-        let mut untrusted = self.untrusted_nodes.write();
-        for id in incoming_ids.iter() {
-            if trusted.contains(id) {
-                debug_assert!(!untrusted.contains(id));
-                continue;
-            } else {
-                let mut last_connected = None;
-                if let Some(node) = untrusted.get(id) {
-                    last_connected = node.last_connected;
-                }
-
-                if let Some(c) = last_connected {
-                    if c.success_for_duration(
-                        self.config.connection_lifetime_for_promotion,
-                    ) {
-                        let removed_node =
-                            untrusted.remove_with_id(id).unwrap();
-                        trusted.add_node(removed_node, false);
-                    }
-                }
-            }
-        }
+        self.node_db.write().promote(
+            incoming_ids,
+            self.config.connection_lifetime_for_promotion,
+        );
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -670,21 +581,13 @@ impl NetworkServiceInner {
     }
 
     fn drop_node(&self, local_id: NodeId) -> Result<(), Error> {
-        let mut tn = self.trusted_nodes.write();
-        let mut utn = self.untrusted_nodes.write();
-        let stream_token = {
-            if let Some(node) = tn.remove_with_id(&local_id) {
-                node.stream_token.clone()
-            } else if let Some(node) = utn.remove_with_id(&local_id) {
-                node.stream_token.clone()
-            } else {
-                None
-            }
-        };
+        let removed_node = self.node_db.write().remove(&local_id);
 
-        if let Some(stream_token) = stream_token {
-            let mut wd = self.dropped_nodes.write();
-            wd.insert(stream_token);
+        if let Some(node) = removed_node {
+            if let Some(stream_token) = node.stream_token {
+                let mut wd = self.dropped_nodes.write();
+                wd.insert(stream_token);
+            }
         }
 
         Ok(())
@@ -707,7 +610,7 @@ impl NetworkServiceInner {
             return;
         }
 
-        let self_id = *meta.id();
+        let self_id = meta.id().clone();
         let max_outgoing_peers = self.config.max_outgoing_peers as usize;
         //let max_incoming_peers = self.config.max_incoming_peers;
         let max_handshakes = self.config.max_handshakes;
@@ -717,14 +620,15 @@ impl NetworkServiceInner {
             self.session_count();
         let samples;
         {
-            let trusted_nodes = self.trusted_nodes.read();
             let egress_attempt_count = if max_outgoing_peers > egress_count {
                 max_outgoing_peers - egress_count
             } else {
                 0
             };
-            samples = trusted_nodes
-                .sample_node_ids(egress_attempt_count as u32, &allow_ips);
+            samples = self.node_db.read().sample_trusted_node_ids(
+                egress_attempt_count as u32,
+                &allow_ips,
+            );
         }
         let reserved_nodes = self.reserved_nodes.read();
         // Try to connect all reserved peers and trusted peers
@@ -794,8 +698,7 @@ impl NetworkServiceInner {
         let (socket, address) = {
             let address = {
                 // outgoing connection must pick node from trusted node table
-                let nodes = self.trusted_nodes.read();
-                if let Some(node) = nodes.get(id) {
+                if let Some(node) = self.node_db.read().get(id, true) {
                     node.endpoint.address
                 } else {
                     debug!(target: "network", "Abort connect. Node expired");
@@ -808,7 +711,7 @@ impl NetworkServiceInner {
                     (socket, address)
                 }
                 Err(e) => {
-                    self.note_trusted_failure(id, true);
+                    self.node_db.write().note_failure(id, true, true);
                     debug!(target: "network", "{}: can't connect o address {:?} {:?}", id, address, e);
                     return;
                 }
@@ -816,7 +719,7 @@ impl NetworkServiceInner {
         };
 
         if let Err(e) = self.create_connection(socket, address, Some(id), io) {
-            self.note_trusted_failure(id, true);
+            self.node_db.write().note_failure(id, true, true);
             debug!(target: "network", "Can't create connection: {:?}", e);
         }
     }
@@ -906,11 +809,7 @@ impl NetworkServiceInner {
                     // This is an outgoing connection.
                     // Outgoing connection must pick node from trusted node
                     // table
-                    self.trusted_nodes.write().note_success(
-                        id,
-                        true,
-                        Some(token),
-                    );
+                    self.node_db.write().note_success(id, Some(token), true);
                 }
                 io.register_stream(token).map(|_| ()).map_err(Into::into)
             }
@@ -1174,11 +1073,7 @@ impl NetworkServiceInner {
             UDP_PROTOCOL_DISCOVERY => {
                 if let Some(discovery) = self.discovery.lock().as_mut() {
                     discovery.on_packet(
-                        &UdpIoContext::new(
-                            &self.udp_channel,
-                            &self.trusted_nodes,
-                            &self.untrusted_nodes,
-                        ),
+                        &UdpIoContext::new(&self.udp_channel, &self.node_db),
                         &packet[1..],
                         from,
                     )?;
@@ -1263,8 +1158,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 self.discovery.lock().as_mut().map(|d| {
                     d.round(&UdpIoContext::new(
                         &self.udp_channel,
-                        &self.trusted_nodes,
-                        &self.untrusted_nodes,
+                        &self.node_db,
                     ))
                 });
                 io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
@@ -1274,10 +1168,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             NODE_TABLE => {
                 trace!(target: "network", "Refreshing node table");
                 self.try_promote_untrusted();
-                self.trusted_nodes.write().save();
-                self.trusted_nodes.write().clear_useless();
-                self.untrusted_nodes.write().save();
-                self.untrusted_nodes.write().clear_useless();
+                self.node_db.write().save();
             }
             SEND_DELAYED_MESSAGES => {
                 if let Some(ref queue) = self.delayed_queue {
@@ -1418,7 +1309,9 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                         sess.deregister_socket(event_loop)
                             .expect("Error deregistering socket");
                         if let Some(node_id) = sess.id() {
-                            self.note_failure(node_id, true);
+                            self.node_db
+                                .write()
+                                .note_failure(node_id, true, false);
                         }
                         debug!("Remove session {}", stream);
                         sessions.remove(stream);
