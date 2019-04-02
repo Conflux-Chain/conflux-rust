@@ -39,6 +39,7 @@ mod connection;
 mod discovery;
 mod error;
 mod ip_utils;
+mod node_database;
 pub mod node_table;
 mod service;
 mod session;
@@ -111,6 +112,8 @@ pub struct NetworkConfiguration {
     /// Connection lifetime threshold for promotion
     pub connection_lifetime_for_promotion: Duration,
     pub test_mode: bool,
+    /// Maximum number of P2P nodes per IP address.
+    pub nodes_per_ip: usize,
 }
 
 impl Default for NetworkConfiguration {
@@ -142,6 +145,7 @@ impl NetworkConfiguration {
             connection_lifetime_for_promotion:
                 DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
             test_mode: false,
+            nodes_per_ip: 1,
         }
     }
 

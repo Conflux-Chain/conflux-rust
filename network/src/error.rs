@@ -12,6 +12,7 @@ pub enum DisconnectReason {
     DisconnectRequested,
     UselessPeer,
     WrongEndpointInfo,
+    IpLimited,
     Unknown,
 }
 
@@ -21,6 +22,7 @@ impl DisconnectReason {
             0 => DisconnectReason::DisconnectRequested,
             1 => DisconnectReason::UselessPeer,
             2 => DisconnectReason::WrongEndpointInfo,
+            3 => DisconnectReason::IpLimited,
             _ => DisconnectReason::Unknown,
         }
     }
@@ -32,6 +34,7 @@ impl fmt::Display for DisconnectReason {
             DisconnectReason::DisconnectRequested => "disconnect requested",
             DisconnectReason::UselessPeer => "useless peer",
             DisconnectReason::WrongEndpointInfo => "wrong node id",
+            DisconnectReason::IpLimited => "IP limited",
             DisconnectReason::Unknown => "unknown",
         };
 
