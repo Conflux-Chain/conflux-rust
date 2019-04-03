@@ -99,7 +99,8 @@ class P2PTest(ConfluxTestFramework):
         tx["v"] = "0x0"
         tx["r"] = "0x0"
         tx["s"] = "0x0"
-        balance = bytes_to_int(bytes(self.nodes[0].cfx_call(tx)))
+        result = self.nodes[0].cfx_call(tx)
+        balance = bytes_to_int(decode_hex(result))
         self.log.debug("address=%s, balance=%s", encode_hex(token_address), balance)
         return balance
 
