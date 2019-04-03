@@ -1220,12 +1220,18 @@ impl ConsensusGraphInner {
     pub fn get_transaction_receipt_with_address(
         &mut self, tx_hash: &H256,
     ) -> Option<(Receipt, TransactionAddress)> {
-        trace!("Get receipt with address {}", tx_hash);
+        trace!("Get receipt with tx_hash {}", tx_hash);
         let address = self.transaction_address_by_hash(tx_hash, false)?;
         // receipts should never be None if address is not None because
         let receipts =
             self.block_receipts_by_hash(&address.block_hash, false)?;
-        Some((receipts.get(address.index).unwrap().clone(), address))
+        Some((
+            receipts
+                .get(address.index)
+                .expect("Error: can't get receipt by tx_address ")
+                .clone(),
+            address,
+        ))
     }
 
     pub fn insert_block_receipts_to_kv(

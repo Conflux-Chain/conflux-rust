@@ -475,7 +475,7 @@ impl RpcImpl {
             },
             data: rpc_tx.data.into(),
         };
-        info!("RPC Request: cfx_call");
+        debug!("RPC Request: cfx_call");
         let mut signed_tx = SignedTransaction::new_unsigned(
             TransactionWithSignature::new_unsigned(tx),
         );
