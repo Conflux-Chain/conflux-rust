@@ -8,5 +8,5 @@ mod executive;
 
 pub use self::{
     executed::{Executed, ExecutionError, ExecutionResult},
-    executive::Executive,
+    executive::{contract_address, Executive},
 };

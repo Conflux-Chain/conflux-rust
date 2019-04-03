@@ -23,8 +23,7 @@ pub struct Transaction {
     pub value: RpcU256,
     pub gas_price: RpcU256,
     pub gas: RpcU256,
-    pub output: Option<Bytes>,
-    pub contracts_created: Option<Vec<RpcH160>>,
+    pub contract_created: Option<RpcH160>,
     pub data: Bytes,
     /// The standardised V field of the signature.
     pub v: RpcU256,
@@ -38,18 +37,18 @@ impl Transaction {
     pub fn from_signed(
         t: &SignedTransaction, receipt: Option<Receipt>,
     ) -> Transaction {
+        let mut contract_created = None;
+        if let Some(ref receipt) = receipt {
+            if let Some(ref address) = receipt.contract_created {
+                contract_created = Some(address.clone().into());
+            }
+        }
         Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
             block_hash: receipt.clone().map(|x| x.block_hash.into()),
             transaction_index: receipt.clone().map(|x| x.index.into()),
-            contracts_created: receipt.clone().map(|x| {
-                x.contracts_created
-                    .iter()
-                    .map(|x| x.clone().into())
-                    .collect()
-            }),
-            output: receipt.clone().map(|x| x.output.into()),
+            contract_created,
             from: t.sender().into(),
             to: match t.action {
                 Action::Create => None,

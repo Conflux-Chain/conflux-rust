@@ -160,6 +160,7 @@ impl Block {
                                     Transaction::from_signed(
                                         tx,
                                         Some(Receipt::new(
+                                            (**tx).clone(),
                                             receipt.clone(),
                                             TransactionAddress {
                                                 block_hash: b.hash(),
@@ -276,7 +277,7 @@ mod tests {
     fn test_serialize_block_transactions() {
         let t = BlockTransactions::Full(vec![Transaction::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","output":null,"contractsCreated":null,"data":"0x","v":"0x0","r":"0x0","s":"0x0"}]"#);
+        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","v":"0x0","r":"0x0","s":"0x0"}]"#);
 
         let t = BlockTransactions::Hashes(vec![H256::default().into()]);
         let serialized = serde_json::to_string(&t).unwrap();

@@ -2,9 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Bytes, H256, U256};
+use crate::rpc::types::{H256, U256};
 use cfx_types::Address;
-use primitives::{receipt::Receipt as PrimitiveReceipt, TransactionAddress};
+use cfxcore::{executive::contract_address, vm::CreateContractAddress};
+use primitives::{
+    receipt::Receipt as PrimitiveReceipt, transaction::Action,
+    SignedTransaction as PrimitiveTransaction, TransactionAddress,
+};
 use serde_derive::Serialize;
 
 #[derive(Debug, Serialize, Clone)]
@@ -18,28 +22,32 @@ pub struct Receipt {
     pub block_hash: H256,
     /// Transaction index within the block
     pub index: usize,
-    /// Addresses of contracts created during execution of transaction.
-    /// Ordered from earliest creation.
-    ///
-    /// eg. sender creates contract A and A in constructor creates contract B
-    ///
-    /// B creation ends first, and it will be the first element of the vector.
-    pub contracts_created: Vec<Address>,
-    /// Transaction output.
-    pub output: Bytes,
+    /// Address of contracts created during execution of transaction.
+    pub contract_created: Option<Address>,
 }
 
 impl Receipt {
     pub fn new(
-        receipt: PrimitiveReceipt, transaction_adress: TransactionAddress,
-    ) -> Receipt {
+        transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
+        transaction_address: TransactionAddress,
+    ) -> Receipt
+    {
+        let mut address = None;
+        if Action::Create == transaction.action {
+            let (created_address, _) = contract_address(
+                CreateContractAddress::FromSenderAndNonce,
+                &transaction.sender,
+                &transaction.nonce,
+                &transaction.data,
+            );
+            address = Some(created_address);
+        }
         Receipt {
             gas_used: receipt.gas_used.into(),
             outcome_status: receipt.outcome_status,
-            block_hash: transaction_adress.block_hash.into(),
-            index: transaction_adress.index,
-            contracts_created: receipt.contracts_created.into(),
-            output: receipt.output.into(),
+            block_hash: transaction_address.block_hash.into(),
+            index: transaction_address.index,
+            contract_created: address,
         }
     }
 }

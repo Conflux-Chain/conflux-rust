@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    bytes::Bytes,
     cache_manager::{CacheId, CacheManager},
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_MISC, COL_TX_ADDRESS},
     executive::{ExecutionError, Executive},
@@ -574,8 +573,6 @@ impl ConsensusGraphInner {
                 {
                     let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                     let mut transaction_logs = Vec::new();
-                    let mut contracts_created = Vec::new();
-                    let mut output = Bytes::new();
 
                     let r = ex.transact(transaction);
                     // TODO Store fine-grained output status in receipts.
@@ -615,8 +612,6 @@ impl ConsensusGraphInner {
                             accumulated_fee += executed.fee;
                             transaction_logs = executed.logs;
                             tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
-                            contracts_created = executed.contracts_created;
-                            output = executed.output;
                         }
                         _ => {
                             n_other += 1;
@@ -627,8 +622,6 @@ impl ConsensusGraphInner {
                         tx_outcome_status,
                         last_cumulative_gas_used,
                         transaction_logs,
-                        contracts_created,
-                        output,
                     );
                     receipts.push(receipt);
 
@@ -2612,12 +2605,20 @@ impl ConsensusGraph {
         self.inner.write().get_transaction_receipt(hash)
     }
 
-    pub fn get_transaction_receipt_with_address(
+    pub fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(Receipt, TransactionAddress)> {
-        self.inner
-            .write()
-            .get_transaction_receipt_with_address(hash)
+    ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
+        let mut inner = self.inner.write();
+        if let Some((receipt, address)) =
+            inner.get_transaction_receipt_with_address(hash)
+        {
+            let block = self.block_by_hash(&address.block_hash, false)?;
+            assert!(address.index < block.transactions.len());
+            let transaction = (*block.transactions[address.index]).clone();
+            Some((transaction, receipt, address))
+        } else {
+            None
+        }
     }
 
     pub fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {

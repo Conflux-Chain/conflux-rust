@@ -182,18 +182,13 @@ impl RpcImpl {
             return Ok(Some(RpcTransaction::from_signed(&transaction, None)));
         }
 
-        if let Some(transaction) = self.consensus.transaction_by_hash(&hash) {
-            if let Some((receipt, tx_address)) = self
-                .consensus
-                .get_transaction_receipt_with_address(&transaction.hash)
-            {
-                Ok(Some(RpcTransaction::from_signed(
-                    &transaction,
-                    Some(Receipt::new(receipt, tx_address)),
-                )))
-            } else {
-                Ok(Some(RpcTransaction::from_signed(&transaction, None)))
-            }
+        if let Some((transaction, receipt, tx_address)) =
+            self.consensus.get_transaction_info_by_hash(&hash)
+        {
+            Ok(Some(RpcTransaction::from_signed(
+                &transaction,
+                Some(Receipt::new(transaction.clone(), receipt, tx_address)),
+            )))
         } else {
             Ok(None)
         }
@@ -456,10 +451,10 @@ impl RpcImpl {
     fn get_transaction_receipt(
         &self, tx_hash: H256,
     ) -> RpcResult<Option<RpcReceipt>> {
-        let maybe_receipt = self
-            .consensus
-            .get_transaction_receipt_with_address(&tx_hash)
-            .map(|(receipt, address)| RpcReceipt::new(receipt, address));
+        let maybe_receipt =
+            self.consensus.get_transaction_info_by_hash(&tx_hash).map(
+                |(tx, receipt, address)| RpcReceipt::new(tx, receipt, address),
+            );
         Ok(maybe_receipt)
     }
 
