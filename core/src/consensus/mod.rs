@@ -872,16 +872,16 @@ impl ConsensusGraphInner {
     }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction,
-    ) -> Result<(Vec<u8>, U256), ExecutionError> {
+        &self, tx: &SignedTransaction, epoch: EpochNumber,
+    ) -> Result<(Vec<u8>, U256), String> {
+        // only allow to call against stated epoch
+        self.validate_stated_epoch(&epoch)?;
+
+        let epoch_id = self.get_hash_from_epoch_number(epoch)?;
         let spec = Spec::new_spec();
         let machine = new_machine();
         let mut state = State::new(
-            StateDb::new(
-                self.storage_manager
-                    .get_state_at(self.best_state_block_hash())
-                    .unwrap(),
-            ),
+            StateDb::new(self.storage_manager.get_state_at(epoch_id).unwrap()),
             0.into(),
             self.vm.clone(),
         );
@@ -897,6 +897,7 @@ impl ConsensusGraphInner {
         let r = ex.transact(tx);
         trace!("Execution result {:?}", r);
         r.map(|r| (r.output, r.gas_used))
+            .map_err(|e| format!("execution error: {:?}", e))
     }
 
     pub fn recompute_states<F>(&mut self, pivot_index: usize, get_block: &F)
@@ -2650,20 +2651,18 @@ impl ConsensusGraph {
     pub fn block_count(&self) -> usize { self.inner.read().indices.len() }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction,
-    ) -> Result<Vec<u8>, ExecutionError> {
+        &self, tx: &SignedTransaction, epoch: EpochNumber,
+    ) -> Result<Vec<u8>, String> {
         self.inner
             .write()
-            .call_virtual(tx)
+            .call_virtual(tx, epoch)
             .map(|(output, _)| output)
     }
 
-    pub fn estimate_gas(
-        &self, tx: &SignedTransaction,
-    ) -> Result<U256, ExecutionError> {
+    pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
         self.inner
             .write()
-            .call_virtual(tx)
+            .call_virtual(tx, EpochNumber::LatestState)
             .map(|(_, gas_used)| gas_used)
     }
 
