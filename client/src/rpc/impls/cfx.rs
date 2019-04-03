@@ -459,7 +459,10 @@ impl RpcImpl {
         Ok(maybe_receipt)
     }
 
-    fn call(&self, rpc_tx: RpcTransaction) -> RpcResult<Vec<u8>> {
+    fn call(&self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>) -> RpcResult<Bytes> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
+        let epoch = self.get_primitive_epoch_number(epoch);
+
         let tx = Transaction {
             nonce: rpc_tx.nonce.into(),
             gas: rpc_tx.gas.into(),
@@ -476,11 +479,9 @@ impl RpcImpl {
         );
         signed_tx.sender = rpc_tx.from.into();
         trace!("call tx {:?}", signed_tx);
-        let result = self.consensus.call_virtual(&signed_tx);
-        result.map_err(|e| {
-            warn!("Transaction execution error {:?}", e);
-            RpcError::internal_error()
-        })
+        self.consensus.call_virtual(&signed_tx, epoch)
+            .map(|output| Bytes::new(output))
+            .map_err(|e| RpcError::invalid_params(e))
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
@@ -646,6 +647,10 @@ impl Cfx for CfxHandler {
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
         self.rpc_impl.send_raw_transaction(raw)
     }
+
+    fn call(&self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>) -> RpcResult<Bytes> {
+        self.rpc_impl.call(rpc_tx, epoch)
+    }
 }
 
 pub struct TestRpcImpl {
@@ -722,10 +727,6 @@ impl TestRpc for TestRpcImpl {
         &self, tx_hash: H256,
     ) -> RpcResult<Option<RpcReceipt>> {
         self.rpc_impl.get_transaction_receipt(tx_hash)
-    }
-
-    fn call(&self, rpc_tx: RpcTransaction) -> RpcResult<Vec<u8>> {
-        self.rpc_impl.call(rpc_tx)
     }
 }
 

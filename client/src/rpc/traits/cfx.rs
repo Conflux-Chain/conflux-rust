@@ -101,9 +101,9 @@ build_rpc_trait! {
 //        #[rpc(name = "cfx_submitTransaction")]
 //        fn submit_transaction(&self, Bytes) -> RpcResult<RpcH256>;
 
-//        /// Call contract, returning hte output data.
-//        #[rpc(name = "cfx_call")]
-//        fn call(&self, CallRequest, Trailing<BlockNumber>) -> BoxFuture<Bytes>;
+        /// Call contract, returning hte output data.
+        #[rpc(name = "cfx_call")]
+        fn call(&self, RpcTransaction, Trailing<EpochNumber>) -> RpcResult<Bytes>;
 
 //        /// Estimate gas needed for execution of given contract.
 //        #[rpc(name = "cfx_estimateGas")]
@@ -187,9 +187,6 @@ build_rpc_trait! {
 
         #[rpc(name = "gettransactionreceipt")]
         fn get_transaction_receipt(&self, H256) -> RpcResult<Option<RpcReceipt>>;
-
-        #[rpc(name = "cfx_call")]
-        fn call(&self, RpcTransaction) -> RpcResult<Vec<u8>>;
     }
 }
 
