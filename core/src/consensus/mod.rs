@@ -573,6 +573,7 @@ impl ConsensusGraphInner {
                 {
                     let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
                     let mut transaction_logs = Vec::new();
+
                     let r = ex.transact(transaction);
                     // TODO Store fine-grained output status in receipts.
                     // Note now NotEnoughCash has
@@ -871,8 +872,8 @@ impl ConsensusGraphInner {
     }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch: EpochNumber
-    ) -> Result<Vec<u8>, String> {
+        &self, tx: &SignedTransaction, epoch: EpochNumber,
+    ) -> Result<(Vec<u8>, U256), String> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
 
@@ -880,11 +881,7 @@ impl ConsensusGraphInner {
         let spec = Spec::new_spec();
         let machine = new_machine();
         let mut state = State::new(
-            StateDb::new(
-                self.storage_manager
-                    .get_state_at(epoch_id)
-                    .unwrap(),
-            ),
+            StateDb::new(self.storage_manager.get_state_at(epoch_id).unwrap()),
             0.into(),
             self.vm.clone(),
         );
@@ -899,7 +896,7 @@ impl ConsensusGraphInner {
         let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
         let r = ex.transact(tx);
         trace!("Execution result {:?}", r);
-        r.map(|r| r.output)
+        r.map(|r| (r.output, r.gas_used))
             .map_err(|e| format!("execution error: {:?}", e))
     }
 
@@ -1218,6 +1215,23 @@ impl ConsensusGraphInner {
             self.block_receipts_by_hash(&address.block_hash, false)?;
         trace!("Get receipts");
         receipts.get(address.index).map(Clone::clone)
+    }
+
+    pub fn get_transaction_receipt_with_address(
+        &mut self, tx_hash: &H256,
+    ) -> Option<(Receipt, TransactionAddress)> {
+        trace!("Get receipt with tx_hash {}", tx_hash);
+        let address = self.transaction_address_by_hash(tx_hash, false)?;
+        // receipts should never be None if address is not None because
+        let receipts =
+            self.block_receipts_by_hash(&address.block_hash, false)?;
+        Some((
+            receipts
+                .get(address.index)
+                .expect("Error: can't get receipt by tx_address ")
+                .clone(),
+            address,
+        ))
     }
 
     pub fn insert_block_receipts_to_kv(
@@ -2598,6 +2612,22 @@ impl ConsensusGraph {
         self.inner.write().get_transaction_receipt(hash)
     }
 
+    pub fn get_transaction_info_by_hash(
+        &self, hash: &H256,
+    ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
+        let mut inner = self.inner.write();
+        if let Some((receipt, address)) =
+            inner.get_transaction_receipt_with_address(hash)
+        {
+            let block = self.block_by_hash(&address.block_hash, false)?;
+            assert!(address.index < block.transactions.len());
+            let transaction = (*block.transactions[address.index]).clone();
+            Some((transaction, receipt, address))
+        } else {
+            None
+        }
+    }
+
     pub fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
         self.inner.read().get_epoch_hash_for_block(hash)
     }
@@ -2627,9 +2657,19 @@ impl ConsensusGraph {
     pub fn block_count(&self) -> usize { self.inner.read().indices.len() }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch: EpochNumber
+        &self, tx: &SignedTransaction, epoch: EpochNumber,
     ) -> Result<Vec<u8>, String> {
-        self.inner.write().call_virtual(tx, epoch)
+        self.inner
+            .write()
+            .call_virtual(tx, epoch)
+            .map(|(output, _)| output)
+    }
+
+    pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
+        self.inner
+            .write()
+            .call_virtual(tx, EpochNumber::LatestState)
+            .map(|(_, gas_used)| gas_used)
     }
 
     pub fn persist_terminals(&self) {

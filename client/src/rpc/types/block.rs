@@ -2,13 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Transaction, H160, H256, U256};
+use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
 use cfxcore::consensus::ConsensusGraphInner;
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     receipt::{TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS},
-    Block as PrimitiveBlock, BlockHeaderBuilder, SignedTransaction,
-    TransactionAddress,
+    Block as PrimitiveBlock, BlockHeaderBuilder, TransactionAddress,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -26,31 +25,31 @@ pub enum BlockTransactions {
     Full(Vec<Transaction>),
 }
 
-impl BlockTransactions {
-    pub fn new(
-        transactions: &Vec<Arc<SignedTransaction>>, include_txs: bool,
-        consensus_inner: &mut ConsensusGraphInner,
-    ) -> Self
-    {
-        match include_txs {
-            false => BlockTransactions::Hashes(
-                transactions.iter().map(|x| H256::from(x.hash())).collect(),
-            ),
-            true => BlockTransactions::Full(
-                transactions
-                    .iter()
-                    .map(|x| {
-                        Transaction::from_signed(
-                            x,
-                            consensus_inner
-                                .transaction_address_by_hash(&x.hash, false),
-                        )
-                    })
-                    .collect(),
-            ),
-        }
-    }
-}
+//impl BlockTransactions {
+//    pub fn new(
+//        transactions: &Vec<Arc<SignedTransaction>>, include_txs: bool,
+//        consensus_inner: &mut ConsensusGraphInner,
+//    ) -> Self
+//    {
+//        match include_txs {
+//            false => BlockTransactions::Hashes(
+//                transactions.iter().map(|x| H256::from(x.hash())).collect(),
+//            ),
+//            true => BlockTransactions::Full(
+//                transactions
+//                    .iter()
+//                    .map(|x| {
+//                        Transaction::from_signed(
+//                            x,
+//                            consensus_inner
+//                                .transaction_address_by_hash(&x.hash, false),
+//                        )
+//                    })
+//                    .collect(),
+//            ),
+//        }
+//    }
+//}
 
 impl Serialize for BlockTransactions {
     fn serialize<S: Serializer>(
@@ -140,9 +139,12 @@ impl Block {
     ) -> Self
     {
         let transactions = match include_txs {
-            false => {
-                BlockTransactions::new(&b.transactions, false, consensus_inner)
-            }
+            false => BlockTransactions::Hashes(
+                b.transactions
+                    .iter()
+                    .map(|x| H256::from(x.hash()))
+                    .collect(),
+            ),
             true => {
                 let tx_vec = match consensus_inner
                     .block_receipts_by_hash(&b.hash(), false)
@@ -152,14 +154,19 @@ impl Block {
                         .iter()
                         .enumerate()
                         .map(|(idx, tx)| {
-                            match receipts.get(idx).unwrap().outcome_status {
+                            let receipt = receipts.get(idx).unwrap();
+                            match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS => {
                                     Transaction::from_signed(
                                         tx,
-                                        Some(TransactionAddress {
-                                            block_hash: b.hash(),
-                                            index: idx,
-                                        }),
+                                        Some(Receipt::new(
+                                            (**tx).clone(),
+                                            receipt.clone(),
+                                            TransactionAddress {
+                                                block_hash: b.hash(),
+                                                index: idx,
+                                            },
+                                        )),
                                     )
                                 }
                                 TRANSACTION_OUTCOME_EXCEPTION => {
@@ -270,7 +277,7 @@ mod tests {
     fn test_serialize_block_transactions() {
         let t = BlockTransactions::Full(vec![Transaction::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","v":"0x0","r":"0x0","s":"0x0"}]"#);
+        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","v":"0x0","r":"0x0","s":"0x0"}]"#);
 
         let t = BlockTransactions::Hashes(vec![H256::default().into()]);
         let serialized = serde_json::to_string(&t).unwrap();

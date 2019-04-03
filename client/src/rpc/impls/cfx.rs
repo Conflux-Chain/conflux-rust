@@ -5,10 +5,9 @@
 use crate::rpc::{
     traits::cfx::{Cfx, DebugRpc, TestRpc},
     types::{
-        Account, Block as RpcBlock, BlockTransactions, Bytes, EpochNumber,
-        Receipt as RpcReceipt, Status as RpcStatus,
-        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-        U256 as RpcU256, U64 as RpcU64,
+        Block as RpcBlock, Bytes, EpochNumber, Receipt as RpcReceipt, Receipt,
+        Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -183,11 +182,13 @@ impl RpcImpl {
             return Ok(Some(RpcTransaction::from_signed(&transaction, None)));
         }
 
-        if let Some(transaction) = self.consensus.transaction_by_hash(&hash) {
-            let tx_address = self
-                .consensus
-                .transaction_address_by_hash(&transaction.hash);
-            Ok(Some(RpcTransaction::from_signed(&transaction, tx_address)))
+        if let Some((transaction, receipt, tx_address)) =
+            self.consensus.get_transaction_info_by_hash(&hash)
+        {
+            Ok(Some(RpcTransaction::from_signed(
+                &transaction,
+                Some(Receipt::new(transaction.clone(), receipt, tx_address)),
+            )))
         } else {
             Ok(None)
         }
@@ -218,38 +219,38 @@ impl RpcImpl {
             .map_err(|err| RpcError::invalid_params(err))
     }
 
-    fn account(
-        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
-        epoch_num: Trailing<EpochNumber>,
-    ) -> RpcResult<Account>
-    {
-        let inner = &mut *self.consensus.inner.write();
-
-        let address: H160 = address.into();
-        let num_txs = num_txs.as_usize();
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-        info!(
-            "RPC Request: cfx_getAccount address={:?} include_txs={:?} num_txs={:?} epoch_num={:?}",
-            address, include_txs, num_txs, epoch_num
-        );
-        self.consensus
-            .get_account(
-                address,
-                num_txs,
-                self.get_primitive_epoch_number(epoch_num),
-            )
-            .and_then(|(balance, transactions)| {
-                Ok(Account {
-                    balance: balance.into(),
-                    transactions: BlockTransactions::new(
-                        &transactions,
-                        include_txs,
-                        inner,
-                    ),
-                })
-            })
-            .map_err(|err| RpcError::invalid_params(err))
-    }
+    //    fn account(
+    //        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
+    //        epoch_num: Trailing<EpochNumber>,
+    //    ) -> RpcResult<Account>
+    //    {
+    //        let inner = &mut *self.consensus.inner.write();
+    //
+    //        let address: H160 = address.into();
+    //        let num_txs = num_txs.as_usize();
+    //        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+    //        info!(
+    //            "RPC Request: cfx_getAccount address={:?} include_txs={:?}
+    // num_txs={:?} epoch_num={:?}",            address, include_txs,
+    // num_txs, epoch_num        );
+    //        self.consensus
+    //            .get_account(
+    //                address,
+    //                num_txs,
+    //                self.get_primitive_epoch_number(epoch_num),
+    //            )
+    //            .and_then(|(balance, transactions)| {
+    //                Ok(Account {
+    //                    balance: balance.into(),
+    //                    transactions: BlockTransactions::new(
+    //                        &transactions,
+    //                        include_txs,
+    //                        inner,
+    //                    ),
+    //                })
+    //            })
+    //            .map_err(|err| RpcError::invalid_params(err))
+    //    }
 
     fn transaction_count(
         &self, address: RpcH160, num: Trailing<EpochNumber>,
@@ -450,19 +451,43 @@ impl RpcImpl {
     fn get_transaction_receipt(
         &self, tx_hash: H256,
     ) -> RpcResult<Option<RpcReceipt>> {
-        let maybe_receipt = self
-            .consensus
-            .get_transaction_receipt(&tx_hash)
-            .map(|receipt| {
-                RpcReceipt::new(receipt.gas_used.into(), receipt.outcome_status)
-            });
+        let maybe_receipt =
+            self.consensus.get_transaction_info_by_hash(&tx_hash).map(
+                |(tx, receipt, address)| RpcReceipt::new(tx, receipt, address),
+            );
         Ok(maybe_receipt)
     }
 
-    fn call(&self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>) -> RpcResult<Bytes> {
+    fn call(
+        &self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>,
+    ) -> RpcResult<Bytes> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
         let epoch = self.get_primitive_epoch_number(epoch);
 
+        let tx = Transaction {
+            nonce: rpc_tx.nonce.into(),
+            gas: rpc_tx.gas.into(),
+            gas_price: rpc_tx.gas_price.into(),
+            value: rpc_tx.value.into(),
+            action: match rpc_tx.to {
+                Some(to) => Action::Call(to.into()),
+                None => Action::Create,
+            },
+            data: rpc_tx.data.into(),
+        };
+        debug!("RPC Request: cfx_call");
+        let mut signed_tx = SignedTransaction::new_unsigned(
+            TransactionWithSignature::new_unsigned(tx),
+        );
+        signed_tx.sender = rpc_tx.from.into();
+        trace!("call tx {:?}", signed_tx);
+        self.consensus
+            .call_virtual(&signed_tx, epoch)
+            .map(|output| Bytes::new(output))
+            .map_err(|e| RpcError::invalid_params(e))
+    }
+
+    fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256> {
         let tx = Transaction {
             nonce: rpc_tx.nonce.into(),
             gas: rpc_tx.gas.into(),
@@ -479,9 +504,13 @@ impl RpcImpl {
         );
         signed_tx.sender = rpc_tx.from.into();
         trace!("call tx {:?}", signed_tx);
-        self.consensus.call_virtual(&signed_tx, epoch)
-            .map(|output| Bytes::new(output))
-            .map_err(|e| RpcError::invalid_params(e))
+        let result = self.consensus.estimate_gas(&signed_tx);
+        result
+            .map_err(|e| {
+                warn!("Transaction execution error {:?}", e);
+                RpcError::internal_error()
+            })
+            .map(|x| x.into())
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
@@ -581,6 +610,10 @@ impl Cfx for CfxHandler {
         self.rpc_impl.best_block_hash()
     }
 
+    fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256> {
+        self.rpc_impl.estimate_gas(rpc_tx)
+    }
+
     fn gas_price(&self) -> RpcResult<RpcU256> { self.rpc_impl.gas_price() }
 
     fn epoch_number(
@@ -611,8 +644,6 @@ impl Cfx for CfxHandler {
         )
     }
 
-    fn chain(&self) -> RpcResult<Vec<RpcBlock>> { self.rpc_impl.chain() }
-
     fn transaction_by_hash(
         &self, hash: RpcH256,
     ) -> RpcResult<Option<RpcTransaction>> {
@@ -629,14 +660,14 @@ impl Cfx for CfxHandler {
         self.rpc_impl.balance(address, num)
     }
 
-    fn account(
-        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
-        epoch_num: Trailing<EpochNumber>,
-    ) -> RpcResult<Account>
-    {
-        self.rpc_impl
-            .account(address, include_txs, num_txs, epoch_num)
-    }
+    //    fn account(
+    //        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
+    //        epoch_num: Trailing<EpochNumber>,
+    //    ) -> RpcResult<Account>
+    //    {
+    //        self.rpc_impl
+    //            .account(address, include_txs, num_txs, epoch_num)
+    //    }
 
     fn transaction_count(
         &self, address: RpcH160, num: Trailing<EpochNumber>,
@@ -648,7 +679,9 @@ impl Cfx for CfxHandler {
         self.rpc_impl.send_raw_transaction(raw)
     }
 
-    fn call(&self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>) -> RpcResult<Bytes> {
+    fn call(
+        &self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>,
+    ) -> RpcResult<Bytes> {
         self.rpc_impl.call(rpc_tx, epoch)
     }
 }
@@ -679,6 +712,8 @@ impl TestRpc for TestRpcImpl {
     fn drop_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
         self.rpc_impl.drop_peer(node_id, address)
     }
+
+    fn chain(&self) -> RpcResult<Vec<RpcBlock>> { self.rpc_impl.chain() }
 
     fn generate(
         &self, num_blocks: usize, num_txs: usize,
