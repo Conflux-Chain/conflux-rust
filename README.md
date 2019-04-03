@@ -1,18 +1,19 @@
 # Conflux-Rust
+<!--div align="center">
+  <img src="logo">
+</div-->
+----------------
 
 |**`Travis`**|
 |---------------|
 |[![Travis](https://travis-ci.com/Conflux-Chain/conflux-rust.svg?branch=master)](https://travis-ci.com/Conflux-Chain/conflux-rust#)|
 
-Conflux-rust is a rust-based implementation of Conflux protocol, it is fast and reliable.
+**Conflux-rust** is a rust-based implementation of Conflux protocol, it is fast and reliable.
 
 ## Build Instruction
 
 1. Install Rust. Instructions can be found [here](https://www.rust-lang.org/).
-2. To make sure that you are using the most updated and stable branch:
-```
-rustup update
-```
+2. Run `rustup update` to make sure that you are on the updated and stable branch
 3. Install clang for compiling rocksdb.
 4. Install other dependencies for rocksdb. Instructions can be found [here](https://github.com/facebook/rocksdb/blob/master/INSTALL.md).
 5. To build the project:
@@ -37,7 +38,7 @@ cargo build
 2. Install extra python3 packages by running `dev-support/dep_pip3.sh` 
 3. Run the python scripts under `test` directory.
 
-**Note that there is another sha3 package which does not contain necessary function. Do not install that package! Install pysha3 instead.
+**Note that there is another sha3 package which does not contain necessary function. Do not install that package! Install pysha3 instead.**
 
 ## Contribution Instruction
 
