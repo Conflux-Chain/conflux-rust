@@ -13,7 +13,11 @@
 ## Build Instruction
 
 1. Install Rust. Instructions can be found [here](https://www.rust-lang.org/).
-2. Run `rustup update` to make sure that you are on the updated and stable branch
+2. To make sure that you are on the most updated and stable branch:
+```
+rustup update
+rustup default stable
+```
 3. Install clang for compiling rocksdb.
 4. Install other dependencies for rocksdb. Instructions can be found [here](https://github.com/facebook/rocksdb/blob/master/INSTALL.md).
 5. To build the project:
@@ -23,10 +27,13 @@ cargo build
 
 ## Run Instruction
 
-1. Edit the configuration file `run/default.toml`: 
+1. Enter `run` directory (**Now we do suggest entering run directory before starting conflux. Otherwise, the created files (from DB and network config) will be mixed with other source code files**).
+2. Edit the configuration file `default.toml`: 
     * Set `public_address` according to your public IP.
-    * If `start_mining=true`:
+    * For miners, Set `start_mining=true`:
       - Set `mining_author` to the account address to receive mining reward.
+    * For others, Set `start_mining=false`.
+
 3. To run `conflux` with the configuration specified:
 ```
 ./target/release/conflux --config default.toml
