@@ -22,7 +22,7 @@ rustup default stable
 4. Install other dependencies for rocksdb. Instructions can be found [here](https://github.com/facebook/rocksdb/blob/master/INSTALL.md).
 5. To build the project:
 ```
-cargo build
+cargo build --release
 ```
 
 ## Run Instruction
@@ -34,9 +34,9 @@ cargo build
       - Set `mining_author` to the account address to receive mining reward.
     * For others, Set `start_mining=false`.
 
-3. To run `conflux` with the configuration specified:
+3. In `run` directory, to run `conflux` with the configuration specified:
 ```
-./target/release/conflux --config default.toml
+./../target/release/conflux --config default.toml
 ```
 
 ## Test Instruction
