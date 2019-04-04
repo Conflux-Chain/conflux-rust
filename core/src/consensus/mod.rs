@@ -44,6 +44,9 @@ use std::{
     sync::Arc,
 };
 
+const HEAVY_BLOCK_THRESHOLD: usize = 2000;
+pub const HEAVY_BLOCK_DIFFICULTY_RATIO: usize = 240;
+
 pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
 
 /// `REWARD_EPOCH_COUNT` needs to be larger than
@@ -185,6 +188,32 @@ impl ConsensusGraphInner {
             .insert(0, vec![inner.genesis_block_index]);
 
         inner
+    }
+
+    pub fn check_mining_heavy_block(
+        &mut self, parent_index: usize, light_difficulty: U256,
+    ) -> bool {
+        let mut index = parent_index;
+        let mut parent = self.arena[index].parent;
+        let total_difficulty =
+            self.weight_tree.subtree_weight(self.genesis_block_index);
+
+        while index != self.genesis_block_index {
+            debug_assert!(parent != NULL);
+            let m = total_difficulty - self.arena[parent].past_difficulty;
+            let n = self.weight_tree.subtree_weight(index);
+            if ((U512::from(2) * U512::from(m - n)) > U512::from(n))
+                && (U512::from(m)
+                    > (U512::from(HEAVY_BLOCK_THRESHOLD)
+                        * U512::from(light_difficulty)))
+            {
+                return true;
+            }
+            index = parent;
+            parent = self.arena[index].parent;
+        }
+
+        false
     }
 
     pub fn insert(&mut self, block: &Block, past_difficulty: U256) -> usize {
@@ -1435,6 +1464,15 @@ impl ConsensusGraph {
         consensus_graph.insert_block_to_kv(genesis, true);
 
         consensus_graph
+    }
+
+    pub fn check_mining_heavy_block(
+        &self, parent_hash: &H256, light_difficulty: &U256,
+    ) -> bool {
+        let mut inner = self.inner.write();
+
+        let parent_index = *inner.indices.get(parent_hash).unwrap();
+        inner.check_mining_heavy_block(parent_index, *light_difficulty)
     }
 
     pub fn get_height_from_epoch_number(
