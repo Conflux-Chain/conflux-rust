@@ -359,6 +359,18 @@ impl SynchronizationGraphInner {
         Ok(())
     }
 
+    /// The input `my_hash` must have been inserted to sync_graph, otherwise
+    /// it'll panic.
+    pub fn total_difficulty_in_own_epoch(&self, my_hash: &H256) -> U256 {
+        let my_index = *self.indices.get(my_hash).expect("exist");
+        self.arena[my_index]
+            .blockset_in_own_view_of_epoch
+            .iter()
+            .fold(0.into(), |acc, x| {
+                acc + *self.arena[*x].block_header.difficulty()
+            })
+    }
+
     /// The input `cur_hash` must have been inserted to sync_graph, otherwise
     /// it'll panic.
     pub fn target_difficulty(&self, cur_hash: &H256) -> U256 {
@@ -982,7 +994,7 @@ impl SynchronizationGraph {
                     // asynchronously
                     self.consensus_sender.lock().send(h).expect("Cannot fail");
                 } else {
-                    self.consensus.on_new_block_construction_only(&h);
+                    self.consensus.on_new_block_construction_only(&h, &*inner);
                 }
 
                 for child in &inner.arena[index].children {

@@ -261,7 +261,6 @@ class P2PInterface(P2PConnection):
         self.protocol_version = 1
         self.genesis = make_genesis()
         self.best_block_hash = self.genesis.block_header.hash
-        self.total_difficulty = 0
         self.blocks = {self.genesis.block_header.hash: self.genesis}
         self.peer_pubkey = None
         self.priv_key, self.pub_key = ec_random_keys()

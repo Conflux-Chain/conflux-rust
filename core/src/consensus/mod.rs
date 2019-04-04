@@ -85,8 +85,9 @@ pub struct ConsensusGraphNode {
     pub hash: H256,
     pub height: u64,
     pub difficulty: U256,
+    /// The total difficulty of its past set (include itself)
+    pub past_difficulty: U256,
     pub pow_quality: U256,
-    pub total_difficulty: U256,
     pub parent: usize,
     pub children: Vec<usize>,
     pub referrers: Vec<usize>,
@@ -153,7 +154,16 @@ impl ConsensusGraphInner {
             cache_man,
             storage_manager,
         };
-        inner.genesis_block_index = inner.insert(genesis_block);
+
+        // NOTE: Only genesis block will be first inserted into consensus graph
+        // and then into synchronization graph. All the other blocks will be
+        // inserted first into synchronization graph then consensus graph.
+        // At current point, genesis block is not in synchronization graph,
+        // so we cannot compute its past_difficulty from
+        // sync_graph.total_difficulty_in_own_epoch().
+        // For genesis block, its past_difficulty is simply its own difficulty.
+        inner.genesis_block_index = inner
+            .insert(genesis_block, *genesis_block.block_header.difficulty());
         inner.weight_tree.make_tree(inner.genesis_block_index);
         inner.weight_tree.update_weight(
             inner.genesis_block_index,
@@ -177,7 +187,7 @@ impl ConsensusGraphInner {
         inner
     }
 
-    pub fn insert(&mut self, block: &Block) -> usize {
+    pub fn insert(&mut self, block: &Block, past_difficulty: U256) -> usize {
         let hash = block.hash();
 
         let parent = if *block.block_header.parent_hash() != H256::default() {
@@ -201,8 +211,8 @@ impl ConsensusGraphInner {
             hash,
             height: block.block_header.height(),
             difficulty: *block.block_header.difficulty(),
+            past_difficulty,
             pow_quality: block.block_header.pow_quality,
-            total_difficulty: block.block_header.difficulty().clone(),
             parent,
             children: Vec::new(),
             referees,
@@ -2137,7 +2147,7 @@ impl ConsensusGraph {
         }
 
         // Construct epochs
-        let mut pivot_index = 0;
+        let mut pivot_index = 1;
         while pivot_index < new_pivot_chain.len() {
             // First, identify all the blocks in the current epoch
             let mut queue = Vec::new();
@@ -2242,11 +2252,20 @@ impl ConsensusGraph {
         }
     }
 
-    pub fn on_new_block_construction_only(&self, hash: &H256) {
+    pub fn on_new_block_construction_only(
+        &self, hash: &H256, sync_inner: &SynchronizationGraphInner,
+    ) {
         let block = self.block_by_hash(hash, false).unwrap();
 
         let inner = &mut *self.inner.write();
-        let me = inner.insert(block.as_ref());
+        let difficulty_in_my_epoch =
+            sync_inner.total_difficulty_in_own_epoch(hash);
+        let parent_idx =
+            *inner.indices.get(block.block_header.parent_hash()).unwrap();
+        let past_difficulty =
+            inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
+
+        let me = inner.insert(block.as_ref(), past_difficulty);
         inner.compute_anticone(me);
 
         inner.weight_tree.make_tree(me);
@@ -2308,7 +2327,14 @@ impl ConsensusGraph {
 
         let mut inner = &mut *self.inner.write();
 
-        let me = inner.insert(block.as_ref());
+        let difficulty_in_my_epoch =
+            sync_inner_lock.read().total_difficulty_in_own_epoch(hash);
+        let parent_idx =
+            *inner.indices.get(block.block_header.parent_hash()).unwrap();
+        let past_difficulty =
+            inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
+
+        let me = inner.insert(block.as_ref(), past_difficulty);
         inner.compute_anticone(me);
 
         let fully_valid = self.check_block_full_validity(
