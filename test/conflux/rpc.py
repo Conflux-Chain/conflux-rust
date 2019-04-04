@@ -174,6 +174,22 @@ class RpcClient:
         else:
             return tx
 
+    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0):
+        if sender is None:
+            sender = self.GENESIS_ADDR
+
+        if priv_key is None:
+            priv_key = default_config["GENESIS_PRI_KEY"]
+
+        if nonce is None:
+            nonce = self.get_nonce(sender)
+
+        action = eth_utils.decode_hex(receiver)
+        data = eth_utils.decode_hex(data_hex)
+        tx = Transaction(nonce, gas_price, gas, action, value, data)
+
+        return tx.sign(priv_key)
+
     def block_hashes_by_epoch(self, epoch: str) -> list:
         blocks = self.node.cfx_getBlocksByEpoch(epoch)
         for b in blocks:
@@ -192,3 +208,34 @@ class RpcClient:
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
         return (status["pending"], status["ready"])
+
+    def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None):
+        if nonce is None:
+            nonce = self.get_nonce(self.GENESIS_ADDR)
+
+        return {
+            "hash": "0x"+"0"*64,
+            "nonce": hex(nonce),
+            "from": self.GENESIS_ADDR,
+            "to": contract_addr,
+            "value": hex(0),
+            "gasPrice": hex(1),
+            "gas": hex(1000000),
+            "data": data_hex,
+            "v": hex(0),
+            "r": hex(0),
+            "s": hex(0),
+        }
+
+    def estimate_gas(self, contract_addr:str, data_hex:str) -> int:
+        tx = self.new_tx_for_call(contract_addr, data_hex)
+        gas = self.node.cfx_estimateGas(tx)
+        return int(gas, 0)
+
+    def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
+        tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
+        
+        if epoch is None:
+            return self.node.cfx_call(tx)
+        else:
+            return self.node.cfx_call(tx, epoch)
