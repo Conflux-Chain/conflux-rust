@@ -573,7 +573,10 @@ impl SynchronizationGraph {
             }
         }
         debug!("Initial missed blocks {:?}", *missed_hashes);
-        info!("Finish recovering {} blocks for SyncGraph", visited_blocks.len());
+        info!(
+            "Finish recovering {} blocks for SyncGraph",
+            visited_blocks.len()
+        );
     }
 
     fn fast_recover_graph_from_db(&mut self) {
