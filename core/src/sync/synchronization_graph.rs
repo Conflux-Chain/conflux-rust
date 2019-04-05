@@ -527,12 +527,14 @@ impl SynchronizationGraph {
                 }
             };
 
+        debug!("Get terminals {:?}", terminals);
         let mut queue = VecDeque::new();
         for terminal in terminals {
             queue.push_back(terminal);
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == self.genesis_block_hash {
                 continue;
@@ -550,19 +552,26 @@ impl SynchronizationGraph {
                 // This is necessary to construct consensus graph.
                 self.insert_block(block, true, false, false);
 
-                if !self.contains_block(&parent) {
+                if !self.contains_block(&parent)
+                    && !visited_blocks.contains(&parent)
+                {
                     queue.push_back(parent);
+                    visited_blocks.insert(parent);
                 }
 
                 for referee in referees {
-                    if !self.contains_block(&referee) {
+                    if !self.contains_block(&referee)
+                        && !visited_blocks.contains(&referee)
+                    {
                         queue.push_back(referee);
+                        visited_blocks.insert(referee);
                     }
                 }
             } else {
                 missed_hashes.insert(hash);
             }
         }
+        debug!("Initial missed blocks {:?}", *missed_hashes);
     }
 
     fn fast_recover_graph_from_db(&mut self) {
@@ -577,6 +586,7 @@ impl SynchronizationGraph {
                     return;
                 }
             };
+        debug!("Get terminals {:?}", terminals);
 
         let mut queue = VecDeque::new();
         for terminal in terminals {
@@ -584,6 +594,7 @@ impl SynchronizationGraph {
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == self.genesis_block_hash {
                 continue;
@@ -604,13 +615,19 @@ impl SynchronizationGraph {
                 // This is necessary to construct consensus graph.
                 self.insert_block(block, true, false, true);
 
-                if !self.contains_block(&parent) {
+                if !self.contains_block(&parent)
+                    && !visited_blocks.contains(&parent)
+                {
                     queue.push_back(parent);
+                    visited_blocks.insert(parent);
                 }
 
                 for referee in referees {
-                    if !self.contains_block(&referee) {
+                    if !self.contains_block(&referee)
+                        && !visited_blocks.contains(&referee)
+                    {
                         queue.push_back(referee);
+                        visited_blocks.insert(referee);
                     }
                 }
             } else {
@@ -618,6 +635,7 @@ impl SynchronizationGraph {
             }
         }
 
+        debug!("Initial missed blocks {:?}", *missed_hashes);
         let inner = self.inner.read();
         self.consensus.construct_pivot(&*inner);
     }
@@ -996,6 +1014,7 @@ impl SynchronizationGraph {
                 inner.arena[index].graph_status = BLOCK_GRAPH_READY;
 
                 let h = inner.arena[index].block_header.hash();
+                debug!("Block {:?} is graph ready", h);
                 if !sync_graph_only {
                     // Make Consensus Worker handle the block in order
                     // asynchronously

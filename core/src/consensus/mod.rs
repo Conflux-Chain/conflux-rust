@@ -270,6 +270,12 @@ impl ConsensusGraphInner {
     }
 
     pub fn epoch_executed(&mut self, epoch_index: usize) -> bool {
+        // `block_receipts_root` is not computed when recovering from db with
+        // fast_recover == false And we should force it to recompute
+        // without checking receipts when fast_recover == false
+        if !self.block_receipts_root.contains_key(&epoch_index) {
+            return false;
+        }
         if let Some(reversed_indices) = self.indices_in_epochs.get(&epoch_index)
         {
             // Clone to avoid holding immutable reference of self
@@ -368,13 +374,16 @@ impl ConsensusGraphInner {
                     .subtree_weight(prev_fork),
             });
 
-            // FIXME `prev_me` can be equal to `me_in_consensus` if the block is
+            // `prev_me` can be equal to `me_in_consensus` if the block is
             // malicously constructed,
             // which may cause index out of bound error here because it has not
             // been inserted to weight_tree
-            pivot_points
-                .entry(prev_me)
-                .or_insert(self.weight_tree.subtree_weight(prev_me));
+            let prev_me_weight = if prev_me != me_in_consensus {
+                self.weight_tree.subtree_weight(prev_me)
+            } else {
+                0.into()
+            };
+            pivot_points.entry(prev_me).or_insert(prev_me_weight);
 
             min_fork_height = min(min_fork_height, self.arena[prev_me].height);
         }
@@ -2033,6 +2042,10 @@ impl ConsensusGraph {
             .unwrap();
 
         let receipts_root = inner.block_receipts_root.get(&me).unwrap().clone();
+        debug!(
+            "Epoch {:?} has state_root={:?} receipts_root={:?}",
+            inner.arena[me].hash, state_root, receipts_root
+        );
 
         (state_root, receipts_root)
     }
