@@ -200,14 +200,12 @@ impl CowNodeRef {
         }
     }
 
-    // FIXME: maybe forbid calling for un-owned node?
+    // FIXME: maybe forbid calling for un-owned node? Check SubTrieVisitor#delete, #delete_all, etc.
     pub fn into_child(mut self) -> Option<NodeRefDeltaMptCompact> {
         if self.owned {
             self.owned = false;
-            Some(self.node_ref.clone().into())
-        } else {
-            None
         }
+        Some(self.node_ref.clone().into())
     }
 
     /// The deletion is always successful. When return value is Error, the
