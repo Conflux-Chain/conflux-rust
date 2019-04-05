@@ -7,7 +7,6 @@ use hash::keccak;
 use std::{convert::AsRef, vec::Vec};
 
 // TODO: from storage_key, recover the db_key for snapshot.
-#[derive(Debug)]
 pub enum StorageKey {
     AccountKey(Vec<u8>),
     StorageKey(Vec<u8>),
