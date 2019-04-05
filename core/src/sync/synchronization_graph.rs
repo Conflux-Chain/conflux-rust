@@ -517,12 +517,12 @@ impl SynchronizationGraph {
 
         debug!("Get terminals {:?}", terminals);
         let mut queue = VecDeque::new();
-        for terminal in &terminals {
-            queue.push_back(*terminal);
+        for terminal in terminals {
+            queue.push_back(terminal);
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
-        let mut checked_blocks: HashSet<H256> = HashSet::new();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == self.genesis_block_hash {
                 continue;
@@ -541,18 +541,18 @@ impl SynchronizationGraph {
                 self.insert_block(block, true, false, false);
 
                 if !self.contains_block(&parent)
-                    && !checked_blocks.contains(&parent)
+                    && !visited_blocks.contains(&parent)
                 {
                     queue.push_back(parent);
-                    checked_blocks.insert(parent);
+                    visited_blocks.insert(parent);
                 }
 
                 for referee in referees {
                     if !self.contains_block(&referee)
-                        && !checked_blocks.contains(&referee)
+                        && !visited_blocks.contains(&referee)
                     {
                         queue.push_back(referee);
-                        checked_blocks.insert(referee);
+                        visited_blocks.insert(referee);
                     }
                 }
             } else {
@@ -577,12 +577,12 @@ impl SynchronizationGraph {
         debug!("Get terminals {:?}", terminals);
 
         let mut queue = VecDeque::new();
-        for terminal in &terminals {
-            queue.push_back(*terminal);
+        for terminal in terminals {
+            queue.push_back(terminal);
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
-        let mut checked_blocks: HashSet<H256> = HashSet::new();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == self.genesis_block_hash {
                 continue;
@@ -604,18 +604,18 @@ impl SynchronizationGraph {
                 self.insert_block(block, true, false, true);
 
                 if !self.contains_block(&parent)
-                    && !checked_blocks.contains(&parent)
+                    && !visited_blocks.contains(&parent)
                 {
                     queue.push_back(parent);
-                    checked_blocks.insert(parent);
+                    visited_blocks.insert(parent);
                 }
 
                 for referee in referees {
                     if !self.contains_block(&referee)
-                        && !checked_blocks.contains(&referee)
+                        && !visited_blocks.contains(&referee)
                     {
                         queue.push_back(referee);
-                        checked_blocks.insert(referee);
+                        visited_blocks.insert(referee);
                     }
                 }
             } else {
@@ -804,7 +804,6 @@ impl SynchronizationGraph {
         } else {
             inner.insert_invalid(header_arc.clone())
         };
-        debug!("header {:?} inserted to sync as {}", hash, me);
 
         // Start to pass influence to descendants
         let mut need_to_relay: Vec<H256> = Vec::new();
@@ -1017,11 +1016,6 @@ impl SynchronizationGraph {
                     );
                     queue.push_back(*referrer);
                 }
-            } else {
-                debug!(
-                    "Block {:?} not graph ready",
-                    inner.arena[index].block_header
-                );
             }
         }
         if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
