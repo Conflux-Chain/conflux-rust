@@ -622,6 +622,13 @@ impl SynchronizationGraph {
         self.consensus.construct_pivot(&*inner);
     }
 
+    pub fn check_mining_heavy_block(
+        &self, parent_hash: &H256, light_difficulty: &U256,
+    ) -> bool {
+        self.consensus
+            .check_mining_heavy_block(parent_hash, light_difficulty)
+    }
+
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
         self.block_headers
             .read()

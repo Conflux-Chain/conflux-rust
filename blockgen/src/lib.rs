@@ -2,11 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, H256};
+use cfx_types::{Address, H256, U256, U512};
 use cfxcore::{
-    consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, SharedSynchronizationGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    consensus::{DEFERRED_STATE_EPOCH_COUNT, HEAVY_BLOCK_DIFFICULTY_RATIO},
+    pow::*,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    SharedSynchronizationGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use log::{debug, trace, warn};
 use parking_lot::RwLock;
@@ -159,6 +161,21 @@ impl BlockGenerator {
 
         trace!("{} txs packed", transactions.len());
 
+        let mut expected_difficulty =
+            self.graph.inner.read().expected_difficulty(&parent_hash);
+        if self
+            .graph
+            .check_mining_heavy_block(&parent_hash, &expected_difficulty)
+        {
+            assert!(
+                U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+                    * U512::from(expected_difficulty)
+                    < U512::from(U256::max_value())
+            );
+            expected_difficulty =
+                U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO) * expected_difficulty;
+        }
+
         let block_header = BlockHeaderBuilder::new()
             .with_transactions_root(Block::compute_transaction_root(
                 &transactions,
@@ -175,9 +192,7 @@ impl BlockGenerator {
             .with_author(self.mining_author)
             .with_deferred_state_root(deferred_state_root)
             .with_deferred_receipts_root(deferred_receipts_root)
-            .with_difficulty(
-                self.graph.inner.read().expected_difficulty(&parent_hash),
-            )
+            .with_difficulty(expected_difficulty)
             .with_referee_hashes(referee)
             .with_nonce(0)
             .with_gas_limit(DEFAULT_MAX_BLOCK_GAS_LIMIT.into())
