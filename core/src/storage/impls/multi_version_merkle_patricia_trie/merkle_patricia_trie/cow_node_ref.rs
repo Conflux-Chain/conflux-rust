@@ -10,6 +10,7 @@
 /// transferred into the CowNodeRef object. The visitor of MPT makes sure that
 /// ownership of any trie node is not transferred more than once at the same
 /// time.
+#[derive(Debug)]
 pub struct CowNodeRef {
     owned: bool,
     pub node_ref: NodeRefDeltaMpt,
@@ -40,6 +41,10 @@ impl MaybeOwnedTrieNodeAsCowCallParam {
 
     /// Do not implement in a trait to keep the call private.
     fn as_ref<'a>(&self) -> &'a TrieNodeDeltaMpt { unsafe { &*self.trie_node } }
+
+    pub fn as_ref_test<'a>(&self) -> &'a TrieNodeDeltaMpt {
+        unsafe { &*self.trie_node }
+    }
 }
 
 impl<'a, GuardType> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
@@ -331,7 +336,8 @@ impl CowNodeRef {
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<MerkleHash>
     {
-        if self.owned {
+        let merkle = if self.owned {
+            trace!("start computing merkle for owned {:?}", self);
             let trie_node = unsafe {
                 trie.get_node_memory_manager().dirty_node_as_mut_unchecked(
                     allocator_ref,
@@ -349,6 +355,7 @@ impl CowNodeRef {
 
             Ok(merkle)
         } else {
+            trace!("start computing merkle for not owned {:?}", self);
             let trie_node = trie
                 .get_node_memory_manager()
                 .node_as_ref_with_cache_manager(
@@ -357,7 +364,9 @@ impl CowNodeRef {
                     trie.get_node_memory_manager().get_cache_manager(),
                 )?;
             Ok(trie_node.merkle_hash)
-        }
+        };
+        trace!("Merkle for node {:?} {:?}", self, merkle);
+        merkle
     }
 
     fn get_or_compute_children_merkles(
@@ -366,7 +375,10 @@ impl CowNodeRef {
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<MaybeMerkleTable>
     {
-        match trie_node.children_table.get_children_count() {
+        let children_merkles = match trie_node
+            .children_table
+            .get_children_count()
+        {
             0 => Ok(None),
             _ => {
                 let mut merkles = ChildrenMerkleTable::default();
@@ -395,7 +407,9 @@ impl CowNodeRef {
                 }
                 Ok(Some(merkles))
             }
-        }
+        };
+        trace!("Child merkle {:?} {:?}", self, children_merkles);
+        children_merkles
     }
 
     // FIXME: unit test.

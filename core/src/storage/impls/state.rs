@@ -96,7 +96,11 @@ impl<'a> StateTrait for State<'a> {
                     &mut self.owned_node_set,
                 )
                 .delete(access_key)?;
-                self.root_node = root_node.map(|maybe_node| maybe_node.into());
+                // root_node is None means nothing is deleted and old_root_node
+                // is not owned
+                if let Some(root_node) = root_node {
+                    self.root_node = Some(root_node.into());
+                }
                 Ok(old_value)
             }
         }
@@ -107,6 +111,7 @@ impl<'a> StateTrait for State<'a> {
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
         self.pre_modification();
 
+        trace!("Before delete_all root_node {:?}", self.root_node);
         match self.get_root_node() {
             None => Ok(None),
             Some(old_root_node) => {
@@ -116,7 +121,13 @@ impl<'a> StateTrait for State<'a> {
                     &mut self.owned_node_set,
                 )
                 .delete_all(access_key_prefix, access_key_prefix)?;
-                self.root_node = root_node.map(|maybe_node| maybe_node.into());
+                trace!("After delete_all compact_root_node {:?}", root_node);
+                // root_node is None means nothing is deleted and old_root_node
+                // is not owned
+                if let Some(root_node) = root_node {
+                    self.root_node = Some(root_node.into());
+                }
+                trace!("After delete_all root_node {:?}", self.root_node);
                 Ok(deleted)
             }
         }

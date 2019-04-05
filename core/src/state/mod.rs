@@ -259,6 +259,7 @@ impl<'a> State<'a> {
         assert!(self.checkpoints.borrow().is_empty());
 
         let mut accounts = self.cache.borrow_mut();
+        trace!("Accounts {:?}", accounts);
         for (address, ref mut entry) in accounts
             .iter_mut()
             .filter(|&(_, ref entry)| entry.is_dirty())
@@ -274,7 +275,8 @@ impl<'a> State<'a> {
                 self.db.delete(&StorageKey::new_account_key(address))?;
             }
         }
-        self.db.commit(epoch_id)?;
+        let state_root = self.db.commit(epoch_id)?;
+        trace!("Epoch {:?} state root {:?}", epoch_id, state_root);
         Ok(())
     }
 
