@@ -96,11 +96,7 @@ impl<'a> StateTrait for State<'a> {
                     &mut self.owned_node_set,
                 )
                 .delete(access_key)?;
-                // root_node is None means nothing is deleted and old_root_node
-                // is not owned
-                if let Some(root_node) = root_node {
-                    self.root_node = Some(root_node.into());
-                }
+                self.root_node = root_node.map(|maybe_root_node|maybe_root_node.into());
                 Ok(old_value)
             }
         }
@@ -120,11 +116,7 @@ impl<'a> StateTrait for State<'a> {
                     &mut self.owned_node_set,
                 )
                 .delete_all(access_key_prefix, access_key_prefix)?;
-                // root_node is None means nothing is deleted and old_root_node
-                // is not owned
-                if let Some(root_node) = root_node {
-                    self.root_node = Some(root_node.into());
-                }
+                self.root_node = root_node.map(|maybe_root_node|maybe_root_node.into());
                 Ok(deleted)
             }
         }
