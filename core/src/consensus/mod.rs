@@ -216,6 +216,10 @@ impl ConsensusGraphInner {
         false
     }
 
+    pub fn check_heavy_block(&mut self, me: usize) -> bool {
+        
+    }
+
     pub fn insert(&mut self, block: &Block, past_difficulty: U256) -> usize {
         let hash = block.hash();
 
@@ -2065,6 +2069,20 @@ impl ConsensusGraph {
                 block.block_header.clone()
             );
             return false;
+        }
+
+        // Check heavy block
+        let my_hash = inner.arena[new].hash;
+        let my_index_in_sync_graph = *sync_graph.indices.get(&my_hash).unwrap();
+        let is_heavy = sync_graph.arena[my_index_in_sync_graph].is_heavy;
+        if is_heavy {
+            if !inner.check_heavy_block(new) {
+                warn!(
+                    "Partially invalid due to invalid heavy block. {:?}",
+                    block.block_header.clone()
+                );
+                return false;
+            }
         }
 
         // Check whether the new block select the correct parent block
