@@ -350,7 +350,7 @@ impl Database {
 		}
 
 		let mut write_opts = WriteOptions::new();
-		write_opts.disable_wal(true);
+		write_opts.disable_wal(false);
 		let read_opts = ReadOptions::default();
 		//TODO: removed read_opts.set_verify_checksums(false);
 

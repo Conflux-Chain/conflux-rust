@@ -96,7 +96,7 @@ impl<'a> StateTrait for State<'a> {
                     &mut self.owned_node_set,
                 )
                 .delete(access_key)?;
-                self.root_node = root_node.map(|maybe_node| maybe_node.into());
+                self.root_node = root_node.map(|maybe_root_node|maybe_root_node.into());
                 Ok(old_value)
             }
         }
@@ -116,7 +116,7 @@ impl<'a> StateTrait for State<'a> {
                     &mut self.owned_node_set,
                 )
                 .delete_all(access_key_prefix, access_key_prefix)?;
-                self.root_node = root_node.map(|maybe_node| maybe_node.into());
+                self.root_node = root_node.map(|maybe_root_node|maybe_root_node.into());
                 Ok(deleted)
             }
         }

@@ -867,8 +867,9 @@ impl NetworkServiceInner {
                     }
                     Ok(SessionData::Continue) => (),
                     Ok(SessionData::None) => break,
-                    Err(_) => {
+                    Err(e) => {
                         //let sess = session.lock();
+                        debug!("Error of readable {:?}", e);
                         kill = true;
                         break;
                     }
