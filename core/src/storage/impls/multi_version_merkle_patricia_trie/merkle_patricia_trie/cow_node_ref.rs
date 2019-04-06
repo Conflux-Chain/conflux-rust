@@ -200,7 +200,8 @@ impl CowNodeRef {
         }
     }
 
-    // FIXME: maybe forbid calling for un-owned node? Check SubTrieVisitor#delete, #delete_all, etc.
+    // FIXME: maybe forbid calling for un-owned node? Check
+    // SubTrieVisitor#delete, #delete_all, etc.
     pub fn into_child(mut self) -> Option<NodeRefDeltaMptCompact> {
         if self.owned {
             self.owned = false;

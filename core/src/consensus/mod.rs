@@ -216,6 +216,67 @@ impl ConsensusGraphInner {
         false
     }
 
+    // Note that, at current point, the difficulty of "me" has not been applied
+    // to affect weights in parental tree.
+    pub fn check_heavy_block(&mut self, me: usize) -> bool {
+        let mut difficulties_to_minus: HashMap<u64, U256> = HashMap::new();
+        let parent_index = self.arena[me].parent;
+        assert!(parent_index != NULL);
+        let anticone = &self.arena[me].data.anticone;
+
+        for index in anticone {
+            if self.arena[*index].data.partial_invalid {
+                continue;
+            }
+            let difficulty_to_minus = self.arena[*index].difficulty;
+            let lca = self.weight_tree.lca(*index, parent_index);
+            assert!(*index != lca);
+            let lca_height = self.arena[lca].height;
+            let entry = difficulties_to_minus
+                .entry(lca_height)
+                .or_insert(U256::from(0));
+            *entry = *entry + difficulty_to_minus;
+        }
+
+        let mut difficulty_to_minus = U256::from(0);
+        let light_difficulty = self.arena[me].difficulty
+            / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO);
+
+        let mut index = parent_index;
+        let mut parent = self.arena[index].parent;
+        let total_difficulty = {
+            let total_difficulty_to_minus = difficulties_to_minus
+                .iter()
+                .fold(U256::from(0), |acc, (_, difficulty)| acc + difficulty);
+            self.weight_tree.subtree_weight(self.genesis_block_index)
+                - total_difficulty_to_minus
+        };
+
+        while index != self.genesis_block_index {
+            debug_assert!(parent != NULL);
+            let index_height = self.arena[index].height;
+            if let Some(difficulty) = difficulties_to_minus.get(&index_height) {
+                difficulty_to_minus = difficulty_to_minus + difficulty;
+            }
+
+            let m = total_difficulty - self.arena[parent].past_difficulty;
+            let mut n = self.weight_tree.subtree_weight(index);
+            assert!(n > difficulty_to_minus);
+            n = n - difficulty_to_minus;
+            if ((U512::from(2) * U512::from(m - n)) > U512::from(n))
+                && (U512::from(m)
+                    > (U512::from(HEAVY_BLOCK_THRESHOLD)
+                        * U512::from(light_difficulty)))
+            {
+                return true;
+            }
+            index = parent;
+            parent = self.arena[index].parent;
+        }
+
+        false
+    }
+
     pub fn insert(&mut self, block: &Block, past_difficulty: U256) -> usize {
         let hash = block.hash();
 
@@ -2085,6 +2146,20 @@ impl ConsensusGraph {
             if !inner.check_correct_parent(new, sync_graph) {
                 warn!(
                     "Partially invalid due to picking incorrect parent. {:?}",
+                    block.block_header.clone()
+                );
+                return false;
+            }
+        }
+
+        // Check heavy block
+        let my_hash = inner.arena[new].hash;
+        let my_index_in_sync_graph = *sync_graph.indices.get(&my_hash).unwrap();
+        let is_heavy = sync_graph.arena[my_index_in_sync_graph].is_heavy;
+        if is_heavy {
+            if !inner.check_heavy_block(new) {
+                warn!(
+                    "Partially invalid due to invalid heavy block. {:?}",
                     block.block_header.clone()
                 );
                 return false;
