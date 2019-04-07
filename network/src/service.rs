@@ -952,8 +952,10 @@ impl NetworkServiceInner {
     }
 
     fn kill_connection(
-        &self, token: StreamToken, io: &IoContext<NetworkIoMessage>, remote: bool,
-    ) {
+        &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
+        remote: bool,
+    )
+    {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
         let mut failure_id = None;
         let mut deregister = false;
