@@ -66,6 +66,8 @@ const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
 
+const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
+
 pub struct ConsensusGraphNodeData {
     pub epoch_number: RefCell<usize>,
     pub partial_invalid: bool,
@@ -1673,6 +1675,46 @@ impl ConsensusGraph {
         self.cache_man.lock().note_used(CacheId::Block(hash));
     }
 
+    /// Store block status to db. Now the status means if the block is partial
+    /// invalid.
+    /// The db key is the block hash plus one extra byte, so we can get better
+    /// data locality if we get both a block and its status from db.
+    /// The status is not a part of the block because the block is inserted
+    /// before we know its status, and we do not want to insert a large chunk
+    /// again. TODO Maybe we can use in-place modification (operator `merge`
+    /// in rocksdb) to keep the status together with the block.
+    pub fn insert_block_status_to_db(
+        &self, block_hash: &H256, partial_invalid: bool,
+    ) {
+        let mut dbops = self.db.key_value().transaction();
+        let mut key = Vec::with_capacity(block_hash.len() + 1);
+        key.extend_from_slice(&block_hash);
+        key.push(BLOCK_STATUS_SUFFIX_BYTE);
+        let value = if partial_invalid { [1] } else { [0] };
+        dbops.put(COL_BLOCKS, &key, &value);
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
+    /// Get block status from db. Now the status means if the block is partial
+    /// invalid
+    pub fn block_status_from_db(&self, block_hash: &H256) -> Option<bool> {
+        let mut key = Vec::with_capacity(block_hash.len() + 1);
+        key.extend_from_slice(&block_hash);
+        key.push(BLOCK_STATUS_SUFFIX_BYTE);
+        self.db
+            .key_value()
+            .get(COL_BLOCKS, &key)
+            .expect("crash for db failure")
+            .map(|encoded| {
+                // TODO May encode more data in the future, and should use an
+                // better structure for encoding and decoding
+                encoded[0] == 1
+            })
+    }
+
     pub fn remove_block_from_kv(&self, hash: &H256) {
         self.blocks.write().remove(hash);
         let mut dbops = self.db.key_value().transaction();
@@ -2437,6 +2479,37 @@ impl ConsensusGraph {
 
         let me = inner.insert(block.as_ref(), past_difficulty);
         inner.compute_anticone(me);
+        let fully_valid =
+            if let Some(partial_invalid) = self.block_status_from_db(hash) {
+                !partial_invalid
+            } else {
+                // FIXME If the status of a block close to terminals is missing
+                // (likely to happen) and we try to check its validity with the
+                // commented code, we will recompute the whole DAG from genesis
+                // because the pivot chain is empty now, which is not what we
+                // want for fast recovery. A better solution is
+                // to assume it's partial invalid, construct the pivot chain and
+                // other data like block_receipts_root first, and then check its
+                // full validity. The pivot chain might need to be updated
+                // depending on the validity result.
+
+                // The correct logic here should be as follows, but this
+                // solution is very costly
+                // ```
+                // let valid = self.check_block_full_validity(me, &block, inner, sync_inner);
+                // self.insert_block_status_to_db(hash, !valid);
+                // valid
+                // ```
+
+                // The assumed value should be false after we fix this issue.
+                // Now we optimistically hope that they are valid.
+                debug!("Assume block {} is valid", hash);
+                true
+            };
+        if !fully_valid {
+            inner.arena[me].data.partial_invalid = true;
+            return;
+        }
 
         inner.weight_tree.make_tree(me);
         inner.weight_tree.link(inner.arena[me].parent, me);
@@ -2513,6 +2586,7 @@ impl ConsensusGraph {
             inner,
             &*sync_inner_lock.read(),
         );
+        self.insert_block_status_to_db(hash, !fully_valid);
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
             return;
