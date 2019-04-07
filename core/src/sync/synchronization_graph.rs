@@ -608,12 +608,13 @@ impl SynchronizationGraph {
         debug!("Get terminals {:?}", terminals);
 
         let mut queue = VecDeque::new();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
             queue.push_back(terminal);
+            visited_blocks.insert(terminal);
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
-        let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == self.genesis_block_hash {
                 continue;
