@@ -140,7 +140,14 @@ impl VerificationConfig {
     }
 
     /// Phase 1 quick block verification. Only does checks that are cheap.
-    /// Operates on a single block
+    /// Operates on a single block.
+    /// Note that we should first check whether the block body matches its
+    /// header, e.g., check transaction root correctness, and then check the
+    /// body itself. If body does not match header, the block may still be
+    /// valid but we get the wrong body from evil node. So we try to get
+    /// body again from others. However, if the body matches the header and
+    /// the body is incorrect, this means the block is invalid, and we
+    /// should discard this block and all its descendants.
     pub fn verify_block_basic(&self, block: &Block) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
