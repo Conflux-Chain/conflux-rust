@@ -1189,6 +1189,4 @@ impl SynchronizationGraph {
                 + compact_blocks.heap_size_of_children()
         });
     }
-
-    pub fn persist_terminals(&self) { self.consensus.persist_terminals(); }
 }

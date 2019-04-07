@@ -1506,6 +1506,21 @@ impl ConsensusGraphInner {
             }
         }
     }
+
+    pub fn persist_terminals(&self) {
+        let mut terminals = Vec::with_capacity(self.parental_terminals.len());
+        for index in &self.parental_terminals {
+            terminals.push(self.arena[*index].hash);
+        }
+        let mut rlp_stream = RlpStream::new();
+        rlp_stream.begin_list(terminals.len());
+        for hash in terminals {
+            rlp_stream.append(&hash);
+        }
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
+        self.db.key_value().write(dbops).expect("db error");
+    }
 }
 
 pub struct ConsensusGraph {
@@ -2679,6 +2694,7 @@ impl ConsensusGraph {
             &*sync_inner_lock.read(),
         );
         inner.pivot_chain = new_pivot_chain;
+        inner.persist_terminals();
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -2761,28 +2777,6 @@ impl ConsensusGraph {
             .write()
             .call_virtual(tx, EpochNumber::LatestState)
             .map(|(_, gas_used)| gas_used)
-    }
-
-    pub fn persist_terminals(&self) {
-        let terminals = {
-            let inner = self.inner.read();
-            let mut terminals =
-                Vec::with_capacity(inner.parental_terminals.len());
-            for index in &inner.parental_terminals {
-                terminals.push(inner.arena[*index].hash);
-            }
-            terminals
-        };
-
-        let mut rlp_stream = RlpStream::new();
-        rlp_stream.begin_list(terminals.len());
-        for hash in terminals {
-            rlp_stream.append(&hash);
-        }
-
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
-        self.db.key_value().write(dbops).expect("db error");
     }
 
     pub fn logs(

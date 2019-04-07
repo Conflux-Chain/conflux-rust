@@ -62,7 +62,6 @@ const REQUEST_START_WAITING_TIME_SECONDS: u64 = 1;
 const TX_TIMER: TimerToken = 0;
 const CHECK_REQUEST_TIMER: TimerToken = 1;
 const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
-const PERSIST_TERMINAL_TIMER: TimerToken = 3;
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -883,7 +882,7 @@ impl SynchronizationProtocolHandler {
             .map(|header| header.hash())
             .collect();
         debug!(
-            "get headers responce of hashes:{:?}, requesting block:{:?}",
+            "get headers response of hashes:{:?}, requesting block:{:?}",
             header_hashes, hashes
         );
 
@@ -1998,8 +1997,6 @@ impl SynchronizationProtocolHandler {
     }
 
     fn block_cache_gc(&self) { self.graph.block_cache_gc(); }
-
-    fn persist_terminals(&self) { self.graph.persist_terminals(); }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -2016,11 +2013,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.protocol_config.block_cache_gc_period,
         )
         .expect("Error registering block_cache_gc timer");
-        io.register_timer(
-            PERSIST_TERMINAL_TIMER,
-            self.protocol_config.persist_terminal_period,
-        )
-        .expect("Error registering persist terminals timer");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2061,9 +2053,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             BLOCK_CACHE_GC_TIMER => {
                 self.block_cache_gc();
-            }
-            PERSIST_TERMINAL_TIMER => {
-                self.persist_terminals();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
