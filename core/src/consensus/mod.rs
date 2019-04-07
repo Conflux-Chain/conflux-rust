@@ -207,6 +207,10 @@ impl ConsensusGraphInner {
                     > (U512::from(HEAVY_BLOCK_THRESHOLD)
                         * U512::from(light_difficulty)))
             {
+                debug!(
+                    "Should mine heavy block m={} n={} parent={:?}",
+                    m, n, self.arena[parent].hash
+                );
                 return true;
             }
             index = parent;
@@ -323,8 +327,8 @@ impl ConsensusGraphInner {
             self.arena[referee].referrers.push(index);
         }
         debug!(
-            "Block {} inserted into Consensus with index {}",
-            hash, index
+            "Block {} inserted into Consensus with index={} past_difficulty={}",
+            hash, index, past_difficulty
         );
 
         index

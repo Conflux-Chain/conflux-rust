@@ -378,9 +378,10 @@ impl SynchronizationGraphInner {
         self.arena[my_index]
             .blockset_in_own_view_of_epoch
             .iter()
-            .fold(0.into(), |acc, x| {
-                acc + *self.arena[*x].block_header.difficulty()
-            })
+            .fold(
+                self.arena[my_index].block_header.difficulty().clone(),
+                |acc, x| acc + *self.arena[*x].block_header.difficulty(),
+            )
     }
 
     /// The input `cur_hash` must have been inserted to sync_graph, otherwise
