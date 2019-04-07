@@ -1331,7 +1331,7 @@ impl SynchronizationProtocolHandler {
             self.requests_queue.lock().push(timed_req);
             true
         } else {
-            warn!("Fail to request header {:?}", hash);
+            debug!("Fail to request header {:?} from peer={}", hash, peer_id);
             false
         }
     }
@@ -1373,7 +1373,7 @@ impl SynchronizationProtocolHandler {
             self.requests_queue.lock().push(timed_req);
             true
         } else {
-            warn!("Fail to request blocks {:?}", hashes);
+            debug!("Fail to request blocks {:?} from peer={}", hashes, peer_id);
             false
         }
     }
@@ -1416,7 +1416,10 @@ impl SynchronizationProtocolHandler {
             self.requests_queue.lock().push(timed_req);
             true
         } else {
-            warn!("Fail to request compact blocks {:?}", hashes);
+            debug!(
+                "Fail to request compact blocks {:?} from peer={}",
+                hashes, peer_id
+            );
             false
         }
     }
@@ -1442,6 +1445,11 @@ impl SynchronizationProtocolHandler {
                 block_hash, peer_id, timed_req.request_id
             );
             self.requests_queue.lock().push(timed_req);
+        } else {
+            debug!(
+                "Fail to request blocktxn {:?} from peer={}",
+                block_hash, peer_id
+            );
         }
     }
 

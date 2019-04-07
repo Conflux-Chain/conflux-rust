@@ -527,6 +527,7 @@ impl SynchronizationGraph {
     }
 
     fn recover_graph_from_db(&mut self) {
+        info!("Start full recovery of the block DAG and state from database");
         let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
@@ -584,9 +585,14 @@ impl SynchronizationGraph {
             }
         }
         debug!("Initial missed blocks {:?}", *missed_hashes);
+        info!(
+            "Finish recovering {} blocks for SyncGraph",
+            visited_blocks.len()
+        );
     }
 
     fn fast_recover_graph_from_db(&mut self) {
+        info!("Start fast recovery of the block DAG from database");
         let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
@@ -648,8 +654,9 @@ impl SynchronizationGraph {
         }
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
-        let inner = self.inner.read();
-        self.consensus.construct_pivot(&*inner);
+        info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
+        self.consensus.construct_pivot(&*self.inner.read());
+        info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
     pub fn check_mining_heavy_block(
