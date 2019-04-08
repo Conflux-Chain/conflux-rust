@@ -224,6 +224,12 @@ impl Encodable for Transaction {
     }
 }
 
+impl HeapSizeOf for Transaction {
+    fn heap_size_of_children(&self) -> usize {
+        self.data.heap_size_of_children()
+    }
+}
+
 /// Signed transaction information without verified signature.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionWithSignature {
@@ -345,6 +351,12 @@ impl TransactionWithSignature {
     }
 }
 
+impl HeapSizeOf for TransactionWithSignature {
+    fn heap_size_of_children(&self) -> usize {
+        self.unsigned.heap_size_of_children()
+    }
+}
+
 /// A signed transaction with successfully recovered `sender`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignedTransaction {
@@ -428,15 +440,19 @@ impl SignedTransaction {
 
     pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price }
 
+    pub fn gas_limit(&self) -> &U256 { &self.transaction.gas }
+
     pub fn size(&self) -> usize {
         // FIXME: We should revisit the size of transaction after we finished
         // the persistent storage part
-        0
+        self.heap_size_of_children()
     }
 
     pub fn public(&self) -> &Option<Public> { &self.public }
 }
 
 impl HeapSizeOf for SignedTransaction {
-    fn heap_size_of_children(&self) -> usize { mem::size_of::<Self>() }
+    fn heap_size_of_children(&self) -> usize {
+        mem::size_of::<Self>() + self.transaction.heap_size_of_children()
+    }
 }
