@@ -20,7 +20,7 @@ class P2PTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def run_test(self):
-        block_number = 2000
+        block_number = 4000
 
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)

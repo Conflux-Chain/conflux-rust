@@ -378,9 +378,10 @@ impl SynchronizationGraphInner {
         self.arena[my_index]
             .blockset_in_own_view_of_epoch
             .iter()
-            .fold(0.into(), |acc, x| {
-                acc + *self.arena[*x].block_header.difficulty()
-            })
+            .fold(
+                self.arena[my_index].block_header.difficulty().clone(),
+                |acc, x| acc + *self.arena[*x].block_header.difficulty(),
+            )
     }
 
     /// The input `cur_hash` must have been inserted to sync_graph, otherwise
@@ -527,6 +528,7 @@ impl SynchronizationGraph {
     }
 
     fn recover_graph_from_db(&mut self) {
+        info!("Start full recovery of the block DAG and state from database");
         let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
@@ -584,9 +586,14 @@ impl SynchronizationGraph {
             }
         }
         debug!("Initial missed blocks {:?}", *missed_hashes);
+        info!(
+            "Finish recovering {} blocks for SyncGraph",
+            visited_blocks.len()
+        );
     }
 
     fn fast_recover_graph_from_db(&mut self) {
+        info!("Start fast recovery of the block DAG from database");
         let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
@@ -601,12 +608,13 @@ impl SynchronizationGraph {
         debug!("Get terminals {:?}", terminals);
 
         let mut queue = VecDeque::new();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
             queue.push_back(terminal);
+            visited_blocks.insert(terminal);
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
-        let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == self.genesis_block_hash {
                 continue;
@@ -648,8 +656,9 @@ impl SynchronizationGraph {
         }
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
-        let inner = self.inner.read();
-        self.consensus.construct_pivot(&*inner);
+        info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
+        self.consensus.construct_pivot(&*self.inner.read());
+        info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
     pub fn check_mining_heavy_block(
@@ -1181,6 +1190,4 @@ impl SynchronizationGraph {
                 + compact_blocks.heap_size_of_children()
         });
     }
-
-    pub fn persist_terminals(&self) { self.consensus.persist_terminals(); }
 }
