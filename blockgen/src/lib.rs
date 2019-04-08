@@ -12,7 +12,10 @@ use cfxcore::{
 };
 use log::{debug, trace, warn};
 use parking_lot::RwLock;
-use primitives::*;
+use primitives::{
+    block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
+    *,
+};
 use std::{
     sync::{mpsc, Arc, Mutex},
     thread::{self, sleep},
@@ -153,7 +156,7 @@ impl BlockGenerator {
     fn assemble_new_block_impl(
         &self, parent_hash: H256, referee: Vec<H256>,
         deferred_state_root: H256, deferred_receipts_root: H256,
-        transactions: Vec<Arc<SignedTransaction>>,
+        block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
     ) -> Block
     {
         let parent_height =
@@ -195,7 +198,7 @@ impl BlockGenerator {
             .with_difficulty(expected_difficulty)
             .with_referee_hashes(referee)
             .with_nonce(0)
-            .with_gas_limit(DEFAULT_MAX_BLOCK_GAS_LIMIT.into())
+            .with_gas_limit(block_gas_limit)
             .build();
 
         Block {
@@ -215,15 +218,22 @@ impl BlockGenerator {
                 DEFERRED_STATE_EPOCH_COUNT as usize - 1,
             );
 
-        let transactions = self
-            .txpool
-            .pack_transactions(num_txs, self.txgen.get_best_state());
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+        let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
+
+        let transactions = self.txpool.pack_transactions(
+            num_txs,
+            block_gas_limit,
+            block_size_limit,
+            self.txgen.get_best_state(),
+        );
 
         self.assemble_new_block_impl(
             parent_hash,
             referee,
             state_root,
             receipts_root,
+            block_gas_limit,
             transactions,
         )
     }
@@ -235,16 +245,22 @@ impl BlockGenerator {
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+        let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
 
-        let transactions = self
-            .txpool
-            .pack_transactions(num_txs, self.txgen.get_best_state());
+        let transactions = self.txpool.pack_transactions(
+            num_txs,
+            block_gas_limit,
+            block_size_limit,
+            self.txgen.get_best_state(),
+        );
 
         self.assemble_new_block_impl(
             best_block_hash,
             referee,
             best_info.deferred_state_root,
             best_info.deferred_receipts_root,
+            block_gas_limit,
             transactions,
         )
     }
@@ -310,6 +326,7 @@ impl BlockGenerator {
             referee,
             state_root,
             receipts_root,
+            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             transactions,
         );
 
@@ -384,7 +401,8 @@ impl BlockGenerator {
 
             if bg.is_mining_block_outdated(&current_mining_block) {
                 // TODO: #transations TBD
-                current_mining_block = bg.assemble_new_block(20000);
+                current_mining_block =
+                    bg.assemble_new_block(MAX_TRANSACTION_COUNT_PER_BLOCK);
 
                 // set a mining problem
                 let current_difficulty =
