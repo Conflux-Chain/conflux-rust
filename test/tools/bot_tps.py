@@ -141,4 +141,6 @@ def work(faucet_addr, faucet_priv_key_hex, rpc_urls:list, num_threads:int, num_r
 faucet_addr = "0xa70ddf9b9750c575db453eea6a041f4c8536785a"
 faucet_priv_key = "4bb79797807812587dd6e02b39fee03056c11eec5ec599609d9175a1275a9a10"
 bootnodes = load_boot_nodes()
-work(faucet_addr, faucet_priv_key, bootnodes, 1, 20)
+num_threads = 1 if len(sys.argv) < 2 else int(sys.argv[1])
+num_receivers = 20 if len(sys.argv) < 3 else int(sys.argv[2])
+work(faucet_addr, faucet_priv_key, bootnodes, num_threads, num_receivers)
