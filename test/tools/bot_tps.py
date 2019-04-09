@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import toml
 import threading
@@ -9,6 +11,7 @@ import sys
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
+from conflux.utils import privtoaddr
 from test_framework.util import get_rpc_proxy, assert_equal
 
 DRIPS_PER_CFX = 10**18
@@ -33,7 +36,7 @@ class Sender:
         tx = self.client.new_tx(sender=self.addr, receiver=addr, nonce=self.nonce, value=amount, priv_key=self.priv_key)
         assert_equal(self.client.send_tx(tx), tx.hash_hex())
 
-        self.balance -= 21000 + amount
+        self.balance -= self.client.DEFAULT_TX_FEE + amount
         self.nonce += 1
 
         client = self.client if rpc_url is None else new_client(rpc_url)
@@ -41,19 +44,19 @@ class Sender:
 
         return sender
 
-    def wait_for_balance(self):
+    def wait_for_balance(self, interval=3):
         while True:
             balance = self.client.get_balance(self.addr)
             if balance > 0:
                 assert_equal(balance, self.balance)
                 break
             else:
-                time.sleep(1)
+                time.sleep(interval)
 
     def account_nonce(self):
         return self.client.get_nonce(self.addr)
 
-    def send(self, to:str, amount:int):
+    def send(self, to:str, amount:int, retry_interval=5):
         tx = self.client.new_tx(sender=self.addr, receiver=to, nonce=self.nonce, value=amount, priv_key=self.priv_key)
 
         while True:
@@ -62,9 +65,9 @@ class Sender:
                 break
             except Exception as e:
                 print("failed to send tx:", e)
-                time.sleep(5)
+                time.sleep(retry_interval)
 
-        self.balance -= 30000
+        self.balance -= self.client.DEFAULT_TX_FEE + amount
         self.nonce += 1
 
 class TpsWorker(threading.Thread):
@@ -138,9 +141,13 @@ def work(faucet_addr, faucet_priv_key_hex, rpc_urls:list, num_threads:int, num_r
         w.join()
 
 # main
-faucet_addr = "0xa70ddf9b9750c575db453eea6a041f4c8536785a"
-faucet_priv_key = "4bb79797807812587dd6e02b39fee03056c11eec5ec599609d9175a1275a9a10"
+if len(sys.argv) == 1:
+    print("faucet private key not specified.")
+    sys.exit(1)
+
+faucet_priv_key = sys.argv[1]
+faucet_addr = eth_utils.encode_hex(privtoaddr(faucet_priv_key))
 bootnodes = load_boot_nodes()
-num_threads = 1 if len(sys.argv) < 2 else int(sys.argv[1])
-num_receivers = 20 if len(sys.argv) < 3 else int(sys.argv[2])
+num_threads = 1 if len(sys.argv) < 3 else int(sys.argv[2])
+num_receivers = 20 if len(sys.argv) < 4 else int(sys.argv[3])
 work(faucet_addr, faucet_priv_key, bootnodes, num_threads, num_receivers)
