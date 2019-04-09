@@ -551,9 +551,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
                 Some(value) => {
                     ret.replace_value_valid(value);
                 }
-                None => {
-                    ret.delete_value_unchecked();
-                }
+                None => {}
             },
             None => {
                 let value_size = self.value_size as usize;

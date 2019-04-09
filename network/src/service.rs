@@ -323,7 +323,7 @@ impl DelayedQueue {
             .is_err()
         {
             debug!("Error sending delayed message");
-            network_service.kill_connection(context.peer, &context.io);
+            network_service.kill_connection(context.peer, &context.io, true);
         };
     }
 }
@@ -658,7 +658,7 @@ impl NetworkServiceInner {
         }
         let mut w = self.dropped_nodes.write();
         for token in w.iter() {
-            self.kill_connection(*token, io);
+            self.kill_connection(*token, io, true);
         }
         w.clear();
     }
@@ -824,7 +824,7 @@ impl NetworkServiceInner {
         &self, stream: StreamToken, io: &IoContext<NetworkIoMessage>,
     ) {
         trace!(target: "network", "Connection closed: {}", stream);
-        self.kill_connection(stream, io);
+        self.kill_connection(stream, io, true);
     }
 
     fn session_readable(
@@ -867,8 +867,9 @@ impl NetworkServiceInner {
                     }
                     Ok(SessionData::Continue) => (),
                     Ok(SessionData::None) => break,
-                    Err(_) => {
+                    Err(e) => {
                         //let sess = session.lock();
+                        debug!("Error of readable {:?}", e);
                         kill = true;
                         break;
                     }
@@ -877,7 +878,7 @@ impl NetworkServiceInner {
         }
 
         if kill {
-            self.kill_connection(stream, io);
+            self.kill_connection(stream, io, true);
         }
 
         let handlers = self.handlers.read();
@@ -952,8 +953,11 @@ impl NetworkServiceInner {
 
     fn kill_connection(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
-    ) {
+        remote: bool,
+    )
+    {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
+        let mut failure_id = None;
         let mut deregister = false;
 
         if let FIRST_SESSION...LAST_SESSION = token {
@@ -970,8 +974,14 @@ impl NetworkServiceInner {
                     }
                     sess.set_expired();
                 }
-                deregister = sess.done();
+                deregister = remote || sess.done();
+                failure_id = sess.id().cloned();
                 debug!("deregister stream {}? {}", token, deregister);
+            }
+        }
+        if let Some(id) = failure_id {
+            if remote {
+                self.node_db.write().note_failure(&id, true, false);
             }
         }
         for p in to_disconnect {
@@ -1251,7 +1261,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                         .disconnect(io, DisconnectReason::DisconnectRequested);
                 }
                 trace!(target: "network", "Disconnect requested {}", peer);
-                self.kill_connection(*peer, io);
+                self.kill_connection(*peer, io, false);
             } //_ => {}
         }
     }
@@ -1487,7 +1497,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
     }
 
     fn disconnect_peer(&self, peer: PeerId) {
-        self.network_service.kill_connection(peer, self.io);
+        self.network_service.kill_connection(peer, self.io, true);
     }
 
     fn register_timer(

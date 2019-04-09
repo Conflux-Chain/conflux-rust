@@ -4,14 +4,14 @@
 
 use crate::{
     cache_manager::{CacheId, CacheManager, CacheSize},
-    consensus::SharedConsensusGraph,
+    consensus::{SharedConsensusGraph, HEAVY_BLOCK_DIFFICULTY_RATIO},
     db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
     pow::ProofOfWorkConfig,
     verification::*,
 };
-use cfx_types::{H256, U256};
+use cfx_types::{H256, U256, U512};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock};
 use primitives::{block::CompactBlock, Block, BlockHeader};
@@ -48,6 +48,8 @@ pub struct SynchronizationGraphNode {
     pub block_header: Arc<BlockHeader>,
     /// The status of graph connectivity in the current block view.
     pub graph_status: u8,
+    /// Whether the block is a heavy block
+    pub is_heavy: bool,
     /// Whether the block body is ready.
     pub block_ready: bool,
     /// The index of the parent of the block.
@@ -104,6 +106,7 @@ impl SynchronizationGraphInner {
         let hash = header.hash();
         let me = self.arena.insert(SynchronizationGraphNode {
             graph_status: BLOCK_INVALID,
+            is_heavy: false,
             block_ready: false,
             parent: NULL,
             children: Vec::new(),
@@ -147,6 +150,7 @@ impl SynchronizationGraphInner {
             } else {
                 BLOCK_HEADER_ONLY
             },
+            is_heavy: false,
             block_ready: *header.parent_hash() == H256::default(),
             parent: NULL,
             children: Vec::new(),
@@ -309,7 +313,8 @@ impl SynchronizationGraphInner {
 
     fn verify_header_graph_ready_block(
         &self, index: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
+        let mut is_heavy_block = false;
         let epoch = self.arena[index].block_header.height();
         let parent = self.arena[index].parent;
         if self.arena[parent].block_header.height() + 1 != epoch {
@@ -344,7 +349,14 @@ impl SynchronizationGraphInner {
 
         let expected_difficulty: U256 = self
             .expected_difficulty(self.arena[index].block_header.parent_hash());
-        if expected_difficulty != *self.arena[index].block_header.difficulty() {
+        let my_difficulty = *self.arena[index].block_header.difficulty();
+
+        if U512::from(my_difficulty)
+            == U512::from(expected_difficulty)
+                * U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+        {
+            is_heavy_block = true;
+        } else if my_difficulty != expected_difficulty {
             warn!(
                 "expected_difficulty {}; difficulty {}",
                 expected_difficulty,
@@ -356,7 +368,7 @@ impl SynchronizationGraphInner {
             })));
         }
 
-        Ok(())
+        Ok(is_heavy_block)
     }
 
     /// The input `my_hash` must have been inserted to sync_graph, otherwise
@@ -366,9 +378,10 @@ impl SynchronizationGraphInner {
         self.arena[my_index]
             .blockset_in_own_view_of_epoch
             .iter()
-            .fold(0.into(), |acc, x| {
-                acc + *self.arena[*x].block_header.difficulty()
-            })
+            .fold(
+                self.arena[my_index].block_header.difficulty().clone(),
+                |acc, x| acc + *self.arena[*x].block_header.difficulty(),
+            )
     }
 
     /// The input `cur_hash` must have been inserted to sync_graph, otherwise
@@ -515,6 +528,7 @@ impl SynchronizationGraph {
     }
 
     fn recover_graph_from_db(&mut self) {
+        info!("Start full recovery of the block DAG and state from database");
         let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
@@ -527,12 +541,14 @@ impl SynchronizationGraph {
                 }
             };
 
+        debug!("Get terminals {:?}", terminals);
         let mut queue = VecDeque::new();
         for terminal in terminals {
             queue.push_back(terminal);
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == self.genesis_block_hash {
                 continue;
@@ -550,22 +566,34 @@ impl SynchronizationGraph {
                 // This is necessary to construct consensus graph.
                 self.insert_block(block, true, false, false);
 
-                if !self.contains_block(&parent) {
+                if !self.contains_block(&parent)
+                    && !visited_blocks.contains(&parent)
+                {
                     queue.push_back(parent);
+                    visited_blocks.insert(parent);
                 }
 
                 for referee in referees {
-                    if !self.contains_block(&referee) {
+                    if !self.contains_block(&referee)
+                        && !visited_blocks.contains(&referee)
+                    {
                         queue.push_back(referee);
+                        visited_blocks.insert(referee);
                     }
                 }
             } else {
                 missed_hashes.insert(hash);
             }
         }
+        debug!("Initial missed blocks {:?}", *missed_hashes);
+        info!(
+            "Finish recovering {} blocks for SyncGraph",
+            visited_blocks.len()
+        );
     }
 
     fn fast_recover_graph_from_db(&mut self) {
+        info!("Start fast recovery of the block DAG from database");
         let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
@@ -577,10 +605,13 @@ impl SynchronizationGraph {
                     return;
                 }
             };
+        debug!("Get terminals {:?}", terminals);
 
         let mut queue = VecDeque::new();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
             queue.push_back(terminal);
+            visited_blocks.insert(terminal);
         }
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
@@ -604,13 +635,19 @@ impl SynchronizationGraph {
                 // This is necessary to construct consensus graph.
                 self.insert_block(block, true, false, true);
 
-                if !self.contains_block(&parent) {
+                if !self.contains_block(&parent)
+                    && !visited_blocks.contains(&parent)
+                {
                     queue.push_back(parent);
+                    visited_blocks.insert(parent);
                 }
 
                 for referee in referees {
-                    if !self.contains_block(&referee) {
+                    if !self.contains_block(&referee)
+                        && !visited_blocks.contains(&referee)
+                    {
                         queue.push_back(referee);
+                        visited_blocks.insert(referee);
                     }
                 }
             } else {
@@ -618,8 +655,17 @@ impl SynchronizationGraph {
             }
         }
 
-        let inner = self.inner.read();
-        self.consensus.construct_pivot(&*inner);
+        debug!("Initial missed blocks {:?}", *missed_hashes);
+        info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
+        self.consensus.construct_pivot(&*self.inner.read());
+        info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
+    }
+
+    pub fn check_mining_heavy_block(
+        &self, parent_hash: &H256, light_difficulty: &U256,
+    ) -> bool {
+        self.consensus
+            .check_mining_heavy_block(parent_hash, light_difficulty)
     }
 
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
@@ -821,6 +867,11 @@ impl SynchronizationGraph {
                 debug_assert!(inner.arena[index].parent != NULL);
 
                 let r = inner.verify_header_graph_ready_block(index);
+                inner.arena[index].is_heavy = match r {
+                    Ok(is_heavy) => is_heavy,
+                    _ => false,
+                };
+
                 if need_to_verify && r.is_err() {
                     warn!(
                         "Invalid header_arc! inserted_header={:?} err={:?}",
@@ -989,6 +1040,7 @@ impl SynchronizationGraph {
                 inner.arena[index].graph_status = BLOCK_GRAPH_READY;
 
                 let h = inner.arena[index].block_header.hash();
+                debug!("Block {:?} is graph ready", h);
                 if !sync_graph_only {
                     // Make Consensus Worker handle the block in order
                     // asynchronously
@@ -1138,6 +1190,4 @@ impl SynchronizationGraph {
                 + compact_blocks.heap_size_of_children()
         });
     }
-
-    pub fn persist_terminals(&self) { self.consensus.persist_terminals(); }
 }

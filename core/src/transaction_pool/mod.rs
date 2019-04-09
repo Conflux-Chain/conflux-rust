@@ -776,8 +776,10 @@ impl TransactionPool {
 
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
-        &self, num_txs: usize, state: State<'a>,
-    ) -> Vec<Arc<SignedTransaction>> {
+        &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
+        state: State<'a>,
+    ) -> Vec<Arc<SignedTransaction>>
+    {
         let mut inner = self.inner.write();
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         let num_txs = min(num_txs, inner.ready_transactions.len());
@@ -788,6 +790,9 @@ impl TransactionPool {
             inner.ready_transactions.len(),
             inner.pending_transactions.len()
         );
+
+        let mut total_tx_gas_limit: U256 = 0.into();
+        let mut total_tx_size: usize = 0;
 
         loop {
             if packed_transactions.len() >= num_txs {
@@ -819,8 +824,22 @@ impl TransactionPool {
                     .or_insert(HashMap::new())
                     .insert(tx.nonce, tx);
             } else if tx.nonce == *nonce {
+                if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
+                    || block_size_limit - total_tx_size < tx.size()
+                {
+                    future_txs
+                        .entry(sender)
+                        .or_insert(HashMap::new())
+                        .insert(tx.nonce, tx);
+                    continue;
+                }
+
+                total_tx_gas_limit += *tx.gas_limit();
+                total_tx_size += tx.size();
+
                 *nonce += 1.into();
                 packed_transactions.push(tx);
+
                 if let Some(tx_map) = future_txs.get_mut(&sender) {
                     loop {
                         if tx_map.is_empty() {

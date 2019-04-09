@@ -20,6 +20,9 @@ use std::{
     sync::Arc,
 };
 
+pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 20000;
+pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 4 * 1024 * 1024;
+
 pub type BlockNumber = u64;
 
 /// A block, encoded as it is on the block chain.

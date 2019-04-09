@@ -62,7 +62,6 @@ const REQUEST_START_WAITING_TIME_SECONDS: u64 = 1;
 const TX_TIMER: TimerToken = 0;
 const CHECK_REQUEST_TIMER: TimerToken = 1;
 const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
-const PERSIST_TERMINAL_TIMER: TimerToken = 3;
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -883,7 +882,7 @@ impl SynchronizationProtocolHandler {
             .map(|header| header.hash())
             .collect();
         debug!(
-            "get headers responce of hashes:{:?}, requesting block:{:?}",
+            "get headers response of hashes:{:?}, requesting block:{:?}",
             header_hashes, hashes
         );
 
@@ -1331,7 +1330,7 @@ impl SynchronizationProtocolHandler {
             self.requests_queue.lock().push(timed_req);
             true
         } else {
-            warn!("Fail to request header {:?}", hash);
+            debug!("Fail to request header {:?} from peer={}", hash, peer_id);
             false
         }
     }
@@ -1373,7 +1372,7 @@ impl SynchronizationProtocolHandler {
             self.requests_queue.lock().push(timed_req);
             true
         } else {
-            warn!("Fail to request blocks {:?}", hashes);
+            debug!("Fail to request blocks {:?} from peer={}", hashes, peer_id);
             false
         }
     }
@@ -1416,7 +1415,10 @@ impl SynchronizationProtocolHandler {
             self.requests_queue.lock().push(timed_req);
             true
         } else {
-            warn!("Fail to request compact blocks {:?}", hashes);
+            debug!(
+                "Fail to request compact blocks {:?} from peer={}",
+                hashes, peer_id
+            );
             false
         }
     }
@@ -1442,6 +1444,11 @@ impl SynchronizationProtocolHandler {
                 block_hash, peer_id, timed_req.request_id
             );
             self.requests_queue.lock().push(timed_req);
+        } else {
+            debug!(
+                "Fail to request blocktxn {:?} from peer={}",
+                block_hash, peer_id
+            );
         }
     }
 
@@ -1715,62 +1722,14 @@ impl SynchronizationProtocolHandler {
             }
         }
         for sync_req in timeout_requests {
-            trace!("Timeout sync_req: {:?}", sync_req);
+            debug!("Timeout sync_req: {:?}", sync_req);
             let req =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id);
             match req {
                 Ok(request) => {
                     // TODO may have better choice than random peer
                     debug!("Timeout request: {:?}", request);
-                    let chosen_peer = match self
-                        .syn
-                        .read()
-                        .get_random_peer(&HashSet::new())
-                    {
-                        Some(p) => p,
-                        None => {
-                            // FIXME There is no peer to request, should store
-                            // the requests and ask for them later
-                            break;
-                        }
-                    };
-                    match request {
-                        RequestMessage::Headers(get_headers) => {
-                            self.request_block_headers(
-                                io,
-                                chosen_peer,
-                                &get_headers.hash,
-                                get_headers.max_blocks,
-                            );
-                        }
-                        RequestMessage::Blocks(get_blocks) => {
-                            self.request_blocks(
-                                io,
-                                chosen_peer,
-                                get_blocks.hashes,
-                            );
-                        }
-                        RequestMessage::Compact(get_compact) => {
-                            {
-                                let mut blocks_in_flight =
-                                    self.blocks_in_flight.lock();
-                                for hash in &get_compact.hashes {
-                                    blocks_in_flight.remove(hash);
-                                }
-                            }
-                            self.request_blocks(
-                                io,
-                                chosen_peer,
-                                get_compact.hashes,
-                            );
-                        }
-                        RequestMessage::BlockTxn(blocktxn) => {
-                            let mut hashes = Vec::new();
-                            hashes.push(blocktxn.block_hash);
-                            self.request_blocks(io, chosen_peer, hashes);
-                        }
-                        _ => {}
-                    }
+                    self.send_request_again(request, io);
                 }
                 Err(e) => {
                     warn!("match request err={:?}", e);
@@ -1831,6 +1790,46 @@ impl SynchronizationProtocolHandler {
                     }
                 }
             }
+        }
+    }
+
+    fn send_request_again(&self, request: RequestMessage, io: &NetworkContext) {
+        let chosen_peer = match self.syn.read().get_random_peer(&HashSet::new())
+        {
+            Some(p) => p,
+            None => {
+                // FIXME There is no peer to request, should store
+                // the requests and ask for them later
+                return;
+            }
+        };
+        match request {
+            RequestMessage::Headers(get_headers) => {
+                self.request_block_headers(
+                    io,
+                    chosen_peer,
+                    &get_headers.hash,
+                    get_headers.max_blocks,
+                );
+            }
+            RequestMessage::Blocks(get_blocks) => {
+                self.request_blocks(io, chosen_peer, get_blocks.hashes);
+            }
+            RequestMessage::Compact(get_compact) => {
+                {
+                    let mut blocks_in_flight = self.blocks_in_flight.lock();
+                    for hash in &get_compact.hashes {
+                        blocks_in_flight.remove(hash);
+                    }
+                }
+                self.request_blocks(io, chosen_peer, get_compact.hashes);
+            }
+            RequestMessage::BlockTxn(blocktxn) => {
+                let mut hashes = Vec::new();
+                hashes.push(blocktxn.block_hash);
+                self.request_blocks(io, chosen_peer, hashes);
+            }
+            _ => {}
         }
     }
 
@@ -1990,8 +1989,6 @@ impl SynchronizationProtocolHandler {
     }
 
     fn block_cache_gc(&self) { self.graph.block_cache_gc(); }
-
-    fn persist_terminals(&self) { self.graph.persist_terminals(); }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -2008,11 +2005,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.protocol_config.block_cache_gc_period,
         )
         .expect("Error registering block_cache_gc timer");
-        io.register_timer(
-            PERSIST_TERMINAL_TIMER,
-            self.protocol_config.persist_terminal_period,
-        )
-        .expect("Error registering persist terminals timer");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2034,11 +2026,26 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         }
     }
 
-    fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, io: &NetworkContext, peer: PeerId) {
         info!("Peer disconnected: peer={:?}", peer);
-        let mut syn = self.syn.write();
-        syn.peers.remove(&peer);
-        syn.handshaking_peers.remove(&peer);
+        let mut unfinished_requests = Vec::new();
+        {
+            let mut syn = self.syn.write();
+            if let Some(peer_state) = syn.peers.remove(&peer) {
+                for maybe_req in peer_state.inflight_requests {
+                    if let Some(req) = maybe_req {
+                        unfinished_requests.push(req.message);
+                    }
+                }
+                for req in peer_state.pending_requests {
+                    unfinished_requests.push(req);
+                }
+            }
+            syn.handshaking_peers.remove(&peer);
+        }
+        for req in unfinished_requests {
+            self.send_request_again(*req, io);
+        }
     }
 
     fn on_timeout(&self, io: &NetworkContext, timer: TimerToken) {
@@ -2053,9 +2060,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             BLOCK_CACHE_GC_TIMER => {
                 self.block_cache_gc();
-            }
-            PERSIST_TERMINAL_TIMER => {
-                self.persist_terminals();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
