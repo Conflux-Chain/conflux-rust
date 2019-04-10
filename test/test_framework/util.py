@@ -257,6 +257,7 @@ def initialize_datadir(dirname, n, conf_parameters):
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
         local_conf = {"port": str(p2p_port(n)),
                         "jsonrpc_local_http_port": str(rpc_port(n)),
+                        "jsonrpc_http_port": str(remote_rpc_port(n)),
                         "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
                         "test_mode": "true",
                         "log_level": "\"trace\"",
@@ -477,8 +478,11 @@ def p2p_port(n):
 
 
 def rpc_port(n):
-    return PORT_MIN + PORT_RANGE + n + (MAX_NODES * PortSeed.n) % (
+    return PORT_MIN + PORT_RANGE + n*2 + (MAX_NODES * PortSeed.n) % (
         PORT_RANGE - 1 - MAX_NODES)
+
+def remote_rpc_port(n):
+    return rpc_port(n) + 1
 
 
 def rpc_url(i, rpchost=None, rpcport=None):

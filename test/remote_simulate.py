@@ -22,8 +22,6 @@ class P2PTest(ConfluxTestFramework):
             "storage_cache_start_size": "20_000_000",
             "storage_node_map_size": "100_000_000",
             "tx_pool_size": "500000",
-            "jsonrpc_tcp_port": "12536",
-            "jsonrpc_http_port": "12537",
             "fast_recover": "true",
             # "enable_discovery": "true",
             #"node_table_timeout": "10",
