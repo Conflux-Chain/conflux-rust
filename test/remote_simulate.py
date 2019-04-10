@@ -75,7 +75,7 @@ class P2PTest(ConfluxTestFramework):
         with open(self.options.ips_file, 'r') as ip_file:
             for line in ip_file.readlines():
                 line = line[:-1]
-                self.add_remote_nodes(self.options.nodes_per_host, user="ec2-user", ip=line)
+                self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=line)
         for i in range(len(self.nodes)):
             self.log.info("Node "+str(i) + " bind to "+self.nodes[i].ip+":"+self.nodes[i].port)
         self.start_nodes()

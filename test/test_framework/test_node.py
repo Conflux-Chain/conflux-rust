@@ -128,7 +128,7 @@ class TestNode:
             ssh_args = '-o "StrictHostKeyChecking no"'
             cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
                 ssh_args, self.user, self.ip, self.datadir)
-            cli_conf = "scp {3} -r {0}/. {1}@{2}:{0};".format(
+            cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
                 self.datadir, self.user, self.ip, ssh_args)
             self.args[0] = "~/conflux"
             cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
