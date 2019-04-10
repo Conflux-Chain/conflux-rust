@@ -13,6 +13,16 @@ from test_framework.util import *
 
 
 class P2PTest(ConfluxTestFramework):
+    def __init__(self, node_per_host=1, txs_per_block=16000, generation_period=1, num_blocks=10000, block_sync_step=100, ips_file="ips"):
+        self.node_per_host = node_per_host
+        self.txs_per_block = txs_per_block
+        self.generation_period = generation_period
+        self.num_blocks = num_blocks
+        self.block_sync_step = block_sync_step
+        self.ips_file = ips_file
+
+        ConfluxTestFramework.__init__(self)
+
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 7
@@ -34,11 +44,10 @@ class P2PTest(ConfluxTestFramework):
                                 }
 
     def setup_network(self):
-        node_per_host = 1
-        with open("ips", 'r') as ip_file:
+        with open(self.ips_file, 'r') as ip_file:
             for line in ip_file.readlines():
                 line = line[:-1]
-                self.add_remote_nodes(node_per_host, user="ec2-user", ip=line)
+                self.add_remote_nodes(self.node_per_host, user="ec2-user", ip=line)
         for i in range(len(self.nodes)):
             self.log.info("Node "+str(i) + " bind to "+self.nodes[i].ip+":"+self.nodes[i].port)
         self.start_nodes()
@@ -74,18 +83,15 @@ class P2PTest(ConfluxTestFramework):
                         time.sleep(60)
                         continue
         else:
-            block_number = 10000000
             threads = {}
-            generate_period = 1
-            tx_n = 100000
-            for i in range(1, block_number):
-                wait_sec = random.expovariate(1 / generate_period)
+            for i in range(1, self.num_blocks):
+                wait_sec = random.expovariate(1 / self.generation_period)
                 p = random.randint(0, self.num_nodes - 1)
                 self.log.debug("%d try to generate block", p)
                 start = time.time()
                 if threads.get(p) is not None:
                     threads[p].join()
-                thread = GenerateThread(self.nodes, p, tx_n, self.log)
+                thread = GenerateThread(self.nodes, p, self.txs_per_block, self.log)
                 thread.start()
                 threads[p] = thread
                 end = time.time()
@@ -94,7 +100,7 @@ class P2PTest(ConfluxTestFramework):
                     time.sleep(wait_sec - (end - start))
                 else:
                     self.log.debug("%d generating block slowly %s", p, str(end-start))
-                if i % 1000 == 0:
+                if i % self.block_sync_step == 0:
                     for t in threads.values():
                         t.join(60)
                     # wait_for_block_count(self.nodes[0], i)
@@ -128,4 +134,11 @@ class GenerateThread(threading.Thread):
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    P2PTest(
+        node_per_host=sys.argv[1],
+        txs_per_block=sys.argv[2],
+        generation_period=sys.argv[3],
+        num_blocks=sys.argv[4],
+        block_sync_step=sys.argv[5],
+        ips_file=sys.argv[6]
+    ).main()
