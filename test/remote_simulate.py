@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from argparse import ArgumentParser
 from eth_utils import decode_hex
 from rlp.sedes import Binary, BigEndianInt
 
@@ -9,18 +10,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
-
 class P2PTest(ConfluxTestFramework):
-    def __init__(self, node_per_host=1, txs_per_block=16000, generation_period=1, num_blocks=10000, block_sync_step=100, ips_file="ips"):
-        self.node_per_host = node_per_host
-        self.txs_per_block = txs_per_block
-        self.generation_period = generation_period
-        self.num_blocks = num_blocks
-        self.block_sync_step = block_sync_step
-        self.ips_file = ips_file
-
-        ConfluxTestFramework.__init__(self)
-
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 7
@@ -41,11 +31,49 @@ class P2PTest(ConfluxTestFramework):
                                 "test_mode": "true",
                                 }
 
+    def add_options(self, parser:ArgumentParser):
+        parser.add_argument(
+            "--nodes-per-host",
+            dest="nodes_per_host",
+            default=3,
+            type=int
+        )
+        parser.add_argument(
+            "--txs-per-block",
+            dest="txs_per_block",
+            default=16000,
+            type=int
+        )
+        parser.add_argument(
+            "--generation-period",
+            dest="generation_period",
+            default=1,
+            type=int
+        )
+        parser.add_argument(
+            "--num-blocks",
+            dest="num_blocks",
+            default=100,
+            type=int
+        )
+        parser.add_argument(
+            "--block-sync-step",
+            dest="block_sync_step",
+            default=10,
+            type=int
+        )
+        parser.add_argument(
+            "--ips-file",
+            dest="ips_file",
+            default="ips",
+            type=str
+        )
+
     def setup_network(self):
-        with open(self.ips_file, 'r') as ip_file:
+        with open(self.options.ips_file, 'r') as ip_file:
             for line in ip_file.readlines():
                 line = line[:-1]
-                self.add_remote_nodes(self.node_per_host, user="ec2-user", ip=line)
+                self.add_remote_nodes(self.options.node_per_host, user="ec2-user", ip=line)
         for i in range(len(self.nodes)):
             self.log.info("Node "+str(i) + " bind to "+self.nodes[i].ip+":"+self.nodes[i].port)
         self.start_nodes()
@@ -82,14 +110,14 @@ class P2PTest(ConfluxTestFramework):
                         continue
         else:
             threads = {}
-            for i in range(1, self.num_blocks):
-                wait_sec = random.expovariate(1 / self.generation_period)
+            for i in range(1, self.options.num_blocks):
+                wait_sec = random.expovariate(1 / self.options.generation_period)
                 p = random.randint(0, self.num_nodes - 1)
                 self.log.debug("%d try to generate block", p)
                 start = time.time()
                 if threads.get(p) is not None:
                     threads[p].join()
-                thread = GenerateThread(self.nodes, p, self.txs_per_block, self.log)
+                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.log)
                 thread.start()
                 threads[p] = thread
                 end = time.time()
@@ -98,7 +126,7 @@ class P2PTest(ConfluxTestFramework):
                     time.sleep(wait_sec - (end - start))
                 else:
                     self.log.debug("%d generating block slowly %s", p, str(end-start))
-                if i % self.block_sync_step == 0:
+                if i % self.options.block_sync_step == 0:
                     for t in threads.values():
                         t.join(60)
                     # wait_for_block_count(self.nodes[0], i)
@@ -132,11 +160,4 @@ class GenerateThread(threading.Thread):
 
 
 if __name__ == "__main__":
-    P2PTest(
-        node_per_host=int(sys.argv[1]),
-        txs_per_block=int(sys.argv[2]),
-        generation_period=int(sys.argv[3]),
-        num_blocks=int(sys.argv[4]),
-        block_sync_step=int(sys.argv[5]),
-        ips_file=sys.argv[6]
-    ).main()
+    P2PTest().main()
