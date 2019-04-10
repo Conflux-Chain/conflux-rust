@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from argparse import ArgumentParser
 from eth_utils import decode_hex
 from rlp.sedes import Binary, BigEndianInt
@@ -15,21 +16,22 @@ class P2PTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 7
         self.rpc_timewait = 3600
-        self.conf_parameters = {"generate_tx": "true", "generate_tx_period_ms": "2", "log_level": "\"debug\"",
-                                "storage_cache_size": "20_000_000",
-                                "storage_cache_start_size": "20_000_000",
-                                "storage_node_map_size": "100_000_000",
-                                "tx_pool_size": "500000",
-                                "jsonrpc_tcp_port": "12536",
-                                "jsonrpc_http_port": "12537",
-                                "fast_recover": "true",
-                                # "enable_discovery": "true",
-                                #"node_table_timeout": "10",
-                                #"node_table_promotion_timeout": "10",
-                                #"bootnodes": "\'cfxnode://97f40043d42028ea5b4ea653981011fdf8c4e63c18089ea4b8ff9004ebc67873069ae8b745e238d9e150637acbfccb14e66e42d396fc7453e5b83fd5704d7141@54.219.149.90:32323\'",
-                                "start_mining": "false",
-                                "test_mode": "true",
-                                }
+        self.conf_parameters = {
+            "generate_tx": "true", "generate_tx_period_ms": "2", "log_level": "\"debug\"",
+            "storage_cache_size": "20_000_000",
+            "storage_cache_start_size": "20_000_000",
+            "storage_node_map_size": "100_000_000",
+            "tx_pool_size": "500000",
+            "jsonrpc_tcp_port": "12536",
+            "jsonrpc_http_port": "12537",
+            "fast_recover": "true",
+            # "enable_discovery": "true",
+            #"node_table_timeout": "10",
+            #"node_table_promotion_timeout": "10",
+            #"bootnodes": "\'cfxnode://97f40043d42028ea5b4ea653981011fdf8c4e63c18089ea4b8ff9004ebc67873069ae8b745e238d9e150637acbfccb14e66e42d396fc7453e5b83fd5704d7141@54.219.149.90:32323\'",
+            "start_mining": "false",
+            "test_mode": "true",
+        }
 
     def add_options(self, parser:ArgumentParser):
         parser.add_argument(
@@ -73,7 +75,7 @@ class P2PTest(ConfluxTestFramework):
         with open(self.options.ips_file, 'r') as ip_file:
             for line in ip_file.readlines():
                 line = line[:-1]
-                self.add_remote_nodes(self.options.node_per_host, user="ec2-user", ip=line)
+                self.add_remote_nodes(self.options.nodes_per_host, user="ec2-user", ip=line)
         for i in range(len(self.nodes)):
             self.log.info("Node "+str(i) + " bind to "+self.nodes[i].ip+":"+self.nodes[i].port)
         self.start_nodes()
