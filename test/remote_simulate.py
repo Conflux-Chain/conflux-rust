@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from http.client import CannotSendRequest
-
 from eth_utils import decode_hex
 from rlp.sedes import Binary, BigEndianInt
 
@@ -135,10 +133,10 @@ class GenerateThread(threading.Thread):
 
 if __name__ == "__main__":
     P2PTest(
-        node_per_host=sys.argv[1],
-        txs_per_block=sys.argv[2],
-        generation_period=sys.argv[3],
-        num_blocks=sys.argv[4],
-        block_sync_step=sys.argv[5],
+        node_per_host=int(sys.argv[1]),
+        txs_per_block=int(sys.argv[2]),
+        generation_period=int(sys.argv[3]),
+        num_blocks=int(sys.argv[4]),
+        block_sync_step=int(sys.argv[5]),
         ips_file=sys.argv[6]
     ).main()
