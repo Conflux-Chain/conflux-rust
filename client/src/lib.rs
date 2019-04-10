@@ -284,7 +284,11 @@ impl Client {
 
         let rpc_tcp_server = rpc::new_tcp(
             rpc::TcpConfiguration::new(None, conf.raw_conf.jsonrpc_tcp_port),
-            setup_public_rpc_apis(rpc_impl.clone()),
+            if conf.raw_conf.test_mode {
+                setup_debug_rpc_apis(rpc_impl.clone())
+            } else {
+                setup_public_rpc_apis(rpc_impl.clone())
+            },
         )?;
 
         let rpc_http_server = rpc::new_http(
@@ -294,7 +298,11 @@ impl Client {
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            setup_public_rpc_apis(rpc_impl.clone()),
+            if conf.raw_conf.test_mode {
+                setup_debug_rpc_apis(rpc_impl.clone())
+            } else {
+                setup_public_rpc_apis(rpc_impl.clone())
+            },
         )?;
 
         Ok(ClientHandle {
