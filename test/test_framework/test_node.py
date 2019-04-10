@@ -46,7 +46,7 @@ class TestNode:
         if remote:
             self.ip = ip
             self.user = user
-            self.rpcport = rpcport if rpcport is not None else 12537
+            self.rpcport = rpcport if rpcport is not None else remote_rpc_port(self.index)
         else:
             self.ip = "127.0.0.1"
             self.rpcport = rpc_port(self.index)
