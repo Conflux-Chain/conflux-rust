@@ -87,11 +87,13 @@ class P2PTest(ConfluxTestFramework):
     def run_test(self):
         start_p2p_connection([self.nodes[0]], remote=True)
 
-        for i in range(self.num_nodes):
+        num_nodes = len(self.nodes)
+
+        for i in range(num_nodes):
             pub_key = self.nodes[i].key
             addr = self.nodes[i].addr
             self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-            init_tx = create_transaction(value=int(default_config["TOTAL_COIN"]/self.num_nodes), receiver=addr, nonce=i)
+            init_tx = create_transaction(value=int(default_config["TOTAL_COIN"]/num_nodes), receiver=addr, nonce=i)
             self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[init_tx]))
         self.nodes[0].disconnect_p2ps()
         mining = False
@@ -100,7 +102,7 @@ class P2PTest(ConfluxTestFramework):
                 count = i * 1000
                 while True:
                     if self.nodes[0].getblockcount() > count:
-                        for index in range(self.num_nodes):
+                        for index in range(num_nodes):
                             self.log.info("Node %d has %d blocks", index, self.nodes[index].getblockcount())
                             self.log.info("Node %d has best block %s", index, self.nodes[index].cfx_getBestBlockHash())
                         self.log.info("%d blocks synced", count)
@@ -112,7 +114,7 @@ class P2PTest(ConfluxTestFramework):
             threads = {}
             for i in range(1, self.options.num_blocks):
                 wait_sec = random.expovariate(1 / self.options.generation_period)
-                p = random.randint(0, self.num_nodes - 1)
+                p = random.randint(0, num_nodes - 1)
                 self.log.debug("%d try to generate block", p)
                 start = time.time()
                 if threads.get(p) is not None:
