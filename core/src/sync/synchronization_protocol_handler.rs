@@ -2030,10 +2030,14 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         info!("Peer disconnected: peer={:?}", peer);
         let mut unfinished_requests = Vec::new();
         {
+            let _requests = self.requests_queue.lock();
             let mut syn = self.syn.write();
             if let Some(peer_state) = syn.peers.remove(&peer) {
                 for maybe_req in peer_state.inflight_requests {
                     if let Some(req) = maybe_req {
+                        req.timed_req
+                            .removed
+                            .store(true, AtomicOrdering::Relaxed);
                         unfinished_requests.push(req.message);
                     }
                 }
