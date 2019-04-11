@@ -53,6 +53,10 @@ impl SynchronizationService {
         }
     }
 
+    pub fn catch_up_mode(&self) -> bool {
+        self.protocol_handler.catch_up_mode()
+    }
+
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.protocol_handler.get_synchronization_graph()
     }

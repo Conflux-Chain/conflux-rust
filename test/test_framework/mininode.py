@@ -286,7 +286,7 @@ class P2PInterface(P2PConnection):
 
     def send_status(self):
         status = Status(self.protocol_version, 0,
-                        self.genesis.block_header.hash, [self.best_block_hash])
+                        self.genesis.block_header.hash, 0, [self.best_block_hash])
         self.send_protocol_msg(status)
 
     def on_protocol_packet(self, payload):

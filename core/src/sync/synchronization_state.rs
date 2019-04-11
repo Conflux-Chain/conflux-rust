@@ -77,6 +77,7 @@ pub struct SynchronizationPeerState {
     /// lowest = next if there is no inflight requests
     pub lowest_request_id: u64,
     pub next_request_id: u64,
+    pub best_epoch: u64,
 
     pub pending_requests: VecDeque<Box<RequestMessage>>,
     /// Holds a set of transactions recently sent to this peer to avoid
@@ -164,6 +165,7 @@ impl SynchronizationPeerState {
 pub type SynchronizationPeers = HashMap<PeerId, SynchronizationPeerState>;
 
 pub struct SynchronizationState {
+    pub catch_up_mode: bool,
     pub peers: SynchronizationPeers,
     pub handshaking_peers: HashMap<PeerId, Instant>,
 }
@@ -171,6 +173,7 @@ pub struct SynchronizationState {
 impl SynchronizationState {
     pub fn new() -> Self {
         SynchronizationState {
+            catch_up_mode: false,
             peers: HashMap::new(),
             handshaking_peers: HashMap::new(),
         }

@@ -401,6 +401,11 @@ impl BlockGenerator {
 
             if bg.is_mining_block_outdated(&current_mining_block) {
                 // TODO: #transations TBD
+                if bg.sync.catch_up_mode() {
+                    thread::sleep(sleep_duration);
+                    continue;
+                }
+
                 current_mining_block =
                     bg.assemble_new_block(MAX_TRANSACTION_COUNT_PER_BLOCK);
 
