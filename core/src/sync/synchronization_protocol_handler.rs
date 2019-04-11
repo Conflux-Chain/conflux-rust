@@ -1718,7 +1718,7 @@ impl SynchronizationProtocolHandler {
             }
         }
         for sync_req in timeout_requests {
-            debug!("Timeout sync_req: {:?}", sync_req);
+            warn!("Timeout sync_req: {:?}", sync_req);
             let req =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id);
             match req {
@@ -2013,7 +2013,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
         let mut syn = self.syn.write();
 
-        debug!("Peer connected: peer={:?}", peer);
+        info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
             io.disconnect_peer(peer);

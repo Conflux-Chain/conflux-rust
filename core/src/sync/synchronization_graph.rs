@@ -84,6 +84,17 @@ pub struct SynchronizationGraphNode {
     pub min_epoch_in_other_views: u64,
 }
 
+impl SynchronizationGraphNode {
+    pub fn light_difficulty(&self) -> U256 {
+        if self.is_heavy {
+            *self.block_header.difficulty()
+                / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+        } else {
+            *self.block_header.difficulty()
+        }
+    }
+}
+
 pub struct SynchronizationGraphInner {
     pub arena: Slab<SynchronizationGraphNode>,
     pub indices: HashMap<H256, usize>,
@@ -409,14 +420,25 @@ impl SynchronizationGraphInner {
         );
 
         let mut cur = cur_index;
-        let cur_difficulty = *self.arena[cur].block_header.difficulty();
+        let cur_difficulty = self.arena[cur].light_difficulty();
         let mut block_count = 0 as u64;
         let mut max_time = u64::min_value();
         let mut min_time = u64::max_value();
         for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
-            block_count = block_count
-                + self.arena[cur].blockset_in_own_view_of_epoch.len() as u64
-                + 1;
+            for index in self.arena[cur].blockset_in_own_view_of_epoch.iter() {
+                if self.arena[*index].is_heavy {
+                    block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
+                } else {
+                    block_count += 1;
+                }
+            }
+
+            if self.arena[cur].is_heavy {
+                block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
+            } else {
+                block_count += 1;
+            }
+
             max_time = max(max_time, self.arena[cur].block_header.timestamp());
             min_time = min(min_time, self.arena[cur].block_header.timestamp());
             cur = self.arena[cur].parent;

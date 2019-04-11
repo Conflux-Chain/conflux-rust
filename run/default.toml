@@ -76,7 +76,7 @@ start_mining=true
 # `log_conf` the path of the log4rs configuration file. The configuration in the file will overwrite the value set by `log_level`.
 # By default, the value is not set.
 #
-# log_conf="../test/log.toml"
+# log_conf="../test/log.yaml"
 
 # `enable_discovery` is used to control whether the node will ask its neighbors for new peers and whether it will respond to other nodes' discovery requests.
 #

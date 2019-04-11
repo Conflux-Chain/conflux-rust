@@ -983,13 +983,20 @@ impl ConsensusGraphInner {
         sync_inner: &SynchronizationGraphInner,
     )
     {
+        let new_best_hash = self.arena[new_best_index].hash.clone();
+        let new_best_index_in_sync =
+            *sync_inner.indices.get(&new_best_hash).unwrap();
+        let new_best_light_difficulty =
+            if sync_inner.arena[new_best_index_in_sync].is_heavy {
+                self.arena[new_best_index].difficulty
+                    / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+            } else {
+                self.arena[new_best_index].difficulty
+            };
         let old_best_index = *self.pivot_chain.last().expect("not empty");
         if old_best_index == self.arena[new_best_index].parent {
             // Pivot chain prolonged
-            assert!(
-                self.current_difficulty
-                    == self.arena[new_best_index].difficulty
-            );
+            assert!(self.current_difficulty == new_best_light_difficulty);
         }
 
         let epoch = self.arena[new_best_index].height;
@@ -1002,9 +1009,9 @@ impl ConsensusGraphInner {
                 * self.pow_config.difficulty_adjustment_epoch_period
         {
             self.current_difficulty =
-                sync_inner.target_difficulty(&self.arena[new_best_index].hash);
+                sync_inner.target_difficulty(&new_best_hash);
         } else {
-            self.current_difficulty = self.arena[new_best_index].difficulty;
+            self.current_difficulty = new_best_light_difficulty;
         }
     }
 
