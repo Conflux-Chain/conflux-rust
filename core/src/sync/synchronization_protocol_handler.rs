@@ -298,6 +298,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!("on_get_compact_blocks_response {:?}", resp);
+        info!("on_get_compact_blocks_response");
         let req = self.match_request(io, peer, resp.request_id())?;
         let mut failed_blocks = Vec::new();
         let mut completed_blocks = Vec::new();
@@ -471,6 +472,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let resp: GetBlockTxnResponce = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
+        info!("on_get_blocktxn_response");
         let hash = resp.block_hash;
         let req = self.match_request(io, peer, resp.request_id())?;
         let req = match req {
@@ -699,7 +701,7 @@ impl SynchronizationProtocolHandler {
 
         let terminal_block_hashes =
             rlp.as_val::<GetTerminalBlockHashesResponse>()?;
-        debug!(
+        info!(
             "on_terminal_block_hashes_response, msg=:{:?}",
             terminal_block_hashes
         );
@@ -807,6 +809,7 @@ impl SynchronizationProtocolHandler {
 
         let mut block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
+        info!("match_request: on_block_headers_response");
         let req = self.match_request(io, peer, block_headers.request_id())?;
         let (req_hash, max_blocks) = match req {
             RequestMessage::Headers(header_req) => {
@@ -947,6 +950,7 @@ impl SynchronizationProtocolHandler {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
+        info!("match_request: on_blocks_response");
         let req = self.match_request(io, peer, blocks.request_id())?;
         let req_hashes_vec = match req {
             RequestMessage::Blocks(request) => request.hashes,
@@ -1718,7 +1722,7 @@ impl SynchronizationProtocolHandler {
             }
         }
         for sync_req in timeout_requests {
-            debug!("Timeout sync_req: {:?}", sync_req);
+            info!("Timeout sync_req: {:?}", sync_req);
             let req =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id);
             match req {
@@ -2013,7 +2017,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
         let mut syn = self.syn.write();
 
-        debug!("Peer connected: peer={:?}", peer);
+        info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
             io.disconnect_peer(peer);
