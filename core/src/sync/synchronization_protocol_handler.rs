@@ -298,7 +298,6 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!("on_get_compact_blocks_response {:?}", resp);
-        info!("on_get_compact_blocks_response");
         let req = self.match_request(io, peer, resp.request_id())?;
         let mut failed_blocks = Vec::new();
         let mut completed_blocks = Vec::new();
@@ -472,7 +471,6 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let resp: GetBlockTxnResponce = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
-        info!("on_get_blocktxn_response");
         let hash = resp.block_hash;
         let req = self.match_request(io, peer, resp.request_id())?;
         let req = match req {
@@ -701,7 +699,7 @@ impl SynchronizationProtocolHandler {
 
         let terminal_block_hashes =
             rlp.as_val::<GetTerminalBlockHashesResponse>()?;
-        info!(
+        debug!(
             "on_terminal_block_hashes_response, msg=:{:?}",
             terminal_block_hashes
         );
@@ -809,7 +807,6 @@ impl SynchronizationProtocolHandler {
 
         let mut block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
-        info!("match_request: on_block_headers_response");
         let req = self.match_request(io, peer, block_headers.request_id())?;
         let (req_hash, max_blocks) = match req {
             RequestMessage::Headers(header_req) => {
@@ -950,7 +947,6 @@ impl SynchronizationProtocolHandler {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
-        info!("match_request: on_blocks_response");
         let req = self.match_request(io, peer, blocks.request_id())?;
         let req_hashes_vec = match req {
             RequestMessage::Blocks(request) => request.hashes,
@@ -1722,7 +1718,7 @@ impl SynchronizationProtocolHandler {
             }
         }
         for sync_req in timeout_requests {
-            info!("Timeout sync_req: {:?}", sync_req);
+            warn!("Timeout sync_req: {:?}", sync_req);
             let req =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id);
             match req {

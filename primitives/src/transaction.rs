@@ -452,6 +452,11 @@ impl SignedTransaction {
 }
 
 impl HeapSizeOf for SignedTransaction {
+    // This function only works for SignedTransaction in Arc,
+    // i.e., for SignedTransaction in Box, this function computes
+    // heap size of SignedTransaction wrongly. This is due to the
+    // wrong handling of heap_size_of_children() of Arc. In our case,
+    // we only have Arc<SignedTransaction>.
     fn heap_size_of_children(&self) -> usize {
         mem::size_of::<Self>() + self.transaction.heap_size_of_children()
     }
