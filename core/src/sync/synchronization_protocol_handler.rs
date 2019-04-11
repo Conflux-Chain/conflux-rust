@@ -1517,10 +1517,6 @@ impl SynchronizationProtocolHandler {
                 }
                 Ok(removed_req)
             } else {
-                warn!(
-                    "Unexpected Responce: peer={:?} request_id={:?}",
-                    peer_id, request_id
-                );
                 Err(ErrorKind::UnexpectedResponse.into())
             }
         } else {
@@ -1732,7 +1728,7 @@ impl SynchronizationProtocolHandler {
                     self.send_request_again(request, io);
                 }
                 Err(e) => {
-                    warn!("match request err={:?}", e);
+                    debug!("Timeout a removed request err={:?}", e);
                 }
             }
         }

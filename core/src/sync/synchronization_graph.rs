@@ -36,6 +36,18 @@ const BLOCK_HEADER_PARENTAL_TREE_READY: u8 = 2;
 const BLOCK_HEADER_GRAPH_READY: u8 = 3;
 const BLOCK_GRAPH_READY: u8 = 4;
 
+pub struct SyncGraphStatistics {
+    pub inserted_block_count: usize,
+}
+
+impl SyncGraphStatistics {
+    fn new() -> SyncGraphStatistics {
+        SyncGraphStatistics {
+            inserted_block_count: 0,
+        }
+    }
+}
+
 pub struct BestInformation {
     pub best_block_hash: H256,
     pub current_difficulty: U256,
@@ -465,6 +477,7 @@ pub struct SynchronizationGraph {
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    pub statistics: RwLock<SyncGraphStatistics>,
 
     /// Channel used to send work to `ConsensusGraph`
     consensus_sender: Mutex<Sender<H256>>,
@@ -503,6 +516,7 @@ impl SynchronizationGraph {
             verification_config,
             cache_man: consensus.cache_man.clone(),
             consensus: consensus.clone(),
+            statistics: RwLock::new(SyncGraphStatistics::new()),
             consensus_sender: Mutex::new(consensus_sender),
         };
 
@@ -537,6 +551,7 @@ impl SynchronizationGraph {
                     rlp.as_list::<H256>().expect("Failed to decode terminals!")
                 }
                 None => {
+                    info!("No terminals got from db");
                     return;
                 }
             };
@@ -602,6 +617,7 @@ impl SynchronizationGraph {
                     rlp.as_list::<H256>().expect("Failed to decode terminals!")
                 }
                 None => {
+                    info!("No terminals got from db");
                     return;
                 }
             };
@@ -983,6 +999,8 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
+        self.stat_inc_inserted_count();
+
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
         debug_assert!(!inner.arena[me].block_ready);
@@ -1149,6 +1167,11 @@ impl SynchronizationGraph {
             unexecuted_transaction_addresses.len()
         );
 
+        info!(
+            "Synchronization graph- inserted block count: {}",
+            self.stat_get_inserted_count()
+        );
+
         cache_man.collect_garbage(current_size, |ids| {
             for id in &ids {
                 match *id {
@@ -1189,5 +1212,16 @@ impl SynchronizationGraph {
                 + unexecuted_transaction_addresses.heap_size_of_children()
                 + compact_blocks.heap_size_of_children()
         });
+    }
+
+    // Manage statistics
+
+    pub fn stat_inc_inserted_count(&self) {
+        let mut stat = self.statistics.write();
+        stat.inserted_block_count += 1;
+    }
+
+    pub fn stat_get_inserted_count(&self) -> usize {
+        self.statistics.read().inserted_block_count
     }
 }
