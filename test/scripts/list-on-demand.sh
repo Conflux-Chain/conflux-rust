@@ -8,15 +8,17 @@ mv instances_all instances_all_old
 #    echo $i >> requests
 #done
 
-res=`aws ec2 describe-instances --filters Name=tag:owner,Values=lpl Name=tag:role,Values=conflux_client Name=instance-state-name,Values=running`
-instances=`echo "$res"|grep INSTANCES|awk '{print $7}'`
+role=$1
+
+res=`aws ec2 describe-instances --filters Name=tag:role,Values=$role Name=instance-state-name,Values=running`
+instances=`echo $res | jq ".Reservations[].Instances[].InstanceId" | tr -d '"'`
 for i in ${instances[*]}
 do
     echo $i >> instances
     echo $i >> instances_all
 done
-res=`aws ec2 describe-instances --filters Name=tag:owner,Values=lpl Name=tag:role,Values=conflux_client Name=instance-state-name,Values=pending`
-instances=`echo "$res"|grep INSTANCES|awk '{print $7}'`
+res=`aws ec2 describe-instances --filters Name=tag:role,Values=$role Name=instance-state-name,Values=pending`
+instances=`echo $res | jq ".Reservations[].Instances[].InstanceId" | tr -d '"'`
 for i in ${instances[*]}
 do
     echo $i >> instances_all

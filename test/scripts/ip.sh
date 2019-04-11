@@ -4,8 +4,8 @@ touch ips
 if [[ -f instances ]]
 then
 	instance=`cat instances`
-	responce=`aws ec2 describe-instances --instance-ids $instance`
-	echo "$responce"|grep INSTANCE|awk '{print $13}' > ips_tmp
+	response=`aws ec2 describe-instances --instance-ids $instance`
+	echo $response | jq ".Reservations[].Instances[].PrivateIpAddress" | tr -d '"' > ips_tmp
 	uniq ips_tmp > ips
 	rm ips_tmp
 fi
