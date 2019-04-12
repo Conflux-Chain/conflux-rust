@@ -48,6 +48,8 @@ use std::{
 };
 use threadpool::ThreadPool;
 
+const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 2;
+
 pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 
 pub const MAX_HEADERS_TO_SEND: u64 = 512;
@@ -62,6 +64,7 @@ const REQUEST_START_WAITING_TIME_SECONDS: u64 = 1;
 const TX_TIMER: TimerToken = 0;
 const CHECK_REQUEST_TIMER: TimerToken = 1;
 const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
+const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -168,6 +171,8 @@ impl SynchronizationProtocolHandler {
             requests_queue: Default::default(),
         }
     }
+
+    pub fn catch_up_mode(&self) -> bool { self.syn.read().catch_up_mode }
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.graph.clone()
@@ -389,7 +394,7 @@ impl SynchronizationProtocolHandler {
         }
 
         // Broadcast completed block_header_ready blocks
-        if !completed_blocks.is_empty() {
+        if !completed_blocks.is_empty() && !self.syn.read().catch_up_mode {
             let new_block_hash_msg: Box<dyn Message> =
                 Box::new(NewBlockHashes {
                     block_hashes: completed_blocks,
@@ -539,7 +544,7 @@ impl SynchronizationProtocolHandler {
                                 // tx hash collision
                                 self.request_blocks(io, peer, blocks.clone());
                             }
-                            if to_relay {
+                            if to_relay && !self.syn.read().catch_up_mode {
                                 let new_block_hash_msg: Box<dyn Message> =
                                     Box::new(NewBlockHashes {
                                         block_hashes: blocks,
@@ -755,6 +760,7 @@ impl SynchronizationProtocolHandler {
             inflight_requests: requests_vec,
             lowest_request_id: 0,
             next_request_id: 0,
+            best_epoch: status.best_epoch,
             pending_requests: VecDeque::new(),
             last_sent_transactions: HashSet::new(),
         };
@@ -915,7 +921,7 @@ impl SynchronizationProtocolHandler {
             // self.request_blocks(io, peer, hashes);
         }
 
-        if !need_to_relay.is_empty() {
+        if !need_to_relay.is_empty() && !self.syn.read().catch_up_mode {
             let new_block_hash_msg: Box<dyn Message> =
                 Box::new(NewBlockHashes {
                     block_hashes: need_to_relay,
@@ -1022,7 +1028,7 @@ impl SynchronizationProtocolHandler {
             }
         }
 
-        if !need_to_relay.is_empty() {
+        if !need_to_relay.is_empty() && !self.syn.read().catch_up_mode {
             let new_block_hash_msg: Box<dyn Message> =
                 Box::new(NewBlockHashes {
                     block_hashes: need_to_relay,
@@ -1136,7 +1142,7 @@ impl SynchronizationProtocolHandler {
         }
 
         // broadcast the hash of the newly got block
-        if !need_to_relay.is_empty() {
+        if !need_to_relay.is_empty() && !self.syn.read().catch_up_mode {
             let new_block_hash_msg: Box<dyn Message> =
                 Box::new(NewBlockHashes {
                     block_hashes: need_to_relay,
@@ -1211,6 +1217,7 @@ impl SynchronizationProtocolHandler {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
             genesis_hash: *self.graph.genesis_hash(),
+            best_epoch: self.graph.best_epoch_number(),
             terminal_block_hashes: self
                 .graph
                 .get_best_info()
@@ -1554,7 +1561,7 @@ impl SynchronizationProtocolHandler {
     pub fn relay_blocks(
         &self, io: &NetworkContext, need_to_relay: Vec<H256>,
     ) -> Result<(), Error> {
-        if !need_to_relay.is_empty() {
+        if !need_to_relay.is_empty() && !self.syn.read().catch_up_mode {
             let new_block_hash_msg: Box<dyn Message> =
                 Box::new(NewBlockHashes {
                     block_hashes: need_to_relay,
@@ -1674,8 +1681,11 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn propagate_new_transactions(&self, io: &NetworkContext) {
-        if self.syn.read().peers.is_empty() {
-            return;
+        {
+            let syn = self.syn.read();
+            if syn.peers.is_empty() || syn.catch_up_mode {
+                return;
+            }
         }
 
         let transactions =
@@ -1985,6 +1995,33 @@ impl SynchronizationProtocolHandler {
     }
 
     fn block_cache_gc(&self) { self.graph.block_cache_gc(); }
+
+    fn update_catch_up_mode(&self) {
+        let mut peer_best_epoches = {
+            let syn = self.syn.read();
+            syn.peers
+                .iter()
+                .map(|(_, state)| state.best_epoch)
+                .collect::<Vec<_>>()
+        };
+
+        if peer_best_epoches.is_empty() {
+            return;
+        }
+
+        peer_best_epoches.sort();
+        let middle_epoch = peer_best_epoches[peer_best_epoches.len() / 2];
+
+        if self.graph.best_epoch_number() + CATCH_UP_EPOCH_LAG_THRESHOLD
+            >= middle_epoch
+        {
+            let mut syn = self.syn.write();
+            syn.catch_up_mode = false;
+        } else {
+            let mut syn = self.syn.write();
+            syn.catch_up_mode = true;
+        }
+    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -2001,6 +2038,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.protocol_config.block_cache_gc_period,
         )
         .expect("Error registering block_cache_gc timer");
+        io.register_timer(
+            CHECK_CATCH_UP_MODE_TIMER,
+            Duration::from_millis(5000),
+        )
+        .expect("Error registering check_catch_up_mode timer");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2060,6 +2102,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             BLOCK_CACHE_GC_TIMER => {
                 self.block_cache_gc();
+            }
+            CHECK_CATCH_UP_MODE_TIMER => {
+                self.update_catch_up_mode();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }

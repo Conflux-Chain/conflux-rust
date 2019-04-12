@@ -86,6 +86,7 @@ class Status(rlp.Serializable):
         ("protocol_version", big_endian_int),
         ("network_id", big_endian_int),
         ("genesis_hash", hash32),
+        ("best_epoch", big_endian_int),
         ("terminal_block_hashes", CountableList(hash32)),
     ]
 
