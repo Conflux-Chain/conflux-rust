@@ -144,7 +144,6 @@ impl StateManager {
             block_header: BlockHeaderBuilder::new()
                 .with_deferred_state_root(root)
                 .with_gas_limit(genesis_gas_limit)
-                // Increase for every test net reset
                 .with_author(test_net_version)
                 .build(),
             transactions: Vec::new(),
