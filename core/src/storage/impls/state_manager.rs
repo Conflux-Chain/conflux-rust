@@ -115,10 +115,13 @@ impl StateManager {
         }
     }
 
-    /// ` test_net_version` is used to update the genesis author so that after resetting, the chain of the older version will be discarded
+    /// ` test_net_version` is used to update the genesis author so that after
+    /// resetting, the chain of the older version will be discarded
     pub fn initialize(
-        &self, secret_store: &SecretStore, genesis_gas_limit: U256, test_net_version: Address,
-    ) -> Block {
+        &self, secret_store: &SecretStore, genesis_gas_limit: U256,
+        test_net_version: Address,
+    ) -> Block
+    {
         let mut state = self.get_state_at(H256::default()).unwrap();
         let kp = KeyPair::from_secret(
             "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
@@ -192,7 +195,7 @@ use super::{
 use crate::{
     ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StorageKey,
 };
-use cfx_types::{H256, U256};
+use cfx_types::{Address, H256, U256};
 use keylib::KeyPair;
 use kvdb::{DBTransaction, DBValue};
 use primitives::{Account, Block, BlockHeaderBuilder, EpochId};
@@ -202,4 +205,3 @@ use std::{
     io, str,
     sync::{Arc, Mutex, MutexGuard},
 };
-use cfx_types::Address;
