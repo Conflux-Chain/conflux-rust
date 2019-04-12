@@ -47,5 +47,5 @@ def make_genesis():
 #     addr = privtoaddr(sp)
 #     state_trie = HexaryTrie(db={})
 #     state_trie[addr] = rlp.encode(Account(balance=10**9, nonce=0, storage_root=b'\x00' * 32, code_hash=trie.BLANK_ROOT))
-    genesis = create_block(difficulty=0)
+    genesis = create_block(difficulty=0, author=default_config["GENESIS_AUTHOR"])
     return genesis

@@ -8,4 +8,5 @@ default_config = dict(
     TOTAL_COIN= 5 * 10**9 * 10**18,
     GENESIS_STATE_ROOT=decode_hex("0x8d9fa8e7b2d2033a7acd4581a899b9b4ee9b81ff6c0edb15e831d4ff615fe483"),
     GENESIS_RECEIPTS_ROOT=decode_hex("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
+    GENESIS_AUTHOR=decode_hex("0x0000000000000000000000000000000000000001"),
 )

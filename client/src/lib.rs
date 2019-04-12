@@ -51,6 +51,11 @@ use std::{
 use threadpool::ThreadPool;
 use txgen::TransactionGenerator;
 
+/// Used in Genesis author to indicate testnet version
+/// Increase by one for every test net reset
+const TESTNET_VERSION: &'static str =
+    "0000000000000000000000000000000000000001";
+
 pub struct ClientHandle {
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
@@ -140,6 +145,7 @@ impl Client {
         let genesis_block = storage_manager.initialize(
             secret_store.as_ref(),
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+            TESTNET_VERSION.into(),
         );
         debug!("Initialize genesis_block={:?}", genesis_block);
 
