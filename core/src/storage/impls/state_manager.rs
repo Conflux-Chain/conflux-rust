@@ -115,8 +115,9 @@ impl StateManager {
         }
     }
 
+    /// ` test_net_version` is used to update the genesis author so that after resetting, the chain of the older version will be discarded
     pub fn initialize(
-        &self, secret_store: &SecretStore, genesis_gas_limit: U256,
+        &self, secret_store: &SecretStore, genesis_gas_limit: U256, test_net_version: Address,
     ) -> Block {
         let mut state = self.get_state_at(H256::default()).unwrap();
         let kp = KeyPair::from_secret(
@@ -143,6 +144,8 @@ impl StateManager {
             block_header: BlockHeaderBuilder::new()
                 .with_deferred_state_root(root)
                 .with_gas_limit(genesis_gas_limit)
+                // Increase for every test net reset
+                .with_author(test_net_version)
                 .build(),
             transactions: Vec::new(),
         };
@@ -200,3 +203,4 @@ use std::{
     io, str,
     sync::{Arc, Mutex, MutexGuard},
 };
+use cfx_types::Address;
