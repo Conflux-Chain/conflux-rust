@@ -48,6 +48,8 @@ use std::{
 };
 use threadpool::ThreadPool;
 
+const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 2;
+
 pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 
 pub const MAX_HEADERS_TO_SEND: u64 = 512;
@@ -2010,7 +2012,9 @@ impl SynchronizationProtocolHandler {
         peer_best_epoches.sort();
         let middle_epoch = peer_best_epoches[peer_best_epoches.len() / 2];
 
-        if self.graph.best_epoch_number() + 2 >= middle_epoch {
+        if self.graph.best_epoch_number() + CATCH_UP_EPOCH_LAG_THRESHOLD
+            >= middle_epoch
+        {
             let mut syn = self.syn.write();
             syn.catch_up_mode = false;
         } else {
