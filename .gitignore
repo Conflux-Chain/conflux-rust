@@ -6,3 +6,8 @@ Cargo.lock
 **/__pycache__
 build/
 .*
+**/blockchain_db/
+**/net_config/
+**/*.log
+**/node.*
+**/testnet.toml
