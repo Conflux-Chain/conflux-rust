@@ -1044,7 +1044,7 @@ impl SynchronizationProtocolHandler {
 
     pub fn on_mined_block(&self, mut block: Block) -> Vec<H256> {
         let hash = block.block_header.hash();
-        debug!("Mined block {:?} header={:?}", hash, block.block_header);
+        info!("Mined block {:?} header={:?}", hash, block.block_header);
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
@@ -2021,6 +2021,7 @@ impl SynchronizationProtocolHandler {
             let mut syn = self.syn.write();
             syn.catch_up_mode = true;
         }
+        info!("Catch-up mode: {}", self.syn.read().catch_up_mode);
     }
 }
 
