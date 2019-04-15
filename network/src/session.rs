@@ -20,6 +20,7 @@ use cfx_types::H520;
 use io::*;
 use keylib::{recover, sign};
 use mio::{deprecated::*, tcp::*, *};
+use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
 use std::{net::SocketAddr, str};
 
@@ -320,7 +321,7 @@ impl Session {
 
     pub fn send_packet<Message>(
         &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
-        packet_id: u8, data: &[u8],
+        packet_id: u8, data: &[u8], priority: SendQueuePriority,
     ) -> Result<SendQueueStatus, Error>
     where
         Message: Send + Sync + Clone,
@@ -347,7 +348,7 @@ impl Session {
         }
         packet.put_slice(&data);
 
-        self.connection.send(io, &packet[..])
+        self.connection.send(io, &packet[..], priority)
     }
 
     pub fn disconnect<Message: Send + Sync + Clone>(
@@ -355,21 +356,29 @@ impl Session {
     ) -> Error {
         let mut rlp = RlpStream::new();
         rlp.begin_list(1).append(&(reason as u32));
-        self.send_packet(io, None, PACKET_DISCONNECT, &rlp.drain())
-            .ok();
+        self.send_packet(
+            io,
+            None,
+            PACKET_DISCONNECT,
+            &rlp.drain(),
+            SendQueuePriority::High,
+        )
+        .ok();
         ErrorKind::Disconnect(reason).into()
     }
 
     fn send_ping<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        self.send_packet(io, None, PACKET_PING, &[]).map(|_| ())
+        self.send_packet(io, None, PACKET_PING, &[], SendQueuePriority::High)
+            .map(|_| ())
     }
 
     fn send_pong<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        self.send_packet(io, None, PACKET_PONG, &[]).map(|_| ())
+        self.send_packet(io, None, PACKET_PONG, &[], SendQueuePriority::High)
+            .map(|_| ())
     }
 
     fn write_hello<Message: Send + Sync + Clone>(
@@ -396,8 +405,14 @@ impl Session {
         packet[32..(32 + 65)].copy_from_slice(&signature[..]);
         let signed_hash = keccak(&packet[32..]);
         packet[0..32].copy_from_slice(&signed_hash);
-        self.send_packet(io, None, PACKET_HELLO, &packet)
-            .map(|_| ())
+        self.send_packet(
+            io,
+            None,
+            PACKET_HELLO,
+            &packet,
+            SendQueuePriority::High,
+        )
+        .map(|_| ())
     }
 
     pub fn writable<Message: Send + Sync + Clone>(

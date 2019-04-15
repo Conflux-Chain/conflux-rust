@@ -62,6 +62,7 @@ use crate::{
 };
 use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;
+use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     cmp::Ordering,
@@ -204,7 +205,9 @@ pub trait NetworkProtocolHandler: Sync + Send {
 pub trait NetworkContext {
     fn get_peer_node_id(&self, peer: PeerId) -> NodeId;
 
-    fn send(&self, peer: PeerId, msg: Vec<u8>) -> Result<(), Error>;
+    fn send(
+        &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
+    ) -> Result<(), Error>;
 
     fn disconnect_peer(&self, peer: PeerId);
 

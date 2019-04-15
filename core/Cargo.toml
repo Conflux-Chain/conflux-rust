@@ -38,6 +38,7 @@ lru = "0.1.11"
 threadpool = "1.0"
 rayon = "1.0"
 link-cut-tree = { path = "../util/link-cut-tree" }
+priority-send-queue = { path = "../util/priority-send-queue" }
 
 [dev-dependencies]
 rustc-hex = "1.0"
