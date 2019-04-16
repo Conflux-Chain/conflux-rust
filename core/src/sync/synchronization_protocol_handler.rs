@@ -34,6 +34,7 @@ use crate::{
     verification::VerificationConfig,
 };
 use primitives::TransactionWithSignature;
+use priority_send_queue::SendQueuePriority;
 use rlp::DecoderError;
 use std::{
     cmp::{self, Ordering},
@@ -184,13 +185,15 @@ impl SynchronizationProtocolHandler {
 
     fn send_message(
         &self, io: &NetworkContext, peer: PeerId, msg: &Message,
-    ) -> Result<(), NetworkError> {
-        self.send_message_with_throttling(io, peer, msg, false)
+        priority: SendQueuePriority,
+    ) -> Result<(), NetworkError>
+    {
+        self.send_message_with_throttling(io, peer, msg, priority, false)
     }
 
     fn send_message_with_throttling(
         &self, io: &NetworkContext, peer: PeerId, msg: &Message,
-        throttling_disabled: bool,
+        priority: SendQueuePriority, throttling_disabled: bool,
     ) -> Result<(), NetworkError>
     {
         if !throttling_disabled && msg.is_size_sensitive() {
@@ -203,7 +206,7 @@ impl SynchronizationProtocolHandler {
         let mut raw = Bytes::new();
         raw.push(msg.msg_id().into());
         raw.extend(msg.rlp_bytes().iter());
-        if let Err(e) = io.send(peer, raw) {
+        if let Err(e) = io.send(peer, raw, priority) {
             debug!("Error sending message: {:?}", e);
             io.disconnect_peer(peer);
             return Err(e);
@@ -294,7 +297,7 @@ impl SynchronizationProtocolHandler {
             compact_blocks,
             blocks: blocks.iter().map(|b| b.as_ref().clone()).collect(),
         };
-        self.send_message(io, peer, &resp)?;
+        self.send_message(io, peer, &resp, SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -403,6 +406,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
+                SendQueuePriority::High,
             )?;
         }
 
@@ -452,7 +456,7 @@ impl SynchronizationProtocolHandler {
                     block_hash: req.block_hash,
                     block_txn: tx_resp,
                 };
-                self.send_message(io, peer, &resp)?;
+                self.send_message(io, peer, &resp, SendQueuePriority::High)?;
             }
             None => {
                 warn!(
@@ -465,7 +469,7 @@ impl SynchronizationProtocolHandler {
                     block_hash: H256::default(),
                     block_txn: Vec::new(),
                 };
-                self.send_message(io, peer, &resp)?;
+                self.send_message(io, peer, &resp, SendQueuePriority::High)?;
             }
         }
         Ok(())
@@ -553,6 +557,7 @@ impl SynchronizationProtocolHandler {
                                     io,
                                     PeerId::max_value(),
                                     new_block_hash_msg.as_ref(),
+                                    SendQueuePriority::High,
                                 )?;
                             }
                         }
@@ -641,7 +646,7 @@ impl SynchronizationProtocolHandler {
         );
 
         let msg: Box<dyn Message> = Box::new(block_headers_resp);
-        self.send_message(io, peer, msg.as_ref())?;
+        self.send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -671,7 +676,7 @@ impl SynchronizationProtocolHandler {
                     })
                     .collect(),
             });
-            self.send_message(io, peer, msg.as_ref())?;
+            self.send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
         }
         Ok(())
     }
@@ -690,7 +695,7 @@ impl SynchronizationProtocolHandler {
             request_id: req.request_id().into(),
             hashes: self.graph.get_best_info().terminal_block_hashes,
         });
-        self.send_message(io, peer, msg.as_ref())?;
+        self.send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -930,6 +935,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
+                SendQueuePriority::High,
             )?;
         }
 
@@ -1037,6 +1043,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
+                SendQueuePriority::High,
             )?;
         }
         Ok(())
@@ -1151,6 +1158,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
+                SendQueuePriority::High,
             )?;
         }
         Ok(())
@@ -1182,7 +1190,9 @@ impl SynchronizationProtocolHandler {
 
     fn broadcast_message(
         &self, io: &NetworkContext, skip_id: PeerId, msg: &Message,
-    ) -> Result<(), NetworkError> {
+        priority: SendQueuePriority,
+    ) -> Result<(), NetworkError>
+    {
         let locked_syn = self.syn.read();
         let mut peer_ids: Vec<PeerId> = locked_syn
             .peers
@@ -1202,7 +1212,7 @@ impl SynchronizationProtocolHandler {
         }
 
         for id in peer_ids {
-            self.send_message(io, id, msg)?;
+            self.send_message(io, id, msg, priority)?;
         }
 
         Ok(())
@@ -1223,7 +1233,7 @@ impl SynchronizationProtocolHandler {
                 .get_best_info()
                 .terminal_block_hashes,
         });
-        self.send_message(io, peer, msg.as_ref())
+        self.send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
     }
 
     /// Remove in-flight blocks.
@@ -1326,6 +1336,7 @@ impl SynchronizationProtocolHandler {
                 max_blocks,
             })),
             syn,
+            SendQueuePriority::High,
         ) {
             debug!(
                 "Requesting {:?} block headers starting at {:?} from peer {:?} request_id={:?}",
@@ -1371,6 +1382,7 @@ impl SynchronizationProtocolHandler {
                 hashes: hashes.clone(),
             })),
             syn,
+            SendQueuePriority::High,
         ) {
             debug!(
                 "Requesting blocks {:?} from {:?} request_id={}",
@@ -1414,6 +1426,7 @@ impl SynchronizationProtocolHandler {
                 hashes: hashes.clone(),
             })),
             syn,
+            SendQueuePriority::High,
         ) {
             debug!(
                 "Requesting compact blocks {:?} from {:?} request_id={}",
@@ -1445,6 +1458,7 @@ impl SynchronizationProtocolHandler {
                 indexes: indexes.clone(),
             })),
             syn,
+            SendQueuePriority::High,
         ) {
             debug!(
                 "Requesting blocktxn {:?} from {:?} request_id={}",
@@ -1462,12 +1476,13 @@ impl SynchronizationProtocolHandler {
     fn send_request(
         &self, io: &NetworkContext, peer_id: PeerId,
         mut msg: Box<RequestMessage>, syn: &mut SynchronizationState,
+        priority: SendQueuePriority,
     ) -> Option<Arc<TimedSyncRequests>>
     {
         if let Some(ref mut peer) = syn.peers.get_mut(&peer_id) {
             if let Some(request_id) = peer.get_next_request_id() {
                 msg.set_request_id(request_id);
-                self.send_message(io, peer_id, msg.get_msg())
+                self.send_message(io, peer_id, msg.get_msg(), priority)
                     .unwrap_or_else(|e| {
                         warn!("Error while send_message, err={:?}", e);
                     });
@@ -1504,7 +1519,14 @@ impl SynchronizationProtocolHandler {
                         let mut pending_msg =
                             peer.pop_pending_request().unwrap();
                         pending_msg.set_request_id(new_request_id);
-                        self.send_message(io, peer_id, pending_msg.get_msg())?;
+                        // FIXME: May need to set priority more precisely.
+                        // Simply treat request as high priority for now.
+                        self.send_message(
+                            io,
+                            peer_id,
+                            pending_msg.get_msg(),
+                            SendQueuePriority::High,
+                        )?;
                         let timed_req =
                             Arc::new(TimedSyncRequests::from_request(
                                 peer_id,
@@ -1550,10 +1572,16 @@ impl SynchronizationProtocolHandler {
                 block: (*block).clone().into(),
             });
             for (id, _) in syn.peers.iter() {
-                self.send_message_with_throttling(io, *id, msg.as_ref(), true)
-                    .unwrap_or_else(|e| {
-                        warn!("Error sending new blocks, err={:?}", e);
-                    });
+                self.send_message_with_throttling(
+                    io,
+                    *id,
+                    msg.as_ref(),
+                    SendQueuePriority::High,
+                    true,
+                )
+                .unwrap_or_else(|e| {
+                    warn!("Error sending new blocks, err={:?}", e);
+                });
             }
         }
     }
@@ -1570,6 +1598,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
+                SendQueuePriority::High,
             )?;
         }
 
@@ -1656,7 +1685,12 @@ impl SynchronizationProtocolHandler {
             let mut max_sent = 0;
             let lucky_peers_len = lucky_peers.len();
             for (peer_id, sent, msg) in lucky_peers {
-                match self.send_message(io, peer_id, msg.as_ref()) {
+                match self.send_message(
+                    io,
+                    peer_id,
+                    msg.as_ref(),
+                    SendQueuePriority::Normal,
+                ) {
                     Ok(_) => {
                         trace!(
                             "{:02} <- Transactions ({} entries)",

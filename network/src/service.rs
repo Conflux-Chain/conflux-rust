@@ -19,6 +19,7 @@ use keylib::{sign, Generator, KeyPair, Random, Secret};
 use mio::{deprecated::EventLoop, tcp::*, udp::*, *};
 use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
+use priority_send_queue::SendQueuePriority;
 use std::{
     cmp::{min, Ordering},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -319,6 +320,7 @@ impl DelayedQueue {
                 Some(context.protocol),
                 session::PACKET_USER,
                 &context.msg,
+                context.priority,
             )
             .is_err()
         {
@@ -1385,12 +1387,14 @@ struct DelayMessageContext {
     session: SharedSession,
     peer: PeerId,
     msg: Vec<u8>,
+    priority: SendQueuePriority,
 }
 
 impl DelayMessageContext {
     pub fn new(
         ts: Instant, io: IoContext<NetworkIoMessage>, protocol: ProtocolId,
         session: SharedSession, peer: PeerId, msg: Vec<u8>,
+        priority: SendQueuePriority,
     ) -> Self
     {
         DelayMessageContext {
@@ -1400,6 +1404,7 @@ impl DelayMessageContext {
             session,
             peer,
             msg,
+            priority,
         }
     }
 }
@@ -1445,7 +1450,9 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         self.network_service.get_peer_node_id(peer)
     }
 
-    fn send(&self, peer: PeerId, msg: Vec<u8>) -> Result<(), Error> {
+    fn send(
+        &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
+    ) -> Result<(), Error> {
         let sessions = self.network_service.sessions.read();
         let session = sessions.get(peer);
         trace!(target: "network", "Sending {} bytes to {}", msg.len(), peer);
@@ -1475,6 +1482,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         (*session).clone(),
                         peer,
                         msg,
+                        priority,
                     ));
                     self.io.register_timer_once_nocancel(
                         SEND_DELAYED_MESSAGES,
@@ -1488,6 +1496,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         Some(self.protocol),
                         session::PACKET_USER,
                         &msg,
+                        priority,
                     )?;
                 }
             }

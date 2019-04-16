@@ -9,11 +9,12 @@ use crate::{
 use bytes::Bytes;
 use mio::{deprecated::*, tcp::*, *};
 use std::{
-    collections::VecDeque,
     io::{self, Read, Write},
     marker::PhantomData,
     sync::atomic::{AtomicBool, Ordering as AtomicOrdering},
 };
+
+use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 
 use crate::Error;
 
@@ -43,7 +44,7 @@ pub struct GenericConnection<Socket: GenericSocket, Sizer: PacketSizer> {
     token: StreamToken,
     socket: Socket,
     recv_buf: Bytes,
-    send_queue: VecDeque<(Vec<u8>, usize)>,
+    send_queue: PrioritySendQueue<(Vec<u8>, usize)>,
     interest: Ready,
     registered: AtomicBool,
     phantom: PhantomData<Sizer>,
@@ -137,12 +138,14 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
 
     pub fn send<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>, data: &[u8],
-    ) -> Result<SendQueueStatus, Error> {
+        priority: SendQueuePriority,
+    ) -> Result<SendQueueStatus, Error>
+    {
         if !data.is_empty() {
             trace!(target: "network", "Sending {} bytes token={:?}", data.len(), self.token);
             THROTTLING_SERVICE.write().on_enqueue(data.len())?;
             let message = data.to_vec();
-            self.send_queue.push_back((message, 0));
+            self.send_queue.push_back((message, 0), priority);
             if !self.interest.is_writable() {
                 self.interest.insert(Ready::writable());
             }
@@ -165,7 +168,7 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
             token: token,
             socket: socket,
             recv_buf: Bytes::new(),
-            send_queue: VecDeque::new(),
+            send_queue: PrioritySendQueue::new(),
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
             phantom: PhantomData,
@@ -321,7 +324,7 @@ mod tests {
             TestConnection {
                 token: 1234567890usize,
                 socket: TestSocket::new(),
-                send_queue: VecDeque::new(),
+                send_queue: PrioritySendQueue::new(),
                 recv_buf: Bytes::new(),
                 interest: Ready::hup() | Ready::readable(),
                 registered: AtomicBool::new(false),
@@ -347,7 +350,9 @@ mod tests {
         let mut connection = TestConnection::new();
         connection.socket = TestSocket::with_buf(1024);
         let data = (vec![0; 10240], 0);
-        connection.send_queue.push_back(data);
+        connection
+            .send_queue
+            .push_back(data, SendQueuePriority::High);
 
         let status = connection.writable(&test_io());
 
