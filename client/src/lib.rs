@@ -50,6 +50,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 use txgen::TransactionGenerator;
+use monitor::Monitor;
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
@@ -310,6 +311,14 @@ impl Client {
                 setup_public_rpc_apis(rpc_impl.clone())
             },
         )?;
+
+        Monitor::init(
+            conf.raw_conf.monitor_host, 
+            conf.raw_conf.monitor_db, 
+            conf.raw_conf.monitor_username,
+            conf.raw_conf.monitor_password,
+            conf.raw_conf.monitor_node,
+        );
 
         Ok(ClientHandle {
             ledger_db: Arc::downgrade(&ledger_db),

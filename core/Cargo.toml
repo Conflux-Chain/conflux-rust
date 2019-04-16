@@ -14,6 +14,7 @@ primitives = { path = "../primitives" }
 parking_lot = "0.6"
 network = { path = "../network" }
 io = { path = "../util/io" }
+monitor = { path = "../util/monitor" }
 log = "0.3"
 rlp = "0.3.0"
 lazy_static = "1.1.0"

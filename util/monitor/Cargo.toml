@@ -1,0 +1,12 @@
+[package]
+name = "monitor"
+version = "0.1.0"
+authors = ["Roy Shang <shangshu1992@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+lazy_static = "1.3.0"
+influx_db_client = "^0.3.6"
+log = "0.3"
+cfx-types = { path = "../../cfx_types" }
+
