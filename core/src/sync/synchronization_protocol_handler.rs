@@ -2103,8 +2103,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         info!("Peer disconnected: peer={:?}", peer);
         let mut unfinished_requests = Vec::new();
         {
-            let _requests = self.requests_queue.lock();
             let mut syn = self.syn.write();
+            let _requests = self.requests_queue.lock();
             if let Some(peer_state) = syn.peers.remove(&peer) {
                 for maybe_req in peer_state.inflight_requests {
                     if let Some(req) = maybe_req {
@@ -2120,8 +2120,37 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             syn.handshaking_peers.remove(&peer);
         }
-        for req in unfinished_requests {
-            self.send_request_again(*req, io);
+
+        for request in unfinished_requests {
+            match &*request {
+                RequestMessage::Headers(get_headers) => {
+                    self.headers_in_flight.lock().remove(&get_headers.hash);
+                    self.header_request_waittime
+                        .lock()
+                        .remove(&get_headers.hash);
+                }
+                RequestMessage::Blocks(get_blocks) => {
+                    for hash in get_blocks.hashes.iter() {
+                        self.blocks_in_flight.lock().remove(hash);
+                        self.block_request_waittime.lock().remove(hash);
+                    }
+                }
+                RequestMessage::Compact(get_compact) => {
+                    for hash in &get_compact.hashes {
+                        self.blocks_in_flight.lock().remove(hash);
+                        self.block_request_waittime.lock().remove(hash);
+                    }
+                }
+                RequestMessage::BlockTxn(blocktxn) => {
+                    self.blocks_in_flight.lock().remove(&blocktxn.block_hash);
+                    self.block_request_waittime
+                        .lock()
+                        .remove(&blocktxn.block_hash);
+                }
+                _ => {}
+            }
+
+            self.send_request_again(*request, io);
         }
     }
 
