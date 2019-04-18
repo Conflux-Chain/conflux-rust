@@ -63,6 +63,7 @@ build_config! {
         (persist_terminal_period_ms, (u64), 60_000)
         (headers_request_timeout_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 120_000)
+        (max_inflight_request_count, (u64), 32)
         (load_test_chain, (Option<String>), None)
         (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
@@ -234,6 +235,9 @@ impl Configuration {
             blocks_request_timeout: Duration::from_millis(
                 self.raw_conf.blocks_request_timeout_ms,
             ),
+            max_inflight_request_count: self
+                .raw_conf
+                .max_inflight_request_count,
         }
     }
 

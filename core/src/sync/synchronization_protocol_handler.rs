@@ -5,7 +5,7 @@
 use super::{
     super::transaction_pool::SharedTransactionPool, random, Error, ErrorKind,
     SharedSynchronizationGraph, SynchronizationGraph, SynchronizationPeerState,
-    SynchronizationState, MAX_INFLIGHT_REQUEST_COUNT,
+    SynchronizationState,
 };
 use crate::{
     bytes::Bytes, consensus::SharedConsensusGraph, pow::ProofOfWorkConfig,
@@ -13,7 +13,7 @@ use crate::{
 use cfx_types::H256;
 use io::TimerToken;
 use message::{
-    GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponce,
+    GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse,
     GetBlocks, GetBlocksResponse, GetCompactBlocks, GetCompactBlocksResponse,
     GetTerminalBlockHashes, GetTerminalBlockHashesResponse, Message, MsgId,
     NewBlock, NewBlockHashes, Status, Transactions,
@@ -92,6 +92,7 @@ pub struct ProtocolConfiguration {
     pub persist_terminal_period: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
+    pub max_inflight_request_count: u64,
 }
 
 #[derive(Debug)]
@@ -457,7 +458,7 @@ impl SynchronizationProtocolHandler {
                     tx_resp.push(block.transactions[last].transaction.clone());
                     last += 1;
                 }
-                let resp = GetBlockTxnResponce {
+                let resp = GetBlockTxnResponse {
                     request_id: req.request_id,
                     block_hash: req.block_hash,
                     block_txn: tx_resp,
@@ -470,7 +471,7 @@ impl SynchronizationProtocolHandler {
                     req.block_hash
                 );
 
-                let resp = GetBlockTxnResponce {
+                let resp = GetBlockTxnResponse {
                     request_id: req.request_id,
                     block_hash: H256::default(),
                     block_txn: Vec::new(),
@@ -484,7 +485,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_blocktxn_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let resp: GetBlockTxnResponce = rlp.as_val()?;
+        let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
         let hash = resp.block_hash;
         let req = self.match_request(io, peer, resp.request_id())?;
@@ -763,9 +764,10 @@ impl SynchronizationProtocolHandler {
             return Err(ErrorKind::Invalid.into());
         }
 
-        let mut requests_vec =
-            Vec::with_capacity(MAX_INFLIGHT_REQUEST_COUNT as usize);
-        for _i in 0..MAX_INFLIGHT_REQUEST_COUNT {
+        let mut requests_vec = Vec::with_capacity(
+            self.protocol_config.max_inflight_request_count as usize,
+        );
+        for _i in 0..self.protocol_config.max_inflight_request_count {
             requests_vec.push(None);
         }
         let peer_state = SynchronizationPeerState {
@@ -776,6 +778,9 @@ impl SynchronizationProtocolHandler {
             lowest_request_id: 0,
             next_request_id: 0,
             best_epoch: status.best_epoch,
+            max_inflight_request_count: self
+                .protocol_config
+                .max_inflight_request_count,
             pending_requests: VecDeque::new(),
             last_sent_transactions: HashSet::new(),
         };

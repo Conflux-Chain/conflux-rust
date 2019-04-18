@@ -123,3 +123,4 @@ start_mining=true
 # persist_terminal_period_ms=60_000
 # headers_request_timeout_ms=30_000
 # blocks_request_timeout_ms=120_000
+# max_inflight_request_count=32
