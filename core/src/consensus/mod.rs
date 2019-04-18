@@ -2530,7 +2530,7 @@ impl ConsensusGraph {
     ) {
         let block = self.block_by_hash(hash, true).unwrap();
 
-        info!(
+        debug!(
             "insert new block into consensus: block_header={:?} tx_count={}",
             block.block_header,
             block.transactions.len(),

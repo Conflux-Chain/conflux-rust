@@ -20,8 +20,6 @@ use std::{
     time::Instant,
 };
 
-pub const MAX_INFLIGHT_REQUEST_COUNT: u64 = 64;
-
 #[derive(Debug)]
 pub enum RequestMessage {
     Headers(GetBlockHeaders),
@@ -79,6 +77,7 @@ pub struct SynchronizationPeerState {
     pub next_request_id: u64,
     pub best_epoch: u64,
 
+    pub max_inflight_request_count: u64,
     pub pending_requests: VecDeque<Box<RequestMessage>>,
     /// Holds a set of transactions recently sent to this peer to avoid
     /// spamming.
@@ -91,7 +90,7 @@ impl SynchronizationPeerState {
     /// when it is moved from pending to inflight queue.
     pub fn get_next_request_id(&mut self) -> Option<u64> {
         if self.next_request_id
-            < self.lowest_request_id + MAX_INFLIGHT_REQUEST_COUNT
+            < self.lowest_request_id + self.max_inflight_request_count
         {
             let id = self.next_request_id;
             self.next_request_id += 1;
@@ -107,7 +106,7 @@ impl SynchronizationPeerState {
     )
     {
         self.inflight_requests
-            [(request_id % MAX_INFLIGHT_REQUEST_COUNT) as usize] =
+            [(request_id % self.max_inflight_request_count) as usize] =
             Some(SynchronizationPeerRequest { message, timed_req });
     }
 
@@ -120,7 +119,7 @@ impl SynchronizationPeerState {
         request_id < self.next_request_id
             && request_id >= self.lowest_request_id
             && self.inflight_requests
-                [(request_id % MAX_INFLIGHT_REQUEST_COUNT) as usize]
+                [(request_id % self.max_inflight_request_count) as usize]
                 .is_some()
     }
 
@@ -140,13 +139,13 @@ impl SynchronizationPeerState {
         {
             let save_req = mem::replace(
                 &mut self.inflight_requests
-                    [(request_id % MAX_INFLIGHT_REQUEST_COUNT) as usize],
+                    [(request_id % self.max_inflight_request_count) as usize],
                 None,
             );
             // Advance lowest_request_id to the next in-flight request
             if request_id == self.lowest_request_id {
                 while self.inflight_requests[(self.lowest_request_id
-                    % MAX_INFLIGHT_REQUEST_COUNT)
+                    % self.max_inflight_request_count)
                     as usize]
                     .is_none()
                     && self.lowest_request_id < self.next_request_id

@@ -30,7 +30,7 @@ pub use crate::{
     blockbodies::GetBlockBodiesResponse,
     blockheaders::GetBlockHeadersResponse,
     blocks::GetBlocksResponse,
-    blocktxn::GetBlockTxnResponce,
+    blocktxn::GetBlockTxnResponse,
     cmpctblocks::GetCompactBlocksResponse,
     getblockbodies::GetBlockBodies,
     getblockhashes::GetBlockHashes,
