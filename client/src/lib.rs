@@ -312,6 +312,7 @@ impl Client {
             },
         )?;
 
+        // initialize Monitor
         Monitor::init(
             conf.raw_conf.monitor_host, 
             conf.raw_conf.monitor_db, 
@@ -360,6 +361,9 @@ impl Client {
         BlockGenerator::stop(&blockgen);
         drop(blockgen);
         drop(to_drop);
+
+        // Stop Monitor
+        Monitor::stop();
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
