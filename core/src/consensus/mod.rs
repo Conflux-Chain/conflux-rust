@@ -44,7 +44,7 @@ use std::{
     sync::Arc,
 };
 
-const HEAVY_BLOCK_THRESHOLD: usize = 2000;
+const HEAVY_BLOCK_THRESHOLD: usize = 200;
 pub const HEAVY_BLOCK_DIFFICULTY_RATIO: usize = 240;
 
 pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
