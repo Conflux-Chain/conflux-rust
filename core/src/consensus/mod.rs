@@ -116,7 +116,7 @@ pub struct ConsensusGraphInner {
     parental_terminals: HashSet<usize>,
     indices_in_epochs: HashMap<usize, Vec<usize>>,
     vm: VmFactory,
-    weight_tree: LinkCutTree,
+    pub weight_tree: LinkCutTree,
     pow_config: ProofOfWorkConfig,
     pub current_difficulty: U256,
     pub db: Arc<SystemDB>,

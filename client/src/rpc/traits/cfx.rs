@@ -191,6 +191,9 @@ build_rpc_trait! {
 
         #[rpc(name = "gettransactionreceipt")]
         fn get_transaction_receipt(&self, H256) -> RpcResult<Option<RpcReceipt>>;
+
+        #[rpc(name = "getPivotChainAndWeight")]
+        fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(RpcH256, RpcU256)>>;
     }
 }
 

@@ -43,6 +43,7 @@ pub struct BlockGenerator {
     sync: SharedSynchronizationService,
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
+    pub test_mining_sleep_time: Option<Duration>,
 }
 
 pub struct Worker {
@@ -108,6 +109,10 @@ impl Worker {
                                 problem = None;
                                 break;
                             }
+                            // This sleep is for test_mode mining of balance_attack
+                            if let Some(t) = bg.test_mining_sleep_time {
+                                thread::sleep(t);
+                            }
                         }
                     } else {
                         thread::sleep(sleep_duration);
@@ -123,7 +128,7 @@ impl BlockGenerator {
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, txgen: SharedTransactionGenerator,
-        pow_config: ProofOfWorkConfig, mining_author: Address,
+        pow_config: ProofOfWorkConfig, mining_author: Address, test_mining_sleep_time: Option<Duration>,
     ) -> Self
     {
         BlockGenerator {
@@ -135,6 +140,7 @@ impl BlockGenerator {
             sync,
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
+            test_mining_sleep_time,
         }
     }
 
@@ -335,10 +341,10 @@ impl BlockGenerator {
 
     fn generate_block_impl(&self, block_init: Block) -> H256 {
         let mut block = block_init;
-        let test_diff = self.pow_config.initial_difficulty.into();
+        let test_diff = block.block_header.difficulty().clone();
         let problem = ProofOfWorkProblem {
             block_hash: block.block_header.problem_hash(),
-            difficulty: test_diff,
+            difficulty: test_diff.clone(),
             boundary: difficulty_to_boundary(&test_diff),
         };
         loop {

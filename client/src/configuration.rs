@@ -47,6 +47,7 @@ build_config! {
         (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
         (fast_recover, (bool), true)
         (test_mode, (bool), false)
+        (test_mining_sleep_us, (Option<u64>), None)
         (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))

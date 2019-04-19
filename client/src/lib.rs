@@ -235,6 +235,7 @@ impl Client {
             txgen.clone(),
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
+            conf.raw_conf.test_mining_sleep_us.map(|t_us| Duration::from_micros(t_us)),
         ));
         if conf.raw_conf.start_mining {
             if maybe_author.is_none() {

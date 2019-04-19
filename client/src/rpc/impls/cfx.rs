@@ -573,6 +573,15 @@ impl RpcImpl {
 
         Ok(ret)
     }
+
+    fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(RpcH256, RpcU256)>> {
+        let inner = &mut *self.consensus.inner.write();
+        let mut chain = Vec::new();
+        for idx in &inner.pivot_chain {
+            chain.push((inner.arena[*idx].hash.into(), inner.weight_tree.subtree_weight(*idx).into()));
+        }
+        Ok(chain)
+    }
 }
 
 fn grouped_txs<T, F>(
@@ -762,6 +771,10 @@ impl TestRpc for TestRpcImpl {
         &self, tx_hash: H256,
     ) -> RpcResult<Option<RpcReceipt>> {
         self.rpc_impl.get_transaction_receipt(tx_hash)
+    }
+
+    fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(RpcH256, RpcU256)>> {
+        self.rpc_impl.get_pivot_chain_and_weight()
     }
 }
 
