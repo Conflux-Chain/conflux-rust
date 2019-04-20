@@ -47,13 +47,8 @@ class P2PTest(ConfluxTestFramework):
             if fork_height >= min(len(chain0), len(chain1)):
                 assert False, "No fork"
         if fork_height >= 5:
-            while True:
-                try:
-                    receipts_root = decode_hex(self.nodes[0].getExecutedInfo(chain0[fork_height - 4][0])[0])
-                    break
-                except Exception as e:
-                    self.log.info(e)
-                    self.log.info("Deferred block not executed?")
+            # Our generated block has height fork_height+1, so its deferred block is fork_height-4
+            receipts_root = decode_hex(self.nodes[0].getExecutedInfo(chain0[fork_height - 4][0])[0])
         else:
             receipts_root = default_config["GENESIS_RECEIPTS_ROOT"]
 
