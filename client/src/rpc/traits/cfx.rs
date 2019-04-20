@@ -194,6 +194,9 @@ build_rpc_trait! {
 
         #[rpc(name = "getPivotChainAndWeight")]
         fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(RpcH256, RpcU256)>>;
+
+        #[rpc(name = "getExecutedInfo")]
+        fn get_executed_info(&self, H256) -> RpcResult<(RpcH256, RpcH256)>;
     }
 }
 

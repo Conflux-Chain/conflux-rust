@@ -13,8 +13,11 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
-    storage::StorageManager, PeerInfo, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    storage::{
+        state::StateTrait, state_manager::StateManagerTrait, StorageManager,
+    },
+    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use jsonrpc_macros::Trailing;
@@ -578,9 +581,40 @@ impl RpcImpl {
         let inner = &mut *self.consensus.inner.write();
         let mut chain = Vec::new();
         for idx in &inner.pivot_chain {
-            chain.push((inner.arena[*idx].hash.into(), inner.weight_tree.subtree_weight(*idx).into()));
+            chain.push((
+                inner.arena[*idx].hash.into(),
+                inner.weight_tree.subtree_weight(*idx).into(),
+            ));
         }
         Ok(chain)
+    }
+
+    fn get_executed_info(
+        &self, block_hash: H256,
+    ) -> RpcResult<(RpcH256, RpcH256)> {
+        let inner = self.consensus.inner.read();
+        let idx =
+            inner
+                .indices
+                .get(&block_hash)
+                .ok_or(RpcError::invalid_params(
+                    "Block not in consensus".to_owned(),
+                ))?;
+        let receipts_root = inner.block_receipts_root.get(idx).ok_or(
+            RpcError::invalid_params(
+                "No receipts root. Possibly never pivot?".to_owned(),
+            ),
+        )?;
+        let state_root = inner
+            .storage_manager
+            .get_state_at(block_hash)
+            .unwrap()
+            .get_state_root()
+            .unwrap()
+            .ok_or(RpcError::invalid_params(
+                "No state root. Possibly never pivot?".to_owned(),
+            ))?;
+        Ok((receipts_root.clone().into(), state_root.into()))
     }
 }
 
@@ -775,6 +809,12 @@ impl TestRpc for TestRpcImpl {
 
     fn get_pivot_chain_and_weight(&self) -> RpcResult<Vec<(RpcH256, RpcU256)>> {
         self.rpc_impl.get_pivot_chain_and_weight()
+    }
+
+    fn get_executed_info(
+        &self, block_hash: H256,
+    ) -> RpcResult<(RpcH256, RpcH256)> {
+        self.rpc_impl.get_executed_info(block_hash)
     }
 }
 

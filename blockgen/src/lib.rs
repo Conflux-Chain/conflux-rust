@@ -109,7 +109,8 @@ impl Worker {
                                 problem = None;
                                 break;
                             }
-                            // This sleep is for test_mode mining of balance_attack
+                            // This sleep is for test_mode mining of
+                            // balance_attack
                             if let Some(t) = bg.test_mining_sleep_time {
                                 thread::sleep(t);
                             }
@@ -128,7 +129,8 @@ impl BlockGenerator {
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, txgen: SharedTransactionGenerator,
-        pow_config: ProofOfWorkConfig, mining_author: Address, test_mining_sleep_time: Option<Duration>,
+        pow_config: ProofOfWorkConfig, mining_author: Address,
+        test_mining_sleep_time: Option<Duration>,
     ) -> Self
     {
         BlockGenerator {

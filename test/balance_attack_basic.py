@@ -46,6 +46,16 @@ class P2PTest(ConfluxTestFramework):
             fork_height += 1
             if fork_height >= min(len(chain0), len(chain1)):
                 assert False, "No fork"
+        if fork_height >= 5:
+            while True:
+                try:
+                    receipts_root = decode_hex(self.nodes[0].getExecutedInfo(chain0[fork_height - 4][0])[0])
+                    break
+                except Exception as e:
+                    self.log.info(e)
+                    self.log.info("Deferred block not executed?")
+        else:
+            receipts_root = default_config["GENESIS_RECEIPTS_ROOT"]
 
         while True:
             # This roughly determines adversary's mining power
@@ -72,12 +82,12 @@ class P2PTest(ConfluxTestFramework):
             if self.start_attack:
                 if fork0[1] <= fork1[1]:
                     parent = fork0[0]
-                    block = NewBlock(create_block(decode_hex(parent), height=fork_height+1, difficulty=self.difficulty, timestamp=random.randint(1, 2 ** 31)))
+                    block = NewBlock(create_block(decode_hex(parent), height=fork_height+1, deferred_receipts_root=receipts_root, difficulty=self.difficulty, timestamp=random.randint(1, 2 ** 31)))
                     self.nodes[0].p2p.send_protocol_msg(block)
                     self.log.info("send to 0 block %s, weight %d %d", block.block.hash_hex(), fork0[1], fork1[1])
                 if fork0[1] >= fork1[1]:
                     parent = fork1[0]
-                    block = NewBlock(create_block(decode_hex(parent), height=fork_height+1, difficulty=self.difficulty, timestamp=random.randint(1, 2 ** 31)))
+                    block = NewBlock(create_block(decode_hex(parent), height=fork_height+1, deferred_receipts_root=receipts_root, difficulty=self.difficulty, timestamp=random.randint(1, 2 ** 31)))
                     self.nodes[1].p2p.send_protocol_msg(block)
                     self.log.info("send to 1 block %s, weight %d %d", block.block.hash_hex(), fork0[1], fork1[1])
 
