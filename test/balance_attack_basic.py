@@ -45,7 +45,7 @@ class P2PTest(ConfluxTestFramework):
                 break
             fork_height += 1
             if fork_height >= min(len(chain0), len(chain1)):
-                assert False, "No fork"
+                assert False, "No fork to start attack, please RETRY or change parameters."
         if fork_height >= 5:
             # Our generated block has height fork_height+1, so its deferred block is fork_height-4
             receipts_root = decode_hex(self.nodes[0].getExecutedInfo(chain0[fork_height - 4][0])[0])
