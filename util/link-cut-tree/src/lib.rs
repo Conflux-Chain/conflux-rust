@@ -388,11 +388,11 @@ mod tests {
         tree.link(1, 2);
         tree.link(1, 3);
         tree.link(0, 4);
-        tree.update_weight(0, &SignedBigNum::from(U256::from(1u64)));
-        tree.update_weight(1, &SignedBigNum::from(U256::from(2u64)));
-        tree.update_weight(2, &SignedBigNum::from(U256::from(3u64)));
-        tree.update_weight(3, &SignedBigNum::from(U256::from(4u64)));
-        tree.update_weight(4, &SignedBigNum::from(U256::from(5u64)));
+        tree.update_weight(0, &SignedBigNum::pos(U256::from(1u64)));
+        tree.update_weight(1, &SignedBigNum::pos(U256::from(2u64)));
+        tree.update_weight(2, &SignedBigNum::pos(U256::from(3u64)));
+        tree.update_weight(3, &SignedBigNum::pos(U256::from(4u64)));
+        tree.update_weight(4, &SignedBigNum::pos(U256::from(5u64)));
 
         assert_eq!(tree.subtree_weight(0), U256::from(15u64));
         assert_eq!(tree.subtree_weight(1), U256::from(9u64));
