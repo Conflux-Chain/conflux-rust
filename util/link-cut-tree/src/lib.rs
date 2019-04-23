@@ -3,8 +3,80 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::U256;
+use std::{convert, ops};
 
 const NULL: usize = !0;
+
+#[derive(Copy, Clone)]
+pub struct SignedBigNum {
+    sign: bool,
+    num: U256,
+}
+
+impl SignedBigNum {
+    fn zero() -> Self {
+        Self {
+            sign: false,
+            num: U256::zero(),
+        }
+    }
+
+    pub fn neg(num: U256) -> Self { Self { sign: true, num } }
+
+    pub fn pos(num: U256) -> Self { Self { sign: false, num } }
+}
+
+impl convert::From<U256> for SignedBigNum {
+    fn from(num: U256) -> Self { Self { sign: false, num } }
+}
+
+impl convert::From<SignedBigNum> for U256 {
+    fn from(signed_num: SignedBigNum) -> Self {
+        assert!(!signed_num.sign);
+        signed_num.num
+    }
+}
+
+impl ops::Add<SignedBigNum> for SignedBigNum {
+    type Output = SignedBigNum;
+
+    fn add(self, other: SignedBigNum) -> SignedBigNum {
+        if self.sign == other.sign {
+            SignedBigNum {
+                sign: self.sign,
+                num: self.num + other.num,
+            }
+        } else if self.num == other.num {
+            SignedBigNum::zero()
+        } else if self.num < other.num {
+            SignedBigNum {
+                sign: other.sign,
+                num: other.num - self.num,
+            }
+        } else {
+            SignedBigNum {
+                sign: self.sign,
+                num: self.num - other.num,
+            }
+        }
+    }
+}
+
+impl ops::AddAssign<SignedBigNum> for SignedBigNum {
+    fn add_assign(&mut self, other: SignedBigNum) {
+        if self.sign == other.sign {
+            self.num += other.num;
+        } else if self.num == other.num {
+            self.sign = false;
+            self.num = U256::zero();
+        } else if self.num < other.num {
+            self.sign = other.sign;
+            self.num = other.num - self.num;
+        } else {
+            self.num -= other.num;
+        }
+    }
+}
 
 #[derive(Clone)]
 struct Node {
@@ -13,8 +85,8 @@ struct Node {
     parent: usize,
     path_parent: usize,
     size: usize,
-    sum: U256,
-    delta: U256,
+    sum: SignedBigNum,
+    delta: SignedBigNum,
 }
 
 impl Default for Node {
@@ -25,8 +97,8 @@ impl Default for Node {
             parent: NULL,
             path_parent: NULL,
             size: 1,
-            sum: U256::zero(),
-            delta: U256::zero(),
+            sum: SignedBigNum::zero(),
+            delta: SignedBigNum::zero(),
         }
     }
 }
@@ -76,7 +148,7 @@ impl LinkCutTree {
                     + self.tree[parent].delta;
                 self.tree[w].delta = delta;
             }
-            self.tree[v].delta = U256::zero();
+            self.tree[v].delta = SignedBigNum::zero();
             self.tree[v].right_child = parent;
             self.tree[parent].parent = v;
             self.tree[v].size += self.tree[parent].size;
@@ -98,7 +170,7 @@ impl LinkCutTree {
                     + self.tree[parent].delta;
                 self.tree[w].delta = delta;
             }
-            self.tree[v].delta = U256::zero();
+            self.tree[v].delta = SignedBigNum::zero();
             self.tree[v].left_child = parent;
             self.tree[parent].parent = v;
             self.tree[v].size += self.tree[parent].size;
@@ -258,7 +330,7 @@ impl LinkCutTree {
         NULL
     }
 
-    pub fn update_weight(&mut self, v: usize, weight: &U256) {
+    pub fn update_weight(&mut self, v: usize, weight: &SignedBigNum) {
         self.access(v);
 
         self.tree[v].sum += *weight;
@@ -270,13 +342,14 @@ impl LinkCutTree {
 
     pub fn subtree_weight(&mut self, v: usize) -> U256 {
         self.access(v);
-        self.tree[v].sum.clone()
+        U256::from(self.tree[v].sum.clone())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{LinkCutTree, U256};
+    use crate::SignedBigNum;
 
     #[test]
     fn test_lca() {
@@ -315,17 +388,24 @@ mod tests {
         tree.link(1, 2);
         tree.link(1, 3);
         tree.link(0, 4);
-        tree.update_weight(0, &U256::from(1u64));
-        tree.update_weight(1, &U256::from(2u64));
-        tree.update_weight(2, &U256::from(3u64));
-        tree.update_weight(3, &U256::from(4u64));
-        tree.update_weight(4, &U256::from(5u64));
+        tree.update_weight(0, &SignedBigNum::pos(U256::from(1u64)));
+        tree.update_weight(1, &SignedBigNum::pos(U256::from(2u64)));
+        tree.update_weight(2, &SignedBigNum::pos(U256::from(3u64)));
+        tree.update_weight(3, &SignedBigNum::pos(U256::from(4u64)));
+        tree.update_weight(4, &SignedBigNum::pos(U256::from(5u64)));
 
         assert_eq!(tree.subtree_weight(0), U256::from(15u64));
         assert_eq!(tree.subtree_weight(1), U256::from(9u64));
         assert_eq!(tree.subtree_weight(2), U256::from(3u64));
         assert_eq!(tree.subtree_weight(3), U256::from(4u64));
         assert_eq!(tree.subtree_weight(4), U256::from(5u64));
+
+        tree.update_weight(4, &SignedBigNum::neg(U256::from(5u64)));
+        assert_eq!(tree.subtree_weight(0), U256::from(10u64));
+        assert_eq!(tree.subtree_weight(1), U256::from(9u64));
+        assert_eq!(tree.subtree_weight(2), U256::from(3u64));
+        assert_eq!(tree.subtree_weight(3), U256::from(4u64));
+        assert_eq!(tree.subtree_weight(4), U256::from(0u64));
     }
 
     #[test]
