@@ -21,6 +21,7 @@ use crate::{
 };
 use cfx_types::{Address, Bloom, H160, H256, U256, U512};
 use heapsize::HeapSizeOf;
+use monitor::Monitor;
 use link_cut_tree::{LinkCutTree, SignedBigNum};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -2778,6 +2779,14 @@ impl ConsensusGraph {
         );
         inner.pivot_chain = new_pivot_chain;
         inner.persist_terminals();
+
+        // update latest state of pivot chain into monitor
+        let mut state_epoch_number: usize = 0;
+        if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
+            state_epoch_number = inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize;
+        };
+        let state_hash = inner.arena[inner.pivot_chain[state_epoch_number]].hash; 
+        Monitor::update_state(state_epoch_number, &state_hash);
     }
 
     pub fn best_block_hash(&self) -> H256 {

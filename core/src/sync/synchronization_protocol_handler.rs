@@ -620,6 +620,7 @@ impl SynchronizationProtocolHandler {
             transactions,
         );
         debug!("Transactions successfully inserted to transaction pool");
+
         Ok(())
     }
 

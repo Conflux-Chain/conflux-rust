@@ -50,6 +50,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 use txgen::TransactionGenerator;
+use monitor::Monitor;
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
@@ -311,6 +312,15 @@ impl Client {
             },
         )?;
 
+        // initialize Monitor
+        Monitor::init(
+            conf.raw_conf.monitor_host, 
+            conf.raw_conf.monitor_db, 
+            conf.raw_conf.monitor_username,
+            conf.raw_conf.monitor_password,
+            conf.raw_conf.monitor_node,
+        );
+
         Ok(ClientHandle {
             ledger_db: Arc::downgrade(&ledger_db),
             debug_rpc_http_server,
@@ -351,6 +361,9 @@ impl Client {
         BlockGenerator::stop(&blockgen);
         drop(blockgen);
         drop(to_drop);
+
+        // Stop Monitor
+        Monitor::stop();
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly

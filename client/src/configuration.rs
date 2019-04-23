@@ -73,6 +73,11 @@ build_config! {
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
         (p2p_nodes_per_ip, (usize), 1)
+        (monitor_host, (Option<String>), None)
+        (monitor_db, (Option<String>), None)
+        (monitor_username, (Option<String>), None)
+        (monitor_password, (Option<String>), None)        
+        (monitor_node, (Option<String>), None)                
     }
     {
         (
