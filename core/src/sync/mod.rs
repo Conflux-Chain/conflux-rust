@@ -22,10 +22,7 @@ pub use self::{
         SharedSynchronizationService, SynchronizationConfiguration,
         SynchronizationService,
     },
-    synchronization_state::{
-        SynchronizationPeerState, SynchronizationState,
-        MAX_INFLIGHT_REQUEST_COUNT,
-    },
+    synchronization_state::{SynchronizationPeerState, SynchronizationState},
 };
 
 pub mod random {
