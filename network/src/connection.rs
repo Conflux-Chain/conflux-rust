@@ -230,7 +230,6 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
 mod tests {
     use std::{
         cmp,
-        collections::VecDeque,
         io::{Read, Result, Write},
     };
 
