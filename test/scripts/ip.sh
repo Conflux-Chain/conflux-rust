@@ -1,15 +1,17 @@
-sudo rm -rf /etc/hosts
+#sudo rm -rf /etc/hosts
 mv ips ips_old
 touch ips
 if [[ -f instances ]]
 then
 	instance=`cat instances`
 	response=`aws ec2 describe-instances --instance-ids $instance`
-	echo $response | jq ".Reservations[].Instances[].PrivateIpAddress" | tr -d '"' > ips_tmp
+	#echo $response | jq ".Reservations[].Instances[].PrivateIpAddress" | tr -d '"' > ips_tmp
+	echo $response | jq ".Reservations[].Instances[].PublicIpAddress" | tr -d '"' > ips_tmp
 	uniq ips_tmp > ips
 	rm ips_tmp
 fi
 echo GET `wc -l ips` IPs
+exit
 ips=(`cat ips`)
 for i in `seq 0 $((${#ips[@]}-1))`
 do
