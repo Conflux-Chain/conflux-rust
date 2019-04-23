@@ -76,6 +76,7 @@ impl Monitor {
         }
     }
 
+    #[allow(deprecated)]
     pub fn update_state(epoch_number: usize, hash: &H256) {
         if let Some(ctx) = Monitor::context() {
             let mut point = point!("state");
