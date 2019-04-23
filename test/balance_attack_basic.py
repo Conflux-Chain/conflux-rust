@@ -8,7 +8,6 @@ from test_framework.blocktools import create_transaction, create_block
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
-from queue import Queue
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -36,37 +35,26 @@ class P2PTest(ConfluxTestFramework):
 
         # Some blocks may have been mined before we setup the latency,
         # so wait for the latency and find the fork point
-        finished = False
-        while not finished:
-            chain0 = self.process_chain(self.nodes[0].getPivotChainAndWeight())
-            chain1 = self.process_chain(self.nodes[1].getPivotChainAndWeight())
-            fork_height = 0
-            while True:
-                if chain0[fork_height][0] != chain1[fork_height][0]:
-                    fork0 = chain0[fork_height]
-                    fork1 = chain1[fork_height]
-                    self.log.info("Forked at height %d %s %s", fork_height, fork0, fork1)
-                    finished = True
-                    break
-                fork_height += 1
-                if fork_height >= min(len(chain0), len(chain1)):
-                    self.log.info("No fork to start attack, retry")
-                    break
+        time.sleep(1)
+        chain0 = self.nodes[0].getPivotChainAndWeight()
+        chain1 = self.nodes[1].getPivotChainAndWeight()
+        fork_height = 0
+        while True:
+            if chain0[fork_height][0] != chain1[fork_height][0]:
+                self.log.info("Forked at height %d", fork_height)
+                break
+            fork_height += 1
+            if fork_height >= min(len(chain0), len(chain1)):
+                assert False, "No fork to start attack, please RETRY or change parameters."
         if fork_height >= 5:
             # Our generated block has height fork_height+1, so its deferred block is fork_height-4
             receipts_root = decode_hex(self.nodes[0].getExecutedInfo(chain0[fork_height - 4][0])[0])
         else:
             receipts_root = default_config["GENESIS_RECEIPTS_ROOT"]
 
-        block_set0 = Queue()
-        block_set1 = Queue()
-        generation_period = 0.1
-        mining_thread0 = AttackMiningThread(fork0[0], fork_height, block_set0, receipts_root, self.difficulty, generation_period * 2)
-        mining_thread1 = AttackMiningThread(fork1[0], fork_height, block_set1, receipts_root, self.difficulty, generation_period * 2)
-        mining_thread0.start()
-        mining_thread1.start()
         while True:
             # This roughly determines adversary's mining power
+            time.sleep(0.1)
 
             chain0 = self.process_chain(self.nodes[0].getPivotChainAndWeight())
             self.check_chain_heavy(chain0, 0, fork_height)
@@ -75,7 +63,7 @@ class P2PTest(ConfluxTestFramework):
             assert_equal(chain0[0][0], chain1[0][0])
             fork0 = chain0[fork_height]
             fork1 = chain1[fork_height]
-            self.log.debug("Fork weight %d %d", fork0[1], fork1[1])
+            # self.log.info("Fork root %s %s", chain0[fork_height], chain1[fork_height])
             if fork0[0] == fork1[0]:
                 self.log.info("Pivot chain merged")
                 self.log.info("chain0 %s", chain0)
@@ -88,20 +76,16 @@ class P2PTest(ConfluxTestFramework):
             '''
             if self.start_attack:
                 if fork0[1] <= fork1[1]:
-                    try:
-                        block = block_set0.get_nowait()
-                        self.nodes[0].p2p.send_protocol_msg(block)
-                        self.log.info("send to 0 block %s, weight %d %d", block.block.hash_hex(), fork0[1], fork1[1])
-                    except Exception:
-                        pass
+                    parent = fork0[0]
+                    block = NewBlock(create_block(decode_hex(parent), height=fork_height+1, deferred_receipts_root=receipts_root, difficulty=self.difficulty, timestamp=random.randint(1, 2 ** 31)))
+                    self.nodes[0].p2p.send_protocol_msg(block)
+                    self.log.info("send to 0 block %s, weight %d %d", block.block.hash_hex(), fork0[1], fork1[1])
                 if fork0[1] >= fork1[1]:
-                    try:
-                        block = block_set1.get_nowait()
-                        self.nodes[1].p2p.send_protocol_msg(block)
-                        self.log.info("send to 1 block %s, weight %d %d", block.block.hash_hex(), fork0[1], fork1[1])
-                    except Exception:
-                        pass
-        exit()
+                    parent = fork1[0]
+                    block = NewBlock(create_block(decode_hex(parent), height=fork_height+1, deferred_receipts_root=receipts_root, difficulty=self.difficulty, timestamp=random.randint(1, 2 ** 31)))
+                    self.nodes[1].p2p.send_protocol_msg(block)
+                    self.log.info("send to 1 block %s, weight %d %d", block.block.hash_hex(), fork0[1], fork1[1])
+
     # Convert weight to integer
     def process_chain(self, chain):
         for i in range(len(chain)):
@@ -116,26 +100,6 @@ class P2PTest(ConfluxTestFramework):
         if chain[-1][1] >= self.difficulty * 240:
             self.log.info("chain %d is heavy at height %d %d %d", chain_id, i,  chain[i][1], chain[i+1][1])
 
-def next_block_time(generation_period):
-    time.time() + random.expovariate(1 / generation_period)
-
-
-class AttackMiningThread(threading.Thread):
-
-    def __init__(self, parent, fork_height, blockset, receipts_root, difficulty, generation_period):
-        threading.Thread.__init__(self, daemon=True)
-        self.fork_height = fork_height
-        self.parent = parent
-        self.blockset = blockset
-        self.receipts_root = receipts_root
-        self.difficulty = difficulty
-        self.generation_period = generation_period
-
-    def run(self):
-        while True:
-            time.sleep(random.expovariate(1 / self.generation_period))
-            block = NewBlock(create_block(decode_hex(self.parent), height=self.fork_height+1, deferred_receipts_root=self.receipts_root, difficulty=self.difficulty, timestamp=random.randint(1, 2 ** 31)))
-            self.blockset.put(block)
 
 if __name__ == "__main__":
     P2PTest().main()
