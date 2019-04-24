@@ -318,6 +318,7 @@ pub struct TransactionPool {
         Mutex<HashMap<H256, HashSet<TransactionAddress>>>,
     pub worker_pool: Arc<Mutex<ThreadPool>>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    spec: vm::Spec,
 }
 
 pub type SharedTransactionPool = Arc<TransactionPool>;
@@ -340,6 +341,7 @@ impl TransactionPool {
             unexecuted_transaction_addresses: Mutex::new(HashMap::new()),
             worker_pool,
             cache_man,
+            spec: vm::Spec::new_spec(),
         }
     }
 
@@ -542,7 +544,7 @@ impl TransactionPool {
         let tx_intrinsic_gas = executive::Executive::gas_required_for(
             transaction.action == Action::Create,
             &transaction.data,
-            &vm::Spec::new_spec(),
+            &self.spec,
         );
         if transaction.gas < (tx_intrinsic_gas as usize).into() {
             debug!(
@@ -795,7 +797,10 @@ impl TransactionPool {
         let mut total_tx_size: usize = 0;
 
         loop {
-            if packed_transactions.len() >= num_txs {
+            if packed_transactions.len() >= num_txs
+                || block_gas_limit - total_tx_gas_limit
+                    < self.spec.tx_gas.into()
+            {
                 break;
             }
 
@@ -841,28 +846,21 @@ impl TransactionPool {
                 packed_transactions.push(tx);
 
                 if let Some(tx_map) = future_txs.get_mut(&sender) {
-                    loop {
-                        if tx_map.is_empty() {
-                            break;
-                        }
-                        if let Some(tx) = tx_map.remove(nonce) {
-                            if block_gas_limit - total_tx_gas_limit
+                    while let Some(tx) = tx_map.remove(nonce) {
+                        if packed_transactions.len() >= num_txs
+                            || block_gas_limit - total_tx_gas_limit
                                 < *tx.gas_limit()
-                                || block_size_limit - total_tx_size
-                                    < tx.rlp_size()
-                            {
-                                tx_map.insert(tx.nonce, tx);
-                                break;
-                            }
-
-                            total_tx_gas_limit += *tx.gas_limit();
-                            total_tx_size += tx.rlp_size();
-
-                            packed_transactions.push(tx);
-                            *nonce += 1.into();
-                        } else {
+                            || block_size_limit - total_tx_size < tx.rlp_size()
+                        {
+                            tx_map.insert(tx.nonce, tx);
                             break;
                         }
+
+                        total_tx_gas_limit += *tx.gas_limit();
+                        total_tx_size += tx.rlp_size();
+
+                        packed_transactions.push(tx);
+                        *nonce += 1.into();
                     }
                 }
             }
