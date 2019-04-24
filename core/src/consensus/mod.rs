@@ -1479,7 +1479,7 @@ impl ConsensusGraphInner {
         &self, pivot_hash: &H256, epoch: usize,
     ) -> Result<(), String> {
         let last_number = self
-            .get_height_from_epoch_number(EpochNumber::LatestState)
+            .get_height_from_epoch_number(EpochNumber::LatestMined)
             .unwrap();
         let hash =
             self.get_hash_from_epoch_number(EpochNumber::Number(epoch.into()))?;
