@@ -194,6 +194,7 @@ impl Transaction {
             s: sig.s().into(),
             v: sig.v(),
             hash: 0.into(),
+            rlp_size: None,
         }
         .compute_hash()
     }
@@ -244,6 +245,8 @@ pub struct TransactionWithSignature {
     pub s: U256,
     /// Hash of the transaction
     pub hash: H256,
+    /// The transaction size when serialized in rlp
+    pub rlp_size: Option<usize>,
 }
 
 impl Deref for TransactionWithSignature {
@@ -258,6 +261,7 @@ impl Decodable for TransactionWithSignature {
             return Err(DecoderError::RlpIncorrectListLen);
         }
         let hash = keccak(d.as_raw());
+        let rlp_size = Some(d.as_raw().len());
 
         Ok(TransactionWithSignature {
             unsigned: Transaction {
@@ -272,6 +276,7 @@ impl Decodable for TransactionWithSignature {
             r: d.val_at(7)?,
             s: d.val_at(8)?,
             hash,
+            rlp_size,
         })
     }
 }
@@ -290,6 +295,7 @@ impl TransactionWithSignature {
             r: 0.into(),
             v: 0.into(),
             hash: Default::default(),
+            rlp_size: None,
         }
     }
 
@@ -348,6 +354,10 @@ impl TransactionWithSignature {
         }
 
         Ok(())
+    }
+
+    pub fn rlp_size(&self) -> usize {
+        self.rlp_size.unwrap_or_else(|| self.rlp_bytes().len())
     }
 }
 
@@ -447,6 +457,8 @@ impl SignedTransaction {
         // the persistent storage part
         self.heap_size_of_children()
     }
+
+    pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
 
     pub fn public(&self) -> &Option<Public> { &self.public }
 }

@@ -76,8 +76,8 @@ build_config! {
         (monitor_host, (Option<String>), None)
         (monitor_db, (Option<String>), None)
         (monitor_username, (Option<String>), None)
-        (monitor_password, (Option<String>), None)        
-        (monitor_node, (Option<String>), None)                
+        (monitor_password, (Option<String>), None)
+        (monitor_node, (Option<String>), None)
     }
     {
         (

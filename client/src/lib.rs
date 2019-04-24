@@ -35,6 +35,7 @@ use crate::rpc::{
 use cfx_types::Address;
 use ctrlc::CtrlC;
 use db::SystemDB;
+use monitor::Monitor;
 use parking_lot::{Condvar, Mutex};
 use primitives::Block;
 use secret_store::SecretStore;
@@ -50,7 +51,6 @@ use std::{
 };
 use threadpool::ThreadPool;
 use txgen::TransactionGenerator;
-use monitor::Monitor;
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
@@ -314,8 +314,8 @@ impl Client {
 
         // initialize Monitor
         Monitor::init(
-            conf.raw_conf.monitor_host, 
-            conf.raw_conf.monitor_db, 
+            conf.raw_conf.monitor_host,
+            conf.raw_conf.monitor_db,
             conf.raw_conf.monitor_username,
             conf.raw_conf.monitor_password,
             conf.raw_conf.monitor_node,

@@ -825,7 +825,7 @@ impl TransactionPool {
                     .insert(tx.nonce, tx);
             } else if tx.nonce == *nonce {
                 if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
-                    || block_size_limit - total_tx_size < tx.size()
+                    || block_size_limit - total_tx_size < tx.rlp_size()
                 {
                     future_txs
                         .entry(sender)
@@ -835,7 +835,7 @@ impl TransactionPool {
                 }
 
                 total_tx_gas_limit += *tx.gas_limit();
-                total_tx_size += tx.size();
+                total_tx_size += tx.rlp_size();
 
                 *nonce += 1.into();
                 packed_transactions.push(tx);
@@ -846,6 +846,18 @@ impl TransactionPool {
                             break;
                         }
                         if let Some(tx) = tx_map.remove(nonce) {
+                            if block_gas_limit - total_tx_gas_limit
+                                < *tx.gas_limit()
+                                || block_size_limit - total_tx_size
+                                    < tx.rlp_size()
+                            {
+                                tx_map.insert(tx.nonce, tx);
+                                break;
+                            }
+
+                            total_tx_gas_limit += *tx.gas_limit();
+                            total_tx_size += tx.rlp_size();
+
                             packed_transactions.push(tx);
                             *nonce += 1.into();
                         } else {
