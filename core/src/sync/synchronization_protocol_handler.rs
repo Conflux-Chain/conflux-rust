@@ -595,7 +595,7 @@ impl SynchronizationProtocolHandler {
 
     fn on_transactions(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
         if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_TERMINAL_BLOCK_HASHES", peer);
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=TRANSACTIONS", peer);
             return Ok(());
         }
 
@@ -620,6 +620,7 @@ impl SynchronizationProtocolHandler {
             transactions,
         );
         debug!("Transactions successfully inserted to transaction pool");
+
         Ok(())
     }
 

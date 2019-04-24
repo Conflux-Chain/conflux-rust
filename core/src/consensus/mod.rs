@@ -21,7 +21,8 @@ use crate::{
 };
 use cfx_types::{Address, Bloom, H160, H256, U256, U512};
 use heapsize::HeapSizeOf;
-use link_cut_tree::LinkCutTree;
+use monitor::Monitor;
+use link_cut_tree::{LinkCutTree, SignedBigNum};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
@@ -172,7 +173,7 @@ impl ConsensusGraphInner {
         inner.weight_tree.make_tree(inner.genesis_block_index);
         inner.weight_tree.update_weight(
             inner.genesis_block_index,
-            genesis_block.block_header.difficulty(),
+            &SignedBigNum::pos(*genesis_block.block_header.difficulty()),
         );
         *inner.arena[inner.genesis_block_index]
             .data
@@ -2520,9 +2521,10 @@ impl ConsensusGraph {
 
         inner.weight_tree.make_tree(me);
         inner.weight_tree.link(inner.arena[me].parent, me);
-        inner
-            .weight_tree
-            .update_weight(me, block.block_header.difficulty());
+        inner.weight_tree.update_weight(
+            me,
+            &SignedBigNum::pos(*block.block_header.difficulty()),
+        );
     }
 
     pub fn on_new_block(
@@ -2602,9 +2604,10 @@ impl ConsensusGraph {
 
         inner.weight_tree.make_tree(me);
         inner.weight_tree.link(inner.arena[me].parent, me);
-        inner
-            .weight_tree
-            .update_weight(me, block.block_header.difficulty());
+        inner.weight_tree.update_weight(
+            me,
+            &SignedBigNum::pos(*block.block_header.difficulty()),
+        );
 
         let last = inner.pivot_chain.last().cloned().unwrap();
         // TODO: constructing new_pivot_chain without cloning!
@@ -2776,6 +2779,14 @@ impl ConsensusGraph {
         );
         inner.pivot_chain = new_pivot_chain;
         inner.persist_terminals();
+
+        // update latest state of pivot chain into monitor
+        let mut state_epoch_number: usize = 0;
+        if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
+            state_epoch_number = inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize;
+        };
+        let state_hash = inner.arena[inner.pivot_chain[state_epoch_number]].hash; 
+        Monitor::update_state(state_epoch_number, &state_hash);
     }
 
     pub fn best_block_hash(&self) -> H256 {

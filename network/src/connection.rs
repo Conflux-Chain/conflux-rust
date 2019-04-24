@@ -18,6 +18,8 @@ use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 
 use crate::Error;
 
+use monitor::Monitor;
+
 #[derive(PartialEq, Eq)]
 pub enum WriteStatus {
     Ongoing,
@@ -150,6 +152,9 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
                 self.interest.insert(Ready::writable());
             }
             io.update_registration(self.token).ok();
+
+            // update current upside stream into monitor
+            Monitor::update_upside_network_packets(data.len());
         }
 
         Ok(SendQueueStatus {
@@ -225,7 +230,6 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
 mod tests {
     use std::{
         cmp,
-        collections::VecDeque,
         io::{Read, Result, Write},
     };
 
