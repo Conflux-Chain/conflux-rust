@@ -1027,6 +1027,12 @@ impl SynchronizationGraph {
 
         self.stat_inc_inserted_count();
 
+        debug!(
+            "new block inserted into graph: block_header={:?} tx_count={},",
+            block.block_header,
+            block.transactions.len(),
+        );
+
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
         debug_assert!(!inner.arena[me].block_ready);

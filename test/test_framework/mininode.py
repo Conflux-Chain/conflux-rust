@@ -224,6 +224,7 @@ class P2PConnection(asyncore.dispatcher):
     # Class utility methods
 
     def _log_message(self, direction, msg):
+        return
         """Logs a message being sent or received over the connection."""
         if direction == "send":
             log_message = "Send message to "
