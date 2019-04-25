@@ -1756,6 +1756,11 @@ impl SynchronizationProtocolHandler {
         peers: Vec<PeerId>, transactions: Vec<Arc<SignedTransaction>>,
     )
     {
+        let all_transactions_hashes = transactions
+            .iter()
+            .map(|tx| tx.hash())
+            .collect::<HashSet<H256>>();
+
         let lucky_peers = {
             peers.into_iter()
                 .filter_map(|peer_id| {
@@ -1781,7 +1786,7 @@ impl SynchronizationProtocolHandler {
                     // limits the size of propagated txs.
                     let mut sum_size = 0;
                     for i in 0..txs.len() {
-                        let size = txs[i].size();
+                        let size = txs[i].rlp_size();
                         if sum_size + size > MAX_BLOCK_SIZE_IN_BYTES {
                             debug!("cannot propagate all txs from pool due to block size limitation, cur_size = {}, tx_size = {}, max_block_size = {}", sum_size, size, MAX_BLOCK_SIZE_IN_BYTES);
                             txs.truncate(i);
@@ -1794,8 +1799,9 @@ impl SynchronizationProtocolHandler {
                     let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
                     for tx in &txs {
                         tx_msg.transactions.push(tx.transaction.clone());
-                        peer_info.last_sent_transactions.insert(tx.hash());
                     }
+
+                    peer_info.last_sent_transactions = all_transactions_hashes.clone();
 
                     Some((peer_id, txs.len(), tx_msg))
                 })
