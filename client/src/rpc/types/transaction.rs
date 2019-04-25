@@ -81,6 +81,7 @@ impl Transaction {
             r: self.r.into(),
             s: self.s.into(),
             hash: self.hash.into(),
+            rlp_size: None,
         };
         let public = tx_with_sig.recover_public()?;
         Ok(SignedTransaction::new(public, tx_with_sig))
