@@ -124,19 +124,19 @@ class TestNode:
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
         my_env["RUST_BACKTRACE"] = "1"
-        if self.remote:
-            ssh_args = '-o "StrictHostKeyChecking no"'
-            cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
-                ssh_args, self.user, self.ip, self.datadir)
-            cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
-                self.datadir, self.user, self.ip, ssh_args)
-            self.args[0] = "~/conflux"
-            cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
-                ssh_args, self.user, self.ip, "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir) + " ".join(self.args))
-            print(cli_mkdir + cli_conf + cli_exe)
-            self.process = subprocess.Popen(cli_mkdir + cli_conf + cli_exe,
-                                            stdout=stdout, stderr=stderr, cwd=self.datadir, shell=True, **kwargs)
-        else:
+        if not self.remote:
+            # ssh_args = '-o "StrictHostKeyChecking no"'
+            # cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
+            #     ssh_args, self.user, self.ip, self.datadir)
+            # cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
+            #     self.datadir, self.user, self.ip, ssh_args)
+            # self.args[0] = "~/conflux"
+            # cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
+            #     ssh_args, self.user, self.ip, "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir) + " ".join(self.args))
+            # print(cli_mkdir + cli_conf + cli_exe)
+            # self.process = subprocess.Popen(cli_mkdir + cli_conf + cli_exe,
+            #                                 stdout=stdout, stderr=stderr, cwd=self.datadir, shell=True, **kwargs)
+        # else:
             self.process = subprocess.Popen(
                 self.args, stdout=stdout, stderr=stderr, cwd=self.datadir, env=my_env, **kwargs)
 
@@ -148,7 +148,7 @@ class TestNode:
         # Poll at a rate of four times per second
         poll_per_s = 4
         for _ in range(poll_per_s * self.rpc_timeout):
-            if self.process.poll() is not None:
+            if not self.remote and self.process.poll() is not None:
                 raise FailedToStartError(
                     self._node_msg(
                         'conflux exited with status {} during initialization'.
@@ -174,7 +174,9 @@ class TestNode:
                 if "No RPC credentials" not in str(e):
                     raise
             time.sleep(1.0 / poll_per_s)
-        self._raise_assertion_error("Unable to connect to bitcoind")
+        self._raise_assertion_error("failed to get RPC proxy: index = {}, ip = {}, rpchost = {}, p2pport={}, rpcport = {}, rpc_url = {}".format(
+            self.index, self.ip, self.rpchost, self.port, self.rpcport, rpc_url(self.index, self.rpchost, self.rpcport)
+        ))
 
     def wait_for_nodeid(self):
         pubkey, x, y = get_nodeid(self)
