@@ -189,6 +189,9 @@ build_rpc_trait! {
         #[rpc(name = "test_generatecustomblock")]
         fn generate_custom_block(&self, H256, Vec<H256>, Bytes) -> RpcResult<H256>;
 
+        #[rpc(name = "test_generateblockwithfaketxs")]
+        fn generate_block_with_fake_txs(&self, Bytes, Trailing<usize>) -> RpcResult<H256>;
+
         #[rpc(name = "gettransactionreceipt")]
         fn get_transaction_receipt(&self, H256) -> RpcResult<Option<RpcReceipt>>;
     }

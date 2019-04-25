@@ -10,7 +10,7 @@ use cfxcore::{
     SharedSynchronizationGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use log::{debug, trace, warn};
+use log::{info, trace, warn};
 use parking_lot::RwLock;
 use primitives::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
@@ -301,16 +301,40 @@ impl BlockGenerator {
     ) -> H256 {
         let block =
             self.assemble_new_fixed_block(parent_hash, referee, num_txs);
-        self.generate_block_impl(block)
+        self.generate_block_impl(block, true)
     }
 
     /// Generate a block with transactions in the pool
     pub fn generate_block(&self, num_txs: usize) -> H256 {
         let block = self.assemble_new_block(num_txs);
-        self.generate_block_impl(block)
+        self.generate_block_impl(block, true)
     }
 
     pub fn generate_custom_block(
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+        wait_for_consensus: bool,
+    ) -> H256
+    {
+        // get the best block
+        let best_info = self.graph.get_best_info();
+        let best_block_hash = best_info.best_block_hash;
+        let mut referee = best_info.terminal_block_hashes;
+        referee.retain(|r| *r != best_block_hash);
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+
+        let block = self.assemble_new_block_impl(
+            best_block_hash,
+            referee,
+            best_info.deferred_state_root,
+            best_info.deferred_receipts_root,
+            block_gas_limit,
+            transactions,
+        );
+
+        self.generate_block_impl(block, wait_for_consensus)
+    }
+
+    pub fn generate_custom_block_with_parent(
         &self, parent_hash: H256, referee: Vec<H256>,
         transactions: Vec<Arc<SignedTransaction>>,
     ) -> H256
@@ -330,10 +354,12 @@ impl BlockGenerator {
             transactions,
         );
 
-        self.generate_block_impl(block)
+        self.generate_block_impl(block, true)
     }
 
-    fn generate_block_impl(&self, block_init: Block) -> H256 {
+    fn generate_block_impl(
+        &self, block_init: Block, wait_for_consensus: bool,
+    ) -> H256 {
         let mut block = block_init;
         let test_diff = self.pow_config.initial_difficulty.into();
         let problem = ProofOfWorkProblem {
@@ -349,19 +375,23 @@ impl BlockGenerator {
             }
         }
         let hash = block.block_header.compute_hash();
-        debug!(
-            "generate_block with block header:{:?} tx_number:{}",
+        info!(
+            "generate_block with block header:{:?} tx_number:{}, block_size:{}",
             block.block_header,
-            block.transactions.len()
+            block.transactions.len(),
+            block.size(),
         );
         self.on_mined_block(block);
 
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
-        while self.graph.consensus.get_block_epoch_number(&hash).is_none() {
-            sleep(Duration::from_millis(100));
+        if wait_for_consensus {
+            while self.graph.consensus.get_block_epoch_number(&hash).is_none() {
+                sleep(Duration::from_millis(100));
+            }
         }
+
         hash
     }
 

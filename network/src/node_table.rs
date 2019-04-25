@@ -372,7 +372,7 @@ impl NodeTable {
         let file = match fs::File::open(&path) {
             Ok(file) => file,
             Err(e) => {
-                debug!(target: "network", "Error opening node table file: {:?}", e);
+                debug!(target: "network", "node table file not found: {:?}", e);
                 return;
             }
         };

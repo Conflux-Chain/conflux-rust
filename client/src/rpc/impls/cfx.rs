@@ -373,16 +373,37 @@ impl RpcImpl {
     ) -> RpcResult<H256> {
         info!("RPC Request: generate_custom_block()");
 
+        let transactions = self.decode_raw_txs(raw_txs, 0)?;
+
+        let hash = self.block_gen.generate_custom_block_with_parent(
+            parent_hash,
+            referee,
+            transactions,
+        );
+
+        Ok(hash)
+    }
+
+    fn decode_raw_txs(
+        &self, raw_txs: Bytes, tx_data_len: usize,
+    ) -> RpcResult<Vec<Arc<SignedTransaction>>> {
         let txs: Vec<TransactionWithSignature> =
             Rlp::new(&raw_txs.into_vec()).as_list().map_err(|err| {
                 RpcError::invalid_params(format!("Decode error: {:?}", err))
             })?;
 
         let mut transactions = Vec::new();
+
         for tx in txs {
             match tx.recover_public() {
-                Ok(public) => transactions
-                    .push(Arc::new(SignedTransaction::new(public, tx))),
+                Ok(public) => {
+                    let mut signed_tx = SignedTransaction::new(public, tx);
+                    if tx_data_len > 0 {
+                        signed_tx.transaction.unsigned.data =
+                            vec![0; tx_data_len];
+                    }
+                    transactions.push(Arc::new(signed_tx));
+                }
                 Err(e) => {
                     return Err(RpcError::invalid_params(format!(
                         "Recover public error: {:?}",
@@ -392,13 +413,15 @@ impl RpcImpl {
             }
         }
 
-        let hash = self.block_gen.generate_custom_block(
-            parent_hash,
-            referee,
-            transactions,
-        );
+        Ok(transactions)
+    }
 
-        Ok(hash)
+    fn generate_block_with_fake_txs(
+        &self, raw_txs_without_data: Bytes, tx_data_len: Trailing<usize>,
+    ) -> RpcResult<H256> {
+        let transactions = self
+            .decode_raw_txs(raw_txs_without_data, tx_data_len.unwrap_or(0))?;
+        Ok(self.block_gen.generate_custom_block(transactions, false))
     }
 
     fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>> {
@@ -737,6 +760,13 @@ impl TestRpc for TestRpcImpl {
     ) -> RpcResult<H256> {
         self.rpc_impl
             .generate_custom_block(parent_hash, referee, raw_txs)
+    }
+
+    fn generate_block_with_fake_txs(
+        &self, raw_txs_without_data: Bytes, tx_data_len: Trailing<usize>,
+    ) -> RpcResult<H256> {
+        self.rpc_impl
+            .generate_block_with_fake_txs(raw_txs_without_data, tx_data_len)
     }
 
     fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>> {

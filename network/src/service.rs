@@ -312,19 +312,14 @@ impl DelayedQueue {
 
     fn send_delayed_messages(&self, network_service: &NetworkServiceInner) {
         let context = self.queue.lock().pop().unwrap();
-        if context
-            .session
-            .write()
-            .send_packet(
-                &context.io,
-                Some(context.protocol),
-                session::PACKET_USER,
-                &context.msg,
-                context.priority,
-            )
-            .is_err()
-        {
-            debug!("Error sending delayed message");
+        if let Err(e) = context.session.write().send_packet(
+            &context.io,
+            Some(context.protocol),
+            session::PACKET_USER,
+            &context.msg,
+            context.priority,
+        ) {
+            debug!("Error sending delayed message: {:?}", e);
             network_service.kill_connection(context.peer, &context.io, true);
         };
     }
@@ -1554,7 +1549,7 @@ fn load_key(path: &Path) -> Option<Secret> {
     let mut file = match fs::File::open(path_buf.as_path()) {
         Ok(file) => file,
         Err(e) => {
-            debug!("Error opening key file: {:?}", e);
+            debug!("failed to open key file: {:?}", e);
             return None;
         }
     };

@@ -1066,7 +1066,7 @@ impl SynchronizationGraph {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
                 self.insert_compact_block(block.to_compact());
-                self.insert_block_to_kv(block, persistent);
+                self.insert_block_to_kv(block.clone(), persistent);
             }
         } else {
             insert_success = false;
@@ -1117,6 +1117,13 @@ impl SynchronizationGraph {
             warn!("db error when flushing block data");
             insert_success = false;
         }
+
+        info!(
+            "new block inserted into graph: block_header={:?}, tx_count={}, block_size={}",
+            block.block_header,
+            block.transactions.len(),
+            block.size(),
+        );
 
         (insert_success, need_to_relay)
     }
