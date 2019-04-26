@@ -1204,9 +1204,10 @@ impl SynchronizationGraph {
         );
 
         {
-            let mut stat = self.statistics.write();
-            stat.current_sync_cons_gap =
+            let sync_cons_gap =
                 self.inner.read().indices.len() - consensus_inner.indices.len();
+            let mut stat = self.statistics.write();
+            stat.current_sync_cons_gap = sync_cons_gap;
             info!("Synchronization graph statistics: {:?}", *stat);
         }
 
