@@ -33,6 +33,7 @@ extern crate strum_macros;
 extern crate keccak_hash;
 
 pub type ProtocolId = [u8; 3];
+pub type HandlerWorkType = u8;
 pub type PeerId = usize;
 
 mod connection;
@@ -186,8 +187,12 @@ pub enum NetworkIoMessage {
         /// Timer delay.
         delay: Duration,
     },
-    /// Disconnect a peer.
-    Disconnect(PeerId),
+    DispatchWork {
+        /// Protocol Id.
+        protocol: ProtocolId,
+        /// Work type.
+        work_type: HandlerWorkType,
+    },
 }
 
 pub trait NetworkProtocolHandler: Sync + Send {
@@ -200,6 +205,8 @@ pub trait NetworkProtocolHandler: Sync + Send {
     fn on_peer_disconnected(&self, io: &NetworkContext, peer: PeerId);
 
     fn on_timeout(&self, io: &NetworkContext, timer: TimerToken);
+
+    fn on_work_dispatch(&self, io: &NetworkContext, work_type: HandlerWorkType);
 }
 
 pub trait NetworkContext {
@@ -216,6 +223,8 @@ pub trait NetworkContext {
     fn register_timer(
         &self, token: TimerToken, delay: Duration,
     ) -> Result<(), Error>;
+
+    fn dispatch_work(&self, work_type: HandlerWorkType);
 }
 
 #[derive(Debug, Clone)]
