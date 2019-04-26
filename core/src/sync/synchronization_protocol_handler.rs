@@ -23,7 +23,10 @@ use network::{
     NetworkProtocolHandler, PeerId,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Block, SignedTransaction};
+use primitives::{
+    block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
+    Block, SignedTransaction,
+};
 use rand::{Rng, RngCore};
 use rlp::Rlp;
 //use slab::Slab;
@@ -1764,36 +1767,43 @@ impl SynchronizationProtocolHandler {
                     let peer_info = syn.peers.get_mut(&peer_id)
                         .expect("peer_id is from peers; peers is result of select_peers_for_transactions; select_peers_for_transactions selects peers from syn.peers; qed");
 
-                    // Send all transactions
-                    if peer_info.last_sent_transactions.is_empty() {
-                        let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
-                        for tx in &transactions {
-                            tx_msg.transactions.push(tx.transaction.clone());
-                        }
-                        peer_info.last_sent_transactions = all_transactions_hashes.clone();
-                        return Some((peer_id, transactions.len(), tx_msg));
-                    }
+                    // filter out transactions that already sent to remote peer.
+                    let mut txs: Vec<Arc<SignedTransaction>> = transactions
+                        .iter()
+                        .filter(|tx| !peer_info.last_sent_transactions.contains(&tx.hash()))
+                        .map(|tx| tx.clone())
+                        .collect();
 
-                    // Get hashes of all transactions to send to this peer
-                    let to_send = all_transactions_hashes.difference(&peer_info.last_sent_transactions)
-                        .cloned()
-                        .collect::<HashSet<_>>();
-                    if to_send.is_empty() {
+                    if txs.is_empty() {
                         return None;
                     }
 
-                    let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
-                    for tx in &transactions {
-                        if to_send.contains(&tx.hash()) {
-                            tx_msg.transactions.push(tx.transaction.clone());
-                        }
+                    if txs.len() > MAX_TRANSACTION_COUNT_PER_BLOCK {
+                        debug!("cannot propagate all txs from pool due to max txs limitation, num_txs = {}, limitation = {}", txs.len(), MAX_TRANSACTION_COUNT_PER_BLOCK);
+                        txs.truncate(MAX_TRANSACTION_COUNT_PER_BLOCK);
                     }
-                    peer_info.last_sent_transactions = all_transactions_hashes
-                        .intersection(&peer_info.last_sent_transactions)
-                        .chain(&to_send)
-                        .cloned()
-                        .collect();
-                    Some((peer_id, tx_msg.transactions.len(), tx_msg))
+
+                    // limits the size of propagated txs.
+                    let mut sum_size = 0;
+                    for i in 0..txs.len() {
+                        let size = txs[i].rlp_size();
+                        if sum_size + size > MAX_BLOCK_SIZE_IN_BYTES {
+                            debug!("cannot propagate all txs from pool due to block size limitation, cur_size = {}, tx_size = {}, max_block_size = {}", sum_size, size, MAX_BLOCK_SIZE_IN_BYTES);
+                            txs.truncate(i);
+                            break;
+                        }
+
+                        sum_size += size;
+                    }
+
+                    let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
+                    for tx in &txs {
+                        tx_msg.transactions.push(tx.transaction.clone());
+                    }
+
+                    peer_info.last_sent_transactions = all_transactions_hashes.clone();
+
+                    Some((peer_id, txs.len(), tx_msg))
                 })
                 .collect::<Vec<_>>()
         };
