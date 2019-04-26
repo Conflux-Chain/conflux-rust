@@ -2532,7 +2532,7 @@ impl ConsensusGraph {
     ) {
         let block = self.block_by_hash(hash, true).unwrap();
 
-        info!(
+        debug!(
             "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
             block.block_header,
             block.transactions.len(),
@@ -2790,11 +2790,6 @@ impl ConsensusGraph {
         let state_hash =
             inner.arena[inner.pivot_chain[state_epoch_number]].hash;
         Monitor::update_state(state_epoch_number, &state_hash);
-
-        info!(
-            "sync_cons_gap: {}",
-            sync_inner_lock.read().indices.len() - inner.indices.len()
-        );
     }
 
     pub fn best_block_hash(&self) -> H256 {

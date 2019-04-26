@@ -36,14 +36,17 @@ const BLOCK_HEADER_PARENTAL_TREE_READY: u8 = 2;
 const BLOCK_HEADER_GRAPH_READY: u8 = 3;
 const BLOCK_GRAPH_READY: u8 = 4;
 
+#[derive(Debug)]
 pub struct SyncGraphStatistics {
     pub inserted_block_count: usize,
+    pub current_sync_cons_gap: usize,
 }
 
 impl SyncGraphStatistics {
     fn new() -> SyncGraphStatistics {
         SyncGraphStatistics {
             inserted_block_count: 0,
+            current_sync_cons_gap: 0,
         }
     }
 }
@@ -1118,12 +1121,17 @@ impl SynchronizationGraph {
             insert_success = false;
         }
 
-        info!(
+        debug!(
             "new block inserted into graph: block_header={:?}, tx_count={}, block_size={}",
             block.block_header,
             block.transactions.len(),
             block.size(),
         );
+
+        let sync_cons_gap = self.inner.read().indices.len()
+            - self.consensus.inner.read().indices.len();
+        debug!("sync_cons_gap: {}", sync_cons_gap);
+        self.statistics.write().current_sync_cons_gap = sync_cons_gap;
 
         (insert_success, need_to_relay)
     }
@@ -1201,8 +1209,8 @@ impl SynchronizationGraph {
         );
 
         info!(
-            "Synchronization graph- inserted block count: {}",
-            self.stat_get_inserted_count()
+            "Synchronization graph statistics: {:?}",
+            *self.statistics.read()
         );
 
         cache_man.collect_garbage(current_size, |ids| {
@@ -1252,9 +1260,5 @@ impl SynchronizationGraph {
     pub fn stat_inc_inserted_count(&self) {
         let mut stat = self.statistics.write();
         stat.inserted_block_count += 1;
-    }
-
-    pub fn stat_get_inserted_count(&self) -> usize {
-        self.statistics.read().inserted_block_count
     }
 }
