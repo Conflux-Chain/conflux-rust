@@ -1179,7 +1179,17 @@ impl SynchronizationGraph {
         }
     }
 
+    fn statistic(&self) {
+        let sync_len = self.inner.read().indices.len();
+        let cons_len = self.consensus.inner.read().indices.len();
+        let mut stat = self.statistics.write();
+        stat.current_sync_cons_gap = sync_len - cons_len;
+        info!("Synchronization graph statistics: {:?}", *stat);
+    }
+
     pub fn block_cache_gc(&self) {
+        self.statistic();
+
         let current_size = self.cache_size().total();
         let mut consensus_inner = self.consensus.inner.write();
         let mut compact_blocks = self.compact_blocks.write();
@@ -1202,14 +1212,6 @@ impl SynchronizationGraph {
             transaction_pubkey_cache.len(),
             unexecuted_transaction_addresses.len()
         );
-
-        {
-            let sync_cons_gap =
-                self.inner.read().indices.len() - consensus_inner.indices.len();
-            let mut stat = self.statistics.write();
-            stat.current_sync_cons_gap = sync_cons_gap;
-            info!("Synchronization graph statistics: {:?}", *stat);
-        }
 
         cache_man.collect_garbage(current_size, |ids| {
             for id in &ids {

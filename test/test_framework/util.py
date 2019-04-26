@@ -584,7 +584,7 @@ class BlockGenThread(threading.Thread):
 
                 self.log.debug("%s generate block %s", r, h)
             except Exception as e:
-                self.log.info("Fails to generate blocks")
+                self.log.info("Node[%d] fails to generate blocks", r)
                 self.log.info(e)
 
     def stop(self):
