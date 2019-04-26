@@ -1128,11 +1128,6 @@ impl SynchronizationGraph {
             block.size(),
         );
 
-        let sync_cons_gap = self.inner.read().indices.len()
-            - self.consensus.inner.read().indices.len();
-        debug!("sync_cons_gap: {}", sync_cons_gap);
-        self.statistics.write().current_sync_cons_gap = sync_cons_gap;
-
         (insert_success, need_to_relay)
     }
 
@@ -1208,10 +1203,12 @@ impl SynchronizationGraph {
             unexecuted_transaction_addresses.len()
         );
 
-        info!(
-            "Synchronization graph statistics: {:?}",
-            *self.statistics.read()
-        );
+        {
+            let mut stat = self.statistics.write();
+            stat.current_sync_cons_gap =
+                self.inner.read().indices.len() - consensus_inner.indices.len();
+            info!("Synchronization graph statistics: {:?}", *stat);
+        }
 
         cache_man.collect_garbage(current_size, |ids| {
             for id in &ids {
