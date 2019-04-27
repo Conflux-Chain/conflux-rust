@@ -40,15 +40,17 @@ impl SynchronizationService {
         fast_recover: bool,
     ) -> Self
     {
+        let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
+            protocol_config,
+            config.consensus,
+            verification_config,
+            pow_config,
+            fast_recover,
+        ));
+
         SynchronizationService {
             network: NetworkService::new(config.network),
-            protocol_handler: Arc::new(SynchronizationProtocolHandler::new(
-                protocol_config,
-                config.consensus,
-                verification_config,
-                pow_config,
-                fast_recover,
-            )),
+            protocol_handler: sync_handler,
             protocol: *b"cfx",
         }
     }

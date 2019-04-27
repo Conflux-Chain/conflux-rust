@@ -9,7 +9,7 @@ use crate::{
     node_database::NodeDatabase,
     node_table::*,
     session::{self, Session, SessionData},
-    Capability, DisconnectReason, Error, IpFilter, NetworkConfiguration,
+    Capability, Error, HandlerWorkType, IpFilter, NetworkConfiguration,
     NetworkContext as NetworkContextTrait, NetworkIoMessage,
     NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
 };
@@ -1250,16 +1250,19 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                         debug!("Error registering timer {}: {:?}", token, e)
                     });
             }
-            NetworkIoMessage::Disconnect(ref peer) => {
-                let session = self.sessions.read().get(*peer).cloned();
-                if let Some(session) = session {
-                    session
-                        .write()
-                        .disconnect(io, DisconnectReason::DisconnectRequested);
+            NetworkIoMessage::DispatchWork {
+                ref protocol,
+                ref work_type,
+            } => {
+                if let Some(handler) = self.handlers.read().get(protocol) {
+                    handler.on_work_dispatch(
+                        &NetworkContext::new(io, *protocol, self),
+                        *work_type,
+                    );
+                } else {
+                    warn!("Work is dispatched to unknown handler");
                 }
-                trace!(target: "network", "Disconnect requested {}", peer);
-                self.kill_connection(*peer, io, false);
-            } //_ => {}
+            }
         }
     }
 
@@ -1517,6 +1520,15 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                 warn!("Error sending network IO message: {:?}", e)
             });
         Ok(())
+    }
+
+    fn dispatch_work(&self, work_type: HandlerWorkType) {
+        self.io
+            .message(NetworkIoMessage::DispatchWork {
+                protocol: self.protocol,
+                work_type,
+            })
+            .expect("Error sending network IO message");
     }
 }
 

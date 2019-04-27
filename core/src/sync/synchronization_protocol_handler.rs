@@ -19,8 +19,8 @@ use message::{
     NewBlock, NewBlockHashes, Status, Transactions,
 };
 use network::{
-    throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
-    NetworkProtocolHandler, PeerId,
+    throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
+    NetworkContext, NetworkProtocolHandler, PeerId,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -76,6 +76,18 @@ enum WaitingRequest {
     Block(H256),
 }
 
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+enum SyncHandlerWorkType {
+    RecoverPublic = 1,
+}
+
+struct RecoverPublicTask {
+    blocks: Vec<Block>,
+    requested: HashSet<H256>,
+    failed_peer: PeerId,
+    compact: bool,
+}
+
 pub struct SynchronizationProtocolHandler {
     protocol_config: ProtocolConfiguration,
     graph: SharedSynchronizationGraph,
@@ -86,6 +98,9 @@ pub struct SynchronizationProtocolHandler {
     block_request_waittime: Mutex<HashMap<H256, Duration>>,
     waiting_requests: Mutex<BinaryHeap<(Instant, WaitingRequest)>>,
     requests_queue: Mutex<BinaryHeap<Arc<TimedSyncRequests>>>,
+
+    // Worker task queue for recover public
+    recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
 }
 
 pub struct ProtocolConfiguration {
@@ -174,6 +189,7 @@ impl SynchronizationProtocolHandler {
             block_request_waittime: Default::default(),
             waiting_requests: Default::default(),
             requests_queue: Default::default(),
+            recover_public_queue: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -399,7 +415,14 @@ impl SynchronizationProtocolHandler {
                 }
             }
         }
-        self.on_blocks_inner(resp.blocks, &mut requested_blocks, io)?;
+
+        self.dispatch_recover_public_task(
+            io,
+            resp.blocks,
+            requested_blocks,
+            peer,
+            true,
+        );
 
         // Request full block if reconstruction fails
         if !failed_blocks.is_empty() {
@@ -420,21 +443,6 @@ impl SynchronizationProtocolHandler {
             )?;
         }
 
-        // Request missing compact blocks from another random peer
-        if !requested_blocks.is_empty() {
-            {
-                let mut blocks_in_flight = self.blocks_in_flight.lock();
-                for hash in &requested_blocks {
-                    blocks_in_flight.remove(hash);
-                }
-            }
-            let chosen_peer = self.choose_peer_after_failure(peer);
-            self.request_compact_block(
-                io,
-                chosen_peer,
-                requested_blocks.into_iter().collect(),
-            );
-        }
         Ok(())
     }
 
@@ -987,36 +995,31 @@ impl SynchronizationProtocolHandler {
                 return Err(ErrorKind::UnexpectedResponse.into());
             }
         };
-        let mut requested_blocks: HashSet<H256> =
+        let requested_blocks: HashSet<H256> =
             req_hashes_vec.into_iter().collect();
-        self.on_blocks_inner(blocks.blocks, &mut requested_blocks, io)?;
-
-        // Request missing blocks from another random peer
-        if !requested_blocks.is_empty() {
-            let chosen_peer = self.choose_peer_after_failure(peer);
-            self.request_blocks(
-                io,
-                chosen_peer,
-                requested_blocks.into_iter().collect(),
-            );
-        }
+        self.dispatch_recover_public_task(
+            io,
+            blocks.blocks,
+            requested_blocks,
+            peer,
+            false,
+        );
 
         Ok(())
     }
 
-    fn on_blocks_inner(
-        &self, blocks: Vec<Block>, requested_blocks: &mut HashSet<H256>,
-        io: &NetworkContext,
-    ) -> Result<(), Error>
-    {
+    fn on_blocks_inner(&self, io: &NetworkContext) -> Result<(), Error> {
+        let mut task = self.recover_public_queue.lock().pop_front().unwrap();
+
         let mut need_to_relay = Vec::new();
-        for mut block in blocks {
+        for mut block in task.blocks {
             let hash = block.hash();
-            if !requested_blocks.contains(&hash) {
+            if !task.requested.contains(&hash) {
                 warn!("Response has not requested block {:?}", hash);
                 continue;
             }
-            Self::recover_public(
+
+            if Self::recover_public(
                 &mut block,
                 &mut *self
                     .get_transaction_pool()
@@ -1024,7 +1027,11 @@ impl SynchronizationProtocolHandler {
                     .write(),
                 &mut *self.graph.cache_man.lock(),
                 &*self.get_transaction_pool().worker_pool.lock(),
-            )?;
+            )
+            .is_err()
+            {
+                continue;
+            }
 
             match self.graph.block_header_by_hash(&hash) {
                 Some(header) => block.block_header = header,
@@ -1046,10 +1053,44 @@ impl SynchronizationProtocolHandler {
                 // The requested block is correctly received
                 self.blocks_in_flight.lock().remove(&hash);
                 self.block_request_waittime.lock().remove(&hash);
-                requested_blocks.remove(&hash);
+                task.requested.remove(&hash);
             }
             if to_relay {
                 need_to_relay.push(hash);
+            }
+        }
+
+        if task.compact {
+            // Request missing compact blocks from another random peer
+            if !task.requested.is_empty() {
+                {
+                    // If request is for compact block, the request will not be
+                    // cleared from blocks_in_flight in
+                    // match_request(). We need to explicitly
+                    // clear it here.
+                    let mut blocks_in_flight = self.blocks_in_flight.lock();
+                    for hash in &task.requested {
+                        blocks_in_flight.remove(hash);
+                    }
+                }
+                let chosen_peer =
+                    self.choose_peer_after_failure(task.failed_peer);
+                self.request_compact_block(
+                    io,
+                    chosen_peer,
+                    task.requested.into_iter().collect(),
+                );
+            }
+        } else {
+            // Request missing blocks from another random peer
+            if !task.requested.is_empty() {
+                let chosen_peer =
+                    self.choose_peer_after_failure(task.failed_peer);
+                self.request_blocks(
+                    io,
+                    chosen_peer,
+                    task.requested.into_iter().collect(),
+                );
             }
         }
 
@@ -1065,6 +1106,7 @@ impl SynchronizationProtocolHandler {
                 SendQueuePriority::High,
             )?;
         }
+
         Ok(())
     }
 
@@ -2178,6 +2220,23 @@ impl SynchronizationProtocolHandler {
         }
         info!("Catch-up mode: {}", self.syn.read().catch_up_mode);
     }
+
+    fn dispatch_recover_public_task(
+        &self, io: &NetworkContext, blocks: Vec<Block>,
+        requested: HashSet<H256>, failed_peer: PeerId, compact: bool,
+    )
+    {
+        self.recover_public_queue
+            .lock()
+            .push_back(RecoverPublicTask {
+                blocks,
+                requested,
+                failed_peer,
+                compact,
+            });
+
+        io.dispatch_work(SyncHandlerWorkType::RecoverPublic as HandlerWorkType);
+    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -2206,6 +2265,18 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
         self.dispatch_message(io, peer, msg_id.into(), rlp);
+    }
+
+    fn on_work_dispatch(
+        &self, io: &NetworkContext, work_type: HandlerWorkType,
+    ) {
+        if work_type == SyncHandlerWorkType::RecoverPublic as HandlerWorkType {
+            if let Err(e) = self.on_blocks_inner(io) {
+                warn!("Error processing RecoverPublic task: {:?}", e);
+            }
+        } else {
+            warn!("Unknown SyncHandlerWorkType");
+        }
     }
 
     fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
