@@ -2533,9 +2533,10 @@ impl ConsensusGraph {
         let block = self.block_by_hash(hash, true).unwrap();
 
         debug!(
-            "insert new block into consensus: block_header={:?} tx_count={}",
+            "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
             block.block_header,
             block.transactions.len(),
+            block.size(),
         );
 
         {

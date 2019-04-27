@@ -338,6 +338,10 @@ impl Session {
         let packet_size =
             1 + protocol.map(|p| p.len()).unwrap_or(0) + data.len();
         if packet_size > MAX_PAYLOAD_SIZE {
+            error!(
+                "Packet is too big, size = {}, max = {}",
+                packet_size, MAX_PAYLOAD_SIZE
+            );
             bail!(ErrorKind::OversizedPacket);
         }
         let mut packet = BytesMut::with_capacity(3 + packet_size);

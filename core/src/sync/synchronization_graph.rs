@@ -36,14 +36,17 @@ const BLOCK_HEADER_PARENTAL_TREE_READY: u8 = 2;
 const BLOCK_HEADER_GRAPH_READY: u8 = 3;
 const BLOCK_GRAPH_READY: u8 = 4;
 
+#[derive(Debug)]
 pub struct SyncGraphStatistics {
     pub inserted_block_count: usize,
+    pub current_sync_cons_gap: usize,
 }
 
 impl SyncGraphStatistics {
     fn new() -> SyncGraphStatistics {
         SyncGraphStatistics {
             inserted_block_count: 0,
+            current_sync_cons_gap: 0,
         }
     }
 }
@@ -1066,7 +1069,7 @@ impl SynchronizationGraph {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
                 self.insert_compact_block(block.to_compact());
-                self.insert_block_to_kv(block, persistent);
+                self.insert_block_to_kv(block.clone(), persistent);
             }
         } else {
             insert_success = false;
@@ -1117,6 +1120,13 @@ impl SynchronizationGraph {
             warn!("db error when flushing block data");
             insert_success = false;
         }
+
+        debug!(
+            "new block inserted into graph: block_header={:?}, tx_count={}, block_size={}",
+            block.block_header,
+            block.transactions.len(),
+            block.size(),
+        );
 
         (insert_success, need_to_relay)
     }
@@ -1169,7 +1179,17 @@ impl SynchronizationGraph {
         }
     }
 
+    fn statistic(&self) {
+        let sync_len = self.inner.read().indices.len();
+        let cons_len = self.consensus.inner.read().indices.len();
+        let mut stat = self.statistics.write();
+        stat.current_sync_cons_gap = sync_len - cons_len;
+        info!("Synchronization graph statistics: {:?}", *stat);
+    }
+
     pub fn block_cache_gc(&self) {
+        self.statistic();
+
         let current_size = self.cache_size().total();
         let mut consensus_inner = self.consensus.inner.write();
         let mut compact_blocks = self.compact_blocks.write();
@@ -1191,11 +1211,6 @@ impl SynchronizationGraph {
             consensus_inner.transaction_addresses.len(),
             transaction_pubkey_cache.len(),
             unexecuted_transaction_addresses.len()
-        );
-
-        info!(
-            "Synchronization graph- inserted block count: {}",
-            self.stat_get_inserted_count()
         );
 
         cache_man.collect_garbage(current_size, |ids| {
@@ -1245,9 +1260,5 @@ impl SynchronizationGraph {
     pub fn stat_inc_inserted_count(&self) {
         let mut stat = self.statistics.write();
         stat.inserted_block_count += 1;
-    }
-
-    pub fn stat_get_inserted_count(&self) -> usize {
-        self.statistics.read().inserted_block_count
     }
 }
