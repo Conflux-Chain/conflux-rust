@@ -2271,11 +2271,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         &self, io: &NetworkContext, work_type: HandlerWorkType,
     ) {
         if work_type == SyncHandlerWorkType::RecoverPublic as HandlerWorkType {
-            match self.on_blocks_inner(io) {
-                Err(e) => {
-                    warn!("Error processing RecoverPublic task: {:?}", e);
-                }
-                _ => {}
+            if let Err(e) = self.on_blocks_inner(io) {
+                warn!("Error processing RecoverPublic task: {:?}", e);
             }
         } else {
             warn!("Unknown SyncHandlerWorkType");
