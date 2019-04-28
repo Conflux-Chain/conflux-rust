@@ -1027,7 +1027,7 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
-        self.stat_inc_inserted_count();
+        self.statistics.inc_sync_graph_inserted_block_count();
 
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
@@ -1178,10 +1178,7 @@ impl SynchronizationGraph {
         }
     }
 
-    pub fn log_statistics(&self) {
-        let stat = self.statistics.inner.read();
-        info!("Statistics: {:?}", *stat);
-    }
+    pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
     pub fn block_cache_gc(&self) {
         let current_size = self.cache_size().total();

@@ -2262,7 +2262,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         )
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
-            .expect("Error registering check_catch_up_mode timer");
+            .expect("Error registering log_statistics timer");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {

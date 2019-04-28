@@ -2507,10 +2507,7 @@ impl ConsensusGraph {
 
         let (me, indices_len) = inner.insert(block.as_ref(), past_difficulty);
         self.statistics
-            .inner
-            .write()
-            .consensus_graph
-            .inserted_block_count = indices_len;
+            .set_consensus_graph_inserted_block_count(indices_len);
         inner.compute_anticone(me);
         let fully_valid =
             if let Some(partial_invalid) = self.block_status_from_db(hash) {
@@ -2614,10 +2611,7 @@ impl ConsensusGraph {
 
         let (me, indices_len) = inner.insert(block.as_ref(), past_difficulty);
         self.statistics
-            .inner
-            .write()
-            .consensus_graph
-            .inserted_block_count = indices_len;
+            .set_consensus_graph_inserted_block_count(indices_len);
         inner.compute_anticone(me);
 
         let fully_valid = self.check_block_full_validity(

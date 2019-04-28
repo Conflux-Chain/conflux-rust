@@ -29,4 +29,19 @@ impl Statistics {
             inner: RwLock::new(StatisticsInner::new()),
         }
     }
+
+    pub fn inc_sync_graph_inserted_block_count(&self) {
+        let mut inner = self.inner.write();
+        inner.sync_graph.inserted_block_count += 1;
+    }
+
+    pub fn set_consensus_graph_inserted_block_count(&self, count: usize) {
+        let mut inner = self.inner.write();
+        inner.consensus_graph.inserted_block_count = count;
+    }
+
+    pub fn log_statistics(&self) {
+        let inner = self.inner.read();
+        info!("Statistics: {:?}", *inner);
+    }
 }
