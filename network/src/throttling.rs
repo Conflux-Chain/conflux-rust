@@ -57,33 +57,43 @@ impl Service {
         &mut self, data_size: usize,
     ) -> Result<usize, Error> {
         if data_size > self.queue_capacity {
-            trace!(target: "throttling", "too large data enqueued, data size: {}, queue capacity: {}", data_size, self.queue_capacity);
+            debug!("throttling.on_enqueue: enqueue too large data, data size = {}, queue capacity = {}", data_size, self.queue_capacity);
             bail!(ErrorKind::Throttling(ThrottlingReason::QueueFull));
         }
 
         if self.cur_queue_size > self.queue_capacity - data_size {
-            trace!(target: "throttling", "queue size not enough, data size: {}, queue size: {}", data_size, self.cur_queue_size);
+            debug!("throttling.on_enqueue: queue size not enough, data size = {}, queue size = {}", data_size, self.cur_queue_size);
             bail!(ErrorKind::Throttling(ThrottlingReason::QueueFull));
         }
 
         self.cur_queue_size += data_size;
+        trace!(
+            "throttling.on_enqueue: queue size = {}",
+            self.cur_queue_size
+        );
 
         Ok(self.cur_queue_size)
     }
 
     pub(crate) fn on_dequeue(&mut self, data_size: usize) -> usize {
         if data_size > self.cur_queue_size {
-            warn!(target: "throttling", "Dequeue too much data, data size: {}, queue size: {}", data_size, self.cur_queue_size);
+            error!("throttling.on_dequeue: dequeue too much data, data size = {}, queue size = {}", data_size, self.cur_queue_size);
             self.cur_queue_size = 0;
         } else {
             self.cur_queue_size -= data_size;
         }
+
+        trace!(
+            "throttling.on_dequeue: queue size = {}",
+            self.cur_queue_size
+        );
 
         self.cur_queue_size
     }
 
     pub fn check_throttling(&self) -> Result<(), Error> {
         if self.cur_queue_size > self.max_throttle_queue_size {
+            debug!("throttling.check_throttling: throttled, queue size = {}, max throttling size = {}", self.cur_queue_size, self.max_throttle_queue_size);
             bail!(ErrorKind::Throttling(ThrottlingReason::Throttled));
         }
 
@@ -96,12 +106,17 @@ impl Service {
         }
 
         if self.cur_queue_size >= self.max_throttle_queue_size {
+            debug!("throttling.get_throttling_ratio: fully throttled, queue size = {}, max throttling size = {}", self.cur_queue_size, self.max_throttle_queue_size);
             return 0.0;
         }
 
-        (self.max_throttle_queue_size - self.cur_queue_size) as f64
+        let ratio = (self.max_throttle_queue_size - self.cur_queue_size) as f64
             / (self.max_throttle_queue_size - self.min_throttle_queue_size)
-                as f64
+                as f64;
+
+        debug!("throttling.get_throttling_ratio: partially throttled, queue size = {}, throttling ratio = {}", self.cur_queue_size, ratio);
+
+        ratio
     }
 }
 
