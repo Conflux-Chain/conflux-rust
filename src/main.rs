@@ -231,7 +231,6 @@ fn main() {
                 .value_name("VALUE")
                 .help("Sets node's name in monitor.")
                 .takes_value(true)
-                .validator(from_str_validator::<usize>),
         )
         .arg(
             Arg::with_name("monitor-host")
@@ -239,7 +238,6 @@ fn main() {
                 .value_name("VALUE")
                 .help("Sets monitor's influxdb host.")
                 .takes_value(true)
-                .validator(from_str_validator::<usize>),
         )
         .arg(
             Arg::with_name("monitor-db")
@@ -247,7 +245,6 @@ fn main() {
                 .value_name("VALUE")
                 .help("Sets monitor's influxdb database.")
                 .takes_value(true)
-                .validator(from_str_validator::<usize>),
         )
         .arg(
             Arg::with_name("monitor-username")
@@ -255,7 +252,6 @@ fn main() {
                 .value_name("VALUE")
                 .help("Sets monitor's influxdb username.")
                 .takes_value(true)
-                .validator(from_str_validator::<usize>),
         )
         .arg(
             Arg::with_name("monitor-password")
@@ -263,7 +259,6 @@ fn main() {
                 .value_name("VALUE")
                 .help("Sets monitor's influxdb password.")
                 .takes_value(true)
-                .validator(from_str_validator::<usize>),
         )
         .get_matches_from(std::env::args().collect::<Vec<_>>());
 
