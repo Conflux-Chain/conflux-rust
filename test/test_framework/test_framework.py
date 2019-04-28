@@ -151,6 +151,7 @@ class ConfluxTestFramework:
             help="Set a random seed")
         self.add_options(parser)
         self.options = parser.parse_args()
+        self.after_options_parsed()
 
         PortSeed.n = self.options.port_seed
 
@@ -253,6 +254,10 @@ class ConfluxTestFramework:
 
     def add_options(self, parser):
         """Override this method to add command-line options to the test"""
+        pass
+
+    def after_options_parsed(self):
+        """Override this method to initialize test with command-line options"""
         pass
 
     def setup_chain(self):
