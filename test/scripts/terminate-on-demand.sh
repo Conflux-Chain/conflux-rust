@@ -1,5 +1,5 @@
 rm -rf ~/.ssh/known_hosts
-region=us-west-1
+region=us-west-2
 touch ~/.ssh/known_hosts
 [[ -f instances ]] || exit
 instance=`cat instances`

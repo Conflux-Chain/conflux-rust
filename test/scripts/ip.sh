@@ -1,5 +1,5 @@
 #sudo rm -rf /etc/hosts
-region=us-west-1
+region=us-west-2
 mv ips ips_old
 touch ips
 if [[ -f instances ]]

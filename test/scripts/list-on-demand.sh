@@ -8,7 +8,7 @@ mv instances_all instances_all_old
 #    echo $i >> requests
 #done
 
-region=us-west-1
+region=us-west-2
 role=$1
 
 res=`aws ec2 describe-instances --filters Name=tag:role,Values=$role Name=instance-state-name,Values=running --region $region`
@@ -18,7 +18,7 @@ do
     echo $i >> instances
     echo $i >> instances_all
 done
-res=`aws ec2 describe-instances --filters Name=tag:role,Values=$role Name=instance-state-name,Values=pending --region $region`
+res=`aws ec2 describe-instances --filters Name=tag:role,Values=$role Name=instance-state-name,Values=stopped --region $region`
 instances=`echo $res | jq ".Reservations[].Instances[].InstanceId" | tr -d '"'`
 for i in ${instances[*]}
 do
