@@ -26,14 +26,14 @@ class P2PTest(ConfluxTestFramework):
 
     def setup_chain(self):
         self.log.info("Initializing test directory " + self.options.tmpdir)
-        self.total_period = 0.05
+        self.total_period = 0.25
         self.evil_rate = self.options.evil_rate
-        self.difficulty = int(2 / (1/self.total_period) / (1-self.evil_rate) * 1000)
+        self.difficulty = int(2 / (1/self.total_period) / (1-self.evil_rate) * 100)
         print(self.difficulty)
         self.conf_parameters = {
             "start_mining": "true",
             "initial_difficulty": str(self.difficulty),
-            "test_mining_sleep_us": "1000",
+            "test_mining_sleep_us": "10000",
             "mining_author": '"' + "0"*40 + '"',
             "log_level": "\"debug\"",
         }
@@ -44,8 +44,8 @@ class P2PTest(ConfluxTestFramework):
         connect_nodes(self.nodes, 0, 1)
 
         # Set latency between two groups
-        self.nodes[0].addlatency(self.nodes[1].key, 1000)
-        self.nodes[1].addlatency(self.nodes[0].key, 1000)
+        self.nodes[0].addlatency(self.nodes[1].key, 10000)
+        self.nodes[1].addlatency(self.nodes[0].key, 10000)
 
     def run_test(self):
         start_p2p_connection(self.nodes)
@@ -82,6 +82,7 @@ class P2PTest(ConfluxTestFramework):
 
         count = 0
         after_count = 0
+        merged = False
         while True:
             # This roughly determines adversary's mining power
             time.sleep(random.expovariate(1 / generation_period))
@@ -95,27 +96,30 @@ class P2PTest(ConfluxTestFramework):
             fork1 = chain1[fork_height]
             self.log.debug("Fork root %s %s", chain0[fork_height], chain1[fork_height])
             if fork0[0] == fork1[0]:
+                merged = True
                 # self.log.info("Pivot chain merged")
                 # self.log.info("chain0 %s", chain0)
                 # self.log.info("chain1 %s", chain1)
                 after_count += 1
-                if after_count >= 60 / generation_period:
-                    self.log.info("Merged. Winner: %s Chain end with %s", fork0[0], chain0[-1][0])
+                if after_count >= 600 / generation_period:
+                    self.log.info("Merged. Winner: %s Chain end with %s", fork0[0], chain0[min(len(chain0), len(chain1)) - 2][0])
                     break
+                continue
 
             count += 1
-            if count >= 1200 / generation_period:
-                self.log.info("Not merged after 20 min")
+            if count >= 2400 / generation_period:
+                self.log.info("Not merged after 40 min")
                 break
             ''' Send blocks to keep balance.
                 The adversary's mining power and strategy is not strictly designed in the naive version.
                 If two forks are already balanced, we need to send blocks to both sides in case no blocks are mined.
             '''
             if self.start_attack:
-                if fork0[1] < fork1[1] or (fork0[1] == fork1[1] and fork0[0] < fork1[0]):
-                    send1 = True
-                else:
-                    send1 = False
+                if not merged:
+                    if fork0[1] < fork1[1] or (fork0[1] == fork1[1] and fork0[0] < fork1[0]):
+                        send1 = True
+                    else:
+                        send1 = False
                 if send1:
                     parent = fork0[0]
                     block = NewBlock(create_block(decode_hex(parent), height=fork_height+1, deferred_receipts_root=receipts_root, difficulty=self.difficulty, timestamp=int(time.time()), author=decode_hex("%040x" % random.randint(0, 2**32 - 1))))

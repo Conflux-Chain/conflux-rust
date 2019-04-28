@@ -89,7 +89,7 @@ impl Worker {
                             }
                         }
 
-                        for _i in 0..100000 {
+                        for _i in 0..1 {
                             //TODO: adjust the number of times
                             let nonce = rand::random();
                             let hash = compute(nonce, &block_hash);
@@ -102,15 +102,17 @@ impl Worker {
                                         warn!("{}", e);
                                     }
                                 }
+                                debug!("mined block");
                                 // TODO Update problem fast. This will cause
                                 // miner to stop mining
                                 // until the previous blocks is processed by
                                 // ConsensusGraph
-                                problem = None;
+//                                problem = None;
                                 break;
                             }
                             // This sleep is for test_mode mining of
                             // balance_attack
+                            debug!("Try nonce {}", nonce);
                             if let Some(t) = bg.test_mining_sleep_time {
                                 thread::sleep(t);
                             }
@@ -396,7 +398,7 @@ impl BlockGenerator {
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
         let mut current_mining_block = Block::default();
         let mut current_problem: Option<ProofOfWorkProblem> = None;
-        let sleep_duration = time::Duration::from_millis(50);
+        let sleep_duration = time::Duration::from_millis(2);
 
         let receiver: mpsc::Receiver<ProofOfWorkSolution> =
             BlockGenerator::start_new_worker(1, bg.clone());
@@ -440,12 +442,14 @@ impl BlockGenerator {
                             &new_solution.unwrap(),
                         )
                     {
+                        debug!("Get solution in loop {}", new_solution.unwrap().nonce);
                         new_solution = receiver.try_recv();
                     } else {
                         break;
                     }
                 }
                 if new_solution.is_ok() {
+                    debug!("Get solution {}", new_solution.unwrap().nonce);
                     let solution = new_solution.unwrap();
                     current_mining_block.block_header.set_nonce(solution.nonce);
                     current_mining_block.block_header.compute_hash();
