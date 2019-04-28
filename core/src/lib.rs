@@ -50,6 +50,7 @@ pub mod pow;
 pub(crate) mod snapshot;
 pub mod state;
 pub mod statedb;
+pub mod statistics;
 pub mod storage;
 pub mod sync;
 pub mod transaction_pool;

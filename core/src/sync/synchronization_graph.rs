@@ -9,6 +9,7 @@ use crate::{
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
     pow::ProofOfWorkConfig,
+    statistics::SharedStatistics,
     verification::*,
 };
 use cfx_types::{H256, U256, U512};
@@ -39,14 +40,12 @@ const BLOCK_GRAPH_READY: u8 = 4;
 #[derive(Debug)]
 pub struct SyncGraphStatistics {
     pub inserted_block_count: usize,
-    pub current_sync_cons_gap: usize,
 }
 
 impl SyncGraphStatistics {
-    fn new() -> SyncGraphStatistics {
+    pub fn new() -> SyncGraphStatistics {
         SyncGraphStatistics {
             inserted_block_count: 0,
-            current_sync_cons_gap: 0,
         }
     }
 }
@@ -502,7 +501,7 @@ pub struct SynchronizationGraph {
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-    pub statistics: RwLock<SyncGraphStatistics>,
+    pub statistics: SharedStatistics,
 
     /// Channel used to send work to `ConsensusGraph`
     consensus_sender: Mutex<Sender<H256>>,
@@ -541,7 +540,7 @@ impl SynchronizationGraph {
             verification_config,
             cache_man: consensus.cache_man.clone(),
             consensus: consensus.clone(),
-            statistics: RwLock::new(SyncGraphStatistics::new()),
+            statistics: consensus.statistics.clone(),
             consensus_sender: Mutex::new(consensus_sender),
         };
 
@@ -1028,7 +1027,7 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
-        self.stat_inc_inserted_count();
+        self.statistics.inc_sync_graph_inserted_block_count();
 
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
@@ -1179,17 +1178,9 @@ impl SynchronizationGraph {
         }
     }
 
-    fn statistic(&self) {
-        let sync_len = self.inner.read().indices.len();
-        let cons_len = self.consensus.inner.read().indices.len();
-        let mut stat = self.statistics.write();
-        stat.current_sync_cons_gap = sync_len - cons_len;
-        info!("Synchronization graph statistics: {:?}", *stat);
-    }
+    pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
     pub fn block_cache_gc(&self) {
-        self.statistic();
-
         let current_size = self.cache_size().total();
         let mut consensus_inner = self.consensus.inner.write();
         let mut compact_blocks = self.compact_blocks.write();
@@ -1258,7 +1249,7 @@ impl SynchronizationGraph {
     // Manage statistics
 
     pub fn stat_inc_inserted_count(&self) {
-        let mut stat = self.statistics.write();
-        stat.inserted_block_count += 1;
+        let mut inner = self.statistics.inner.write();
+        inner.sync_graph.inserted_block_count += 1;
     }
 }
