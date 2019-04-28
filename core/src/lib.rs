@@ -45,6 +45,7 @@ pub mod db;
 pub mod error;
 mod evm;
 pub mod executive;
+pub mod genesis;
 pub mod machine;
 pub mod pow;
 pub(crate) mod snapshot;
