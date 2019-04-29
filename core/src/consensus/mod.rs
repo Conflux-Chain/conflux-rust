@@ -128,7 +128,6 @@ pub struct ConsensusGraphInner {
     genesis_block_index: usize,
     genesis_block_state_root: H256,
     genesis_block_receipts_root: H256,
-    parental_terminals: HashSet<usize>,
     indices_in_epochs: HashMap<usize, Vec<usize>>,
     vm: VmFactory,
     weight_tree: LinkCutTree,
@@ -164,7 +163,6 @@ impl ConsensusGraphInner {
                 .block_header
                 .deferred_receipts_root()
                 .clone(),
-            parental_terminals: HashSet::new(),
             indices_in_epochs: HashMap::new(),
             vm,
             weight_tree: LinkCutTree::new(),
@@ -195,7 +193,6 @@ impl ConsensusGraphInner {
             .epoch_number
             .borrow_mut() = 0;
         inner.pivot_chain.push(inner.genesis_block_index);
-        inner.parental_terminals.insert(inner.genesis_block_index);
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
         inner.block_receipts_root.insert(
             inner.genesis_block_index,
@@ -336,11 +333,9 @@ impl ConsensusGraphInner {
         self.indices.insert(hash, index);
 
         if parent != NULL {
-            self.parental_terminals.remove(&parent);
             self.terminal_hashes.remove(&self.arena[parent].hash);
             self.arena[parent].children.push(index);
         }
-        self.parental_terminals.insert(index);
         self.terminal_hashes.insert(hash);
         let referees = self.arena[index].referees.clone();
         for referee in referees {
@@ -1535,14 +1530,14 @@ impl ConsensusGraphInner {
     }
 
     pub fn persist_terminals(&self) {
-        let mut terminals = Vec::with_capacity(self.parental_terminals.len());
-        for index in &self.parental_terminals {
-            terminals.push(self.arena[*index].hash);
+        let mut terminals = Vec::with_capacity(self.terminal_hashes.len());
+        for h in &self.terminal_hashes {
+            terminals.push(h);
         }
         let mut rlp_stream = RlpStream::new();
         rlp_stream.begin_list(terminals.len());
         for hash in terminals {
-            rlp_stream.append(&hash);
+            rlp_stream.append(hash);
         }
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
