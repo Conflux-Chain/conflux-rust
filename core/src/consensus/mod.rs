@@ -12,6 +12,7 @@ use crate::{
     pow::ProofOfWorkConfig,
     state::{CleanupMode, State},
     statedb::StateDb,
+    statistics::SharedStatistics,
     storage::{state::StateTrait, StorageManager, StorageManagerTrait},
     sync::SynchronizationGraphInner,
     transaction_pool::SharedTransactionPool,
@@ -68,6 +69,19 @@ const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
+
+#[derive(Debug)]
+pub struct ConsensusGraphStatistics {
+    pub inserted_block_count: usize,
+}
+
+impl ConsensusGraphStatistics {
+    pub fn new() -> ConsensusGraphStatistics {
+        ConsensusGraphStatistics {
+            inserted_block_count: 0,
+        }
+    }
+}
 
 pub struct ConsensusGraphNodeData {
     pub epoch_number: RefCell<usize>,
@@ -166,8 +180,9 @@ impl ConsensusGraphInner {
         // so we cannot compute its past_difficulty from
         // sync_graph.total_difficulty_in_own_epoch().
         // For genesis block, its past_difficulty is simply its own difficulty.
-        inner.genesis_block_index = inner
+        let (genesis_index, _) = inner
             .insert(genesis_block, *genesis_block.block_header.difficulty());
+        inner.genesis_block_index = genesis_index;
         inner.weight_tree.make_tree(inner.genesis_block_index);
         inner.weight_tree.update_weight(
             inner.genesis_block_index,
@@ -281,7 +296,9 @@ impl ConsensusGraphInner {
         false
     }
 
-    pub fn insert(&mut self, block: &Block, past_difficulty: U256) -> usize {
+    pub fn insert(
+        &mut self, block: &Block, past_difficulty: U256,
+    ) -> (usize, usize) {
         let hash = block.hash();
 
         let parent = if *block.block_header.parent_hash() != H256::default() {
@@ -329,7 +346,7 @@ impl ConsensusGraphInner {
             hash, index, past_difficulty
         );
 
-        index
+        (index, self.indices.len())
     }
 
     pub fn epoch_executed(&mut self, epoch_index: usize) -> bool {
@@ -1541,6 +1558,7 @@ pub struct ConsensusGraph {
     pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub invalid_blocks: RwLock<HashSet<H256>>,
     storage_manager: Arc<StorageManager>,
+    pub statistics: SharedStatistics,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -1548,7 +1566,8 @@ pub type SharedConsensusGraph = Arc<ConsensusGraph>;
 impl ConsensusGraph {
     pub fn with_genesis_block(
         genesis_block: Block, storage_manager: Arc<StorageManager>,
-        vm: VmFactory, txpool: SharedTransactionPool, db: Arc<SystemDB>,
+        vm: VmFactory, txpool: SharedTransactionPool,
+        statistics: SharedStatistics, db: Arc<SystemDB>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
         pow_config: ProofOfWorkConfig,
     ) -> Self
@@ -1570,6 +1589,7 @@ impl ConsensusGraph {
             cache_man,
             invalid_blocks: RwLock::new(HashSet::new()),
             storage_manager,
+            statistics,
         };
 
         let genesis = consensus_graph.genesis_block();
@@ -2480,7 +2500,9 @@ impl ConsensusGraph {
         let past_difficulty =
             inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
 
-        let me = inner.insert(block.as_ref(), past_difficulty);
+        let (me, indices_len) = inner.insert(block.as_ref(), past_difficulty);
+        self.statistics
+            .set_consensus_graph_inserted_block_count(indices_len);
         inner.compute_anticone(me);
         let fully_valid =
             if let Some(partial_invalid) = self.block_status_from_db(hash) {
@@ -2582,7 +2604,9 @@ impl ConsensusGraph {
         let past_difficulty =
             inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
 
-        let me = inner.insert(block.as_ref(), past_difficulty);
+        let (me, indices_len) = inner.insert(block.as_ref(), past_difficulty);
+        self.statistics
+            .set_consensus_graph_inserted_block_count(indices_len);
         inner.compute_anticone(me);
 
         let fully_valid = self.check_block_full_validity(

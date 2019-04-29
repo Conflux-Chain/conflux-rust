@@ -69,6 +69,7 @@ const TX_TIMER: TimerToken = 0;
 const CHECK_REQUEST_TIMER: TimerToken = 1;
 const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
+const LOG_STATISTIC_TIMER: TimerToken = 4;
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -2193,6 +2194,8 @@ impl SynchronizationProtocolHandler {
 
     fn block_cache_gc(&self) { self.graph.block_cache_gc(); }
 
+    fn log_statistics(&self) { self.graph.log_statistics(); }
+
     fn update_catch_up_mode(&self) {
         let mut peer_best_epoches = {
             let syn = self.syn.read();
@@ -2258,6 +2261,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             Duration::from_millis(5000),
         )
         .expect("Error registering check_catch_up_mode timer");
+        io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
+            .expect("Error registering log_statistics timer");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2361,6 +2366,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_catch_up_mode();
+            }
+            LOG_STATISTIC_TIMER => {
+                self.log_statistics();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }

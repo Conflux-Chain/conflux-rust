@@ -11,8 +11,9 @@ mod synchronization_state;
 pub use self::{
     error::{Error, ErrorKind},
     synchronization_graph::{
-        BestInformation, SharedSynchronizationGraph, SynchronizationGraph,
-        SynchronizationGraphInner, SynchronizationGraphNode,
+        BestInformation, SharedSynchronizationGraph, SyncGraphStatistics,
+        SynchronizationGraph, SynchronizationGraphInner,
+        SynchronizationGraphNode,
     },
     synchronization_protocol_handler::{
         ProtocolConfiguration, SynchronizationProtocolHandler,

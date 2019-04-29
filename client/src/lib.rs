@@ -24,9 +24,9 @@ pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 use cfxcore::{
     cache_manager::CacheManager, pow::WORKER_COMPUTATION_PARALLELISM,
-    storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, SynchronizationService,
-    TransactionPool,
+    statistics::Statistics, storage::StorageManager,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
+    ConsensusGraph, SynchronizationService, TransactionPool,
 };
 
 use crate::rpc::{
@@ -167,6 +167,8 @@ impl Client {
             cache_man.clone(),
         ));
 
+        let statistics = Arc::new(Statistics::new());
+
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::with_genesis_block(
@@ -174,6 +176,7 @@ impl Client {
             storage_manager.clone(),
             vm.clone(),
             txpool.clone(),
+            statistics.clone(),
             ledger_db.clone(),
             cache_man.clone(),
             pow_config.clone(),
