@@ -55,7 +55,7 @@ use txgen::TransactionGenerator;
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
 const TESTNET_VERSION: &'static str =
-    "0000000000000000000000000000000000000001";
+    "0000000000000000000000000000000000000002";
 
 pub struct ClientHandle {
     pub debug_rpc_http_server: Option<HttpServer>,
