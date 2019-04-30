@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub use super::super::super::db::COL_DELTA_TRIE;
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct AtomicCommit {
@@ -118,30 +119,23 @@ impl StateManager {
     /// ` test_net_version` is used to update the genesis author so that after
     /// resetting, the chain of the older version will be discarded
     pub fn initialize(
-        &self, secret_store: &SecretStore, genesis_gas_limit: U256,
-        test_net_version: Address,
+        &self, genesis_accounts: HashMap<Address, U256>,
+        genesis_gas_limit: U256, test_net_version: Address,
     ) -> Block
     {
         let mut state = self.get_state_at(H256::default()).unwrap();
-        let kp = KeyPair::from_secret(
-            "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
-                .parse()
-                .unwrap(),
-        )
-        .unwrap();
-        let addr = kp.address();
-        let account = Account::new_empty_with_balance(
-            &addr,
-            &U256::from_dec_str("5000000000000000000000000000")
-                .expect("Not overflow"),
-            &0.into(),
-        );
-        state
-            .set(
-                StorageKey::new_account_key(&addr).as_ref(),
-                encode(&account).as_ref(),
-            )
-            .unwrap();
+
+        for (addr, balance) in genesis_accounts {
+            let account =
+                Account::new_empty_with_balance(&addr, &balance, &0.into());
+            state
+                .set(
+                    StorageKey::new_account_key(&addr).as_ref(),
+                    encode(&account).as_ref(),
+                )
+                .unwrap();
+        }
+
         let root = state.compute_state_root().unwrap();
         let genesis = Block {
             block_header: BlockHeaderBuilder::new()
@@ -153,7 +147,6 @@ impl StateManager {
         };
         debug!("Genesis Block:{:?} hash={:?}", genesis, genesis.hash());
         state.commit(genesis.block_header.hash()).unwrap();
-        secret_store.insert(kp);
         genesis
     }
 
@@ -196,11 +189,9 @@ use crate::{
     ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StorageKey,
 };
 use cfx_types::{Address, H256, U256};
-use keylib::KeyPair;
 use kvdb::{DBTransaction, DBValue};
 use primitives::{Account, Block, BlockHeaderBuilder, EpochId};
 use rlp::encode;
-use secret_store::SecretStore;
 use std::{
     io, str,
     sync::{Arc, Mutex, MutexGuard},

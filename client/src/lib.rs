@@ -23,7 +23,7 @@ use self::{http::Server as HttpServer, tcp::Server as TcpServer};
 pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 use cfxcore::{
-    cache_manager::CacheManager, pow::WORKER_COMPUTATION_PARALLELISM,
+    cache_manager::CacheManager, genesis, pow::WORKER_COMPUTATION_PARALLELISM,
     statistics::Statistics, storage::StorageManager,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
     ConsensusGraph, SynchronizationService, TransactionPool,
@@ -143,8 +143,17 @@ impl Client {
             });
         }
 
+        let genesis_accounts = if conf.raw_conf.test_mode {
+            match conf.raw_conf.genesis_accounts {
+                Some(ref file) => genesis::load_file(file)?,
+                None => genesis::default(secret_store.as_ref()),
+            }
+        } else {
+            genesis::default(secret_store.as_ref())
+        };
+
         let genesis_block = storage_manager.initialize(
-            secret_store.as_ref(),
+            genesis_accounts,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             TESTNET_VERSION.into(),
         );
