@@ -29,7 +29,7 @@ const COLLECTION_QUEUE_SIZE: usize = 8;
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum CacheId {
     Block(H256),
-    BlockReceipts(usize),
+    BlockReceipts(H256),
     TransactionAddress(H256),
     UnexecutedTransactionAddress(H256),
     TransactionPubkey(H256),

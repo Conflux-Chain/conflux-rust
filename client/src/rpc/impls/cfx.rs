@@ -99,7 +99,11 @@ impl RpcImpl {
             )
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|hash| {
-                let block = self.consensus.block_by_hash(&hash, false).unwrap();
+                let block = self
+                    .consensus
+                    .data_man
+                    .block_by_hash(&hash, false)
+                    .unwrap();
                 Ok(RpcBlock::new(&*block, inner, include_txs))
             })
     }
@@ -114,7 +118,8 @@ impl RpcImpl {
         );
         let inner = &mut *self.consensus.inner.write();
 
-        if let Some(block) = self.consensus.block_by_hash(&hash, false) {
+        if let Some(block) = self.consensus.data_man.block_by_hash(&hash, false)
+        {
             let result_block = Some(RpcBlock::new(&*block, inner, include_txs));
             Ok(result_block)
         } else {
@@ -140,7 +145,7 @@ impl RpcImpl {
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|_| {
                 if let Some(block) =
-                    self.consensus.block_by_hash(&block_hash, false)
+                    self.consensus.data_man.block_by_hash(&block_hash, false)
                 {
                     debug!("Build RpcBlock {}", block.hash());
                     let result_block = RpcBlock::new(&*block, inner, true);
@@ -162,6 +167,7 @@ impl RpcImpl {
             .map(|x| {
                 RpcBlock::new(
                     self.consensus
+                        .data_man
                         .block_by_hash(x, false)
                         .expect("Error to get block by hash")
                         .as_ref(),
@@ -198,6 +204,8 @@ impl RpcImpl {
         info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
 
         self.consensus
+            .inner
+            .read_recursive()
             .block_hashes_by_epoch(self.get_primitive_epoch_number(num))
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
