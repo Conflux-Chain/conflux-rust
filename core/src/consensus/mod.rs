@@ -389,141 +389,75 @@ impl ConsensusGraphInner {
         sync_graph: &SynchronizationGraphInner,
     ) -> bool
     {
-        struct ForkPointInfo {
-            pivot_index: usize,
-            fork_total_difficulty: U256,
-        }
-
         let me_in_sync = *sync_graph
             .indices
             .get(&self.arena[me_in_consensus].hash)
             .unwrap();
 
-        let mut fork_points: HashMap<usize, ForkPointInfo> = HashMap::new();
-        let mut pivot_points: HashMap<usize, U256> = HashMap::new();
-        let mut min_fork_height = u64::max_value();
-
         let anticone = &self.arena[me_in_consensus].data.anticone;
 
-        // Avoid unnecessarily following pathes that result in the same fork
-        // points.
-        let mut visited_indices = HashSet::new();
+        let mut valid = true;
+        let parent = self.arena[me_in_consensus].parent;
 
-        // Given that the parent of `me` is checked, we just need to check the
-        // fork points whose difficulty are affected by blocks in this
-        // new epoch.
-        'outer: for sync_index in
-            &sync_graph.arena[me_in_sync].blockset_in_own_view_of_epoch
-        {
-            let mut fork = *self
-                .indices
-                .get(&sync_graph.arena[*sync_index].block_header.hash())
-                .expect("In consensus graph");
-            visited_indices.insert(fork);
-            let mut me = me_in_consensus;
-            while self.arena[me].height > self.arena[fork].height {
-                me = self.arena[me].parent;
-            }
-            if me == fork {
-                //FIXME: Maybe we should treat this as invalid block.
-                continue;
-            }
-            while self.arena[fork].height > self.arena[me].height {
-                fork = self.arena[fork].parent;
-                if visited_indices.contains(&fork) {
-                    continue 'outer;
-                }
-            }
-            debug_assert!(fork != me);
-            let mut prev_fork = NULL;
-            let mut prev_me = NULL;
-            while fork != me {
-                prev_fork = fork;
-                prev_me = me;
-                debug_assert!(self.arena[fork].height == self.arena[me].height);
-                fork = self.arena[fork].parent;
-                me = self.arena[me].parent;
-                if visited_indices.contains(&fork) {
-                    continue 'outer;
-                }
-            }
-            fork_points.entry(prev_fork).or_insert(ForkPointInfo {
-                pivot_index: prev_me,
-                fork_total_difficulty: self
-                    .weight_tree
-                    .subtree_weight(prev_fork),
-            });
-
-            // `prev_me` can be equal to `me_in_consensus` if the block is
-            // malicously constructed,
-            // which may cause index out of bound error here because it has not
-            // been inserted to weight_tree
-            let prev_me_weight = if prev_me != me_in_consensus {
-                self.weight_tree.subtree_weight(prev_me)
-            } else {
-                0.into()
-            };
-            pivot_points.entry(prev_me).or_insert(prev_me_weight);
-
-            min_fork_height = min(min_fork_height, self.arena[prev_me].height);
-        }
-        debug!(
-            "Get {} fork_points, {} pivot_points",
-            fork_points.len(),
-            pivot_points.len()
-        );
-
-        if fork_points.is_empty() {
-            debug_assert!(pivot_points.is_empty());
-            return true;
-        }
-
-        // Remove difficulty contribution of anticone for fork points
+        // Remove difficulty contribution of anticone
         for index in anticone {
             if self.arena[*index].data.partial_invalid {
                 continue;
             }
             let difficulty = self.arena[*index].difficulty;
-            let mut upper = self.arena[*index].parent;
-            debug_assert!(upper != NULL);
-            loop {
-                if self.arena[upper].height < min_fork_height {
-                    break;
-                }
-
-                if let Some(fork_info) = fork_points.get_mut(&upper) {
-                    debug_assert!(!pivot_points.contains_key(&upper));
-                    fork_info.fork_total_difficulty -= difficulty;
-                    break;
-                } else if pivot_points.contains_key(&upper) {
-                    let height = self.arena[upper].height;
-                    for (pivot_index, pivot_total_difficulty) in
-                        pivot_points.iter_mut()
-                    {
-                        if self.arena[*pivot_index].height <= height {
-                            *pivot_total_difficulty -= difficulty;
-                        }
-                    }
-                    break;
-                }
-                upper = self.arena[upper].parent;
-            }
+            self.weight_tree
+                .update_weight(*index, &SignedBigNum::neg(difficulty));
         }
-        debug!("Finish difficulty contribution removal");
 
         // Check the pivot selection decision.
-        for (index, fork_info) in fork_points {
-            if (fork_info.fork_total_difficulty, self.arena[index].hash)
-                > (
-                    pivot_points.get(&fork_info.pivot_index).unwrap().clone(),
-                    self.arena[fork_info.pivot_index].hash,
+        for sync_index_in_epoch in
+            &sync_graph.arena[me_in_sync].blockset_in_own_view_of_epoch
+        {
+            let consensus_index_in_epoch = *self
+                .indices
+                .get(
+                    &sync_graph.arena[*sync_index_in_epoch].block_header.hash(),
                 )
+                .expect("In consensus graph");
+
+            let lca = self.weight_tree.lca(consensus_index_in_epoch, parent);
+            assert!(lca != consensus_index_in_epoch);
+            if lca == parent {
+                valid = false;
+                break;
+            }
+
+            let fork = self.weight_tree.ancestor_at(
+                consensus_index_in_epoch,
+                self.arena[lca].height as usize + 1,
+            );
+            let pivot = self
+                .weight_tree
+                .ancestor_at(parent, self.arena[lca].height as usize + 1);
+
+            let fork_subtree_weight = self.weight_tree.subtree_weight(fork);
+            let pivot_subtree_weight = self.weight_tree.subtree_weight(pivot);
+
+            if (fork_subtree_weight > pivot_subtree_weight)
+                || ((fork_subtree_weight == pivot_subtree_weight)
+                    && (self.arena[fork].hash > self.arena[pivot].hash))
             {
-                return false;
+                valid = false;
+                break;
             }
         }
 
-        true
+        // Add back difficulty contribution of anticone
+        for index in anticone {
+            if self.arena[*index].data.partial_invalid {
+                continue;
+            }
+            let difficulty = self.arena[*index].difficulty;
+            self.weight_tree
+                .update_weight(*index, &SignedBigNum::pos(difficulty));
+        }
+
+        valid
     }
 
     pub fn compute_anticone(&mut self, me: usize) {

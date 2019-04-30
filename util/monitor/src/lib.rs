@@ -5,6 +5,7 @@ extern crate log;
 
 use cfx_types::H256;
 use influx_db_client::{Client, Point, Precision, Value};
+use parking_lot::Mutex;
 use std::{
     mem,
     sync::{
@@ -13,7 +14,6 @@ use std::{
     },
     thread,
 };
-use parking_lot::Mutex;
 
 static ONCE: Once = ONCE_INIT;
 static mut SINGLETON: *mut Monitor = 0 as *mut Monitor;
