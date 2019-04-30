@@ -13,6 +13,7 @@ use std::{
     },
     thread,
 };
+use parking_lot::Mutex;
 
 static ONCE: Once = ONCE_INIT;
 static mut SINGLETON: *mut Monitor = 0 as *mut Monitor;
@@ -21,7 +22,7 @@ pub struct Monitor {
     node: String,
     client: Client,
     thread: Option<thread::JoinHandle<()>>,
-    queue: Sender<Msg>,
+    queue: Mutex<Sender<Msg>>,
 }
 
 enum Msg {
@@ -57,7 +58,7 @@ impl Monitor {
                 node: node,
                 client: client,
                 thread: None,
-                queue: sc,
+                queue: Mutex::new(sc),
             };
 
             // Put it in the heap so it can outlive this call
@@ -88,7 +89,7 @@ impl Monitor {
 
     pub fn stop() {
         if let Some(ctx) = Monitor::context() {
-            ctx.queue.send(Msg::Stop).unwrap();
+            ctx.queue.lock().send(Msg::Stop).unwrap();
         }
     }
 
@@ -105,7 +106,7 @@ impl Monitor {
                     ),
                 )
                 .add_tag("node", Value::String(ctx.node.clone()));
-            ctx.queue.send(Msg::Payload(point)).unwrap();
+            ctx.queue.lock().send(Msg::Payload(point)).unwrap();
         }
     }
 
@@ -115,7 +116,7 @@ impl Monitor {
             point
                 .add_field("size", Value::Integer(size as i64))
                 .add_tag("node", Value::String(ctx.node.clone()));
-            ctx.queue.send(Msg::Payload(point)).unwrap();
+            ctx.queue.lock().send(Msg::Payload(point)).unwrap();
         }
     }
 
