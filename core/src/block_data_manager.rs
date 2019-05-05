@@ -252,6 +252,14 @@ impl BlockDataManager {
             b
         });
 
+        let mut block_receipts = self.block_receipts.write();
+        let receipt_info = block_receipts
+            .entry(hash)
+            .or_insert(BlockReceiptsInfo::default());
+        receipt_info.insert_receipts_at_epoch(
+            &epoch,
+            BlockExecutedResult { receipts, bloom },
+        );
         if persistent {
             let mut dbops = self.db.key_value().transaction();
             let mut rlp_stream = RlpStream::new_list(3);
@@ -265,16 +273,6 @@ impl BlockDataManager {
                 .expect("crash for db failure");
         }
 
-        {
-            let mut block_receipts = self.block_receipts.write();
-            let receipt_info = block_receipts
-                .entry(hash)
-                .or_insert(BlockReceiptsInfo::default());
-            receipt_info.insert_receipts_at_epoch(
-                &epoch,
-                BlockExecutedResult { receipts, bloom },
-            );
-        }
         self.cache_man
             .lock()
             .note_used(CacheId::BlockReceipts(hash));
