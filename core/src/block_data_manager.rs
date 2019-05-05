@@ -171,6 +171,16 @@ impl BlockDataManager {
             .map(|header_ref| header_ref.clone())
     }
 
+    pub fn insert_block_header(
+        &self, hash: H256, header: Arc<BlockHeader>,
+    ) -> Option<Arc<BlockHeader>> {
+        self.block_headers.write().insert(hash, header)
+    }
+
+    pub fn remove_block_header(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
+        self.block_headers.write().remove(hash)
+    }
+
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         let result = self.block_by_hash(hash, false)?;
         Some(result.block_header.height())
@@ -202,7 +212,8 @@ impl BlockDataManager {
     pub fn block_results_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch: &H256, update_cache: bool,
     ) -> Option<BlockExecutedResult> {
-        // Check cache first
+        // TODO Maybe we can release the lock here and try to get the write lock again later,
+        // so we do not hold the lock while reading from db.
         let block_receipts = self.block_receipts.upgradable_read();
         let maybe_receipts =
             block_receipts.get(hash).and_then(|receipt_info| {
@@ -343,6 +354,19 @@ impl BlockDataManager {
                 .clone(),
             address,
         ))
+    }
+
+    /// Return `false` if there is no executed results for given `block_hash`
+    pub fn receipts_retain_epoch(
+        &self, block_hash: &H256, epoch: &H256,
+    ) -> bool {
+        match self.block_receipts.write().get_mut(block_hash) {
+            Some(r) => {
+                r.retain_epoch(epoch);
+                true
+            }
+            None => false,
+        }
     }
 }
 

@@ -582,6 +582,8 @@ impl ConsensusGraphInner {
             let mut n_other = 0;
             let mut last_cumulative_gas_used = U256::zero();
             {
+                // TODO We acquire the lock at the start to avoid acquiring it for every tx.
+                // But if the server does not need to handle tx related rpc, the lock is not needed.
                 let mut transaction_addresses =
                     self.data_man.transaction_addresses.write();
                 let mut unexecuted_transaction_addresses =
@@ -844,11 +846,7 @@ impl ConsensusGraphInner {
             rewards.push((author, reward));
             if on_local_pivot {
                 self.data_man
-                    .block_receipts
-                    .write()
-                    .get_mut(&block_hash)
-                    .expect("exists")
-                    .retain_epoch(&pivot_hash);
+                    .receipts_retain_epoch(&block_hash, &pivot_hash);
             }
         }
         debug!("Give rewards reward={:?}", rewards);
@@ -1259,9 +1257,6 @@ pub struct ConsensusGraph {
     genesis_block: Arc<Block>,
     pub txpool: SharedTransactionPool,
     pub data_man: Arc<BlockDataManager>,
-    // This db is used to persist information related to
-    // ledger structure, like block- or transaction-related
-    // stuffs.
     pub invalid_blocks: RwLock<HashSet<H256>>,
     storage_manager: Arc<StorageManager>,
     pub statistics: SharedStatistics,
@@ -1296,10 +1291,10 @@ impl ConsensusGraph {
         };
 
         let genesis = consensus_graph.genesis_block();
-        data_man
-            .block_headers
-            .write()
-            .insert(genesis.hash(), Arc::new(genesis.block_header.clone()));
+        data_man.insert_block_header(
+            genesis.hash(),
+            Arc::new(genesis.block_header.clone()),
+        );
         data_man.insert_block_to_kv(genesis, true);
 
         consensus_graph
@@ -2007,9 +2002,7 @@ impl ConsensusGraph {
                 inner.block_receipts_root.insert(
                     new_pivot_chain[height],
                     self.data_man
-                        .block_headers
-                        .read()
-                        .get(&future_block_hash)
+                        .block_header_by_hash(&future_block_hash)
                         .unwrap()
                         .deferred_receipts_root()
                         .clone(),

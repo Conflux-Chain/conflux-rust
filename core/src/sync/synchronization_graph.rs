@@ -519,9 +519,7 @@ impl SynchronizationGraph {
         let genesis_block_hash = consensus.genesis_block().hash();
         let data_man = consensus.data_man.clone();
         let genesis_block_header = data_man
-            .block_headers
-            .read()
-            .get(&genesis_block_hash)
+            .block_header_by_hash(&genesis_block_hash)
             .expect("genesis exists")
             .clone();
         let (consensus_sender, consensus_receiver) = mpsc::channel();
@@ -714,10 +712,8 @@ impl SynchronizationGraph {
 
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
         self.data_man
-            .block_headers
-            .read()
-            .get(hash)
-            .map(|header_ref| (**header_ref).clone())
+            .block_header_by_hash(hash)
+            .map(|header_ref| header_ref.as_ref().clone())
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
@@ -846,7 +842,7 @@ impl SynchronizationGraph {
 
             inner.arena.remove(*index);
             inner.indices.remove(&hash);
-            self.data_man.block_headers.write().remove(&hash);
+            self.data_man.remove_block_header(&hash);
             self.remove_block_from_kv(&hash);
         }
     }
@@ -977,9 +973,7 @@ impl SynchronizationGraph {
         }
 
         self.data_man
-            .block_headers
-            .write()
-            .insert(header_arc.hash(), header_arc);
+            .insert_block_header(header_arc.hash(), header_arc);
         (true, need_to_relay)
     }
 
@@ -1029,7 +1023,8 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
-        self.statistics.set_sync_graph_inserted_block_count(inner.indices.len());
+        self.statistics
+            .set_sync_graph_inserted_block_count(inner.indices.len());
 
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
@@ -1187,8 +1182,8 @@ impl SynchronizationGraph {
         let current_size = self.cache_size().total();
         let mut executed_results = self.data_man.block_receipts.write();
         let mut tx_address = self.data_man.transaction_addresses.write();
-        let mut compact_blocks = self.compact_blocks.write();
         let mut blocks = self.data_man.blocks.write();
+        let mut compact_blocks = self.compact_blocks.write();
         let mut transaction_pubkey_cache =
             self.consensus.txpool.transaction_pubkey_cache.write();
         let mut unexecuted_transaction_addresses = self
