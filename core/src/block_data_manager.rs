@@ -4,7 +4,6 @@
 
 use crate::{
     cache_manager::{CacheId, CacheManager},
-    consensus::ConsensusGraphInner,
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
     ext_db::SystemDB,
     verification::VerificationConfig,
@@ -212,13 +211,13 @@ impl BlockDataManager {
     pub fn block_results_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch: &H256, update_cache: bool,
     ) -> Option<BlockExecutedResult> {
-        // TODO Maybe we can release the lock here and try to get the write lock again later,
-        // so we do not hold the lock while reading from db.
-        let block_receipts = self.block_receipts.upgradable_read();
         let maybe_receipts =
-            block_receipts.get(hash).and_then(|receipt_info| {
-                receipt_info.get_receipts_at_epoch(assumed_epoch)
-            });
+            self.block_receipts
+                .read()
+                .get(hash)
+                .and_then(|receipt_info| {
+                    receipt_info.get_receipts_at_epoch(assumed_epoch)
+                });
         if maybe_receipts.is_some() {
             return maybe_receipts;
         }
@@ -231,7 +230,8 @@ impl BlockDataManager {
             return None;
         }
         if update_cache {
-            RwLockUpgradableReadGuard::upgrade(block_receipts)
+            self.block_receipts
+                .write()
                 .entry(*hash)
                 .or_insert(BlockReceiptsInfo::default())
                 .insert_receipts_at_epoch(assumed_epoch, receipts.clone());
@@ -252,14 +252,6 @@ impl BlockDataManager {
             b
         });
 
-        let mut block_receipts = self.block_receipts.write();
-        let receipt_info = block_receipts
-            .entry(hash)
-            .or_insert(BlockReceiptsInfo::default());
-        receipt_info.insert_receipts_at_epoch(
-            &epoch,
-            BlockExecutedResult { receipts, bloom },
-        );
         if persistent {
             let mut dbops = self.db.key_value().transaction();
             let mut rlp_stream = RlpStream::new_list(3);
@@ -272,6 +264,15 @@ impl BlockDataManager {
                 .write(dbops)
                 .expect("crash for db failure");
         }
+
+        let mut block_receipts = self.block_receipts.write();
+        let receipt_info = block_receipts
+            .entry(hash)
+            .or_insert(BlockReceiptsInfo::default());
+        receipt_info.insert_receipts_at_epoch(
+            &epoch,
+            BlockExecutedResult { receipts, bloom },
+        );
 
         self.cache_man
             .lock()
@@ -318,40 +319,6 @@ impl BlockDataManager {
             .key_value()
             .write(dbops)
             .expect("crash for db failure");
-    }
-
-    /// It requires inner lock to ensure that the tx_address and receipts are
-    /// consistent
-    pub fn get_transaction_receipt(
-        &self, tx_hash: &H256, inner: &ConsensusGraphInner,
-    ) -> Option<Receipt> {
-        trace!("Get receipt {}", tx_hash);
-        let address = self.transaction_address_by_hash(tx_hash, false)?;
-        trace!("Got address {:?}", address);
-        // receipts should never be None if address is not None because
-        let receipts =
-            inner.block_receipts_by_hash(&address.block_hash, false)?;
-        trace!("Get receipts");
-        receipts.get(address.index).map(Clone::clone)
-    }
-
-    /// It requires inner lock to ensure that the tx_address and receipts are
-    /// consistent
-    pub fn get_transaction_receipt_with_address(
-        &self, tx_hash: &H256, inner: &ConsensusGraphInner,
-    ) -> Option<(Receipt, TransactionAddress)> {
-        trace!("Get receipt with tx_hash {}", tx_hash);
-        let address = self.transaction_address_by_hash(tx_hash, false)?;
-        // receipts should never be None if address is not None because
-        let receipts =
-            inner.block_receipts_by_hash(&address.block_hash, false)?;
-        Some((
-            receipts
-                .get(address.index)
-                .expect("Error: can't get receipt by tx_address ")
-                .clone(),
-            address,
-        ))
     }
 
     /// Return `false` if there is no executed results for given `block_hash`

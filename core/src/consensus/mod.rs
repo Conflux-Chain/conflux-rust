@@ -582,8 +582,9 @@ impl ConsensusGraphInner {
             let mut n_other = 0;
             let mut last_cumulative_gas_used = U256::zero();
             {
-                // TODO We acquire the lock at the start to avoid acquiring it for every tx.
-                // But if the server does not need to handle tx related rpc, the lock is not needed.
+                // TODO We acquire the lock at the start to avoid acquiring it
+                // for every tx. But if the server does not need
+                // to handle tx related rpc, the lock is not needed.
                 let mut transaction_addresses =
                     self.data_man.transaction_addresses.write();
                 let mut unexecuted_transaction_addresses =
@@ -1201,6 +1202,24 @@ impl ConsensusGraphInner {
         })
     }
 
+    pub fn get_transaction_receipt_with_address(
+        &self, tx_hash: &H256,
+    ) -> Option<(Receipt, TransactionAddress)> {
+        trace!("Get receipt with tx_hash {}", tx_hash);
+        let address =
+            self.data_man.transaction_address_by_hash(tx_hash, false)?;
+        // receipts should never be None if address is not None because
+        let receipts =
+            self.block_receipts_by_hash(&address.block_hash, false)?;
+        Some((
+            receipts
+                .get(address.index)
+                .expect("Error: can't get receipt by tx_address ")
+                .clone(),
+            address,
+        ))
+    }
+
     pub fn transaction_count(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
@@ -1317,31 +1336,6 @@ impl ConsensusGraph {
 
     pub fn best_epoch_number(&self) -> usize {
         self.inner.read().best_epoch_number()
-    }
-
-    pub fn recover_executed_tx_address(
-        &self, epoch_blocks: &Vec<Arc<Block>>, epoch_hash: &H256,
-    ) {
-        for block in epoch_blocks {
-            let block_hash = block.hash();
-            let result = self
-                .data_man
-                .block_results_by_hash_with_epoch(&block_hash, epoch_hash, true)
-                .expect("receipts of skipped pivot block should exist");
-            for (idx, tx) in block.transactions.iter().enumerate() {
-                if result.receipts.get(idx).unwrap().outcome_status
-                    == TRANSACTION_OUTCOME_SUCCESS
-                {
-                    self.data_man.insert_transaction_address_to_kv(
-                        &tx.hash,
-                        &TransactionAddress {
-                            block_hash,
-                            index: idx,
-                        },
-                    )
-                }
-            }
-        }
     }
 
     pub fn genesis_block(&self) -> Arc<Block> { self.genesis_block.clone() }
@@ -1500,7 +1494,7 @@ impl ConsensusGraph {
     }
 
     pub fn get_epoch_blocks(
-        &self, inner: &mut ConsensusGraphInner, epoch_index: usize,
+        &self, inner: &ConsensusGraphInner, epoch_index: usize,
     ) -> Vec<Arc<Block>> {
         let mut epoch_blocks = Vec::new();
         let reversed_indices =
@@ -1532,13 +1526,13 @@ impl ConsensusGraph {
 
         // Check if the state has been computed
         if inner.storage_manager.state_exists(epoch_hash)
-            && self.epoch_executed(epoch_index, inner)
+            && self.epoch_executed_and_recovered(
+                epoch_index,
+                inner,
+                on_local_pivot,
+            )
         {
             debug!("Skip execution in prefix {:?}", epoch_hash);
-            if on_local_pivot {
-                let epoch_blocks = self.get_epoch_blocks(inner, epoch_index);
-                self.recover_executed_tx_address(&epoch_blocks, &epoch_hash);
-            }
             return;
         }
 
@@ -2396,35 +2390,60 @@ impl ConsensusGraph {
     /// Check if all executed results of an epoch exist
     ///
     /// This function will require lock of block_receipts
-    pub fn epoch_executed(
+    pub fn epoch_executed_and_recovered(
         &self, epoch_index: usize, inner: &ConsensusGraphInner,
-    ) -> bool {
+        on_local_pivot: bool,
+    ) -> bool
+    {
         // `block_receipts_root` is not computed when recovering from db with
         // fast_recover == false And we should force it to recompute
         // without checking receipts when fast_recover == false
         if !inner.block_receipts_root.contains_key(&epoch_index) {
             return false;
         }
+        let mut epoch_receipts = Vec::new();
         if let Some(reversed_indices) =
             inner.indices_in_epochs.get(&epoch_index)
         {
             for i in reversed_indices {
-                if self
-                    .data_man
-                    .block_results_by_hash_with_epoch(
-                        &inner.arena[*i].hash,
-                        &inner.arena[epoch_index].hash,
-                        true,
-                    )
-                    .is_none()
-                {
+                if let Some(r) = self.data_man.block_results_by_hash_with_epoch(
+                    &inner.arena[*i].hash,
+                    &inner.arena[epoch_index].hash,
+                    true,
+                ) {
+                    epoch_receipts.push(r.receipts);
+                } else {
                     return false;
                 }
             }
-            true
         } else {
-            false
+            return false;
         }
+
+        // Recover tx address if we will skip pivot chain execution
+        if on_local_pivot {
+            let epoch_blocks = self.get_epoch_blocks(inner, epoch_index);
+            for (block_idx, block) in epoch_blocks.iter().enumerate() {
+                let block_hash = block.hash();
+                for (tx_idx, tx) in block.transactions.iter().enumerate() {
+                    if epoch_receipts[block_idx]
+                        .get(tx_idx)
+                        .unwrap()
+                        .outcome_status
+                        == TRANSACTION_OUTCOME_SUCCESS
+                    {
+                        self.data_man.insert_transaction_address_to_kv(
+                            &tx.hash,
+                            &TransactionAddress {
+                                block_hash,
+                                index: tx_idx,
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        true
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -2451,9 +2470,8 @@ impl ConsensusGraph {
         // We need to hold the inner lock to ensure that tx_address and receipts
         // are consistent
         let inner = self.inner.read();
-        if let Some((receipt, address)) = self
-            .data_man
-            .get_transaction_receipt_with_address(hash, &*inner)
+        if let Some((receipt, address)) =
+            inner.get_transaction_receipt_with_address(hash)
         {
             let block =
                 self.data_man.block_by_hash(&address.block_hash, false)?;
