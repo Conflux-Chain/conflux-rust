@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager},
-    db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_MISC, COL_TX_ADDRESS},
+    db::COL_MISC,
     executive::{ExecutionError, Executive},
     ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
@@ -16,12 +17,10 @@ use crate::{
     storage::{state::StateTrait, StorageManager, StorageManagerTrait},
     sync::SynchronizationGraphInner,
     transaction_pool::SharedTransactionPool,
-    verification::VerificationConfig,
     vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, Bloom, H160, H256, U256, U512};
-use heapsize::HeapSizeOf;
 use link_cut_tree::{LinkCutTree, SignedBigNum};
 use monitor::Monitor;
 use parking_lot::{Mutex, RwLock};
@@ -32,11 +31,11 @@ use primitives::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
     },
     transaction::Action,
-    Block, BlockHeader, BlockHeaderBuilder, EpochNumber, SignedTransaction,
+    Block, BlockHeaderBuilder, EpochNumber, SignedTransaction,
     TransactionAddress,
 };
 use rayon::prelude::*;
-use rlp::{Rlp, RlpStream};
+use rlp::RlpStream;
 use slab::Slab;
 use std::{
     cell::RefCell,
@@ -67,8 +66,6 @@ const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
 const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
-
-const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
 #[derive(Debug)]
 pub struct ConsensusGraphStatistics {
@@ -120,10 +117,6 @@ pub struct ConsensusGraphInner {
     pub indices: HashMap<H256, usize>,
     pub pivot_chain: Vec<usize>,
     pub block_receipts_root: HashMap<usize, H256>,
-    pub block_receipts: HashMap<usize, BlockReceiptsInfo>,
-    // FIXME add log_blooms to BlockReceiptsInfo
-    pub block_log_blooms: HashMap<usize, Bloom>,
-    pub transaction_addresses: HashMap<H256, TransactionAddress>,
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
     genesis_block_state_root: H256,
@@ -133,16 +126,15 @@ pub struct ConsensusGraphInner {
     weight_tree: LinkCutTree,
     pow_config: ProofOfWorkConfig,
     pub current_difficulty: U256,
-    pub db: Arc<SystemDB>,
-    pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    data_man: Arc<BlockDataManager>,
     pub storage_manager: Arc<StorageManager>,
 }
 
 impl ConsensusGraphInner {
     pub fn with_genesis_block(
         genesis_block: &Block, storage_manager: Arc<StorageManager>,
-        vm: VmFactory, pow_config: ProofOfWorkConfig, db: Arc<SystemDB>,
-        cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        vm: VmFactory, pow_config: ProofOfWorkConfig,
+        data_man: Arc<BlockDataManager>,
     ) -> Self
     {
         let mut inner = ConsensusGraphInner {
@@ -150,9 +142,6 @@ impl ConsensusGraphInner {
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
             block_receipts_root: Default::default(),
-            block_receipts: Default::default(),
-            block_log_blooms: Default::default(),
-            transaction_addresses: Default::default(),
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
             genesis_block_state_root: genesis_block
@@ -168,8 +157,7 @@ impl ConsensusGraphInner {
             weight_tree: LinkCutTree::new(),
             pow_config,
             current_difficulty: pow_config.initial_difficulty.into(),
-            db,
-            cache_man,
+            data_man,
             storage_manager,
         };
 
@@ -347,41 +335,6 @@ impl ConsensusGraphInner {
         );
 
         (index, self.indices.len())
-    }
-
-    pub fn epoch_executed(&mut self, epoch_index: usize) -> bool {
-        // `block_receipts_root` is not computed when recovering from db with
-        // fast_recover == false And we should force it to recompute
-        // without checking receipts when fast_recover == false
-        if !self.block_receipts_root.contains_key(&epoch_index) {
-            return false;
-        }
-        if let Some(reversed_indices) = self.indices_in_epochs.get(&epoch_index)
-        {
-            // Clone to avoid holding immutable reference of self
-            for i in reversed_indices.clone() {
-                if let Some(fees) = self.block_receipts.get(&i) {
-                    if fees.get_receipts_at_epoch(epoch_index).is_none() {
-                        return false;
-                    }
-                } else {
-                    // Check receipts from disk
-                    if self
-                        .block_receipts_by_hash_with_epoch(
-                            &self.arena[i].hash.clone(),
-                            &self.arena[epoch_index].hash.clone(),
-                            true,
-                        )
-                        .is_none()
-                    {
-                        return false;
-                    }
-                }
-            }
-            true
-        } else {
-            false
-        }
     }
 
     fn check_correct_parent(
@@ -601,7 +554,7 @@ impl ConsensusGraphInner {
             HashMap<H256, HashSet<TransactionAddress>>,
         >,
         on_local_pivot: bool, to_pending: &mut Vec<Arc<SignedTransaction>>,
-    )
+    ) -> Vec<Arc<Vec<Receipt>>>
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
@@ -629,6 +582,11 @@ impl ConsensusGraphInner {
             let mut n_other = 0;
             let mut last_cumulative_gas_used = U256::zero();
             {
+                // TODO We acquire the lock at the start to avoid acquiring it
+                // for every tx. But if the server does not need
+                // to handle tx related rpc, the lock is not needed.
+                let mut transaction_addresses =
+                    self.data_man.transaction_addresses.write();
                 let mut unexecuted_transaction_addresses =
                     unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
@@ -694,13 +652,12 @@ impl ConsensusGraphInner {
                             index: idx,
                         };
                         if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
-                            self.insert_transaction_address_to_kv(
+                            self.data_man.insert_transaction_address_to_kv(
                                 &hash, &tx_addr,
                             );
-                            if self.transaction_addresses.contains_key(&hash) {
-                                self.transaction_addresses
-                                    .insert(hash, tx_addr);
-                                self.cache_man.lock().note_used(
+                            if transaction_addresses.contains_key(&hash) {
+                                transaction_addresses.insert(hash, tx_addr);
+                                self.data_man.cache_man.lock().note_used(
                                     CacheId::TransactionAddress(hash),
                                 );
                             }
@@ -727,7 +684,7 @@ impl ConsensusGraphInner {
             }
 
             let block_receipts = Arc::new(receipts);
-            self.insert_block_receipts_to_kv(
+            self.data_man.insert_block_results_to_kv(
                 block.hash(),
                 pivot_block.hash(),
                 block_receipts.clone(),
@@ -744,15 +701,15 @@ impl ConsensusGraphInner {
             BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
         );
         debug!("Finish processing tx for epoch");
+        epoch_receipts
     }
 
     // TODO remove stored fees in forks after processing rewards, and recompute
     // if it's needed in the future
-    fn process_rewards_and_fees<F>(
+    fn process_rewards_and_fees(
         &mut self, state: &mut State, pivot_index: usize,
-        pivot_block_upper: usize, on_local_pivot: bool, get_block: F,
-    ) where
-        F: Fn(&H256) -> Option<Arc<Block>>,
+        pivot_block_upper: usize, on_local_pivot: bool,
+    )
     {
         /// (Fee, PackingBlockIndexSet)
         struct TxExecutionInfo(U256, HashSet<usize>);
@@ -771,30 +728,32 @@ impl ConsensusGraphInner {
         // tx
         let indices_in_epoch =
             self.indices_in_epochs.get(&pivot_index).unwrap().clone();
-        for index in &indices_in_epoch {
+        let mut epoch_receipts = None;
+        for (enum_idx, index) in indices_in_epoch.iter().enumerate() {
             let block_hash = self.arena[*index].hash;
-            let block = get_block(&block_hash).expect("exist");
+            let block = self
+                .data_man
+                .block_by_hash(&block_hash, false)
+                .expect("exist");
             authors.insert(*index, block.block_header.author().clone());
 
-            let receipts = match self.block_receipts_by_hash_with_epoch(
+            let receipts = match self.data_man.block_results_by_hash_with_epoch(
                 &block_hash,
                 &pivot_hash,
                 true,
             ) {
-                Some(receipts) => receipts,
+                Some(receipts) => receipts.receipts,
                 None => {
                     debug_assert!(!on_local_pivot);
-                    // Pivot index is on pivot chain of the block whose state is being computed. If pivot index is on local pivit chain, \
-                    // the receipts is computed before and not removed (in
-                    // memory or in db); if it's used for verifying a long fork,
-                    // it's computed before along the verification.");
-                    self.recompute_states(pivot_index, &get_block);
-                    self.block_receipts_by_hash_with_epoch(
-                        &block_hash,
-                        &pivot_hash,
-                        true,
-                    )
-                    .unwrap()
+                    // We need to return receipts instead of getting it through
+                    // function get_receipts, because it's
+                    // possible that the computed receipts is deleted by garbage
+                    // collection before we try get it
+                    if epoch_receipts.is_none() {
+                        epoch_receipts =
+                            Some(self.recompute_states(pivot_index));
+                    }
+                    epoch_receipts.as_ref().unwrap()[enum_idx].clone()
                 }
             };
 
@@ -835,6 +794,7 @@ impl ConsensusGraphInner {
             if self.arena[*index].data.partial_invalid {
                 continue;
             }
+            let block_hash = self.arena[*index].hash;
 
             let mut reward: U512 =
                 if self.arena[*index].pow_quality >= difficulty {
@@ -842,9 +802,7 @@ impl ConsensusGraphInner {
                 } else {
                     debug!(
                         "Block {} pow_quality {} is less than difficulty {}!",
-                        self.arena[*index].hash,
-                        self.arena[*index].pow_quality,
-                        difficulty
+                        block_hash, self.arena[*index].pow_quality, difficulty
                     );
                     0.into()
                 };
@@ -888,10 +846,8 @@ impl ConsensusGraphInner {
             let author = *authors.get(index).unwrap();
             rewards.push((author, reward));
             if on_local_pivot {
-                self.block_receipts
-                    .get_mut(index)
-                    .expect("exists")
-                    .retain_epoch(pivot_index);
+                self.data_man
+                    .receipts_retain_epoch(&block_hash, &pivot_hash);
             }
         }
         debug!("Give rewards reward={:?}", rewards);
@@ -991,15 +947,19 @@ impl ConsensusGraphInner {
             .map_err(|e| format!("execution error: {:?}", e))
     }
 
-    pub fn recompute_states<F>(&mut self, pivot_index: usize, get_block: &F)
-    where F: Fn(&H256) -> Option<Arc<Block>> {
+    pub fn recompute_states(
+        &mut self, pivot_index: usize,
+    ) -> Vec<Arc<Vec<Receipt>>> {
         let reversed_indices =
             self.indices_in_epochs.get(&pivot_index).unwrap();
 
         let mut epoch_blocks = Vec::new();
         {
             for idx in reversed_indices {
-                let block = get_block(&self.arena[*idx].hash).expect("Exist");
+                let block = self
+                    .data_man
+                    .block_by_hash(&self.arena[*idx].hash, false)
+                    .expect("Exist");
                 epoch_blocks.push(block);
             }
         }
@@ -1028,7 +988,7 @@ impl ConsensusGraphInner {
             &Mutex::new(Default::default()),
             false,
             &mut Vec::new(),
-        );
+        )
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -1188,179 +1148,10 @@ impl ConsensusGraphInner {
         }
     }
 
-    pub fn block_receipts_by_hash_from_db(
-        &self, hash: &H256,
-    ) -> Option<(H256, Vec<Receipt>)> {
-        trace!("Read receipts from db {}", hash);
-        let block_receipts = self.db.key_value().get(COL_BLOCK_RECEIPTS, hash)
-            .expect("Low level database error when fetching block receipts. Some issue with disk?")?;
-        let rlp = Rlp::new(&block_receipts);
-        let epoch: H256 = rlp.val_at(0).expect("encoded");
-        let block_receipts = rlp.list_at(1).expect("encoded");
-        Some((epoch, block_receipts))
-    }
-
-    /// Return None if receipts for corresponding epoch is not computed before
-    /// or has been overwritten by another new pivot chain in db
-    pub fn block_receipts_by_hash_with_epoch(
-        &mut self, hash: &H256, assumed_epoch: &H256, update_cache: bool,
-    ) -> Option<Arc<Vec<Receipt>>> {
-        let index = self.indices.get(hash)?;
-        let assumed_pivot_index = self.indices.get(assumed_epoch)?;
-        // Check cache first
-        let maybe_receipts =
-            self.block_receipts.get(index).and_then(|receipt_info| {
-                receipt_info.get_receipts_at_epoch(*assumed_pivot_index)
-            });
-        if maybe_receipts.is_some() {
-            return maybe_receipts;
-        }
-        let (epoch, block_receipts) =
-            self.block_receipts_by_hash_from_db(hash)?;
-        if epoch != *assumed_epoch {
-            debug!(
-                "epoch from db {} does not match assumed {}",
-                epoch, assumed_epoch
-            );
-            return None;
-        }
-        let block_receipts = Arc::new(block_receipts);
-        if update_cache {
-            self.block_receipts
-                .entry(*index)
-                .or_insert(BlockReceiptsInfo::default())
-                .insert_receipts_at_epoch(
-                    *assumed_pivot_index,
-                    block_receipts.clone(),
-                );
-            self.cache_man
-                .lock()
-                .note_used(CacheId::BlockReceipts(*index));
-        }
-        Some(block_receipts)
-    }
-
-    pub fn block_receipts_by_hash(
-        &mut self, hash: &H256, update_cache: bool,
-    ) -> Option<Arc<Vec<Receipt>>> {
-        self.get_epoch_hash_for_block(hash).and_then(|epoch| {
-            trace!("Block {} is in epoch {}", hash, epoch);
-            self.block_receipts_by_hash_with_epoch(hash, &epoch, update_cache)
-        })
-    }
-
     pub fn receipts_root_by_hash(&self, hash: &H256) -> Option<H256> {
         self.indices.get(hash).and_then(|index| {
             self.block_receipts_root.get(&index).map(Clone::clone)
         })
-    }
-
-    fn transaction_address_by_hash_from_db(
-        &self, hash: &H256,
-    ) -> Option<TransactionAddress> {
-        let tx_index_encoded = self.db.key_value().get(COL_TX_ADDRESS, hash).expect("Low level database error when fetching transaction index. Some issue with disk?")?;
-        let rlp = Rlp::new(&tx_index_encoded);
-        let tx_index: TransactionAddress =
-            rlp.as_val().expect("Wrong tx index rlp format!");
-        Some(tx_index)
-    }
-
-    pub fn transaction_address_by_hash(
-        &mut self, hash: &H256, update_cache: bool,
-    ) -> Option<TransactionAddress> {
-        if let Some(index) = self.transaction_addresses.get(hash) {
-            return Some(index.clone());
-        }
-        self.transaction_address_by_hash_from_db(hash)
-            .map(|address| {
-                if update_cache {
-                    self.transaction_addresses
-                        .insert(hash.clone(), address.clone());
-                    self.cache_man
-                        .lock()
-                        .note_used(CacheId::TransactionAddress(*hash));
-                }
-                address
-            })
-    }
-
-    fn insert_transaction_address_to_kv(
-        &self, hash: &H256, tx_address: &TransactionAddress,
-    ) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_TX_ADDRESS, hash, &rlp::encode(tx_address));
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
-    }
-
-    pub fn get_transaction_receipt(
-        &mut self, tx_hash: &H256,
-    ) -> Option<Receipt> {
-        trace!("Get receipt {}", tx_hash);
-        let address = self.transaction_address_by_hash(tx_hash, false)?;
-        trace!("Got address {:?}", address);
-        // receipts should never be None if address is not None because
-        let receipts =
-            self.block_receipts_by_hash(&address.block_hash, false)?;
-        trace!("Get receipts");
-        receipts.get(address.index).map(Clone::clone)
-    }
-
-    pub fn get_transaction_receipt_with_address(
-        &mut self, tx_hash: &H256,
-    ) -> Option<(Receipt, TransactionAddress)> {
-        trace!("Get receipt with tx_hash {}", tx_hash);
-        let address = self.transaction_address_by_hash(tx_hash, false)?;
-        // receipts should never be None if address is not None because
-        let receipts =
-            self.block_receipts_by_hash(&address.block_hash, false)?;
-        Some((
-            receipts
-                .get(address.index)
-                .expect("Error: can't get receipt by tx_address ")
-                .clone(),
-            address,
-        ))
-    }
-
-    pub fn insert_block_receipts_to_kv(
-        &mut self, hash: H256, epoch: H256, block_receipts: Arc<Vec<Receipt>>,
-        persistent: bool,
-    )
-    {
-        if persistent {
-            let mut dbops = self.db.key_value().transaction();
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append(&epoch);
-            rlp_stream.append_list(&*block_receipts);
-            dbops.put(COL_BLOCK_RECEIPTS, &hash, &rlp_stream.drain());
-            self.db
-                .key_value()
-                .write(dbops)
-                .expect("crash for db failure");
-        }
-
-        let index = *self.indices.get(&hash).expect("in arena");
-        let epoch_index = *self.indices.get(&epoch).expect("in arena");
-        // TODO: make it managed by cache manager
-        self.block_log_blooms.insert(
-            index,
-            block_receipts.iter().fold(Bloom::zero(), |mut b, r| {
-                b.accrue_bloom(&r.log_bloom);
-                b
-            }),
-        );
-
-        let receipt_info = self
-            .block_receipts
-            .entry(index)
-            .or_insert(BlockReceiptsInfo::default());
-        receipt_info.insert_receipts_at_epoch(epoch_index, block_receipts);
-        self.cache_man
-            .lock()
-            .note_used(CacheId::BlockReceipts(index));
     }
 
     pub fn all_blocks_with_topo_order(&self) -> Vec<H256> {
@@ -1400,6 +1191,35 @@ impl ConsensusGraphInner {
         Ok(())
     }
 
+    pub fn block_receipts_by_hash(
+        &self, hash: &H256, update_cache: bool,
+    ) -> Option<Arc<Vec<Receipt>>> {
+        self.get_epoch_hash_for_block(hash).and_then(|epoch| {
+            trace!("Block {} is in epoch {}", hash, epoch);
+            self.data_man
+                .block_results_by_hash_with_epoch(hash, &epoch, update_cache)
+                .map(|r| r.receipts)
+        })
+    }
+
+    pub fn get_transaction_receipt_with_address(
+        &self, tx_hash: &H256,
+    ) -> Option<(Receipt, TransactionAddress)> {
+        trace!("Get receipt with tx_hash {}", tx_hash);
+        let address =
+            self.data_man.transaction_address_by_hash(tx_hash, false)?;
+        // receipts should never be None if address is not None because
+        let receipts =
+            self.block_receipts_by_hash(&address.block_hash, false)?;
+        Some((
+            receipts
+                .get(address.index)
+                .expect("Error: can't get receipt by tx_address ")
+                .clone(),
+            address,
+        ))
+    }
+
     pub fn transaction_count(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
@@ -1435,34 +1255,6 @@ impl ConsensusGraphInner {
         Ok(())
     }
 
-    pub fn recover_executed_tx_address(
-        &mut self, epoch_blocks: &Vec<Arc<Block>>, epoch_hash: &H256,
-    ) {
-        for block in epoch_blocks {
-            let block_hash = block.hash();
-            let receipts = self
-                .block_receipts_by_hash_with_epoch(
-                    &block_hash,
-                    epoch_hash,
-                    true,
-                )
-                .expect("receipts of skipped pivot block should exist");
-            for (idx, tx) in block.transactions.iter().enumerate() {
-                if receipts.get(idx).unwrap().outcome_status
-                    == TRANSACTION_OUTCOME_SUCCESS
-                {
-                    self.insert_transaction_address_to_kv(
-                        &tx.hash,
-                        &TransactionAddress {
-                            block_hash,
-                            index: idx,
-                        },
-                    )
-                }
-            }
-        }
-    }
-
     pub fn persist_terminals(&self) {
         let mut terminals = Vec::with_capacity(self.terminal_hashes.len());
         for h in &self.terminal_hashes {
@@ -1473,23 +1265,17 @@ impl ConsensusGraphInner {
         for hash in terminals {
             rlp_stream.append(hash);
         }
-        let mut dbops = self.db.key_value().transaction();
+        let mut dbops = self.data_man.db.key_value().transaction();
         dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
-        self.db.key_value().write(dbops).expect("db error");
+        self.data_man.db.key_value().write(dbops).expect("db error");
     }
 }
 
 pub struct ConsensusGraph {
     pub inner: RwLock<ConsensusGraphInner>,
-    pub block_headers: Arc<RwLock<HashMap<H256, Arc<BlockHeader>>>>,
-    pub blocks: Arc<RwLock<HashMap<H256, Arc<Block>>>>,
     genesis_block: Arc<Block>,
     pub txpool: SharedTransactionPool,
-    // This db is used to persist information related to
-    // ledger structure, like block- or transaction-related
-    // stuffs.
-    pub db: Arc<SystemDB>,
-    pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    pub data_man: Arc<BlockDataManager>,
     pub invalid_blocks: RwLock<HashSet<H256>>,
     storage_manager: Arc<StorageManager>,
     pub statistics: SharedStatistics,
@@ -1506,32 +1292,29 @@ impl ConsensusGraph {
         pow_config: ProofOfWorkConfig,
     ) -> Self
     {
+        let data_man = Arc::new(BlockDataManager::new(db, cache_man));
         let consensus_graph = ConsensusGraph {
             inner: RwLock::new(ConsensusGraphInner::with_genesis_block(
                 &genesis_block,
                 storage_manager.clone(),
                 vm,
                 pow_config,
-                db.clone(),
-                cache_man.clone(),
+                data_man.clone(),
             )),
-            blocks: Arc::new(RwLock::new(HashMap::new())),
-            block_headers: Arc::new(RwLock::new(HashMap::new())),
             genesis_block: Arc::new(genesis_block),
             txpool,
-            db,
-            cache_man,
+            data_man: data_man.clone(),
             invalid_blocks: RwLock::new(HashSet::new()),
             storage_manager,
             statistics,
         };
 
         let genesis = consensus_graph.genesis_block();
-        consensus_graph
-            .block_headers
-            .write()
-            .insert(genesis.hash(), Arc::new(genesis.block_header.clone()));
-        consensus_graph.insert_block_to_kv(genesis, true);
+        data_man.insert_block_header(
+            genesis.hash(),
+            Arc::new(genesis.block_header.clone()),
+        );
+        data_man.insert_block_to_kv(genesis, true);
 
         consensus_graph
     }
@@ -1553,148 +1336,6 @@ impl ConsensusGraph {
 
     pub fn best_epoch_number(&self) -> usize {
         self.inner.read().best_epoch_number()
-    }
-
-    pub fn block_hashes_by_epoch(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<Vec<H256>, String> {
-        self.inner.read().block_hashes_by_epoch(epoch_number)
-    }
-
-    pub fn transaction_by_hash(
-        &self, hash: &H256,
-    ) -> Option<Arc<SignedTransaction>> {
-        let address = self
-            .inner
-            .write()
-            .transaction_address_by_hash(hash, false)?;
-        let block = self.block_by_hash(&address.block_hash, false)?;
-        assert!(address.index < block.transactions.len());
-        Some(block.transactions[address.index].clone())
-    }
-
-    pub fn block_by_hash_from_db(&self, hash: &H256) -> Option<Block> {
-        debug!("Loading block {} from db", hash);
-        let block = self.db.key_value().get(COL_BLOCKS, hash)
-            .expect("Low level database error when fetching block. Some issue with disk?")?;
-        let rlp = Rlp::new(&block);
-        let mut block = Block::decode_with_tx_public(&rlp)
-            .expect("Wrong block rlp format!");
-        debug!("Finish constructing block {} from db", hash);
-        //let mut block = rlp.as_val::<Block>().expect("Wrong block rlp
-        // format!"); SynchronizationProtocolHandler::recover_public(
-        //    &mut block,
-        //    &mut *self.txpool.transaction_pubkey_cache.write(),
-        //    &mut *self.cache_man.lock(),
-        //    &*self.worker_pool.lock(),
-        //)
-        //.expect("Failed to recover public!");
-        VerificationConfig::compute_header_pow_quality(&mut block.block_header);
-        Some(block)
-    }
-
-    pub fn block_by_hash(
-        &self, hash: &H256, update_cache: bool,
-    ) -> Option<Arc<Block>> {
-        // Check cache first
-        {
-            let read = self.blocks.read();
-            if let Some(v) = read.get(hash) {
-                return Some(v.clone());
-            }
-        }
-
-        let block = self.block_by_hash_from_db(hash)?;
-        let block = Arc::new(block);
-
-        if update_cache {
-            let mut write = self.blocks.write();
-            write.insert(*hash, block.clone());
-            self.cache_man.lock().note_used(CacheId::Block(*hash));
-        }
-        Some(block)
-    }
-
-    pub fn insert_block_to_kv(&self, block: Arc<Block>, persistent: bool) {
-        let hash = block.hash();
-
-        if persistent {
-            let mut dbops = self.db.key_value().transaction();
-            //dbops.put(COL_BLOCKS, &hash, &rlp::encode(block.as_ref()));
-            dbops.put(COL_BLOCKS, &hash, &block.encode_with_tx_public());
-            self.db
-                .key_value()
-                .write(dbops)
-                .expect("crash for db failure");
-        }
-
-        self.blocks.write().insert(hash, block);
-        self.cache_man.lock().note_used(CacheId::Block(hash));
-    }
-
-    /// Store block status to db. Now the status means if the block is partial
-    /// invalid.
-    /// The db key is the block hash plus one extra byte, so we can get better
-    /// data locality if we get both a block and its status from db.
-    /// The status is not a part of the block because the block is inserted
-    /// before we know its status, and we do not want to insert a large chunk
-    /// again. TODO Maybe we can use in-place modification (operator `merge`
-    /// in rocksdb) to keep the status together with the block.
-    pub fn insert_block_status_to_db(
-        &self, block_hash: &H256, partial_invalid: bool,
-    ) {
-        let mut dbops = self.db.key_value().transaction();
-        let mut key = Vec::with_capacity(block_hash.len() + 1);
-        key.extend_from_slice(&block_hash);
-        key.push(BLOCK_STATUS_SUFFIX_BYTE);
-        let value = if partial_invalid { [1] } else { [0] };
-        dbops.put(COL_BLOCKS, &key, &value);
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
-    }
-
-    /// Get block status from db. Now the status means if the block is partial
-    /// invalid
-    pub fn block_status_from_db(&self, block_hash: &H256) -> Option<bool> {
-        let mut key = Vec::with_capacity(block_hash.len() + 1);
-        key.extend_from_slice(&block_hash);
-        key.push(BLOCK_STATUS_SUFFIX_BYTE);
-        self.db
-            .key_value()
-            .get(COL_BLOCKS, &key)
-            .expect("crash for db failure")
-            .map(|encoded| {
-                // TODO May encode more data in the future, and should use an
-                // better structure for encoding and decoding
-                encoded[0] == 1
-            })
-    }
-
-    pub fn remove_block_from_kv(&self, hash: &H256) {
-        self.blocks.write().remove(hash);
-        let mut dbops = self.db.key_value().transaction();
-        dbops.delete(COL_BLOCKS, hash);
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
-    }
-
-    pub fn block_header_by_hash(
-        &self, hash: &H256,
-    ) -> Option<Arc<BlockHeader>> {
-        // TODO If we persist headers, we should try to get it from db
-        self.block_headers
-            .read()
-            .get(hash)
-            .map(|header_ref| header_ref.clone())
-    }
-
-    pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
-        let result = self.block_by_hash(hash, false)?;
-        Some(result.block_header.height())
     }
 
     pub fn genesis_block(&self) -> Arc<Block> { self.genesis_block.clone() }
@@ -1743,7 +1384,7 @@ impl ConsensusGraph {
             last_epoch_number -= 1;
 
             for hash in hashes {
-                let block = self.block_by_hash(&hash, false).unwrap();
+                let block = self.data_man.block_by_hash(&hash, false).unwrap();
                 for tx in block.transactions.iter() {
                     if tx_hashes.insert(tx.hash()) {
                         prices.push(tx.gas_price().clone());
@@ -1803,6 +1444,7 @@ impl ConsensusGraph {
                         .unwrap();
                     for hash in hashes {
                         let block = self
+                            .data_man
                             .block_by_hash(&hash, false)
                             .expect("Error: Cannot get block by hash.");
                         for tx in block.transactions.iter() {
@@ -1852,7 +1494,7 @@ impl ConsensusGraph {
     }
 
     pub fn get_epoch_blocks(
-        &self, inner: &mut ConsensusGraphInner, epoch_index: usize,
+        &self, inner: &ConsensusGraphInner, epoch_index: usize,
     ) -> Vec<Arc<Block>> {
         let mut epoch_blocks = Vec::new();
         let reversed_indices =
@@ -1860,6 +1502,7 @@ impl ConsensusGraph {
         {
             for idx in reversed_indices {
                 let block = self
+                    .data_man
                     .block_by_hash(&inner.arena[*idx].hash, false)
                     .expect("Exist");
                 epoch_blocks.push(block);
@@ -1883,13 +1526,13 @@ impl ConsensusGraph {
 
         // Check if the state has been computed
         if inner.storage_manager.state_exists(epoch_hash)
-            && inner.epoch_executed(epoch_index)
+            && self.epoch_executed_and_recovered(
+                epoch_index,
+                inner,
+                on_local_pivot,
+            )
         {
             debug!("Skip execution in prefix {:?}", epoch_hash);
-            if on_local_pivot {
-                let epoch_blocks = self.get_epoch_blocks(inner, epoch_index);
-                inner.recover_executed_tx_address(&epoch_blocks, &epoch_hash);
-            }
             return;
         }
 
@@ -1929,7 +1572,6 @@ impl ConsensusGraph {
                 reward_pivot_index,
                 reward_pivot_upper_index,
                 on_local_pivot,
-                |h| self.block_by_hash(h, false),
             );
         }
 
@@ -2353,9 +1995,8 @@ impl ConsensusGraph {
                     .clone();
                 inner.block_receipts_root.insert(
                     new_pivot_chain[height],
-                    self.block_headers
-                        .read()
-                        .get(&future_block_hash)
+                    self.data_man
+                        .block_header_by_hash(&future_block_hash)
                         .unwrap()
                         .deferred_receipts_root()
                         .clone(),
@@ -2386,12 +2027,12 @@ impl ConsensusGraph {
 
             let mut receipts_correct = true;
             for i in epoch_indexes {
-                if let Some(receipt) = inner.block_receipts_by_hash_with_epoch(
-                    &inner.arena[i].hash.clone(),
+                if let Some(r) = self.data_man.block_results_by_hash_with_epoch(
+                    &inner.arena[i].hash,
                     &pivot_hash,
                     true,
                 ) {
-                    epoch_receipts.push(receipt);
+                    epoch_receipts.push(r.receipts);
                 } else {
                     // Constructed pivot chain does not match receipts in db, so
                     // we have to recompute the receipts of this epoch
@@ -2424,7 +2065,7 @@ impl ConsensusGraph {
     pub fn on_new_block_construction_only(
         &self, hash: &H256, sync_inner: &SynchronizationGraphInner,
     ) {
-        let block = self.block_by_hash(hash, false).unwrap();
+        let block = self.data_man.block_by_hash(hash, false).unwrap();
 
         let inner = &mut *self.inner.write();
         let difficulty_in_my_epoch =
@@ -2438,33 +2079,34 @@ impl ConsensusGraph {
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
         inner.compute_anticone(me);
-        let fully_valid =
-            if let Some(partial_invalid) = self.block_status_from_db(hash) {
-                !partial_invalid
-            } else {
-                // FIXME If the status of a block close to terminals is missing
-                // (likely to happen) and we try to check its validity with the
-                // commented code, we will recompute the whole DAG from genesis
-                // because the pivot chain is empty now, which is not what we
-                // want for fast recovery. A better solution is
-                // to assume it's partial invalid, construct the pivot chain and
-                // other data like block_receipts_root first, and then check its
-                // full validity. The pivot chain might need to be updated
-                // depending on the validity result.
+        let fully_valid = if let Some(partial_invalid) =
+            self.data_man.block_status_from_db(hash)
+        {
+            !partial_invalid
+        } else {
+            // FIXME If the status of a block close to terminals is missing
+            // (likely to happen) and we try to check its validity with the
+            // commented code, we will recompute the whole DAG from genesis
+            // because the pivot chain is empty now, which is not what we
+            // want for fast recovery. A better solution is
+            // to assume it's partial invalid, construct the pivot chain and
+            // other data like block_receipts_root first, and then check its
+            // full validity. The pivot chain might need to be updated
+            // depending on the validity result.
 
-                // The correct logic here should be as follows, but this
-                // solution is very costly
-                // ```
-                // let valid = self.check_block_full_validity(me, &block, inner, sync_inner);
-                // self.insert_block_status_to_db(hash, !valid);
-                // valid
-                // ```
+            // The correct logic here should be as follows, but this
+            // solution is very costly
+            // ```
+            // let valid = self.check_block_full_validity(me, &block, inner, sync_inner);
+            // self.insert_block_status_to_db(hash, !valid);
+            // valid
+            // ```
 
-                // The assumed value should be false after we fix this issue.
-                // Now we optimistically hope that they are valid.
-                debug!("Assume block {} is valid", hash);
-                true
-            };
+            // The assumed value should be false after we fix this issue.
+            // Now we optimistically hope that they are valid.
+            debug!("Assume block {} is valid", hash);
+            true
+        };
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
             return;
@@ -2481,7 +2123,7 @@ impl ConsensusGraph {
     pub fn on_new_block(
         &self, hash: &H256, sync_inner_lock: &RwLock<SynchronizationGraphInner>,
     ) {
-        let block = self.block_by_hash(hash, true).unwrap();
+        let block = self.data_man.block_by_hash(hash, true).unwrap();
 
         debug!(
             "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
@@ -2501,7 +2143,7 @@ impl ConsensusGraph {
             // and it will not be inserted to tx pool again.
             let mut unexecuted_transaction_addresses =
                 self.txpool.unexecuted_transaction_addresses.lock();
-            let mut cache_man = self.cache_man.lock();
+            let mut cache_man = self.data_man.cache_man.lock();
             for (idx, tx) in block.transactions.iter().enumerate() {
                 self.txpool.remove_pending(tx.as_ref());
                 self.txpool.remove_ready(tx.clone());
@@ -2549,7 +2191,7 @@ impl ConsensusGraph {
             inner,
             &*sync_inner_lock.read(),
         );
-        self.insert_block_status_to_db(hash, !fully_valid);
+        self.data_man.insert_block_status_to_db(hash, !fully_valid);
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
             return;
@@ -2745,6 +2387,65 @@ impl ConsensusGraph {
         Monitor::update_state(state_epoch_number, &state_hash);
     }
 
+    /// Check if all executed results of an epoch exist
+    ///
+    /// This function will require lock of block_receipts
+    pub fn epoch_executed_and_recovered(
+        &self, epoch_index: usize, inner: &ConsensusGraphInner,
+        on_local_pivot: bool,
+    ) -> bool
+    {
+        // `block_receipts_root` is not computed when recovering from db with
+        // fast_recover == false And we should force it to recompute
+        // without checking receipts when fast_recover == false
+        if !inner.block_receipts_root.contains_key(&epoch_index) {
+            return false;
+        }
+        let mut epoch_receipts = Vec::new();
+        if let Some(reversed_indices) =
+            inner.indices_in_epochs.get(&epoch_index)
+        {
+            for i in reversed_indices {
+                if let Some(r) = self.data_man.block_results_by_hash_with_epoch(
+                    &inner.arena[*i].hash,
+                    &inner.arena[epoch_index].hash,
+                    true,
+                ) {
+                    epoch_receipts.push(r.receipts);
+                } else {
+                    return false;
+                }
+            }
+        } else {
+            return false;
+        }
+
+        // Recover tx address if we will skip pivot chain execution
+        if on_local_pivot {
+            let epoch_blocks = self.get_epoch_blocks(inner, epoch_index);
+            for (block_idx, block) in epoch_blocks.iter().enumerate() {
+                let block_hash = block.hash();
+                for (tx_idx, tx) in block.transactions.iter().enumerate() {
+                    if epoch_receipts[block_idx]
+                        .get(tx_idx)
+                        .unwrap()
+                        .outcome_status
+                        == TRANSACTION_OUTCOME_SUCCESS
+                    {
+                        self.data_man.insert_transaction_address_to_kv(
+                            &tx.hash,
+                            &TransactionAddress {
+                                block_hash,
+                                index: tx_idx,
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        true
+    }
+
     pub fn best_block_hash(&self) -> H256 {
         self.inner.read().best_block_hash()
     }
@@ -2763,40 +2464,23 @@ impl ConsensusGraph {
         self.inner.read().get_hash_from_epoch_number(epoch_number)
     }
 
-    pub fn get_transaction_receipt(&self, hash: &H256) -> Option<Receipt> {
-        self.inner.write().get_transaction_receipt(hash)
-    }
-
     pub fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
-        let mut inner = self.inner.write();
+        // We need to hold the inner lock to ensure that tx_address and receipts
+        // are consistent
+        let inner = self.inner.read();
         if let Some((receipt, address)) =
             inner.get_transaction_receipt_with_address(hash)
         {
-            let block = self.block_by_hash(&address.block_hash, false)?;
+            let block =
+                self.data_man.block_by_hash(&address.block_hash, false)?;
             assert!(address.index < block.transactions.len());
             let transaction = (*block.transactions[address.index]).clone();
             Some((transaction, receipt, address))
         } else {
             None
         }
-    }
-
-    pub fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
-        self.inner.read().get_epoch_hash_for_block(hash)
-    }
-
-    pub fn block_receipts_by_hash(
-        &self, hash: &H256,
-    ) -> Option<Arc<Vec<Receipt>>> {
-        self.inner.write().block_receipts_by_hash(hash, false)
-    }
-
-    pub fn transaction_address_by_hash(
-        &self, hash: &H256,
-    ) -> Option<TransactionAddress> {
-        self.inner.write().transaction_address_by_hash(hash, false)
     }
 
     pub fn transaction_count(
@@ -2856,16 +2540,23 @@ impl ConsensusGraph {
 
             let mut blocks = Vec::new();
             for epoch_idx in from_epoch..to_epoch {
+                let epoch_hash = inner.arena[epoch_idx].hash;
                 for index in inner
                     .indices_in_epochs
                     .get(&inner.pivot_chain[epoch_idx])
                     .unwrap()
                 {
                     let hash = inner.arena[*index].hash;
-                    if let Some(block_log_bloom) =
-                        inner.block_log_blooms.get(index)
+                    if let Some(block_log_bloom) = self
+                        .data_man
+                        .block_results_by_hash_with_epoch(
+                            &hash,
+                            &epoch_hash,
+                            false,
+                        )
+                        .map(|r| r.bloom)
                     {
-                        if !bloom_match(block_log_bloom) {
+                        if !bloom_match(&block_log_bloom) {
                             continue;
                         }
                     }
@@ -2902,8 +2593,10 @@ impl ConsensusGraph {
             .chunks(128)
             .flat_map(move |blocks_chunk| {
                 blocks_chunk.into_par_iter()
-                    .filter_map(|hash| self.block_receipts_by_hash(&hash).map(|r| (hash, (*r).clone())))
-                    .filter_map(|(hash, receipts)| self.block_by_hash(&hash, false).map(|b| (hash, receipts, b.transaction_hashes())))
+                    .filter_map(|hash|
+                        self.inner.read().block_receipts_by_hash(&hash, false).map(|r| (hash, (*r).clone()))
+                    )
+                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false).map(|b| (hash, receipts, b.transaction_hashes())))
                     .flat_map(|(hash, mut receipts, mut hashes)| {
                         if receipts.len() != hashes.len() {
                             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", hash, receipts.len(), hashes.len());
@@ -2946,50 +2639,5 @@ impl ConsensusGraph {
             .collect::<Vec<LocalizedLogEntry>>();
         logs.reverse();
         logs
-    }
-}
-
-type BlockReceipts = Arc<Vec<Receipt>>;
-type EpochIndex = usize;
-
-#[derive(Default, Debug)]
-pub struct BlockReceiptsInfo {
-    info_with_epoch: Vec<(EpochIndex, BlockReceipts)>,
-}
-
-impl HeapSizeOf for BlockReceiptsInfo {
-    fn heap_size_of_children(&self) -> usize {
-        self.info_with_epoch.heap_size_of_children()
-    }
-}
-
-impl BlockReceiptsInfo {
-    /// `epoch` is the index of the epoch id in consensus arena
-    pub fn get_receipts_at_epoch(
-        &self, epoch: EpochIndex,
-    ) -> Option<BlockReceipts> {
-        for (e_id, receipts) in &self.info_with_epoch {
-            if *e_id == epoch {
-                return Some(receipts.clone());
-            }
-        }
-        None
-    }
-
-    /// Insert the tx fee when the block is included in epoch `epoch`
-    pub fn insert_receipts_at_epoch(
-        &mut self, epoch: EpochIndex, receipts: BlockReceipts,
-    ) {
-        // If it's inserted before, the fee must be the same, so we do not add
-        // duplicate entry
-        if self.get_receipts_at_epoch(epoch).is_none() {
-            self.info_with_epoch.push((epoch, receipts));
-        }
-    }
-
-    /// Only keep the tx fee in the given `epoch`
-    /// Called after we process rewards, and other fees will not be used w.h.p.
-    pub fn retain_epoch(&mut self, epoch: EpochIndex) {
-        self.info_with_epoch.retain(|(e_id, _)| *e_id == epoch);
     }
 }

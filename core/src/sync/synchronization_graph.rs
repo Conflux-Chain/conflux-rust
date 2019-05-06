@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager, CacheSize},
     consensus::{SharedConsensusGraph, HEAVY_BLOCK_DIFFICULTY_RATIO},
     db::COL_MISC,
@@ -494,9 +495,8 @@ impl SynchronizationGraphInner {
 pub struct SynchronizationGraph {
     pub inner: Arc<RwLock<SynchronizationGraphInner>>,
     pub consensus: SharedConsensusGraph,
-    pub block_headers: Arc<RwLock<HashMap<H256, Arc<BlockHeader>>>>,
+    pub data_man: Arc<BlockDataManager>,
     pub compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
-    pub blocks: Arc<RwLock<HashMap<H256, Arc<Block>>>>,
     genesis_block_hash: H256,
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
@@ -517,10 +517,9 @@ impl SynchronizationGraph {
     ) -> Self
     {
         let genesis_block_hash = consensus.genesis_block().hash();
-        let genesis_block_header = consensus
-            .block_headers
-            .read()
-            .get(&genesis_block_hash)
+        let data_man = consensus.data_man.clone();
+        let genesis_block_header = data_man
+            .block_header_by_hash(&genesis_block_hash)
             .expect("genesis exists")
             .clone();
         let (consensus_sender, consensus_receiver) = mpsc::channel();
@@ -532,13 +531,12 @@ impl SynchronizationGraph {
         ));
         let mut sync_graph = SynchronizationGraph {
             inner: inner.clone(),
+            data_man: data_man.clone(),
             compact_blocks: RwLock::new(HashMap::new()),
-            blocks: consensus.blocks.clone(),
-            block_headers: consensus.block_headers.clone(),
             genesis_block_hash,
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
-            cache_man: consensus.cache_man.clone(),
+            cache_man: data_man.cache_man.clone(),
             consensus: consensus.clone(),
             statistics: consensus.statistics.clone(),
             consensus_sender: Mutex::new(consensus_sender),
@@ -567,7 +565,7 @@ impl SynchronizationGraph {
 
     fn recover_graph_from_db(&mut self) {
         info!("Start full recovery of the block DAG and state from database");
-        let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
+        let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
                 Some(terminals) => {
@@ -633,7 +631,7 @@ impl SynchronizationGraph {
 
     fn fast_recover_graph_from_db(&mut self) {
         info!("Start fast recovery of the block DAG from database");
-        let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
+        let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
             {
                 Some(terminals) => {
@@ -713,10 +711,9 @@ impl SynchronizationGraph {
     }
 
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
-        self.block_headers
-            .read()
-            .get(hash)
-            .map(|header_ref| (**header_ref).clone())
+        self.data_man
+            .block_header_by_hash(hash)
+            .map(|header_ref| header_ref.as_ref().clone())
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
@@ -725,11 +722,11 @@ impl SynchronizationGraph {
     }
 
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
-        self.consensus.block_by_hash(hash, true)
+        self.data_man.block_by_hash(hash, true)
     }
 
     pub fn block_by_hash_from_db(&self, hash: &H256) -> Option<Block> {
-        self.consensus.block_by_hash_from_db(hash)
+        self.data_man.block_by_hash_from_db(hash)
     }
 
     pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {
@@ -845,7 +842,7 @@ impl SynchronizationGraph {
 
             inner.arena.remove(*index);
             inner.indices.remove(&hash);
-            self.block_headers.write().remove(&hash);
+            self.data_man.remove_block_header(&hash);
             self.remove_block_from_kv(&hash);
         }
     }
@@ -975,9 +972,8 @@ impl SynchronizationGraph {
             return (false, need_to_relay);
         }
 
-        self.block_headers
-            .write()
-            .insert(header_arc.hash(), header_arc);
+        self.data_man
+            .insert_block_header(header_arc.hash(), header_arc);
         (true, need_to_relay)
     }
 
@@ -991,11 +987,11 @@ impl SynchronizationGraph {
     }
 
     pub fn insert_block_to_kv(&self, block: Arc<Block>, persistent: bool) {
-        self.consensus.insert_block_to_kv(block, persistent)
+        self.data_man.insert_block_to_kv(block, persistent)
     }
 
     fn remove_block_from_kv(&self, hash: &H256) {
-        self.consensus.remove_block_from_kv(hash)
+        self.data_man.remove_block_from_kv(hash)
     }
 
     pub fn insert_block(
@@ -1027,7 +1023,8 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
-        self.statistics.set_sync_graph_inserted_block_count(inner.indices.len());
+        self.statistics
+            .set_sync_graph_inserted_block_count(inner.indices.len());
 
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
@@ -1115,7 +1112,7 @@ impl SynchronizationGraph {
 
         // Post-processing invalid blocks.
         self.process_invalid_blocks(inner.deref_mut(), &invalid_set);
-        if self.consensus.db.key_value().flush().is_err() {
+        if self.data_man.db.key_value().flush().is_err() {
             warn!("db error when flushing block data");
             insert_success = false;
         }
@@ -1149,13 +1146,14 @@ impl SynchronizationGraph {
 
     /// Get current cache size.
     pub fn cache_size(&self) -> CacheSize {
-        let consensus_inner = self.consensus.inner.write();
         let compact_blocks = self.compact_blocks.read().heap_size_of_children();
-        let blocks = self.blocks.read().heap_size_of_children();
+        let blocks = self.data_man.blocks.read().heap_size_of_children();
         let block_receipts =
-            consensus_inner.block_receipts.heap_size_of_children();
-        let transaction_addresses = consensus_inner
+            self.data_man.block_receipts.read().heap_size_of_children();
+        let transaction_addresses = self
+            .data_man
             .transaction_addresses
+            .read()
             .heap_size_of_children()
             + self
                 .consensus
@@ -1182,9 +1180,10 @@ impl SynchronizationGraph {
 
     pub fn block_cache_gc(&self) {
         let current_size = self.cache_size().total();
-        let mut consensus_inner = self.consensus.inner.write();
+        let mut blocks = self.data_man.blocks.write();
+        let mut executed_results = self.data_man.block_receipts.write();
+        let mut tx_address = self.data_man.transaction_addresses.write();
         let mut compact_blocks = self.compact_blocks.write();
-        let mut blocks = self.blocks.write();
         let mut transaction_pubkey_cache =
             self.consensus.txpool.transaction_pubkey_cache.write();
         let mut unexecuted_transaction_addresses = self
@@ -1198,8 +1197,8 @@ impl SynchronizationGraph {
             current_size,
             blocks.len(),
             compact_blocks.len(),
-            consensus_inner.block_receipts.len(),
-            consensus_inner.transaction_addresses.len(),
+            executed_results.len(),
+            tx_address.len(),
             transaction_pubkey_cache.len(),
             unexecuted_transaction_addresses.len()
         );
@@ -1211,10 +1210,10 @@ impl SynchronizationGraph {
                         blocks.remove(h);
                     }
                     CacheId::BlockReceipts(ref h) => {
-                        consensus_inner.block_receipts.remove(h);
+                        executed_results.remove(h);
                     }
                     CacheId::TransactionAddress(ref h) => {
-                        consensus_inner.transaction_addresses.remove(h);
+                        tx_address.remove(h);
                     }
                     CacheId::UnexecutedTransactionAddress(ref h) => {
                         unexecuted_transaction_addresses.remove(h);
@@ -1229,17 +1228,15 @@ impl SynchronizationGraph {
             }
 
             blocks.shrink_to_fit();
-            consensus_inner.block_receipts.shrink_to_fit();
-            consensus_inner.transaction_addresses.shrink_to_fit();
+            executed_results.shrink_to_fit();
+            tx_address.shrink_to_fit();
             transaction_pubkey_cache.shrink_to_fit();
             unexecuted_transaction_addresses.shrink_to_fit();
             compact_blocks.shrink_to_fit();
 
             blocks.heap_size_of_children()
-                + consensus_inner.block_receipts.heap_size_of_children()
-                + consensus_inner
-                    .transaction_addresses
-                    .heap_size_of_children()
+                + executed_results.heap_size_of_children()
+                + tx_address.heap_size_of_children()
                 + transaction_pubkey_cache.heap_size_of_children()
                 + unexecuted_transaction_addresses.heap_size_of_children()
                 + compact_blocks.heap_size_of_children()
