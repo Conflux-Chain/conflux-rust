@@ -1027,7 +1027,8 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
-        self.statistics.set_sync_graph_inserted_block_count(inner.indices.len());
+        self.statistics
+            .set_sync_graph_inserted_block_count(inner.indices.len());
 
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
