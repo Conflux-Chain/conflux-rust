@@ -1180,9 +1180,9 @@ impl SynchronizationGraph {
 
     pub fn block_cache_gc(&self) {
         let current_size = self.cache_size().total();
+        let mut blocks = self.data_man.blocks.write();
         let mut executed_results = self.data_man.block_receipts.write();
         let mut tx_address = self.data_man.transaction_addresses.write();
-        let mut blocks = self.data_man.blocks.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut transaction_pubkey_cache =
             self.consensus.txpool.transaction_pubkey_cache.write();
