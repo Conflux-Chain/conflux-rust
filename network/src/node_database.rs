@@ -253,13 +253,13 @@ pub enum InsertResult {
 }
 
 /// IP address limitation for P2P nodes.
-struct NodeIpLimit {
+pub struct NodeIpLimit {
     nodes_per_ip: usize, // 0 presents unlimited
     ip_to_nodes: HashMap<IpAddr, usize>,
 }
 
 impl NodeIpLimit {
-    fn new(nodes_per_ip: usize) -> Self {
+    pub fn new(nodes_per_ip: usize) -> Self {
         debug!(target: "network", "NodeIpLimit::new: nodes_per_ip = {}", nodes_per_ip);
         NodeIpLimit {
             nodes_per_ip,
@@ -293,8 +293,20 @@ impl NodeIpLimit {
 
     fn is_enabled(&self) -> bool { self.nodes_per_ip > 0 }
 
+    /// Check if the specified IP address is allowed.
+    pub fn is_ip_allowed(&self, ip: &IpAddr) -> bool {
+        if !self.is_enabled() {
+            return true;
+        }
+
+        match self.ip_to_nodes.get(ip) {
+            Some(num) => *num < self.nodes_per_ip,
+            None => true,
+        }
+    }
+
     /// Validate IP address when adding a new node.
-    fn on_add(&mut self, ip: IpAddr) -> bool {
+    pub fn on_add(&mut self, ip: IpAddr) -> bool {
         if !self.is_enabled() {
             return true;
         }
@@ -329,7 +341,7 @@ impl NodeIpLimit {
 
     /// Update the number of nodes for the specified IP address when deleting a
     /// node.
-    fn on_delete(&mut self, ip: IpAddr) {
+    pub fn on_delete(&mut self, ip: IpAddr) {
         if !self.is_enabled() {
             return;
         }

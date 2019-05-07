@@ -44,6 +44,7 @@ mod node_database;
 pub mod node_table;
 mod service;
 mod session;
+mod session_manager;
 pub mod throttling;
 
 pub use crate::{

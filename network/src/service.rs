@@ -9,6 +9,7 @@ use crate::{
     node_database::NodeDatabase,
     node_table::*,
     session::{self, Session, SessionData},
+    session_manager::SessionManager,
     Capability, Error, HandlerWorkType, IpFilter, NetworkConfiguration,
     NetworkContext as NetworkContextTrait, NetworkIoMessage,
     NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
@@ -31,8 +32,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-type Slab<T> = ::slab::Slab<T, usize>;
 
 const MAX_SESSIONS: usize = 2048;
 
@@ -278,7 +277,7 @@ struct ProtocolTimer {
 /// RWLocks of the fields have to follow the defined order to avoid race
 #[allow(dead_code)]
 pub struct NetworkServiceInner {
-    sessions: Arc<RwLock<Slab<SharedSession>>>,
+    pub sessions: RwLock<SessionManager>,
     pub metadata: RwLock<HostMetadata>,
     pub config: NetworkConfiguration,
     udp_socket: Mutex<UdpSocket>,
@@ -433,10 +432,11 @@ impl NetworkServiceInner {
             discovery: Mutex::new(discovery),
             udp_socket: Mutex::new(udp_socket),
             tcp_listener: Mutex::new(tcp_listener),
-            sessions: Arc::new(RwLock::new(Slab::new_starting_at(
+            sessions: RwLock::new(SessionManager::new(
                 FIRST_SESSION,
-                LAST_SESSION,
-            ))),
+                MAX_SESSIONS,
+                config.nodes_per_ip,
+            )),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
             timer_counter: RwLock::new(HANDLER_TIMER),
@@ -591,7 +591,7 @@ impl NetworkServiceInner {
     }
 
     fn has_enough_outgoing_peers(&self) -> bool {
-        let (_, egress_count, _) = self.session_count();
+        let (_, egress_count, _) = self.sessions.read().stat();
         return egress_count >= self.config.max_outgoing_peers as usize;
     }
 
@@ -614,7 +614,7 @@ impl NetworkServiceInner {
         let allow_ips = self.config.ip_filter.clone();
 
         let (handshake_count, egress_count, ingress_count) =
-            self.session_count();
+            self.sessions.read().stat();
         let samples;
         {
             let egress_attempt_count = if max_outgoing_peers > egress_count {
@@ -634,7 +634,9 @@ impl NetworkServiceInner {
         let max_handshakes_per_round = max_handshakes / 2;
         let mut started: usize = 0;
         for id in nodes
-            .filter(|id| !self.have_session(id) && *id != self_id)
+            .filter(|id| {
+                !self.sessions.read().contains_node(id) && *id != self_id
+            })
             .take(min(
                 max_handshakes_per_round as usize,
                 max_handshakes as usize - handshake_count,
@@ -660,34 +662,8 @@ impl NetworkServiceInner {
         w.clear();
     }
 
-    // returns (handshakes, egress, ingress)
-    fn session_count(&self) -> (usize, usize, usize) {
-        let mut handshakes = 0;
-        let mut egress = 0;
-        let mut ingress = 0;
-        for s in self.sessions.read().iter() {
-            match s.try_read() {
-                Some(ref s) if s.is_ready() && s.metadata.originated => {
-                    egress += 1
-                }
-                Some(ref s) if s.is_ready() && !s.metadata.originated => {
-                    ingress += 1
-                }
-                _ => handshakes += 1,
-            }
-        }
-        (handshakes, egress, ingress)
-    }
-
-    fn have_session(&self, id: &NodeId) -> bool {
-        self.sessions
-            .read()
-            .iter()
-            .any(|sess| sess.read().metadata.id == Some(*id))
-    }
-
     fn connect_peer(&self, id: &NodeId, io: &IoContext<NetworkIoMessage>) {
-        if self.have_session(id) {
+        if self.sessions.read().contains_node(id) {
             trace!(target: "network", "Abort connect. Node already connected");
             return;
         }
@@ -723,47 +699,30 @@ impl NetworkServiceInner {
 
     pub fn get_peer_info(&self) -> Vec<PeerInfo> {
         let sessions = self.sessions.read();
-        let sessions = &*sessions;
 
         let mut peers = Vec::with_capacity(sessions.count());
-        for i in (0..MAX_SESSIONS).map(|x| x + FIRST_SESSION) {
-            let session = sessions.get(i);
-            if session.is_some() {
-                let sess = session.unwrap().read();
-                peers.push(PeerInfo {
-                    id: i,
-                    nodeid: sess.id().unwrap_or(&NodeId::default()).clone(),
-                    addr: sess.address(),
-                    caps: sess.metadata.peer_capabilities.clone(),
-                })
-            }
+        for session in sessions.iter() {
+            let sess = session.read();
+            peers.push(PeerInfo {
+                id: sess.token(),
+                nodeid: sess.id().unwrap_or(&NodeId::default()).clone(),
+                addr: sess.address(),
+                caps: sess.metadata.peer_capabilities.clone(),
+            })
         }
         peers
     }
 
     pub fn get_peer_node_id(&self, peer: PeerId) -> NodeId {
         let sessions = self.sessions.read();
-        let session = sessions.get(peer);
-        if session.is_some() {
-            let sess = session.unwrap().read();
-            sess.id().unwrap_or(&NodeId::default()).clone()
-        } else {
-            NodeId::default()
-        }
-    }
 
-    #[allow(unused)]
-    pub fn connected_peers(&self) -> Vec<PeerId> {
-        let sessions = self.sessions.read();
-        let sessions = &*sessions;
-
-        let mut peers = Vec::with_capacity(sessions.count());
-        for i in (0..MAX_SESSIONS).map(|x| x + FIRST_SESSION) {
-            if sessions.get(i).is_some() {
-                peers.push(i);
+        match sessions.get(peer) {
+            Some(session) => {
+                let sess = session.read();
+                sess.id().unwrap_or(&NodeId::default()).clone()
             }
+            None => NodeId::default(),
         }
-        peers
     }
 
     fn start(&self, io: &IoContext<NetworkIoMessage>) -> Result<(), Error> {
@@ -783,25 +742,9 @@ impl NetworkServiceInner {
     {
         let mut sessions = self.sessions.write();
 
-        let token = sessions.insert_with_opt(|token| {
-            trace!(target: "network", "{}: Initiating session", token);
-            match Session::new(
-                io,
-                socket,
-                address,
-                id,
-                token,
-                self,
-            ) {
-                Ok(sess) => Some(Arc::new(RwLock::new(sess))),
-                Err(e) => {
-                    debug!(target: "network", "Error creating session: {:?}", e);
-                    None
-                }
-            }
-        });
-        match token {
-            Some(token) => {
+        match sessions.create(socket, address, id, io, self) {
+            Ok(token) => {
+                trace!("session created with token {}", token);
                 if let Some(id) = id {
                     // This is an outgoing connection.
                     // Outgoing connection must pick node from trusted node
@@ -810,8 +753,8 @@ impl NetworkServiceInner {
                 }
                 io.register_stream(token).map(|_| ()).map_err(Into::into)
             }
-            None => {
-                debug!(target: "network", "Max sessions reached");
+            Err(reason) => {
+                debug!("failed to create session: {}", reason);
                 Ok(())
             }
         }
@@ -942,8 +885,9 @@ impl NetworkServiceInner {
                     break;
                 }
             };
+
             if let Err(e) = self.create_connection(socket, address, None, io) {
-                debug!(target: "netweork", "Can't accept connection: {:?}", e);
+                debug!(target: "network", "Can't accept connection: {:?}", e);
             }
         }
     }
@@ -1324,7 +1268,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                                 .note_failure(node_id, true, false);
                         }
                         debug!("Remove session {}", stream);
-                        sessions.remove(stream);
+                        sessions.remove(&*sess);
                     }
                 }
             }

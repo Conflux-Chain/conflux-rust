@@ -5,7 +5,7 @@ matrix:
       - env:
             - CACHE_NAME=unit_tests
         cache:
-            timeout: 300
+            timeout: 600
             cargo: true
         install:
             - export RUSTFLAGS="-D warnings"
@@ -16,7 +16,7 @@ matrix:
       - env:
             - CACHE_NAME=bench
         cache:
-            timeout: 300
+            timeout: 600
             cargo: true
         install:
             - export RUSTFLAGS="-g -D warnings"
@@ -26,7 +26,7 @@ matrix:
       - env:
             - CACHE_NAME=integration_tests
         cache:
-            timeout: 300
+            timeout: 600
             cargo: true
         before_install:
             # python3.6 is requried for integration tests.

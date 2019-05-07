@@ -12,7 +12,7 @@ from test_framework.test_node import TestNode
 from test_framework.util import *
 
 class IpLimitedNode(P2PInterface):
-    disconnect_reason = 0
+    disconnect_reason = None
 
     def on_disconnect(self, disconnect):
         self.close()
@@ -57,19 +57,18 @@ class AutoDiscovery(ConfluxTestFramework):
     def test_ip_limit(self):
         self.log.info("Test node number limitation per IP")
 
-        self.limited_node = self.nodes[self.num_nodes - 1]
-        extra_args = self.discovery_args()
-        extra_args.extend(["--p2p-nodes-per-ip", "1", "--bootnodes", self.bootnode_id])
-        self.start_node(self.num_nodes - 1, extra_args=extra_args)
+        # start node with IP limitation enabled
+        self.ip_limited_node = self.nodes[self.num_nodes - 1]
+        self.start_node(self.num_nodes - 1, extra_args=("--p2p-nodes-per-ip", "1"))
 
-        # ensure the IP limited node connected with the bootnode
-        wait_until(lambda: len(self.limited_node.getpeerinfo()) == 1)
+        # add a dummy peer to ensure IP used in underlying node table.
+        self.ip_limited_node.addnode(self.bootnode.key, "127.0.0.1:33333")
 
-        # create a P2P connection, and should be refused because of IP limited.
+        # create a P2P connection, and should be refused because of IP limited during handshake
         p2p = IpLimitedNode()
-        self.limited_node.add_p2p_connection(p2p)
+        self.ip_limited_node.add_p2p_connection(p2p)
         network_thread_start()
-        wait_until(lambda: p2p.disconnect_reason == 3)
+        wait_until(lambda: p2p.disconnect_reason == 3, timeout=5)
 
 
 if __name__ == "__main__":

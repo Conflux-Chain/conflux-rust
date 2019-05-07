@@ -188,6 +188,21 @@ impl Session {
                 let signature = H520::from_slice(&data[32..(32 + 65)]);
                 let node_id = recover(&signature.into(), &keccak(signed))?;
                 if self.metadata.id.is_none() {
+                    if let Err(reason) = host
+                        .sessions
+                        .write()
+                        .update_ingress_node_id(self.token(), &node_id)
+                    {
+                        warn!(
+                            "failed to update node id of ingress session: {}",
+                            reason
+                        );
+                        return Err(self.disconnect(
+                            io,
+                            DisconnectReason::WrongEndpointInfo,
+                        ));
+                    }
+
                     self.metadata.id = Some(node_id);
                 } else {
                     if Some(node_id) != self.metadata.id {
@@ -305,11 +320,10 @@ impl Session {
             return Err(self.disconnect(io, DisconnectReason::IpLimited));
         } else {
             debug!(target: "network", "Receive valid endpoint {:?}", entry);
-            match host.node_db.write().insert_with_token(entry, self.token()) {
-                InsertResult::IpLimited => {
-                    return Err(self.disconnect(io, DisconnectReason::IpLimited));
-                }
-                _ => {}
+            if host.node_db.write().insert_with_token(entry, self.token())
+                == InsertResult::IpLimited
+            {
+                return Err(self.disconnect(io, DisconnectReason::IpLimited));
             }
         }
 
