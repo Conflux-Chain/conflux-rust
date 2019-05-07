@@ -25,7 +25,6 @@ class P2PTest(ConfluxTestFramework):
 
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
-            print(chosen_peer)
             block_hash = self.nodes[chosen_peer].generate(1, 0)
             self.log.info("%d generate block %s", chosen_peer, block_hash)
             time.sleep(random.random()/12)
