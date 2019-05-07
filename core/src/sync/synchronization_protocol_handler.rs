@@ -1509,7 +1509,7 @@ impl SynchronizationProtocolHandler {
                    );
                     self.requests_queue.lock().push(timed_req);
                 } else {
-                    warn!("Header request is added in pending queue. peer {}, hash {:?}", peer_id, *hash);
+                    debug!("Header request is added in pending queue. peer {}, hash {:?}", peer_id, *hash);
                 }
                 Ok(())
             }
@@ -1598,7 +1598,7 @@ impl SynchronizationProtocolHandler {
                     );
                     self.requests_queue.lock().push(timed_req);
                 } else {
-                    warn!("Blocks request is added in pending queue. peer {}, hashes {:?}", peer_id, hashes);
+                    debug!("Blocks request is added in pending queue. peer {}, hashes {:?}", peer_id, hashes);
                 }
                 Ok(())
             }
@@ -1680,7 +1680,7 @@ impl SynchronizationProtocolHandler {
                     );
                     self.requests_queue.lock().push(timed_req);
                 } else {
-                    warn!("Compact block request is added in pending queue. peer {}, hashes {:?}", peer_id, hashes);
+                    debug!("Compact block request is added in pending queue. peer {}, hashes {:?}", peer_id, hashes);
                 }
                 Ok(())
             }
@@ -1713,7 +1713,7 @@ impl SynchronizationProtocolHandler {
                     );
                     self.requests_queue.lock().push(timed_req);
                 } else {
-                    warn!("request_blocktxn is added in pending queue. peer {}, hash {:?}", peer_id, block_hash);
+                    debug!("request_blocktxn is added in pending queue. peer {}, hash {:?}", peer_id, block_hash);
                 }
                 Ok(())
             }
@@ -2307,7 +2307,7 @@ impl SynchronizationProtocolHandler {
                 }
             }
 
-            if total_recovered_num != recovered_transactions.len() {
+            if total_recovered_num != tx_num {
                 info!(
                     "Failed to recover public for block {:?}",
                     block.block_header.hash()
