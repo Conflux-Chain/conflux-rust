@@ -9,26 +9,35 @@ pub type MsgIdInner = u8;
 #[derive(Debug, PartialEq, Eq)]
 pub struct MsgId(MsgIdInner);
 
-impl MsgId {
-    pub const GET_BLOCKS: MsgId = MsgId(0x00);
-    pub const GET_BLOCKS_RESPONSE: MsgId = MsgId(0x01);
-    pub const GET_BLOCKS_WITH_PUBLIC_RESPONSE: MsgId = MsgId(0x02);
-    pub const GET_BLOCK_BODIES: MsgId = MsgId(0x03);
-    pub const GET_BLOCK_BODIES_RESPONSE: MsgId = MsgId(0x04);
-    pub const GET_BLOCK_HASHES: MsgId = MsgId(0x05);
-    pub const GET_BLOCK_HASHES_RESPONSE: MsgId = MsgId(0x06);
-    pub const GET_BLOCK_HEADERS: MsgId = MsgId(0x07);
-    pub const GET_BLOCK_HEADERS_RESPONSE: MsgId = MsgId(0x08);
-    pub const GET_BLOCK_TXN: MsgId = MsgId(0x09);
-    pub const GET_BLOCK_TXN_RESPONSE: MsgId = MsgId(0x0a);
-    pub const GET_CMPCT_BLOCKS: MsgId = MsgId(0x0b);
-    pub const GET_CMPCT_BLOCKS_RESPONSE: MsgId = MsgId(0x0c);
-    pub const GET_TERMINAL_BLOCK_HASHES: MsgId = MsgId(0x0d);
-    pub const GET_TERMINAL_BLOCK_HASHES_RESPONSE: MsgId = MsgId(0x0e);
-    pub const NEW_BLOCK: MsgId = MsgId(0x0f);
-    pub const NEW_BLOCK_HASHES: MsgId = MsgId(0x10);
-    pub const STATUS: MsgId = MsgId(0x11);
-    pub const TRANSACTIONS: MsgId = MsgId(0x12);
+macro_rules! build_msgid {
+    ($($name:ident = $value:expr)*) => {
+        impl MsgId {
+            $(pub const $name: MsgId = MsgId($value);)*
+        }
+    }
+}
+
+build_msgid! {
+    STATUS = 0x00
+    NEW_BLOCK_HASHES = 0x01
+    TRANSACTIONS = 0x02
+
+    GET_BLOCK_HASHES = 0x03
+    GET_BLOCK_HASHES_RESPONSE = 0x04
+    GET_BLOCK_HEADERS = 0x05
+    GET_BLOCK_HEADERS_RESPONSE = 0x06
+    GET_BLOCK_BODIES = 0x07
+    GET_BLOCK_BODIES_RESPONSE = 0x08
+    NEW_BLOCK = 0x09
+    GET_TERMINAL_BLOCK_HASHES_RESPONSE = 0x0a
+    GET_TERMINAL_BLOCK_HASHES = 0x0b
+    GET_BLOCKS = 0x0c
+    GET_BLOCKS_RESPONSE = 0x0d
+    GET_CMPCT_BLOCKS = 0x0e
+    GET_BLOCKS_WITH_PUBLIC_RESPONSE = 0x0f
+    GET_CMPCT_BLOCKS_RESPONSE = 0x10
+    GET_BLOCK_TXN = 0x11
+    GET_BLOCK_TXN_RESPONSE = 0x12
 }
 
 impl From<u8> for MsgId {
