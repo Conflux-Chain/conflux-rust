@@ -29,7 +29,7 @@ mod transactions;
 pub use crate::{
     blockbodies::GetBlockBodiesResponse,
     blockheaders::GetBlockHeadersResponse,
-    blocks::GetBlocksResponse,
+    blocks::{GetBlocksResponse, GetBlocksWithPublicResponse},
     blocktxn::GetBlockTxnResponse,
     cmpctblocks::GetCompactBlocksResponse,
     getblockbodies::GetBlockBodies,

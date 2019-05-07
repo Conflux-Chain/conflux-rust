@@ -5,7 +5,9 @@
 use crate::{bytes::Bytes, hash::keccak};
 use cfx_types::{Address, H160, H256, U256};
 use heapsize::HeapSizeOf;
-use keylib::{self, public_to_address, recover, Public, Secret, Signature};
+use keylib::{
+    self, public_to_address, recover, verify_public, Public, Secret, Signature,
+};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{error, fmt, mem, ops::Deref};
 use unexpected::OutOfBounds;
@@ -461,6 +463,19 @@ impl SignedTransaction {
     pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
 
     pub fn public(&self) -> &Option<Public> { &self.public }
+
+    pub fn verify_public(&self) -> Result<bool, keylib::Error> {
+        if self.public.is_none() {
+            return Ok(false);
+        }
+
+        let public = self.public.unwrap();
+        Ok(verify_public(
+            &public,
+            &self.signature(),
+            &self.unsigned.hash(),
+        )?)
+    }
 }
 
 impl HeapSizeOf for SignedTransaction {

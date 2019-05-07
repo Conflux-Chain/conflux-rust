@@ -65,6 +65,7 @@ build_config! {
         (headers_request_timeout_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 120_000)
         (max_inflight_request_count, (u64), 32)
+        (request_block_with_public, (bool), false)
         (load_test_chain, (Option<String>), None)
         (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
@@ -244,6 +245,7 @@ impl Configuration {
             max_inflight_request_count: self
                 .raw_conf
                 .max_inflight_request_count,
+            request_block_with_public: self.raw_conf.request_block_with_public,
         }
     }
 

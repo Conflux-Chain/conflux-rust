@@ -13,6 +13,7 @@ class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 16
+        self.rpc_timewait = 100000
 
     def setup_network(self):
         self.setup_nodes()
