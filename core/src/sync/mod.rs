@@ -20,8 +20,7 @@ pub use self::{
         SYNCHRONIZATION_PROTOCOL_VERSION,
     },
     synchronization_service::{
-        SharedSynchronizationService, SynchronizationConfiguration,
-        SynchronizationService,
+        SharedSynchronizationService, SynchronizationService,
     },
     synchronization_state::{SynchronizationPeerState, SynchronizationState},
 };

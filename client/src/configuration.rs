@@ -80,6 +80,9 @@ build_config! {
         (monitor_username, (Option<String>), None)
         (monitor_password, (Option<String>), None)
         (monitor_node, (Option<String>), None)
+        (data_propagate_enabled, (bool), false)
+        (data_propagate_interval_ms, (u64), 1000)
+        (data_propagate_size, (usize), 1000)
     }
     {
         (

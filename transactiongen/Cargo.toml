@@ -23,3 +23,5 @@ log = "0.4"
 db = { path = "../db" }
 kvdb-rocksdb = "0.1.3"
 toml = "0.4"
+io = { path = "../util/io" }
+priority-send-queue = { path = "../util/priority-send-queue" }
