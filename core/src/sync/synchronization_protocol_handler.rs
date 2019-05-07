@@ -14,9 +14,10 @@ use cfx_types::H256;
 use io::TimerToken;
 use message::{
     GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse,
-    GetBlocks, GetBlocksResponse, GetCompactBlocks, GetCompactBlocksResponse,
-    GetTerminalBlockHashes, GetTerminalBlockHashesResponse, Message, MsgId,
-    NewBlock, NewBlockHashes, Status, Transactions,
+    GetBlocks, GetBlocksResponse, GetBlocksWithPublicResponse,
+    GetCompactBlocks, GetCompactBlocksResponse, GetTerminalBlockHashes,
+    GetTerminalBlockHashesResponse, Message, MsgId, NewBlock, NewBlockHashes,
+    Status, Transactions,
 };
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
@@ -112,6 +113,7 @@ pub struct ProtocolConfiguration {
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub max_inflight_request_count: u64,
+    pub request_block_with_public: bool,
 }
 
 #[derive(Debug)]
@@ -256,6 +258,9 @@ impl SynchronizationProtocolHandler {
             MsgId::NEW_BLOCK_HASHES => self.on_new_block_hashes(io, peer, &rlp),
             MsgId::GET_BLOCKS_RESPONSE => {
                 self.on_blocks_response(io, peer, &rlp)
+            }
+            MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
+                self.on_blocks_with_public_response(io, peer, &rlp)
             }
             MsgId::GET_BLOCKS => self.on_get_blocks(io, peer, &rlp),
             MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
@@ -687,20 +692,48 @@ impl SynchronizationProtocolHandler {
         if req.hashes.is_empty() {
             debug!("Received empty getblocks message: peer={:?}", peer);
         } else {
-            let msg: Box<dyn Message> = Box::new(GetBlocksResponse {
-                request_id: req.request_id().into(),
-                blocks: req
-                    .hashes
-                    .iter()
-                    .take(MAX_BLOCKS_TO_SEND as usize)
-                    .filter_map(|hash| {
-                        self.graph
-                            .block_by_hash(hash)
-                            .map(|b| b.as_ref().clone())
-                    })
-                    .collect(),
-            });
-            self.send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
+            if req.with_public {
+                let msg: Box<dyn Message> =
+                    Box::new(GetBlocksWithPublicResponse {
+                        request_id: req.request_id().into(),
+                        blocks: req
+                            .hashes
+                            .iter()
+                            .take(MAX_BLOCKS_TO_SEND as usize)
+                            .filter_map(|hash| {
+                                self.graph
+                                    .block_by_hash(hash)
+                                    .map(|b| b.as_ref().clone())
+                            })
+                            .collect(),
+                    });
+                self.send_message(
+                    io,
+                    peer,
+                    msg.as_ref(),
+                    SendQueuePriority::High,
+                )?;
+            } else {
+                let msg: Box<dyn Message> = Box::new(GetBlocksResponse {
+                    request_id: req.request_id().into(),
+                    blocks: req
+                        .hashes
+                        .iter()
+                        .take(MAX_BLOCKS_TO_SEND as usize)
+                        .filter_map(|hash| {
+                            self.graph
+                                .block_by_hash(hash)
+                                .map(|b| b.as_ref().clone())
+                        })
+                        .collect(),
+                });
+                self.send_message(
+                    io,
+                    peer,
+                    msg.as_ref(),
+                    SendQueuePriority::High,
+                )?;
+            }
         }
         Ok(())
     }
@@ -1009,9 +1042,49 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn on_blocks_inner(&self, io: &NetworkContext) -> Result<(), Error> {
-        let mut task = self.recover_public_queue.lock().pop_front().unwrap();
+    fn on_blocks_with_public_response(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        if !self.syn.read().peers.contains_key(&peer) {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_BLOCKS_WITH_PUBLIC_RESPONSE", peer);
+            return Ok(());
+        }
 
+        let blocks = rlp.as_val::<GetBlocksWithPublicResponse>()?;
+        debug!(
+            "on_blocks_response, get block hashes {:?}",
+            blocks
+                .blocks
+                .iter()
+                .map(|b| b.block_header.hash())
+                .collect::<Vec<H256>>()
+        );
+        let req = self.match_request(io, peer, blocks.request_id())?;
+        let req_hashes_vec = match req {
+            RequestMessage::Blocks(request) => request.hashes,
+            RequestMessage::Compact(request) => request.hashes,
+            _ => {
+                warn!("Get response not matching the request! req={:?}, resp={:?}", req, blocks);
+                return Err(ErrorKind::UnexpectedResponse.into());
+            }
+        };
+        let requested_blocks: HashSet<H256> =
+            req_hashes_vec.into_iter().collect();
+
+        self.dispatch_recover_public_task(
+            io,
+            blocks.blocks,
+            requested_blocks,
+            peer,
+            false,
+        );
+
+        Ok(())
+    }
+
+    fn on_blocks_inner(
+        &self, io: &NetworkContext, mut task: RecoverPublicTask,
+    ) -> Result<(), Error> {
         let mut need_to_relay = Vec::new();
         for mut block in task.blocks {
             let hash = block.hash();
@@ -1109,6 +1182,11 @@ impl SynchronizationProtocolHandler {
         }
 
         Ok(())
+    }
+
+    fn on_blocks_inner_task(&self, io: &NetworkContext) -> Result<(), Error> {
+        let task = self.recover_public_queue.lock().pop_front().unwrap();
+        self.on_blocks_inner(io, task)
     }
 
     pub fn on_mined_block(&self, mut block: Block) -> Vec<H256> {
@@ -1474,7 +1552,13 @@ impl SynchronizationProtocolHandler {
             return;
         }
         if self
-            .request_blocks_unchecked(io, peer_id, &hashes, syn)
+            .request_blocks_unchecked(
+                io,
+                peer_id,
+                &hashes,
+                self.request_block_need_public(syn.catch_up_mode),
+                syn,
+            )
             .is_err()
         {
             let mut block_request_waittime = self.block_request_waittime.lock();
@@ -1492,7 +1576,7 @@ impl SynchronizationProtocolHandler {
 
     fn request_blocks_unchecked(
         &self, io: &NetworkContext, peer_id: PeerId, hashes: &Vec<H256>,
-        syn: &mut SynchronizationState,
+        with_public: bool, syn: &mut SynchronizationState,
     ) -> Result<(), Error>
     {
         match self.send_request(
@@ -1500,6 +1584,7 @@ impl SynchronizationProtocolHandler {
             peer_id,
             Box::new(RequestMessage::Blocks(GetBlocks {
                 request_id: 0.into(),
+                with_public,
                 hashes: hashes.clone(),
             })),
             syn,
@@ -1991,6 +2076,9 @@ impl SynchronizationProtocolHandler {
                                 io,
                                 chosen_peer,
                                 &blocks,
+                                self.request_block_need_public(
+                                    syn.catch_up_mode,
+                                ),
                                 syn,
                             )
                             .is_err()
@@ -2112,20 +2200,39 @@ impl SynchronizationProtocolHandler {
                 }
             }
         }
+
         if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
             for (idx, tx) in uncached_trans {
-                if let Ok(public) = tx.recover_public() {
-                    recovered_transactions[idx] = Arc::new(
-                        SignedTransaction::new(public, tx.transaction.clone()),
-                    );
+                if tx.public.is_none() {
+                    if let Ok(public) = tx.recover_public() {
+                        recovered_transactions[idx] =
+                            Arc::new(SignedTransaction::new(
+                                public,
+                                tx.transaction.clone(),
+                            ));
+                    } else {
+                        info!(
+                            "Unable to recover the public key of transaction {:?}",
+                            tx.hash()
+                        );
+                        return Err(DecoderError::Custom(
+                            "Cannot recover public key",
+                        ));
+                    }
                 } else {
-                    debug!(
-                        "Unable to recover the public key of transaction {:?}",
-                        tx.hash()
-                    );
-                    return Err(DecoderError::Custom(
-                        "Cannot recover public key",
-                    ));
+                    let res = tx.verify_public();
+                    if res.is_ok() && res.unwrap() {
+                        recovered_transactions[idx] =
+                            Arc::new(SignedTransaction::new(
+                                tx.public.unwrap(),
+                                tx.transaction.clone(),
+                            ));
+                    } else {
+                        info!("Failed to verify the public key of transaction {:?}", tx.hash());
+                        return Err(DecoderError::Custom(
+                            "Cannot recover public key",
+                        ));
+                    }
                 }
             }
         } else {
@@ -2161,13 +2268,24 @@ impl SynchronizationProtocolHandler {
                 worker_pool.execute(move || {
                     let mut signed_txes = Vec::new();
                     for (idx, tx) in unsigned_txes {
-                        if let Ok(public) = tx.recover_public() {
-                            signed_txes.push((idx, public));
+                        if tx.public.is_none() {
+                            if let Ok(public) = tx.recover_public() {
+                                signed_txes.push((idx, public));
+                            } else {
+                                info!(
+                                    "Unable to recover the public key of transaction {:?}",
+                                    tx.hash()
+                                );
+                                break;
+                            }
                         } else {
-                            debug!(
-                                "Unable to recover the public key of transaction {:?}",
-                                tx.hash()
-                            );
+                            let res = tx.verify_public();
+                            if res.is_ok() && res.unwrap() {
+                                signed_txes.push((idx, tx.public.clone().unwrap()));
+                            } else {
+                                info!("Failed to verify the public key of transaction {:?}", tx.hash());
+                                break;
+                            }
                         }
                     }
                     sender.send(signed_txes).unwrap();
@@ -2175,7 +2293,9 @@ impl SynchronizationProtocolHandler {
             }
             worker_pool.join();
 
+            let mut total_recovered_num = 0 as usize;
             for tx_publics in receiver.iter().take(n_thread) {
+                total_recovered_num += tx_publics.len();
                 for (idx, public) in tx_publics {
                     let tx = Arc::new(SignedTransaction::new(
                         public,
@@ -2185,6 +2305,14 @@ impl SynchronizationProtocolHandler {
                     tx_cache.insert(tx.hash(), tx.clone());
                     recovered_transactions[idx] = tx;
                 }
+            }
+
+            if total_recovered_num != recovered_transactions.len() {
+                info!(
+                    "Failed to recover public for block {:?}",
+                    block.block_header.hash()
+                );
+                return Err(DecoderError::Custom("Cannot recover public key"));
             }
         }
 
@@ -2240,6 +2368,10 @@ impl SynchronizationProtocolHandler {
 
         io.dispatch_work(SyncHandlerWorkType::RecoverPublic as HandlerWorkType);
     }
+
+    fn request_block_need_public(&self, catch_up_mode: bool) -> bool {
+        catch_up_mode && self.protocol_config.request_block_with_public
+    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -2276,7 +2408,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         &self, io: &NetworkContext, work_type: HandlerWorkType,
     ) {
         if work_type == SyncHandlerWorkType::RecoverPublic as HandlerWorkType {
-            if let Err(e) = self.on_blocks_inner(io) {
+            if let Err(e) = self.on_blocks_inner_task(io) {
                 warn!("Error processing RecoverPublic task: {:?}", e);
             }
         } else {

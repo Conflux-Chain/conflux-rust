@@ -33,25 +33,25 @@ PACKET_PING = 0x02
 PACKET_PONG = 0x03
 PACKET_PROTOCOL = 0x10
 
-GET_BLOCKS_RESPONSE = 0x0d
-GET_BLOCK_BODIES_RESPONSE = 0x08
-GET_BLOCK_HASHES_RESPONSE = 0x04
-GET_BLOCK_HEADERS_RESPONSE = 0x06
-GET_BLOCK_TXN_RESPONSE = 0x12
-GET_BLOCKS = 0x0c
-GET_BLOCK_BODIES = 0x07
-GET_BLOCK_HASHES = 0x03
-GET_BLOCK_HEADERS = 0x05
-GET_BLOCK_TXN = 0x11
-GET_CMPCT_BLOCKS = 0x0e
-GET_CMPCT_BLOCKS_RESPONSE = 0x10
-GET_TERMINAL_BLOCK_HASHES = 0x0b
-NEW_BLOCK = 0x09
-NEW_BLOCK_HASHES = 0x01
-STATUS = 0x00
-GET_TERMINAL_BLOCK_HASHES_RESPONSE = 0x0a
-TRANSACTIONS = 0x02
-
+GET_BLOCKS = 0x00
+GET_BLOCKS_RESPONSE = 0x01
+GET_BLOCKS_WITH_PUBLIC_RESPONSE = 0x02
+GET_BLOCK_BODIES = 0x03
+GET_BLOCK_BODIES_RESPONSE = 0x04
+GET_BLOCK_HASHES = 0x05
+GET_BLOCK_HASHES_RESPONSE = 0x06
+GET_BLOCK_HEADERS = 0x07
+GET_BLOCK_HEADERS_RESPONSE = 0x08
+GET_BLOCK_TXN = 0x09
+GET_BLOCK_TXN_RESPONSE = 0x0a
+GET_CMPCT_BLOCKS = 0x0b
+GET_CMPCT_BLOCKS_RESPONSE = 0x0c
+GET_TERMINAL_BLOCK_HASHES = 0x0d
+GET_TERMINAL_BLOCK_HASHES_RESPONSE = 0x0e
+NEW_BLOCK = 0x0f
+NEW_BLOCK_HASHES = 0x10
+STATUS = 0x11
+TRANSACTIONS = 0x12
 
 class Capability(rlp.Serializable):
     fields = [
@@ -315,12 +315,14 @@ class GetTerminalBlockHashes(rlp.Serializable):
 class GetBlocks(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
+        ("with_public", boolean),
         ("hashes", CountableList(hash32)),
     ]
 
-    def __init__(self, reqid=0, hashes=[]):
+    def __init__(self, reqid=0, with_public=False, hashes=[]):
         super().__init__(
             reqid=reqid,
+            with_public=with_public,
             hashes=hashes
         )
 

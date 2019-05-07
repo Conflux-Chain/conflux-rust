@@ -10,6 +10,7 @@ use std::ops::{Deref, DerefMut};
 #[derive(Debug, PartialEq)]
 pub struct GetBlockBodies {
     request_id: RequestId,
+    pub with_public: bool,
     pub hashes: Vec<H256>,
 }
 
@@ -30,21 +31,23 @@ impl DerefMut for GetBlockBodies {
 impl Encodable for GetBlockBodies {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.request_id)
+            .append(&self.with_public)
             .append_list(&self.hashes);
     }
 }
 
 impl Decodable for GetBlockBodies {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
+        if rlp.item_count()? != 3 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
         Ok(GetBlockBodies {
             request_id: rlp.val_at(0)?,
-            hashes: rlp.list_at(1)?,
+            with_public: rlp.val_at(1)?,
+            hashes: rlp.list_at(2)?,
         })
     }
 }
