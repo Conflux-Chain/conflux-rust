@@ -35,6 +35,7 @@ use crate::rpc::{
 use cfx_types::Address;
 use ctrlc::CtrlC;
 use db::SystemDB;
+use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use primitives::Block;
 use secret_store::SecretStore;
@@ -49,7 +50,7 @@ use std::{
     time::{Duration, Instant},
 };
 use threadpool::ThreadPool;
-use txgen::TransactionGenerator;
+use txgen::{propagate::DataPropagation, TransactionGenerator};
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
@@ -190,14 +191,24 @@ impl Client {
             pow_config.clone(),
         ));
 
-        let sync_config = cfxcore::SynchronizationConfiguration {
-            network: network_config,
-            consensus: consensus.clone(),
-        };
+        let mut network = NetworkService::new(network_config);
+        network
+            .start()
+            .map_err(|e| format!("failed to start network service: {:?}", e))?;
+
+        if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
+            DataPropagation::register(
+                conf.raw_conf.data_propagate_interval_ms,
+                conf.raw_conf.data_propagate_size,
+                &network,
+            )?;
+        }
+
         let verification_config = conf.verification_config();
         let protocol_config = conf.protocol_config();
-        let mut sync = cfxcore::SynchronizationService::new(
-            sync_config,
+        let sync = cfxcore::SynchronizationService::new(
+            network,
+            consensus.clone(),
             protocol_config,
             verification_config,
             pow_config.clone(),
