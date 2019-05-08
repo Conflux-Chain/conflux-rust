@@ -317,11 +317,11 @@ class GetTerminalBlockHashes(rlp.Serializable):
 class GetBlocks(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
-        ("with_public", boolean),
+        ("with_public", big_endian_int),
         ("hashes", CountableList(hash32)),
     ]
 
-    def __init__(self, reqid=0, with_public=False, hashes=[]):
+    def __init__(self, reqid=0, with_public=0, hashes=[]):
         super().__init__(
             reqid=reqid,
             with_public=with_public,

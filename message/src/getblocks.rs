@@ -30,10 +30,15 @@ impl DerefMut for GetBlocks {
 
 impl Encodable for GetBlocks {
     fn rlp_append(&self, stream: &mut RlpStream) {
+        let with_public_n = if self.with_public {
+            1 as u8
+        } else {
+            0 as u8
+        };
         stream
             .begin_list(3)
             .append(&self.request_id)
-            .append(&self.with_public)
+            .append(&with_public_n)
             .append_list(&self.hashes);
     }
 }
@@ -46,7 +51,7 @@ impl Decodable for GetBlocks {
 
         Ok(GetBlocks {
             request_id: rlp.val_at(0)?,
-            with_public: rlp.val_at(1)?,
+            with_public: rlp.val_at::<u8>(1)? == 1,
             hashes: rlp.list_at(2)?,
         })
     }

@@ -514,7 +514,10 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
         # make sure all nodes are reachable
         next = (i + 1) % num_nodes
         peer[i].append(next)
-        
+        lat = random.randint(latency_min, latency_max)
+        latencies[i][next] = lat
+        latencies[next][i] = lat
+
         for _ in range(sample - 1):
             while True:
                 p = random.randint(0, num_nodes - 1)
