@@ -46,7 +46,8 @@ pub struct SyncGraphStatistics {
 impl SyncGraphStatistics {
     pub fn new() -> SyncGraphStatistics {
         SyncGraphStatistics {
-            inserted_block_count: 0,
+            // Already counted genesis block
+            inserted_block_count: 1,
         }
     }
 }
@@ -1023,8 +1024,7 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
-        self.statistics
-            .set_sync_graph_inserted_block_count(inner.indices.len());
+        self.statistics.inc_sync_graph_inserted_block_count();
 
         let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());

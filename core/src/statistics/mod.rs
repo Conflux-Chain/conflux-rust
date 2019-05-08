@@ -30,9 +30,9 @@ impl Statistics {
         }
     }
 
-    pub fn set_sync_graph_inserted_block_count(&self, count: usize) {
+    pub fn inc_sync_graph_inserted_block_count(&self) {
         let mut inner = self.inner.write();
-        inner.sync_graph.inserted_block_count = count;
+        inner.sync_graph.inserted_block_count += 1;
     }
 
     pub fn set_consensus_graph_inserted_block_count(&self, count: usize) {

@@ -981,13 +981,20 @@ impl SynchronizationProtocolHandler {
                 self.request_block_headers(io, Some(peer), past_hash, num);
             }
         }
+
+        let catch_up_mode = self.syn.read().catch_up_mode;
+
         if !hashes.is_empty() {
-            // TODO configure which path to use
-            self.request_compact_block(io, Some(peer), hashes);
-            // self.request_blocks(io, Some(peer), hashes);
+            // FIXME: This is a naive strategy. Need to
+            // make it more sophisticated.
+            if catch_up_mode {
+                self.request_blocks(io, Some(peer), hashes);
+            } else {
+                self.request_compact_block(io, Some(peer), hashes);
+            }
         }
 
-        if !need_to_relay.is_empty() && !self.syn.read().catch_up_mode {
+        if !need_to_relay.is_empty() && !catch_up_mode {
             let new_block_hash_msg: Box<dyn Message> =
                 Box::new(NewBlockHashes {
                     block_hashes: need_to_relay,
@@ -1052,7 +1059,7 @@ impl SynchronizationProtocolHandler {
 
         let blocks = rlp.as_val::<GetBlocksWithPublicResponse>()?;
         debug!(
-            "on_blocks_response, get block hashes {:?}",
+            "on_blocks_with_public_response, get block hashes {:?}",
             blocks
                 .blocks
                 .iter()
