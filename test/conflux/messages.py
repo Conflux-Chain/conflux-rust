@@ -49,8 +49,8 @@ GET_TERMINAL_BLOCK_HASHES_RESPONSE = 0x0a
 GET_TERMINAL_BLOCK_HASHES = 0x0b
 GET_BLOCKS = 0x0c
 GET_BLOCKS_RESPONSE = 0x0d
-GET_CMPCT_BLOCKS = 0x0e
-GET_BLOCKS_WITH_PUBLIC_RESPONSE = 0x0f
+GET_BLOCKS_WITH_PUBLIC_RESPONSE = 0x0e
+GET_CMPCT_BLOCKS = 0x0f
 GET_CMPCT_BLOCKS_RESPONSE = 0x10
 GET_BLOCK_TXN = 0x11
 GET_BLOCK_TXN_RESPONSE = 0x12
@@ -317,11 +317,11 @@ class GetTerminalBlockHashes(rlp.Serializable):
 class GetBlocks(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
-        ("with_public", boolean),
+        ("with_public", big_endian_int),
         ("hashes", CountableList(hash32)),
     ]
 
-    def __init__(self, reqid=0, with_public=False, hashes=[]):
+    def __init__(self, reqid=0, with_public=0, hashes=[]):
         super().__init__(
             reqid=reqid,
             with_public=with_public,

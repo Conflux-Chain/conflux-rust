@@ -303,6 +303,7 @@ class P2PInterface(P2PConnection):
                 self.protocol_message_count[packet_type] += 1
                 msg = None
                 msg_class = get_msg_class(packet_type)
+                logger.debug("%s %s", packet_type, rlp.decode(payload))
                 if msg_class is not None:
                     msg = rlp.decode(payload, msg_class)
                 if packet_type == STATUS:
