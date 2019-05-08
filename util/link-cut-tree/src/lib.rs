@@ -466,11 +466,13 @@ impl MinLinkCutTree {
             if u != NULL {
                 self.tree[u].parent = parent;
                 self.tree[u].delta = self.tree[u].delta + self.tree[v].delta;
+                self.update(u);
             }
             if w != NULL {
                 self.tree[w].delta = self.tree[w].delta
                     + self.tree[v].delta
                     + self.tree[parent].delta;
+                self.update(w);
             }
             self.tree[v].value = self.tree[v].value + self.tree[v].delta;
             self.tree[v].delta = SignedBigNum::zero();
@@ -485,11 +487,13 @@ impl MinLinkCutTree {
             if u != NULL {
                 self.tree[u].parent = parent;
                 self.tree[u].delta = self.tree[u].delta + self.tree[v].delta;
+                self.update(u);
             }
             if w != NULL {
                 self.tree[w].delta = self.tree[w].delta
                     + self.tree[v].delta
                     + self.tree[parent].delta;
+                self.update(w);
             }
             self.tree[v].value = self.tree[v].value + self.tree[v].delta;
             self.tree[v].delta = SignedBigNum::zero();
