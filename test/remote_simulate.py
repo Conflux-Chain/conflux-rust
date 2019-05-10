@@ -22,11 +22,8 @@ class P2PTest(ConfluxTestFramework):
         self.num_nodes = 1
         self.rpc_timewait = 30
         self.conf_parameters = {
-            "log_level": "\"info\"",
+            "log_level": "\"debug\"",
             "fast_recover": "true",
-            "enable_discovery": "false",
-            "start_mining": "false",
-            "test_mode": "true",
             "send_tx_period_ms": "31536000000", # one year to disable txs propagation
         }
 
@@ -91,6 +88,24 @@ class P2PTest(ConfluxTestFramework):
             default=2,
             type=int
         )
+        parser.add_argument(
+            "--data-propagate-enabled",
+            dest="data_propagate_enabled",
+            default=False,
+            type=bool
+        )
+        parser.add_argument(
+            "--data-propagate-interval-ms",
+            dest="data_propagate_interval_ms",
+            default=1000,
+            type=int
+        )
+        parser.add_argument(
+            "--data-propagate-size",
+            dest="data_propagate_size",
+            default=1000,
+            type=int
+        )
 
     def after_options_parsed(self):
         self.num_nodes = self.options.nodes_per_host
@@ -115,6 +130,11 @@ class P2PTest(ConfluxTestFramework):
 
         # txpool
         self.conf_parameters["tx_pool_size"] = str(500000 // target_memory * self.options.storage_memory_mb)
+
+        # data propagation
+        self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
+        self.conf_parameters["data_propagate_interval_ms"] = str(self.options.data_propagate_interval_ms)
+        self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
 
     def stop_nodes(self):
         result = self.__pssh__("killall -9 conflux")
