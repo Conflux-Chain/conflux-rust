@@ -35,7 +35,6 @@ use crate::rpc::{
 use cfx_types::Address;
 use ctrlc::CtrlC;
 use db::SystemDB;
-use monitor::Monitor;
 use parking_lot::{Condvar, Mutex};
 use primitives::Block;
 use secret_store::SecretStore;
@@ -324,15 +323,6 @@ impl Client {
             },
         )?;
 
-        // initialize Monitor
-        Monitor::init(
-            conf.raw_conf.monitor_host,
-            conf.raw_conf.monitor_db,
-            conf.raw_conf.monitor_username,
-            conf.raw_conf.monitor_password,
-            conf.raw_conf.monitor_node,
-        );
-
         Ok(ClientHandle {
             ledger_db: Arc::downgrade(&ledger_db),
             debug_rpc_http_server,
@@ -373,9 +363,6 @@ impl Client {
         BlockGenerator::stop(&blockgen);
         drop(blockgen);
         drop(to_drop);
-
-        // Stop Monitor
-        Monitor::stop();
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
