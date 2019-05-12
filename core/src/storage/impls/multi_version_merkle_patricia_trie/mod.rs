@@ -36,10 +36,7 @@ impl MultiVersionMerklePatriciaTrie {
                 conf.cache_size,
                 conf.idle_size,
                 conf.node_map_size,
-                RecentLFU::<RLFUPosT, DeltaMptDbKey>::new(
-                    conf.cache_size,
-                    (conf.cache_size as f64 * conf.recent_lfu_factor) as u32,
-                ),
+                LRU::<RLFUPosT, DeltaMptDbKey>::new(conf.cache_size),
                 kvdb,
             ),
         }
@@ -96,7 +93,7 @@ pub(self) mod node_ref_map;
 mod slab;
 
 use self::{
-    cache::algorithm::recent_lfu::RecentLFU, merkle_patricia_trie::*,
+    cache::algorithm::lru::LRU, merkle_patricia_trie::*,
     node_memory_manager::*, node_ref_map::DeltaMptDbKey,
 };
 use super::errors::*;
