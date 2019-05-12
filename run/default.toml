@@ -124,4 +124,6 @@ start_mining=true
 # headers_request_timeout_ms=30_000
 # blocks_request_timeout_ms=120_000
 # max_inflight_request_count=32
+# start_as_catch_up_mode=false
+# max_trans_count_received_in_catch_up=60000
 # request_block_with_public=false

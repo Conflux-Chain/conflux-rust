@@ -17,7 +17,7 @@ use message::{
     GetBlocks, GetBlocksResponse, GetBlocksWithPublicResponse,
     GetCompactBlocks, GetCompactBlocksResponse, GetTerminalBlockHashes,
     GetTerminalBlockHashesResponse, Message, MsgId, NewBlock, NewBlockHashes,
-    Status, Transactions,
+    Status, TransactionPropagationControl, Transactions,
 };
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
@@ -53,7 +53,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 
-const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 2;
+const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
 
 pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 
@@ -62,7 +62,7 @@ pub const MAX_BLOCKS_TO_SEND: u64 = 256;
 const MIN_PEERS_PROPAGATION: usize = 4;
 const MAX_PEERS_PROPAGATION: usize = 128;
 const DEFAULT_GET_HEADERS_NUM: u64 = 1;
-const DEFAULT_GET_PARENT_HEADERS_NUM: u64 = 100;
+const DEFAULT_GET_PARENT_HEADERS_NUM: u64 = 30;
 const REQUEST_START_WAITING_TIME_SECONDS: u64 = 1;
 //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
 
@@ -113,7 +113,9 @@ pub struct ProtocolConfiguration {
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub max_inflight_request_count: u64,
+    pub start_as_catch_up_mode: bool,
     pub request_block_with_public: bool,
+    pub max_trans_count_received_in_catch_up: u64,
 }
 
 #[derive(Debug)]
@@ -177,6 +179,7 @@ impl SynchronizationProtocolHandler {
         fast_recover: bool,
     ) -> Self
     {
+        let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
         SynchronizationProtocolHandler {
             protocol_config,
             graph: Arc::new(SynchronizationGraph::new(
@@ -185,7 +188,7 @@ impl SynchronizationProtocolHandler {
                 pow_config,
                 fast_recover,
             )),
-            syn: RwLock::new(SynchronizationState::new()),
+            syn: RwLock::new(SynchronizationState::new(start_as_catch_up_mode)),
             headers_in_flight: Default::default(),
             header_request_waittime: Default::default(),
             blocks_in_flight: Default::default(),
@@ -269,7 +272,7 @@ impl SynchronizationProtocolHandler {
             MsgId::GET_TERMINAL_BLOCK_HASHES => {
                 self.on_get_terminal_block_hashes(io, peer, &rlp)
             }
-            MsgId::TRANSACTIONS => self.on_transactions(peer, &rlp),
+            MsgId::TRANSACTIONS => self.on_transactions(io, peer, &rlp),
             MsgId::GET_CMPCT_BLOCKS => {
                 self.on_get_compact_blocks(io, peer, &rlp)
             }
@@ -279,6 +282,9 @@ impl SynchronizationProtocolHandler {
             MsgId::GET_BLOCK_TXN => self.on_get_blocktxn(io, peer, &rlp),
             MsgId::GET_BLOCK_TXN_RESPONSE => {
                 self.on_get_blocktxn_response(io, peer, &rlp)
+            }
+            MsgId::TRANSACTION_PROPAGATION_CONTROL => {
+                self.on_trans_prop_ctrl(peer, &rlp)
             }
             _ => {
                 warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
@@ -610,7 +616,9 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn on_transactions(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
+    fn on_transactions(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
         if !self.syn.read().peers.contains_key(&peer) {
             warn!("Unexpected message from unrecognized peer: peer={:?} msg=TRANSACTIONS", peer);
             return Ok(());
@@ -624,13 +632,28 @@ impl SynchronizationProtocolHandler {
             peer
         );
 
-        self.syn
-            .write()
-            .peers
-            .get_mut(&peer)
-            .ok_or(ErrorKind::UnknownPeer)?
-            .last_sent_transactions
-            .extend(transactions.iter().map(|tx| tx.hash()));
+        {
+            let mut syn = self.syn.write();
+
+            let peer_info =
+                syn.peers.get_mut(&peer).ok_or(ErrorKind::UnknownPeer)?;
+            if peer_info.notified_mode.is_some()
+                && (peer_info.notified_mode.unwrap() == true)
+            {
+                peer_info.received_transaction_count += transactions.len();
+                if peer_info.received_transaction_count
+                    > self.protocol_config.max_trans_count_received_in_catch_up
+                        as usize
+                {
+                    io.disconnect_peer(peer);
+                    return Err(ErrorKind::TooManyTrans.into());
+                }
+            }
+
+            peer_info
+                .last_sent_transactions
+                .extend(transactions.iter().map(|tx| tx.hash()));
+        }
 
         self.get_transaction_pool().insert_new_transactions(
             self.graph.consensus.best_state_block_hash(),
@@ -676,6 +699,26 @@ impl SynchronizationProtocolHandler {
 
         let msg: Box<dyn Message> = Box::new(block_headers_resp);
         self.send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
+        Ok(())
+    }
+
+    fn on_trans_prop_ctrl(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
+        if !self.syn.read().peers.contains_key(&peer) {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=TRANSACTION_PROPAGATION_CONTROL", peer);
+            return Ok(());
+        }
+
+        let trans_prop_ctrl = rlp.as_val::<TransactionPropagationControl>()?;
+        debug!(
+            "on_trans_prop_ctrl, peer {}, msg=:{:?}",
+            peer, trans_prop_ctrl
+        );
+
+        let mut syn = self.syn.write();
+        if let Some(peer_info) = syn.peers.get_mut(&peer) {
+            peer_info.need_prop_trans = !trans_prop_ctrl.catch_up_mode;
+        }
+
         Ok(())
     }
 
@@ -829,6 +872,9 @@ impl SynchronizationProtocolHandler {
                 .max_inflight_request_count,
             pending_requests: VecDeque::new(),
             last_sent_transactions: HashSet::new(),
+            received_transaction_count: 0,
+            need_prop_trans: true,
+            notified_mode: None,
         };
 
         debug!(
@@ -1901,6 +1947,9 @@ impl SynchronizationProtocolHandler {
                 .filter_map(|peer_id| {
                     let peer_info = syn.peers.get_mut(&peer_id)
                         .expect("peer_id is from peers; peers is result of select_peers_for_transactions; select_peers_for_transactions selects peers from syn.peers; qed");
+                    if !peer_info.need_prop_trans {
+                        return None;
+                    }
 
                     // filter out transactions that already sent to remote peer.
                     let mut txs: Vec<Arc<SignedTransaction>> = transactions
@@ -2331,7 +2380,7 @@ impl SynchronizationProtocolHandler {
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
-    fn update_catch_up_mode(&self) {
+    fn update_catch_up_mode(&self, io: &NetworkContext) {
         let mut peer_best_epoches = {
             let syn = self.syn.read();
             syn.peers
@@ -2347,16 +2396,53 @@ impl SynchronizationProtocolHandler {
         peer_best_epoches.sort();
         let middle_epoch = peer_best_epoches[peer_best_epoches.len() / 2];
 
-        if self.graph.best_epoch_number() + CATCH_UP_EPOCH_LAG_THRESHOLD
-            >= middle_epoch
-        {
+        let (need_notify, catch_up_mode) = {
             let mut syn = self.syn.write();
-            syn.catch_up_mode = false;
-        } else {
-            let mut syn = self.syn.write();
-            syn.catch_up_mode = true;
+            if self.graph.best_epoch_number() + CATCH_UP_EPOCH_LAG_THRESHOLD
+                >= middle_epoch
+            {
+                syn.catch_up_mode = false;
+            } else {
+                syn.catch_up_mode = true;
+            }
+
+            let catch_up_mode = syn.catch_up_mode;
+
+            let mut need_notify = Vec::new();
+            for (peer, state) in syn.peers.iter_mut() {
+                if state.notified_mode.is_none()
+                    || (state.notified_mode.unwrap() != catch_up_mode)
+                {
+                    state.received_transaction_count = 0;
+                    state.notified_mode = Some(catch_up_mode);
+                    need_notify.push(*peer);
+                }
+            }
+
+            (need_notify, catch_up_mode)
+        };
+
+        info!("Catch-up mode: {}", catch_up_mode);
+
+        let trans_prop_ctrl_msg: Box<dyn Message> =
+            Box::new(TransactionPropagationControl { catch_up_mode });
+
+        for peer in need_notify {
+            if self
+                .send_message(
+                    io,
+                    peer,
+                    trans_prop_ctrl_msg.as_ref(),
+                    SendQueuePriority::High,
+                )
+                .is_err()
+            {
+                info!(
+                    "Failed to send transaction control message to peer {}",
+                    peer
+                );
+            }
         }
-        info!("Catch-up mode: {}", self.syn.read().catch_up_mode);
     }
 
     fn dispatch_recover_public_task(
@@ -2504,7 +2590,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.block_cache_gc();
             }
             CHECK_CATCH_UP_MODE_TIMER => {
-                self.update_catch_up_mode();
+                self.update_catch_up_mode(io);
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();
