@@ -342,7 +342,7 @@ impl<'trie> SubTrieVisitor<'trie> {
             node_cow.get_trie_node(node_memory_manager, &allocator)?;
 
         let key_prefix: CompressedPathRaw;
-        match trie_node_ref.walk::<Read>(key_remaining) {
+        match trie_node_ref.walk::<Write>(key_remaining) {
             WalkStop::ChildNotFound {
                 key_remaining,
                 child_index,
@@ -358,12 +358,12 @@ impl<'trie> SubTrieVisitor<'trie> {
                 unmatched_child_index,
                 unmatched_path_remaining,
             } => {
-                if key_child_index.is_none() {
+                if key_child_index.is_some() {
                     return Ok((None, false, node_cow.into_child()));
                 }
                 // To enumerate the subtree.
                 key_prefix =
-                    CompressedPathRaw::concat(&key, &unmatched_path_remaining);
+                    CompressedPathRaw::concat(&key, unmatched_child_index, &unmatched_path_remaining);
             }
             WalkStop::Descent {
                 key_remaining,
