@@ -78,6 +78,7 @@ impl MultiVersionMerklePatriciaTrie {
                         &self.node_memory_manager.get_allocator(),
                         node,
                         self.node_memory_manager.get_cache_manager(),
+                        &mut false,
                     )?
                     .merkle_hash,
             )),
