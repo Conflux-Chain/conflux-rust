@@ -21,7 +21,7 @@ pub type AllocatorRefRef<'a, CacheAlgoDataT> =
     &'a AllocatorRef<'a, CacheAlgoDataT>;
 
 pub type RLFUPosT = u32;
-pub type CacheAlgorithmDeltaMpt = RecentLFU<RLFUPosT, DeltaMptDbKey>;
+pub type CacheAlgorithmDeltaMpt = LRU<RLFUPosT, DeltaMptDbKey>;
 pub type CacheAlgoDataDeltaMpt =
     <CacheAlgorithmDeltaMpt as CacheAlgorithm>::CacheAlgoData;
 
@@ -756,8 +756,8 @@ impl<
 use super::{
     super::{super::super::db::COL_DELTA_TRIE, errors::*},
     cache::algorithm::{
-        recent_lfu::RecentLFU, CacheAccessResult, CacheAlgoDataTrait,
-        CacheAlgorithm, CacheIndexTrait, CacheStoreUtil,
+        lru::LRU, CacheAccessResult, CacheAlgoDataTrait, CacheAlgorithm,
+        CacheIndexTrait, CacheStoreUtil,
     },
     guarded_value::*,
     merkle_patricia_trie::*,
