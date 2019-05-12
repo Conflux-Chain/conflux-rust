@@ -82,6 +82,9 @@ pub struct SynchronizationPeerState {
     /// Holds a set of transactions recently sent to this peer to avoid
     /// spamming.
     pub last_sent_transactions: HashSet<H256>,
+    pub received_transaction_count: usize,
+    pub need_prop_trans: bool,
+    pub notified_mode: Option<bool>,
 }
 
 impl SynchronizationPeerState {
@@ -170,9 +173,9 @@ pub struct SynchronizationState {
 }
 
 impl SynchronizationState {
-    pub fn new() -> Self {
+    pub fn new(catch_up_mode: bool) -> Self {
         SynchronizationState {
-            catch_up_mode: false,
+            catch_up_mode,
             peers: HashMap::new(),
             handshaking_peers: HashMap::new(),
         }

@@ -30,3 +30,28 @@ impl Decodable for Transactions {
         })
     }
 }
+
+////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, PartialEq)]
+pub struct TransactionPropagationControl {
+    pub catch_up_mode: bool,
+}
+
+impl Message for TransactionPropagationControl {
+    fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_PROPAGATION_CONTROL }
+}
+
+impl Encodable for TransactionPropagationControl {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.append(&self.catch_up_mode);
+    }
+}
+
+impl Decodable for TransactionPropagationControl {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(TransactionPropagationControl {
+            catch_up_mode: rlp.as_val()?,
+        })
+    }
+}

@@ -65,6 +65,8 @@ build_config! {
         (headers_request_timeout_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 120_000)
         (max_inflight_request_count, (u64), 32)
+        (start_as_catch_up_mode, (bool), false)
+        (max_trans_count_received_in_catch_up, (u64), 60_000)
         (request_block_with_public, (bool), false)
         (load_test_chain, (Option<String>), None)
         (start_mining, (bool), false)
@@ -241,6 +243,10 @@ impl Configuration {
                 .raw_conf
                 .max_inflight_request_count,
             request_block_with_public: self.raw_conf.request_block_with_public,
+            start_as_catch_up_mode: self.raw_conf.start_as_catch_up_mode,
+            max_trans_count_received_in_catch_up: self
+                .raw_conf
+                .max_trans_count_received_in_catch_up,
         }
     }
 

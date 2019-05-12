@@ -38,6 +38,7 @@ build_msgid! {
     GET_CMPCT_BLOCKS_RESPONSE = 0x10
     GET_BLOCK_TXN = 0x11
     GET_BLOCK_TXN_RESPONSE = 0x12
+    TRANSACTION_PROPAGATION_CONTROL = 0x13
 }
 
 impl From<u8> for MsgId {
