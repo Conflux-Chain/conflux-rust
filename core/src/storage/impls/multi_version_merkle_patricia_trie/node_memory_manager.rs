@@ -115,6 +115,13 @@ pub struct NodeMemoryManager<
     // managed.
     /// This db access is read only.
     db: Arc<KeyValueDB>,
+
+    // TODO(yz): use other atomic integer types when they becomes
+    // available in rust stable.
+    db_load_counter: AtomicUsize,
+    uncached_leaf_load_times: AtomicUsize,
+    uncached_leaf_db_loads: AtomicUsize,
+    pub compute_merkle_db_loads: AtomicUsize,
 }
 
 impl<
@@ -178,6 +185,11 @@ impl<
             }),
             db_load_lock: Default::default(),
             db: kvdb,
+
+            db_load_counter: Default::default(),
+            uncached_leaf_db_loads: Default::default(),
+            uncached_leaf_load_times: Default::default(),
+            compute_merkle_db_loads: Default::default(),
         }
     }
 
@@ -211,6 +223,15 @@ impl<
         Ok(())
     }
 
+    pub fn log_uncached_key_access(&self, db_load_count: i32) {
+        if db_load_count != 0 {
+            self.uncached_leaf_db_loads
+                .fetch_add(db_load_count as usize, Ordering::Relaxed);
+            self.uncached_leaf_load_times
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     pub unsafe fn get_in_memory_node_mut<'a>(
         allocator: AllocatorRefRef<'a, CacheAlgoDataT>, cache_slot: usize,
     ) -> &'a mut TrieNode<CacheAlgoDataT> {
@@ -228,6 +249,7 @@ impl<
         >,
     >
     {
+        self.db_load_counter.fetch_add(1, Ordering::Relaxed);
         // We never save null node in db.
         let rlp_bytes = self
             .db
@@ -400,6 +422,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
+        is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -480,6 +503,8 @@ impl<
 
                             cache_manager_mut_wrapped = Some(guard);
 
+                            *is_loaded_from_db = true;
+
                             trie_node = loaded_trie_node;
                         }
                         Some(cache_slot) => {
@@ -523,6 +548,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
+        is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -538,6 +564,7 @@ impl<
                     allocator,
                     node,
                     cache_manager,
+                    is_loaded_from_db,
                 )
             },
             NodeRefDeltaMpt::Dirty { ref index } => unsafe {
@@ -594,7 +621,30 @@ impl<
             .cache_algorithm
             .log_usage(&"trie node cache ".into());
         let allocator_ref = self.get_allocator();
-        debug!("trie node allocator: max allowed size: {}, configured idle_size: {}, size: {}, allocated: {}", self.size_limit, self.idle_size, allocator_ref.capacity(), allocator_ref.len());
+        info!(
+            "trie node allocator: max allowed size: {}, \
+             configured idle_size: {}, size: {}, allocated: {}",
+            self.size_limit,
+            self.idle_size,
+            allocator_ref.capacity(),
+            allocator_ref.len()
+        );
+        info!(
+            "number of nodes loaded from db {}",
+            self.db_load_counter.load(Ordering::Relaxed)
+        );
+        info!(
+            "number of uncached leaf node loads {}",
+            self.uncached_leaf_load_times.load(Ordering::Relaxed)
+        );
+        info!(
+            "number of db loads for uncached leaf nodes {}",
+            self.uncached_leaf_db_loads.load(Ordering::Relaxed)
+        );
+        info!(
+            "number of db loads for merkle computation {}",
+            self.compute_merkle_db_loads.load(Ordering::Relaxed)
+        )
     }
 }
 
@@ -717,4 +767,11 @@ use super::{
 use kvdb::KeyValueDB;
 use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use rlp::*;
-use std::{hint::unreachable_unchecked, mem, sync::Arc};
+use std::{
+    hint::unreachable_unchecked,
+    mem,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};

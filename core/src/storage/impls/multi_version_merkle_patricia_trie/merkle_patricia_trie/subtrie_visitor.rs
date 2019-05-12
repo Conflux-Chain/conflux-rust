@@ -70,15 +70,23 @@ impl<'trie> SubTrieVisitor<'trie> {
         let cache_manager = node_memory_manager.get_cache_manager();
         let mut node_ref = self.root.node_ref.clone();
         let mut key = key;
+
+        let mut db_load_count = 0;
         loop {
+            let mut is_loaded_from_db = false;
             let trie_node = node_memory_manager
                 .node_as_ref_with_cache_manager(
                     allocator_ref,
                     node_ref,
                     cache_manager,
+                    &mut is_loaded_from_db,
                 )?;
+            if is_loaded_from_db {
+                db_load_count += 1;
+            }
             match trie_node.walk::<Read>(key) {
                 WalkStop::Arrived => {
+                    node_memory_manager.log_uncached_key_access(db_load_count);
                     return Ok(Some(trie_node));
                 }
                 WalkStop::Descent {
@@ -490,6 +498,8 @@ impl<'trie> SubTrieVisitor<'trie> {
         // TODO(yz): be compliant to borrow rule and avoid duplicated
 
         let is_owned = node_cow.is_owned();
+        // FIXME: apply db_load_counter to all places where it matters, and also
+        // FIXME: pass down to recursion. (Also check other methods.)
         let trie_node_ref =
             node_cow.get_trie_node(node_memory_manager, &allocator)?;
         match trie_node_ref.walk::<Write>(key) {
