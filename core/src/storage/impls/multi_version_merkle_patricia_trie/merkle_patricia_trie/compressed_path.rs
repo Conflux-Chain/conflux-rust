@@ -122,21 +122,15 @@ impl Decodable for CompressedPathRaw {
 
 impl CompressedPathRaw {
     pub fn concat<X: CompressedPathTrait, Y: CompressedPathTrait>(
-        x: &X, y: &Y,
+        x: &X, child_index: u8, y: &Y,
     ) -> Self {
-        let x_slice;
-        if x.end_mask() != 0 {
-            let s = x.path_slice();
-            x_slice = &s[0..s.len() - 1];
-        } else {
-            x_slice = x.path_slice();
-        }
+        let x_slice = x.path_slice();
         let y_slice = y.path_slice();
         let size = x_slice.len() + y_slice.len();
 
         let mut path;
         if size <= MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
-            path = MaybeInPlaceByteArray::copy_from(x_slice, size);
+            path = MaybeInPlaceByteArray::copy_from(x_slice, x_slice.len());
             path.get_slice_mut(size)
                 [x_slice.len()..x_slice.len() + y_slice.len()]
                 .clone_from_slice(y_slice);
@@ -144,6 +138,14 @@ impl CompressedPathRaw {
             path = MaybeInPlaceByteArray::copy_from(
                 &([x_slice, y_slice].concat()),
                 size,
+            );
+        }
+
+        if x.end_mask() != 0 {
+            let path_slice_mut = path.get_slice_mut(size);
+            path_slice_mut[x_slice.len() - 1] = CompressedPathRaw::set_second_nibble(
+                path_slice_mut[x_slice.len() - 1],
+                child_index,
             );
         }
 

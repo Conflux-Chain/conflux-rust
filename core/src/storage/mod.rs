@@ -8,7 +8,6 @@
 pub mod state;
 pub mod state_manager;
 
-#[cfg(test)]
 pub mod tests;
 
 mod impls;
