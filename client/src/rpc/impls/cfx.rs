@@ -429,7 +429,7 @@ impl RpcImpl {
     ) -> RpcResult<H256> {
         let transactions = self
             .decode_raw_txs(raw_txs_without_data, tx_data_len.unwrap_or(0))?;
-        Ok(self.block_gen.generate_custom_block(transactions, false))
+        Ok(self.block_gen.generate_custom_block(transactions))
     }
 
     fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>> {

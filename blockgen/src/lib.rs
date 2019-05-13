@@ -156,6 +156,7 @@ impl BlockGenerator {
         }
     }
 
+    // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
         &self, parent_hash: H256, referee: Vec<H256>,
         deferred_state_root: H256, deferred_receipts_root: H256,
@@ -246,7 +247,6 @@ impl BlockGenerator {
         // get the best block
         let (guarded, best_info) = self.graph.get_best_info().into();
 
-        let mut write_guard = RwLockUpgradableReadGuard::upgrade(guarded);
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);
@@ -267,8 +267,7 @@ impl BlockGenerator {
             best_info.deferred_receipts_root,
             block_gas_limit,
             transactions,
-            // TODO: should not hold and pass write lock to consensus.
-            &mut *write_guard,
+            &mut *RwLockUpgradableReadGuard::upgrade(guarded),
         )
     }
 
@@ -313,18 +312,17 @@ impl BlockGenerator {
     ) -> H256 {
         let block =
             self.assemble_new_fixed_block(parent_hash, referee, num_txs);
-        self.generate_block_impl(block, true)
+        self.generate_block_impl(block)
     }
 
     /// Generate a block with transactions in the pool
     pub fn generate_block(&self, num_txs: usize) -> H256 {
         let block = self.assemble_new_block(num_txs);
-        self.generate_block_impl(block, true)
+        self.generate_block_impl(block)
     }
 
     pub fn generate_custom_block(
         &self, transactions: Vec<Arc<SignedTransaction>>,
-        wait_for_consensus: bool,
     ) -> H256
     {
         // get the best block
@@ -344,7 +342,7 @@ impl BlockGenerator {
             &mut *RwLockUpgradableReadGuard::upgrade(consensus_guard)
         );
 
-        self.generate_block_impl(block, wait_for_consensus)
+        self.generate_block_impl(block)
     }
 
     pub fn generate_custom_block_with_parent(
@@ -368,11 +366,11 @@ impl BlockGenerator {
             &mut *self.graph.consensus.inner.write(),
         );
 
-        self.generate_block_impl(block, true)
+        self.generate_block_impl(block)
     }
 
     fn generate_block_impl(
-        &self, block_init: Block, wait_for_consensus: bool,
+        &self, block_init: Block,
     ) -> H256 {
         let mut block = block_init;
         let test_diff = self.pow_config.initial_difficulty.into();
