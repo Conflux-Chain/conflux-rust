@@ -180,6 +180,7 @@ impl CowNodeRef {
                 &allocator,
                 self.node_ref.clone(),
                 node_memory_manager.get_cache_manager(),
+                &mut false,
             )?,
         ))
     }
@@ -242,6 +243,7 @@ impl CowNodeRef {
                     .get_trie_node(node_memory_manager, &allocator)?;
                 let key_prefix = CompressedPathRaw::concat(
                     &key_prefix,
+                    i,
                     &child_node.compressed_path_ref(),
                 );
                 let child_node = GuardedValue::take(child_node);
@@ -348,13 +350,20 @@ impl CowNodeRef {
 
             Ok(merkle)
         } else {
+            let mut load_from_db = false;
             let trie_node = trie
                 .get_node_memory_manager()
                 .node_as_ref_with_cache_manager(
                     allocator_ref,
                     self.node_ref.clone(),
                     trie.get_node_memory_manager().get_cache_manager(),
+                    &mut load_from_db,
                 )?;
+            if load_from_db {
+                trie.get_node_memory_manager()
+                    .compute_merkle_db_loads
+                    .fetch_add(1, Ordering::Relaxed);
+            }
             Ok(trie_node.merkle_hash)
         }
     }
@@ -431,6 +440,7 @@ impl CowNodeRef {
                 .get_trie_node(node_memory_manager, &allocator)?;
             let key_prefix = CompressedPathRaw::concat(
                 &key_prefix,
+                i,
                 &child_node.compressed_path_ref(),
             );
             let child_node = GuardedValue::take(child_node);
@@ -728,4 +738,6 @@ use super::{
 };
 use parking_lot::MutexGuard;
 use rlp::*;
-use std::{cell::Cell, hint::unreachable_unchecked, ops::Deref};
+use std::{
+    cell::Cell, hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
+};
