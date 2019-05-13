@@ -10,11 +10,14 @@ use crate::{
 use cfx_types::{Address, H256, U256};
 use heapsize::HeapSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{mem, sync::Arc};
+use std::{
+    mem,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
-/// A block header.
 #[derive(Clone, Debug, Eq)]
-pub struct BlockHeader {
+pub struct BlockHeaderRlpPart {
     /// Parent hash.
     parent_hash: H256,
     /// Block height
@@ -37,20 +40,10 @@ pub struct BlockHeader {
     referee_hashes: Vec<H256>,
     /// Nonce of the block
     nonce: u64,
-    /// Hash of the block
-    hash: Option<H256>,
-    /// POW quality of the block
-    pub pow_quality: U256,
 }
 
-impl HeapSizeOf for BlockHeader {
-    fn heap_size_of_children(&self) -> usize {
-        mem::size_of::<Self>() + self.referee_hashes.heap_size_of_children()
-    }
-}
-
-impl PartialEq for BlockHeader {
-    fn eq(&self, o: &BlockHeader) -> bool {
+impl PartialEq for BlockHeaderRlpPart {
+    fn eq(&self, o: &BlockHeaderRlpPart) -> bool {
         self.parent_hash == o.parent_hash
             && self.height == o.height
             && self.timestamp == o.timestamp
@@ -64,29 +57,71 @@ impl PartialEq for BlockHeader {
     }
 }
 
-impl Default for BlockHeader {
-    fn default() -> Self {
-        BlockHeader {
-            parent_hash: H256::default(),
-            height: 0,
-            timestamp: 0,
-            author: Address::default(),
-            transactions_root: KECCAK_EMPTY_LIST_RLP,
-            deferred_state_root: KECCAK_NULL_RLP,
-            deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
-            difficulty: U256::zero(),
-            gas_limit: U256::zero(),
-            referee_hashes: Vec::new(),
-            nonce: 0,
-            hash: None,
-            pow_quality: U256::zero(),
-        }
+/// A block header.
+#[derive(Clone, Debug, Eq)]
+pub struct BlockHeader {
+    rlp_part: BlockHeaderRlpPart,
+    /// Hash of the block
+    hash: Option<H256>,
+    /// POW quality of the block
+    pub pow_quality: U256,
+    /// Approximated rlp size of the block header
+    pub approximated_rlp_size: usize,
+}
+
+impl Deref for BlockHeader {
+    type Target = BlockHeaderRlpPart;
+
+    fn deref(&self) -> &Self::Target { &self.rlp_part }
+}
+
+impl DerefMut for BlockHeader {
+    fn deref_mut(&mut self) -> &mut BlockHeaderRlpPart { &mut self.rlp_part }
+}
+
+impl HeapSizeOf for BlockHeader {
+    fn heap_size_of_children(&self) -> usize {
+        mem::size_of::<Self>() + self.referee_hashes.heap_size_of_children()
     }
 }
 
+impl PartialEq for BlockHeader {
+    fn eq(&self, o: &BlockHeader) -> bool { self.rlp_part == o.rlp_part }
+}
+
+/*
+impl Default for BlockHeader {
+    fn default() -> Self {
+        let mut block_header = BlockHeader {
+            rlp_part: BlockHeaderRlpPart {
+                parent_hash: H256::default(),
+                height: 0,
+                timestamp: 0,
+                author: Address::default(),
+                transactions_root: KECCAK_EMPTY_LIST_RLP,
+                deferred_state_root: KECCAK_NULL_RLP,
+                deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
+                difficulty: U256::zero(),
+                gas_limit: U256::zero(),
+                referee_hashes: Vec::new(),
+                nonce: 0,
+            },
+            hash: None,
+            pow_quality: U256::zero(),
+            approximated_rlp_size: 0,
+        };
+
+        block_header.approximated_rlp_size = mem::size_of::<BlockHeaderRlpPart>()
+            + block_header.referee_hashes.heap_size_of_children();
+
+        block_header
+    }
+}
+*/
+
 impl BlockHeader {
-    /// Create a new, default-valued, header.
-    pub fn new() -> Self { Self::default() }
+    /// Approximated rlp size of the block header.
+    pub fn approximated_rlp_size(&self) -> usize { self.approximated_rlp_size }
 
     /// Get the parent_hash field of the header.
     pub fn parent_hash(&self) -> &H256 { &self.parent_hash }
@@ -290,21 +325,30 @@ impl BlockHeaderBuilder {
     }
 
     pub fn build(&self) -> BlockHeader {
-        BlockHeader {
-            parent_hash: self.parent_hash,
-            height: self.height,
-            timestamp: self.timestamp,
-            author: self.author,
-            transactions_root: self.transactions_root,
-            deferred_state_root: self.deferred_state_root,
-            deferred_receipts_root: self.deferred_receipts_root,
-            difficulty: self.difficulty,
-            gas_limit: self.gas_limit,
-            referee_hashes: self.referee_hashes.clone(),
-            nonce: self.nonce,
+        let mut block_header = BlockHeader {
+            rlp_part: BlockHeaderRlpPart {
+                parent_hash: self.parent_hash,
+                height: self.height,
+                timestamp: self.timestamp,
+                author: self.author,
+                transactions_root: self.transactions_root,
+                deferred_state_root: self.deferred_state_root,
+                deferred_receipts_root: self.deferred_receipts_root,
+                difficulty: self.difficulty,
+                gas_limit: self.gas_limit,
+                referee_hashes: self.referee_hashes.clone(),
+                nonce: self.nonce,
+            },
             hash: None,
             pow_quality: U256::zero(),
-        }
+            approximated_rlp_size: 0,
+        };
+
+        block_header.approximated_rlp_size =
+            mem::size_of::<BlockHeaderRlpPart>()
+                + block_header.referee_hashes.heap_size_of_children();
+
+        block_header
     }
 
     pub fn compute_block_receipts_root(
@@ -325,20 +369,24 @@ impl Encodable for BlockHeader {
 
 impl Decodable for BlockHeader {
     fn decode(r: &Rlp) -> Result<Self, DecoderError> {
+        let rlp_size = r.as_raw().len();
         Ok(BlockHeader {
-            parent_hash: r.val_at(0)?,
-            height: r.val_at(1)?,
-            timestamp: r.val_at(2)?,
-            author: r.val_at(3)?,
-            transactions_root: r.val_at(4)?,
-            deferred_state_root: r.val_at(5)?,
-            deferred_receipts_root: r.val_at(6)?,
-            difficulty: r.val_at(7)?,
-            gas_limit: r.val_at(8)?,
-            referee_hashes: r.list_at(9)?,
-            nonce: r.val_at(10)?,
+            rlp_part: BlockHeaderRlpPart {
+                parent_hash: r.val_at(0)?,
+                height: r.val_at(1)?,
+                timestamp: r.val_at(2)?,
+                author: r.val_at(3)?,
+                transactions_root: r.val_at(4)?,
+                deferred_state_root: r.val_at(5)?,
+                deferred_receipts_root: r.val_at(6)?,
+                difficulty: r.val_at(7)?,
+                gas_limit: r.val_at(8)?,
+                referee_hashes: r.list_at(9)?,
+                nonce: r.val_at(10)?,
+            },
             hash: keccak(r.as_raw()).into(),
             pow_quality: U256::zero(),
+            approximated_rlp_size: rlp_size,
         })
     }
 }
