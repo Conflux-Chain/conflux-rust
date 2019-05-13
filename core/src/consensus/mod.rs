@@ -1319,10 +1319,10 @@ impl ConsensusGraph {
     }
 
     pub fn check_mining_heavy_block(
-        &self, parent_hash: &H256, light_difficulty: &U256,
-    ) -> bool {
-        let mut inner = self.inner.write();
-
+        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
+        light_difficulty: &U256,
+    ) -> bool
+    {
         let parent_index = *inner.indices.get(parent_hash).unwrap();
         inner.check_mining_heavy_block(parent_index, *light_difficulty)
     }
@@ -2144,8 +2144,6 @@ impl ConsensusGraph {
                 self.txpool.unexecuted_transaction_addresses.lock();
             let mut cache_man = self.data_man.cache_man.lock();
             for (idx, tx) in block.transactions.iter().enumerate() {
-                self.txpool.remove_pending(tx.as_ref());
-                self.txpool.remove_ready(tx.clone());
                 // If an executed tx
                 let tx_hash = tx.hash();
                 if let Some(addr_set) =
@@ -2168,7 +2166,6 @@ impl ConsensusGraph {
                 }
             }
         }
-        info!("Transaction pool size={}", self.txpool.len());
 
         let mut inner = &mut *self.inner.write();
 
@@ -2182,6 +2179,14 @@ impl ConsensusGraph {
         let (me, indices_len) = inner.insert(block.as_ref(), past_difficulty);
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
+
+        // It's only correct to set tx stale after the block is considered
+        // terminal for mining.
+        for tx in block.transactions.iter() {
+            self.txpool.remove_pending(&*tx);
+            self.txpool.remove_ready(tx.clone());
+        }
+
         inner.compute_anticone(me);
 
         let fully_valid = self.check_block_full_validity(

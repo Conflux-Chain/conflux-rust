@@ -4,14 +4,17 @@
 
 use cfx_types::{Address, H256, U256, U512};
 use cfxcore::{
-    consensus::{DEFERRED_STATE_EPOCH_COUNT, HEAVY_BLOCK_DIFFICULTY_RATIO},
+    consensus::{
+        ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
+        HEAVY_BLOCK_DIFFICULTY_RATIO,
+    },
     pow::*,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedSynchronizationGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use log::{info, trace, warn};
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
     *,
@@ -157,6 +160,7 @@ impl BlockGenerator {
         &self, parent_hash: H256, referee: Vec<H256>,
         deferred_state_root: H256, deferred_receipts_root: H256,
         block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
+        consensus_inner: &mut ConsensusGraphInner,
     ) -> Block
     {
         let parent_height =
@@ -166,10 +170,11 @@ impl BlockGenerator {
 
         let mut expected_difficulty =
             self.graph.inner.read().expected_difficulty(&parent_hash);
-        if self
-            .graph
-            .check_mining_heavy_block(&parent_hash, &expected_difficulty)
-        {
+        if self.graph.check_mining_heavy_block(
+            consensus_inner,
+            &parent_hash,
+            &expected_difficulty,
+        ) {
             assert!(
                 U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
                     * U512::from(expected_difficulty)
@@ -232,13 +237,16 @@ impl BlockGenerator {
             receipts_root,
             block_gas_limit,
             transactions,
+            &mut *self.graph.consensus.inner.write(),
         )
     }
 
     /// Assemble a new block without nonce
     pub fn assemble_new_block(&self, num_txs: usize) -> Block {
         // get the best block
-        let best_info = self.graph.get_best_info();
+        let (guarded, best_info) = self.graph.get_best_info().into();
+
+        let mut write_guard = RwLockUpgradableReadGuard::upgrade(guarded);
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);
@@ -249,7 +257,8 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
-            self.txgen.get_best_state(),
+            // TODO: the best state isn't necessary anymore.
+            self.txgen.get_best_state_at(&write_guard.best_block_hash()),
         );
 
         self.assemble_new_block_impl(
@@ -259,6 +268,8 @@ impl BlockGenerator {
             best_info.deferred_receipts_root,
             block_gas_limit,
             transactions,
+            // TODO: should not hold and pass write lock to consensus.
+            &mut *write_guard,
         )
     }
 
@@ -274,7 +285,8 @@ impl BlockGenerator {
         }
 
         // 1st Check: if the parent block changed
-        let best_block_hash = self.graph.get_best_info().best_block_hash;
+        let best_block_hash =
+            self.graph.get_best_info().as_ref().best_block_hash;
         if best_block_hash != *block.unwrap().block_header.parent_hash() {
             return true;
         }
@@ -317,7 +329,7 @@ impl BlockGenerator {
     ) -> H256
     {
         // get the best block
-        let best_info = self.graph.get_best_info();
+        let (consensus_guard, best_info) = self.graph.get_best_info().into();
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);
@@ -330,6 +342,7 @@ impl BlockGenerator {
             best_info.deferred_receipts_root,
             block_gas_limit,
             transactions,
+            &mut *RwLockUpgradableReadGuard::upgrade(consensus_guard)
         );
 
         self.generate_block_impl(block, wait_for_consensus)
@@ -353,6 +366,7 @@ impl BlockGenerator {
             receipts_root,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             transactions,
+            &mut *self.graph.consensus.inner.write(),
         );
 
         self.generate_block_impl(block, true)
@@ -387,10 +401,17 @@ impl BlockGenerator {
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
-        if wait_for_consensus {
-            while self.graph.consensus.get_block_epoch_number(&hash).is_none() {
-                sleep(Duration::from_millis(100));
-            }
+        while self
+            .graph
+            .consensus
+            .inner
+            .read()
+            .indices
+            .get(&hash)
+            .is_none()
+        {
+            // FIXME: change to a notification by future later.
+            sleep(Duration::from_millis(100));
         }
 
         hash
