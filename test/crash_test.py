@@ -6,6 +6,7 @@ from rlp.sedes import Binary, BigEndianInt
 
 from conflux import utils
 from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
+from conflux.rpc import RpcClient
 from test_framework.blocktools import create_block, create_transaction
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
@@ -67,7 +68,8 @@ class P2PTest(ConfluxTestFramework):
         self.log.debug("New tx %s: %s send value %d to %s", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
                        value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:])
         def check_packed():
-            self.nodes[0].generateoneblock(1)
+            client = RpcClient(self.nodes[0])
+            client.generate_block(1)
             return checktx(self.nodes[0], tx.hash_hex())
         wait_until(lambda: check_packed())
         sender_addr = eth_utils.encode_hex(privtoaddr(sender_key))

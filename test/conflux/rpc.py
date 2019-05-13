@@ -54,19 +54,19 @@ class RpcClient:
         
         return eth_utils.encode_hex(sha3_256(seed))
 
-    def generate_block(self, num_txs: int = 0) -> str:
+    def generate_block(self, num_txs: int = 0, block_size_limit_bytes: int = 300000) -> str:
         assert_greater_than_or_equal(num_txs, 0)
-        block_hash = self.node.generateoneblock(num_txs)
+        block_hash = self.node.generateoneblock(num_txs, block_size_limit_bytes)
         assert_is_hash_string(block_hash)
         return block_hash
 
-    def generate_blocks(self, num_blocks: int, num_txs: int = 0) -> list:
+    def generate_blocks(self, num_blocks: int, num_txs: int = 0, block_size_limit_bytes: int = 300000) -> list:
         assert_greater_than(num_blocks, 0)
         assert_greater_than_or_equal(num_txs, 0)
 
         blocks = []
         for _ in range(0, num_blocks):
-            block_hash = self.generate_block(num_txs)
+            block_hash = self.generate_block(num_txs, block_size_limit_bytes)
             blocks.append(block_hash)
 
         return blocks
@@ -138,7 +138,7 @@ class RpcClient:
             self.generate_blocks_to_state(num_txs=num_txs)
         
         def check_tx():
-            self.node.generateoneblock(num_txs)
+            self.generate_block(num_txs)
             return checktx(self.node, tx_hash)
         wait_until(check_tx, timeout=timeout)
 

@@ -6,6 +6,7 @@ from rlp.sedes import Binary, BigEndianInt
 
 from conflux import utils
 from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
+from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_block, create_transaction
 from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.mininode import *

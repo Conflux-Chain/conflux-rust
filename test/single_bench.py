@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import datetime
 from http.client import CannotSendRequest
-
 from conflux.utils import convert_to_nodeid, privtoaddr, parse_as_int, encode_hex
+from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import  create_transaction
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *

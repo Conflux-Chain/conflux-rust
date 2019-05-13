@@ -2,6 +2,7 @@
 from http.client import CannotSendRequest
 from eth_utils import decode_hex
 from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
