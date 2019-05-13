@@ -192,18 +192,6 @@ impl Client {
         ));
 
         let mut network = NetworkService::new(network_config);
-        network
-            .start()
-            .map_err(|e| format!("failed to start network service: {:?}", e))?;
-
-        if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
-            DataPropagation::register(
-                conf.raw_conf.data_propagate_interval_ms,
-                conf.raw_conf.data_propagate_size,
-                &network,
-            )?;
-        }
-
         let verification_config = conf.verification_config();
         let protocol_config = conf.protocol_config();
         let sync = cfxcore::SynchronizationService::new(
@@ -214,7 +202,22 @@ impl Client {
             pow_config.clone(),
             conf.fast_recover(),
         );
+
+        // start network service after synchronization service initialized.
+        network
+            .start()
+            .map_err(|e| format!("failed to start network service: {:?}", e))?;
+
         sync.start().unwrap();
+
+        if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
+            DataPropagation::register(
+                conf.raw_conf.data_propagate_interval_ms,
+                conf.raw_conf.data_propagate_size,
+                &network,
+            )?;
+        }
+
         let sync = Arc::new(sync);
         let sync_graph = sync.get_synchronization_graph();
 
