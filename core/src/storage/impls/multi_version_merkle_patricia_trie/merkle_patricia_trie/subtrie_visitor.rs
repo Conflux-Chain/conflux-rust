@@ -370,8 +370,11 @@ impl<'trie> SubTrieVisitor<'trie> {
                     return Ok((None, false, node_cow.into_child()));
                 }
                 // To enumerate the subtree.
-                key_prefix =
-                    CompressedPathRaw::concat(&key, unmatched_child_index, &unmatched_path_remaining);
+                key_prefix = CompressedPathRaw::concat(
+                    &key,
+                    unmatched_child_index,
+                    &unmatched_path_remaining,
+                );
             }
             WalkStop::Descent {
                 key_remaining,

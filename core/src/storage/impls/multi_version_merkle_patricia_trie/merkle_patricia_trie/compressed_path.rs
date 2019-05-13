@@ -143,10 +143,11 @@ impl CompressedPathRaw {
 
         if x.end_mask() != 0 {
             let path_slice_mut = path.get_slice_mut(size);
-            path_slice_mut[x_slice.len() - 1] = CompressedPathRaw::set_second_nibble(
-                path_slice_mut[x_slice.len() - 1],
-                child_index,
-            );
+            path_slice_mut[x_slice.len() - 1] =
+                CompressedPathRaw::set_second_nibble(
+                    path_slice_mut[x_slice.len() - 1],
+                    child_index,
+                );
         }
 
         Self {

@@ -146,8 +146,6 @@ impl StateManager {
                 .with_author(test_net_version)
                 .build(),
             Vec::new(),
-            None,
-            None,
         );
         debug!("Genesis Block:{:?} hash={:?}", genesis, genesis.hash());
         state.commit(genesis.block_header.hash()).unwrap();

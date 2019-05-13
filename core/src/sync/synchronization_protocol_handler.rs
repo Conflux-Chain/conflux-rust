@@ -25,6 +25,7 @@ use network::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
     Block, SignedTransaction,
 };
 use rand::{Rng, RngCore};
@@ -71,8 +72,6 @@ const CHECK_REQUEST_TIMER: TimerToken = 1;
 const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
-
-const MAX_TXS_BYTES_TO_PROPOGATE: usize = 10_000_000;
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -406,7 +405,7 @@ impl SynchronizationProtocolHandler {
                                 .collect();
                             self.blocks_in_flight.lock().remove(&hash);
                             let (success, to_relay) = self.graph.insert_block(
-                                Block::new(header, trans, None, None),
+                                Block::new(header, trans),
                                 true,  // need_to_verify
                                 true,  // persistent
                                 false, // sync_graph_only
@@ -562,7 +561,7 @@ impl SynchronizationProtocolHandler {
                             // FIXME Should check if hash matches
 
                             let (success, to_relay) = self.graph.insert_block(
-                                Block::new(header, trans, None, None),
+                                Block::new(header, trans),
                                 true,
                                 true,
                                 false,
@@ -1200,7 +1199,6 @@ impl SynchronizationProtocolHandler {
 
             if Self::recover_public(
                 &mut block,
-                self.get_transaction_pool(),
                 &mut *self
                     .get_transaction_pool()
                     .transaction_pubkey_cache
@@ -1354,7 +1352,6 @@ impl SynchronizationProtocolHandler {
         let mut block = new_block.block;
         Self::recover_public(
             &mut block,
-            self.get_transaction_pool(),
             &mut *self.get_transaction_pool().transaction_pubkey_cache.write(),
             &mut *self.graph.cache_man.lock(),
             &*self.get_transaction_pool().worker_pool.lock(),
@@ -2005,46 +2002,43 @@ impl SynchronizationProtocolHandler {
                         return None;
                     }
 
-                    // Send all transactions
-                    if peer_info.last_sent_transactions.is_empty() {
-                        let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
-                        let mut total_tx_bytes = 0;
-                        for tx in &transactions {
-                            total_tx_bytes += tx.rlp_size();
-                            if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPOGATE {
-                                break
-                            }
+                    // filter out transactions that already sent to remote peer.
+                    let mut txs: Vec<Arc<SignedTransaction>> = transactions
+                        .iter()
+                        .filter(|tx| !peer_info.last_sent_transactions.contains(&tx.hash()))
+                        .map(|tx| tx.clone())
+                        .collect();
 
-                            tx_msg.transactions.push(tx.transaction.clone());
-                            peer_info.last_sent_transactions.insert(tx.hash());
-                        }
-                        return Some((peer_id, transactions.len(), tx_msg));
-                    }
-
-                    // Get hashes of all transactions to send to this peer
-                    let to_send = all_transactions_hashes.difference(&peer_info.last_sent_transactions)
-                        .cloned()
-                        .collect::<HashSet<_>>();
-                    if to_send.is_empty() {
+                    if txs.is_empty() {
                         return None;
                     }
 
-                    peer_info.last_sent_transactions = all_transactions_hashes
-                        .intersection(&peer_info.last_sent_transactions).cloned().collect();
-                    let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
-                    let mut total_tx_bytes = 0;
-                    for tx in &transactions {
-                        if to_send.contains(&tx.hash()) {
-                            total_tx_bytes += tx.rlp_size();
-                            if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPOGATE {
-                                break
-                            }
-
-                            tx_msg.transactions.push(tx.transaction.clone());
-                            peer_info.last_sent_transactions.insert(tx.hash());
-                        }
+                    if txs.len() > MAX_TRANSACTION_COUNT_PER_BLOCK {
+                        debug!("cannot propagate all txs from pool due to max txs limitation, num_txs = {}, limitation = {}", txs.len(), MAX_TRANSACTION_COUNT_PER_BLOCK);
+                        txs.truncate(MAX_TRANSACTION_COUNT_PER_BLOCK);
                     }
-                    Some((peer_id, tx_msg.transactions.len(), tx_msg))
+
+                    // limits the size of propagated txs.
+                    let mut sum_size = 0;
+                    for i in 0..txs.len() {
+                        let size = txs[i].rlp_size();
+                        if sum_size + size > MAX_BLOCK_SIZE_IN_BYTES {
+                            debug!("cannot propagate all txs from pool due to block size limitation, cur_size = {}, tx_size = {}, max_block_size = {}", sum_size, size, MAX_BLOCK_SIZE_IN_BYTES);
+                            txs.truncate(i);
+                            break;
+                        }
+
+                        sum_size += size;
+                    }
+
+                    let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
+                    for tx in &txs {
+                        tx_msg.transactions.push(tx.transaction.clone());
+                    }
+
+                    peer_info.last_sent_transactions = all_transactions_hashes.clone();
+
+                    Some((peer_id, txs.len(), tx_msg))
                 })
                 .collect::<Vec<_>>()
         };
@@ -2296,25 +2290,21 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn recover_public(
-        block: &mut Block, tx_pool: SharedTransactionPool,
+        block: &mut Block,
         tx_cache: &mut HashMap<H256, Arc<SignedTransaction>>,
         cache_man: &mut CacheManager<CacheId>, worker_pool: &ThreadPool,
     ) -> Result<(), DecoderError>
     {
-        debug!("recover public for block started.");
         let mut recovered_transactions =
             Vec::with_capacity(block.transactions.len());
         let mut uncached_trans = Vec::with_capacity(block.transactions.len());
         for (idx, transaction) in block.transactions.iter().enumerate() {
             match tx_cache.get(&transaction.hash()) {
                 Some(tx) => recovered_transactions.push(tx.clone()),
-                None => match tx_pool.get_transaction(&transaction.hash()) {
-                    Some(tx) => recovered_transactions.push(tx.clone()),
-                    None => {
-                        uncached_trans.push((idx, transaction.clone()));
-                        recovered_transactions.push(transaction.clone());
-                    }
-                },
+                None => {
+                    uncached_trans.push((idx, transaction.clone()));
+                    recovered_transactions.push(transaction.clone());
+                }
             }
         }
 
@@ -2434,7 +2424,6 @@ impl SynchronizationProtocolHandler {
         }
 
         block.transactions = recovered_transactions;
-        debug!("recover public for block finished.");
         Ok(())
     }
 

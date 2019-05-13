@@ -261,8 +261,6 @@ impl Block {
                     }
                     transactions
                 },
-                None,
-                None,
             )),
         }
     }

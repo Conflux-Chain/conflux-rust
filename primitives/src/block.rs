@@ -49,6 +49,12 @@ impl HeapSizeOf for Block {
 impl Block {
     pub fn new(
         block_header: BlockHeader, transactions: Vec<Arc<SignedTransaction>>,
+    ) -> Self {
+        Self::new_with_rlp_size(block_header, transactions, None, None)
+    }
+
+    pub fn new_with_rlp_size(
+        block_header: BlockHeader, transactions: Vec<Arc<SignedTransaction>>,
         rlp_size: Option<usize>, rlp_size_with_public: Option<usize>,
     ) -> Self
     {
@@ -160,7 +166,7 @@ impl Block {
             transactions.push(Arc::new(tx));
         }
 
-        Ok(Block::new(
+        Ok(Block::new_with_rlp_size(
             rlp.val_at(0)?,
             transactions,
             None,
@@ -200,7 +206,7 @@ impl Decodable for Block {
             signed_transactions.push(Arc::new(signed));
         }
 
-        Ok(Block::new(
+        Ok(Block::new_with_rlp_size(
             rlp.val_at(0)?,
             signed_transactions,
             Some(rlp.as_raw().len()),

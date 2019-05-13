@@ -201,7 +201,7 @@ impl BlockGenerator {
             .with_gas_limit(block_gas_limit)
             .build();
 
-        Block::new(block_header, transactions, None, None)
+        Block::new(block_header, transactions)
     }
 
     /// Assemble a new block with specified parent and referee, this is for test
