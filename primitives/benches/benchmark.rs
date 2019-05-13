@@ -15,7 +15,7 @@ fn recover_benchmark(c: &mut Criterion) {
     let msg = keccak("0".as_bytes());
     let kp = KeyPair::from_secret(secret).unwrap();
     let sig = sign(kp.secret(), &msg).unwrap();
-    c.bench_function("Recover public for 100 times", move |b| {
+    c.bench_function("Recover public", move |b| {
         b.iter(|| {
             recover(&sig, &msg).unwrap();
         });
@@ -32,7 +32,7 @@ fn verify_benchmark(c: &mut Criterion) {
     let kp = KeyPair::from_secret(secret).unwrap();
     let pub_key = kp.public().clone();
     let sig = sign(kp.secret(), &msg).unwrap();
-    c.bench_function("Verify public for 100 times", move |b| {
+    c.bench_function("Verify public", move |b| {
         b.iter(|| {
             verify_public(&pub_key, &sig, &msg).unwrap();
         });
