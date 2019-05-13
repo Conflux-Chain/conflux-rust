@@ -18,3 +18,10 @@ lru = "0.1"
 byteorder = "1.2.7"
 rand = "0.5"
 siphasher = "0.3"
+
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "benchmark"
+harness = false
