@@ -1247,7 +1247,8 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             FIRST_SESSION...LAST_SESSION => {
                 if let Some(session) = self.sessions.remove(stream) {
                     let sess = session.write();
-                    sess.deregister_socket(event_loop).expect("Error deregistering socket");
+                    sess.deregister_socket(event_loop)
+                        .expect("Error deregistering socket");
                     if let Some(node_id) = sess.id() {
                         self.node_db.write().note_failure(node_id, true, false);
                     }

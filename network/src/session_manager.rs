@@ -125,7 +125,7 @@ impl SessionManager {
     pub fn remove(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
         let mut sessions = self.sessions.write();
         let session = sessions.get(idx).cloned()?;
-        let sess = session.read();
+        let sess = session.write();
 
         if !sess.expired() {
             return None;
