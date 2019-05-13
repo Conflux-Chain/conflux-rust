@@ -191,30 +191,23 @@ impl Client {
             pow_config.clone(),
         ));
 
-        let mut network = NetworkService::new(network_config);
         let verification_config = conf.verification_config();
         let protocol_config = conf.protocol_config();
-        let sync = cfxcore::SynchronizationService::new(
-            network,
+        let mut sync = cfxcore::SynchronizationService::new(
+            NetworkService::new(network_config),
             consensus.clone(),
             protocol_config,
             verification_config,
             pow_config.clone(),
             conf.fast_recover(),
         );
-
-        // start network service after synchronization service initialized.
-        network
-            .start()
-            .map_err(|e| format!("failed to start network service: {:?}", e))?;
-
         sync.start().unwrap();
 
         if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
             DataPropagation::register(
                 conf.raw_conf.data_propagate_interval_ms,
                 conf.raw_conf.data_propagate_size,
-                &network,
+                sync.get_network_service(),
             )?;
         }
 

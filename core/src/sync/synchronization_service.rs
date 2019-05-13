@@ -49,6 +49,8 @@ impl SynchronizationService {
         }
     }
 
+    pub fn get_network_service(&self) -> &NetworkService { &self.network }
+
     pub fn catch_up_mode(&self) -> bool {
         self.protocol_handler.catch_up_mode()
     }
@@ -57,7 +59,8 @@ impl SynchronizationService {
         self.protocol_handler.get_synchronization_graph()
     }
 
-    pub fn start(&self) -> Result<(), Error> {
+    pub fn start(&mut self) -> Result<(), Error> {
+        self.network.start()?;
         self.network.register_protocol(
             self.protocol_handler.clone(),
             self.protocol,
