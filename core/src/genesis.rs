@@ -9,18 +9,27 @@ use std::{collections::HashMap, fs::File, io::Read};
 use toml::Value;
 
 pub fn default(secret_store: &SecretStore) -> HashMap<Address, U256> {
-    let secret =
+    let balance = U256::from_dec_str("5000000000000000000000000000000000")
+        .expect("Not overflow"); // 5*10^33
+
+    let kp = KeyPair::from_secret(
         "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
             .parse()
-            .unwrap();
-    let kp = KeyPair::from_secret(secret).unwrap();
-    let balance = U256::from_dec_str("5000000000000000000000000000")
-        .expect("Not overflow"); // 5 billion by default
+            .unwrap(),
+    )
+    .unwrap();
+    let kp2 = KeyPair::from_secret(
+        "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
 
     let mut accounts: HashMap<Address, U256> = HashMap::new();
     accounts.insert(kp.address(), balance);
+    accounts.insert(kp2.address(), balance);
 
-    secret_store.insert(kp);
+    secret_store.insert(kp2);
 
     accounts
 }

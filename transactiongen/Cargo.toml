@@ -11,6 +11,7 @@ clap = "2"
 cfxcore = { path = "../core" }
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
+hex = "0.2"
 keccak-hash = "0.1.2"
 primitives = { path = "../primitives" }
 parking_lot = "0.6"

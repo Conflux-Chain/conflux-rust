@@ -21,8 +21,9 @@ use jsonrpc_macros::Trailing;
 use network::node_table::{NodeEndpoint, NodeEntry, NodeId};
 use parking_lot::{Condvar, Mutex};
 use primitives::{
-    Action, EpochNumber as PrimitiveEpochNumber, SignedTransaction,
-    Transaction, TransactionWithSignature,
+    block::MAX_BLOCK_SIZE_IN_BYTES, Action,
+    EpochNumber as PrimitiveEpochNumber, SignedTransaction, Transaction,
+    TransactionWithSignature,
 };
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
@@ -350,8 +351,10 @@ impl RpcImpl {
         info!("RPC Request: generate({:?})", num_blocks);
         let mut hashes = Vec::new();
         for _i in 0..num_blocks {
-            hashes
-                .push(self.block_gen.generate_block_with_transactions(num_txs));
+            hashes.push(self.block_gen.generate_block_with_transactions(
+                num_txs,
+                MAX_BLOCK_SIZE_IN_BYTES,
+            ));
         }
         Ok(hashes)
     }
@@ -369,11 +372,37 @@ impl RpcImpl {
         Ok(hash)
     }
 
-    fn generate_one_block(&self, num_txs: usize) -> RpcResult<H256> {
+    fn generate_one_block(
+        &self, num_txs: usize, block_size_limit: usize,
+    ) -> RpcResult<H256> {
         info!("RPC Request: generate_one_block()");
-        // TODO Choose proper num_txs
-        let hash = self.block_gen.generate_block(num_txs);
+        let hash =
+            self.block_gen
+                .generate_block(num_txs, block_size_limit, vec![]);
         Ok(hash)
+    }
+
+    fn generate_one_block_special(
+        &self, num_txs: usize, mut block_size_limit: usize,
+        num_txs_simple: usize, num_txs_erc20: usize,
+    ) -> RpcResult<()>
+    {
+        info!("RPC Request: generate_one_block_special()");
+
+        let block_gen = &self.block_gen;
+        let special_transactions = block_gen.generate_special_transactions(
+            &mut block_size_limit,
+            num_txs_simple,
+            num_txs_erc20,
+        );
+
+        block_gen.generate_block(
+            num_txs,
+            block_size_limit,
+            special_transactions,
+        );
+
+        Ok(())
     }
 
     fn generate_custom_block(
@@ -759,8 +788,23 @@ impl TestRpc for TestRpcImpl {
             .generate_fixed_block(parent_hash, referee, num_txs)
     }
 
-    fn generate_one_block(&self, num_txs: usize) -> RpcResult<H256> {
-        self.rpc_impl.generate_one_block(num_txs)
+    fn generate_one_block(
+        &self, num_txs: usize, block_size_limit: usize,
+    ) -> RpcResult<H256> {
+        self.rpc_impl.generate_one_block(num_txs, block_size_limit)
+    }
+
+    fn generate_one_block_special(
+        &self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize,
+        num_txs_erc20: usize,
+    ) -> RpcResult<()>
+    {
+        self.rpc_impl.generate_one_block_special(
+            num_txs,
+            block_size_limit,
+            num_txs_simple,
+            num_txs_erc20,
+        )
     }
 
     fn generate_custom_block(
