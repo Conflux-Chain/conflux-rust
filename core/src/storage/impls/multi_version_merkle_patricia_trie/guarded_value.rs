@@ -28,8 +28,9 @@ impl<GuardType, ValueType> GuardedValue<GuardType, ValueType> {
 }
 
 impl<GuardType, ValueType: Clone> GuardedValue<GuardType, ValueType> {
+    /// Unsafe because the lock guard is released.
     /// There is no guarantee for the validity of value especially when
-    /// ValueType is reference type.
+    /// ValueType is reference alike, e.g. an index.
     pub unsafe fn get_value(&self) -> ValueType { self.value.clone() }
 }
 

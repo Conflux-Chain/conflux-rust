@@ -86,7 +86,7 @@ impl MultiVersionMerklePatriciaTrie {
     pub fn log_usage(&self) { self.node_memory_manager.log_usage(); }
 }
 
-mod guarded_value;
+pub mod guarded_value;
 pub(self) mod node_ref_map;
 /// Fork of upstream slab in order to compact data and to provide internal
 /// mutability.

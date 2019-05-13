@@ -5,17 +5,20 @@
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager, CacheSize},
-    consensus::{SharedConsensusGraph, HEAVY_BLOCK_DIFFICULTY_RATIO},
+    consensus::{
+        ConsensusGraphInner, SharedConsensusGraph, HEAVY_BLOCK_DIFFICULTY_RATIO,
+    },
     db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
     pow::ProofOfWorkConfig,
     statistics::SharedStatistics,
+    storage::GuardedValue,
     verification::*,
 };
 use cfx_types::{H256, U256, U512};
 use heapsize::HeapSizeOf;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{block::CompactBlock, Block, BlockHeader};
 use rlp::Rlp;
 use slab::Slab;
@@ -701,10 +704,15 @@ impl SynchronizationGraph {
     }
 
     pub fn check_mining_heavy_block(
-        &self, parent_hash: &H256, light_difficulty: &U256,
-    ) -> bool {
-        self.consensus
-            .check_mining_heavy_block(parent_hash, light_difficulty)
+        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
+        light_difficulty: &U256,
+    ) -> bool
+    {
+        self.consensus.check_mining_heavy_block(
+            inner,
+            parent_hash,
+            light_difficulty,
+        )
     }
 
     pub fn best_epoch_number(&self) -> u64 {
@@ -1127,9 +1135,14 @@ impl SynchronizationGraph {
         (insert_success, need_to_relay)
     }
 
-    pub fn get_best_info(&self) -> BestInformation {
-        let consensus_inner = self.consensus.inner.read();
-        BestInformation {
+    pub fn get_best_info(
+        &self,
+    ) -> GuardedValue<
+        RwLockUpgradableReadGuard<ConsensusGraphInner>,
+        BestInformation,
+    > {
+        let consensus_inner = self.consensus.inner.upgradable_read();
+        let value = BestInformation {
             best_block_hash: consensus_inner.best_block_hash(),
             current_difficulty: consensus_inner.current_difficulty,
             terminal_block_hashes: consensus_inner.terminal_hashes(),
@@ -1137,7 +1150,8 @@ impl SynchronizationGraph {
                 .deferred_state_root_following_best_block(),
             deferred_receipts_root: consensus_inner
                 .deferred_receipts_root_following_best_block(),
-        }
+        };
+        GuardedValue::new(consensus_inner, value)
     }
 
     pub fn verified_invalid(&self, hash: &H256) -> bool {
