@@ -53,14 +53,40 @@ class ArgumentHolder:
                 self.__dict__[arg_name]
             ))
 
-class RemoteSimulateArgs(ArgumentHolder):
+class RemoteSimulateConfig:
+    def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks):
+        self.block_gen_interval_ms = block_gen_interval_ms
+        self.txs_per_block = txs_per_block
+        self.tx_size = tx_size
+        self.num_blocks = num_blocks
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    @staticmethod
+    def parse(batch_config):
+        config_groups = []
+        for config in batch_config.split(","):
+            fields = config.split(":")
+            assert len(fields) == 4, "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>"
+            config_groups.append(RemoteSimulateConfig(
+                int(fields[0]),
+                int(fields[1]),
+                int(fields[2]),
+                int(fields[3]),
+            ))
+        return config_groups
+
+class LatencyExperiment(ArgumentHolder):
     def __init__(self):
+        self.vms = 10
+        self.stat_confirmation_latency = False
+        self.simulate_log_file = "exp.log"
+        self.stat_log_file = "exp_stat_latency.log"
+        self.stat_archive_file = "exp_stat_latency.tgz"
+
         self.nodes_per_host = 10
-        self.generation_period_ms = 500
-        self.num_blocks = 1000
         self.block_sync_step = 10
-        self.txs_per_block = 1
-        self.generate_tx_data_len = 600_000
         self.connect_peers = 8
         self.ips_file = "ips"
         self.throttling = "512,1024,2048"
@@ -69,43 +95,21 @@ class RemoteSimulateArgs(ArgumentHolder):
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000
 
+        self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
+
         ArgumentHolder.__init__(self)
 
-class LatencyExperiment(RemoteSimulateArgs):
-    def __init__(self):
-        self.cmd = ""
-        self.vms = 10
-        self.stat_confirmation_latency = False
-        self.simulate_log_file = "exp.log"
-        self.stat_log_file = "exp_stat_latency.log"
-        self.stat_archive_file = "exp_stat_latency.tgz"
-
-        self.generate_txs_data_len_group = "150000,200000,250000,300000,350000,400000"
-
-        RemoteSimulateArgs.__init__(self)
-
     def run(self):
-        if self.cmd == "tps":
-            self.run_tps()
-        else:
-            if self.cmd == "":
-                print("command not specified!")
-            else:
-                print("invalid command:", self.cmd)
-            print("supported commands: tps")
-
-    def run_tps(self):
-        for tx_data_len in self.generate_txs_data_len_group.split(","):
-            tx_data_len = int(tx_data_len)
+        for config in RemoteSimulateConfig.parse(self.batch_config):
             print("=========================================================")
-            print("start TPS experiment, tx_data_len = {} ...".format(tx_data_len))
+            print("Experiment started, config = {} ...".format(config))
             
             print("kill remote conflux and cleanup logs ...")
             kill_remote_conflux(self.ips_file)
             cleanup_remote_logs(self.ips_file)
 
             print("Run remote simulator ...")
-            self.run_remote_simulate(tx_data_len)
+            self.run_remote_simulate(config)
 
             print("Kill remote conflux and copy logs ...")
             kill_remote_conflux(self.ips_file)
@@ -117,9 +121,11 @@ class LatencyExperiment(RemoteSimulateArgs):
             os.system("echo error logs: `grep -i thrott -r logs | wc -l`")
 
             print("Computing latencies ...")
-            block_size_kb = self.txs_per_block * tx_data_len // 1000
-            self.stat_latency(self.generation_period_ms, block_size_kb)
+            block_size_kb = config.txs_per_block * config.tx_size // 1000
+            self.stat_latency(config.block_gen_interval_ms, block_size_kb)
 
+        print("=========================================================")
+        print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
         os.system("tar cvfz {} {} *.csv".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
@@ -127,18 +133,19 @@ class LatencyExperiment(RemoteSimulateArgs):
         assert ret == 0, "failed to copy remote logs to local, return code = {}".format(ret)
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
-    def run_remote_simulate(self, tx_data_len):
+    def run_remote_simulate(self, config:RemoteSimulateConfig):
         cmd = " ".join([
             "python3 ../remote_simulate.py",
             "--nodes-per-host", str(self.nodes_per_host),
-            "--generation-period-ms", str(self.generation_period_ms),
-            "--num-blocks", str(self.num_blocks),
+            "--generation-period-ms", str(config.block_gen_interval_ms),
+            "--num-blocks", str(config.num_blocks),
             "--block-sync-step", str(self.block_sync_step),
-            "--txs-per-block", str(self.txs_per_block),
-            "--generate-tx-data-len", str(tx_data_len),
+            "--txs-per-block", str(config.txs_per_block),
+            "--generate-tx-data-len", str(config.tx_size),
             "--connect-peers", str(self.connect_peers),
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
+            "--storage-memory-mb", str(self.storage_memory_mb),
             "--data-propagate-enabled", str(self.data_propagate_enabled).lower(),
             "--data-propagate-interval-ms", str(self.data_propagate_interval_ms),
             "--data-propagate-size", str(self.data_propagate_size),
