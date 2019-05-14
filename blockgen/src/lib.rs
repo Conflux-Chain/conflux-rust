@@ -257,8 +257,7 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
-            // TODO: the best state isn't necessary anymore.
-            self.txgen.get_best_state_at(&write_guard.best_block_hash()),
+            self.txgen.get_best_state_at(&guarded.best_state_block_hash()),
         );
 
         self.assemble_new_block_impl(
