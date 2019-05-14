@@ -174,14 +174,30 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn hash(&self) -> H256 {
-        let mut s = RlpStream::new();
-        s.append(self);
-        keccak(s.as_raw())
+    /// Append object with a without signature into RLP stream
+    pub fn rlp_append_unsigned_transaction(&self, s: &mut RlpStream, chain_id: Option<u64>) {
+        s.begin_list(if chain_id.is_none() { 6 } else { 9 });
+        s.append(&self.nonce);
+        s.append(&self.gas_price);
+        s.append(&self.gas);
+        s.append(&self.action);
+        s.append(&self.value);
+        s.append(&self.data);
+        if let Some(n) = chain_id {
+            s.append(&n);
+            s.append(&0u8);
+            s.append(&0u8);
+        }
+    }
+
+    pub fn hash(&self, chain_id: Option<u64>) -> H256 {
+        let mut stream = RlpStream::new();
+        self.rlp_append_unsigned_transaction(&mut stream, chain_id);
+        keccak(stream.as_raw())
     }
 
     pub fn sign(self, secret: &Secret) -> SignedTransaction {
-        let sig = ::keylib::sign(secret, &self.hash())
+        let sig = ::keylib::sign(secret, &self.hash(None))
             .expect("data is valid and context has signing capabilities; qed");
         let tx_with_sig = self.with_signature(sig);
         let public = tx_with_sig
@@ -297,7 +313,7 @@ impl TransactionWithSignature {
             unsigned: tx,
             s: 0.into(),
             r: 0.into(),
-            v: 0.into(),
+            v: 0,
             hash: Default::default(),
             rlp_size: None,
         }
@@ -343,9 +359,18 @@ impl TransactionWithSignature {
 
     pub fn hash(&self) -> H256 { self.hash }
 
+    /// The chain ID, or `None` if this is a global transaction.
+    pub fn chain_id(&self) -> Option<u64> {
+        match self.v {
+            v if self.is_unsigned() => Some(v.into()),
+            v if v >= 35 => Some(((v - 35) / 2).into()),
+            _ => None,
+        }
+    }
+
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
-        Ok(recover(&self.signature(), &self.unsigned.hash())?)
+        Ok(recover(&self.signature(), &self.unsigned.hash(self.chain_id()))?)
     }
 
     /// Verify basic signature params. Does not attempt sender recovery.
@@ -476,7 +501,7 @@ impl SignedTransaction {
             Ok(verify_public(
                 &public,
                 &self.signature(),
-                &self.unsigned.hash(),
+                &self.unsigned.hash(None),
             )?)
         } else {
             Ok(true)
