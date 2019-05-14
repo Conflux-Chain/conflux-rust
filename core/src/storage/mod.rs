@@ -16,7 +16,9 @@ pub use self::{
     impls::{
         defaults,
         errors::{Error, ErrorKind, Result},
-        multi_version_merkle_patricia_trie::merkle_patricia_trie::MerkleHash,
+        multi_version_merkle_patricia_trie::{
+            guarded_value::GuardedValue, merkle_patricia_trie::MerkleHash,
+        },
     },
     state::{State as Storage, StateTrait as StorageTrait},
     state_manager::{

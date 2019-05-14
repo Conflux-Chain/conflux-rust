@@ -14,7 +14,7 @@ extern crate secret_store;
 extern crate log;
 
 use crate::bytes::Bytes;
-use cfx_types::{Address, H512, U256, U512};
+use cfx_types::{Address, H256, H512, U256, U512};
 use cfxcore::{
     state::State,
     statedb::StateDb,
@@ -79,16 +79,20 @@ impl TransactionGenerator {
         }
     }
 
-    pub fn get_best_state(&self) -> State {
+    pub fn get_best_state_at(&self, block_hash: &H256) -> State {
         State::new(
             StateDb::new(
                 self.storage_manager
-                    .get_state_at(self.consensus.best_state_block_hash())
+                    .get_state_at(block_hash.clone())
                     .unwrap(),
             ),
             0.into(),
             Default::default(),
         )
+    }
+
+    pub fn get_best_state(&self) -> State {
+        self.get_best_state_at(&self.consensus.best_state_block_hash())
     }
 
     pub fn generate_transaction(&self) -> SignedTransaction {
