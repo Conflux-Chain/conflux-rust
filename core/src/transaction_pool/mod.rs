@@ -487,6 +487,7 @@ impl TransactionPool {
         {
             let mut tx_cache = self.transaction_pubkey_cache.write();
             let mut cache_man = self.cache_man.lock();
+
             for txes in signed_trans {
                 for tx in txes {
                     tx_cache.insert(tx.hash(), tx.clone());

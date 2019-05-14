@@ -176,6 +176,7 @@ impl StateManagerTrait for StateManager {
     fn make_snapshot(&self, epoch_id: EpochId) -> Snapshot { unimplemented!() }
 
     fn get_state_at(&self, epoch_id: EpochId) -> Result<State> {
+        // FIXME: only allow existing epoch id and H256::Default().
         Ok(State::new(self, self.get_state_root_node_ref(epoch_id)?))
     }
 
