@@ -15,6 +15,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
+from scripts.exp_latency import pscp, pssh, kill_remote_conflux, cleanup_remote_logs
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -137,24 +138,7 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
 
     def stop_nodes(self):
-        result = self.__pssh__("killall -9 conflux")
-        if result != 0:
-            self.log.error("failed to kill conflux process on remote nodes, return code = {}".format(result))
-
-    def __execute__(self, command):
-        self.log.info("[COMMAND]: {}".format(command))
-        result = os.system(command)
-        if result != 0:
-            self.log.error("command execution failed, return code is {}".format(result))
-        return result
-
-    def __pscp__(self, local:str, remote:str):
-        cmd = 'parallel-scp -O "StrictHostKeyChecking no" -h {} -p 400 {} {}'.format(self.options.ips_file, local, remote)
-        return self.__execute__(cmd)
-
-    def __pssh__(self, cmd:str):
-        cmd = 'parallel-ssh -O "StrictHostKeyChecking no" -h {} -p 400 \"{}\"'.format(self.options.ips_file, cmd)
-        return self.__execute__(cmd)
+        kill_remote_conflux(self.options.ips_file)
 
     def setup_remote_conflux(self):
         # tar the config file for all nodes
@@ -163,20 +147,18 @@ class P2PTest(ConfluxTestFramework):
             tar_file.add(self.options.tmpdir, arcname=os.path.basename(self.options.tmpdir))
 
         self.log.info("copy conflux configuration files to remote nodes ...")
-        result = self.__pscp__(zipped_conf_file, "~")
+        pscp(self.options.ips_file, zipped_conf_file, "~", 3, "copy conflux configuration files to remote nodes")
         os.remove(zipped_conf_file)
-        assert_equal(result, 0)
 
         self.log.info("setup conflux runtime environment ...")
-        result = self.__pssh__("tar zxf conflux_conf.tgz -C /tmp && rm conflux_conf.tgz")
-        assert_equal(result, 0)
+        pssh(self.options.ips_file, "tar zxf conflux_conf.tgz -C /tmp", 3, "decompress conflux configuration files")
+        pssh(self.options.ips_file, "rm conflux_conf.tgz", 3, "delete conflux configuration files")
 
         # start conflux on all nodes
         self.log.info("start conflux on remote nodes ...")
-        result = self.__pssh__("./remote_start_conflux.sh {} {} {} > start_conflux.out".format(
+        pssh(self.options.ips_file, "sh ./remote_start_conflux.sh {} {} {} > start_conflux.out".format(
             self.options.tmpdir, p2p_port(0), self.options.nodes_per_host
         ))
-        assert_equal(result, 0)
 
     def setup_network(self):
         self.setup_remote_conflux()
