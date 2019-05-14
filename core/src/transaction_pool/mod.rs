@@ -888,18 +888,20 @@ impl TransactionPool {
             }
         }
 
-        let mut rlp_s = RlpStream::new();
-        for tx in &packed_transactions {
-            rlp_s.append::<TransactionWithSignature>(&**tx);
+        if log::max_level() >= log::LogLevel::Debug {
+            let mut rlp_s = RlpStream::new();
+            for tx in &packed_transactions {
+                rlp_s.append::<TransactionWithSignature>(&**tx);
+            }
+            debug!(
+                "After packing ready pool size:{}, pending pool size:{}, packed_transactions: {}, \
+                rlp size: {}",
+                inner.ready_transactions.len(),
+                inner.pending_transactions.len(),
+                packed_transactions.len(),
+                rlp_s.out().len()
+            );
         }
-        debug!(
-            "After packing ready pool size:{}, pending pool size:{}, packed_transactions: {}, \
-            rlp size: {}",
-            inner.ready_transactions.len(),
-            inner.pending_transactions.len(),
-            packed_transactions.len(),
-            rlp_s.out().len()
-        );
 
         packed_transactions
     }
