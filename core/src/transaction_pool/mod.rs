@@ -27,6 +27,7 @@ use primitives::{
     Account, Action, EpochId, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
+use rlp::*;
 use std::{
     cmp::{min, Ordering},
     collections::{hash_map::HashMap, HashSet},
@@ -797,21 +798,12 @@ impl TransactionPool {
         let mut total_tx_gas_limit: U256 = 0.into();
         let mut total_tx_size: usize = 0;
 
-        loop {
-            if packed_transactions.len() >= num_txs
-                || block_gas_limit - total_tx_gas_limit
-                    < self.spec.tx_gas.into()
-            {
-                break;
-            }
+        let mut big_tx_resample_times_limit = 10;
 
-            let tx = match inner.ready_transactions.pop() {
-                None => break,
-                Some(tx) => tx,
-            };
-
+        'out: while let Some(tx) = inner.ready_transactions.pop() {
             let sender = tx.sender;
             let nonce_entry = nonce_map.entry(sender);
+
             let state_nonce = state.nonce(&sender);
             if state_nonce.is_err() {
                 debug!(
@@ -830,38 +822,57 @@ impl TransactionPool {
                     .or_insert(HashMap::new())
                     .insert(tx.nonce, tx);
             } else if tx.nonce == *nonce {
+                let tx_size = tx.rlp_size();
                 if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
-                    || block_size_limit - total_tx_size < tx.rlp_size()
+                    || block_size_limit - total_tx_size < tx_size
                 {
                     future_txs
                         .entry(sender)
                         .or_insert(HashMap::new())
                         .insert(tx.nonce, tx);
-                    continue;
+                    if big_tx_resample_times_limit > 0 {
+                        big_tx_resample_times_limit -= 1;
+                        continue 'out;
+                    } else {
+                        break 'out;
+                    }
                 }
 
                 total_tx_gas_limit += *tx.gas_limit();
-                total_tx_size += tx.rlp_size();
+                total_tx_size += tx_size;
 
                 *nonce += 1.into();
                 packed_transactions.push(tx);
 
+                if packed_transactions.len() >= num_txs {
+                    break 'out;
+                }
+
                 if let Some(tx_map) = future_txs.get_mut(&sender) {
                     while let Some(tx) = tx_map.remove(nonce) {
-                        if packed_transactions.len() >= num_txs
-                            || block_gas_limit - total_tx_gas_limit
-                                < *tx.gas_limit()
-                            || block_size_limit - total_tx_size < tx.rlp_size()
+                        let tx_size = tx.rlp_size();
+                        if block_gas_limit - total_tx_gas_limit
+                            < *tx.gas_limit()
+                            || block_size_limit - total_tx_size < tx_size
                         {
                             tx_map.insert(tx.nonce, tx);
-                            break;
+                            if big_tx_resample_times_limit > 0 {
+                                big_tx_resample_times_limit -= 1;
+                                continue 'out;
+                            } else {
+                                break 'out;
+                            }
                         }
 
                         total_tx_gas_limit += *tx.gas_limit();
-                        total_tx_size += tx.rlp_size();
+                        total_tx_size += tx_size;
 
                         packed_transactions.push(tx);
                         *nonce += 1.into();
+
+                        if packed_transactions.len() >= num_txs {
+                            break 'out;
+                        }
                     }
                 }
             }
@@ -876,11 +887,21 @@ impl TransactionPool {
                 inner.ready_transactions.insert(tx.clone());
             }
         }
-        debug!(
-            "After packing ready pool size:{}, pending pool size:{}",
-            inner.ready_transactions.len(),
-            inner.pending_transactions.len()
-        );
+
+        if log::max_level() >= log::LogLevel::Debug {
+            let mut rlp_s = RlpStream::new();
+            for tx in &packed_transactions {
+                rlp_s.append::<TransactionWithSignature>(&**tx);
+            }
+            debug!(
+                "After packing ready pool size:{}, pending pool size:{}, packed_transactions: {}, \
+                rlp size: {}",
+                inner.ready_transactions.len(),
+                inner.pending_transactions.len(),
+                packed_transactions.len(),
+                rlp_s.out().len()
+            );
+        }
 
         packed_transactions
     }

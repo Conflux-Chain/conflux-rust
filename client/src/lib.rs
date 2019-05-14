@@ -32,9 +32,10 @@ use cfxcore::{
 use crate::rpc::{
     impls::cfx::RpcImpl, setup_debug_rpc_apis, setup_public_rpc_apis, RpcBlock,
 };
-use cfx_types::Address;
+use cfx_types::{Address, U256};
 use ctrlc::CtrlC;
 use db::SystemDB;
+use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use primitives::Block;
@@ -50,7 +51,10 @@ use std::{
     time::{Duration, Instant},
 };
 use threadpool::ThreadPool;
-use txgen::{propagate::DataPropagation, TransactionGenerator};
+use txgen::{
+    propagate::DataPropagation, SpecialTransactionGenerator,
+    TransactionGenerator,
+};
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
@@ -222,6 +226,14 @@ impl Client {
             sync.net_key_pair().ok(),
         ));
 
+        let special_txgen =
+            Arc::new(Mutex::new(SpecialTransactionGenerator::new(
+                sync.net_key_pair().unwrap(),
+                &public_to_address(secret_store.get_keypair(0).public()),
+                U256::from_dec_str("10000000000000000").unwrap(),
+                U256::from_dec_str("10000000000000000").unwrap(),
+            )));
+
         let blockgen_config = conf.blockgen_config();
         if let Some(chain_path) = blockgen_config.test_chain_path {
             let file_path = Path::new(&chain_path);
@@ -252,6 +264,7 @@ impl Client {
             txpool.clone(),
             sync.clone(),
             txgen.clone(),
+            special_txgen.clone(),
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
         ));

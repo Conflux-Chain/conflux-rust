@@ -29,7 +29,8 @@ fn test_mining_10_epochs_inner(handle: &ClientHandle) {
 
     let instant = Instant::now();
     while instant.elapsed() < max_timeout {
-        let new_best_block_hash = sync_graph.get_best_info().as_ref().best_block_hash;
+        let new_best_block_hash =
+            sync_graph.get_best_info().as_ref().best_block_hash;
         let end_height = sync_graph
             .block_height_by_hash(&new_best_block_hash)
             .unwrap();
@@ -40,7 +41,8 @@ fn test_mining_10_epochs_inner(handle: &ClientHandle) {
         }
         thread::sleep(sleep_duration);
     }
-    let new_best_block_hash = sync_graph.get_best_info().as_ref().best_block_hash;
+    let new_best_block_hash =
+        sync_graph.get_best_info().as_ref().best_block_hash;
     let end_height = sync_graph
         .block_height_by_hash(&new_best_block_hash)
         .unwrap();
