@@ -487,11 +487,11 @@ impl BlockGenerator {
                     continue;
                 }
 
-                current_mining_block = bg.assemble_new_block(
+                current_mining_block = Some(bg.assemble_new_block(
                     MAX_TRANSACTION_COUNT_PER_BLOCK,
                     MAX_BLOCK_SIZE_IN_BYTES,
                     vec![],
-                );
+                ));
 
                 // set a mining problem
                 let current_difficulty = current_mining_block
