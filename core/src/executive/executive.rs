@@ -974,7 +974,7 @@ impl<'a, 'b> Executive<'a, 'b> {
         let nonce = self.state.nonce(&sender)?;
 
         let spec = self.spec;
-        let base_gas_required = U256::from(Self::gas_required_for(
+        let mut base_gas_required = U256::from(Self::gas_required_for(
             match tx.action {
                 Action::Create => true,
                 Action::Call(_) => false,
@@ -984,10 +984,14 @@ impl<'a, 'b> Executive<'a, 'b> {
         ));
 
         if tx.gas < base_gas_required {
+            // FIXME: changed to be compatible to eth transactions.
+            /*
             return Err(ExecutionError::NotEnoughBaseGas {
                 required: base_gas_required,
                 got: tx.gas,
             });
+            */
+            base_gas_required = tx.gas;
         }
 
         if !tx.is_unsigned()
@@ -1010,6 +1014,8 @@ impl<'a, 'b> Executive<'a, 'b> {
         // This should never happen because we have checked block gas limit
         // before SyncGraph Validate if transaction fits into give block
         if self.env.gas_used + tx.gas > self.env.gas_limit {
+            // FIXME: make gas limit configurable.
+            debug!("block gas limit reached!");
             return Err(ExecutionError::BlockGasLimitReached {
                 gas_limit: self.env.gas_limit,
                 gas_used: self.env.gas_used,
@@ -1138,9 +1144,15 @@ impl<'a, 'b> Executive<'a, 'b> {
             cmp::min(refunds_bound, (tx.gas - gas_left_prerefund) >> 1);
         let gas_left = gas_left_prerefund + refunded;
 
+        // FIXME: preserve the refunded value.
         let gas_used = tx.gas - gas_left;
-        let refund_value = U256::zero();
-        let fees_value = tx.gas * tx.gas_price;
+
+        // FIXME: do not charge tx fee in eth replay test.
+        let refund_value = tx.gas * tx.gas_price;
+        let fees_value = gas_used * tx.gas_price;
+        // self.env.gas_used += tx.gas;
+        // let refund_value = U256::zero();
+        // let fees_value = tx.gas * tx.gas_price;
 
         trace!("exec::finalize: tx.gas={}, sstore_refunds={}, suicide_refunds={}, refunds_bound={}, gas_left_prerefund={}, refunded={}, gas_left={}, gas_used={}, refund_value={}, fees_value={}\n",
                tx.gas, sstore_refunds, suicide_refunds, refunds_bound, gas_left_prerefund, refunded, gas_left, gas_used, refund_value, fees_value);
