@@ -139,14 +139,14 @@ impl StateManager {
         }
 
         let root = state.compute_state_root().unwrap();
-        let genesis = Block {
-            block_header: BlockHeaderBuilder::new()
+        let genesis = Block::new(
+            BlockHeaderBuilder::new()
                 .with_deferred_state_root(root)
                 .with_gas_limit(genesis_gas_limit)
                 .with_author(test_net_version)
                 .build(),
-            transactions: Vec::new(),
-        };
+            Vec::new(),
+        );
         debug!("Genesis Block:{:?} hash={:?}", genesis, genesis.hash());
         state.commit(genesis.block_header.hash()).unwrap();
         genesis

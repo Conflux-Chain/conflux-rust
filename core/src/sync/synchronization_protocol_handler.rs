@@ -24,9 +24,7 @@ use network::{
     NetworkContext, NetworkProtocolHandler, PeerId,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{
-    Block, SignedTransaction,
-};
+use primitives::{Block, SignedTransaction};
 use rand::{Rng, RngCore};
 use rlp::Rlp;
 //use slab::Slab;
@@ -58,6 +56,7 @@ pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 
 pub const MAX_HEADERS_TO_SEND: u64 = 512;
 pub const MAX_BLOCKS_TO_SEND: u64 = 256;
+const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
 const MIN_PEERS_PROPAGATION: usize = 4;
 const MAX_PEERS_PROPAGATION: usize = 128;
 const DEFAULT_GET_HEADERS_NUM: u64 = 1;
@@ -235,7 +234,12 @@ impl SynchronizationProtocolHandler {
         raw.extend(msg.rlp_bytes().iter());
         if let Err(e) = io.send(peer, raw, priority) {
             debug!("Error sending message: {:?}", e);
-            io.disconnect_peer(peer);
+            match e.kind() {
+                network::ErrorKind::OversizedPacket => {}
+                _ => {
+                    io.disconnect_peer(peer);
+                }
+            }
             return Err(e);
         };
         debug!(
@@ -400,10 +404,7 @@ impl SynchronizationProtocolHandler {
                                 .collect();
                             self.blocks_in_flight.lock().remove(&hash);
                             let (success, to_relay) = self.graph.insert_block(
-                                Block {
-                                    block_header: header,
-                                    transactions: trans,
-                                },
+                                Block::new(header, trans),
                                 true,  // need_to_verify
                                 true,  // persistent
                                 false, // sync_graph_only
@@ -559,10 +560,7 @@ impl SynchronizationProtocolHandler {
                             // FIXME Should check if hash matches
 
                             let (success, to_relay) = self.graph.insert_block(
-                                Block {
-                                    block_header: header,
-                                    transactions: trans,
-                                },
+                                Block::new(header, trans),
                                 true,
                                 true,
                                 false,
@@ -735,50 +733,101 @@ impl SynchronizationProtocolHandler {
         debug!("on_get_blocks, msg=:{:?}", req);
         if req.hashes.is_empty() {
             debug!("Received empty getblocks message: peer={:?}", peer);
+        } else if req.with_public {
+            let mut blocks = Vec::new();
+            let mut packet_size_left = MAX_PACKET_SIZE;
+            for hash in req.hashes.iter() {
+                if let Some(block) = self.graph.block_by_hash(hash) {
+                    if packet_size_left
+                        >= block.approximated_rlp_size_with_public()
+                    {
+                        packet_size_left -=
+                            block.approximated_rlp_size_with_public();
+                        let block = block.as_ref().clone();
+                        blocks.push(block);
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            let mut msg = Box::new(GetBlocksWithPublicResponse {
+                request_id: req.request_id().into(),
+                blocks,
+            });
+
+            loop {
+                if msg.blocks.is_empty() {
+                    info!("No block is sent for GetBlocks request!");
+                    break;
+                }
+
+                if let Err(e) = self.send_message(
+                    io,
+                    peer,
+                    msg.as_ref(),
+                    SendQueuePriority::High,
+                ) {
+                    match e.kind() {
+                        network::ErrorKind::OversizedPacket => {
+                            let block_count = msg.blocks.len() / 2;
+                            msg.blocks.truncate(block_count);
+                        }
+                        _ => {
+                            return Err(e.into());
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
         } else {
-            if req.with_public {
-                let msg: Box<dyn Message> =
-                    Box::new(GetBlocksWithPublicResponse {
-                        request_id: req.request_id().into(),
-                        blocks: req
-                            .hashes
-                            .iter()
-                            .take(MAX_BLOCKS_TO_SEND as usize)
-                            .filter_map(|hash| {
-                                self.graph
-                                    .block_by_hash(hash)
-                                    .map(|b| b.as_ref().clone())
-                            })
-                            .collect(),
-                    });
-                self.send_message(
+            let mut blocks = Vec::new();
+            let mut packet_size_left = MAX_PACKET_SIZE;
+            for hash in req.hashes.iter() {
+                if let Some(block) = self.graph.block_by_hash(hash) {
+                    if packet_size_left >= block.approximated_rlp_size() {
+                        packet_size_left -= block.approximated_rlp_size();
+                        let block = block.as_ref().clone();
+                        blocks.push(block);
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            let mut msg = Box::new(GetBlocksResponse {
+                request_id: req.request_id().into(),
+                blocks,
+            });
+
+            loop {
+                if msg.blocks.is_empty() {
+                    info!("No block is sent for GetBlocks request!");
+                    break;
+                }
+
+                if let Err(e) = self.send_message(
                     io,
                     peer,
                     msg.as_ref(),
                     SendQueuePriority::High,
-                )?;
-            } else {
-                let msg: Box<dyn Message> = Box::new(GetBlocksResponse {
-                    request_id: req.request_id().into(),
-                    blocks: req
-                        .hashes
-                        .iter()
-                        .take(MAX_BLOCKS_TO_SEND as usize)
-                        .filter_map(|hash| {
-                            self.graph
-                                .block_by_hash(hash)
-                                .map(|b| b.as_ref().clone())
-                        })
-                        .collect(),
-                });
-                self.send_message(
-                    io,
-                    peer,
-                    msg.as_ref(),
-                    SendQueuePriority::High,
-                )?;
+                ) {
+                    match e.kind() {
+                        network::ErrorKind::OversizedPacket => {
+                            let block_count = msg.blocks.len() / 2;
+                            msg.blocks.truncate(block_count);
+                        }
+                        _ => {
+                            return Err(e.into());
+                        }
+                    }
+                } else {
+                    break;
+                }
             }
         }
+
         Ok(())
     }
 

@@ -230,8 +230,8 @@ impl Block {
             BlockTransactions::Hashes(_) => Err(RpcError::invalid_params(
                 "Invalid params: expected a array of transaction objects.",
             )),
-            BlockTransactions::Full(vec) => Ok(PrimitiveBlock {
-                block_header: BlockHeaderBuilder::new()
+            BlockTransactions::Full(vec) => Ok(PrimitiveBlock::new(
+                BlockHeaderBuilder::new()
                     .with_parent_hash(self.parent_hash.into())
                     .with_height(self.height.as_usize() as u64)
                     .with_timestamp(self.timestamp.as_usize() as u64)
@@ -251,7 +251,7 @@ impl Block {
                     )
                     .with_nonce(self.nonce.as_usize() as u64)
                     .build(),
-                transactions: {
+                {
                     let mut transactions = Vec::new();
                     for tx in vec.into_iter() {
                         let signed_tx = tx.into_signed().map_err(|e| {
@@ -261,7 +261,7 @@ impl Block {
                     }
                     transactions
                 },
-            }),
+            )),
         }
     }
 }

@@ -26,12 +26,16 @@ pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 4 * 1024 * 1024;
 pub type BlockNumber = u64;
 
 /// A block, encoded as it is on the block chain.
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     /// The header hash of this block.
     pub block_header: BlockHeader,
     /// The transactions in this block.
     pub transactions: Vec<Arc<SignedTransaction>>,
+    /// Approximated rlp size of the block.
+    pub approximated_rlp_size: usize,
+    /// Approximated rlp size of block with transaction public key.
+    pub approximated_rlp_size_with_public: usize,
 }
 
 impl HeapSizeOf for Block {
@@ -43,7 +47,48 @@ impl HeapSizeOf for Block {
 }
 
 impl Block {
+    pub fn new(
+        block_header: BlockHeader, transactions: Vec<Arc<SignedTransaction>>,
+    ) -> Self {
+        Self::new_with_rlp_size(block_header, transactions, None, None)
+    }
+
+    pub fn new_with_rlp_size(
+        block_header: BlockHeader, transactions: Vec<Arc<SignedTransaction>>,
+        rlp_size: Option<usize>, rlp_size_with_public: Option<usize>,
+    ) -> Self
+    {
+        let approximated_rlp_size = match rlp_size {
+            Some(size) => size,
+            None => transactions
+                .iter()
+                .fold(block_header.approximated_rlp_size(), |accum, tx| {
+                    accum + tx.rlp_size()
+                }),
+        };
+
+        let approximated_rlp_size_with_public = match rlp_size_with_public {
+            Some(size) => size,
+            None => approximated_rlp_size + transactions.len() * 84, /* Sender(20B) + Public(64B) */
+        };
+
+        Block {
+            block_header,
+            transactions,
+            approximated_rlp_size,
+            approximated_rlp_size_with_public,
+        }
+    }
+
     pub fn hash(&self) -> H256 { self.block_header.hash() }
+
+    /// Approximated rlp size of the block.
+    pub fn approximated_rlp_size(&self) -> usize { self.approximated_rlp_size }
+
+    /// Approximated rlp size of block with transaction public key.
+    pub fn approximated_rlp_size_with_public(&self) -> usize {
+        self.approximated_rlp_size_with_public
+    }
 
     pub fn total_gas(&self) -> U256 {
         let mut sum = U256::from(0);
@@ -121,10 +166,12 @@ impl Block {
             transactions.push(Arc::new(tx));
         }
 
-        Ok(Block {
-            block_header: rlp.val_at(0)?,
+        Ok(Block::new_with_rlp_size(
+            rlp.val_at(0)?,
             transactions,
-        })
+            None,
+            Some(rlp.as_raw().len()),
+        ))
     }
 }
 
@@ -159,16 +206,18 @@ impl Decodable for Block {
             signed_transactions.push(Arc::new(signed));
         }
 
-        Ok(Block {
-            block_header: rlp.val_at(0)?,
-            transactions: signed_transactions,
-        })
+        Ok(Block::new_with_rlp_size(
+            rlp.val_at(0)?,
+            signed_transactions,
+            Some(rlp.as_raw().len()),
+            None,
+        ))
     }
 }
 
 // TODO Some optimization may be made if short_id hash collission is detected,
 // but should be rare
-#[derive(Default, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct CompactBlock {
     /// The block header
     pub block_header: BlockHeader,

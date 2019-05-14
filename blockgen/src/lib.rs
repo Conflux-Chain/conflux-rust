@@ -201,10 +201,7 @@ impl BlockGenerator {
             .with_gas_limit(block_gas_limit)
             .build();
 
-        Block {
-            block_header,
-            transactions,
-        }
+        Block::new(block_header, transactions)
     }
 
     /// Assemble a new block with specified parent and referee, this is for test
@@ -271,10 +268,14 @@ impl BlockGenerator {
     }
 
     /// Check if we need to mine on a new block
-    pub fn is_mining_block_outdated(&self, block: &Block) -> bool {
+    pub fn is_mining_block_outdated(&self, block: Option<&Block>) -> bool {
+        if block.is_none() {
+            return true;
+        }
+
         // 1st Check: if the parent block changed
         let best_block_hash = self.graph.get_best_info().best_block_hash;
-        if best_block_hash != *block.block_header.parent_hash() {
+        if best_block_hash != *block.unwrap().block_header.parent_hash() {
             return true;
         }
         // TODO: 2nd check: if the referee hashes changed
@@ -416,7 +417,7 @@ impl BlockGenerator {
     }
 
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
-        let mut current_mining_block = Block::default();
+        let mut current_mining_block = None;
         let mut current_problem: Option<ProofOfWorkProblem> = None;
         let sleep_duration = time::Duration::from_millis(50);
 
@@ -429,21 +430,27 @@ impl BlockGenerator {
                 _ => {}
             }
 
-            if bg.is_mining_block_outdated(&current_mining_block) {
+            if bg.is_mining_block_outdated(current_mining_block.as_ref()) {
                 // TODO: #transations TBD
                 if bg.sync.catch_up_mode() {
                     thread::sleep(sleep_duration);
                     continue;
                 }
 
-                current_mining_block =
-                    bg.assemble_new_block(MAX_TRANSACTION_COUNT_PER_BLOCK);
+                current_mining_block = Some(
+                    bg.assemble_new_block(MAX_TRANSACTION_COUNT_PER_BLOCK),
+                );
 
                 // set a mining problem
-                let current_difficulty =
-                    current_mining_block.block_header.difficulty();
+                let current_difficulty = current_mining_block
+                    .as_ref()
+                    .unwrap()
+                    .block_header
+                    .difficulty();
                 let problem = ProofOfWorkProblem {
                     block_hash: current_mining_block
+                        .as_ref()
+                        .unwrap()
                         .block_header
                         .problem_hash(),
                     difficulty: *current_difficulty,
@@ -469,10 +476,18 @@ impl BlockGenerator {
                 }
                 if new_solution.is_ok() {
                     let solution = new_solution.unwrap();
-                    current_mining_block.block_header.set_nonce(solution.nonce);
-                    current_mining_block.block_header.compute_hash();
-                    bg.on_mined_block(current_mining_block);
-                    current_mining_block = Block::default();
+                    current_mining_block
+                        .as_mut()
+                        .unwrap()
+                        .block_header
+                        .set_nonce(solution.nonce);
+                    current_mining_block
+                        .as_mut()
+                        .unwrap()
+                        .block_header
+                        .compute_hash();
+                    bg.on_mined_block(current_mining_block.unwrap());
+                    current_mining_block = None;
                     current_problem = None;
                 } else {
                     // wait a moment and check again
