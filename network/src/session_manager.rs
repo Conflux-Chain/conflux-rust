@@ -9,34 +9,38 @@ use crate::{
 use io::IoContext;
 use mio::net::TcpStream;
 use parking_lot::RwLock;
-use slab::{Slab, SlabIter};
+use slab::Slab;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
-/// Session manager maintains all ingress and egress TCP connections.
-/// It supports to limit the connections according to node IP policy.
+/// Session manager maintains all ingress and egress TCP connections in thread
+/// safe manner. It supports to limit the connections according to node IP
+/// policy.
 pub struct SessionManager {
-    sessions: Slab<Arc<RwLock<Session>>, usize>,
-    node_id_index: HashMap<NodeId, usize>,
-    ip_limit: NodeIpLimit,
+    sessions: RwLock<Slab<Arc<RwLock<Session>>, usize>>,
+    node_id_index: RwLock<HashMap<NodeId, usize>>,
+    ip_limit: RwLock<NodeIpLimit>,
 }
 
 impl SessionManager {
     pub fn new(offset: usize, capacity: usize, nodes_per_ip: usize) -> Self {
         SessionManager {
-            sessions: Slab::new_starting_at(offset, capacity),
-            node_id_index: HashMap::new(),
-            ip_limit: NodeIpLimit::new(nodes_per_ip),
+            sessions: RwLock::new(Slab::new_starting_at(offset, capacity)),
+            node_id_index: RwLock::new(HashMap::new()),
+            ip_limit: RwLock::new(NodeIpLimit::new(nodes_per_ip)),
         }
     }
 
-    pub fn count(&self) -> usize { self.sessions.count() }
+    pub fn count(&self) -> usize { self.sessions.read().count() }
 
-    pub fn get(&self, idx: usize) -> Option<&Arc<RwLock<Session>>> {
-        self.sessions.get(idx)
+    pub fn get(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
+        self.sessions.read().get(idx).cloned()
     }
 
-    pub fn iter(&self) -> SlabIter<Arc<RwLock<Session>>, usize> {
-        self.sessions.iter()
+    pub fn visit<F>(&self, mut visitor: F)
+    where F: FnMut(&Arc<RwLock<Session>>) {
+        for session in self.sessions.read().iter() {
+            visitor(session);
+        }
     }
 
     /// Retrieves the session count of handshakes, egress and ingress.
@@ -45,7 +49,7 @@ impl SessionManager {
         let mut egress = 0;
         let mut ingress = 0;
 
-        for s in self.sessions.iter() {
+        for s in self.sessions.read().iter() {
             match s.try_read() {
                 Some(ref s) if s.is_ready() && s.metadata.originated => {
                     egress += 1
@@ -61,19 +65,23 @@ impl SessionManager {
     }
 
     pub fn contains_node(&self, id: &NodeId) -> bool {
-        self.node_id_index.contains_key(id)
+        self.node_id_index.read().contains_key(id)
     }
 
     /// Creates a new session with specified TCP socket. It is egress connection
     /// if the `id` is not `None`, otherwise it is ingress connection.
     pub fn create(
-        &mut self, socket: TcpStream, address: SocketAddr, id: Option<&NodeId>,
+        &self, socket: TcpStream, address: SocketAddr, id: Option<&NodeId>,
         io: &IoContext<NetworkIoMessage>, host: &NetworkServiceInner,
     ) -> Result<usize, String>
     {
+        let mut sessions = self.sessions.write();
+        let mut node_id_index = self.node_id_index.write();
+        let mut ip_limit = self.ip_limit.write();
+
         // ensure the node id is unique if specified.
         if let Some(node_id) = id {
-            if self.node_id_index.contains_key(node_id) {
+            if node_id_index.contains_key(node_id) {
                 return Err(format!(
                     "session already exists, nodeId = {:?}",
                     node_id
@@ -83,14 +91,14 @@ impl SessionManager {
 
         // validate against node IP policy.
         let ip = address.ip();
-        if !self.ip_limit.is_ip_allowed(&ip) {
+        if !ip_limit.is_ip_allowed(&ip) {
             return Err(format!(
                 "IP policy limited, nodeId = {:?}, addr = {:?}",
                 id, address
             ));
         }
 
-        let index = match self.sessions.vacant_entry() {
+        let index = match sessions.vacant_entry() {
             None => Err(String::from("Max sessions reached")),
             Some(entry) => {
                 match Session::new(io, socket, address, id, entry.index(), host)
@@ -105,33 +113,42 @@ impl SessionManager {
 
         // update on creation succeeded
         if let Some(node_id) = id {
-            self.node_id_index.insert(node_id.clone(), index);
+            node_id_index.insert(node_id.clone(), index);
         }
 
-        self.ip_limit.on_add(ip);
+        ip_limit.on_add(ip);
 
         Ok(index)
     }
 
-    pub fn remove(&mut self, session: &Session) {
-        if self.sessions.remove(session.token()).is_some() {
-            if let Some(node_id) = session.id() {
-                self.node_id_index.remove(node_id);
-            }
+    /// Removes an expired session with specified `idx`.
+    pub fn remove(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
+        let mut sessions = self.sessions.write();
+        let session = sessions.get(idx).cloned()?;
+        let sess = session.write();
 
-            self.ip_limit.on_delete(session.address().ip());
+        if !sess.expired() {
+            return None;
         }
+
+        let removed = sessions.remove(idx)?;
+
+        if let Some(node_id) = sess.id() {
+            self.node_id_index.write().remove(node_id);
+        }
+
+        self.ip_limit.write().on_delete(sess.address().ip());
+
+        Some(removed)
     }
 
     pub fn update_ingress_node_id(
-        &mut self, idx: usize, node_id: &NodeId,
+        &self, idx: usize, node_id: &NodeId,
     ) -> Result<(), String> {
-        // ensure the node id is unique
-        if let Some(cur_idx) = self.node_id_index.get(node_id) {
-            return Err(format!("session already exists, node_id = {:?}, cur_idx = {}, new_idx = {}", node_id.clone(), *cur_idx, idx));
-        }
+        let sessions = self.sessions.read();
+        let mut node_id_index = self.node_id_index.write();
 
-        if !self.sessions.contains(idx) {
+        if !sessions.contains(idx) {
             return Err(format!(
                 "session not found, index = {}, node_id = {:?}",
                 idx,
@@ -139,7 +156,12 @@ impl SessionManager {
             ));
         }
 
-        self.node_id_index.insert(node_id.clone(), idx);
+        // ensure the node id is unique
+        if let Some(cur_idx) = node_id_index.get(node_id) {
+            return Err(format!("session already exists, node_id = {:?}, cur_idx = {}, new_idx = {}", node_id.clone(), *cur_idx, idx));
+        }
+
+        node_id_index.insert(node_id.clone(), idx);
 
         Ok(())
     }

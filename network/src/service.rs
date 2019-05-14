@@ -277,7 +277,7 @@ struct ProtocolTimer {
 /// RWLocks of the fields have to follow the defined order to avoid race
 #[allow(dead_code)]
 pub struct NetworkServiceInner {
-    pub sessions: RwLock<SessionManager>,
+    pub sessions: SessionManager,
     pub metadata: RwLock<HostMetadata>,
     pub config: NetworkConfiguration,
     udp_socket: Mutex<UdpSocket>,
@@ -432,11 +432,11 @@ impl NetworkServiceInner {
             discovery: Mutex::new(discovery),
             udp_socket: Mutex::new(udp_socket),
             tcp_listener: Mutex::new(tcp_listener),
-            sessions: RwLock::new(SessionManager::new(
+            sessions: SessionManager::new(
                 FIRST_SESSION,
                 MAX_SESSIONS,
                 config.nodes_per_ip,
-            )),
+            ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
             timer_counter: RwLock::new(HANDLER_TIMER),
@@ -554,8 +554,8 @@ impl NetworkServiceInner {
     fn try_promote_untrusted(&self) {
         // Get NodeIds from incoming connections
         let mut incoming_ids: Vec<NodeId> = Vec::new();
-        for s in self.sessions.read().iter() {
-            if let Some(ref s) = s.try_read() {
+        self.sessions.visit(|s| {
+            if let Some(s) = s.try_read() {
                 if s.is_ready() && !s.metadata.originated {
                     // is live incoming connection
                     if let Some(id) = s.metadata.id {
@@ -563,7 +563,7 @@ impl NetworkServiceInner {
                     }
                 }
             }
-        }
+        });
 
         // Check each live connection for its lifetime.
         // Promote the peers with live connection for a threshold period
@@ -591,7 +591,7 @@ impl NetworkServiceInner {
     }
 
     fn has_enough_outgoing_peers(&self) -> bool {
-        let (_, egress_count, _) = self.sessions.read().stat();
+        let (_, egress_count, _) = self.sessions.stat();
         return egress_count >= self.config.max_outgoing_peers as usize;
     }
 
@@ -614,7 +614,7 @@ impl NetworkServiceInner {
         let allow_ips = self.config.ip_filter.clone();
 
         let (handshake_count, egress_count, ingress_count) =
-            self.sessions.read().stat();
+            self.sessions.stat();
         let samples;
         {
             let egress_attempt_count = if max_outgoing_peers > egress_count {
@@ -634,9 +634,7 @@ impl NetworkServiceInner {
         let max_handshakes_per_round = max_handshakes / 2;
         let mut started: usize = 0;
         for id in nodes
-            .filter(|id| {
-                !self.sessions.read().contains_node(id) && *id != self_id
-            })
+            .filter(|id| !self.sessions.contains_node(id) && *id != self_id)
             .take(min(
                 max_handshakes_per_round as usize,
                 max_handshakes as usize - handshake_count,
@@ -663,7 +661,7 @@ impl NetworkServiceInner {
     }
 
     fn connect_peer(&self, id: &NodeId, io: &IoContext<NetworkIoMessage>) {
-        if self.sessions.read().contains_node(id) {
+        if self.sessions.contains_node(id) {
             trace!(target: "network", "Abort connect. Node already connected");
             return;
         }
@@ -698,10 +696,9 @@ impl NetworkServiceInner {
     }
 
     pub fn get_peer_info(&self) -> Vec<PeerInfo> {
-        let sessions = self.sessions.read();
+        let mut peers = Vec::with_capacity(self.sessions.count());
 
-        let mut peers = Vec::with_capacity(sessions.count());
-        for session in sessions.iter() {
+        self.sessions.visit(|session| {
             let sess = session.read();
             peers.push(PeerInfo {
                 id: sess.token(),
@@ -709,14 +706,13 @@ impl NetworkServiceInner {
                 addr: sess.address(),
                 caps: sess.metadata.peer_capabilities.clone(),
             })
-        }
+        });
+
         peers
     }
 
     pub fn get_peer_node_id(&self, peer: PeerId) -> NodeId {
-        let sessions = self.sessions.read();
-
-        match sessions.get(peer) {
+        match self.sessions.get(peer) {
             Some(session) => {
                 let sess = session.read();
                 sess.id().unwrap_or(&NodeId::default()).clone()
@@ -740,9 +736,7 @@ impl NetworkServiceInner {
         io: &IoContext<NetworkIoMessage>,
     ) -> Result<(), Error>
     {
-        let mut sessions = self.sessions.write();
-
-        match sessions.create(socket, address, id, io, self) {
+        match self.sessions.create(socket, address, id, io, self) {
             Ok(token) => {
                 trace!("session created with token {}", token);
                 if let Some(id) = id {
@@ -781,10 +775,9 @@ impl NetworkServiceInner {
         let mut ready_protocols: Vec<ProtocolId> = Vec::new();
         let mut messages: Vec<(ProtocolId, Vec<u8>)> = Vec::new();
         let mut kill = false;
-        let session = self.sessions.read().get(stream).cloned();
 
         // if let Some(session) = session.clone()
-        if let Some(session) = session {
+        if let Some(session) = self.sessions.get(stream) {
             loop {
                 let mut sess = session.write();
                 let data = sess.readable(io, self);
@@ -858,9 +851,7 @@ impl NetworkServiceInner {
             self.drop_peers(io);
         }
 
-        let session = self.sessions.read().get(stream).cloned();
-
-        if let Some(session) = session {
+        if let Some(session) = self.sessions.get(stream) {
             let mut sess = session.write();
             if let Err(e) = sess.writable(io) {
                 trace!(target: "network", "{}: Session write error: {:?}", stream, e);
@@ -902,8 +893,7 @@ impl NetworkServiceInner {
         let mut deregister = false;
 
         if let FIRST_SESSION...LAST_SESSION = token {
-            let sessions = self.sessions.read();
-            if let Some(session) = sessions.get(token).cloned() {
+            if let Some(session) = self.sessions.get(token) {
                 let mut sess = session.write();
                 if !sess.expired() {
                     if sess.is_ready() {
@@ -1217,8 +1207,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     {
         match stream {
             FIRST_SESSION...LAST_SESSION => {
-                let session = self.sessions.read().get(stream).cloned();
-                if let Some(session) = session {
+                if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
                         .register_socket(reg, event_loop)
@@ -1256,20 +1245,14 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     {
         match stream {
             FIRST_SESSION...LAST_SESSION => {
-                let mut sessions = self.sessions.write();
-                if let Some(session) = sessions.get(stream).cloned() {
+                if let Some(session) = self.sessions.remove(stream) {
                     let sess = session.write();
-                    if sess.expired() {
-                        sess.deregister_socket(event_loop)
-                            .expect("Error deregistering socket");
-                        if let Some(node_id) = sess.id() {
-                            self.node_db
-                                .write()
-                                .note_failure(node_id, true, false);
-                        }
-                        debug!("Remove session {}", stream);
-                        sessions.remove(&*sess);
+                    sess.deregister_socket(event_loop)
+                        .expect("Error deregistering socket");
+                    if let Some(node_id) = sess.id() {
+                        self.node_db.write().note_failure(node_id, true, false);
                     }
+                    debug!("Remove session {}", stream);
                 }
             }
             _ => warn!("Unexpected stream deregistration"),
@@ -1283,8 +1266,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     {
         match stream {
             FIRST_SESSION...LAST_SESSION => {
-                let session = self.sessions.read().get(stream).cloned();
-                if let Some(session) = session {
+                if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
                         .update_socket(reg, event_loop)
@@ -1395,8 +1377,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
     fn send(
         &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error> {
-        let sessions = self.network_service.sessions.read();
-        let session = sessions.get(peer);
+        let session = self.network_service.sessions.get(peer);
         trace!(target: "network", "Sending {} bytes to {}", msg.len(), peer);
         if let Some(session) = session {
             let latency =
@@ -1421,7 +1402,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         ts_to_send,
                         self.io.clone(),
                         self.protocol,
-                        (*session).clone(),
+                        session.clone(),
                         peer,
                         msg,
                         priority,

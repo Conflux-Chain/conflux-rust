@@ -190,7 +190,6 @@ impl Session {
                 if self.metadata.id.is_none() {
                     if let Err(reason) = host
                         .sessions
-                        .write()
                         .update_ingress_node_id(self.token(), &node_id)
                     {
                         warn!(
