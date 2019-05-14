@@ -77,6 +77,9 @@ build_config! {
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
         (p2p_nodes_per_ip, (usize), 1)
+        (data_propagate_enabled, (bool), false)
+        (data_propagate_interval_ms, (u64), 1000)
+        (data_propagate_size, (usize), 1000)
     }
     {
         (

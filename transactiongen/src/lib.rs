@@ -29,6 +29,8 @@ use rand::prelude::*;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{collections::HashMap, sync::Arc, thread, time};
 
+pub mod propagate;
+
 #[allow(unused)]
 enum TransGenState {
     Start,

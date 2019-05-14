@@ -207,7 +207,10 @@ pub trait NetworkProtocolHandler: Sync + Send {
 
     fn on_timeout(&self, io: &NetworkContext, timer: TimerToken);
 
-    fn on_work_dispatch(&self, io: &NetworkContext, work_type: HandlerWorkType);
+    fn on_work_dispatch(
+        &self, _io: &NetworkContext, _work_type: HandlerWorkType,
+    ) {
+    }
 }
 
 pub trait NetworkContext {

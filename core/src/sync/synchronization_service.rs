@@ -15,16 +15,10 @@ use cfx_types::H256;
 use keylib::KeyPair;
 use network::{
     node_table::{NodeEntry, NodeId},
-    Error as NetworkError, NetworkConfiguration, NetworkService, PeerInfo,
-    ProtocolId,
+    Error as NetworkError, NetworkService, PeerInfo, ProtocolId,
 };
 use primitives::Block;
 use std::sync::Arc;
-
-pub struct SynchronizationConfiguration {
-    pub network: NetworkConfiguration,
-    pub consensus: SharedConsensusGraph,
-}
 
 pub struct SynchronizationService {
     network: NetworkService,
@@ -34,7 +28,7 @@ pub struct SynchronizationService {
 
 impl SynchronizationService {
     pub fn new(
-        config: SynchronizationConfiguration,
+        network: NetworkService, consensus_graph: SharedConsensusGraph,
         protocol_config: ProtocolConfiguration,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         fast_recover: bool,
@@ -42,18 +36,20 @@ impl SynchronizationService {
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
             protocol_config,
-            config.consensus,
+            consensus_graph,
             verification_config,
             pow_config,
             fast_recover,
         ));
 
         SynchronizationService {
-            network: NetworkService::new(config.network),
+            network,
             protocol_handler: sync_handler,
             protocol: *b"cfx",
         }
     }
+
+    pub fn get_network_service(&self) -> &NetworkService { &self.network }
 
     pub fn catch_up_mode(&self) -> bool {
         self.protocol_handler.catch_up_mode()
