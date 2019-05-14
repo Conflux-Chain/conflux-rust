@@ -55,13 +55,13 @@ class ArgumentHolder:
 
 class RemoteSimulateArgs(ArgumentHolder):
     def __init__(self):
-        self.nodes_per_host = 3
+        self.nodes_per_host = 10
         self.generation_period_ms = 500
         self.num_blocks = 1000
         self.block_sync_step = 10
         self.txs_per_block = 1
         self.generate_tx_data_len = 600_000
-        self.connect_peers = 3
+        self.connect_peers = 8
         self.ips_file = "ips"
         self.throttling = "512,1024,2048"
         self.storage_memory_mb = 2
@@ -96,6 +96,8 @@ class LatencyExperiment(RemoteSimulateArgs):
 
     def run_tps(self):
         for tx_data_len in self.generate_txs_data_len_group.split(","):
+            tx_data_len = int(tx_data_len)
+            print("=========================================================")
             print("start TPS experiment, tx_data_len = {} ...".format(tx_data_len))
             
             print("kill remote conflux and cleanup logs ...")
@@ -167,5 +169,4 @@ class LatencyExperiment(RemoteSimulateArgs):
         assert ret == 0, "Failed to statistic block confirmation latency, return code = {}".format(ret)
 
 if __name__ == "__main__":
-    # LatencyExperiment().run()
-    print(RemoteSimulateArgs().__dict__)
+    LatencyExperiment().run()
