@@ -259,7 +259,9 @@ impl<KVDB: KeyValueDB + ?Sized> Readable for KVDB {
         R: Deref<Target = [u8]>,
     {
         self.get(col, &key.key())
-            .expect(&format!("db get failed, key: {:?}", &key.key() as &[u8]))
+            .unwrap_or_else(|_| {
+                panic!("db get failed, key: {:?}", &key.key() as &[u8])
+            })
             .map(|v| rlp::decode(&v).expect("decode db value failed"))
     }
 

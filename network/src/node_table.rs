@@ -780,7 +780,7 @@ impl NodeTable {
         let nodes = node_ids
             .into_iter()
             .map(|id| {
-                let index = self.node_index.get(&id).unwrap();
+                let index = &self.node_index[&id];
                 &self.node_reputation_table[index.0][index.1]
             })
             .take(MAX_NODES)
