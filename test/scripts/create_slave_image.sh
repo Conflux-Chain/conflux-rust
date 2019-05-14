@@ -21,7 +21,7 @@ master_ip=`cat ips`
 master_id=`cat instances`
 setup_script="setup_image.sh"
 scp -o "StrictHostKeyChecking no" $SCRIPT_DIR/$setup_script ubuntu@$master_ip:~
-ssh ubuntu@$master_ip ./$setup_script
+ssh ubuntu@$master_ip ./$setup_script $branch
 
 res=`aws ec2 create-image --instance-id $master_id --name ${key_pair}_slave_image --no-reboot`
 echo $res|jq ".ImageId"

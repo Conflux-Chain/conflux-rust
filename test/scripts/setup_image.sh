@@ -4,6 +4,7 @@ if ! [ -x "$(command -v cargo)" ]; then
   echo 'Error: cargo is not installed.' >&2
   exit 1
 fi
+branch=${1:-master}
 sudo apt install -y iotop clang git
 git clone https://github.com/Conflux-Chain/conflux-rust
 cd conflux-rust
