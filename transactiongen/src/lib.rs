@@ -34,7 +34,7 @@ use rand::prelude::*;
 use rlp::Encodable;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::Arc,
     thread, time,
 };
@@ -305,6 +305,8 @@ pub struct SpecialTransactionGenerator {
     erc20_address: Address,
 }
 
+// Allow use of hex() in H256, etc.
+#[allow(deprecated)]
 impl SpecialTransactionGenerator {
     const MAX_TOTAL_ACCOUNTS: usize = 100000;
 
