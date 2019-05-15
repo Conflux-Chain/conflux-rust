@@ -616,6 +616,10 @@ impl ConsensusGraphInner {
                             // Add future transactions back to pool if we are
                             // not verifying forking chain
                             if on_local_pivot && got > expected {
+                                debug!(
+                                    "tx execution error InvalidNonce: nonce expected: {}, got {}, \
+                                    transaction={:?}, err={:?}",
+                                    expected, got, transaction.clone(), r);
                                 trace!(
                                         "To re-add transaction ({:?}) to pending pool",
                                         transaction.clone()
@@ -2132,6 +2136,7 @@ impl ConsensusGraph {
         );
 
         {
+            // FIXME: the comments below is now BS.
             // When a tx is executed successfully, it will be removed from
             // `unexecuted_transaction_addresses` If a tx is
             // executed with failure(InvalidNonce), or the block packing it is
@@ -2183,9 +2188,11 @@ impl ConsensusGraph {
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
         for tx in block.transactions.iter() {
-            self.txpool.remove_pending(&*tx);
-            self.txpool.remove_ready(tx.clone());
+            self.txpool.set_tx_stale_for_ready(tx.clone());
         }
+
+        let (_ready, pending, total) = self.txpool.stats();
+        info!("Total transaction received {}, total txs packed by chain {}", total, total - pending);
 
         inner.compute_anticone(me);
 
