@@ -29,10 +29,11 @@ fn get_expected_best_hash() -> String {
     if let Value::Array(blocks) = json {
         for block_value in blocks.iter().rev() {
             if let Value::Object(ref block) = block_value {
-                let hash_value = &block["hash"];
-                if let Value::Null = hash_value {
+                let epoch_value = &block["epochNumber"];
+                if let Value::Null = epoch_value {
                     continue;
                 }
+                let hash_value = &block["hash"];
                 if let Value::String(hash) = hash_value {
                     return hash.clone();
                 }
