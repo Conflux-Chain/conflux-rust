@@ -888,7 +888,7 @@ impl TransactionPool {
             }
         }
 
-        if log::max_level() >= log::LogLevel::Debug {
+        if log::max_level() >= log::Level::Debug {
             let mut rlp_s = RlpStream::new();
             for tx in &packed_transactions {
                 rlp_s.append::<TransactionWithSignature>(&**tx);
