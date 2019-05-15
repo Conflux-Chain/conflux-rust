@@ -19,7 +19,7 @@ use crate::{
 use cfx_types::{H256, U256, U512};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{block::CompactBlock, Block, BlockHeader, EpochNumber};
+use primitives::{block::CompactBlock, Block, BlockHeader};
 use rlp::Rlp;
 use slab::Slab;
 use std::{
