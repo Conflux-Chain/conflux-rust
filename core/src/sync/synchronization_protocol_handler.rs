@@ -1475,7 +1475,7 @@ impl SynchronizationProtocolHandler {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
             genesis_hash: *self.graph.genesis_hash(),
-            best_epoch: self.graph.best_epoch_number(),
+            best_epoch: best_info.best_epoch_number as u64,
             terminal_block_hashes: best_info.terminal_block_hashes,
         });
         self.send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
