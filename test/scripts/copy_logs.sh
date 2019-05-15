@@ -2,17 +2,14 @@
 
 set -e
 
-shopt -s  expand_aliases
-which pssh || alias pssh='parallel-ssh'
-
 log_dir=logs
 
 rm -rf $log_dir
 mkdir -p $log_dir/logs_tmp
 
 
-#pssh -O "StrictHostKeyChecking no" -h ips -p 400 -t 600 'find /tmp/conflux_test_* -name "conflux.log" | xargs tar cvfz log.tgz'
-pssh -O "StrictHostKeyChecking no" -h ips -p 400 -t 600 "./remote_collect_log.sh"
+#parallel-ssh -O "StrictHostKeyChecking no" -h ips -p 400 -t 600 'find /tmp/conflux_test_* -name "conflux.log" | xargs tar cvfz log.tgz'
+parallel-ssh -O "StrictHostKeyChecking no" -h ips -p 400 -t 600 "./remote_collect_log.sh"
 for i in `cat ips`
 do
     scp -o "StrictHostKeyChecking no" ubuntu@$i:~/log.tgz $log_dir/logs_tmp/$i.tgz &
