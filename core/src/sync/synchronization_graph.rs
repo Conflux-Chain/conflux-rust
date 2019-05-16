@@ -57,6 +57,7 @@ impl SyncGraphStatistics {
 
 pub struct BestInformation {
     pub best_block_hash: H256,
+    pub best_epoch_number: usize,
     pub current_difficulty: U256,
     pub terminal_block_hashes: Vec<H256>,
     pub deferred_state_root: H256,
@@ -1144,6 +1145,7 @@ impl SynchronizationGraph {
         let consensus_inner = self.consensus.inner.upgradable_read();
         let value = BestInformation {
             best_block_hash: consensus_inner.best_block_hash(),
+            best_epoch_number: consensus_inner.best_epoch_number(),
             current_difficulty: consensus_inner.current_difficulty,
             terminal_block_hashes: consensus_inner.terminal_hashes(),
             deferred_state_root: consensus_inner

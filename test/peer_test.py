@@ -25,9 +25,14 @@ class AutoDiscovery(ConfluxTestFramework):
         # node 1,2,3: nodes with IP limitation disabled
         # node 4:     node with IP limitation enabled
         self.num_nodes = 5
+        self.conf_parameters = {
+            "discovery_fast_refresh_timeout_ms": "200",
+            "discovery_round_timeout_ms": "100",
+            "discovery_housekeeping_timeout_ms": "200",
+        }
 
     def discovery_args(self):
-        return ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "15"]
+        return ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -49,8 +54,8 @@ class AutoDiscovery(ConfluxTestFramework):
         self.log.info("Test AutoDiscovery")
         wait_until(lambda: [len(i.getpeerinfo()) for i in self.nodes[0:-1]].count(self.num_nodes - 2) == self.num_nodes - 1)
         sec = (datetime.datetime.now() - self.start_time).total_seconds()
-        assert_greater_than_or_equal(sec, 15)
-        self.log.info("Passed after running " + str(sec) + " seconds")
+        # assert_greater_than_or_equal(sec, 15)
+        self.log.info("Passed after running %.2f seconds" % sec)
 
         self.test_ip_limit()
         
@@ -68,7 +73,7 @@ class AutoDiscovery(ConfluxTestFramework):
         p2p = IpLimitedNode()
         self.ip_limited_node.add_p2p_connection(p2p)
         network_thread_start()
-        wait_until(lambda: p2p.disconnect_reason == 3, timeout=5)
+        wait_until(lambda: p2p.disconnect_reason == 3 or p2p.state == "closed", timeout=3)
 
 
 if __name__ == "__main__":

@@ -44,6 +44,9 @@ build_config! {
         (public_address, (Option<String>), None)
         (ledger_cache_size, (Option<usize>), Some(2048))
         (enable_discovery, (bool), true)
+        (discovery_fast_refresh_timeout_ms, (u64), 10000)
+        (discovery_round_timeout_ms, (u64), 500)
+        (discovery_housekeeping_timeout_ms, (u64), 1000)
         (node_table_timeout, (Option<u64>), Some(300))
         (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
         (fast_recover, (bool), true)
@@ -158,6 +161,14 @@ impl Configuration {
         }
         network_config.test_mode = self.raw_conf.test_mode;
         network_config.nodes_per_ip = self.raw_conf.p2p_nodes_per_ip;
+        network_config.fast_discovery_refresh_timeout = Duration::from_millis(
+            self.raw_conf.discovery_fast_refresh_timeout_ms,
+        );
+        network_config.discovery_round_timeout =
+            Duration::from_millis(self.raw_conf.discovery_round_timeout_ms);
+        network_config.housekeeping_timeout = Duration::from_millis(
+            self.raw_conf.discovery_housekeeping_timeout_ms,
+        );
         network_config
     }
 
