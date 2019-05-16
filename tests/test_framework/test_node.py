@@ -33,13 +33,14 @@ class ErrorMatch(Enum):
 
 class TestNode:
     def __init__(self, index, datadir, rpchost, confluxd, rpc_timeout=None, remote=False, ip=None, user=None,
-                 rpcport=None):
+                 rpcport=None, no_pssh=False):
         self.index = index
         self.datadir = datadir
         self.stdout_dir = os.path.join(self.datadir, "stdout")
         self.stderr_dir = os.path.join(self.datadir, "stderr")
         self.log = os.path.join(self.datadir, "node" + str(index) + ".log")
         self.remote = remote
+        self.no_pssh = no_pssh
         self.rpchost = rpchost
         if remote:
             self.ip = ip
