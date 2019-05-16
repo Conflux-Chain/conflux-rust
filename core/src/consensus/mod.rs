@@ -2,9 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod consensus_executor;
+use super::consensus::consensus_executor::{ConsensusExecutor, ExecutionTask};
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager},
+    consensus::consensus_executor::{
+        EpochExecutionTask,
+        ExecutionTask::{ExecuteEpoch, GetResult},
+        GetExecutionResultTask,
+    },
     db::COL_MISC,
     executive::{ExecutionError, Executive},
     ext_db::SystemDB,
@@ -1277,6 +1284,7 @@ pub struct ConsensusGraph {
     pub data_man: Arc<BlockDataManager>,
     pub invalid_blocks: RwLock<HashSet<H256>>,
     storage_manager: Arc<StorageManager>,
+    executor: Mutex<ConsensusExecutor>,
     pub statistics: SharedStatistics,
 }
 
@@ -1289,10 +1297,12 @@ impl ConsensusGraph {
         statistics: SharedStatistics, db: Arc<SystemDB>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
         pow_config: ProofOfWorkConfig,
-    ) -> Self
+    ) -> Arc<Self>
     {
         let data_man = Arc::new(BlockDataManager::new(db, cache_man));
-        let consensus_graph = ConsensusGraph {
+        let executor = Mutex::new(ConsensusExecutor::new());
+
+        let consensus_graph = Arc::new(ConsensusGraph {
             inner: RwLock::new(ConsensusGraphInner::with_genesis_block(
                 &genesis_block,
                 storage_manager.clone(),
@@ -1305,8 +1315,9 @@ impl ConsensusGraph {
             data_man: data_man.clone(),
             invalid_blocks: RwLock::new(HashSet::new()),
             storage_manager,
+            executor,
             statistics,
-        };
+        });
 
         let genesis = consensus_graph.genesis_block();
         data_man.insert_block_header(
@@ -1315,6 +1326,8 @@ impl ConsensusGraph {
         );
         data_man.insert_block_to_kv(genesis, true);
 
+        let consensus = consensus_graph.clone();
+        consensus_graph.executor.lock().start(consensus);
         consensus_graph
     }
 
@@ -1517,11 +1530,12 @@ impl ConsensusGraph {
     /// The parameters are indexes in consensus graph.
     pub fn compute_epoch(
         &self, inner: &mut ConsensusGraphInner, epoch_index: usize,
-        parent_index: usize, reward_index: Option<(usize, usize)>,
-        on_local_pivot: bool, to_pending: &mut Vec<Arc<SignedTransaction>>,
+        reward_index: Option<(usize, usize)>, on_local_pivot: bool,
+        to_pending: &mut Vec<Arc<SignedTransaction>>,
     )
     {
         let epoch_hash = inner.arena[epoch_index].hash;
+        let parent_index = inner.arena[epoch_index].parent;
 
         // Check if the state has been computed
         if inner.storage_manager.state_exists(epoch_hash)
@@ -1638,7 +1652,7 @@ impl ConsensusGraph {
         }
         // Because we have genesis at height 0, this should always be true
         debug_assert!(inner.pivot_chain[fork_height] == idx);
-        debug!("Forked at index {}", idx);
+        debug!("Forked at index {} height {}", idx, fork_height);
         chain.push(idx);
         chain.reverse();
         let mut epoch_number_map: HashMap<usize, usize> = HashMap::new();
@@ -1718,7 +1732,6 @@ impl ConsensusGraph {
             self.compute_epoch(
                 inner,
                 inner.pivot_chain[last_state_height],
-                inner.pivot_chain[last_state_height - 1],
                 reward_index,
                 false,
                 &mut Vec::new(),
@@ -1751,7 +1764,6 @@ impl ConsensusGraph {
             self.compute_epoch(
                 inner,
                 chain[fork_at],
-                chain[fork_at - 1],
                 reward_index,
                 false,
                 &mut Vec::new(),
@@ -1759,15 +1771,8 @@ impl ConsensusGraph {
         }
 
         // FIXME: Propagate errors upward
-        let state_root = inner
-            .storage_manager
-            .get_state_at(inner.arena[me].hash)
-            .unwrap()
-            .get_state_root()
-            .unwrap()
-            .unwrap();
-
-        let receipts_root = inner.block_receipts_root.get(&me).unwrap().clone();
+        let (state_root, receipts_root) =
+            self.executor.lock().wait_for_result(me);
         debug!(
             "Epoch {:?} has state_root={:?} receipts_root={:?}",
             inner.arena[me].hash, state_root, receipts_root
@@ -2052,7 +2057,6 @@ impl ConsensusGraph {
                 self.compute_epoch(
                     inner,
                     pivot_index,
-                    inner.arena[pivot_index].parent,
                     reward_index,
                     true,
                     &mut Vec::new(),
@@ -2328,7 +2332,6 @@ impl ConsensusGraph {
             pivot_index += 1;
         }
 
-        let mut to_pending = Vec::new();
         let to_state_pos =
             if new_pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
                 0 as usize
@@ -2353,24 +2356,12 @@ impl ConsensusGraph {
         while state_at < to_state_pos {
             let reward_index =
                 inner.get_pivot_reward_index(state_at, &new_pivot_chain);
-            self.compute_epoch(
-                inner,
+            self.executor.lock().enqueue_epoch(
                 new_pivot_chain[state_at],
-                new_pivot_chain[state_at - 1],
                 reward_index,
                 true,
-                &mut to_pending,
             );
             state_at += 1;
-        }
-
-        if state_at > 1 {
-            state_at -= 1;
-            let state = inner
-                .storage_manager
-                .get_state_at(inner.arena[new_pivot_chain[state_at]].hash)
-                .unwrap();
-            self.txpool.recycle_future_transactions(to_pending, state);
         }
 
         inner.adjust_difficulty(
@@ -2379,6 +2370,7 @@ impl ConsensusGraph {
         );
         inner.pivot_chain = new_pivot_chain;
         inner.persist_terminals();
+        debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 
     /// Check if all executed results of an epoch exist
@@ -2634,4 +2626,53 @@ impl ConsensusGraph {
         logs.reverse();
         logs
     }
+
+    fn handle_execution_work(&self, task: ExecutionTask) {
+        match task {
+            ExecuteEpoch(task) => self.handle_epoch_execution(task),
+            GetResult(task) => self.handle_get_result(task),
+        }
+    }
+
+    fn handle_epoch_execution(&self, task: EpochExecutionTask) {
+        let mut to_pending: Vec<Arc<SignedTransaction>> = Vec::new();
+        let mut inner = self.inner.write();
+        self.compute_epoch(
+            &mut *inner,
+            task.epoch_index,
+            task.reward_index,
+            true,
+            &mut to_pending,
+        );
+        let parent = inner.arena[task.epoch_index].parent;
+
+        if parent != inner.genesis_block_index {
+            let state = inner
+                .storage_manager
+                .get_state_at(inner.arena[parent].hash)
+                .unwrap();
+            self.txpool.recycle_future_transactions(to_pending, state);
+        }
+    }
+
+    fn handle_get_result(&self, task: GetExecutionResultTask) {
+        let inner = self.inner.read();
+        let epoch_index = task.epoch_index;
+        // FIXME: Propagate errors upward
+        let state_root = inner
+            .storage_manager
+            .get_state_at(inner.arena[epoch_index].hash)
+            .unwrap()
+            .get_state_root()
+            .unwrap()
+            .unwrap();
+
+        let receipts_root =
+            inner.block_receipts_root.get(&epoch_index).unwrap().clone();
+        task.sender
+            .send((state_root, receipts_root))
+            .expect("Consensus Worker fails");
+    }
+
+    pub fn stop_executor(&self) { self.executor.lock().stop() }
 }

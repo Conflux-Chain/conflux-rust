@@ -78,15 +78,20 @@ pub struct ClientHandle {
 impl ClientHandle {
     pub fn into_be_dropped(
         self,
-    ) -> (Weak<SystemDB>, Arc<BlockGenerator>, Box<Any>) {
+    ) -> (
+        Weak<SystemDB>,
+        Arc<BlockGenerator>,
+        Arc<ConsensusGraph>,
+        Box<Any>,
+    ) {
         (
             self.ledger_db,
             self.blockgen,
+            self.consensus,
             Box::new((
                 self.debug_rpc_http_server,
                 self.rpc_tcp_server,
                 self.rpc_http_server,
-                self.consensus,
                 self.txpool,
                 self.sync,
                 self.txgen,
@@ -184,7 +189,7 @@ impl Client {
 
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
-        let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+        let consensus = ConsensusGraph::with_genesis_block(
             genesis_block,
             storage_manager.clone(),
             vm.clone(),
@@ -193,7 +198,7 @@ impl Client {
             ledger_db.clone(),
             cache_man.clone(),
             pow_config.clone(),
-        ));
+        );
 
         let verification_config = conf.verification_config();
         let protocol_config = conf.protocol_config();
@@ -379,8 +384,11 @@ impl Client {
     }
 
     pub fn close(handle: ClientHandle) -> i32 {
-        let (ledger_db, blockgen, to_drop) = handle.into_be_dropped();
+        let (ledger_db, blockgen, consensus, to_drop) =
+            handle.into_be_dropped();
         BlockGenerator::stop(&blockgen);
+        consensus.stop_executor();
+        drop(consensus);
         drop(blockgen);
         drop(to_drop);
 

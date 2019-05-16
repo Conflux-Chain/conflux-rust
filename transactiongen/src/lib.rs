@@ -33,11 +33,7 @@ use primitives::{
 use rand::prelude::*;
 use rlp::Encodable;
 use secret_store::{SecretStore, SharedSecretStore};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    thread, time,
-};
+use std::{collections::HashMap, sync::Arc, thread, time};
 
 pub mod propagate;
 

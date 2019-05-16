@@ -2,10 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use criterion::Criterion;
-use keylib::{KeyPair, sign, recover, verify_public};
-use criterion::{criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use keccak_hash::keccak;
+use keylib::{recover, sign, verify_public, KeyPair};
 
 fn recover_benchmark(c: &mut Criterion) {
     let secret =
@@ -21,7 +20,6 @@ fn recover_benchmark(c: &mut Criterion) {
         });
     });
 }
-
 
 fn verify_benchmark(c: &mut Criterion) {
     let secret =
