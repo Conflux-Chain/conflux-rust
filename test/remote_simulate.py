@@ -21,7 +21,7 @@ class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
-        self.rpc_timewait = 30
+        self.rpc_timewait = 10
         self.conf_parameters = {
             "log_level": "\"debug\"",
             "fast_recover": "true",
@@ -92,8 +92,7 @@ class P2PTest(ConfluxTestFramework):
         parser.add_argument(
             "--data-propagate-enabled",
             dest="data_propagate_enabled",
-            default=False,
-            type=bool
+            action='store_true',
         )
         parser.add_argument(
             "--data-propagate-interval-ms",
@@ -247,16 +246,12 @@ class P2PTest(ConfluxTestFramework):
                 best_block_futures.append(executor.submit(n.getbestblockhash))
 
             for f in block_count_futures:
-                if f.exception() is not None:
-                    self.log.error("failed to get block count: {}".format(f.exception()))
-                else:
-                    block_counts.append(f.result())
+                assert f.exception() is None, "failed to get block count: {}".format(f.exception())
+                block_counts.append(f.result())
 
             for f in best_block_futures:
-                if f.exception() is not None:
-                    self.log.error("failed to get best block: {}".format(f.exception()))
-                else:
-                    best_blocks.append(f.result())
+                assert f.exception() is None, "failed to get best block: {}".format(f.exception())
+                best_blocks.append(f.result())
 
             self.log.info("blocks: {}".format(Counter(block_counts)))
 
