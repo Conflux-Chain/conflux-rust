@@ -42,6 +42,7 @@ build_msgid! {
     TRANSACTION_DIGESTS = 0x14
     GET_TRANSACTIONS = 0x15
     GET_TRANSACTIONS_RESPONSE = 0x16
+    GET_BLOCK_HASHES_BY_EPOCH = 0x17
 }
 
 impl From<u8> for MsgId {

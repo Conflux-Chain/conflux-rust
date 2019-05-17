@@ -8,12 +8,14 @@ extern crate primitives;
 extern crate rlp;
 
 mod blockbodies;
+mod blockhashes;
 mod blockheaders;
 mod blocks;
 mod blocktxn;
 mod cmpctblocks;
 mod getblockbodies;
 mod getblockhashes;
+mod getblockhashesbyepoch;
 mod getblockheaders;
 mod getblocks;
 mod getblocktxn;
@@ -28,12 +30,14 @@ mod transactions;
 
 pub use crate::{
     blockbodies::GetBlockBodiesResponse,
+    blockhashes::GetBlockHashesResponse,
     blockheaders::GetBlockHeadersResponse,
     blocks::{GetBlocksResponse, GetBlocksWithPublicResponse},
     blocktxn::GetBlockTxnResponse,
     cmpctblocks::GetCompactBlocksResponse,
     getblockbodies::GetBlockBodies,
     getblockhashes::GetBlockHashes,
+    getblockhashesbyepoch::GetBlockHashesByEpoch,
     getblockheaders::GetBlockHeaders,
     getblocks::GetBlocks,
     getblocktxn::GetBlockTxn,

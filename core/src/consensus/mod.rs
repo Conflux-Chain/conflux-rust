@@ -1345,6 +1345,12 @@ impl ConsensusGraph {
         self.inner.read().get_block_epoch_number(hash)
     }
 
+    pub fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.inner.read().block_hashes_by_epoch(epoch_number)
+    }
+
     pub fn gas_price(&self) -> Option<U256> {
         let inner = self.inner.read();
         let mut last_epoch_number = inner.best_epoch_number();
