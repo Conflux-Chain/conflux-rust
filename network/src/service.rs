@@ -216,14 +216,13 @@ impl NetworkService {
     pub fn sign_challenge(&self, challenge: Vec<u8>) -> Result<Vec<u8>, Error> {
         let hash = keccak(challenge);
         if let Some(ref inner) = self.inner {
-            let signature =
-                match sign(inner.metadata.read().keys.secret(), &hash) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        warn!(target: "network", "Error signing hello packet");
-                        return Err(Error::from(e));
-                    }
-                };
+            let signature = match sign(inner.metadata.keys.secret(), &hash) {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!(target: "network", "Error signing hello packet");
+                    return Err(Error::from(e));
+                }
+            };
             Ok(signature[..].to_owned())
         } else {
             Err("Network service not started yet!".into())
@@ -232,7 +231,7 @@ impl NetworkService {
 
     pub fn net_key_pair(&self) -> Result<KeyPair, Error> {
         if let Some(ref inner) = self.inner {
-            Ok(inner.metadata.read().keys.clone())
+            Ok(inner.metadata.keys.clone())
         } else {
             Err("Network service not started yet!".into())
         }
@@ -255,7 +254,7 @@ pub struct HostMetadata {
     #[allow(unused)]
     /// Our private and public keys.
     pub keys: KeyPair,
-    pub capabilities: Vec<Capability>,
+    pub capabilities: RwLock<Vec<Capability>>,
     pub local_address: SocketAddr,
     /// Local address + discovery port
     pub local_endpoint: NodeEndpoint,
@@ -278,7 +277,7 @@ struct ProtocolTimer {
 #[allow(dead_code)]
 pub struct NetworkServiceInner {
     pub sessions: SessionManager,
-    pub metadata: RwLock<HostMetadata>,
+    pub metadata: HostMetadata,
     pub config: NetworkConfiguration,
     udp_socket: Mutex<UdpSocket>,
     tcp_listener: Mutex<TcpListener>,
@@ -420,13 +419,13 @@ impl NetworkServiceInner {
         let nodes_path = config.config_path.clone();
 
         let mut inner = NetworkServiceInner {
-            metadata: RwLock::new(HostMetadata {
+            metadata: HostMetadata {
                 keys,
-                capabilities: Vec::new(),
+                capabilities: RwLock::new(Vec::new()),
                 local_address: listen_address,
                 local_endpoint,
                 public_endpoint,
-            }),
+            },
             config: config.clone(),
             udp_channel: RwLock::new(UdpChannel::new()),
             discovery: Mutex::new(discovery),
@@ -573,9 +572,7 @@ impl NetworkServiceInner {
         );
     }
 
-    pub fn local_addr(&self) -> SocketAddr {
-        self.metadata.read().local_address
-    }
+    pub fn local_addr(&self) -> SocketAddr { self.metadata.local_address }
 
     fn drop_node(&self, local_id: NodeId) -> Result<(), Error> {
         let removed_node = self.node_db.write().remove(&local_id);
@@ -602,12 +599,11 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        let meta = self.metadata.read();
-        if meta.capabilities.is_empty() {
+        if self.metadata.capabilities.read().is_empty() {
             return;
         }
 
-        let self_id = meta.id().clone();
+        let self_id = self.metadata.id().clone();
         let max_outgoing_peers = self.config.max_outgoing_peers as usize;
         //let max_incoming_peers = self.config.max_incoming_peers;
         let max_handshakes = self.config.max_handshakes;
@@ -1152,9 +1148,9 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 let h = handler.clone();
                 h.initialize(&NetworkContext::new(io, *protocol, self));
                 self.handlers.write().insert(*protocol, h);
-                let mut metadata = self.metadata.write();
+                let mut caps = self.metadata.capabilities.write();
                 for &version in versions {
-                    metadata.capabilities.push(Capability {
+                    caps.push(Capability {
                         protocol: *protocol,
                         version,
                     });
