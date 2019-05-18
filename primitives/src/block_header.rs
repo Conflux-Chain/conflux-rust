@@ -347,6 +347,7 @@ impl BlockHeaderBuilder {
         block_header.approximated_rlp_size =
             mem::size_of::<BlockHeaderRlpPart>()
                 + block_header.referee_hashes.heap_size_of_children();
+        block_header.compute_hash();
 
         block_header
     }
