@@ -27,22 +27,21 @@ use std::{
     thread,
 };
 
-enum RunningState {
-    Start,
-    Stop,
-}
-
+#[derive(Debug)]
 pub struct RewardExecutionInfo {
     pub pivot_hash: H256,
     pub epoch_block_hashes: Vec<H256>,
     pub epoch_block_states: Vec<(bool, U512)>,
 }
 
+#[derive(Debug)]
 pub enum ExecutionTask {
     ExecuteEpoch(EpochExecutionTask),
     GetResult(GetExecutionResultTask),
+    Stop,
 }
 
+#[derive(Debug)]
 pub struct EpochExecutionTask {
     pub epoch_hash: H256,
     pub epoch_block_hashes: Vec<H256>,
@@ -50,6 +49,7 @@ pub struct EpochExecutionTask {
     pub on_local_pivot: bool,
 }
 
+#[derive(Debug)]
 pub struct GetExecutionResultTask {
     pub epoch_hash: H256,
     pub sender: Sender<(H256, H256)>,
@@ -57,8 +57,6 @@ pub struct GetExecutionResultTask {
 
 pub struct ConsensusExecutor {
     sender: Mutex<Sender<ExecutionTask>>,
-    state: Arc<Mutex<RunningState>>,
-
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
 }
@@ -67,24 +65,18 @@ impl ConsensusExecutor {
     pub fn start(data_man: Arc<BlockDataManager>, vm: VmFactory) -> Arc<Self> {
         let (sender, receiver) = channel();
 
-        let state = Arc::new(Mutex::new(RunningState::Start));
         let executor = Arc::new(ConsensusExecutor {
             sender: Mutex::new(sender),
-            state,
             data_man,
             vm,
         });
         // It receives blocks hashes from on_new_block and execute them
-        let state_clone = executor.state.clone();
         let executor_clone = executor.clone();
         thread::Builder::new()
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
-                match *state_clone.lock() {
-                    RunningState::Stop => break,
-                    _ => {}
-                }
                 match receiver.recv() {
+                    Ok(ExecutionTask::Stop) => break,
                     Ok(task) => executor_clone.handle_execution_work(task),
                     Err(_) => break,
                 }
@@ -123,11 +115,13 @@ impl ConsensusExecutor {
     }
 
     fn handle_execution_work(&self, task: ExecutionTask) {
+        debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
                 self.handle_epoch_execution(task)
             }
             ExecutionTask::GetResult(task) => self.handle_get_result(task),
+            _ => {}
         }
     }
 
@@ -645,5 +639,10 @@ impl ConsensusExecutor {
         true
     }
 
-    pub fn stop(&self) { *self.state.lock() = RunningState::Stop; }
+    pub fn stop(&self) {
+        self.sender
+            .lock()
+            .send(ExecutionTask::Stop)
+            .expect("Receiver exists");
+    }
 }
