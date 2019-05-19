@@ -18,8 +18,7 @@ use message::{
     GetCompactBlocks, GetCompactBlocksResponse, GetTerminalBlockHashes,
     GetTerminalBlockHashesResponse, GetTransactions, GetTransactionsResponse,
     Message, MsgId, NewBlock, NewBlockHashes, Status, TransIndex,
-    TransactionDigest, TransactionDigests, TransactionPropagationControl,
-    Transactions,
+    TransactionDigests, TransactionPropagationControl, Transactions,
 };
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
@@ -577,7 +576,7 @@ impl SynchronizationProtocolHandler {
             && (peer_info.notified_mode.unwrap() == true)
         {
             peer_info.received_transaction_count +=
-                transaction_digests.trans_digests.len();
+                transaction_digests.trans_short_ids.len();
             if peer_info.received_transaction_count
                 > self.protocol_config.max_trans_count_received_in_catch_up
                     as usize
@@ -590,24 +589,25 @@ impl SynchronizationProtocolHandler {
         let mut indices = Vec::new();
         let mut tx_ids = HashSet::new();
 
-        for digest in transaction_digests.trans_digests {
-            if syn
-                .inflight_requested_transactions
-                .contains(&digest.short_id)
-            {
+        for (idx, tx_id) in
+            transaction_digests.trans_short_ids.iter().enumerate()
+        {
+            if syn.inflight_requested_transactions.contains(tx_id) {
                 // Already being requested
                 continue;
             }
 
-            if syn.received_transactions.contains(&digest.short_id) {
+            if syn.received_transactions.contains(tx_id) {
                 // Already received
                 continue;
             }
 
-            syn.inflight_requested_transactions.insert(digest.short_id);
+            syn.inflight_requested_transactions.insert(*tx_id);
 
-            indices.push(digest.source_index);
-            tx_ids.insert(digest.short_id);
+            let index =
+                TransIndex::new((transaction_digests.window_index, idx));
+            indices.push(index);
+            tx_ids.insert(*tx_id);
         }
 
         self.request_transactions(io, peer, indices, tx_ids, &mut *syn)
@@ -2218,23 +2218,20 @@ impl SynchronizationProtocolHandler {
 
                     // Send all transactions
                     if peer_info.last_sent_transaction_hashes.is_empty() {
-                        let mut tx_msg = Box::new(TransactionDigests { trans_digests: Vec::new() });
+                        let mut tx_msg = Box::new(TransactionDigests { window_index, trans_short_ids: Vec::new() });
                         let mut total_tx_bytes = 0;
-                        for (idx, tx) in transactions.iter().enumerate() {
+                        for tx in transactions.iter() {
                             total_tx_bytes += tx.rlp_size();
                             if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPOGATE {
                                 break;
                             }
                             sent_transactions.push(tx.clone());
 
-                            tx_msg.trans_digests.push(TransactionDigest {
-                                short_id: TxPropagateId::from(tx.hash()),
-                                source_index: TransIndex::new((window_index, idx)),
-                            });
+                            tx_msg.trans_short_ids.push(TxPropagateId::from(tx.hash()));
                             peer_info.last_sent_transaction_hashes.insert(tx.hash());
                         }
-                        assert!(!tx_msg.trans_digests.is_empty());
-                        return Some((peer_id, tx_msg.trans_digests.len(), tx_msg));
+                        assert!(!tx_msg.trans_short_ids.is_empty());
+                        return Some((peer_id, tx_msg.trans_short_ids.len(), tx_msg));
                     }
 
                     // Get hashes of all transactions to send to this peer
@@ -2250,9 +2247,8 @@ impl SynchronizationProtocolHandler {
                     // from last_sent_transaction_hashes.
                     peer_info.last_sent_transaction_hashes = all_transactions_hashes
                         .intersection(&peer_info.last_sent_transaction_hashes).cloned().collect();
-                    let mut tx_msg = Box::new(TransactionDigests { trans_digests: Vec::new() });
+                    let mut tx_msg = Box::new(TransactionDigests { window_index, trans_short_ids: Vec::new() });
                     let mut total_tx_bytes = 0;
-                    let mut idx = 0 as usize;
                     for tx in &transactions {
                         if to_send.contains(&tx.hash()) {
                             total_tx_bytes += tx.rlp_size();
@@ -2260,16 +2256,12 @@ impl SynchronizationProtocolHandler {
                                 break;
                             }
                             sent_transactions.push(tx.clone());
-                            tx_msg.trans_digests.push(TransactionDigest {
-                                short_id: TxPropagateId::from(tx.hash()),
-                                source_index: TransIndex::new((window_index, idx)),
-                            });
+                            tx_msg.trans_short_ids.push(TxPropagateId::from(tx.hash()));
                             peer_info.last_sent_transaction_hashes.insert(tx.hash());
-                            idx += 1;
                         }
                     }
-                    assert!(!tx_msg.trans_digests.is_empty());
-                    Some((peer_id, tx_msg.trans_digests.len(), tx_msg))
+                    assert!(!tx_msg.trans_short_ids.is_empty());
+                    Some((peer_id, tx_msg.trans_short_ids.len(), tx_msg))
                 })
                 .collect::<Vec<_>>()
         };

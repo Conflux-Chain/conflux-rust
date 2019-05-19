@@ -7,7 +7,6 @@ use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     collections::HashSet,
-    mem,
     ops::{Deref, DerefMut},
 };
 
@@ -87,54 +86,31 @@ impl Decodable for TransIndex {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct TransactionDigest {
-    pub short_id: TxPropagateId,
-    pub source_index: TransIndex,
-}
-
-impl TransactionDigest {
-    pub fn size() -> usize { mem::size_of::<Self>() }
-}
-
-impl Encodable for TransactionDigest {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.short_id)
-            .append(&self.source_index);
-    }
-}
-
-impl Decodable for TransactionDigest {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(TransactionDigest {
-            short_id: rlp.val_at(0)?,
-            source_index: rlp.val_at(1)?,
-        })
-    }
-}
-
-#[derive(Debug, PartialEq)]
 pub struct TransactionDigests {
-    pub trans_digests: Vec<TransactionDigest>,
+    pub window_index: usize,
+    pub trans_short_ids: Vec<TxPropagateId>,
 }
 
 impl Message for TransactionDigests {
     fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_DIGESTS }
 
-    fn is_size_sensitive(&self) -> bool { self.trans_digests.len() > 1 }
+    fn is_size_sensitive(&self) -> bool { self.trans_short_ids.len() > 1 }
 }
 
 impl Encodable for TransactionDigests {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.append_list(&self.trans_digests);
+        stream
+            .begin_list(2)
+            .append(&self.window_index)
+            .append_list(&self.trans_short_ids);
     }
 }
 
 impl Decodable for TransactionDigests {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(TransactionDigests {
-            trans_digests: rlp.as_list()?,
+            window_index: rlp.val_at(0)?,
+            trans_short_ids: rlp.list_at(1)?,
         })
     }
 }

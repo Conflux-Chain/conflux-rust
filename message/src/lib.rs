@@ -46,7 +46,6 @@ pub use crate::{
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{
         GetTransactions, GetTransactionsResponse, TransIndex,
-        TransactionDigest, TransactionDigests, TransactionPropagationControl,
-        Transactions,
+        TransactionDigests, TransactionPropagationControl, Transactions,
     },
 };

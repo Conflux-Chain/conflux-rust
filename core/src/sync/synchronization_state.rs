@@ -204,8 +204,8 @@ impl SentTransactionContainer {
                 return None;
             }
         } else {
-            if index.first() + 1 + std::usize::MAX - inner.base_time_tick + 1
-                > inner.window_size
+            if index.first() + 1 + std::usize::MAX - inner.base_time_tick
+                >= inner.window_size
             {
                 return None;
             }
@@ -240,10 +240,10 @@ impl SentTransactionContainer {
             inner.base_time_tick += 1;
         }
         inner.next_time_tick += 1;
-        let indices = inner.time_windowed_indices[next_window_index]
+        let trans = inner.time_windowed_indices[next_window_index]
             .as_mut()
             .unwrap();
-        (next_time_tick, indices)
+        (next_time_tick, trans)
     }
 }
 
