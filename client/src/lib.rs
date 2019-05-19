@@ -189,7 +189,7 @@ impl Client {
 
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
-        let consensus = ConsensusGraph::with_genesis_block(
+        let consensus = Arc::new(ConsensusGraph::with_genesis_block(
             genesis_block,
             storage_manager.clone(),
             vm.clone(),
@@ -198,7 +198,7 @@ impl Client {
             ledger_db.clone(),
             cache_man.clone(),
             pow_config.clone(),
-        );
+        ));
 
         let verification_config = conf.verification_config();
         let protocol_config = conf.protocol_config();

@@ -3,22 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 mod consensus_executor;
-use super::consensus::consensus_executor::{ConsensusExecutor, ExecutionTask};
+use super::consensus::consensus_executor::ConsensusExecutor;
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager},
-    consensus::consensus_executor::{
-        EpochExecutionTask,
-        ExecutionTask::{ExecuteEpoch, GetResult},
-        GetExecutionResultTask, RewardExecutionInfo,
-    },
+    consensus::consensus_executor::RewardExecutionInfo,
     db::COL_MISC,
-    executive::{ExecutionError, Executive},
+    executive::Executive,
     ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
     machine::new_machine,
     pow::ProofOfWorkConfig,
-    state::{CleanupMode, State},
+    state::State,
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::{state::StateTrait, StorageManager, StorageManagerTrait},
@@ -27,15 +23,13 @@ use crate::{
     vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
 };
-use cfx_types::{Address, Bloom, H160, H256, U256, U512};
+use cfx_types::{Bloom, H160, H256, U256, U512};
 use link_cut_tree::{LinkCutTree, SignedBigNum};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
-    },
+    receipt::Receipt,
     transaction::Action,
     Block, BlockHeaderBuilder, EpochNumber, SignedTransaction,
     TransactionAddress,
@@ -912,7 +906,7 @@ impl ConsensusGraph {
         statistics: SharedStatistics, db: Arc<SystemDB>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
         pow_config: ProofOfWorkConfig,
-    ) -> Arc<Self>
+    ) -> Self
     {
         let data_man = Arc::new(BlockDataManager::new(
             Arc::new(genesis_block),
@@ -923,7 +917,7 @@ impl ConsensusGraph {
         ));
         let executor = ConsensusExecutor::start(data_man.clone(), vm);
 
-        let consensus_graph = Arc::new(ConsensusGraph {
+        ConsensusGraph {
             inner: RwLock::new(ConsensusGraphInner::with_genesis_block(
                 pow_config,
                 data_man.clone(),
@@ -933,10 +927,7 @@ impl ConsensusGraph {
             invalid_blocks: RwLock::new(HashSet::new()),
             executor,
             statistics,
-        });
-
-        let consensus = consensus_graph.clone();
-        consensus_graph
+        }
     }
 
     pub fn check_mining_heavy_block(

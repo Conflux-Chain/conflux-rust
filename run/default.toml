@@ -10,7 +10,7 @@ bootnodes='cfxnode://337c2a5cc9c251cef4cac4b0212e4c66a4439756acd8b1a085bf32b8d54
 # If not set, the process will try to find out the public IP with best effort, and use `port` as public port.
 # However, it's HIGHLY RECOMMENDED to set the value manually, especially for machines with IP translated by NAT.
 #
-public_address="124.193.101.50:32323"
+# public_address="127.0.0.1:32323"
 
 # `port` is the TCP port that the process listens for P2P messages.
 #
@@ -31,7 +31,7 @@ start_mining=true
 # The value is a 40-digit hex string without 0x prefix.
 # By default, the value is not set.
 #
-mining_author="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# mining_author="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 # `jsonrpc_tcp_port` and `jsonrpc_http_port` are the ports for the node to
 # provide rpc service. If not set, the node will not start rpc services. By

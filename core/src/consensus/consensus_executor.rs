@@ -9,7 +9,6 @@ use crate::{
     storage::{state::StateTrait, state_manager::StateManagerTrait},
     vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
-    ConsensusGraph,
 };
 use cfx_types::{Address, H256, U256, U512};
 use parking_lot::Mutex;
@@ -22,7 +21,7 @@ use primitives::{
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        mpsc::{channel, Receiver, Sender},
+        mpsc::{channel, Sender},
         Arc,
     },
     thread,
