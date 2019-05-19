@@ -44,5 +44,9 @@ pub use crate::{
     newblockhashes::NewBlockHashes,
     status::Status,
     terminalblockhashes::GetTerminalBlockHashesResponse,
-    transactions::{TransactionPropagationControl, Transactions},
+    transactions::{
+        GetTransactions, GetTransactionsResponse, TransIndex,
+        TransactionDigest, TransactionDigests, TransactionPropagationControl,
+        Transactions,
+    },
 };
