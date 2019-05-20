@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, H160, H256, U256};
+use cfx_types::{Address, H160, H256, H64, U256};
 use heapsize::HeapSizeOf;
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
@@ -18,6 +18,8 @@ pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
 /// Shorter id for transactions in compact blocks
 // TODO should be u48
 pub type TxShortId = u64;
+
+pub type TxPropagateId = H64;
 
 #[derive(Debug, PartialEq, Clone)]
 /// Errors concerning transaction processing.

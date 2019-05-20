@@ -67,8 +67,11 @@ build_config! {
         (persist_terminal_period_ms, (u64), 60_000)
         (headers_request_timeout_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 120_000)
+        (transaction_request_timeout_ms, (u64), 30_000)
+        (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
         (max_inflight_request_count, (u64), 32)
         (start_as_catch_up_mode, (bool), false)
+        (received_tx_index_maintain_timeout_ms, (u64), 600_000)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (request_block_with_public, (bool), false)
         (load_test_chain, (Option<String>), None)
@@ -253,11 +256,20 @@ impl Configuration {
             blocks_request_timeout: Duration::from_millis(
                 self.raw_conf.blocks_request_timeout_ms,
             ),
+            transaction_request_timeout: Duration::from_millis(
+                self.raw_conf.transaction_request_timeout_ms,
+            ),
+            tx_maintained_for_peer_timeout: Duration::from_millis(
+                self.raw_conf.tx_maintained_for_peer_timeout_ms,
+            ),
             max_inflight_request_count: self
                 .raw_conf
                 .max_inflight_request_count,
             request_block_with_public: self.raw_conf.request_block_with_public,
             start_as_catch_up_mode: self.raw_conf.start_as_catch_up_mode,
+            received_tx_index_maintain_timeout: Duration::from_millis(
+                self.raw_conf.received_tx_index_maintain_timeout_ms,
+            ),
             max_trans_count_received_in_catch_up: self
                 .raw_conf
                 .max_trans_count_received_in_catch_up,

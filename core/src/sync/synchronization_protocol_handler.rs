@@ -4,8 +4,8 @@
 
 use super::{
     super::transaction_pool::SharedTransactionPool, random, Error, ErrorKind,
-    SharedSynchronizationGraph, SynchronizationGraph, SynchronizationPeerState,
-    SynchronizationState,
+    SentTransactionContainer, SharedSynchronizationGraph, SynchronizationGraph,
+    SynchronizationPeerState, SynchronizationState,
 };
 use crate::{
     bytes::Bytes, consensus::SharedConsensusGraph, pow::ProofOfWorkConfig,
@@ -16,15 +16,15 @@ use message::{
     GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse,
     GetBlocks, GetBlocksResponse, GetBlocksWithPublicResponse,
     GetCompactBlocks, GetCompactBlocksResponse, GetTerminalBlockHashes,
-    GetTerminalBlockHashesResponse, Message, MsgId, NewBlock, NewBlockHashes,
-    Status, TransactionPropagationControl, Transactions,
+    GetTerminalBlockHashesResponse, GetTransactions, GetTransactionsResponse,
+    Message, MsgId, NewBlock, NewBlockHashes, Status, TransIndex,
+    TransactionDigests, TransactionPropagationControl, Transactions,
 };
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Block, SignedTransaction};
 use rand::{Rng, RngCore};
 use rlp::Rlp;
 //use slab::Slab;
@@ -34,7 +34,9 @@ use crate::{
     sync::synchronization_state::RequestMessage,
     verification::VerificationConfig,
 };
-use primitives::TransactionWithSignature;
+use primitives::{
+    Block, SignedTransaction, TransactionWithSignature, TxPropagateId,
+};
 use priority_send_queue::SendQueuePriority;
 use rlp::DecoderError;
 use std::{
@@ -70,7 +72,7 @@ const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
 
-const MAX_TXS_BYTES_TO_PROPOGATE: usize = 10_000_000;
+const MAX_TXS_BYTES_TO_PROPOGATE: usize = 14 * 1024 * 1024; // 14MB
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -112,8 +114,11 @@ pub struct ProtocolConfiguration {
     pub persist_terminal_period: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
+    pub transaction_request_timeout: Duration,
+    pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub start_as_catch_up_mode: bool,
+    pub received_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
 }
@@ -148,6 +153,7 @@ impl TimedSyncRequests {
             RequestMessage::Blocks(_)
             | RequestMessage::Compact(_)
             | RequestMessage::BlockTxn(_) => conf.blocks_request_timeout,
+            RequestMessage::Transactions(_) => conf.transaction_request_timeout,
             _ => Duration::default(),
         };
         TimedSyncRequests::new(peer_id, timeout, request_id)
@@ -180,6 +186,9 @@ impl SynchronizationProtocolHandler {
     ) -> Self
     {
         let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
+        let received_tx_index_maintain_timeout =
+            protocol_config.received_tx_index_maintain_timeout;
+
         SynchronizationProtocolHandler {
             protocol_config,
             graph: Arc::new(SynchronizationGraph::new(
@@ -188,7 +197,10 @@ impl SynchronizationProtocolHandler {
                 pow_config,
                 fast_recover,
             )),
-            syn: RwLock::new(SynchronizationState::new(start_as_catch_up_mode)),
+            syn: RwLock::new(SynchronizationState::new(
+                start_as_catch_up_mode,
+                received_tx_index_maintain_timeout.as_secs(),
+            )),
             headers_in_flight: Default::default(),
             header_request_waittime: Default::default(),
             blocks_in_flight: Default::default(),
@@ -291,6 +303,11 @@ impl SynchronizationProtocolHandler {
             MsgId::TRANSACTION_PROPAGATION_CONTROL => {
                 self.on_trans_prop_ctrl(peer, &rlp)
             }
+            MsgId::TRANSACTION_DIGESTS => self.on_trans_digests(io, peer, &rlp),
+            MsgId::GET_TRANSACTIONS => self.on_get_transactions(io, peer, &rlp),
+            MsgId::GET_TRANSACTIONS_RESPONSE => {
+                self.on_get_transactions_response(io, peer, &rlp)
+            }
             _ => {
                 warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
                 Ok(())
@@ -307,6 +324,11 @@ impl SynchronizationProtocolHandler {
     fn on_get_compact_blocks(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        if !self.syn.read().peers.contains_key(&peer) {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_CMPCT_BLOCKS", peer);
+            return Ok(());
+        }
+
         let req: GetCompactBlocks = rlp.as_val()?;
         let mut compact_blocks = Vec::with_capacity(req.hashes.len());
         let mut blocks = Vec::new();
@@ -341,6 +363,11 @@ impl SynchronizationProtocolHandler {
     fn on_get_compact_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        if !self.syn.read().peers.contains_key(&peer) {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_CMPCT_BLOCKS_RESPONSE", peer);
+            return Ok(());
+        }
+
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!("on_get_compact_blocks_response {:?}", resp);
         let req = self.match_request(io, peer, resp.request_id())?;
@@ -460,9 +487,140 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
+    fn on_get_transactions_response(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        if !self.syn.read().peers.contains_key(&peer) {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_TRANSACTIONS_RESPONSE", peer);
+            return Ok(());
+        }
+
+        let resp = rlp.as_val::<GetTransactionsResponse>()?;
+        debug!("on_get_transactions_response {:?}", resp);
+
+        self.match_request(io, peer, resp.request_id())?;
+        // FIXME: Do some check based on transaction request.
+
+        let transactions = resp.transactions;
+        debug!(
+            "Received {:?} transactions from Peer {:?}",
+            transactions.len(),
+            peer
+        );
+        let tx_ids = transactions
+            .iter()
+            .map(|tx| TxPropagateId::from(tx.hash()))
+            .collect::<Vec<_>>();
+
+        {
+            let mut syn = self.syn.write();
+            let peer_info =
+                syn.peers.get_mut(&peer).ok_or(ErrorKind::UnknownPeer)?;
+            peer_info
+                .last_sent_transaction_hashes
+                .extend(transactions.iter().map(|tx| tx.hash()));
+
+            syn.received_transactions.append_transaction_ids(tx_ids);
+        }
+
+        self.get_transaction_pool().insert_new_transactions(
+            self.graph.consensus.best_state_block_hash(),
+            transactions,
+        );
+        debug!("Transactions successfully inserted to transaction pool");
+        Ok(())
+    }
+
+    fn on_get_transactions(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let get_transactions = rlp.as_val::<GetTransactions>()?;
+
+        if let Some(peer_info) = self.syn.read().peers.get(&peer) {
+            let transactions = get_transactions
+                .indices
+                .iter()
+                .filter_map(|tx_idx| {
+                    if let Some(tx) =
+                        peer_info.sent_transactions.get_transaction(tx_idx)
+                    {
+                        Some(tx.transaction.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let resp = GetTransactionsResponse {
+                request_id: get_transactions.request_id,
+                transactions,
+            };
+            self.send_message(io, peer, &resp, SendQueuePriority::Normal)?;
+        } else {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_TRANSACTIONS", peer);
+        }
+
+        Ok(())
+    }
+
+    fn on_trans_digests(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let transaction_digests = rlp.as_val::<TransactionDigests>()?;
+
+        let mut syn = self.syn.write();
+
+        let peer_info =
+            syn.peers.get_mut(&peer).ok_or(ErrorKind::UnknownPeer)?;
+        if peer_info.notified_mode.is_some()
+            && (peer_info.notified_mode.unwrap() == true)
+        {
+            peer_info.received_transaction_count +=
+                transaction_digests.trans_short_ids.len();
+            if peer_info.received_transaction_count
+                > self.protocol_config.max_trans_count_received_in_catch_up
+                    as usize
+            {
+                io.disconnect_peer(peer);
+                return Err(ErrorKind::TooManyTrans.into());
+            }
+        }
+
+        let mut indices = Vec::new();
+        let mut tx_ids = HashSet::new();
+
+        for (idx, tx_id) in
+            transaction_digests.trans_short_ids.iter().enumerate()
+        {
+            if syn.inflight_requested_transactions.contains(tx_id) {
+                // Already being requested
+                continue;
+            }
+
+            if syn.received_transactions.contains(tx_id) {
+                // Already received
+                continue;
+            }
+
+            syn.inflight_requested_transactions.insert(*tx_id);
+
+            let index =
+                TransIndex::new((transaction_digests.window_index, idx));
+            indices.push(index);
+            tx_ids.insert(*tx_id);
+        }
+
+        self.request_transactions(io, peer, indices, tx_ids, &mut *syn)
+    }
+
     fn on_get_blocktxn(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        if !self.syn.read().peers.contains_key(&peer) {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_BLOCK_TXN", peer);
+            return Ok(());
+        }
+
         let req: GetBlockTxn = rlp.as_val()?;
         debug!("on_get_blocktxn");
         match self.graph.block_by_hash(&req.block_hash) {
@@ -510,6 +668,11 @@ impl SynchronizationProtocolHandler {
     fn on_get_blocktxn_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        if !self.syn.read().peers.contains_key(&peer) {
+            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_BLOCK_TXN_RESPONSE", peer);
+            return Ok(());
+        }
+
         let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
         let hash = resp.block_hash;
@@ -650,7 +813,7 @@ impl SynchronizationProtocolHandler {
             }
 
             peer_info
-                .last_sent_transactions
+                .last_sent_transaction_hashes
                 .extend(transactions.iter().map(|tx| tx.hash()));
         }
 
@@ -910,6 +1073,14 @@ impl SynchronizationProtocolHandler {
         for _i in 0..self.protocol_config.max_inflight_request_count {
             requests_vec.push(None);
         }
+
+        // FIXME: make sent_transaction_window_size to be 2^pow.
+        let sent_transaction_window_size = self
+            .protocol_config
+            .tx_maintained_for_peer_timeout
+            .as_millis()
+            / self.protocol_config.send_tx_period.as_millis();
+
         let peer_state = SynchronizationPeerState {
             id: peer,
             protocol_version: status.protocol_version,
@@ -922,7 +1093,10 @@ impl SynchronizationProtocolHandler {
                 .protocol_config
                 .max_inflight_request_count,
             pending_requests: VecDeque::new(),
-            last_sent_transactions: HashSet::new(),
+            last_sent_transaction_hashes: HashSet::new(),
+            sent_transactions: SentTransactionContainer::new(
+                sent_transaction_window_size as usize,
+            ),
             received_transaction_count: 0,
             need_prop_trans: true,
             notified_mode: None,
@@ -1679,6 +1853,38 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    fn request_transactions(
+        &self, io: &NetworkContext, peer_id: PeerId, indices: Vec<TransIndex>,
+        tx_ids: HashSet<TxPropagateId>, syn: &mut SynchronizationState,
+    ) -> Result<(), Error>
+    {
+        match self.send_request(
+            io,
+            peer_id,
+            Box::new(RequestMessage::Transactions(GetTransactions {
+                request_id: 0.into(),
+                indices,
+                tx_ids,
+            })),
+            syn,
+            SendQueuePriority::Normal,
+        ) {
+            Ok(timed_req) => {
+                if let Some(timed_req) = timed_req {
+                    debug!(
+                        "Requesting transactions from {:?} request_id={}",
+                        peer_id, timed_req.request_id
+                    );
+                    self.requests_queue.lock().push(timed_req);
+                } else {
+                    debug!("Transactions request is added in pending queue. peer {}", peer_id);
+                }
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     fn request_blocks_unchecked(
         &self, io: &NetworkContext, peer_id: PeerId, hashes: &Vec<H256>,
         with_public: bool, syn: &mut SynchronizationState,
@@ -1865,8 +2071,11 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         let mut syn = self.syn.write();
-        if let Some(ref mut peer) = syn.peers.get_mut(&peer_id) {
-            if let Some(removed_req) = self.remove_request(peer, request_id) {
+        if syn.peers.contains_key(&peer_id) {
+            if let Some(removed_req) =
+                self.remove_request(peer_id, request_id, &mut *syn)
+            {
+                let peer = syn.peers.get_mut(&peer_id).unwrap();
                 while peer.has_pending_requests() {
                     if let Some(new_request_id) = peer.get_next_request_id() {
                         let mut pending_msg =
@@ -1999,50 +2208,60 @@ impl SynchronizationProtocolHandler {
                 .filter_map(|peer_id| {
                     let peer_info = syn.peers.get_mut(&peer_id)
                         .expect("peer_id is from peers; peers is result of select_peers_for_transactions; select_peers_for_transactions selects peers from syn.peers; qed");
-                    if !peer_info.need_prop_trans {
+
+                    let sent_transactions = Vec::new();
+                    let (window_index, sent_transactions) = peer_info.sent_transactions.append_transactions(sent_transactions);
+
+                    if transactions.is_empty() || !peer_info.need_prop_trans {
                         return None;
                     }
 
                     // Send all transactions
-                    if peer_info.last_sent_transactions.is_empty() {
-                        let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
+                    if peer_info.last_sent_transaction_hashes.is_empty() {
+                        let mut tx_msg = Box::new(TransactionDigests { window_index, trans_short_ids: Vec::new() });
                         let mut total_tx_bytes = 0;
-                        for tx in &transactions {
+                        for tx in transactions.iter() {
                             total_tx_bytes += tx.rlp_size();
                             if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPOGATE {
-                                break
+                                break;
                             }
+                            sent_transactions.push(tx.clone());
 
-                            tx_msg.transactions.push(tx.transaction.clone());
-                            peer_info.last_sent_transactions.insert(tx.hash());
+                            tx_msg.trans_short_ids.push(TxPropagateId::from(tx.hash()));
+                            peer_info.last_sent_transaction_hashes.insert(tx.hash());
                         }
-                        return Some((peer_id, transactions.len(), tx_msg));
+                        assert!(!tx_msg.trans_short_ids.is_empty());
+                        return Some((peer_id, tx_msg.trans_short_ids.len(), tx_msg));
                     }
 
                     // Get hashes of all transactions to send to this peer
-                    let to_send = all_transactions_hashes.difference(&peer_info.last_sent_transactions)
+                    let to_send = all_transactions_hashes.difference(&peer_info.last_sent_transaction_hashes)
                         .cloned()
                         .collect::<HashSet<_>>();
+
                     if to_send.is_empty() {
                         return None;
                     }
 
-                    peer_info.last_sent_transactions = all_transactions_hashes
-                        .intersection(&peer_info.last_sent_transactions).cloned().collect();
-                    let mut tx_msg = Box::new(Transactions { transactions: Vec::new() });
+                    // This is to remove transactions that are already out of transaction pool
+                    // from last_sent_transaction_hashes.
+                    peer_info.last_sent_transaction_hashes = all_transactions_hashes
+                        .intersection(&peer_info.last_sent_transaction_hashes).cloned().collect();
+                    let mut tx_msg = Box::new(TransactionDigests { window_index, trans_short_ids: Vec::new() });
                     let mut total_tx_bytes = 0;
                     for tx in &transactions {
                         if to_send.contains(&tx.hash()) {
                             total_tx_bytes += tx.rlp_size();
                             if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPOGATE {
-                                break
+                                break;
                             }
-
-                            tx_msg.transactions.push(tx.transaction.clone());
-                            peer_info.last_sent_transactions.insert(tx.hash());
+                            sent_transactions.push(tx.clone());
+                            tx_msg.trans_short_ids.push(TxPropagateId::from(tx.hash()));
+                            peer_info.last_sent_transaction_hashes.insert(tx.hash());
                         }
                     }
-                    Some((peer_id, tx_msg.transactions.len(), tx_msg))
+                    assert!(!tx_msg.trans_short_ids.is_empty());
+                    Some((peer_id, tx_msg.trans_short_ids.len(), tx_msg))
                 })
                 .collect::<Vec<_>>()
         };
@@ -2067,14 +2286,14 @@ impl SynchronizationProtocolHandler {
                     }
                     Err(e) => {
                         warn!(
-                            "failed to propagate txs to peer, id: {}, err: {}",
+                            "failed to propagate transaction ids to peer, id: {}, err: {}",
                             peer_id, e
                         );
                     }
                 }
             }
             debug!(
-                "Sent up to {} transactions to {} peers.",
+                "Sent up to {} transaction ids to {} peers.",
                 max_sent, lucky_peers_len
             );
         }
@@ -2237,8 +2456,9 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn remove_request(
-        &self, peer: &mut SynchronizationPeerState, request_id: u64,
+        &self, peer_id: PeerId, request_id: u64, syn: &mut SynchronizationState,
     ) -> Option<RequestMessage> {
+        let peer = syn.peers.get_mut(&peer_id).unwrap();
         peer.remove_inflight_request(request_id).map(|req| {
             match *req.message {
                 RequestMessage::Headers(ref get_headers) => {
@@ -2252,6 +2472,11 @@ impl SynchronizationProtocolHandler {
                 }
                 RequestMessage::BlockTxn(ref blocktxn) => {
                     self.blocks_in_flight.lock().remove(&blocktxn.block_hash);
+                }
+                RequestMessage::Transactions(ref get_transactions) => {
+                    for tx_id in &get_transactions.tx_ids {
+                        syn.inflight_requested_transactions.remove(tx_id);
+                    }
                 }
                 _ => {}
             }
@@ -2628,6 +2853,12 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                     self.block_request_waittime
                         .lock()
                         .remove(&blocktxn.block_hash);
+                }
+                RequestMessage::Transactions(get_transactions) => {
+                    let mut syn = self.syn.write();
+                    for tx_id in &get_transactions.tx_ids {
+                        syn.inflight_requested_transactions.remove(tx_id);
+                    }
                 }
                 _ => {}
             }
