@@ -21,3 +21,4 @@ cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_confl
 
 cd ~
 ./throttle_bitcoin_bandwidth.sh 20 30
+ls /sys/fs/cgroup/net_cls
