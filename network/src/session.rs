@@ -253,11 +253,10 @@ impl Session {
         host: &NetworkServiceInner,
     ) -> Result<(), Error>
     {
-        let host_meta = host.metadata.read();
         let peer_caps: Vec<Capability> = rlp.list_at(0)?;
 
         let mut caps: Vec<Capability> = Vec::new();
-        for hc in &host_meta.capabilities {
+        for hc in host.metadata.capabilities.read().iter() {
             if peer_caps
                 .iter()
                 .any(|c| c.protocol == hc.protocol && c.version == hc.version)
@@ -267,8 +266,9 @@ impl Session {
         }
 
         caps.retain(|c| {
-            host_meta
+            host.metadata
                 .capabilities
+                .read()
                 .iter()
                 .any(|hc| hc.protocol == c.protocol && hc.version == c.version)
         });
@@ -313,7 +313,7 @@ impl Session {
             debug!(target: "network", "Got bad address: {:?}", entry);
             return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
         } else if !(entry.endpoint.is_allowed(host.get_ip_filter())
-            && entry.id != *host_meta.id())
+            && entry.id != *host.metadata.id())
         {
             debug!(target: "network", "Address not allowed: {:?}", entry);
             return Err(self.disconnect(io, DisconnectReason::IpLimited));
@@ -401,18 +401,17 @@ impl Session {
     fn write_hello<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
-        let host_meta = host.metadata.read();
         debug!(target: "network", "{} Sending Hello", self.token());
         let mut rlp = RlpStream::new_list(2);
-        rlp.append_list(&host_meta.capabilities);
-        host_meta.public_endpoint.to_rlp_list(&mut rlp);
+        rlp.append_list(&*host.metadata.capabilities.read());
+        host.metadata.public_endpoint.to_rlp_list(&mut rlp);
 
         let mut packet =
             cfx_bytes::Bytes::with_capacity(rlp.as_raw().len() + 32 + 65);
         packet.resize(32 + 65, 0);
         packet.extend_from_slice(rlp.as_raw());
         let hash = keccak(&packet[(32 + 65)..]);
-        let signature = match sign(host_meta.keys.secret(), &hash) {
+        let signature = match sign(host.metadata.keys.secret(), &hash) {
             Ok(s) => s,
             Err(e) => {
                 warn!(target: "network", "Error signing hello packet");

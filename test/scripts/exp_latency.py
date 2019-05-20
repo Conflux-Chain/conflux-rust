@@ -14,11 +14,11 @@ def execute(cmd, retry, cmd_description):
         retry -= 1
 
 def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
-    cmd = 'parallel-ssh -O "StrictHostKeyChecking no" -h {} -p 400 \"{}\" > /dev/null'.format(ips_file, remote_cmd)
+    cmd = 'parallel-ssh -O "StrictHostKeyChecking no" -h {} -p 400 \"{}\" > /dev/null 2>&1'.format(ips_file, remote_cmd)
     execute(cmd, retry, cmd_description)
 
 def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
-    cmd = 'parallel-scp -O "StrictHostKeyChecking no" -h {} -p 400 {} {} > /dev/null'.format(ips_file, local, remote)
+    cmd = 'parallel-scp -O "StrictHostKeyChecking no" -h {} -p 400 {} {} > /dev/null 2>&1'.format(ips_file, local, remote)
     execute(cmd, retry, cmd_description)
 
 def kill_remote_conflux(ips_file:str):
@@ -32,12 +32,19 @@ class ArgumentHolder:
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
         
         for arg_name in self.__dict__.keys():
-            parser.add_argument(
-                "--" + str(arg_name).replace("_", "-"),
-                dest=arg_name,
-                default=self.__dict__[arg_name],
-                type=type(self.__dict__[arg_name])
-            )
+            if type(self.__dict__[arg_name]) == bool:
+                parser.add_argument(
+                    "--" + str(arg_name).replace("_", "-"),
+                    dest=arg_name,
+                    action='store_true',
+                )
+            else:
+                parser.add_argument(
+                    "--" + str(arg_name).replace("_", "-"),
+                    dest=arg_name,
+                    default=self.__dict__[arg_name],
+                    type=type(self.__dict__[arg_name])
+                )
 
         options = parser.parse_args()
 
@@ -134,7 +141,7 @@ class LatencyExperiment(ArgumentHolder):
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
-        cmd = " ".join([
+        cmd = [
             "python3 ../remote_simulate.py",
             "--nodes-per-host", str(self.nodes_per_host),
             "--generation-period-ms", str(config.block_gen_interval_ms),
@@ -146,11 +153,19 @@ class LatencyExperiment(ArgumentHolder):
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
-            "--data-propagate-enabled", str(self.data_propagate_enabled).lower(),
-            "--data-propagate-interval-ms", str(self.data_propagate_interval_ms),
-            "--data-propagate-size", str(self.data_propagate_size),
-            ">", self.simulate_log_file
-        ])
+        ]
+
+        if self.data_propagate_enabled:
+            cmd.extend([
+                "--data-propagate-enabled",
+                "--data-propagate-interval-ms", str(self.data_propagate_interval_ms),
+                "--data-propagate-size", str(self.data_propagate_size),
+            ])
+
+        cmd.extend([">", self.simulate_log_file])
+        cmd = " ".join(cmd)
+
+        print("[CMD]: {}".format(cmd))
 
         ret = os.system(cmd)
         assert ret == 0, "Failed to run remote simulator, return code = {}. Please check [{}] for more details".format(ret, self.simulate_log_file)

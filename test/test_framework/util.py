@@ -535,6 +535,8 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
 
     for t in threads:
         t.join(timeout)
+        assert not t.is_alive(), "Node connect to other nodes timeout in {} seconds".format(timeout)
+        assert not t.failed, "connect_sample_nodes failed."
 
 class ConnectThread(threading.Thread):
     def __init__(self, nodes, a, peers, latencies, log, min_peers=3, daemon=True):
@@ -545,6 +547,7 @@ class ConnectThread(threading.Thread):
         self.latencies = latencies
         self.log = log
         self.min_peers = min_peers
+        self.failed = False
 
     def run(self):
         try:
@@ -559,5 +562,7 @@ class ConnectThread(threading.Thread):
                 else:
                     time.sleep(1)
         except Exception as e:
-            self.log.error("Node " + str(self.a) + " fails to be connected to" + str(self.peers))
+            node = self.nodes[self.a]
+            self.log.error("Node " + str(self.a) + " fails to be connected to " + str(self.peers) + ", ip={}, index={}".format(node.ip, node.index))
             self.log.error(e)
+            self.failed = True
