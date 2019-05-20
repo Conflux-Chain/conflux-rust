@@ -9,10 +9,8 @@ use crate::{
     cache_manager::{CacheId, CacheManager},
     consensus::consensus_executor::RewardExecutionInfo,
     db::COL_MISC,
-    executive::Executive,
     ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
-    machine::new_machine,
     pow::ProofOfWorkConfig,
     state::State,
     statedb::StateDb,
@@ -20,7 +18,6 @@ use crate::{
     storage::{state::StateTrait, StorageManager, StorageManagerTrait},
     sync::SynchronizationGraphInner,
     transaction_pool::SharedTransactionPool,
-    vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256, U512};
@@ -915,7 +912,7 @@ impl ConsensusGraph {
             storage_manager,
             cache_man,
         ));
-        let executor = ConsensusExecutor::start(data_man.clone(), vm);
+        let executor = Arc::new(ConsensusExecutor::start(data_man.clone(), vm));
 
         ConsensusGraph {
             inner: RwLock::new(ConsensusGraphInner::with_genesis_block(
@@ -1579,7 +1576,6 @@ impl ConsensusGraph {
                     &epoch_block_hashes,
                     &reward_execution_info,
                     true,
-                    &mut Vec::new(),
                 );
             }
         }
@@ -2084,40 +2080,17 @@ impl ConsensusGraph {
     ) -> Result<(Vec<u8>, U256), String> {
         // only allow to call against stated epoch
         self.inner.read().validate_stated_epoch(&epoch)?;
-
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
-        let spec = Spec::new_spec();
-        let machine = new_machine();
-        let mut state = State::new(
-            StateDb::new(
-                self.data_man
-                    .storage_manager
-                    .get_state_at(epoch_id)
-                    .unwrap(),
-            ),
-            0.into(),
-            self.executor.vm.clone(),
-        );
-        let mut env = EnvInfo {
-            number: 0, // TODO: replace 0 with correct cardinal number
-            author: Default::default(),
-            timestamp: Default::default(),
-            difficulty: Default::default(),
-            gas_used: U256::zero(),
-            gas_limit: tx.gas.clone(),
-        };
-        let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
-        let r = ex.transact(tx);
-        trace!("Execution result {:?}", r);
-        r.map(|r| (r.output, r.gas_used))
-            .map_err(|e| format!("execution error: {:?}", e))
+        self.executor.call_virtual(tx, &epoch_id)
     }
-
-    pub fn stop_executor(&self) { self.executor.stop() }
 
     /// Wait for a block's epoch is computed.
     /// Return the state_root and receipts_root
     pub fn wait_for_block_state(&self, block_hash: &H256) -> (H256, H256) {
         self.executor.wait_for_result(*block_hash)
     }
+}
+
+impl Drop for ConsensusGraph {
+    fn drop(&mut self) { self.executor.stop(); }
 }
