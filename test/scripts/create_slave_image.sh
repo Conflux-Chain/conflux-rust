@@ -19,9 +19,23 @@ setup_script="setup_image.sh"
 scp -o "StrictHostKeyChecking no" $SCRIPT_DIR/$setup_script ubuntu@$master_ip:~
 ssh ubuntu@$master_ip ./$setup_script $branch
 
+# create slave image
 res=`aws ec2 create-image --instance-id $master_id --name ${key_pair}_slave_image --no-reboot`
 image_id=`echo $res | jq ".ImageId" | tr -d '"'`
 
+# wait until image is available
+while true
+do
+    image_info=`aws ec2 describe-images --image-ids $image_id`
+    image_status=`echo $image_info | jq ".Images[].State" | tr -d '"'`
+    echo "image is $image_status"
+    if [ "$image_status" != "pending" ]; then
+        break
+    fi
+    sleep(5)
+done
+
+# delete the instance that used to make slave image
 ./terminate-on-demand.sh
 
 echo $image_id > slave_image
