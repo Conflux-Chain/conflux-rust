@@ -543,7 +543,7 @@ impl RpcImpl {
         trace!("call tx {:?}", signed_tx);
         self.consensus
             .call_virtual(&signed_tx, epoch)
-            .map(|output| Bytes::new(output))
+            .map(|output| Bytes::new(output.0))
             .map_err(|e| RpcError::invalid_params(e))
     }
 

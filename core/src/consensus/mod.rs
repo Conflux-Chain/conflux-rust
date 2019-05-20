@@ -2,33 +2,31 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod consensus_executor;
+use super::consensus::consensus_executor::ConsensusExecutor;
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager},
+    consensus::consensus_executor::RewardExecutionInfo,
     db::COL_MISC,
-    executive::{ExecutionError, Executive},
     ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
-    machine::new_machine,
     pow::ProofOfWorkConfig,
-    state::{CleanupMode, State},
+    state::State,
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::{state::StateTrait, StorageManager, StorageManagerTrait},
     sync::SynchronizationGraphInner,
     transaction_pool::SharedTransactionPool,
-    vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
 };
-use cfx_types::{Address, Bloom, H160, H256, U256, U512};
+use cfx_types::{Bloom, H160, H256, U256, U512};
 use link_cut_tree::{LinkCutTree, SignedBigNum};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
-    },
+    receipt::Receipt,
     transaction::Action,
     Block, BlockHeaderBuilder, EpochNumber, SignedTransaction,
     TransactionAddress,
@@ -115,49 +113,42 @@ pub struct ConsensusGraphInner {
     pub arena: Slab<ConsensusGraphNode>,
     pub indices: HashMap<H256, usize>,
     pub pivot_chain: Vec<usize>,
-    pub block_receipts_root: HashMap<usize, H256>,
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
     genesis_block_state_root: H256,
     genesis_block_receipts_root: H256,
     indices_in_epochs: HashMap<usize, Vec<usize>>,
-    vm: VmFactory,
     weight_tree: LinkCutTree,
     pow_config: ProofOfWorkConfig,
     pub current_difficulty: U256,
     data_man: Arc<BlockDataManager>,
-    pub storage_manager: Arc<StorageManager>,
 }
 
 impl ConsensusGraphInner {
     pub fn with_genesis_block(
-        genesis_block: &Block, storage_manager: Arc<StorageManager>,
-        vm: VmFactory, pow_config: ProofOfWorkConfig,
-        data_man: Arc<BlockDataManager>,
-    ) -> Self
-    {
+        pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
+    ) -> Self {
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
-            block_receipts_root: Default::default(),
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
-            genesis_block_state_root: genesis_block
+            genesis_block_state_root: data_man
+                .genesis_block()
                 .block_header
                 .deferred_state_root()
                 .clone(),
-            genesis_block_receipts_root: genesis_block
+            genesis_block_receipts_root: data_man
+                .genesis_block()
                 .block_header
                 .deferred_receipts_root()
                 .clone(),
             indices_in_epochs: HashMap::new(),
-            vm,
             weight_tree: LinkCutTree::new(),
             pow_config,
             current_difficulty: pow_config.initial_difficulty.into(),
-            data_man,
-            storage_manager,
+            data_man: data_man.clone(),
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -167,13 +158,17 @@ impl ConsensusGraphInner {
         // so we cannot compute its past_difficulty from
         // sync_graph.total_difficulty_in_own_epoch().
         // For genesis block, its past_difficulty is simply its own difficulty.
-        let (genesis_index, _) = inner
-            .insert(genesis_block, *genesis_block.block_header.difficulty());
+        let (genesis_index, _) = inner.insert(
+            data_man.genesis_block().as_ref(),
+            *data_man.genesis_block().block_header.difficulty(),
+        );
         inner.genesis_block_index = genesis_index;
         inner.weight_tree.make_tree(inner.genesis_block_index);
         inner.weight_tree.update_weight(
             inner.genesis_block_index,
-            &SignedBigNum::pos(*genesis_block.block_header.difficulty()),
+            &SignedBigNum::pos(
+                *data_man.genesis_block().block_header.difficulty(),
+            ),
         );
         *inner.arena[inner.genesis_block_index]
             .data
@@ -181,15 +176,24 @@ impl ConsensusGraphInner {
             .borrow_mut() = 0;
         inner.pivot_chain.push(inner.genesis_block_index);
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
-        inner.block_receipts_root.insert(
-            inner.genesis_block_index,
-            inner.genesis_block_receipts_root,
-        );
         inner
             .indices_in_epochs
             .insert(0, vec![inner.genesis_block_index]);
 
         inner
+    }
+
+    pub fn get_epoch_block_hashes(&self, epoch_index: usize) -> Vec<H256> {
+        let reversed_indices =
+            self.indices_in_epochs.get(&epoch_index).unwrap();
+
+        let mut epoch_blocks = Vec::new();
+        {
+            for idx in reversed_indices {
+                epoch_blocks.push(self.arena[*idx].hash);
+            }
+        }
+        epoch_blocks
     }
 
     pub fn check_mining_heavy_block(
@@ -547,317 +551,6 @@ impl ConsensusGraphInner {
         reversed_indices
     }
 
-    fn process_epoch_transactions(
-        &mut self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
-        unexecuted_transaction_addresses_lock: &Mutex<
-            HashMap<H256, HashSet<TransactionAddress>>,
-        >,
-        on_local_pivot: bool, to_pending: &mut Vec<Arc<SignedTransaction>>,
-    ) -> Vec<Arc<Vec<Receipt>>>
-    {
-        let pivot_block = epoch_blocks.last().expect("Epoch not empty");
-        let spec = Spec::new_spec();
-        let machine = new_machine();
-        let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
-        for block in epoch_blocks.iter() {
-            let mut receipts = Vec::new();
-            debug!(
-                "process txs in block: hash={:?}, tx count={:?}",
-                block.hash(),
-                block.transactions.len()
-            );
-            let mut env = EnvInfo {
-                number: 0, // TODO: replace 0 with correct cardinal number
-                author: block.block_header.author().clone(),
-                timestamp: block.block_header.timestamp(),
-                difficulty: block.block_header.difficulty().clone(),
-                gas_used: U256::zero(),
-                gas_limit: U256::from(block.block_header.gas_limit()),
-            };
-            let mut accumulated_fee: U256 = 0.into();
-            let mut ex = Executive::new(state, &mut env, &machine, &spec);
-            let mut n_invalid_nonce = 0;
-            let mut n_ok = 0;
-            let mut n_other = 0;
-            let mut last_cumulative_gas_used = U256::zero();
-            {
-                // TODO We acquire the lock at the start to avoid acquiring it
-                // for every tx. But if the server does not need
-                // to handle tx related rpc, the lock is not needed.
-                let mut transaction_addresses =
-                    self.data_man.transaction_addresses.write();
-                let mut unexecuted_transaction_addresses =
-                    unexecuted_transaction_addresses_lock.lock();
-                for (idx, transaction) in block.transactions.iter().enumerate()
-                {
-                    let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
-                    let mut transaction_logs = Vec::new();
-
-                    let r = ex.transact(transaction);
-                    // TODO Store fine-grained output status in receipts.
-                    // Note now NotEnoughCash has
-                    // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
-                    // but its nonce is increased, which might need fixing.
-                    match r {
-                        Err(ExecutionError::NotEnoughBaseGas {
-                            required: _,
-                            got: _,
-                        })
-                        | Err(ExecutionError::SenderMustExist {})
-                        | Err(ExecutionError::Internal(_)) => {
-                            warn!(
-                                    "tx execution error: transaction={:?}, err={:?}",
-                                    transaction, r
-                                );
-                        }
-                        Err(ExecutionError::InvalidNonce { expected, got }) => {
-                            n_invalid_nonce += 1;
-                            trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
-                            // Add future transactions back to pool if we are
-                            // not verifying forking chain
-                            if on_local_pivot && got > expected {
-                                trace!(
-                                        "To re-add transaction ({:?}) to pending pool",
-                                        transaction.clone()
-                                    );
-                                to_pending.push(transaction.clone());
-                            }
-                        }
-                        Ok(executed) => {
-                            last_cumulative_gas_used =
-                                executed.cumulative_gas_used;
-                            n_ok += 1;
-                            trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
-                            accumulated_fee += executed.fee;
-                            transaction_logs = executed.logs;
-                            tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
-                        }
-                        _ => {
-                            n_other += 1;
-                            trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
-                        }
-                    }
-                    let receipt = Receipt::new(
-                        tx_outcome_status,
-                        last_cumulative_gas_used,
-                        transaction_logs,
-                    );
-                    receipts.push(receipt);
-
-                    if on_local_pivot {
-                        let hash = transaction.hash();
-                        let tx_addr = TransactionAddress {
-                            block_hash: block.hash(),
-                            index: idx,
-                        };
-                        if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
-                            self.data_man.insert_transaction_address_to_kv(
-                                &hash, &tx_addr,
-                            );
-                            if transaction_addresses.contains_key(&hash) {
-                                transaction_addresses.insert(hash, tx_addr);
-                                self.data_man.cache_man.lock().note_used(
-                                    CacheId::TransactionAddress(hash),
-                                );
-                            }
-                            unexecuted_transaction_addresses.remove(&hash);
-                        } else {
-                            let mut remove = false;
-                            if let Some(addr_set) =
-                                unexecuted_transaction_addresses.get_mut(&hash)
-                            {
-                                addr_set.remove(&tx_addr);
-                                if addr_set.is_empty() {
-                                    remove = true;
-                                }
-                            }
-                            if remove {
-                                // If a tx is not executed in all blocks, we
-                                // will pack it again
-                                // and it has already been in to_pending now.
-                                unexecuted_transaction_addresses.remove(&hash);
-                            }
-                        }
-                    }
-                }
-            }
-
-            let block_receipts = Arc::new(receipts);
-            self.data_man.insert_block_results_to_kv(
-                block.hash(),
-                pivot_block.hash(),
-                block_receipts.clone(),
-                on_local_pivot,
-            );
-            epoch_receipts.push(block_receipts);
-            debug!(
-                "n_invalid_nonce={}, n_ok={}, n_other={}",
-                n_invalid_nonce, n_ok, n_other
-            );
-        }
-        self.block_receipts_root.insert(
-            *self.indices.get(&pivot_block.hash()).expect("in arena"),
-            BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
-        );
-        debug!("Finish processing tx for epoch");
-        epoch_receipts
-    }
-
-    // TODO remove stored fees in forks after processing rewards, and recompute
-    // if it's needed in the future
-    fn process_rewards_and_fees(
-        &mut self, state: &mut State, pivot_index: usize,
-        pivot_block_upper: usize, on_local_pivot: bool,
-    )
-    {
-        /// (Fee, PackingBlockIndexSet)
-        struct TxExecutionInfo(U256, HashSet<usize>);
-
-        let pivot_hash = self.arena[pivot_index].hash.clone();
-        debug!("Process rewards and fees for {:?}", pivot_hash);
-        let difficulty = self.arena[pivot_index].difficulty;
-        let mut rewards: Vec<(Address, U256)> = Vec::new();
-
-        // Tx fee for each block in this epoch
-        let mut tx_fee = HashMap::new();
-        // Author of each block in this epoch
-        let mut authors = HashMap::new();
-
-        // Compute tx_fee of each block based on gas_used and gas_price of every
-        // tx
-        let indices_in_epoch =
-            self.indices_in_epochs.get(&pivot_index).unwrap().clone();
-        let mut epoch_receipts = None;
-        for (enum_idx, index) in indices_in_epoch.iter().enumerate() {
-            let block_hash = self.arena[*index].hash;
-            let block = self
-                .data_man
-                .block_by_hash(&block_hash, false)
-                .expect("exist");
-            authors.insert(*index, block.block_header.author().clone());
-
-            let receipts = match self.data_man.block_results_by_hash_with_epoch(
-                &block_hash,
-                &pivot_hash,
-                true,
-            ) {
-                Some(receipts) => receipts.receipts,
-                None => {
-                    debug_assert!(!on_local_pivot);
-                    // We need to return receipts instead of getting it through
-                    // function get_receipts, because it's
-                    // possible that the computed receipts is deleted by garbage
-                    // collection before we try get it
-                    if epoch_receipts.is_none() {
-                        epoch_receipts =
-                            Some(self.recompute_states(pivot_index));
-                    }
-                    epoch_receipts.as_ref().unwrap()[enum_idx].clone()
-                }
-            };
-
-            let mut last_gas_used = U256::zero();
-            debug_assert!(receipts.len() == block.transactions.len());
-            for (idx, tx) in block.transactions.iter().enumerate() {
-                let gas_used = receipts[idx].gas_used - last_gas_used;
-                let fee = tx.gas_price * gas_used;
-                let info = tx_fee
-                    .entry(tx.hash())
-                    .or_insert(TxExecutionInfo(fee, HashSet::default()));
-                info.1.insert(*index);
-                if !fee.is_zero() {
-                    debug_assert!(info.1.len() == 1 || info.0.is_zero());
-                    info.0 = fee;
-                }
-                last_gas_used = receipts[idx].gas_used;
-            }
-        }
-
-        let mut block_tx_fees = HashMap::new();
-        for TxExecutionInfo(fee, block_set) in tx_fee.values() {
-            let block_count = U256::from(block_set.len());
-            let quotient: U256 = *fee / block_count;
-            let mut remainder: U256 = *fee - (block_count * quotient);
-            for block_index in block_set {
-                let reward =
-                    block_tx_fees.entry(*block_index).or_insert(U256::zero());
-                *reward += quotient;
-                if !remainder.is_zero() {
-                    *reward += 1.into();
-                    remainder -= 1.into();
-                }
-            }
-        }
-
-        for index in &indices_in_epoch {
-            if self.arena[*index].data.partial_invalid {
-                continue;
-            }
-            let block_hash = self.arena[*index].hash;
-
-            let mut reward: U512 =
-                if self.arena[*index].pow_quality >= difficulty {
-                    U512::from(BASE_MINING_REWARD) * U512::from(CONFLUX_TOKEN)
-                } else {
-                    debug!(
-                        "Block {} pow_quality {} is less than difficulty {}!",
-                        block_hash, self.arena[*index].pow_quality, difficulty
-                    );
-                    0.into()
-                };
-
-            // Add tx fee to base reward, and penalize them together
-            if let Some(fee) = block_tx_fees.get(index) {
-                reward += U512::from(*fee);
-            }
-
-            if reward > 0.into() {
-                let anticone_set = self.arena[*index]
-                    .data
-                    .anticone
-                    .difference(&self.arena[pivot_block_upper].data.anticone)
-                    .cloned()
-                    .collect::<HashSet<_>>();
-
-                let mut anticone_difficulty: U512 = 0.into();
-                for a_index in anticone_set {
-                    anticone_difficulty +=
-                        U512::from(self.arena[a_index].difficulty);
-                }
-
-                let penalty = reward * anticone_difficulty
-                    / U512::from(self.arena[*index].difficulty)
-                    * anticone_difficulty
-                    / U512::from(self.arena[*index].difficulty)
-                    / U512::from(ANTICONE_PENALTY_RATIO)
-                    / U512::from(ANTICONE_PENALTY_RATIO);
-
-                if penalty > reward {
-                    debug!("Block {} penalty {} larger than reward {}! anticone_difficulty={}", self.arena[*index].hash, penalty, reward, anticone_difficulty);
-                    reward = 0.into();
-                } else {
-                    reward -= penalty;
-                }
-            }
-
-            debug_assert!(reward <= U512::from(U256::max_value()));
-            let reward = U256::from(reward);
-            let author = *authors.get(index).unwrap();
-            rewards.push((author, reward));
-            if on_local_pivot {
-                self.data_man
-                    .receipts_retain_epoch(&block_hash, &pivot_hash);
-            }
-        }
-        debug!("Give rewards reward={:?}", rewards);
-
-        for (address, reward) in rewards {
-            state
-                .add_balance(&address, &reward, CleanupMode::ForceCreate)
-                .unwrap();
-        }
-    }
-
     /// Return the consensus graph indexes of the pivot block where the rewards
     /// of its epoch should be computed The rewards are needed to compute
     /// the state of the epoch at height `state_at` of `chain`
@@ -878,6 +571,45 @@ impl ConsensusGraphInner {
         } else {
             None
         }
+    }
+
+    fn get_reward_execution_info_from_index(
+        &self, reward_index: Option<(usize, usize)>,
+    ) -> Option<RewardExecutionInfo> {
+        reward_index.map(|(pivot_index, upper_index)| {
+            let pivot_hash = self.arena[pivot_index].hash;
+            let epoch_block_hashes = self.get_epoch_block_hashes(pivot_index);
+            let mut epoch_block_states = Vec::new();
+            for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
+                let partial_invalid = self.arena[*index].data.partial_invalid;
+                let anticone_set = self.arena[*index]
+                    .data
+                    .anticone
+                    .difference(&self.arena[upper_index].data.anticone)
+                    .cloned()
+                    .collect::<HashSet<_>>();
+
+                let mut anticone_difficulty: U512 = 0.into();
+                for a_index in anticone_set {
+                    anticone_difficulty +=
+                        U512::from(self.arena[a_index].difficulty);
+                }
+                epoch_block_states.push((partial_invalid, anticone_difficulty));
+            }
+            RewardExecutionInfo {
+                pivot_hash,
+                epoch_block_hashes,
+                epoch_block_states,
+            }
+        })
+    }
+
+    fn get_reward_execution_info(
+        &self, state_at: usize, chain: &Vec<usize>,
+    ) -> Option<RewardExecutionInfo> {
+        self.get_reward_execution_info_from_index(
+            self.get_pivot_reward_index(state_at, chain),
+        )
     }
 
     pub fn adjust_difficulty(
@@ -917,79 +649,6 @@ impl ConsensusGraphInner {
         }
     }
 
-    pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<(Vec<u8>, U256), String> {
-        // only allow to call against stated epoch
-        self.validate_stated_epoch(&epoch)?;
-
-        let epoch_id = self.get_hash_from_epoch_number(epoch)?;
-        let spec = Spec::new_spec();
-        let machine = new_machine();
-        let mut state = State::new(
-            StateDb::new(self.storage_manager.get_state_at(epoch_id).unwrap()),
-            0.into(),
-            self.vm.clone(),
-        );
-        let mut env = EnvInfo {
-            number: 0, // TODO: replace 0 with correct cardinal number
-            author: Default::default(),
-            timestamp: Default::default(),
-            difficulty: Default::default(),
-            gas_used: U256::zero(),
-            gas_limit: tx.gas.clone(),
-        };
-        let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
-        let r = ex.transact(tx);
-        trace!("Execution result {:?}", r);
-        r.map(|r| (r.output, r.gas_used))
-            .map_err(|e| format!("execution error: {:?}", e))
-    }
-
-    pub fn recompute_states(
-        &mut self, pivot_index: usize,
-    ) -> Vec<Arc<Vec<Receipt>>> {
-        let reversed_indices =
-            self.indices_in_epochs.get(&pivot_index).unwrap();
-
-        let mut epoch_blocks = Vec::new();
-        {
-            for idx in reversed_indices {
-                let block = self
-                    .data_man
-                    .block_by_hash(&self.arena[*idx].hash, false)
-                    .expect("Exist");
-                epoch_blocks.push(block);
-            }
-        }
-        debug!(
-            "Recompute receipts epoch_id={}, block_count={}",
-            self.arena[pivot_index].hash,
-            reversed_indices.len()
-        );
-        // TODO This clone is only needed to pass borrow check. Needs to be
-        // refactored.
-        let storage_manager = self.storage_manager.clone();
-        let mut state = State::new(
-            StateDb::new(
-                storage_manager
-                    .get_state_at(
-                        self.arena[self.arena[pivot_index].parent].hash,
-                    )
-                    .unwrap(),
-            ),
-            0.into(),
-            self.vm.clone(),
-        );
-        self.process_epoch_transactions(
-            &mut state,
-            &epoch_blocks,
-            &Mutex::new(Default::default()),
-            false,
-            &mut Vec::new(),
-        )
-    }
-
     pub fn best_block_hash(&self) -> H256 {
         self.arena[*self.pivot_chain.last().unwrap()].hash
     }
@@ -1012,46 +671,6 @@ impl ConsensusGraphInner {
     }
 
     pub fn best_epoch_number(&self) -> usize { self.pivot_chain.len() - 1 }
-
-    pub fn deferred_state_root(&self, chain: &[usize]) -> Option<H256> {
-        let chain_len = chain.len();
-        let index = if chain_len < DEFERRED_STATE_EPOCH_COUNT as usize {
-            0
-        } else {
-            chain_len - DEFERRED_STATE_EPOCH_COUNT as usize
-        };
-        let state = self
-            .storage_manager
-            .get_state_at(self.arena[chain[index]].hash)
-            .unwrap();
-        trace!(
-            "get state, hash ({:?}), chain len: {}, chain index: {}",
-            self.arena[chain[index]].hash,
-            chain_len,
-            index
-        );
-        state.get_state_root().unwrap()
-    }
-
-    pub fn deferred_state_root_following_best_block(&self) -> H256 {
-        self.deferred_state_root(&self.pivot_chain).unwrap()
-    }
-
-    pub fn deferred_receipts_root(&self, chain: &[usize]) -> Option<H256> {
-        let chain_len = chain.len();
-        let index = if chain_len < DEFERRED_STATE_EPOCH_COUNT as usize {
-            0
-        } else {
-            chain_len - DEFERRED_STATE_EPOCH_COUNT as usize
-        };
-
-        let root = self.block_receipts_root.get(&chain[index])?;
-        Some(root.clone())
-    }
-
-    pub fn deferred_receipts_root_following_best_block(&self) -> H256 {
-        self.deferred_receipts_root(&self.pivot_chain).unwrap()
-    }
 
     pub fn get_height_from_epoch_number(
         &self, epoch_number: EpochNumber,
@@ -1121,8 +740,9 @@ impl ConsensusGraphInner {
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db =
-            StateDb::new(self.storage_manager.get_state_at(hash).unwrap());
+        let state_db = StateDb::new(
+            self.data_man.storage_manager.get_state_at(hash).unwrap(),
+        );
         Ok(
             if let Ok(maybe_acc) = state_db.get_account(&address, false) {
                 maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
@@ -1145,12 +765,6 @@ impl ConsensusGraphInner {
         } else {
             None
         }
-    }
-
-    pub fn receipts_root_by_hash(&self, hash: &H256) -> Option<H256> {
-        self.indices.get(hash).and_then(|index| {
-            self.block_receipts_root.get(&index).map(Clone::clone)
-        })
     }
 
     pub fn all_blocks_with_topo_order(&self) -> Vec<H256> {
@@ -1225,8 +839,9 @@ impl ConsensusGraphInner {
         self.validate_stated_epoch(&epoch_number)?;
 
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db =
-            StateDb::new(self.storage_manager.get_state_at(hash).unwrap());
+        let state_db = StateDb::new(
+            self.data_man.storage_manager.get_state_at(hash).unwrap(),
+        );
         let state = State::new(state_db, 0.into(), Default::default());
         state
             .nonce(&address)
@@ -1272,11 +887,10 @@ impl ConsensusGraphInner {
 
 pub struct ConsensusGraph {
     pub inner: RwLock<ConsensusGraphInner>,
-    genesis_block: Arc<Block>,
     pub txpool: SharedTransactionPool,
     pub data_man: Arc<BlockDataManager>,
     pub invalid_blocks: RwLock<HashSet<H256>>,
-    storage_manager: Arc<StorageManager>,
+    executor: Arc<ConsensusExecutor>,
     pub statistics: SharedStatistics,
 }
 
@@ -1291,31 +905,26 @@ impl ConsensusGraph {
         pow_config: ProofOfWorkConfig,
     ) -> Self
     {
-        let data_man = Arc::new(BlockDataManager::new(db, cache_man));
-        let consensus_graph = ConsensusGraph {
+        let data_man = Arc::new(BlockDataManager::new(
+            Arc::new(genesis_block),
+            txpool.clone(),
+            db,
+            storage_manager,
+            cache_man,
+        ));
+        let executor = Arc::new(ConsensusExecutor::start(data_man.clone(), vm));
+
+        ConsensusGraph {
             inner: RwLock::new(ConsensusGraphInner::with_genesis_block(
-                &genesis_block,
-                storage_manager.clone(),
-                vm,
                 pow_config,
                 data_man.clone(),
             )),
-            genesis_block: Arc::new(genesis_block),
             txpool,
             data_man: data_man.clone(),
             invalid_blocks: RwLock::new(HashSet::new()),
-            storage_manager,
+            executor,
             statistics,
-        };
-
-        let genesis = consensus_graph.genesis_block();
-        data_man.insert_block_header(
-            genesis.hash(),
-            Arc::new(genesis.block_header.clone()),
-        );
-        data_man.insert_block_to_kv(genesis, true);
-
-        consensus_graph
+        }
     }
 
     pub fn check_mining_heavy_block(
@@ -1336,8 +945,6 @@ impl ConsensusGraph {
     pub fn best_epoch_number(&self) -> usize {
         self.inner.read().best_epoch_number()
     }
-
-    pub fn genesis_block(&self) -> Arc<Block> { self.genesis_block.clone() }
 
     pub fn verified_invalid(&self, hash: &H256) -> bool {
         self.invalid_blocks.read().contains(hash)
@@ -1510,93 +1117,6 @@ impl ConsensusGraph {
         epoch_blocks
     }
 
-    /// Compute the epoch `epoch_index`, and skip it if already computed.
-    /// After the function is called, it's assured that the state, the receipt
-    /// root, and the receipts of blocks executed by this epoch exist (receipt
-    /// root must be in memory because it's not persisted now).
-    /// The parameters are indexes in consensus graph.
-    pub fn compute_epoch(
-        &self, inner: &mut ConsensusGraphInner, epoch_index: usize,
-        parent_index: usize, reward_index: Option<(usize, usize)>,
-        on_local_pivot: bool, to_pending: &mut Vec<Arc<SignedTransaction>>,
-    )
-    {
-        let epoch_hash = inner.arena[epoch_index].hash;
-
-        // Check if the state has been computed
-        if inner.storage_manager.state_exists(epoch_hash)
-            && self.epoch_executed_and_recovered(
-                epoch_index,
-                inner,
-                on_local_pivot,
-            )
-        {
-            debug!("Skip execution in prefix {:?}", epoch_hash);
-            return;
-        }
-
-        // Get blocks in this epoch after skip checking
-        let epoch_blocks = self.get_epoch_blocks(inner, epoch_index);
-
-        debug!(
-            "Process tx epoch_id={}, block_count={}",
-            epoch_hash,
-            epoch_blocks.len()
-        );
-
-        let mut state = State::new(
-            StateDb::new(
-                self.storage_manager
-                    .get_state_at(inner.arena[parent_index].hash)
-                    .unwrap(),
-            ),
-            0.into(),
-            inner.vm.clone(),
-        );
-        inner.process_epoch_transactions(
-            &mut state,
-            &epoch_blocks,
-            &self.txpool.unexecuted_transaction_addresses,
-            on_local_pivot,
-            to_pending,
-        );
-
-        if let Some((reward_pivot_index, reward_pivot_upper_index)) =
-            reward_index
-        {
-            // Calculate the block reward for blocks inside the epoch
-            // All transaction fees are shared among blocks inside one epoch
-            inner.process_rewards_and_fees(
-                &mut state,
-                reward_pivot_index,
-                reward_pivot_upper_index,
-                on_local_pivot,
-            );
-        }
-
-        // FIXME: We may want to propagate the error up
-        if on_local_pivot {
-            state.commit_and_notify(epoch_hash, &self.txpool).unwrap();
-        } else {
-            state.commit(epoch_hash).unwrap();
-        }
-        debug!(
-            "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}",
-            on_local_pivot,
-            epoch_hash,
-            inner
-                .storage_manager
-                .get_state_at(epoch_hash)
-                .unwrap()
-                .get_state_root()
-                .unwrap(),
-            inner
-                .block_receipts_root
-                .get(&epoch_index)
-                .unwrap()
-        );
-    }
-
     // TODO Merge logic.
     /// This is a very expensive call to force the engine to recompute the state
     /// root of a given block
@@ -1607,13 +1127,14 @@ impl ConsensusGraph {
         // do it again FIXME: propagate the error up
         info!("compute_state_for_block {:?}", block_hash);
         {
-            let cached_state = inner
+            let cached_state = self
+                .data_man
                 .storage_manager
                 .get_state_at(block_hash.clone())
                 .unwrap();
             if cached_state.does_exist() {
                 if let Some(receipts_root) =
-                    inner.receipts_root_by_hash(&block_hash)
+                    self.data_man.get_receipts_root(&block_hash)
                 {
                     return (
                         cached_state.get_state_root().unwrap().unwrap(),
@@ -1638,7 +1159,7 @@ impl ConsensusGraph {
         }
         // Because we have genesis at height 0, this should always be true
         debug_assert!(inner.pivot_chain[fork_height] == idx);
-        debug!("Forked at index {}", idx);
+        debug!("Forked at index {} height {}", idx, fork_height);
         chain.push(idx);
         chain.reverse();
         let mut epoch_number_map: HashMap<usize, usize> = HashMap::new();
@@ -1713,20 +1234,22 @@ impl ConsensusGraph {
 
         last_state_height += 1;
         while last_state_height <= fork_height {
-            let reward_index = inner
-                .get_pivot_reward_index(last_state_height, &inner.pivot_chain);
-            self.compute_epoch(
-                inner,
-                inner.pivot_chain[last_state_height],
-                inner.pivot_chain[last_state_height - 1],
-                reward_index,
+            let epoch_index = inner.pivot_chain[last_state_height];
+            let reward_execution_info = inner.get_reward_execution_info(
+                last_state_height,
+                &inner.pivot_chain,
+            );
+            self.executor.enqueue_epoch(
+                inner.arena[epoch_index].hash,
+                inner.get_epoch_block_hashes(epoch_index),
+                reward_execution_info,
                 false,
-                &mut Vec::new(),
             );
             last_state_height += 1;
         }
 
         for fork_at in 1..chain.len() {
+            let epoch_index = chain[fork_at];
             let reward_index =
                 if fork_height + fork_at > REWARD_EPOCH_COUNT as usize {
                     let epoch_num =
@@ -1748,26 +1271,19 @@ impl ConsensusGraph {
                 } else {
                     None
                 };
-            self.compute_epoch(
-                inner,
-                chain[fork_at],
-                chain[fork_at - 1],
-                reward_index,
+            let reward_execution_info =
+                inner.get_reward_execution_info_from_index(reward_index);
+            self.executor.enqueue_epoch(
+                inner.arena[epoch_index].hash,
+                inner.get_epoch_block_hashes(epoch_index),
+                reward_execution_info,
                 false,
-                &mut Vec::new(),
             );
         }
 
         // FIXME: Propagate errors upward
-        let state_root = inner
-            .storage_manager
-            .get_state_at(inner.arena[me].hash)
-            .unwrap()
-            .get_state_root()
-            .unwrap()
-            .unwrap();
-
-        let receipts_root = inner.block_receipts_root.get(&me).unwrap().clone();
+        let (state_root, receipts_root) =
+            self.executor.wait_for_result(*block_hash);
         debug!(
             "Epoch {:?} has state_root={:?} receipts_root={:?}",
             inner.arena[me].hash, state_root, receipts_root
@@ -1852,13 +1368,17 @@ impl ConsensusGraph {
             );
             debug!("Deferred block is {:?}", inner.arena[deferred].hash);
 
-            if inner
+            let correct_receipts_root =
+                self.data_man.get_receipts_root(&inner.arena[deferred].hash);
+            if self
+                .data_man
                 .storage_manager
                 .contains_state(inner.arena[deferred].hash)
-                && inner.block_receipts_root.contains_key(&deferred)
+                && correct_receipts_root.is_some()
             {
                 let mut valid = true;
-                let correct_state_root = inner
+                let correct_state_root = self
+                    .data_man
                     .storage_manager
                     .get_state_at(inner.arena[deferred].hash)
                     .unwrap()
@@ -1874,10 +1394,8 @@ impl ConsensusGraph {
                     );
                     valid = false;
                 }
-                let correct_receipts_root =
-                    inner.block_receipts_root.get(&deferred).unwrap().clone();
                 if *block.block_header.deferred_receipts_root()
-                    != correct_receipts_root
+                    != correct_receipts_root.unwrap()
                 {
                     warn!(
                         "Invalid receipt root: should be {:?}",
@@ -1992,8 +1510,8 @@ impl ConsensusGraph {
                     [height + DEFERRED_STATE_EPOCH_COUNT as usize]]
                     .hash
                     .clone();
-                inner.block_receipts_root.insert(
-                    new_pivot_chain[height],
+                self.data_man.insert_receipts_root(
+                    inner.arena[new_pivot_chain[height]].hash,
                     self.data_man
                         .block_header_by_hash(&future_block_hash)
                         .unwrap()
@@ -2040,22 +1558,24 @@ impl ConsensusGraph {
                 }
             }
             if receipts_correct {
-                inner.block_receipts_root.insert(
-                    pivot_index,
+                self.data_man.insert_receipts_root(
+                    pivot_hash,
                     BlockHeaderBuilder::compute_block_receipts_root(
                         &epoch_receipts,
                     ),
                 );
             } else {
-                let reward_index = inner
-                    .get_pivot_reward_index(state_height, &inner.pivot_chain);
-                self.compute_epoch(
-                    inner,
-                    pivot_index,
-                    inner.arena[pivot_index].parent,
-                    reward_index,
+                let reward_execution_info = inner.get_reward_execution_info(
+                    state_height,
+                    &inner.pivot_chain,
+                );
+                let epoch_block_hashes = inner
+                    .get_epoch_block_hashes(inner.pivot_chain[state_height]);
+                self.executor.compute_epoch(
+                    &pivot_hash,
+                    &epoch_block_hashes,
+                    &reward_execution_info,
                     true,
-                    &mut Vec::new(),
                 );
             }
         }
@@ -2328,7 +1848,6 @@ impl ConsensusGraph {
             pivot_index += 1;
         }
 
-        let mut to_pending = Vec::new();
         let to_state_pos =
             if new_pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
                 0 as usize
@@ -2351,26 +1870,16 @@ impl ConsensusGraph {
 
         // Apply transactions in the determined total order
         while state_at < to_state_pos {
-            let reward_index =
-                inner.get_pivot_reward_index(state_at, &new_pivot_chain);
-            self.compute_epoch(
-                inner,
-                new_pivot_chain[state_at],
-                new_pivot_chain[state_at - 1],
-                reward_index,
+            let epoch_index = new_pivot_chain[state_at];
+            let reward_execution_info =
+                inner.get_reward_execution_info(state_at, &new_pivot_chain);
+            self.executor.enqueue_epoch(
+                inner.arena[epoch_index].hash,
+                inner.get_epoch_block_hashes(epoch_index),
+                reward_execution_info,
                 true,
-                &mut to_pending,
             );
             state_at += 1;
-        }
-
-        if state_at > 1 {
-            state_at -= 1;
-            let state = inner
-                .storage_manager
-                .get_state_at(inner.arena[new_pivot_chain[state_at]].hash)
-                .unwrap();
-            self.txpool.recycle_future_transactions(to_pending, state);
         }
 
         inner.adjust_difficulty(
@@ -2379,65 +1888,7 @@ impl ConsensusGraph {
         );
         inner.pivot_chain = new_pivot_chain;
         inner.persist_terminals();
-    }
-
-    /// Check if all executed results of an epoch exist
-    ///
-    /// This function will require lock of block_receipts
-    pub fn epoch_executed_and_recovered(
-        &self, epoch_index: usize, inner: &ConsensusGraphInner,
-        on_local_pivot: bool,
-    ) -> bool
-    {
-        // `block_receipts_root` is not computed when recovering from db with
-        // fast_recover == false And we should force it to recompute
-        // without checking receipts when fast_recover == false
-        if !inner.block_receipts_root.contains_key(&epoch_index) {
-            return false;
-        }
-        let mut epoch_receipts = Vec::new();
-        if let Some(reversed_indices) =
-            inner.indices_in_epochs.get(&epoch_index)
-        {
-            for i in reversed_indices {
-                if let Some(r) = self.data_man.block_results_by_hash_with_epoch(
-                    &inner.arena[*i].hash,
-                    &inner.arena[epoch_index].hash,
-                    true,
-                ) {
-                    epoch_receipts.push(r.receipts);
-                } else {
-                    return false;
-                }
-            }
-        } else {
-            return false;
-        }
-
-        // Recover tx address if we will skip pivot chain execution
-        if on_local_pivot {
-            let epoch_blocks = self.get_epoch_blocks(inner, epoch_index);
-            for (block_idx, block) in epoch_blocks.iter().enumerate() {
-                let block_hash = block.hash();
-                for (tx_idx, tx) in block.transactions.iter().enumerate() {
-                    if epoch_receipts[block_idx]
-                        .get(tx_idx)
-                        .unwrap()
-                        .outcome_status
-                        == TRANSACTION_OUTCOME_SUCCESS
-                    {
-                        self.data_man.insert_transaction_address_to_kv(
-                            &tx.hash,
-                            &TransactionAddress {
-                                block_hash,
-                                index: tx_idx,
-                            },
-                        )
-                    }
-                }
-            }
-        }
-        true
+        debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -2489,19 +1940,8 @@ impl ConsensusGraph {
 
     pub fn block_count(&self) -> usize { self.inner.read().indices.len() }
 
-    pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<Vec<u8>, String> {
-        self.inner
-            .write()
-            .call_virtual(tx, epoch)
-            .map(|(output, _)| output)
-    }
-
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
-        self.inner
-            .write()
-            .call_virtual(tx, EpochNumber::LatestState)
+        self.call_virtual(tx, EpochNumber::LatestState)
             .map(|(_, gas_used)| gas_used)
     }
 
@@ -2634,4 +2074,23 @@ impl ConsensusGraph {
         logs.reverse();
         logs
     }
+
+    pub fn call_virtual(
+        &self, tx: &SignedTransaction, epoch: EpochNumber,
+    ) -> Result<(Vec<u8>, U256), String> {
+        // only allow to call against stated epoch
+        self.inner.read().validate_stated_epoch(&epoch)?;
+        let epoch_id = self.get_hash_from_epoch_number(epoch)?;
+        self.executor.call_virtual(tx, &epoch_id)
+    }
+
+    /// Wait for a block's epoch is computed.
+    /// Return the state_root and receipts_root
+    pub fn wait_for_block_state(&self, block_hash: &H256) -> (H256, H256) {
+        self.executor.wait_for_result(*block_hash)
+    }
+}
+
+impl Drop for ConsensusGraph {
+    fn drop(&mut self) { self.executor.stop(); }
 }

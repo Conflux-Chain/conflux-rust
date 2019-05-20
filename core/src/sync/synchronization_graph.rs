@@ -502,7 +502,6 @@ pub struct SynchronizationGraph {
     pub consensus: SharedConsensusGraph,
     pub data_man: Arc<BlockDataManager>,
     pub compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
-    genesis_block_hash: H256,
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
@@ -521,16 +520,11 @@ impl SynchronizationGraph {
         fast_recover: bool,
     ) -> Self
     {
-        let genesis_block_hash = consensus.genesis_block().hash();
         let data_man = consensus.data_man.clone();
-        let genesis_block_header = data_man
-            .block_header_by_hash(&genesis_block_hash)
-            .expect("genesis exists")
-            .clone();
         let (consensus_sender, consensus_receiver) = mpsc::channel();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
-                genesis_block_header,
+                Arc::new(data_man.genesis_block().block_header.clone()),
                 pow_config,
             ),
         ));
@@ -538,7 +532,6 @@ impl SynchronizationGraph {
             inner: inner.clone(),
             data_man: data_man.clone(),
             compact_blocks: RwLock::new(HashMap::new()),
-            genesis_block_hash,
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
             cache_man: data_man.cache_man.clone(),
@@ -592,7 +585,7 @@ impl SynchronizationGraph {
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
         while let Some(hash) = queue.pop_front() {
-            if hash == self.genesis_block_hash {
+            if hash == self.data_man.genesis_block().hash() {
                 continue;
             }
 
@@ -659,7 +652,7 @@ impl SynchronizationGraph {
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
         while let Some(hash) = queue.pop_front() {
-            if hash == self.genesis_block_hash {
+            if hash == self.data_man.genesis_block().hash() {
                 continue;
             }
 
@@ -748,7 +741,7 @@ impl SynchronizationGraph {
         })
     }
 
-    pub fn genesis_hash(&self) -> &H256 { &self.genesis_block_hash }
+    pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }
 
     pub fn contains_block_header(&self, hash: &H256) -> bool {
         self.inner.read().indices.contains_key(hash)
@@ -1143,15 +1136,16 @@ impl SynchronizationGraph {
         BestInformation,
     > {
         let consensus_inner = self.consensus.inner.upgradable_read();
+        let (deferred_state_root, deferred_receipts_root) = self
+            .consensus
+            .wait_for_block_state(&consensus_inner.best_state_block_hash());
         let value = BestInformation {
             best_block_hash: consensus_inner.best_block_hash(),
             best_epoch_number: consensus_inner.best_epoch_number(),
             current_difficulty: consensus_inner.current_difficulty,
             terminal_block_hashes: consensus_inner.terminal_hashes(),
-            deferred_state_root: consensus_inner
-                .deferred_state_root_following_best_block(),
-            deferred_receipts_root: consensus_inner
-                .deferred_receipts_root_following_best_block(),
+            deferred_state_root,
+            deferred_receipts_root,
         };
         GuardedValue::new(consensus_inner, value)
     }

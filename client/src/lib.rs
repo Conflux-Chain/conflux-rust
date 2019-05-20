@@ -83,10 +83,10 @@ impl ClientHandle {
             self.ledger_db,
             self.blockgen,
             Box::new((
+                self.consensus,
                 self.debug_rpc_http_server,
                 self.rpc_tcp_server,
                 self.rpc_http_server,
-                self.consensus,
                 self.txpool,
                 self.sync,
                 self.txgen,

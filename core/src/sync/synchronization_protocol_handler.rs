@@ -848,7 +848,7 @@ impl SynchronizationProtocolHandler {
             }
             let header = header.unwrap();
             block_headers_resp.headers.push(header.clone());
-            if hash == *self.graph.genesis_hash() {
+            if hash == self.graph.genesis_hash() {
                 break;
             }
             hash = header.parent_hash().clone();
@@ -1059,7 +1059,7 @@ impl SynchronizationProtocolHandler {
         let mut status = rlp.as_val::<Status>()?;
         debug!("on_status, msg=:{:?}", status);
         let genesis_hash = self.graph.genesis_hash();
-        if *genesis_hash != status.genesis_hash {
+        if genesis_hash != status.genesis_hash {
             debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 peer, genesis_hash, status.genesis_hash
@@ -1648,7 +1648,7 @@ impl SynchronizationProtocolHandler {
         let msg: Box<dyn Message> = Box::new(Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
-            genesis_hash: *self.graph.genesis_hash(),
+            genesis_hash: self.graph.genesis_hash(),
             best_epoch: best_info.best_epoch_number as u64,
             terminal_block_hashes: best_info.terminal_block_hashes,
         });
