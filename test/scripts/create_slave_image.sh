@@ -32,7 +32,7 @@ do
     if [ "$image_status" != "pending" ]; then
         break
     fi
-    sleep(5)
+    sleep 5
 done
 
 # delete the instance that used to make slave image
