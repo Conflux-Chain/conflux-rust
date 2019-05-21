@@ -724,7 +724,6 @@ impl ConsensusGraphInner {
     }
 
     pub fn epoch_hash(&self, epoch_number: usize) -> H256 {
-        assert!(epoch_number < self.pivot_chain.len());
         self.arena[self.pivot_chain[epoch_number]].hash
     }
 
@@ -1739,7 +1738,6 @@ impl ConsensusGraph {
             let lca = inner.weight_tree.lca(last, me);
 
             let fork_at = inner.arena[lca].height as usize + 1;
-            assert!(fork_at < inner.pivot_chain.len());
             let prev = inner.pivot_chain[fork_at];
             let prev_weight = inner.weight_tree.subtree_weight(prev);
             let new = inner.weight_tree.ancestor_at(me, fork_at as usize);
@@ -1920,7 +1918,6 @@ impl ConsensusGraph {
         {
             let block =
                 self.data_man.block_by_hash(&address.block_hash, false)?;
-            assert!(address.index < block.transactions.len());
             let transaction = (*block.transactions[address.index]).clone();
             Some((transaction, receipt, address))
         } else {

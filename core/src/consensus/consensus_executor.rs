@@ -26,6 +26,7 @@ use std::{
     },
     thread::{self, JoinHandle},
 };
+use std::collections::btree_set::BTreeSet;
 
 /// The struct includes all the information to compute rewards for old epochs
 #[derive(Debug)]
@@ -487,8 +488,8 @@ impl ConsensusExecutionHandler {
         on_local_pivot: bool,
     )
     {
-        /// (Fee, PackingBlockIndexSet)
-        struct TxExecutionInfo(U256, HashSet<H256>);
+        /// (Fee, SetOfPackingBlockHash)
+        struct TxExecutionInfo(U256, BTreeSet<H256>);
 
         let epoch_blocks = self
             .data_man
@@ -496,7 +497,7 @@ impl ConsensusExecutionHandler {
             .expect("blocks exist");
         let pivot_block = epoch_blocks.last().expect("Not empty");
         assert!(pivot_block.hash() == *pivot_hash);
-        debug!("Process rewards and fees for {:?}", pivot_hash);
+        debug!("Process rewards and fees for {:?} with state {:?}", pivot_hash, epoch_block_states);
         let difficulty = *pivot_block.block_header.difficulty();
         let mut rewards: Vec<(Address, U256)> = Vec::new();
 
@@ -536,7 +537,7 @@ impl ConsensusExecutionHandler {
                 let fee = tx.gas_price * gas_used;
                 let info = tx_fee
                     .entry(tx.hash())
-                    .or_insert(TxExecutionInfo(fee, HashSet::default()));
+                    .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
                 info.1.insert(block_hash);
                 if !fee.is_zero() {
                     debug_assert!(info.1.len() == 1 || info.0.is_zero());
