@@ -17,14 +17,36 @@ use std::{
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 
 use crate::Error;
+use std::sync::atomic::AtomicUsize;
 
 #[derive(PartialEq, Eq)]
 pub enum WriteStatus {
     Ongoing,
+    LowPriority,
     Complete,
 }
 
 pub const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
+
+static HIGH_PRIORITY_PACKETS: AtomicUsize = AtomicUsize::new(0);
+
+fn incr_high_priority_packets() {
+    assert_ne!(
+        HIGH_PRIORITY_PACKETS.fetch_add(1, AtomicOrdering::SeqCst),
+        std::usize::MAX
+    );
+}
+
+fn decr_high_priority_packets() {
+    assert_ne!(
+        HIGH_PRIORITY_PACKETS.fetch_sub(1, AtomicOrdering::SeqCst),
+        0
+    );
+}
+
+fn has_high_priority_packets() -> bool {
+    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst) > 0
+}
 
 pub trait GenericSocket: Read + Write {}
 
@@ -55,9 +77,13 @@ impl<Socket: GenericSocket, Sizer: PacketSizer> Drop
 {
     fn drop(&mut self) {
         let mut service = THROTTLING_SERVICE.write();
-        while let Some((packet, pos)) = self.send_queue.pop_front() {
+        while let Some(((packet, pos), priority)) = self.send_queue.pop_front()
+        {
             if pos < packet.len() {
                 service.on_dequeue(packet.len() - pos);
+                if priority == SendQueuePriority::High {
+                    decr_high_priority_packets();
+                }
             }
         }
     }
@@ -100,8 +126,17 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
         {
+            if self.send_queue.is_send_queue_empty(SendQueuePriority::High) && has_high_priority_packets() {
+                return Ok(WriteStatus::LowPriority);
+            }
+
             let buf = match self.send_queue.front_mut() {
-                Some(buf) => buf,
+                Some((buf, promoted)) => {
+                    if promoted {
+                        incr_high_priority_packets();
+                    }
+                    buf
+                }
                 None => return Ok(WriteStatus::Complete),
             };
             let len = buf.0.len();
@@ -119,6 +154,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
                         Ok(WriteStatus::Ongoing)
                     } else {
                         trace!(target: "network", "Wrote {} bytes token={:?}", len, self.token);
+                        decr_high_priority_packets();
                         Ok(WriteStatus::Complete)
                     }
                 }
@@ -146,6 +182,9 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
             THROTTLING_SERVICE.write().on_enqueue(data.len())?;
             let message = data.to_vec();
             self.send_queue.push_back((message, 0), priority);
+            if priority == SendQueuePriority::High {
+                incr_high_priority_packets();
+            }
             if !self.interest.is_writable() {
                 self.interest.insert(Ready::writable());
             }
@@ -352,6 +391,7 @@ mod tests {
         connection
             .send_queue
             .push_back(data, SendQueuePriority::High);
+        incr_high_priority_packets();
 
         let status = connection.writable(&test_io());
 
