@@ -582,17 +582,20 @@ impl ConsensusGraphInner {
             let mut epoch_block_states = Vec::new();
             for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
                 let partial_invalid = self.arena[*index].data.partial_invalid;
-                let anticone_set = self.arena[*index]
-                    .data
-                    .anticone
-                    .difference(&self.arena[upper_index].data.anticone)
-                    .cloned()
-                    .collect::<HashSet<_>>();
-
                 let mut anticone_difficulty: U512 = 0.into();
-                for a_index in anticone_set {
-                    anticone_difficulty +=
-                        U512::from(self.arena[a_index].difficulty);
+                // If a block is partial_invalid, it won't have reward and anticone_difficulty will not be used, so it's okay to set it to 0.
+                if !partial_invalid {
+                    let anticone_set = self.arena[*index]
+                        .data
+                        .anticone
+                        .difference(&self.arena[upper_index].data.anticone)
+                        .cloned()
+                        .collect::<HashSet<_>>();
+
+                    for a_index in anticone_set {
+                        anticone_difficulty +=
+                            U512::from(self.arena[a_index].difficulty);
+                    }
                 }
                 epoch_block_states.push((partial_invalid, anticone_difficulty));
             }
@@ -1486,13 +1489,11 @@ impl ConsensusGraph {
             // Second, sort all the blocks based on their topological order
             // and break ties with block hash
             let reversed_indices = inner.topological_sort(&queue);
-
             debug!(
                 "Construct epoch_id={}, block_count={}",
                 inner.arena[new_pivot_chain[height]].hash,
                 reversed_indices.len()
             );
-
             inner
                 .indices_in_epochs
                 .insert(new_pivot_chain[height], reversed_indices);
