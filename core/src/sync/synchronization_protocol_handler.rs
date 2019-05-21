@@ -920,11 +920,6 @@ impl SynchronizationProtocolHandler {
             });
 
             loop {
-                if msg.blocks.is_empty() {
-                    info!("No block is sent for GetBlocks request!");
-                    break;
-                }
-
                 if let Err(e) = self.send_message(
                     io,
                     peer,
@@ -965,11 +960,6 @@ impl SynchronizationProtocolHandler {
             });
 
             loop {
-                if msg.blocks.is_empty() {
-                    info!("No block is sent for GetBlocks request!");
-                    break;
-                }
-
                 if let Err(e) = self.send_message(
                     io,
                     peer,
