@@ -391,6 +391,7 @@ mod tests {
         connection
             .send_queue
             .push_back(data, SendQueuePriority::High);
+        incr_high_priority_packets();
 
         let status = connection.writable(&test_io());
 
