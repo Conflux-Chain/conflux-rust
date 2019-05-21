@@ -14,11 +14,11 @@ use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    receipt::Receipt, Block, BlockHeader, SignedTransaction, TransactionAddress,
+    receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
+    Block, BlockHeader, SignedTransaction, TransactionAddress,
 };
 use rlp::{Rlp, RlpStream};
 use std::{collections::HashMap, sync::Arc};
-use primitives::receipt::TRANSACTION_OUTCOME_SUCCESS;
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
@@ -401,8 +401,8 @@ impl BlockDataManager {
         }
         let mut epoch_receipts = Vec::new();
         for h in epoch_block_hashes {
-            if let Some(r) = self
-                .block_results_by_hash_with_epoch(h, epoch_hash, true)
+            if let Some(r) =
+                self.block_results_by_hash_with_epoch(h, epoch_hash, true)
             {
                 epoch_receipts.push(r.receipts);
             } else {
@@ -413,27 +413,26 @@ impl BlockDataManager {
         // Recover tx address if we will skip pivot chain execution
         if on_local_pivot {
             for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
-                {
-                    let block = self
-                        .block_by_hash(block_hash, true)
-                        .expect("block exists");
-                    for (tx_idx, tx) in block.transactions.iter().enumerate() {
-                        if epoch_receipts[block_idx]
-                            .get(tx_idx)
-                            .unwrap()
-                            .outcome_status
-                            == TRANSACTION_OUTCOME_SUCCESS
-                        {
-                            self.insert_transaction_address_to_kv(
-                                &tx.hash,
-                                &TransactionAddress {
-                                    block_hash: *block_hash,
-                                    index: tx_idx,
-                                },
-                            )
-                        }
+            {
+                let block =
+                    self.block_by_hash(block_hash, true).expect("block exists");
+                for (tx_idx, tx) in block.transactions.iter().enumerate() {
+                    if epoch_receipts[block_idx]
+                        .get(tx_idx)
+                        .unwrap()
+                        .outcome_status
+                        == TRANSACTION_OUTCOME_SUCCESS
+                    {
+                        self.insert_transaction_address_to_kv(
+                            &tx.hash,
+                            &TransactionAddress {
+                                block_hash: *block_hash,
+                                index: tx_idx,
+                            },
+                        )
                     }
                 }
+            }
         }
         true
     }

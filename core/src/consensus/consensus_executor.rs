@@ -1,7 +1,10 @@
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::CacheId,
-    consensus::{ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD, CONFLUX_TOKEN},
+    consensus::{
+        ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
+        CONFLUX_TOKEN,
+    },
     executive::{ExecutionError, Executive},
     machine::new_machine,
     state::{CleanupMode, State},
@@ -11,7 +14,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256, U512};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
@@ -21,7 +24,7 @@ use primitives::{
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        mpsc::{channel, Sender},
+        mpsc::{channel, Sender, TryRecvError},
         Arc,
     },
     thread::{self, JoinHandle},
@@ -36,7 +39,7 @@ pub struct RewardExecutionInfo {
 }
 
 #[derive(Debug)]
-pub enum ExecutionTask {
+enum ExecutionTask {
     ExecuteEpoch(EpochExecutionTask),
     GetResult(GetExecutionResultTask),
     Stop,
@@ -51,10 +54,25 @@ pub struct EpochExecutionTask {
     pub on_local_pivot: bool,
 }
 
+impl EpochExecutionTask {
+    pub fn new(
+        epoch_hash: H256, epoch_block_hashes: Vec<H256>,
+        reward_info: Option<RewardExecutionInfo>, on_local_pivot: bool,
+    ) -> Self
+    {
+        Self {
+            epoch_hash,
+            epoch_block_hashes,
+            reward_info,
+            on_local_pivot,
+        }
+    }
+}
+
 /// `sender` is used to return the computed `(state_root, receipts_root)` to the
 /// thread who sends this task.
 #[derive(Debug)]
-pub struct GetExecutionResultTask {
+struct GetExecutionResultTask {
     pub epoch_hash: H256,
     pub sender: Sender<(H256, H256)>,
 }
@@ -73,7 +91,11 @@ pub struct ConsensusExecutor {
 }
 
 impl ConsensusExecutor {
-    pub fn start(data_man: Arc<BlockDataManager>, vm: VmFactory) -> Self {
+    pub fn start(
+        data_man: Arc<BlockDataManager>, vm: VmFactory,
+        consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
+    ) -> Self
+    {
         let handler = Arc::new(ConsensusExecutionHandler::new(data_man, vm));
         let (sender, receiver) = channel();
 
@@ -86,16 +108,26 @@ impl ConsensusExecutor {
         let handle = thread::Builder::new()
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
-                match receiver.recv() {
-                    Ok(ExecutionTask::Stop) => {
-                        debug!(
-                            "Consensus Executor stopped by receiving STOP task"
-                        );
-                        break;
+                let maybe_task = receiver.try_recv();
+                if maybe_task == Err(Err(TryRecvError::Empty)) {
+                    // The channel is empty, so we try to optimistically compute
+                    // later epochs
+                    match consensus_inner.read().get_compute_advance_task() {
+                        Some(task) => handler.handle_epoch_execution(task),
+                        None => {
+                            // Even optimistic tasks are all finished, so we
+                            // block and wait for new
+                            // execution tasks
+                            if !handler.handle_recv_result(receiver.recv()) {
+                                break;
+                            }
+                        }
                     }
-                    Ok(task) => handler.handle_execution_work(task),
-                    Err(e) => {
-                        warn!("Consensus Executor stopped by Err={:?}", e);
+                } else {
+                    // Handle execution task in channel.
+                    // `maybe_task` cannot be `Empty` here so we can pass it to
+                    // the handler.
+                    if !handler.handle_recv_result(maybe_task) {
                         break;
                     }
                 }
@@ -126,35 +158,16 @@ impl ConsensusExecutor {
     /// Enqueue the epoch to be executed by the background execution thread
     /// The parameters are needed for the thread to execute this epoch without
     /// holding inner lock.
-    pub fn enqueue_epoch(
-        &self, epoch_hash: H256, epoch_block_hashes: Vec<H256>,
-        reward_info: Option<RewardExecutionInfo>, on_local_pivot: bool,
-    ) -> bool
-    {
+    pub fn enqueue_epoch(&self, task: EpochExecutionTask) -> bool {
         self.sender
             .lock()
-            .send(ExecutionTask::ExecuteEpoch(EpochExecutionTask {
-                epoch_hash,
-                epoch_block_hashes,
-                reward_info,
-                on_local_pivot,
-            }))
+            .send(ExecutionTask::ExecuteEpoch(task))
             .is_ok()
     }
 
     /// Execute the epoch synchronously
-    pub fn compute_epoch(
-        &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
-        reward_execution_info: &Option<RewardExecutionInfo>,
-        on_local_pivot: bool,
-    )
-    {
-        self.handler.compute_epoch(
-            epoch_hash,
-            epoch_block_hashes,
-            reward_execution_info,
-            on_local_pivot,
-        )
+    pub fn compute_epoch(&self, task: EpochExecutionTask) {
+        self.handler.handle_epoch_execution(task)
     }
 
     pub fn call_virtual(
@@ -184,15 +197,34 @@ impl ConsensusExecutionHandler {
         ConsensusExecutionHandler { data_man, vm }
     }
 
-    fn handle_execution_work(&self, task: ExecutionTask) {
+    /// Return `false` if someting goes wrong, and we will break the working
+    /// loop. `maybe_task` should match results from `recv()`, so it does not
+    /// contain `Empty` case.
+    fn handle_recv_result(&self, maybe_task: Result<T, TryRecvError>) -> bool {
+        match maybe_task {
+            Ok(ExecutionTask::Stop) => {
+                debug!("Consensus Executor stopped by receiving STOP task");
+                false
+            }
+            Ok(task) => self.handle_execution_work(task),
+            Err(e) => {
+                warn!("Consensus Executor stopped by Err={:?}", e);
+                false
+            }
+        }
+    }
+
+    /// Always return `true` for now
+    fn handle_execution_work(&self, task: ExecutionTask) -> bool {
         debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
                 self.handle_epoch_execution(task)
             }
-            ExecutionTask::GetResult(task) => self.handle_get_result(task),
+            ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
             _ => {}
         }
+        true
     }
 
     fn handle_epoch_execution(&self, task: EpochExecutionTask) {
@@ -204,7 +236,7 @@ impl ConsensusExecutionHandler {
         );
     }
 
-    fn handle_get_result(&self, task: GetExecutionResultTask) {
+    fn handle_get_result_task(&self, task: GetExecutionResultTask) {
         let state_root = self
             .data_man
             .storage_manager
@@ -647,7 +679,6 @@ impl ConsensusExecutionHandler {
             false,
         )
     }
-
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
