@@ -724,7 +724,9 @@ impl ConsensusGraphInner {
     }
 
     pub fn epoch_hash(&self, epoch_number: usize) -> Option<H256> {
-        self.arena.get(self.pivot_chain[epoch_number]).map(|node| node.hash )
+        self.pivot_chain
+            .get(epoch_number)
+            .map(|idx| self.arena[*idx].hash)
     }
 
     pub fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
