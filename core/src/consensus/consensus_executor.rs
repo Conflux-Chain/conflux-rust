@@ -113,12 +113,20 @@ impl ConsensusExecutor {
                     Err(TryRecvError::Empty) => {
                         // The channel is empty, so we try to optimistically
                         // compute later epochs
-                        match consensus_inner.write().get_opt_execution_task() {
-                            Some(task) => handler.handle_epoch_execution(task),
+                        let maybe_opt_task = consensus_inner.write().get_opt_execution_task();
+                        match maybe_opt_task {
+                            Some(task) => {
+                                debug!("Get opt_execution_task {:?}", task);
+                                handler.handle_epoch_execution(task)
+                            },
                             None => {
-                                // Even optimistic tasks are all finished, so we
-                                // block and wait for new
-                                // execution tasks
+                                debug!("No optimistic tasks to execute, block for new tasks");
+                                // Even optimistic tasks are all finished, so we block and wait for
+                                // new execution tasks.
+                                //
+                                // New optimistic tasks will only exist if pivot_chain changes,
+                                // and new tasks will be sent to `receiver` in this case, so this
+                                // waiting will not prevent new optimistic tasks from being executed
                                 if !handler.handle_recv_result(receiver.recv())
                                 {
                                     break;
