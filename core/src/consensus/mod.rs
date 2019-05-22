@@ -723,15 +723,17 @@ impl ConsensusGraphInner {
             })
     }
 
-    pub fn epoch_hash(&self, epoch_number: usize) -> H256 {
-        self.arena[self.pivot_chain[epoch_number]].hash
+    pub fn epoch_hash(&self, epoch_number: usize) -> Option<H256> {
+        self.pivot_chain
+            .get(epoch_number)
+            .map(|idx| self.arena[*idx].hash)
     }
 
     pub fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
         self.indices.get(hash).and_then(|block_index| {
             let epoch_number =
                 self.arena[*block_index].data.epoch_number.borrow().clone();
-            Some(self.epoch_hash(epoch_number))
+            self.epoch_hash(epoch_number)
         })
     }
 
@@ -1895,10 +1897,6 @@ impl ConsensusGraph {
 
     pub fn best_state_epoch_number(&self) -> usize {
         self.inner.read().best_state_epoch_number()
-    }
-
-    pub fn epoch_hash(&self, epoch_number: usize) -> H256 {
-        self.inner.read().epoch_hash(epoch_number)
     }
 
     pub fn get_hash_from_epoch_number(
