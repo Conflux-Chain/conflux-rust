@@ -112,7 +112,7 @@ impl ConsensusExecutor {
                 if maybe_task == Err(Err(TryRecvError::Empty)) {
                     // The channel is empty, so we try to optimistically compute
                     // later epochs
-                    match consensus_inner.read().get_compute_advance_task() {
+                    match consensus_inner.write().get_opt_execution_task() {
                         Some(task) => handler.handle_epoch_execution(task),
                         None => {
                             // Even optimistic tasks are all finished, so we

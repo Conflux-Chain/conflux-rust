@@ -113,6 +113,7 @@ pub struct ConsensusGraphInner {
     pub arena: Slab<ConsensusGraphNode>,
     pub indices: HashMap<H256, usize>,
     pub pivot_chain: Vec<usize>,
+    opt_executed_height: Some(usize),
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
     genesis_block_state_root: H256,
@@ -132,6 +133,7 @@ impl ConsensusGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
+            opt_executed_height: None,
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
             genesis_block_state_root: data_man
@@ -183,8 +185,16 @@ impl ConsensusGraphInner {
         inner
     }
 
-    pub fn get_compute_advance_task(&self) -> Option<EpochExecutionTask> {
-        None
+    pub fn get_opt_execution_task(&mut self) -> Option<EpochExecutionTask> {
+        let opt_index = self.pivot_chain[self.opt_executed_height?];
+        let execution_task = EpochExecutionTask::new(self.arena[opt_index].hash, self.get_epoch_block_hashes(opt_index), self.get_reward_execution_info(opt_index, &self.pivot_chain), true);
+        let next_opt_index = opt_index + 1;
+        if next_opt_index >= self.pivot_chain.len() {
+            self.opt_executed_height = None;
+        } else {
+            self.opt_executed_height = Some(next_opt_index);
+        }
+        Some(execution_task)
     }
 
     pub fn get_epoch_block_hashes(&self, epoch_index: usize) -> Vec<H256> {
