@@ -36,11 +36,8 @@ impl SessionManager {
         self.sessions.read().get(idx).cloned()
     }
 
-    pub fn visit<F>(&self, mut visitor: F)
-    where F: FnMut(&Arc<RwLock<Session>>) {
-        for session in self.sessions.read().iter() {
-            visitor(session);
-        }
+    pub fn all(&self) -> Vec<Arc<RwLock<Session>>> {
+        self.sessions.read().iter().map(|s| s.clone()).collect()
     }
 
     /// Retrieves the session count of handshakes, egress and ingress.
@@ -120,26 +117,17 @@ impl SessionManager {
 
         Ok(index)
     }
-
-    /// Removes an expired session with specified `idx`.
-    pub fn remove(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
+    
+    pub fn remove(&self, session: &Session) {
         let mut sessions = self.sessions.write();
-        let session = sessions.get(idx).cloned()?;
-        let sess = session.write();
 
-        if !sess.expired() {
-            return None;
+        if sessions.remove(session.token()).is_some() {
+            if let Some(node_id) = session.id() {
+                self.node_id_index.write().remove(node_id);
+            }
+
+            self.ip_limit.write().on_delete(session.address().ip());
         }
-
-        let removed = sessions.remove(idx)?;
-
-        if let Some(node_id) = sess.id() {
-            self.node_id_index.write().remove(node_id);
-        }
-
-        self.ip_limit.write().on_delete(sess.address().ip());
-
-        Some(removed)
     }
 
     pub fn update_ingress_node_id(
