@@ -189,8 +189,9 @@ impl ConsensusGraphInner {
         let opt_height = self.opt_executed_height?;
         let opt_index = self.pivot_chain[opt_height];
 
-        // `on_local_pivot` is set to `false` because we cannot update
-        // transaction addresses in this optimistic execution
+        // `on_local_pivot` is set to `true` because when we later skip its
+        // execution on pivot chain, we will not notify tx pool, so we
+        // will also notify in advance.
         let execution_task = EpochExecutionTask::new(
             self.arena[opt_index].hash,
             self.get_epoch_block_hashes(opt_index),
