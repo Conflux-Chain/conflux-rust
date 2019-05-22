@@ -10,9 +10,9 @@ use crate::{
     node_table::*,
     session::{self, Session, SessionData},
     session_manager::SessionManager,
-    Capability, Error, HandlerWorkType, IpFilter, NetworkConfiguration,
-    NetworkContext as NetworkContextTrait, NetworkIoMessage,
-    NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
+    Capability, Error, ErrorKind, HandlerWorkType, IpFilter,
+    NetworkConfiguration, NetworkContext as NetworkContextTrait,
+    NetworkIoMessage, NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
 };
 use cfx_bytes::Bytes;
 use keccak_hash::keccak;
@@ -310,15 +310,34 @@ impl DelayedQueue {
 
     fn send_delayed_messages(&self, network_service: &NetworkServiceInner) {
         let context = self.queue.lock().pop().unwrap();
-        if let Err(e) = context.session.write().send_packet(
+        match context.session.write().send_packet(
             &context.io,
             Some(context.protocol),
             session::PACKET_USER,
             &context.msg,
             context.priority,
         ) {
-            debug!("Error sending delayed message: {:?}", e);
-            network_service.kill_connection(context.peer, &context.io, true);
+            Ok(_) => {}
+            Err(Error(ErrorKind::Expired, _)) => {
+                // If a connection is set expired, it should have been killed
+                // before, and the stored `context.peer` may have been reused by
+                // another connection, so we cannot kill it again
+                info!(
+                    "Error sending delayed message to expired connection {:?}",
+                    context.peer
+                );
+            }
+            Err(e) => {
+                info!(
+                    "Error sending delayed message: peer={:?} err={:?}",
+                    context.peer, e
+                );
+                network_service.kill_connection(
+                    context.peer,
+                    &context.io,
+                    true,
+                );
+            }
         };
     }
 }
