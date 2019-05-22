@@ -117,8 +117,7 @@ impl SessionManager {
 
         Ok(index)
     }
-
-    /// Removes an expired session with specified `idx`.
+    
     pub fn remove(&self, session: &Session) {
         let mut sessions = self.sessions.write();
 
