@@ -186,14 +186,16 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_opt_execution_task(&mut self) -> Option<EpochExecutionTask> {
-        let opt_index = self.pivot_chain[self.opt_executed_height?];
+        debug!("get_opt_exec_task {:?} {:?}", self.opt_executed_height, self.pivot_chain);
+        let opt_height = self.opt_executed_height?;
+        let opt_index = self.pivot_chain[opt_height];
 
         // `on_local_pivot` is set to `false` because we cannot update
         // transaction addresses in this optimistic execution
         let execution_task = EpochExecutionTask::new(
             self.arena[opt_index].hash,
             self.get_epoch_block_hashes(opt_index),
-            self.get_reward_execution_info(opt_index, &self.pivot_chain),
+            self.get_reward_execution_info(opt_height, &self.pivot_chain),
             false,
         );
         let next_opt_index = opt_index + 1;
@@ -1806,7 +1808,7 @@ impl ConsensusGraph {
             } else {
                 // The previous subtree is still heavier, nothing is updated
                 debug!("Finish Consensus.on_new_block() with pivot chain unchanged");
-                return;
+                inner.pivot_chain.len()
             }
         };
         debug!("Forked at index {}", new_pivot_chain[fork_at - 1]);

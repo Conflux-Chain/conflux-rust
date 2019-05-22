@@ -13,10 +13,6 @@ from test_framework.mininode import *
 from test_framework.util import *
 
 class P2PTest(DefaultConfluxTestFramework):
-    def set_test_params(self):
-        self.setup_clean_chain = True
-        self.num_nodes = 16
-
     def run_test(self):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}
