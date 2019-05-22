@@ -553,16 +553,16 @@ impl NetworkServiceInner {
     fn try_promote_untrusted(&self) {
         // Get NodeIds from incoming connections
         let mut incoming_ids: Vec<NodeId> = Vec::new();
-        self.sessions.visit(|s| {
+        for s in self.sessions.all() {
             if let Some(s) = s.try_read() {
-                if s.is_ready() && !s.metadata.originated {
+                if s.is_ready() && !s.metadata.originated && !s.expired() {
                     // is live incoming connection
                     if let Some(id) = s.metadata.id {
                         incoming_ids.push(id);
                     }
                 }
             }
-        });
+        }
 
         // Check each live connection for its lifetime.
         // Promote the peers with live connection for a threshold period
@@ -694,15 +694,17 @@ impl NetworkServiceInner {
     pub fn get_peer_info(&self) -> Vec<PeerInfo> {
         let mut peers = Vec::with_capacity(self.sessions.count());
 
-        self.sessions.visit(|session| {
+        for session in self.sessions.all() {
             let sess = session.read();
-            peers.push(PeerInfo {
-                id: sess.token(),
-                nodeid: sess.id().unwrap_or(&NodeId::default()).clone(),
-                addr: sess.address(),
-                caps: sess.metadata.peer_capabilities.clone(),
-            })
-        });
+            if !sess.expired() {
+                peers.push(PeerInfo {
+                    id: sess.token(),
+                    nodeid: sess.id().unwrap_or(&NodeId::default()).clone(),
+                    addr: sess.address(),
+                    caps: sess.metadata.peer_capabilities.clone(),
+                });
+            }
+        }
 
         peers
     }
@@ -1241,14 +1243,19 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     {
         match stream {
             FIRST_SESSION...LAST_SESSION => {
-                if let Some(session) = self.sessions.remove(stream) {
+                if let Some(session) = self.sessions.get(stream) {
                     let sess = session.write();
-                    sess.deregister_socket(event_loop)
-                        .expect("Error deregistering socket");
-                    if let Some(node_id) = sess.id() {
-                        self.node_db.write().note_failure(node_id, true, false);
+                    if sess.expired() {
+                        sess.deregister_socket(event_loop)
+                            .expect("Error deregistering socket");
+                        if let Some(node_id) = sess.id() {
+                            self.node_db
+                                .write()
+                                .note_failure(node_id, true, false);
+                        }
+                        debug!("Remove session {}", stream);
+                        self.sessions.remove(&*sess);
                     }
-                    debug!("Remove session {}", stream);
                 }
             }
             _ => warn!("Unexpected stream deregistration"),

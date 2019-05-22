@@ -535,7 +535,7 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
 
     for t in threads:
         t.join(timeout)
-        assert not t.is_alive(), "Node connect to other nodes timeout in {} seconds".format(timeout)
+        assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
         assert not t.failed, "connect_sample_nodes failed."
 
 class ConnectThread(threading.Thread):
