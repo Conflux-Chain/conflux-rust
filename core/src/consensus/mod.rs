@@ -186,7 +186,6 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_opt_execution_task(&mut self) -> Option<EpochExecutionTask> {
-        debug!("get_opt_exec_task {:?} {:?}", self.opt_executed_height, self.pivot_chain);
         let opt_height = self.opt_executed_height?;
         let opt_index = self.pivot_chain[opt_height];
 
@@ -196,13 +195,13 @@ impl ConsensusGraphInner {
             self.arena[opt_index].hash,
             self.get_epoch_block_hashes(opt_index),
             self.get_reward_execution_info(opt_height, &self.pivot_chain),
-            false,
+            true,
         );
-        let next_opt_index = opt_index + 1;
-        if next_opt_index >= self.pivot_chain.len() {
+        let next_opt_height = opt_height + 1;
+        if next_opt_height >= self.pivot_chain.len() {
             self.opt_executed_height = None;
         } else {
-            self.opt_executed_height = Some(next_opt_index);
+            self.opt_executed_height = Some(next_opt_height);
         }
         Some(execution_task)
     }
