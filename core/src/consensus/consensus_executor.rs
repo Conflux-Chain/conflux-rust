@@ -22,7 +22,7 @@ use primitives::{
     Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{btree_set::BTreeSet, HashMap, HashSet},
     sync::{
         mpsc::{channel, Sender, TryRecvError},
         Arc,
@@ -519,8 +519,8 @@ impl ConsensusExecutionHandler {
         on_local_pivot: bool,
     )
     {
-        /// (Fee, PackingBlockIndexSet)
-        struct TxExecutionInfo(U256, HashSet<H256>);
+        /// (Fee, SetOfPackingBlockHash)
+        struct TxExecutionInfo(U256, BTreeSet<H256>);
 
         let epoch_blocks = self
             .data_man
@@ -528,7 +528,10 @@ impl ConsensusExecutionHandler {
             .expect("blocks exist");
         let pivot_block = epoch_blocks.last().expect("Not empty");
         assert!(pivot_block.hash() == *pivot_hash);
-        debug!("Process rewards and fees for {:?}", pivot_hash);
+        debug!(
+            "Process rewards and fees for {:?} with state {:?}",
+            pivot_hash, epoch_block_states
+        );
         let difficulty = *pivot_block.block_header.difficulty();
         let mut rewards: Vec<(Address, U256)> = Vec::new();
 
@@ -568,8 +571,12 @@ impl ConsensusExecutionHandler {
                 let fee = tx.gas_price * gas_used;
                 let info = tx_fee
                     .entry(tx.hash())
-                    .or_insert(TxExecutionInfo(fee, HashSet::default()));
-                info.1.insert(block_hash);
+                    .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
+                // `false` means the block is fully valid
+                // Partial invalid blocks will not share the tx fee
+                if epoch_block_states[enum_idx].0 == false {
+                    info.1.insert(block_hash);
+                }
                 if !fee.is_zero() {
                     debug_assert!(info.1.len() == 1 || info.0.is_zero());
                     info.0 = fee;
@@ -580,6 +587,11 @@ impl ConsensusExecutionHandler {
 
         let mut block_tx_fees = HashMap::new();
         for TxExecutionInfo(fee, block_set) in tx_fee.values() {
+            if block_set.is_empty() {
+                // tx_fee for the transactions executed in a partial invalid
+                // blocks and not packed in other blocks will be lost
+                continue;
+            }
             let block_count = U256::from(block_set.len());
             let quotient: U256 = *fee / block_count;
             let mut remainder: U256 = *fee - (block_count * quotient);

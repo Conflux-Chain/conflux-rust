@@ -920,11 +920,9 @@ impl SynchronizationProtocolHandler {
             });
 
             loop {
-                if msg.blocks.is_empty() {
-                    info!("No block is sent for GetBlocks request!");
-                    break;
-                }
-
+                // The number of blocks will keep decreasing for each iteration in the loop.
+                // when `msg.blocks.len() == 0`, we should not get `OversizedPacket` error, and
+                // we will break out of the loop then.
                 if let Err(e) = self.send_message(
                     io,
                     peer,
@@ -965,11 +963,9 @@ impl SynchronizationProtocolHandler {
             });
 
             loop {
-                if msg.blocks.is_empty() {
-                    info!("No block is sent for GetBlocks request!");
-                    break;
-                }
-
+                // The number of blocks will keep decreasing for each iteration in the loop.
+                // when `msg.blocks.len() == 0`, we should not get `OversizedPacket` error, and
+                // we will break out of the loop then.
                 if let Err(e) = self.send_message(
                     io,
                     peer,
