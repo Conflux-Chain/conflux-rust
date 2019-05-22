@@ -113,7 +113,7 @@ pub struct ConsensusGraphInner {
     pub arena: Slab<ConsensusGraphNode>,
     pub indices: HashMap<H256, usize>,
     pub pivot_chain: Vec<usize>,
-    opt_executed_height: Some(usize),
+    opt_executed_height: Option<usize>,
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
     genesis_block_state_root: H256,
@@ -187,7 +187,15 @@ impl ConsensusGraphInner {
 
     pub fn get_opt_execution_task(&mut self) -> Option<EpochExecutionTask> {
         let opt_index = self.pivot_chain[self.opt_executed_height?];
-        let execution_task = EpochExecutionTask::new(self.arena[opt_index].hash, self.get_epoch_block_hashes(opt_index), self.get_reward_execution_info(opt_index, &self.pivot_chain), true);
+
+        // `on_local_pivot` is set to `false` because we cannot update
+        // transaction addresses in this optimistic execution
+        let execution_task = EpochExecutionTask::new(
+            self.arena[opt_index].hash,
+            self.get_epoch_block_hashes(opt_index),
+            self.get_reward_execution_info(opt_index, &self.pivot_chain),
+            false,
+        );
         let next_opt_index = opt_index + 1;
         if next_opt_index >= self.pivot_chain.len() {
             self.opt_executed_height = None;
@@ -935,7 +943,11 @@ impl ConsensusGraph {
                 pow_config,
                 data_man.clone(),
             )));
-        let executor = Arc::new(ConsensusExecutor::start(data_man.clone(), vm));
+        let executor = Arc::new(ConsensusExecutor::start(
+            data_man.clone(),
+            vm,
+            inner.clone(),
+        ));
 
         ConsensusGraph {
             inner,
@@ -1590,9 +1602,9 @@ impl ConsensusGraph {
                 let epoch_block_hashes = inner
                     .get_epoch_block_hashes(inner.pivot_chain[state_height]);
                 self.executor.compute_epoch(EpochExecutionTask::new(
-                    &pivot_hash,
-                    &epoch_block_hashes,
-                    &reward_execution_info,
+                    pivot_hash,
+                    epoch_block_hashes,
+                    reward_execution_info,
                     true,
                 ));
             }
@@ -1793,7 +1805,8 @@ impl ConsensusGraph {
                 fork_at
             } else {
                 // The previous subtree is still heavier, nothing is updated
-                inner.pivot_chain.len()
+                debug!("Finish Consensus.on_new_block() with pivot chain unchanged");
+                return;
             }
         };
         debug!("Forked at index {}", new_pivot_chain[fork_at - 1]);
@@ -1904,6 +1917,11 @@ impl ConsensusGraph {
             &*sync_inner_lock.read(),
         );
         inner.pivot_chain = new_pivot_chain;
+        inner.opt_executed_height = if to_state_pos > 0 {
+            Some(to_state_pos)
+        } else {
+            None
+        };
         inner.persist_terminals();
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }

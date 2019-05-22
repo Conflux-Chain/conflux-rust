@@ -24,7 +24,7 @@ use primitives::{
 use std::{
     collections::{btree_set::BTreeSet, HashMap, HashSet},
     sync::{
-        mpsc::{channel, Sender, TryRecvError},
+        mpsc::{channel, RecvError, Sender, TryRecvError},
         Arc,
     },
     thread::{self, JoinHandle},
@@ -109,26 +109,33 @@ impl ConsensusExecutor {
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
                 let maybe_task = receiver.try_recv();
-                if maybe_task == Err(Err(TryRecvError::Empty)) {
-                    // The channel is empty, so we try to optimistically compute
-                    // later epochs
-                    match consensus_inner.write().get_opt_execution_task() {
-                        Some(task) => handler.handle_epoch_execution(task),
-                        None => {
-                            // Even optimistic tasks are all finished, so we
-                            // block and wait for new
-                            // execution tasks
-                            if !handler.handle_recv_result(receiver.recv()) {
-                                break;
+                match maybe_task {
+                    Err(TryRecvError::Empty) => {
+                        // The channel is empty, so we try to optimistically
+                        // compute later epochs
+                        match consensus_inner.write().get_opt_execution_task() {
+                            Some(task) => handler.handle_epoch_execution(task),
+                            None => {
+                                // Even optimistic tasks are all finished, so we
+                                // block and wait for new
+                                // execution tasks
+                                if !handler.handle_recv_result(receiver.recv())
+                                {
+                                    break;
+                                }
                             }
                         }
                     }
-                } else {
-                    // Handle execution task in channel.
-                    // `maybe_task` cannot be `Empty` here so we can pass it to
-                    // the handler.
-                    if !handler.handle_recv_result(maybe_task) {
-                        break;
+                    maybe_error => {
+                        // Handle execution task in channel.
+                        // If `maybe_task` is Err, it can only be
+                        // `TryRecvError::Disconnected`, and it has the same
+                        // meaning as `RecvError` for `recv()`
+                        if !handler.handle_recv_result(
+                            maybe_error.map_err(|_| RecvError),
+                        ) {
+                            break;
+                        }
                     }
                 }
             })
@@ -200,7 +207,9 @@ impl ConsensusExecutionHandler {
     /// Return `false` if someting goes wrong, and we will break the working
     /// loop. `maybe_task` should match results from `recv()`, so it does not
     /// contain `Empty` case.
-    fn handle_recv_result(&self, maybe_task: Result<T, TryRecvError>) -> bool {
+    fn handle_recv_result(
+        &self, maybe_task: Result<ExecutionTask, RecvError>,
+    ) -> bool {
         match maybe_task {
             Ok(ExecutionTask::Stop) => {
                 debug!("Consensus Executor stopped by receiving STOP task");
@@ -256,6 +265,11 @@ impl ConsensusExecutionHandler {
     /// Compute the epoch `epoch_hash`, and skip it if already computed.
     /// After the function is called, it's assured that the state, the receipt
     /// root, and the receipts of blocks executed by this epoch exist.
+    ///
+    /// TODO Not sure if this difference is important.
+    /// One different between skipped execution in pivot chain is that the
+    /// transactions packed in the skipped epoch will be checked if they can
+    /// be recycled.
     pub fn compute_epoch(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         reward_execution_info: &Option<RewardExecutionInfo>,
