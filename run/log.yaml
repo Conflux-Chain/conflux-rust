@@ -1,7 +1,7 @@
 refresh_rate: 30 seconds
 
 appenders:
-    stdout:
+  stdout:
     kind: console
 
   logfile:
@@ -23,3 +23,20 @@ root:
     appenders:
         - stdout
         - logfile
+
+# We can set log level for crates individually
+loggers:
+    network:
+        level: info
+    cfxcore:
+        level: info
+    rpc:
+        level: info
+    discovery:
+        level: info
+    sync:
+        level: info
+    blockgen:
+        level: info
+    client:
+        level: info
