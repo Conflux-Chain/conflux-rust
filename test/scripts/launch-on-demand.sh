@@ -16,7 +16,7 @@ elif [[ -f slave_image ]]; then
     public=""
 else
     # create master instances
-    image="ami-027fed00b9d7c6260" # experiment image
+    image="ami-0efc1e5200037bd84" # experiment image
     type="m5.2xlarge"
     public="--public"
 fi
@@ -29,7 +29,7 @@ fi
 n=$1
 keypair=$2
 role=$3
-res=`aws ec2 run-instances --image-id $image --count $n --key-name $keypair --instance-type $type --security-group-ids sg-0345bbb6934681ea1 --subnet-id subnet-a5cfe3dc --block-device-mapping DeviceName=/dev/xvda,Ebs={VolumeSize=100} --tag-specifications "ResourceType=instance,Tags=[{Key=role,Value=$role},{Key=Name,Value=$type-$image}]"`
+res=`aws ec2 run-instances --image-id $image --count $n --key-name $keypair --instance-type $type --security-group-ids sg-0345bbb6934681ea1 --subnet-id subnet-a5cfe3dc --block-device-mapping DeviceName=/dev/sda1,Ebs={VolumeSize=100} --tag-specifications "ResourceType=instance,Tags=[{Key=role,Value=$role},{Key=Name,Value=$type-$image}]"`
 echo $res | jq ".Instances[].InstanceId" | tr -d '"' > instances
 
 num_created=`cat instances | wc -l`
@@ -51,13 +51,13 @@ do
 	sleep 3
 done
 
-echo "Back up ~/.ssh/known_hosts to ./known_hosts_backup"
 echo "Wait for launched instances able to be connected"
 backup_host=false
 if [[ -f ~/.ssh/known_hosts ]]; then
     backup_host=true
 fi
 if $backup_host; then
+    echo "Back up ~/.ssh/known_hosts to ./known_hosts_backup"
     mv ~/.ssh/known_hosts known_hosts_backup
 fi
 # retrieve IPs and SSH all instances to update known_hosts
@@ -71,7 +71,7 @@ do
     fi
 done
 wc -l ~/.ssh/known_hosts
-echo "Restore known_hosts"
 if $backup_host; then
+    echo "Restore known_hosts"
     mv known_hosts_backup ~/.ssh/known_hosts
 fi

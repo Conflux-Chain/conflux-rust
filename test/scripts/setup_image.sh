@@ -1,11 +1,11 @@
-# This scripts requires that cargo is installed
+# This scripts requires that cargo and awscli are installed and configured
 source ~/.bashrc
 if ! [ -x "$(command -v cargo)" ]; then
   echo 'Error: cargo is not installed.' >&2
   exit 1
 fi
 branch=${1:-master}
-sudo apt install -y iotop clang git
+sudo apt install -y iotop clang git jq
 
 if [[ ! -d conflux-rust ]]; then
   git clone https://github.com/Conflux-Chain/conflux-rust
