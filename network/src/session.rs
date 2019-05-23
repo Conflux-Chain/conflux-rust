@@ -194,7 +194,7 @@ impl Session {
                         .update_ingress_node_id(self.token(), &node_id)
                     {
                         debug!(
-                            "failed to update node id of ingress session, reason = {}, session = {:?}",
+                            "failed to update node id of ingress session, reason = {:?}, session = {:?}",
                             reason, self
                         );
                         return Err(self.disconnect(

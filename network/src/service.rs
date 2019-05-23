@@ -848,11 +848,7 @@ impl NetworkServiceInner {
         if !ready_protocols.is_empty() {
             for protocol in ready_protocols {
                 if let Some(handler) = handlers.get(&protocol).clone() {
-                    debug!(
-                        "Network Service: {}: peer {} connected",
-                        self.local_addr(),
-                        stream
-                    );
+                    debug!("session handshaked, token = {}", stream);
                     handler.on_peer_connected(
                         &NetworkContext::new(io, protocol, self),
                         stream,
@@ -937,7 +933,10 @@ impl NetworkServiceInner {
                 }
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
-                debug!("deregister stream {}? {}", token, deregister);
+                debug!(
+                    "kill connection, deregister = {}, session = {:?}",
+                    deregister, *sess
+                );
             }
         }
         if let Some(id) = failure_id {
@@ -947,7 +946,6 @@ impl NetworkServiceInner {
         }
         for p in to_disconnect {
             if let Some(h) = self.handlers.read().get(&p).clone() {
-                debug!("{}: peer {} disconnected", self.local_addr(), token);
                 h.on_peer_disconnected(
                     &NetworkContext::new(io, p, self),
                     token,
