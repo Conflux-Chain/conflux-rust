@@ -71,12 +71,12 @@ start_mining=true
 # If not set, the log will only be printed to stdout, and not persisted to files.
 # By default, the value is not set.
 #
-# log_file="./conflux.log"
+# log_file="conflux.log"
 
 # `log_conf` the path of the log4rs configuration file. The configuration in the file will overwrite the value set by `log_level`.
 # By default, the value is not set.
 #
-# log_conf="../test/log.yaml"
+log_conf="log.yaml"
 
 # `enable_discovery` is used to control whether the node will ask its neighbors for new peers and whether it will respond to other nodes' discovery requests.
 #
