@@ -12,6 +12,7 @@ if [[ ! -d conflux-rust ]]; then
 fi
 
 cd conflux-rust
+git reset --hard
 git pull
 git checkout $branch
 cargo update
