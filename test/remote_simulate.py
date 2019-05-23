@@ -17,6 +17,9 @@ from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
 from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 
+SOSP_LAT = "sosp_latency"
+LAT_LATEST = "latency_latest"
+
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -105,9 +108,26 @@ class P2PTest(ConfluxTestFramework):
             default=1000,
             type=int
         )
+        # Experiments include "sosp_latency", "latency_latest"
+        parser.add_argument(
+            "--experiment-name",
+            dest="experiment_name",
+            default=SOSP_LAT,
+            type=str,
+        )
+        # options for LAT_LATEST
+        parser.add_argument(
+            "--tps",
+            dest="tps",
+            default=1000,
+            type=int,
+        )
 
     def after_options_parsed(self):
         self.num_nodes = self.options.nodes_per_host
+
+        # experiment name
+        self.exp_name = self.options.experiment_name
 
         # throttling
         egress_settings = self.options.throttling.split(",")
@@ -134,6 +154,10 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
         self.conf_parameters["data_propagate_interval_ms"] = str(self.options.data_propagate_interval_ms)
         self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
+
+        if self.exp_name == LAT_LATEST:
+            self.conf_parameters["generate_tx"] = "true"
+            self.conf_parameters["generate_tx_period_us"] = str(1000000 * self.num_nodes // self.options.tps)
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
@@ -186,6 +210,16 @@ class P2PTest(ConfluxTestFramework):
         monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count,), daemon=True)
         monitor_thread.start()
 
+        if self.exp_name == LAT_LATEST:
+            # Setup balance for each node
+            client = RpcClient(self.nodes[0])
+            for i in range(num_nodes):
+                pub_key = self.nodes[i].key
+                addr = self.nodes[i].addr
+                self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
+                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/num_nodes), receiver=addr, nonce=i)
+                client.send_tx(tx)
+
         # generate blocks
         threads = {}
         rpc_times = []
@@ -208,7 +242,12 @@ class P2PTest(ConfluxTestFramework):
                 self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
                 break
 
-            thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+            if self.exp_name == SOSP_LAT:
+                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+            elif self.exp_name == LAT_LATEST:
+                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+            else:
+                self.log.warn("Unsupported experiment name")
             thread.start()
             threads[p] = thread
 
@@ -275,6 +314,7 @@ class P2PTest(ConfluxTestFramework):
 
         self.log.info("monitor completed.")
 
+
 class GenerateThread(threading.Thread):
     def __init__(self, nodes, i, tx_n, tx_data_len, log, rpc_times:list):
         threading.Thread.__init__(self, daemon=True)
@@ -301,6 +341,17 @@ class GenerateThread(threading.Thread):
             start = time.time()
             h = self.nodes[self.i].test_generateblockwithfaketxs(encoded_txs, self.tx_data_len)
             self.rpc_times.append(round(time.time() - start, 3))
+            self.log.debug("node %d actually generate block %s", self.i, h)
+        except Exception as e:
+            self.log.error("Node %d fails to generate block", self.i)
+            self.log.error(str(e))
+
+
+class SimpleGenerateThread(GenerateThread):
+    def run(self):
+        try:
+            client = RpcClient(self.nodes[self.i])
+            client.generate_block()
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
             self.log.error("Node %d fails to generate block", self.i)

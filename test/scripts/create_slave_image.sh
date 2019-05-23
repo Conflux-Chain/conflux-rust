@@ -40,7 +40,7 @@ do
 done
 
 # delete the instance that used to make slave image
-echo "delete the instance that used to make slave image ..."
-./terminate-on-demand.sh
+# echo "delete the instance that used to make slave image ..."
+# ./terminate-on-demand.sh
 
 echo $image_id > slave_image

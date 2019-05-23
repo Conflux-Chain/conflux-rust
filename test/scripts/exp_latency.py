@@ -3,6 +3,9 @@
 import argparse
 import os
 
+from remote_simulate import LAT_LATEST
+
+
 def execute(cmd, retry, cmd_description):
     while True:
         ret = os.system(cmd)
@@ -101,6 +104,7 @@ class LatencyExperiment(ArgumentHolder):
         self.data_propagate_enabled = False
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000
+        self.tps = 1000
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
@@ -154,6 +158,8 @@ class LatencyExperiment(ArgumentHolder):
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
+            "--experiment-name", LAT_LATEST,
+            "--tps", str(self.tps),
         ]
 
         if self.data_propagate_enabled:

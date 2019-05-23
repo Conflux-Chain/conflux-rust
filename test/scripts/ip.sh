@@ -9,7 +9,9 @@ else
     echo "Invalid argument. Pass no argument to get private ips or --public for public ips."
 fi
 
-mv ips ips_old
+if [[ -f ips ]]; then
+    mv ips ips_old
+fi
 touch ips
 if [[ -f instances ]]
 then
@@ -27,6 +29,7 @@ do
   ssh -o "StrictHostKeyChecking no" ubuntu@${ips[$i]} "exit" &
 done
 wait
+true
 #scp ips_current lpl@blk:~/ips
 #scp -i MyKeyPair.pem ips_current ubuntu@aws:~/ssd/ips
 #ssh vm "./tmp.sh"
