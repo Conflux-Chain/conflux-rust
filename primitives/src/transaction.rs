@@ -466,17 +466,21 @@ impl SignedTransaction {
 
     pub fn public(&self) -> &Option<Public> { &self.public }
 
-    pub fn verify_public(&self) -> Result<bool, keylib::Error> {
+    pub fn verify_public(&self, skip: bool) -> Result<bool, keylib::Error> {
         if self.public.is_none() {
             return Ok(false);
         }
 
-        let public = self.public.unwrap();
-        Ok(verify_public(
-            &public,
-            &self.signature(),
-            &self.unsigned.hash(),
-        )?)
+        if !skip {
+            let public = self.public.unwrap();
+            Ok(verify_public(
+                &public,
+                &self.signature(),
+                &self.unsigned.hash(),
+            )?)
+        } else {
+            Ok(true)
+        }
     }
 }
 

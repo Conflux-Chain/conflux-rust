@@ -2558,7 +2558,7 @@ impl SynchronizationProtocolHandler {
                         ));
                     }
                 } else {
-                    let res = tx.verify_public();
+                    let res = tx.verify_public(true); // skip verification
                     if res.is_ok() && res.unwrap() {
                         recovered_transactions[idx] =
                             Arc::new(SignedTransaction::new(
@@ -2617,7 +2617,7 @@ impl SynchronizationProtocolHandler {
                                 break;
                             }
                         } else {
-                            let res = tx.verify_public();
+                            let res = tx.verify_public(true); // skip verification
                             if res.is_ok() && res.unwrap() {
                                 signed_txes.push((idx, tx.public.clone().unwrap()));
                             } else {
