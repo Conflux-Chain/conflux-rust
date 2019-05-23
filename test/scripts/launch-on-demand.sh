@@ -16,7 +16,7 @@ elif [[ -f slave_image ]]; then
     public=""
 else
     # create master instances
-    image="ami-0afc9060cdd4c2aab" # experiment image
+    image="ami-09c41c4556fa22686" # experiment image
     type="m5.2xlarge"
     public="--public"
 fi
@@ -64,6 +64,7 @@ fi
 while true
 do
     rm -f ~/.ssh/known_hosts
+    touch ~/.ssh/known_hosts
     $SCRIPT_DIR/ip.sh $public
     if [[ $1 -eq `cat ~/.ssh/known_hosts | wc -l`  ]]; then
         break

@@ -3,8 +3,6 @@
 import argparse
 import os
 
-from remote_simulate import LAT_LATEST
-
 
 def execute(cmd, retry, cmd_description):
     while True:
@@ -158,7 +156,7 @@ class LatencyExperiment(ArgumentHolder):
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
-            "--experiment-name", LAT_LATEST,
+            "--experiment-name", "latency_latest",
             "--tps", str(self.tps),
         ]
 
