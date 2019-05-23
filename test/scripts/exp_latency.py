@@ -127,9 +127,10 @@ class LatencyExperiment(ArgumentHolder):
             os.system("echo throttling logs: `grep -i thrott -r logs | wc -l`")
             os.system("echo error logs: `grep -i thrott -r logs | wc -l`")
 
-            print("Computing latencies ...")
-            block_size_kb = config.txs_per_block * config.tx_size // 1000
-            self.stat_latency(config.block_gen_interval_ms, block_size_kb)
+            if self.stat_confirmation_latency:
+                print("Computing latencies ...")
+                block_size_kb = config.txs_per_block * config.tx_size // 1000
+                self.stat_latency(config.block_gen_interval_ms, block_size_kb)
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))

@@ -219,7 +219,7 @@ impl NetworkService {
             let signature = match sign(inner.metadata.keys.secret(), &hash) {
                 Ok(s) => s,
                 Err(e) => {
-                    warn!(target: "network", "Error signing hello packet");
+                    warn!("Error signing hello packet");
                     return Err(Error::from(e));
                 }
             };
@@ -385,7 +385,7 @@ impl NetworkServiceInner {
             listen_address.ip(),
             tcp_listener.local_addr()?.port(),
         );
-        debug!(target: "network", "Listening at {:?}", listen_address);
+        debug!("Listening at {:?}", listen_address);
         let udp_port = config.udp_port.unwrap_or_else(|| listen_address.port());
         let local_endpoint = NodeEndpoint {
             address: listen_address,
@@ -475,7 +475,7 @@ impl NetworkServiceInner {
         let reserved_nodes = config.reserved_nodes.clone();
         for n in reserved_nodes {
             if let Err(e) = inner.add_reserved_node(&n) {
-                debug!(target: "network", "Error parsing node id: {}: {:?}", n, e);
+                debug!("Error parsing node id: {}: {:?}", n, e);
             }
         }
 
@@ -516,7 +516,7 @@ impl NetworkServiceInner {
     fn add_boot_node(&self, id: &str) {
         match Node::from_str(id) {
             Err(e) => {
-                debug!(target: "network", "Could not add node {}: {:?}", id, e);
+                debug!("Could not add node {}: {:?}", id, e);
             }
             Ok(n) => {
                 self.node_db.write().insert_trusted(NodeEntry {
@@ -658,7 +658,12 @@ impl NetworkServiceInner {
             self.connect_peer(&id, io);
             started += 1;
         }
-        debug!(target: "network", "Connecting peers: {} sessions, {} pending + {} started", egress_count + ingress_count, handshake_count, started);
+        debug!(
+            "Connecting peers: {} sessions, {} pending + {} started",
+            egress_count + ingress_count,
+            handshake_count,
+            started
+        );
     }
 
     // Kill connections of all dropped peers
@@ -677,7 +682,7 @@ impl NetworkServiceInner {
 
     fn connect_peer(&self, id: &NodeId, io: &IoContext<NetworkIoMessage>) {
         if self.sessions.contains_node(id) {
-            trace!(target: "network", "Abort connect. Node already connected");
+            trace!("Abort connect. Node already connected");
             return;
         }
 
@@ -687,18 +692,21 @@ impl NetworkServiceInner {
                 if let Some(node) = self.node_db.read().get(id, true) {
                     node.endpoint.address
                 } else {
-                    debug!(target: "network", "Abort connect. Node expired");
+                    debug!("Abort connect. Node expired");
                     return;
                 }
             };
             match TcpStream::connect(&address) {
                 Ok(socket) => {
-                    trace!(target: "network", "{}: connecting to {:?}", id, address);
+                    trace!("{}: connecting to {:?}", id, address);
                     (socket, address)
                 }
                 Err(e) => {
                     self.node_db.write().note_failure(id, true, true);
-                    debug!(target: "network", "{}: can't connect o address {:?} {:?}", id, address, e);
+                    debug!(
+                        "{}: can't connect o address {:?} {:?}",
+                        id, address, e
+                    );
                     return;
                 }
             }
@@ -706,12 +714,15 @@ impl NetworkServiceInner {
 
         if let Err(e) = self.create_connection(socket, address, Some(id), io) {
             self.node_db.write().note_failure(id, true, true);
-            debug!(target: "network", "Can't create connection: {:?}", e);
+            debug!("Can't create connection: {:?}", e);
         }
     }
 
     pub fn get_peer_info(&self) -> Vec<PeerInfo> {
+        debug!("get_peer_info: enter");
+
         let mut peers = Vec::with_capacity(self.sessions.count());
+        debug!("get_peer_info: {} sessions in total", peers.capacity());
 
         for session in self.sessions.all() {
             let sess = session.read();
@@ -724,6 +735,8 @@ impl NetworkServiceInner {
                 });
             }
         }
+
+        debug!("get_peer_info: leave, {} peers retrieved", peers.len());
 
         peers
     }
@@ -755,7 +768,7 @@ impl NetworkServiceInner {
     {
         match self.sessions.create(socket, address, id, io, self) {
             Ok(token) => {
-                trace!("session created with token {}", token);
+                debug!("new session created, token = {}, address = {:?}, id = {:?}", token, address, id);
                 if let Some(id) = id {
                     // This is an outgoing connection.
                     // Outgoing connection must pick node from trusted node
@@ -765,7 +778,7 @@ impl NetworkServiceInner {
                 io.register_stream(token).map(|_| ()).map_err(Into::into)
             }
             Err(reason) => {
-                debug!("failed to create session: {}", reason);
+                debug!("failed to create session, reason = {}, address = {:?}, id = {:?}", reason, address, id);
                 Ok(())
             }
         }
@@ -774,7 +787,7 @@ impl NetworkServiceInner {
     fn connection_closed(
         &self, stream: StreamToken, io: &IoContext<NetworkIoMessage>,
     ) {
-        trace!(target: "network", "Connection closed: {}", stream);
+        trace!("Connection closed: {}", stream);
         self.kill_connection(stream, io, true);
     }
 
@@ -809,17 +822,17 @@ impl NetworkServiceInner {
                     }
                     Ok(SessionData::Message { data, protocol }) => {
                         match self.handlers.read().get(&protocol) {
-                            None => {
-                                warn!(target: "network", "No handler found for protocol: {:?}", protocol)
-                            }
+                            None => warn!(
+                                "No handler found for protocol: {:?}",
+                                protocol
+                            ),
                             Some(_) => messages.push((protocol, data)),
                         }
                     }
                     Ok(SessionData::Continue) => (),
                     Ok(SessionData::None) => break,
-                    Err(e) => {
-                        //let sess = session.lock();
-                        debug!("Error of readable {:?}", e);
+                    Err(Error(kind, _)) => {
+                        debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
                         kill = true;
                         break;
                     }
@@ -835,11 +848,7 @@ impl NetworkServiceInner {
         if !ready_protocols.is_empty() {
             for protocol in ready_protocols {
                 if let Some(handler) = handlers.get(&protocol).clone() {
-                    debug!(
-                        "Network Service: {}: peer {} connected",
-                        self.local_addr(),
-                        stream
-                    );
+                    debug!("session handshaked, token = {}", stream);
                     handler.on_peer_connected(
                         &NetworkContext::new(io, protocol, self),
                         stream,
@@ -871,7 +880,7 @@ impl NetworkServiceInner {
         if let Some(session) = self.sessions.get(stream) {
             let mut sess = session.write();
             if let Err(e) = sess.writable(io) {
-                trace!(target: "network", "{}: Session write error: {:?}", stream, e);
+                trace!("{}: Session write error: {:?}", stream, e);
             }
             if sess.done() {
                 io.deregister_stream(stream).unwrap_or_else(|e| {
@@ -882,20 +891,20 @@ impl NetworkServiceInner {
     }
 
     fn accept(&self, io: &IoContext<NetworkIoMessage>) {
-        trace!(target: "network", "Accepting incoming connection");
+        trace!("Accepting incoming connection");
         loop {
             let (socket, address) = match self.tcp_listener.lock().accept() {
                 Ok((sock, addr)) => (sock, addr),
                 Err(e) => {
                     if e.kind() != io::ErrorKind::WouldBlock {
-                        debug!(target: "network", "Error accepting connection: {:?}", e);
+                        debug!("Error accepting connection: {:?}", e);
                     }
                     break;
                 }
             };
 
             if let Err(e) = self.create_connection(socket, address, None, io) {
-                debug!(target: "network", "Can't accept connection: {:?}", e);
+                debug!("Can't accept connection: {:?}", e);
             }
         }
     }
@@ -924,7 +933,10 @@ impl NetworkServiceInner {
                 }
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
-                debug!("deregister stream {}? {}", token, deregister);
+                debug!(
+                    "kill connection, deregister = {}, session = {:?}",
+                    deregister, *sess
+                );
             }
         }
         if let Some(id) = failure_id {
@@ -934,7 +946,6 @@ impl NetworkServiceInner {
         }
         for p in to_disconnect {
             if let Some(h) = self.handlers.read().get(&p).clone() {
-                debug!("{}: peer {} disconnected", self.local_addr(), token);
                 h.on_peer_disconnected(
                     &NetworkContext::new(io, p, self),
                     token,
@@ -968,14 +979,16 @@ impl NetworkServiceInner {
 
         let mut buf = [0u8; MAX_DATAGRAM_SIZE];
         match udp_socket.recv_from(&mut buf) {
-			Ok(Some((len, address))) => self.on_udp_packet(&buf[0..len], address).unwrap_or_else(|e| {
-				debug!(target: "network", "Error processing UDP packet: {:?}", e);
-			}),
-			Ok(_) => {},
-			Err(e) => {
-				debug!(target: "network", "Error reading UDP socket: {:?}", e);
-			},
-		};
+            Ok(Some((len, address))) => self
+                .on_udp_packet(&buf[0..len], address)
+                .unwrap_or_else(|e| {
+                    debug!("Error processing UDP packet: {:?}", e);
+                }),
+            Ok(_) => {}
+            Err(e) => {
+                debug!("Error reading UDP socket: {:?}", e);
+            }
+        };
 
         let new_writable;
         {
@@ -987,10 +1000,9 @@ impl NetworkServiceInner {
         // If it does, we might need to change monitor interest to All if
         // it is only Readable.
         if writable != new_writable {
-            io.update_registration(UDP_MESSAGE)
-                .unwrap_or_else(|e| {
-                    debug!(target: "network", "Error updating UDP registration: {:?}", e)
-                });
+            io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
+                debug!("Error updating UDP registration: {:?}", e)
+            });
         }
     }
 
@@ -1001,23 +1013,25 @@ impl NetworkServiceInner {
             match udp_socket.send_to(&data.payload, &data.address) {
                 Ok(Some(size)) if size == data.payload.len() => {}
                 Ok(Some(_)) => {
-                    warn!(target: "network", "UDP sent incomplete datagram");
+                    warn!("UDP sent incomplete datagram");
                 }
                 Ok(None) => {
                     udp_channel.requeue_send(data);
                     return;
                 }
                 Err(e) => {
-                    debug!(target: "network", "UDP send error: {:?}, address: {:?}", e, &data.address);
+                    debug!(
+                        "UDP send error: {:?}, address: {:?}",
+                        e, &data.address
+                    );
                     return;
                 }
             }
         }
         // look at whether the monitor interest can be set as Readable.
-        io.update_registration(UDP_MESSAGE)
-			.unwrap_or_else(|e| {
-				debug!(target: "network", "Error updating UDP registration: {:?}", e)
-			});
+        io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
+            debug!("Error updating UDP registration: {:?}", e)
+        });
     }
 
     fn on_udp_packet(
@@ -1037,12 +1051,12 @@ impl NetworkServiceInner {
                     )?;
                     Ok(())
                 } else {
-                    warn!(target: "network", "Discovery is not ready. Drop the message!");
+                    warn!("Discovery is not ready. Drop the message!");
                     Ok(())
                 }
             }
             _ => {
-                warn!(target: "network", "Unknown UDP protocol. Simply drops the message!");
+                warn!("Unknown UDP protocol. Simply drops the message!");
                 Ok(())
             }
         };
@@ -1063,10 +1077,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     fn stream_hup(
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
-        trace!(target: "network", "Hup: {}", stream);
+        trace!("Hup: {}", stream);
         match stream {
             FIRST_SESSION...LAST_SESSION => self.connection_closed(stream, io),
-            _ => warn!(target: "network", "Unexpected hup"),
+            _ => warn!("Unexpected hup"),
         }
     }
 
@@ -1124,7 +1138,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 });
             }
             NODE_TABLE => {
-                trace!(target: "network", "Refreshing node table");
+                trace!("Refreshing node table");
                 self.try_promote_untrusted();
                 self.node_db.write().save();
             }
@@ -1136,9 +1150,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             _ => match self.timers.read().get(&token).cloned() {
                 Some(timer) => {
                     match self.handlers.read().get(&timer.protocol).cloned() {
-                        None => {
-                            warn!(target: "network", "No handler found for protocol: {:?}", timer.protocol)
-                        }
+                        None => warn!(
+                            "No handler found for protocol: {:?}",
+                            timer.protocol
+                        ),
                         Some(h) => {
                             h.on_timeout(
                                 &NetworkContext::new(io, timer.protocol, self),
@@ -1272,8 +1287,8 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                                 .write()
                                 .note_failure(node_id, true, false);
                         }
-                        debug!("Remove session {}", stream);
                         self.sessions.remove(&*sess);
+                        debug!("Removed session: {:?}", *sess);
                     }
                 }
             }
@@ -1400,7 +1415,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error> {
         let session = self.network_service.sessions.get(peer);
-        trace!(target: "network", "Sending {} bytes to {}", msg.len(), peer);
+        trace!("Sending {} bytes to {}", msg.len(), peer);
         if let Some(session) = session {
             let latency =
                 self.network_service
@@ -1495,7 +1510,7 @@ fn save_key(path: &Path, key: &Secret) {
         }
     };
     if let Err(e) = restrict_permissions_owner(path, true, false) {
-        warn!(target: "network", "Failed to modify permissions of the file ({})", e);
+        warn!("Failed to modify permissions of the file ({})", e);
     }
     if let Err(e) = file.write(&key.hex().into_bytes()[2..]) {
         warn!("Error writing key file: {:?}", e);

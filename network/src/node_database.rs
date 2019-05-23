@@ -260,7 +260,7 @@ pub struct NodeIpLimit {
 
 impl NodeIpLimit {
     pub fn new(nodes_per_ip: usize) -> Self {
-        debug!(target: "network", "NodeIpLimit::new: nodes_per_ip = {}", nodes_per_ip);
+        debug!("NodeIpLimit::new: nodes_per_ip = {}", nodes_per_ip);
         NodeIpLimit {
             nodes_per_ip,
             ip_to_nodes: HashMap::new(),
@@ -281,10 +281,10 @@ impl NodeIpLimit {
                 *num += 1;
 
                 if *num > self.nodes_per_ip {
-                    warn!(target: "network", "NodeIpLimit::init: too many nodes added, actual = {}, limited = {}", *num, self.nodes_per_ip);
+                    warn!("NodeIpLimit::init: too many nodes added, actual = {}, limited = {}", *num, self.nodes_per_ip);
                 }
             } else {
-                error!(target: "network", "NodeIpLimit::init: node not found when visit table");
+                error!("NodeIpLimit::init: node not found when visit table");
             }
 
             true
@@ -353,7 +353,7 @@ impl NodeIpLimit {
                 *num -= 1;
             }
         } else {
-            error!(target: "network", "NodeIpLimit::on_delete: ip not found");
+            error!("NodeIpLimit::on_delete: ip not found");
         }
     }
 

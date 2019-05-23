@@ -22,7 +22,7 @@ use keylib::{recover, sign};
 use mio::{deprecated::*, tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
-use std::{net::SocketAddr, str};
+use std::{fmt, net::SocketAddr, str};
 
 struct PacketSizer;
 
@@ -144,10 +144,11 @@ impl Session {
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<SessionData, Error> {
         if self.expired() {
+            debug!("cannot read data due to expired, session = {:?}", self);
             return Ok(SessionData::None);
         }
         if !self.sent_hello {
-            debug!(target: "network", "{} Write Hello, sent_hello {}", self.token(), self.sent_hello);
+            debug!("send hello before read data, session = {:?}", self);
             self.write_hello(io, host)?;
             self.sent_hello = true;
         }
@@ -176,7 +177,7 @@ impl Session {
         let data = &data[4..];
         match packet_id {
             PACKET_HELLO => {
-                debug!(target: "network", "{}: Hello", self.token());
+                debug!("read packet HELLO, session = {:?}", self);
                 if data.len() <= 32 + 65 {
                     return Err(ErrorKind::BadProtocol.into());
                 }
@@ -192,13 +193,13 @@ impl Session {
                         .sessions
                         .update_ingress_node_id(self.token(), &node_id)
                     {
-                        warn!(
-                            "failed to update node id of ingress session: {}",
-                            reason
+                        debug!(
+                            "failed to update node id of ingress session, reason = {:?}, session = {:?}",
+                            reason, self
                         );
                         return Err(self.disconnect(
                             io,
-                            DisconnectReason::WrongEndpointInfo,
+                            DisconnectReason::UpdateNodeIdFailed,
                         ));
                     }
 
@@ -218,9 +219,11 @@ impl Session {
             PACKET_DISCONNECT => {
                 let rlp = Rlp::new(&data);
                 let reason: u8 = rlp.val_at(0)?;
-                if self.had_hello {
-                    debug!(target: "network", "{}: Disconnected: {:?}", self.token(), DisconnectReason::from_u8(reason));
-                }
+                debug!(
+                    "read packet DISCONNECT, reason = {}, session = {:?}",
+                    DisconnectReason::from_u8(reason),
+                    self
+                );
                 Err(ErrorKind::Disconnect(DisconnectReason::from_u8(reason))
                     .into())
             }
@@ -242,7 +245,10 @@ impl Session {
                 }
             }
             _ => {
-                debug!(target: "network", "Unknown packet: {:?}", packet_id);
+                debug!(
+                    "read packet UNKNOWN, packet_id = {:?}, session = {:?}",
+                    packet_id, self
+                );
                 Ok(SessionData::Continue)
             }
         }
@@ -287,17 +293,16 @@ impl Session {
         self.metadata.capabilities = caps;
         self.metadata.peer_capabilities = peer_caps;
         if self.metadata.capabilities.is_empty() {
-            trace!(target: "network", "No common capabilities with peer.");
+            debug!("No common capabilities with remote peer, peer_node_id = {:?}, session = {:?}", id, self);
             return Err(self.disconnect(io, DisconnectReason::UselessPeer));
         }
 
         let hello_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
-
-        // TODO Temporary remove for local test.
         if self.address.ip() != hello_from.address.ip() {
-            trace!(target: "network", "IP in Hello does not match session IP, \
-            Session IP: {:?}, Hello IP: {:?}", self.address.ip(), hello_from.address.ip());
-            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
+            trace!("IP in Hello does not match session IP, Session IP = {:?}, Hello IP = {:?}, session = {:?}", self.address.ip(), hello_from.address.ip(), self);
+            return Err(
+                self.disconnect(io, DisconnectReason::WrongEndpointInfo)
+            );
         }
 
         let ping_to = NodeEndpoint {
@@ -310,15 +315,20 @@ impl Session {
             endpoint: ping_to.clone(),
         };
         if !entry.endpoint.is_valid() {
-            debug!(target: "network", "Got bad address: {:?}", entry);
-            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
+            debug!("Got invalid endpoint {:?}, session = {:?}", entry, self);
+            return Err(
+                self.disconnect(io, DisconnectReason::WrongEndpointInfo)
+            );
         } else if !(entry.endpoint.is_allowed(host.get_ip_filter())
             && entry.id != *host.metadata.id())
         {
-            debug!(target: "network", "Address not allowed: {:?}", entry);
+            debug!(
+                "Address not allowed, endpoint = {:?}, session = {:?}",
+                entry, self
+            );
             return Err(self.disconnect(io, DisconnectReason::IpLimited));
         } else {
-            debug!(target: "network", "Receive valid endpoint {:?}", entry);
+            debug!("Received valid endpoint {:?}, session = {:?}", entry, self);
             if host.node_db.write().insert_with_token(entry, self.token())
                 == InsertResult::IpLimited
             {
@@ -342,7 +352,7 @@ impl Session {
         if protocol.is_some()
             && (self.metadata.capabilities.is_empty() || !self.had_hello)
         {
-            debug!(target: "network", "Sending to unconfirmed session {}, protocol: {:?}, packet: {}, had_hello: {}", self.token(), protocol.as_ref().map(|p| str::from_utf8(&p[..]).unwrap_or("???")), packet_id, self.had_hello);
+            debug!("Sending to unconfirmed session {}, protocol: {:?}, packet: {}, had_hello: {}", self.token(), protocol.as_ref().map(|p| str::from_utf8(&p[..]).unwrap_or("???")), packet_id, self.had_hello);
             bail!(ErrorKind::BadProtocol);
         }
         if self.expired() {
@@ -352,8 +362,8 @@ impl Session {
             1 + protocol.map(|p| p.len()).unwrap_or(0) + data.len();
         if packet_size > MAX_PAYLOAD_SIZE {
             error!(
-                "Packet is too big, size = {}, max = {}",
-                packet_size, MAX_PAYLOAD_SIZE
+                "Packet is too big, size = {}, max = {}, session = {:?}",
+                packet_size, MAX_PAYLOAD_SIZE, self
             );
             bail!(ErrorKind::OversizedPacket);
         }
@@ -401,7 +411,7 @@ impl Session {
     fn write_hello<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
-        debug!(target: "network", "{} Sending Hello", self.token());
+        debug!("Sending Hello, session = {:?}", self);
         let mut rlp = RlpStream::new_list(2);
         rlp.append_list(&*host.metadata.capabilities.read());
         host.metadata.public_endpoint.to_rlp_list(&mut rlp);
@@ -414,7 +424,7 @@ impl Session {
         let signature = match sign(host.metadata.keys.secret(), &hash) {
             Ok(s) => s,
             Err(e) => {
-                warn!(target: "network", "Error signing hello packet");
+                debug!("failed to sign hello packet, session = {:?}", self);
                 return Err(Error::from(e));
             }
         };
@@ -436,5 +446,12 @@ impl Session {
     ) -> Result<(), Error> {
         self.connection.writable(io)?;
         Ok(())
+    }
+}
+
+impl fmt::Debug for Session {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Session {{ token: {}, id: {:?}, originated: {}, address: {:?}, sent_hello: {}, had_hello: {}, expired: {} }}",
+               self.token(), self.id(), self.metadata.originated, self.address, self.sent_hello, self.had_hello, self.expired)
     }
 }
