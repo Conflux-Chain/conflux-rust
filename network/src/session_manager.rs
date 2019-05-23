@@ -117,7 +117,7 @@ impl SessionManager {
 
         Ok(index)
     }
-    
+
     pub fn remove(&self, session: &Session) {
         let mut sessions = self.sessions.write();
 

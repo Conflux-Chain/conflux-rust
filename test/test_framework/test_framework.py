@@ -70,7 +70,7 @@ class ConfluxTestFramework:
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
-        self.rpc_timewait = 60  # Wait for up to 60 seconds for the RPC server to respond
+        self.rpc_timewait = 3  # Wait for up to 5 seconds for the RPC server to respond
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}

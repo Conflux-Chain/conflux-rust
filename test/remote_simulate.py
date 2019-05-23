@@ -21,7 +21,6 @@ class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
-        self.rpc_timewait = 10
         self.conf_parameters = {
             "log_level": "\"debug\"",
             "fast_recover": "true",
