@@ -1,7 +1,10 @@
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::CacheId,
-    consensus::{ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD, CONFLUX_TOKEN},
+    consensus::{
+        ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
+        CONFLUX_TOKEN,
+    },
     executive::{ExecutionError, Executive},
     machine::new_machine,
     state::{CleanupMode, State},
@@ -11,7 +14,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256, U512};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
@@ -21,7 +24,7 @@ use primitives::{
 use std::{
     collections::{btree_set::BTreeSet, HashMap, HashSet},
     sync::{
-        mpsc::{channel, Sender},
+        mpsc::{channel, RecvError, Sender, TryRecvError},
         Arc,
     },
     thread::{self, JoinHandle},
@@ -36,7 +39,7 @@ pub struct RewardExecutionInfo {
 }
 
 #[derive(Debug)]
-pub enum ExecutionTask {
+enum ExecutionTask {
     ExecuteEpoch(EpochExecutionTask),
     GetResult(GetExecutionResultTask),
     Stop,
@@ -51,10 +54,25 @@ pub struct EpochExecutionTask {
     pub on_local_pivot: bool,
 }
 
+impl EpochExecutionTask {
+    pub fn new(
+        epoch_hash: H256, epoch_block_hashes: Vec<H256>,
+        reward_info: Option<RewardExecutionInfo>, on_local_pivot: bool,
+    ) -> Self
+    {
+        Self {
+            epoch_hash,
+            epoch_block_hashes,
+            reward_info,
+            on_local_pivot,
+        }
+    }
+}
+
 /// `sender` is used to return the computed `(state_root, receipts_root)` to the
 /// thread who sends this task.
 #[derive(Debug)]
-pub struct GetExecutionResultTask {
+struct GetExecutionResultTask {
     pub epoch_hash: H256,
     pub sender: Sender<(H256, H256)>,
 }
@@ -73,7 +91,11 @@ pub struct ConsensusExecutor {
 }
 
 impl ConsensusExecutor {
-    pub fn start(data_man: Arc<BlockDataManager>, vm: VmFactory) -> Self {
+    pub fn start(
+        data_man: Arc<BlockDataManager>, vm: VmFactory,
+        consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
+    ) -> Self
+    {
         let handler = Arc::new(ConsensusExecutionHandler::new(data_man, vm));
         let (sender, receiver) = channel();
 
@@ -86,17 +108,47 @@ impl ConsensusExecutor {
         let handle = thread::Builder::new()
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
-                match receiver.recv() {
-                    Ok(ExecutionTask::Stop) => {
-                        debug!(
-                            "Consensus Executor stopped by receiving STOP task"
-                        );
-                        break;
+                let maybe_task = receiver.try_recv();
+                match maybe_task {
+                    Err(TryRecvError::Empty) => {
+                        // The channel is empty, so we try to optimistically
+                        // get later epochs to execute. Here we use `try_write` because some thread
+                        // may wait for execution results while holding the Consensus Inner lock,
+                        // if we wait on inner lock here we may get deadlock
+                        let maybe_opt_task = consensus_inner
+                            .try_write()
+                            .and_then(|mut inner|
+                                inner.get_opt_execution_task()
+                            );
+                        match maybe_opt_task {
+                            Some(task) => {
+                                debug!("Get opt_execution_task {:?}", task);
+                                handler.handle_epoch_execution(task)
+                            },
+                            None => {
+                                debug!("No optimistic tasks to execute, block for new tasks");
+                                //  Even optimistic tasks are all finished, so we block and wait for
+                                //  new execution tasks.
+                                //  New optimistic tasks will only exist if pivot_chain changes,
+                                //  and new tasks will be sent to `receiver` in this case, so this
+                                // waiting will not prevent new optimistic tasks from being executed
+                                if !handler.handle_recv_result(receiver.recv())
+                                {
+                                    break;
+                                }
+                            }
+                        }
                     }
-                    Ok(task) => handler.handle_execution_work(task),
-                    Err(e) => {
-                        warn!("Consensus Executor stopped by Err={:?}", e);
-                        break;
+                    maybe_error => {
+                        // Handle execution task in channel.
+                        // If `maybe_task` is Err, it can only be
+                        // `TryRecvError::Disconnected`, and it has the same
+                        // meaning as `RecvError` for `recv()`
+                        if !handler.handle_recv_result(
+                            maybe_error.map_err(|_| RecvError),
+                        ) {
+                            break;
+                        }
                     }
                 }
             })
@@ -126,35 +178,16 @@ impl ConsensusExecutor {
     /// Enqueue the epoch to be executed by the background execution thread
     /// The parameters are needed for the thread to execute this epoch without
     /// holding inner lock.
-    pub fn enqueue_epoch(
-        &self, epoch_hash: H256, epoch_block_hashes: Vec<H256>,
-        reward_info: Option<RewardExecutionInfo>, on_local_pivot: bool,
-    ) -> bool
-    {
+    pub fn enqueue_epoch(&self, task: EpochExecutionTask) -> bool {
         self.sender
             .lock()
-            .send(ExecutionTask::ExecuteEpoch(EpochExecutionTask {
-                epoch_hash,
-                epoch_block_hashes,
-                reward_info,
-                on_local_pivot,
-            }))
+            .send(ExecutionTask::ExecuteEpoch(task))
             .is_ok()
     }
 
     /// Execute the epoch synchronously
-    pub fn compute_epoch(
-        &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
-        reward_execution_info: &Option<RewardExecutionInfo>,
-        on_local_pivot: bool,
-    )
-    {
-        self.handler.compute_epoch(
-            epoch_hash,
-            epoch_block_hashes,
-            reward_execution_info,
-            on_local_pivot,
-        )
+    pub fn compute_epoch(&self, task: EpochExecutionTask) {
+        self.handler.handle_epoch_execution(task)
     }
 
     pub fn call_virtual(
@@ -184,15 +217,36 @@ impl ConsensusExecutionHandler {
         ConsensusExecutionHandler { data_man, vm }
     }
 
-    fn handle_execution_work(&self, task: ExecutionTask) {
+    /// Return `false` if someting goes wrong, and we will break the working
+    /// loop. `maybe_task` should match results from `recv()`, so it does not
+    /// contain `Empty` case.
+    fn handle_recv_result(
+        &self, maybe_task: Result<ExecutionTask, RecvError>,
+    ) -> bool {
+        match maybe_task {
+            Ok(ExecutionTask::Stop) => {
+                debug!("Consensus Executor stopped by receiving STOP task");
+                false
+            }
+            Ok(task) => self.handle_execution_work(task),
+            Err(e) => {
+                warn!("Consensus Executor stopped by Err={:?}", e);
+                false
+            }
+        }
+    }
+
+    /// Always return `true` for now
+    fn handle_execution_work(&self, task: ExecutionTask) -> bool {
         debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
                 self.handle_epoch_execution(task)
             }
-            ExecutionTask::GetResult(task) => self.handle_get_result(task),
+            ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
             _ => {}
         }
+        true
     }
 
     fn handle_epoch_execution(&self, task: EpochExecutionTask) {
@@ -204,7 +258,7 @@ impl ConsensusExecutionHandler {
         );
     }
 
-    fn handle_get_result(&self, task: GetExecutionResultTask) {
+    fn handle_get_result_task(&self, task: GetExecutionResultTask) {
         let state_root = self
             .data_man
             .storage_manager
@@ -224,6 +278,11 @@ impl ConsensusExecutionHandler {
     /// Compute the epoch `epoch_hash`, and skip it if already computed.
     /// After the function is called, it's assured that the state, the receipt
     /// root, and the receipts of blocks executed by this epoch exist.
+    ///
+    /// TODO Not sure if this difference is important.
+    /// One different between skipped execution in pivot chain is that the
+    /// transactions packed in the skipped epoch will be checked if they can
+    /// be recycled.
     pub fn compute_epoch(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         reward_execution_info: &Option<RewardExecutionInfo>,
@@ -232,7 +291,7 @@ impl ConsensusExecutionHandler {
     {
         // Check if the state has been computed
         if self.data_man.storage_manager.state_exists(*epoch_hash)
-            && self.epoch_executed_and_recovered(
+            && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
                 on_local_pivot,
@@ -658,59 +717,6 @@ impl ConsensusExecutionHandler {
             &Mutex::new(Default::default()),
             false,
         )
-    }
-
-    /// Check if all executed results of an epoch exist
-    fn epoch_executed_and_recovered(
-        &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
-        on_local_pivot: bool,
-    ) -> bool
-    {
-        // `block_receipts_root` is not computed when recovering from db with
-        // fast_recover == false And we should force it to recompute
-        // without checking receipts when fast_recover == false
-        if self.data_man.get_receipts_root(epoch_hash).is_none() {
-            return false;
-        }
-        let mut epoch_receipts = Vec::new();
-        for h in epoch_block_hashes {
-            if let Some(r) = self
-                .data_man
-                .block_results_by_hash_with_epoch(h, epoch_hash, true)
-            {
-                epoch_receipts.push(r.receipts);
-            } else {
-                return false;
-            }
-        }
-
-        // Recover tx address if we will skip pivot chain execution
-        if on_local_pivot {
-            for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
-            {
-                let block = self
-                    .data_man
-                    .block_by_hash(block_hash, true)
-                    .expect("block exists");
-                for (tx_idx, tx) in block.transactions.iter().enumerate() {
-                    if epoch_receipts[block_idx]
-                        .get(tx_idx)
-                        .unwrap()
-                        .outcome_status
-                        == TRANSACTION_OUTCOME_SUCCESS
-                    {
-                        self.data_man.insert_transaction_address_to_kv(
-                            &tx.hash,
-                            &TransactionAddress {
-                                block_hash: *block_hash,
-                                index: tx_idx,
-                            },
-                        )
-                    }
-                }
-            }
-        }
-        true
     }
 
     pub fn call_virtual(

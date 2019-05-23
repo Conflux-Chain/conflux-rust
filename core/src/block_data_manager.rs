@@ -14,7 +14,8 @@ use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    receipt::Receipt, Block, BlockHeader, SignedTransaction, TransactionAddress,
+    receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
+    Block, BlockHeader, SignedTransaction, TransactionAddress,
 };
 use rlp::{Rlp, RlpStream};
 use std::{collections::HashMap, sync::Arc};
@@ -384,6 +385,56 @@ impl BlockDataManager {
             .read()
             .get(block_hash)
             .map(Clone::clone)
+    }
+
+    /// Check if all executed results of an epoch exist
+    pub fn epoch_executed_and_recovered(
+        &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
+        on_local_pivot: bool,
+    ) -> bool
+    {
+        // `block_receipts_root` is not computed when recovering from db with
+        // fast_recover == false And we should force it to recompute
+        // without checking receipts when fast_recover == false
+        if self.get_receipts_root(epoch_hash).is_none() {
+            return false;
+        }
+        let mut epoch_receipts = Vec::new();
+        for h in epoch_block_hashes {
+            if let Some(r) =
+                self.block_results_by_hash_with_epoch(h, epoch_hash, true)
+            {
+                epoch_receipts.push(r.receipts);
+            } else {
+                return false;
+            }
+        }
+
+        // Recover tx address if we will skip pivot chain execution
+        if on_local_pivot {
+            for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
+            {
+                let block =
+                    self.block_by_hash(block_hash, true).expect("block exists");
+                for (tx_idx, tx) in block.transactions.iter().enumerate() {
+                    if epoch_receipts[block_idx]
+                        .get(tx_idx)
+                        .unwrap()
+                        .outcome_status
+                        == TRANSACTION_OUTCOME_SUCCESS
+                    {
+                        self.insert_transaction_address_to_kv(
+                            &tx.hash,
+                            &TransactionAddress {
+                                block_hash: *block_hash,
+                                index: tx_idx,
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        true
     }
 }
 

@@ -46,6 +46,11 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
                 self.generate_block(num_txs)
                 time.sleep(0.5)
 
+        # After having optimistic execution, get_receipts may get receipts with not deferred block, these extra blocks
+        # ensure that later get_balance can get correct executed balance for all transactions
+        for _ in range(5):
+            client.generate_block()
+
         self.log.info("sync up blocks among nodes ...")
         sync_blocks(self.nodes)
 
@@ -69,9 +74,10 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
         self.log.info("begin to validate balance and nonce ...")
         all_accounts = list(senders)
         all_accounts.extend(receivers)
-        for account in all_accounts:
-            for idx in range(self.num_nodes):
-                node_client = RpcClient(self.nodes[idx])
+        for idx in range(self.num_nodes):
+            self.log.debug("validate for node %d", idx)
+            node_client = RpcClient(self.nodes[idx])
+            for account in all_accounts:
                 assert_equal(node_client.get_balance(account.address), account.balance)
                 assert_equal(node_client.get_nonce(account.address), account.nonce)
 

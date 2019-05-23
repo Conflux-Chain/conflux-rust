@@ -7,7 +7,7 @@ use super::consensus::consensus_executor::ConsensusExecutor;
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager},
-    consensus::consensus_executor::RewardExecutionInfo,
+    consensus::consensus_executor::{EpochExecutionTask, RewardExecutionInfo},
     db::COL_MISC,
     ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
@@ -113,6 +113,7 @@ pub struct ConsensusGraphInner {
     pub arena: Slab<ConsensusGraphNode>,
     pub indices: HashMap<H256, usize>,
     pub pivot_chain: Vec<usize>,
+    opt_executed_height: Option<usize>,
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
     genesis_block_state_root: H256,
@@ -132,6 +133,7 @@ impl ConsensusGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
+            opt_executed_height: None,
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
             genesis_block_state_root: data_man
@@ -181,6 +183,28 @@ impl ConsensusGraphInner {
             .insert(0, vec![inner.genesis_block_index]);
 
         inner
+    }
+
+    pub fn get_opt_execution_task(&mut self) -> Option<EpochExecutionTask> {
+        let opt_height = self.opt_executed_height?;
+        let opt_index = self.pivot_chain[opt_height];
+
+        // `on_local_pivot` is set to `true` because when we later skip its
+        // execution on pivot chain, we will not notify tx pool, so we
+        // will also notify in advance.
+        let execution_task = EpochExecutionTask::new(
+            self.arena[opt_index].hash,
+            self.get_epoch_block_hashes(opt_index),
+            self.get_reward_execution_info(opt_height, &self.pivot_chain),
+            true,
+        );
+        let next_opt_height = opt_height + 1;
+        if next_opt_height >= self.pivot_chain.len() {
+            self.opt_executed_height = None;
+        } else {
+            self.opt_executed_height = Some(next_opt_height);
+        }
+        Some(execution_task)
     }
 
     pub fn get_epoch_block_hashes(&self, epoch_index: usize) -> Vec<H256> {
@@ -582,17 +606,22 @@ impl ConsensusGraphInner {
             let mut epoch_block_states = Vec::new();
             for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
                 let partial_invalid = self.arena[*index].data.partial_invalid;
-                let anticone_set = self.arena[*index]
-                    .data
-                    .anticone
-                    .difference(&self.arena[upper_index].data.anticone)
-                    .cloned()
-                    .collect::<HashSet<_>>();
-
                 let mut anticone_difficulty: U512 = 0.into();
-                for a_index in anticone_set {
-                    anticone_difficulty +=
-                        U512::from(self.arena[a_index].difficulty);
+                // If a block is partial_invalid, it won't have reward and
+                // anticone_difficulty will not be used, so it's okay to set it
+                // to 0.
+                if !partial_invalid {
+                    let anticone_set = self.arena[*index]
+                        .data
+                        .anticone
+                        .difference(&self.arena[upper_index].data.anticone)
+                        .cloned()
+                        .collect::<HashSet<_>>();
+
+                    for a_index in anticone_set {
+                        anticone_difficulty +=
+                            U512::from(self.arena[a_index].difficulty);
+                    }
                 }
                 epoch_block_states.push((partial_invalid, anticone_difficulty));
             }
@@ -887,7 +916,7 @@ impl ConsensusGraphInner {
 }
 
 pub struct ConsensusGraph {
-    pub inner: RwLock<ConsensusGraphInner>,
+    pub inner: Arc<RwLock<ConsensusGraphInner>>,
     pub txpool: SharedTransactionPool,
     pub data_man: Arc<BlockDataManager>,
     pub invalid_blocks: RwLock<HashSet<H256>>,
@@ -913,13 +942,19 @@ impl ConsensusGraph {
             storage_manager,
             cache_man,
         ));
-        let executor = Arc::new(ConsensusExecutor::start(data_man.clone(), vm));
-
-        ConsensusGraph {
-            inner: RwLock::new(ConsensusGraphInner::with_genesis_block(
+        let inner =
+            Arc::new(RwLock::new(ConsensusGraphInner::with_genesis_block(
                 pow_config,
                 data_man.clone(),
-            )),
+            )));
+        let executor = Arc::new(ConsensusExecutor::start(
+            data_man.clone(),
+            vm,
+            inner.clone(),
+        ));
+
+        ConsensusGraph {
+            inner,
             txpool,
             data_man: data_man.clone(),
             invalid_blocks: RwLock::new(HashSet::new()),
@@ -1240,12 +1275,12 @@ impl ConsensusGraph {
                 last_state_height,
                 &inner.pivot_chain,
             );
-            self.executor.enqueue_epoch(
+            self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
                 reward_execution_info,
                 false,
-            );
+            ));
             last_state_height += 1;
         }
 
@@ -1274,12 +1309,12 @@ impl ConsensusGraph {
                 };
             let reward_execution_info =
                 inner.get_reward_execution_info_from_index(reward_index);
-            self.executor.enqueue_epoch(
+            self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
                 reward_execution_info,
                 false,
-            );
+            ));
         }
 
         // FIXME: Propagate errors upward
@@ -1487,13 +1522,11 @@ impl ConsensusGraph {
             // Second, sort all the blocks based on their topological order
             // and break ties with block hash
             let reversed_indices = inner.topological_sort(&queue);
-
             debug!(
                 "Construct epoch_id={}, block_count={}",
                 inner.arena[new_pivot_chain[height]].hash,
                 reversed_indices.len()
             );
-
             inner
                 .indices_in_epochs
                 .insert(new_pivot_chain[height], reversed_indices);
@@ -1572,12 +1605,12 @@ impl ConsensusGraph {
                 );
                 let epoch_block_hashes = inner
                     .get_epoch_block_hashes(inner.pivot_chain[state_height]);
-                self.executor.compute_epoch(
-                    &pivot_hash,
-                    &epoch_block_hashes,
-                    &reward_execution_info,
+                self.executor.compute_epoch(EpochExecutionTask::new(
+                    pivot_hash,
+                    epoch_block_hashes,
+                    reward_execution_info,
                     true,
-                );
+                ));
             }
         }
     }
@@ -1776,6 +1809,7 @@ impl ConsensusGraph {
                 fork_at
             } else {
                 // The previous subtree is still heavier, nothing is updated
+                debug!("Finish Consensus.on_new_block() with pivot chain unchanged");
                 inner.pivot_chain.len()
             }
         };
@@ -1873,12 +1907,12 @@ impl ConsensusGraph {
             let epoch_index = new_pivot_chain[state_at];
             let reward_execution_info =
                 inner.get_reward_execution_info(state_at, &new_pivot_chain);
-            self.executor.enqueue_epoch(
+            self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
                 reward_execution_info,
                 true,
-            );
+            ));
             state_at += 1;
         }
 
@@ -1887,6 +1921,11 @@ impl ConsensusGraph {
             &*sync_inner_lock.read(),
         );
         inner.pivot_chain = new_pivot_chain;
+        inner.opt_executed_height = if to_state_pos > 0 {
+            Some(to_state_pos)
+        } else {
+            None
+        };
         inner.persist_terminals();
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }

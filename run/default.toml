@@ -10,7 +10,7 @@ bootnodes='cfxnode://337c2a5cc9c251cef4cac4b0212e4c66a4439756acd8b1a085bf32b8d54
 # If not set, the process will try to find out the public IP with best effort, and use `port` as public port.
 # However, it's HIGHLY RECOMMENDED to set the value manually, especially for machines with IP translated by NAT.
 #
-# public_address="127.0.0.1:32323"
+public_address="59.66.209.32:32323"
 
 # `port` is the TCP port that the process listens for P2P messages.
 #
@@ -25,7 +25,7 @@ bootnodes='cfxnode://337c2a5cc9c251cef4cac4b0212e4c66a4439756acd8b1a085bf32b8d54
 # If not set, the node will not start mining blocks.
 # If the value is true, `mining_author` must be set.
 #
-start_mining=true
+# start_mining=true
 
 # `mining_author` is the address to receive mining rewards.
 # The value is a 40-digit hex string without 0x prefix.
