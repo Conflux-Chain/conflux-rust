@@ -55,7 +55,7 @@ build_config! {
         (db_compaction_profile, (Option<String>), None)
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (generate_tx, (bool), false)
-        (generate_tx_period_ms, (Option<u64>), Some(100))
+        (generate_tx_period_us, (Option<u64>), Some(100))
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
@@ -222,7 +222,7 @@ impl Configuration {
     pub fn tx_gen_config(&self) -> TransactionGeneratorConfig {
         TransactionGeneratorConfig::new(
             self.raw_conf.generate_tx,
-            self.raw_conf.generate_tx_period_ms.expect("has default"),
+            self.raw_conf.generate_tx_period_us.expect("has default"),
         )
     }
 

@@ -34,6 +34,7 @@ use rand::prelude::*;
 use rlp::Encodable;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{collections::HashMap, sync::Arc, thread, time};
+use std::time::Instant;
 
 pub mod propagate;
 
@@ -52,7 +53,7 @@ impl TransactionGeneratorConfig {
     pub fn new(generate_tx: bool, period_ms: u64) -> Self {
         TransactionGeneratorConfig {
             generate_tx,
-            period: time::Duration::from_millis(period_ms),
+            period: time::Duration::from_micros(period_ms),
         }
     }
 }
@@ -172,9 +173,10 @@ impl TransactionGenerator {
             public_to_address(key_pair.public()),
             key_pair.public()
         );
-        debug!("{:?} {:?}", tx_config.generate_tx, tx_config.period);
+        debug!("Tx Generation Config {:?} {:?}", tx_config.generate_tx, tx_config.period);
         secret_store.insert(key_pair);
         let mut tx_n = 0;
+        let mut start_time = Instant::now();
         loop {
             match *txgen.state.read() {
                 TransGenState::Stop => return Ok(()),
@@ -214,7 +216,6 @@ impl TransactionGenerator {
             if sender_balance.is_none()
                 || sender_balance.clone().unwrap() == 0.into()
             {
-                thread::sleep(tx_config.period);
                 continue;
             }
             let sender_balance = balance_map
@@ -288,7 +289,14 @@ impl TransactionGenerator {
             if tx_n % 100 == 0 {
                 info!("Generated {} transactions", tx_n);
             }
-            thread::sleep(tx_config.period);
+            let now = Instant::now();
+            let time_elapsed = now.duration_since(start_time);
+            if let Some(time_left) = tx_config.period.checked_sub(time_elapsed) {
+                thread::sleep(time_left);
+            } else {
+                debug!("Elapsed time larger than the time needed for sleep: start={:?} now={:?}", start_time, now);
+            }
+            start_time = now;
         }
         Ok(())
     }
