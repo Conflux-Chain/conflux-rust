@@ -7,21 +7,9 @@ if ! [ -x "$(command -v cargo)" ]; then
 fi
 branch=${1:-master}
 
-# Wait for apt to be unlocked
-i=0
-while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
-    case $(($i % 4)) in
-        0 ) j="-" ;;
-        1 ) j="\\" ;;
-        2 ) j="|" ;;
-        3 ) j="/" ;;
-    esac
-    echo -en "\r[$j] Waiting for other software managers to finish..."
-    sleep 0.5
-    ((i=i+1))
-done
-
 sudo apt update
+# Wait for apt to be unlocked
+apt_wait
 sudo apt install -y iotop clang git jq pssh
 pip3 install prettytable
 
@@ -42,3 +30,17 @@ cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_confl
 cd ~
 ./throttle_bitcoin_bandwidth.sh 20 30
 ls /sys/fs/cgroup/net_cls
+
+apt_wait () {
+  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+    sleep 1
+  done
+  while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
+    sleep 1
+  done
+  if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
+    while sudo fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
+      sleep 1
+    done
+  fi
+}
