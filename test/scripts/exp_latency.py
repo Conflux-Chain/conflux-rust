@@ -106,7 +106,7 @@ class LatencyExperiment(ArgumentHolder):
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000
 
-        self.batch_config = "500:1:150000:1000:2000,500:1:150000:1000:4000,500:1:150000:1000:6000"
+        self.batch_config = "500:1:150000:1000:2000,500:1:150000:1000:3000,500:1:150000:1000:4000"
 
         ArgumentHolder.__init__(self)
 

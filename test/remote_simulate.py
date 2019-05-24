@@ -148,8 +148,8 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["ledger_cache_size"] = str(2048 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_start_size"] = str(1000000 // target_memory * self.options.storage_memory_mb)
-        # self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_cache_size"] = "200000"
+        self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
+        # self.conf_parameters["storage_cache_size"] = "200000"
         self.conf_parameters["storage_idle_size"] = str(200000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_node_map_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
 
