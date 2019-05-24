@@ -7,6 +7,19 @@ if ! [ -x "$(command -v cargo)" ]; then
 fi
 branch=${1:-master}
 
+apt_wait () {
+  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+    sleep 1
+  done
+  while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
+    sleep 1
+  done
+  if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
+    while sudo fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
+      sleep 1
+    done
+  fi
+}
 sudo apt update
 # Wait for apt to be unlocked
 apt_wait
@@ -30,17 +43,3 @@ cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_confl
 cd ~
 ./throttle_bitcoin_bandwidth.sh 20 30
 ls /sys/fs/cgroup/net_cls
-
-apt_wait () {
-  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
-    sleep 1
-  done
-  while sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do
-    sleep 1
-  done
-  if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
-    while sudo fuser /var/log/unattended-upgrades/unattended-upgrades.log >/dev/null 2>&1 ; do
-      sleep 1
-    done
-  fi
-}
