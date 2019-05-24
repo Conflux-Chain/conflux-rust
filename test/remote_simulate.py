@@ -23,6 +23,7 @@ LAT_LATEST = "latency_latest"
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
+        self.rpc_timewait = 60
         self.num_nodes = 1
         self.conf_parameters = {
             "log_level": "\"debug\"",
@@ -319,8 +320,8 @@ class P2PTest(ConfluxTestFramework):
                 retry = 0
             else:
                 retry += 1
-                if retry >= 40:
-                    self.log.error("No block generated after 20 intervals")
+                if retry >= 100:
+                    self.log.error("No block generated after 50 intervals")
                     break
 
         self.log.info("monitor completed.")
