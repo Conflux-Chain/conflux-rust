@@ -177,7 +177,7 @@ class P2PTest(ConfluxTestFramework):
         cmd_kill_conflux = "killall -9 conflux || echo already killed"
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
-        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} > start_conflux.out".format(
+        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} &> start_conflux.out".format(
             self.options.tmpdir, p2p_port(0), self.options.nodes_per_host
         )
         cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)

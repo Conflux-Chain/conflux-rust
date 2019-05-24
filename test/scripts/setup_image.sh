@@ -5,7 +5,7 @@ if ! [ -x "$(command -v cargo)" ]; then
   exit 1
 fi
 branch=${1:-master}
-sudo apt install -y iotop clang git jq
+sudo apt install -y iotop clang git jq pssh
 
 if [[ ! -d conflux-rust ]]; then
   git clone https://github.com/Conflux-Chain/conflux-rust
@@ -17,6 +17,7 @@ git pull
 git checkout $branch
 cargo update
 cargo build --release
+./dev-support/dep_pip3.sh
 cd test/scripts
 cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py ~
 

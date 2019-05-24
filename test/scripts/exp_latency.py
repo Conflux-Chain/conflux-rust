@@ -93,12 +93,12 @@ class LatencyExperiment(ArgumentHolder):
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
 
-        self.nodes_per_host = 10
+        self.nodes_per_host = 1
         self.block_sync_step = 10
         self.connect_peers = 8
         self.ips_file = "ips"
         self.throttling = "512,1024,2048"
-        self.storage_memory_mb = 2
+        self.storage_memory_mb = 16
         self.data_propagate_enabled = False
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000

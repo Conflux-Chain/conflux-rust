@@ -11,6 +11,7 @@ echo "num_conflux = $3"
 
 export RUST_BACKTRACE=full
 
+./throttle_bitcoin_bandwidth.sh 20 $num
 for i in `seq 1 $num`
 do
 	nid=$(($i-1))

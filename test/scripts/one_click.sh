@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 set -euxo pipefail
 key_pair="$1"
-if false; then
-branch="${2:-master}"
+branch="${2:-lpl_test}"
 ./create_slave_image.sh $key_pair $branch
-fi
 slave_count=5
 master_ip=`cat ips`
 slave_image=`cat slave_image`

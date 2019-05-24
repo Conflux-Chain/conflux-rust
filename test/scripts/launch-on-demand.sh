@@ -52,14 +52,9 @@ do
 done
 
 echo "Wait for launched instances able to be connected"
-backup_host=false
-if [[ -f ~/.ssh/known_hosts ]]; then
-    backup_host=true
-fi
-if $backup_host; then
-    echo "Back up ~/.ssh/known_hosts to ./known_hosts_backup"
-    mv ~/.ssh/known_hosts known_hosts_backup
-fi
+touch ~/.ssh/known_hosts
+echo "Back up ~/.ssh/known_hosts to ./known_hosts_backup"
+mv ~/.ssh/known_hosts known_hosts_backup
 # retrieve IPs and SSH all instances to update known_hosts
 while true
 do
@@ -71,7 +66,5 @@ do
     fi
 done
 wc -l ~/.ssh/known_hosts
-if $backup_host; then
-    echo "Restore known_hosts"
-    mv known_hosts_backup ~/.ssh/known_hosts
-fi
+echo "Restore known_hosts"
+mv known_hosts_backup ~/.ssh/known_hosts
