@@ -7,6 +7,7 @@ fi
 branch=${1:-master}
 sudo apt update
 sudo apt install -y iotop clang git jq pssh
+pip3 install prettytable
 
 if [[ ! -d conflux-rust ]]; then
   git clone https://github.com/Conflux-Chain/conflux-rust

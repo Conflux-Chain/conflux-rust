@@ -62,11 +62,12 @@ class ArgumentHolder:
             ))
 
 class RemoteSimulateConfig:
-    def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks):
+    def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks, tps):
         self.block_gen_interval_ms = block_gen_interval_ms
         self.txs_per_block = txs_per_block
         self.tx_size = tx_size
         self.num_blocks = num_blocks
+        self.tps = tps
 
     def __str__(self):
         return str(self.__dict__)
@@ -88,7 +89,7 @@ class RemoteSimulateConfig:
 class LatencyExperiment(ArgumentHolder):
     def __init__(self):
         self.vms = 10
-        self.stat_confirmation_latency = False
+        self.stat_confirmation_latency = True
         self.simulate_log_file = "exp.log"
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
@@ -103,9 +104,8 @@ class LatencyExperiment(ArgumentHolder):
         self.data_propagate_enabled = False
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000
-        self.tps = 1000
 
-        self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
+        self.batch_config = "500:1:150000:1000:2000,500:1:150000:1000:4000,500:1:150000:1000:6000"
 
         ArgumentHolder.__init__(self)
 
@@ -158,7 +158,7 @@ class LatencyExperiment(ArgumentHolder):
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
             "--experiment-name", self.exp_name,
-            "--tps", str(self.tps),
+            "--tps", str(config.tps),
         ]
 
         if self.data_propagate_enabled:

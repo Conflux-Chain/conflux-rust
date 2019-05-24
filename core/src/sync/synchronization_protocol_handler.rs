@@ -546,6 +546,7 @@ impl SynchronizationProtocolHandler {
                     {
                         Some(tx.transaction.clone())
                     } else {
+                        debug!("tx idx {:?} requested but is None", tx_idx);
                         None
                     }
                 })
@@ -555,6 +556,7 @@ impl SynchronizationProtocolHandler {
                 request_id: get_transactions.request_id,
                 transactions,
             };
+            debug!("on_get_transactions request {} txs, returned {} txs", get_transactions.indices.len(), resp.transactions.len());
             self.send_message(io, peer, &resp, SendQueuePriority::Normal)?;
         } else {
             warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_TRANSACTIONS", peer);
@@ -609,6 +611,7 @@ impl SynchronizationProtocolHandler {
             indices.push(index);
             tx_ids.insert(*tx_id);
         }
+        debug!("Request {} transactions from peer={}", indices.len(), peer);
 
         self.request_transactions(io, peer, indices, tx_ids, &mut *syn)
     }
