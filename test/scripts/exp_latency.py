@@ -77,12 +77,13 @@ class RemoteSimulateConfig:
         config_groups = []
         for config in batch_config.split(","):
             fields = config.split(":")
-            assert len(fields) == 4, "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>"
+            assert len(fields) == 5, "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>"
             config_groups.append(RemoteSimulateConfig(
                 int(fields[0]),
                 int(fields[1]),
                 int(fields[2]),
                 int(fields[3]),
+                int(fields[4]),
             ))
         return config_groups
 

@@ -126,6 +126,12 @@ class P2PTest(ConfluxTestFramework):
     def after_options_parsed(self):
         self.num_nodes = self.options.nodes_per_host
 
+        self.ips = []
+        with open(self.options.ips_file, 'r') as ip_file:
+            for line in ip_file.readlines():
+                line = line[:-1]
+                self.ips.append(line)
+
         # experiment name
         self.exp_name = self.options.experiment_name
 
@@ -157,7 +163,7 @@ class P2PTest(ConfluxTestFramework):
 
         if self.exp_name == LAT_LATEST:
             self.conf_parameters["generate_tx"] = "true"
-            self.conf_parameters["generate_tx_period_us"] = str(1000000 * self.num_nodes // self.options.tps)
+            self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
@@ -187,10 +193,8 @@ class P2PTest(ConfluxTestFramework):
         self.setup_remote_conflux()
 
         # add remote nodes and start all
-        with open(self.options.ips_file, 'r') as ip_file:
-            for line in ip_file.readlines():
-                line = line[:-1]
-                self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=line)
+        for ip in self.ips:
+            self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=ip)
         for i in range(len(self.nodes)):
             self.log.info("Node[{}]: ip={}, p2p_port={}, rpc_port={}".format(
                 i, self.nodes[i].ip, self.nodes[i].port, self.nodes[i].rpcport))
@@ -205,11 +209,6 @@ class P2PTest(ConfluxTestFramework):
     def run_test(self):
         num_nodes = len(self.nodes)
 
-        # setup monitor to report the current block count periodically
-        cur_block_count = self.nodes[0].getblockcount()
-        monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count,), daemon=True)
-        monitor_thread.start()
-
         if self.exp_name == LAT_LATEST:
             # Setup balance for each node
             client = RpcClient(self.nodes[0])
@@ -219,6 +218,11 @@ class P2PTest(ConfluxTestFramework):
                 self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
                 tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/num_nodes), receiver=encode_hex(addr), nonce=i)
                 client.send_tx(tx)
+
+        # setup monitor to report the current block count periodically
+        cur_block_count = self.nodes[0].getblockcount()
+        monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count,), daemon=True)
+        monitor_thread.start()
 
         # generate blocks
         threads = {}
@@ -303,6 +307,7 @@ class P2PTest(ConfluxTestFramework):
     def monitor(self, cur_block_count:int):
         pre_block_count = 0
 
+        retry = 0
         while pre_block_count < self.options.num_blocks + cur_block_count:
             time.sleep(self.options.generation_period_ms / 1000 / 2)
 
@@ -311,6 +316,12 @@ class P2PTest(ConfluxTestFramework):
             if block_count != pre_block_count:
                 self.log.info("current blocks: %d", block_count)
                 pre_block_count = block_count
+                retry = 0
+            else:
+                retry += 1
+                if retry >= 40:
+                    self.log.error("No block generated after 20 intervals")
+                    break
 
         self.log.info("monitor completed.")
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # This scripts requires that cargo and awscli are installed and configured
 source ~/.bashrc
 if ! [ -x "$(command -v cargo)" ]; then
@@ -5,6 +6,21 @@ if ! [ -x "$(command -v cargo)" ]; then
   exit 1
 fi
 branch=${1:-master}
+
+# Wait for apt to be unlocked
+i=0
+while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
+    case $(($i % 4)) in
+        0 ) j="-" ;;
+        1 ) j="\\" ;;
+        2 ) j="|" ;;
+        3 ) j="/" ;;
+    esac
+    echo -en "\r[$j] Waiting for other software managers to finish..."
+    sleep 0.5
+    ((i=i+1))
+done
+
 sudo apt update
 sudo apt install -y iotop clang git jq pssh
 pip3 install prettytable
