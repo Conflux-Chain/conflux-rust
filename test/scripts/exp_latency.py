@@ -93,6 +93,7 @@ class LatencyExperiment(ArgumentHolder):
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
 
+        self.exp_name = "latency_latest"
         self.nodes_per_host = 1
         self.block_sync_step = 10
         self.connect_peers = 8
@@ -156,7 +157,7 @@ class LatencyExperiment(ArgumentHolder):
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
-            "--experiment-name", "latency_latest",
+            "--experiment-name", self.exp_name,
             "--tps", str(self.tps),
         ]
 

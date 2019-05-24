@@ -5,6 +5,7 @@ if ! [ -x "$(command -v cargo)" ]; then
   exit 1
 fi
 branch=${1:-master}
+sudo apt update
 sudo apt install -y iotop clang git jq pssh
 
 if [[ ! -d conflux-rust ]]; then
@@ -13,8 +14,8 @@ fi
 
 cd conflux-rust
 git reset --hard
-git pull
 git checkout $branch
+git pull
 cargo update
 cargo build --release
 ./dev-support/dep_pip3.sh
