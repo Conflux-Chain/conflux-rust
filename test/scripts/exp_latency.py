@@ -140,8 +140,7 @@ class LatencyExperiment(ArgumentHolder):
         os.system("tar cvfz {} {} *.csv".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
-        ret = os.system("sh copy_logs.sh > /dev/null")
-        assert ret == 0, "failed to copy remote logs to local, return code = {}".format(ret)
+        execute("sh copy_logs.sh > /dev/null", 3, "copy_logs")
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
