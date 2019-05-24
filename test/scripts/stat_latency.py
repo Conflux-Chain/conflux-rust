@@ -93,7 +93,7 @@ class LogAnalyzer:
             referee_count_list.append(len(block.referees))
             if len(block.txs) > 0:
                 ts = block.timestamp
-                if ts > min_time:
+                if ts < min_time:
                     min_time = ts
                 if ts > max_time:
                     max_time = ts
