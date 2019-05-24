@@ -28,4 +28,4 @@ do
     echo $i >> instances_all
 done
 #echo "$res"|grep STATE|grep running > state
-${SCRIPT_DIR}/ip.sh
+#${SCRIPT_DIR}/ip.sh

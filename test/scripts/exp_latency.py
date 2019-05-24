@@ -90,7 +90,7 @@ class RemoteSimulateConfig:
 class LatencyExperiment(ArgumentHolder):
     def __init__(self):
         self.vms = 10
-        self.stat_confirmation_latency = True
+        self.stat_confirmation_latency = False
         self.simulate_log_file = "exp.log"
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
@@ -131,10 +131,9 @@ class LatencyExperiment(ArgumentHolder):
             os.system("echo throttling logs: `grep -i thrott -r logs | wc -l`")
             os.system("echo error logs: `grep -i thrott -r logs | wc -l`")
 
-            if self.stat_confirmation_latency:
-                print("Computing latencies ...")
-                block_size_kb = config.txs_per_block * config.tx_size // 1000
-                self.stat_latency(config.block_gen_interval_ms, block_size_kb)
+            print("Computing latencies ...")
+            block_size_kb = config.txs_per_block * config.tx_size // 1000
+            self.stat_latency(config.block_gen_interval_ms, block_size_kb)
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
@@ -193,9 +192,11 @@ class LatencyExperiment(ArgumentHolder):
         ret = os.system("python3 stat_latency.py {0} logs {0}.csv >> {1}".format(tag, self.stat_log_file))
         assert ret == 0, "Failed to statistic block relay latency, return code = {}".format(ret)
 
-        print("begin to statistic confirmation latency ...")
-        ret = os.system("python3 stat_confirmation.py logs 4 >> {}".format(self.stat_log_file))
-        assert ret == 0, "Failed to statistic block confirmation latency, return code = {}".format(ret)
+        if self.stat_confirmation_latency:
+            print("begin to statistic confirmation latency ...")
+            ret = os.system("python3 stat_confirmation.py logs 4 >> {}".format(self.stat_log_file))
+            assert ret == 0, "Failed to statistic block confirmation latency, return code = {}".format(ret)
+
 
 if __name__ == "__main__":
     LatencyExperiment().run()
