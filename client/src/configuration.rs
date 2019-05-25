@@ -87,6 +87,8 @@ build_config! {
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
         (record_tx_address, (bool), true)
+        // Set default to true when we have new tx pool implementatio
+        (enable_opt_execution, (bool), false)
     }
     {
         (

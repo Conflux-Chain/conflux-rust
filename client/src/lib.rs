@@ -194,6 +194,7 @@ impl Client {
             cache_man.clone(),
             pow_config.clone(),
             conf.raw_conf.record_tx_address,
+            conf.raw_conf.enable_opt_execution,
         ));
 
         let verification_config = conf.verification_config();

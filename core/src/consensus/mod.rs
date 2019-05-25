@@ -123,11 +123,13 @@ pub struct ConsensusGraphInner {
     pow_config: ProofOfWorkConfig,
     pub current_difficulty: U256,
     data_man: Arc<BlockDataManager>,
+
+    enable_opt_execution: bool,
 }
 
 impl ConsensusGraphInner {
     pub fn with_genesis_block(
-        pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
+        pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>, enable_opt_execution: bool
     ) -> Self {
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
@@ -151,6 +153,7 @@ impl ConsensusGraphInner {
             pow_config,
             current_difficulty: pow_config.initial_difficulty.into(),
             data_man: data_man.clone(),
+            enable_opt_execution,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -186,6 +189,9 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_opt_execution_task(&mut self) -> Option<EpochExecutionTask> {
+        if !self.enable_opt_execution {
+            return None;
+        }
         let opt_height = self.opt_executed_height?;
         let opt_index = self.pivot_chain[opt_height];
 
@@ -932,7 +938,7 @@ impl ConsensusGraph {
         vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, db: Arc<SystemDB>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-        pow_config: ProofOfWorkConfig, record_tx_address: bool,
+        pow_config: ProofOfWorkConfig, record_tx_address: bool, enable_opt_execution: bool,
     ) -> Self
     {
         let data_man = Arc::new(BlockDataManager::new(
@@ -947,6 +953,7 @@ impl ConsensusGraph {
             Arc::new(RwLock::new(ConsensusGraphInner::with_genesis_block(
                 pow_config,
                 data_man.clone(),
+                enable_opt_execution,
             )));
         let executor = Arc::new(ConsensusExecutor::start(
             data_man.clone(),
