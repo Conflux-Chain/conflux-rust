@@ -32,6 +32,7 @@ fi
 
 cd conflux-rust
 git reset --hard
+git fetch
 git checkout $branch
 git pull
 cargo update

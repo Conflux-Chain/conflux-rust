@@ -75,12 +75,12 @@ class RemoteSimulateConfig:
     @staticmethod
     def parse(batch_config):
         config_groups = []
+        if batch_config[-1] == ",":
+            # Ignore trailing comma
+            batch_config = batch_config[:-1]
         for config in batch_config.split(","):
             fields = config.split(":")
-            if len(fields) == 0:
-                # Ignore trailing comma
-                continue
-            assert len(fields) == 5, "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>"
+            assert len(fields) == 5, "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:<tps>"
             config_groups.append(RemoteSimulateConfig(
                 int(fields[0]),
                 int(fields[1]),
