@@ -254,7 +254,7 @@ impl SynchronizationProtocolHandler {
             }
             return Err(e);
         };
-        debug!(
+        trace!(
             "Send message({}) to {:?}",
             msg.msg_id(),
             io.get_peer_node_id(peer)

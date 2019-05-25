@@ -86,6 +86,7 @@ build_config! {
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
+        (record_tx_address, (bool), true)
     }
     {
         (

@@ -932,7 +932,7 @@ impl ConsensusGraph {
         vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, db: Arc<SystemDB>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-        pow_config: ProofOfWorkConfig,
+        pow_config: ProofOfWorkConfig, record_tx_address: bool,
     ) -> Self
     {
         let data_man = Arc::new(BlockDataManager::new(
@@ -941,6 +941,7 @@ impl ConsensusGraph {
             db,
             storage_manager,
             cache_man,
+            record_tx_address,
         ));
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_genesis_block(

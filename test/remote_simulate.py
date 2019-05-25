@@ -161,6 +161,7 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["data_propagate_interval_ms"] = str(self.options.data_propagate_interval_ms)
         self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
 
+        self.conf_parameters["record_tx_address"] = "false"
         if self.exp_name == LAT_LATEST:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
