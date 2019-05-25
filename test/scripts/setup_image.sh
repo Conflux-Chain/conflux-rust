@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# This scripts requires that cargo and awscli are installed and configured
+# This scripts requires that cargo and awscli are installed and configured, and have set nproc and nofile
 source ~/.bashrc
 if ! [ -x "$(command -v cargo)" ]; then
   echo 'Error: cargo is not installed.' >&2
