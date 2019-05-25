@@ -1859,6 +1859,10 @@ impl SynchronizationProtocolHandler {
         tx_ids: HashSet<TxPropagateId>, syn: &mut SynchronizationState,
     ) -> Result<(), Error>
     {
+        if indices.is_empty() {
+            return Ok(());
+        }
+
         match self.send_request(
             io,
             peer_id,
@@ -2561,7 +2565,7 @@ impl SynchronizationProtocolHandler {
                         ));
                     }
                 } else {
-                    let res = tx.verify_public();
+                    let res = tx.verify_public(true); // skip verification
                     if res.is_ok() && res.unwrap() {
                         recovered_transactions[idx] =
                             Arc::new(SignedTransaction::new(
@@ -2620,7 +2624,7 @@ impl SynchronizationProtocolHandler {
                                 break;
                             }
                         } else {
-                            let res = tx.verify_public();
+                            let res = tx.verify_public(true); // skip verification
                             if res.is_ok() && res.unwrap() {
                                 signed_txes.push((idx, tx.public.clone().unwrap()));
                             } else {
