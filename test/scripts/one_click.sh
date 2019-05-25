@@ -17,7 +17,7 @@ run_latency_exp () {
 
     # Create master instance and slave image
     ./create_slave_image.sh $key_pair $branch
-    ./ip.sh
+    ./ip.sh --public
     
     # Launch slave instances
     master_ip=`cat ips`
