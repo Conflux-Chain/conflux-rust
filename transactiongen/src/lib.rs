@@ -294,9 +294,9 @@ impl TransactionGenerator {
             if let Some(time_left) = tx_config.period.checked_sub(time_elapsed) {
                 thread::sleep(time_left);
             } else {
-                debug!("Elapsed time larger than the time needed for sleep: start={:?} now={:?}", start_time, now);
+                debug!("Elapsed time larger than the time needed for sleep: time_elapsed={:?}", time_elapsed);
             }
-            start_time = now;
+            start_time = Instant::now();
         }
         Ok(())
     }
