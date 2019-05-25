@@ -300,7 +300,9 @@ impl Session {
         let hello_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
         if self.address.ip() != hello_from.address.ip() {
             trace!("IP in Hello does not match session IP, Session IP = {:?}, Hello IP = {:?}, session = {:?}", self.address.ip(), hello_from.address.ip(), self);
-            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
+            return Err(
+                self.disconnect(io, DisconnectReason::WrongEndpointInfo)
+            );
         }
 
         let ping_to = NodeEndpoint {
@@ -314,7 +316,9 @@ impl Session {
         };
         if !entry.endpoint.is_valid() {
             debug!("Got invalid endpoint {:?}, session = {:?}", entry, self);
-            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
+            return Err(
+                self.disconnect(io, DisconnectReason::WrongEndpointInfo)
+            );
         } else if !(entry.endpoint.is_allowed(host.get_ip_filter())
             && entry.id != *host.metadata.id())
         {

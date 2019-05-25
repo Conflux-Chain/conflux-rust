@@ -126,57 +126,72 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
         }
     }
 
+    fn write(&mut self) -> Result<WriteStatus, Error> {
+        if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
+            && has_high_priority_packets()
+        {
+            trace!(
+                "Give up to send socket data due to low priority, token = {}",
+                self.token
+            );
+            return Ok(WriteStatus::LowPriority);
+        }
+
+        let buf = match self.send_queue.front_mut() {
+            Some((buf, promoted)) => {
+                if promoted {
+                    trace!("Low priority packet promoted to high priority, token = {}", self.token);
+                    incr_high_priority_packets();
+                }
+                buf
+            }
+            None => return Ok(WriteStatus::Complete),
+        };
+        let len = buf.0.len();
+        let pos = buf.1;
+        if pos >= len {
+            error!(
+                "Unexpected connection data, token = {}, len = {}, pos = {}",
+                self.token, len, pos
+            );
+            return Ok(WriteStatus::Complete);
+        }
+
+        let size = self.socket.write(&buf.0[pos..])?;
+
+        trace!(
+            "Succeed to send socket data, token = {}, size = {}",
+            self.token,
+            size
+        );
+        THROTTLING_SERVICE.write().on_dequeue(size);
+
+        if pos + size < len {
+            buf.1 += size;
+            Ok(WriteStatus::Ongoing)
+        } else {
+            trace!("Packet sent, token = {}, size = {}", self.token, len);
+            decr_high_priority_packets();
+            Ok(WriteStatus::Complete)
+        }
+    }
+
     pub fn writable<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
-        {
-            if self.send_queue.is_send_queue_empty(SendQueuePriority::High) && has_high_priority_packets() {
-                trace!("Give up to send socket data due to low priority, token = {}", self.token);
-                return Ok(WriteStatus::LowPriority);
-            }
+        let status = self.write();
 
-            let buf = match self.send_queue.front_mut() {
-                Some((buf, promoted)) => {
-                    if promoted {
-                        trace!("Low priority packet promoted to high priority, token = {}", self.token);
-                        incr_high_priority_packets();
-                    }
-                    buf
-                }
-                None => return Ok(WriteStatus::Complete),
-            };
-            let len = buf.0.len();
-            let pos = buf.1;
-            if pos >= len {
-                error!("Unexpected connection data, token = {}, len = {}, pos = {}", self.token, len, pos);
-                return Ok(WriteStatus::Complete);
-            }
-            match self.socket.write(&buf.0[pos..]) {
-                Ok(size) => {
-                    trace!("Succeed to send socket data, token = {}, size = {}", self.token, size);
-                    THROTTLING_SERVICE.write().on_dequeue(size);
+        if let Ok(WriteStatus::Complete) = status {
+            self.send_queue.pop_front();
+        }
 
-                    if pos + size < len {
-                        buf.1 += size;
-                        Ok(WriteStatus::Ongoing)
-                    } else {
-                        trace!("Packet sent, token = {}, size = {}", self.token, len);
-                        decr_high_priority_packets();
-                        Ok(WriteStatus::Complete)
-                    }
-                }
-                Err(e) => Err(e)?,
-            }
-        }.and_then(|status| {
-            if status == WriteStatus::Complete {
-                self.send_queue.pop_front();
-            }
-            if self.send_queue.is_empty() {
-                self.interest.remove(Ready::writable());
-            }
-            io.update_registration(self.token)?;
-            Ok(status)
-        })
+        if self.send_queue.is_empty() {
+            self.interest.remove(Ready::writable());
+        }
+
+        io.update_registration(self.token)?;
+
+        status
     }
 
     pub fn send<Message: Sync + Send + Clone + 'static>(
