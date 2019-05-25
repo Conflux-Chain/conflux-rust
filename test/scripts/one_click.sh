@@ -16,7 +16,17 @@ master_ip=`cat ips`
 slave_image=`cat slave_image`
 
 ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
-stdbuf -o 0 ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name latency_latest" | tee one_click_output
+# Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:<tps>
+# Different experiments in a batch is divided by commas
+# Example: "250:1:150000:1000:4000,250:1:150000:1000:6000,250:1:150000:1000:8000,250:1:150000:1000:12000"
+
+# Experiments for latency with the newest code, <txs_per_block> and <tx_size> will not take effects
+latency_latest_default="250:1:150000:1000:"
+for tps in 4000 8000 12000
+do
+    exp_config="${exp_config}${latency_latest_default}${tps},"
+done
+ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name latency_latest --batch-config ${exp_config}"
 
 rm -rf tmp_data
 mkdir tmp_data

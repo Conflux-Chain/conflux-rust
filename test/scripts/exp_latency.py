@@ -77,6 +77,9 @@ class RemoteSimulateConfig:
         config_groups = []
         for config in batch_config.split(","):
             fields = config.split(":")
+            if len(fields) == 0:
+                # Ignore trailing comma
+                continue
             assert len(fields) == 5, "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>"
             config_groups.append(RemoteSimulateConfig(
                 int(fields[0]),
