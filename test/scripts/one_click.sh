@@ -17,7 +17,8 @@ run_latency_exp () {
 
     # Create master instance and slave image
     ./create_slave_image.sh $key_pair $branch
-
+    ./ip.sh
+    
     # Launch slave instances
     master_ip=`cat ips`
     slave_image=`cat slave_image`
@@ -36,10 +37,9 @@ run_latency_exp () {
 
     # Download results
     archive_file="exp_stat_latency.tgz"
-    archive_file_local="exp_stat_latency.tgz-$branch-$exp_name-$exp_config"
     log="exp_stat_latency.log"
-    scp ubuntu@${master_ip}:~/conflux-rust/test/scripts/${archive_file} $archive_file_local
-    tar xfvz $archive_file_local
+    scp ubuntu@${master_ip}:~/conflux-rust/test/scripts/${archive_file} .
+    tar xfvz $archive_file
     cat $log
 
     # Terminate master instance and delete slave images
@@ -51,7 +51,7 @@ run_latency_exp () {
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000:4000,250:1:150000:1000:6000,250:1:150000:1000:8000,250:1:150000:1000:12000"
 # Experiments for latency with the newest code, <txs_per_block> and <tx_size> will not take effects
-latency_latest_default="250:1:150000:4000:"
+latency_latest_default="250:1:150000:2000:"
 exp_config=""
 for tps in 12000
 do
