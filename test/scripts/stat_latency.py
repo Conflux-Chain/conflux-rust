@@ -91,7 +91,7 @@ class LogAnalyzer:
             block_size_list.append(block.size)
             block_timestamp_list.append(block.timestamp)
             referee_count_list.append(len(block.referees))
-            if len(block.txs) > 0:
+            if block.txs > 0:
                 ts = block.timestamp
                 if ts < min_time:
                     min_time = ts
@@ -117,7 +117,7 @@ class LogAnalyzer:
 
         tx_sum = sum(block_txs_list)
         print("{} txs generated".format(tx_sum))
-        print("Throughput is ".format(tx_sum / (max_time - min_time)))
+        print("Throughput is {}".format(tx_sum / (max_time - min_time)))
         table.pretty_print()
         if self.csv_output is not None:
             table.output_csv(self.csv_output)

@@ -15,7 +15,7 @@ slave_role=${key_pair}_exp_slave
 master_ip=`cat ips`
 slave_image=`cat slave_image`
 
-ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
+ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 stdbuf -o 0 ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name latency_latest" | tee one_click_output
 
 rm -rf tmp_data

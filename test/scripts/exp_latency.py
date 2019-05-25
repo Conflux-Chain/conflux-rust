@@ -106,7 +106,7 @@ class LatencyExperiment(ArgumentHolder):
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000
 
-        self.batch_config = "500:1:150000:1000:2000,500:1:150000:1000:3000,500:1:150000:1000:4000"
+        self.batch_config = "250:1:150000:1000:4000,250:1:150000:1000:6000,250:1:150000:1000:8000,250:1:150000:1000:12000"
 
         ArgumentHolder.__init__(self)
 
@@ -125,7 +125,7 @@ class LatencyExperiment(ArgumentHolder):
             print("Kill remote conflux and copy logs ...")
             kill_remote_conflux(self.ips_file)
             self.copy_remote_logs()
-            cleanup_remote_logs(self.ips_file)
+            # cleanup_remote_logs(self.ips_file)
 
             print("Statistic logs ...")
             os.system("echo throttling logs: `grep -i thrott -r logs | wc -l`")
