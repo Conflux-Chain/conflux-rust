@@ -41,6 +41,8 @@ run_latency_exp () {
     scp ubuntu@${master_ip}:~/conflux-rust/test/scripts/${archive_file} .
     tar xfvz $archive_file
     cat $log
+    mv $archive_file ${archive_file}.`date +%s`
+    mv $log ${log}.`date +%s`
 
     # Terminate master instance and delete slave images
     # Comment this line if the data on the master instances are needed for further analysis

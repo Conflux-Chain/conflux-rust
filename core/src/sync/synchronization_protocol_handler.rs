@@ -496,7 +496,7 @@ impl SynchronizationProtocolHandler {
         }
 
         let resp = rlp.as_val::<GetTransactionsResponse>()?;
-        debug!("on_get_transactions_response {:?}", resp);
+        debug!("on_get_transactions_response {:?}", resp.request_id());
 
         self.match_request(io, peer, resp.request_id())?;
         // FIXME: Do some check based on transaction request.
