@@ -26,6 +26,7 @@ run_latency_exp () {
 
     # Run experiments
     ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name $exp_name --batch-config \"$exp_config\""
+    exit
 
     # Terminate slave instances
     rm -rf tmp_data
@@ -53,7 +54,7 @@ run_latency_exp () {
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000:4000,250:1:150000:1000:6000,250:1:150000:1000:8000,250:1:150000:1000:12000"
 # Experiments for latency with the newest code, <txs_per_block> and <tx_size> will not take effects
-latency_latest_default="250:1:150000:2000:"
+latency_latest_default="250:1:1000000:2000:"
 exp_config=""
 for tps in 4000
 do

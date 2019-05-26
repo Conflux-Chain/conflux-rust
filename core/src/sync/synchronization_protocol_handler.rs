@@ -369,7 +369,7 @@ impl SynchronizationProtocolHandler {
         }
 
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
-        debug!("on_get_compact_blocks_response {:?}", resp);
+        debug!("on_get_compact_blocks_response request_id={} compact={} block={}", resp.request_id(), resp.compact_blocks.len(), resp.blocks.len());
         let req = self.match_request(io, peer, resp.request_id())?;
         let mut failed_blocks = Vec::new();
         let mut completed_blocks = Vec::new();

@@ -370,7 +370,7 @@ class SimpleGenerateThread(GenerateThread):
         try:
             client = RpcClient(self.nodes[self.i])
             # Do not limit num tx in blocks, only limit it with block size
-            h = client.generate_block(10000000)
+            h = client.generate_block(10000000, self.tx_n * self.tx_data_len)
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
             self.log.error("Node %d fails to generate block", self.i)
