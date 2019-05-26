@@ -547,6 +547,9 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
     ) -> TrieNode<CacheAlgoDataT>
     {
         let mut ret = TrieNode::default();
+        ret.value_size = 0;
+        ret.path_steps = 0;
+        ret.path_end_mask = 0;
 
         match new_value {
             Some(maybe_value) => match maybe_value {

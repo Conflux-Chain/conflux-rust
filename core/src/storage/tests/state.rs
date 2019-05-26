@@ -353,6 +353,7 @@ fn test_set_order() {
 
 #[test]
 fn test_set_order_concurrent() {
+    // FIXME: Peter found that there may be freeing issue when exiting the test.
     let mut rng = get_rng_for_test();
     let state_manager = Arc::new(new_state_manager_for_testing());
     let keys = Arc::new(
