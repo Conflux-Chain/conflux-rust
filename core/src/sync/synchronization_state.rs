@@ -12,6 +12,7 @@ use network::PeerId;
 use crate::sync::{
     random, synchronization_protocol_handler::TimedSyncRequests,
 };
+use parking_lot::RwLock;
 use primitives::{SignedTransaction, TxPropagateId};
 use rand::Rng;
 use std::{
@@ -351,7 +352,8 @@ impl SynchronizationPeerState {
     }
 }
 
-pub type SynchronizationPeers = HashMap<PeerId, SynchronizationPeerState>;
+pub type SynchronizationPeers =
+    HashMap<PeerId, Arc<RwLock<SynchronizationPeerState>>>;
 
 pub struct SynchronizationState {
     pub catch_up_mode: bool,

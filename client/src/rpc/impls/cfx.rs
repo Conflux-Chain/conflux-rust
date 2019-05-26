@@ -289,7 +289,7 @@ impl RpcImpl {
             .and_then(|tx| {
                 let result = self.tx_pool.insert_new_transactions(
                     self.consensus.best_state_block_hash(),
-                    vec![tx],
+                    &vec![tx],
                 );
                 if result.is_empty() || result.len() > 1 {
                     error!("insert_new_transactions failed, invalid length of returned result vector {}", result.len());

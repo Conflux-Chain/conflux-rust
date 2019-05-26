@@ -356,7 +356,7 @@ impl TransactionPool {
 
     pub fn insert_new_transactions(
         &self, latest_epoch: EpochId,
-        transactions: Vec<TransactionWithSignature>,
+        transactions: &Vec<TransactionWithSignature>,
     ) -> Vec<Result<H256, String>>
     {
         // FIXME: do not unwrap.

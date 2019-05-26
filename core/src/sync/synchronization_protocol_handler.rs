@@ -363,11 +363,6 @@ impl SynchronizationProtocolHandler {
     fn on_get_compact_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_CMPCT_BLOCKS_RESPONSE", peer);
-            return Ok(());
-        }
-
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!("on_get_compact_blocks_response {:?}", resp);
         let req = self.match_request(io, peer, resp.request_id())?;
@@ -490,11 +485,6 @@ impl SynchronizationProtocolHandler {
     fn on_get_transactions_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_TRANSACTIONS_RESPONSE", peer);
-            return Ok(());
-        }
-
         let resp = rlp.as_val::<GetTransactionsResponse>()?;
         debug!("on_get_transactions_response {:?}", resp);
 
@@ -507,27 +497,37 @@ impl SynchronizationProtocolHandler {
             transactions.len(),
             peer
         );
+
         let tx_ids = transactions
             .iter()
             .map(|tx| TxPropagateId::from(tx.hash()))
             .collect::<Vec<_>>();
-
-        {
-            let mut syn = self.syn.write();
-            let peer_info =
-                syn.peers.get_mut(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info
-                .last_sent_transaction_hashes
-                .extend(transactions.iter().map(|tx| tx.hash()));
-
-            syn.received_transactions.append_transaction_ids(tx_ids);
-        }
+        self.syn
+            .write()
+            .received_transactions
+            .append_transaction_ids(tx_ids);
 
         self.get_transaction_pool().insert_new_transactions(
             self.graph.consensus.best_state_block_hash(),
-            transactions,
+            &transactions,
         );
         debug!("Transactions successfully inserted to transaction pool");
+
+        let peer_info = {
+            let peer_info = self
+                .syn
+                .read()
+                .peers
+                .get(&peer)
+                .ok_or(ErrorKind::UnknownPeer)?;
+            peer_info.clone()
+        };
+
+        peer_info
+            .write()
+            .last_sent_transaction_hashes
+            .extend(transactions.iter().map(|tx| tx.hash()));
+
         Ok(())
     }
 
@@ -535,8 +535,18 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let get_transactions = rlp.as_val::<GetTransactions>()?;
+        let peer_info = {
+            let peer_info = self
+                .syn
+                .read()
+                .peers
+                .get(&peer)
+                .ok_or(ErrorKind::UnknownPeer)?;
+            peer_info.clone()
+        };
 
-        if let Some(peer_info) = self.syn.read().peers.get(&peer) {
+        let resp = {
+            let peer_info = peer_info.read();
             let transactions = get_transactions
                 .indices
                 .iter()
@@ -551,15 +561,13 @@ impl SynchronizationProtocolHandler {
                 })
                 .collect::<Vec<_>>();
 
-            let resp = GetTransactionsResponse {
+            GetTransactionsResponse {
                 request_id: get_transactions.request_id,
                 transactions,
-            };
-            self.send_message(io, peer, &resp, SendQueuePriority::Normal)?;
-        } else {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_TRANSACTIONS", peer);
-        }
+            }
+        };
 
+        self.send_message(io, peer, &resp, SendQueuePriority::Normal)?;
         Ok(())
     }
 
@@ -668,11 +676,6 @@ impl SynchronizationProtocolHandler {
     fn on_get_blocktxn_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_BLOCK_TXN_RESPONSE", peer);
-            return Ok(());
-        }
-
         let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
         let hash = resp.block_hash;
@@ -819,7 +822,7 @@ impl SynchronizationProtocolHandler {
 
         self.get_transaction_pool().insert_new_transactions(
             self.graph.consensus.best_state_block_hash(),
-            transactions,
+            &transactions,
         );
         debug!("Transactions successfully inserted to transaction pool");
 
@@ -1014,11 +1017,6 @@ impl SynchronizationProtocolHandler {
     fn on_terminal_block_hashes_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_TERMINAL_BLOCK_HASHES_RESPONSE", peer);
-            return Ok(());
-        }
-
         let terminal_block_hashes =
             rlp.as_val::<GetTerminalBlockHashesResponse>()?;
         debug!(
@@ -1141,11 +1139,6 @@ impl SynchronizationProtocolHandler {
     fn on_block_headers_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_BLOCK_HEADERS_RESPONSE", peer);
-            return Ok(());
-        }
-
         let mut block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
         let req = self.match_request(io, peer, block_headers.request_id())?;
@@ -1282,11 +1275,6 @@ impl SynchronizationProtocolHandler {
     fn on_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_BLOCKS_RESPONSE", peer);
-            return Ok(());
-        }
-
         let blocks = rlp.as_val::<GetBlocksResponse>()?;
         debug!(
             "on_blocks_response, get block hashes {:?}",
@@ -1321,11 +1309,6 @@ impl SynchronizationProtocolHandler {
     fn on_blocks_with_public_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        if !self.syn.read().peers.contains_key(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_BLOCKS_WITH_PUBLIC_RESPONSE", peer);
-            return Ok(());
-        }
-
         let blocks = rlp.as_val::<GetBlocksWithPublicResponse>()?;
         debug!(
             "on_blocks_with_public_response, get block hashes {:?}",
@@ -1761,7 +1744,7 @@ impl SynchronizationProtocolHandler {
 
     fn request_block_headers_unchecked(
         &self, io: &NetworkContext, peer_id: PeerId, hash: &H256,
-        max_blocks: u64, syn: &mut SynchronizationState,
+        max_blocks: u64,
     ) -> Result<(), Error>
     {
         match self.send_request(
@@ -1772,7 +1755,6 @@ impl SynchronizationProtocolHandler {
                 hash: *hash,
                 max_blocks,
             })),
-            syn,
             SendQueuePriority::High,
         ) {
             Ok(timed_req) => {
@@ -1853,7 +1835,7 @@ impl SynchronizationProtocolHandler {
 
     fn request_transactions(
         &self, io: &NetworkContext, peer_id: PeerId, indices: Vec<TransIndex>,
-        tx_ids: HashSet<TxPropagateId>, syn: &mut SynchronizationState,
+        tx_ids: HashSet<TxPropagateId>,
     ) -> Result<(), Error>
     {
         if indices.is_empty() {
@@ -1868,7 +1850,6 @@ impl SynchronizationProtocolHandler {
                 indices,
                 tx_ids,
             })),
-            syn,
             SendQueuePriority::Normal,
         ) {
             Ok(timed_req) => {
@@ -1889,7 +1870,7 @@ impl SynchronizationProtocolHandler {
 
     fn request_blocks_unchecked(
         &self, io: &NetworkContext, peer_id: PeerId, hashes: &Vec<H256>,
-        with_public: bool, syn: &mut SynchronizationState,
+        with_public: bool,
     ) -> Result<(), Error>
     {
         match self.send_request(
@@ -1900,7 +1881,6 @@ impl SynchronizationProtocolHandler {
                 with_public,
                 hashes: hashes.clone(),
             })),
-            syn,
             SendQueuePriority::High,
         ) {
             Ok(timed_req) => {
@@ -1972,9 +1952,7 @@ impl SynchronizationProtocolHandler {
 
     fn request_compact_block_unchecked(
         &self, io: &NetworkContext, peer_id: PeerId, hashes: &Vec<H256>,
-        syn: &mut SynchronizationState,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         match self.send_request(
             io,
             peer_id,
@@ -1982,7 +1960,6 @@ impl SynchronizationProtocolHandler {
                 request_id: 0.into(),
                 hashes: hashes.clone(),
             })),
-            syn,
             SendQueuePriority::High,
         ) {
             Ok(timed_req) => {
@@ -2006,7 +1983,6 @@ impl SynchronizationProtocolHandler {
         indexes: Vec<usize>,
     ) -> Result<(), Error>
     {
-        let syn = &mut *self.syn.write();
         match self.send_request(
             io,
             peer_id,
@@ -2015,7 +1991,6 @@ impl SynchronizationProtocolHandler {
                 block_hash: block_hash.clone(),
                 indexes: indexes.clone(),
             })),
-            syn,
             SendQueuePriority::High,
         ) {
             Ok(timed_req) => {
@@ -2035,38 +2010,45 @@ impl SynchronizationProtocolHandler {
     }
 
     fn send_request(
-        &self, io: &NetworkContext, peer_id: PeerId,
-        mut msg: Box<RequestMessage>, syn: &mut SynchronizationState,
+        &self, io: &NetworkContext, peer: PeerId, mut msg: Box<RequestMessage>,
         priority: SendQueuePriority,
     ) -> Result<Option<Arc<TimedSyncRequests>>, Error>
     {
-        if let Some(ref mut peer) = syn.peers.get_mut(&peer_id) {
-            if let Some(request_id) = peer.get_next_request_id() {
-                msg.set_request_id(request_id);
-                self.send_message(io, peer_id, msg.get_msg(), priority)
-                    .unwrap_or_else(|e| {
-                        warn!("Error while send_message, err={:?}", e);
-                    });
-                let timed_req = Arc::new(TimedSyncRequests::from_request(
-                    peer_id,
-                    request_id,
-                    &msg,
-                    &self.protocol_config,
-                ));
-                peer.append_inflight_request(
-                    request_id,
-                    msg,
-                    timed_req.clone(),
-                );
-                return Ok(Some(timed_req));
-            } else {
-                trace!("Append requests for later:{:?}", msg);
-                peer.append_pending_request(msg);
-                return Ok(None);
-            }
+        let peer_info = {
+            let peer_info = self
+                .syn
+                .read()
+                .peers
+                .get(&peer)
+                .ok_or(ErrorKind::UnknownPeer)?;
+            peer_info.clone()
+        };
+
+        let mut peer_info = peer_info.write();
+
+        if let Some(request_id) = peer_info.get_next_request_id() {
+            msg.set_request_id(request_id);
+            self.send_message(io, peer_id, msg.get_msg(), priority)
+                .unwrap_or_else(|e| {
+                    warn!("Error while send_message, err={:?}", e);
+                });
+            let timed_req = Arc::new(TimedSyncRequests::from_request(
+                peer_id,
+                request_id,
+                &msg,
+                &self.protocol_config,
+            ));
+            peer_info.append_inflight_request(
+                request_id,
+                msg,
+                timed_req.clone(),
+            );
+            Ok(Some(timed_req))
+        } else {
+            trace!("Append requests for later:{:?}", msg);
+            peer.append_pending_request(msg);
+            Ok(None)
         }
-        warn!("No peer for request:{:?}", msg);
-        Err(ErrorKind::UnknownPeer.into())
     }
 
     fn match_request(
