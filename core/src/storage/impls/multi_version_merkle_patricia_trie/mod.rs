@@ -5,7 +5,7 @@
 pub mod cache;
 pub(in super::super) mod merkle_patricia_trie;
 pub(in super::super) mod node_memory_manager;
-pub(super) mod return_after_use;
+pub(in super::super) mod return_after_use;
 pub(super) mod row_number;
 
 pub use self::node_ref_map::DEFAULT_NODE_MAP_SIZE;

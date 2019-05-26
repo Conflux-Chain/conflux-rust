@@ -18,6 +18,7 @@ pub use self::{
         errors::{Error, ErrorKind, Result},
         multi_version_merkle_patricia_trie::{
             guarded_value::GuardedValue, merkle_patricia_trie::MerkleHash,
+            return_after_use::ReturnAfterUse,
         },
     },
     state::{State as Storage, StateTrait as StorageTrait},

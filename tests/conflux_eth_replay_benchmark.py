@@ -256,6 +256,11 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         """
 
         for txs, count in RlpIter(f, tx_batch_size):
+            # FIXME: generate some random transaction similar to reorg_test.py, then see if
+            # FIXME: packing them result in conflicting state root.
+            # FIXME: but maybe first write an executor.
+
+            # FIXME: test if mixing packing of initialize txs and simple payments result into conflicting state root.
             if tx_count > 4000000:
                 time.sleep(500000)
 
