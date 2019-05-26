@@ -4,6 +4,7 @@
 
 use blockgen::BlockGeneratorConfig;
 use cfxcore::{
+    consensus::ConsensusConfig,
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
@@ -86,6 +87,7 @@ build_config! {
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
+        (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
     }
     {
         (
@@ -206,6 +208,15 @@ impl Configuration {
             compact_profile,
             NUM_COLUMNS.clone(),
         )
+    }
+
+    pub fn consensus_config(&self) -> ConsensusConfig {
+        ConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+        }
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {

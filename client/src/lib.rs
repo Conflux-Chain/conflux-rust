@@ -185,6 +185,7 @@ impl Client {
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+            conf.consensus_config(),
             genesis_block,
             storage_manager.clone(),
             vm.clone(),
