@@ -2199,8 +2199,8 @@ impl SynchronizationProtocolHandler {
     }
 
     fn propagate_transactions_to_peers(
-        &self, syn: &mut SynchronizationState, io: &NetworkContext,
-        peers: Vec<PeerId>, transactions: Vec<Arc<SignedTransaction>>,
+        &self, io: &NetworkContext, peers: Vec<PeerId>,
+        transactions: Vec<Arc<SignedTransaction>>,
     )
     {
         let all_transactions_hashes = transactions
@@ -2209,13 +2209,21 @@ impl SynchronizationProtocolHandler {
             .collect::<HashSet<H256>>();
 
         let lucky_peers = {
-            peers.into_iter()
+            peers
+                .into_iter()
                 .filter_map(|peer_id| {
-                    let peer_info = syn.peers.get_mut(&peer_id)
-                        .expect("peer_id is from peers; peers is result of select_peers_for_transactions; select_peers_for_transactions selects peers from syn.peers; qed");
+                    let mut syn = self.syn.write();
+                    let peer_info = syn.peers.get_mut(&peer_id);
+                    if peer_info.is_none() {
+                        return None;
+                    }
+
+                    let peer_info = peer_info.unwrap();
 
                     let sent_transactions = Vec::new();
-                    let (window_index, sent_transactions) = peer_info.sent_transactions.append_transactions(sent_transactions);
+                    let (window_index, sent_transactions) = peer_info
+                        .sent_transactions
+                        .append_transactions(sent_transactions);
 
                     if transactions.is_empty() || !peer_info.need_prop_trans {
                         return None;
@@ -2223,7 +2231,10 @@ impl SynchronizationProtocolHandler {
 
                     // Send all transactions
                     if peer_info.last_sent_transaction_hashes.is_empty() {
-                        let mut tx_msg = Box::new(TransactionDigests { window_index, trans_short_ids: Vec::new() });
+                        let mut tx_msg = Box::new(TransactionDigests {
+                            window_index,
+                            trans_short_ids: Vec::new(),
+                        });
                         let mut total_tx_bytes = 0;
                         for tx in transactions.iter() {
                             total_tx_bytes += tx.rlp_size();
@@ -2232,15 +2243,24 @@ impl SynchronizationProtocolHandler {
                             }
                             sent_transactions.push(tx.clone());
 
-                            tx_msg.trans_short_ids.push(TxPropagateId::from(tx.hash()));
-                            peer_info.last_sent_transaction_hashes.insert(tx.hash());
+                            tx_msg
+                                .trans_short_ids
+                                .push(TxPropagateId::from(tx.hash()));
+                            peer_info
+                                .last_sent_transaction_hashes
+                                .insert(tx.hash());
                         }
                         assert!(!tx_msg.trans_short_ids.is_empty());
-                        return Some((peer_id, tx_msg.trans_short_ids.len(), tx_msg));
+                        return Some((
+                            peer_id,
+                            tx_msg.trans_short_ids.len(),
+                            tx_msg,
+                        ));
                     }
 
                     // Get hashes of all transactions to send to this peer
-                    let to_send = all_transactions_hashes.difference(&peer_info.last_sent_transaction_hashes)
+                    let to_send = all_transactions_hashes
+                        .difference(&peer_info.last_sent_transaction_hashes)
                         .cloned()
                         .collect::<HashSet<_>>();
 
@@ -2248,11 +2268,20 @@ impl SynchronizationProtocolHandler {
                         return None;
                     }
 
-                    // This is to remove transactions that are already out of transaction pool
+                    // This is to remove transactions that are already out of
+                    // transaction pool
                     // from last_sent_transaction_hashes.
-                    peer_info.last_sent_transaction_hashes = all_transactions_hashes
-                        .intersection(&peer_info.last_sent_transaction_hashes).cloned().collect();
-                    let mut tx_msg = Box::new(TransactionDigests { window_index, trans_short_ids: Vec::new() });
+                    peer_info.last_sent_transaction_hashes =
+                        all_transactions_hashes
+                            .intersection(
+                                &peer_info.last_sent_transaction_hashes,
+                            )
+                            .cloned()
+                            .collect();
+                    let mut tx_msg = Box::new(TransactionDigests {
+                        window_index,
+                        trans_short_ids: Vec::new(),
+                    });
                     let mut total_tx_bytes = 0;
                     for tx in &transactions {
                         if to_send.contains(&tx.hash()) {
@@ -2261,8 +2290,12 @@ impl SynchronizationProtocolHandler {
                                 break;
                             }
                             sent_transactions.push(tx.clone());
-                            tx_msg.trans_short_ids.push(TxPropagateId::from(tx.hash()));
-                            peer_info.last_sent_transaction_hashes.insert(tx.hash());
+                            tx_msg
+                                .trans_short_ids
+                                .push(TxPropagateId::from(tx.hash()));
+                            peer_info
+                                .last_sent_transaction_hashes
+                                .insert(tx.hash());
                         }
                     }
                     assert!(!tx_msg.trans_short_ids.is_empty());
@@ -2318,14 +2351,12 @@ impl SynchronizationProtocolHandler {
             return;
         }
 
-        let mut syn = self.syn.write();
-        let peers = self.select_peers_for_transactions(&mut *syn, |_| true);
-        self.propagate_transactions_to_peers(
-            &mut *syn,
-            io,
-            peers,
-            transactions,
-        );
+        let peers = {
+            let mut syn = self.syn.write();
+            self.select_peers_for_transactions(&mut *syn, |_| true)
+        };
+
+        self.propagate_transactions_to_peers(io, peers, transactions);
     }
 
     pub fn remove_expired_flying_request(&self, io: &NetworkContext) {
