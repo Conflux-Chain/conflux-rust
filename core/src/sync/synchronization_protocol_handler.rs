@@ -2219,11 +2219,13 @@ impl SynchronizationProtocolHandler {
                     }
 
                     let peer_info = peer_info.unwrap();
+                    debug!("prop:: Start propagate_transactions_to_peers for {} all={} last_sent={}", peer_id, all_transactions_hashes.len(), peer_info.last_sent_transaction_hashes.len());
 
                     let sent_transactions = Vec::new();
                     let (window_index, sent_transactions) = peer_info
                         .sent_transactions
                         .append_transactions(sent_transactions);
+                    debug!("prop:: append_transactions");
 
                     if transactions.is_empty() || !peer_info.need_prop_trans {
                         return None;
@@ -2263,6 +2265,7 @@ impl SynchronizationProtocolHandler {
                         .difference(&peer_info.last_sent_transaction_hashes)
                         .cloned()
                         .collect::<HashSet<_>>();
+                    debug!("prop:: compute_diff, to_send={}", to_send.len());
 
                     if to_send.is_empty() {
                         return None;
@@ -2278,6 +2281,7 @@ impl SynchronizationProtocolHandler {
                             )
                             .cloned()
                             .collect();
+                    debug!("prop:: remove last_sent={}", peer_info.last_sent_transaction_hashes.len());
                     let mut tx_msg = Box::new(TransactionDigests {
                         window_index,
                         trans_short_ids: Vec::new(),
@@ -2298,6 +2302,7 @@ impl SynchronizationProtocolHandler {
                                 .insert(tx.hash());
                         }
                     }
+                    debug!("prop:: finish tx_len={}", tx_msg.trans_short_ids.len());
                     assert!(!tx_msg.trans_short_ids.is_empty());
                     Some((peer_id, tx_msg.trans_short_ids.len(), tx_msg))
                 })
