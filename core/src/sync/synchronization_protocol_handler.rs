@@ -4,8 +4,8 @@
 
 use super::{
     super::transaction_pool::SharedTransactionPool, random, Error, ErrorKind,
-    SentTransactionContainer, SharedSynchronizationGraph, SynchronizationGraph,
-    SynchronizationPeerState, SynchronizationState,
+    SharedSynchronizationGraph, SynchronizationGraph, SynchronizationPeerState,
+    SynchronizationState,
 };
 use crate::{
     bytes::Bytes, consensus::SharedConsensusGraph, pow::ProofOfWorkConfig,
@@ -25,7 +25,7 @@ use network::{
     NetworkContext, NetworkProtocolHandler, PeerId,
 };
 use parking_lot::{Mutex, RwLock};
-use rand::{Rng, RngCore};
+use rand::Rng;
 use rlp::Rlp;
 //use slab::Slab;
 use crate::{
@@ -72,7 +72,7 @@ const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
 
-const MAX_TXS_BYTES_TO_PROPOGATE: usize = 1024 * 1024; // 1MB
+const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -189,6 +189,11 @@ impl SynchronizationProtocolHandler {
         let received_tx_index_maintain_timeout =
             protocol_config.received_tx_index_maintain_timeout;
 
+        // FIXME: make sent_transaction_window_size to be 2^pow.
+        let sent_transaction_window_size =
+            protocol_config.tx_maintained_for_peer_timeout.as_millis()
+                / protocol_config.send_tx_period.as_millis();
+
         SynchronizationProtocolHandler {
             protocol_config,
             graph: Arc::new(SynchronizationGraph::new(
@@ -200,6 +205,7 @@ impl SynchronizationProtocolHandler {
             syn: RwLock::new(SynchronizationState::new(
                 start_as_catch_up_mode,
                 received_tx_index_maintain_timeout.as_secs(),
+                sent_transaction_window_size as usize,
             )),
             headers_in_flight: Default::default(),
             header_request_waittime: Default::default(),
@@ -507,18 +513,6 @@ impl SynchronizationProtocolHandler {
         );
         debug!("Transactions successfully inserted to transaction pool");
 
-        let peer_info = {
-            let syn = self.syn.read();
-            let peer_info =
-                syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info.clone()
-        };
-
-        peer_info
-            .write()
-            .last_sent_transaction_hashes
-            .extend(transactions.iter().map(|tx| tx.hash()));
-
         Ok(())
     }
 
@@ -526,28 +520,24 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let get_transactions = rlp.as_val::<GetTransactions>()?;
-        let peer_info = {
-            let syn = self.syn.read();
-            let peer_info =
-                syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info.clone()
-        };
 
         let resp = {
-            let peer_info = peer_info.read();
-            let transactions = get_transactions
-                .indices
-                .iter()
-                .filter_map(|tx_idx| {
-                    if let Some(tx) =
-                        peer_info.sent_transactions.get_transaction(tx_idx)
-                    {
-                        Some(tx.transaction.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
+            let transactions = {
+                let syn = self.syn.read();
+                get_transactions
+                    .indices
+                    .iter()
+                    .filter_map(|tx_idx| {
+                        if let Some(tx) =
+                            syn.sent_transactions.get_transaction(tx_idx)
+                        {
+                            Some(tx.transaction.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            };
 
             GetTransactionsResponse {
                 request_id: get_transactions.request_id,
@@ -564,13 +554,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let transaction_digests = rlp.as_val::<TransactionDigests>()?;
 
-        let peer_info = {
-            let syn = self.syn.read();
-            let peer_info =
-                syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info.clone()
-        };
-
+        let peer_info = self.syn.read().get_peer_info(&peer)?;
         let should_disconnect = {
             let mut peer_info = peer_info.write();
             if peer_info.notified_mode.is_some()
@@ -808,16 +792,10 @@ impl SynchronizationProtocolHandler {
             peer
         );
 
-        let peer_info = {
-            let syn = self.syn.read();
-            let peer_info =
-                syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info.clone()
-        };
-
+        let peer_info = self.syn.read().get_peer_info(&peer)?;
         let should_disconnect = {
             let mut peer_info = peer_info.write();
-            let should_disconnect = if peer_info.notified_mode.is_some()
+            if peer_info.notified_mode.is_some()
                 && (peer_info.notified_mode.unwrap() == true)
             {
                 peer_info.received_transaction_count += transactions.len();
@@ -831,14 +809,7 @@ impl SynchronizationProtocolHandler {
                 }
             } else {
                 false
-            };
-
-            if !should_disconnect {
-                peer_info
-                    .last_sent_transaction_hashes
-                    .extend(transactions.iter().map(|tx| tx.hash()));
             }
-            should_disconnect
         };
 
         if should_disconnect {
@@ -900,15 +871,8 @@ impl SynchronizationProtocolHandler {
             peer, trans_prop_ctrl
         );
 
-        let peer_info = {
-            let syn = self.syn.read();
-            let peer_info =
-                syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info.clone()
-        };
-
-        let mut peer_info = peer_info.write();
-        peer_info.need_prop_trans = !trans_prop_ctrl.catch_up_mode;
+        let peer_info = self.syn.read().get_peer_info(&peer)?;
+        peer_info.write().need_prop_trans = !trans_prop_ctrl.catch_up_mode;
 
         Ok(())
     }
@@ -1096,13 +1060,6 @@ impl SynchronizationProtocolHandler {
             requests_vec.push(None);
         }
 
-        // FIXME: make sent_transaction_window_size to be 2^pow.
-        let sent_transaction_window_size = self
-            .protocol_config
-            .tx_maintained_for_peer_timeout
-            .as_millis()
-            / self.protocol_config.send_tx_period.as_millis();
-
         let peer_state = SynchronizationPeerState {
             id: peer,
             protocol_version: status.protocol_version,
@@ -1115,10 +1072,6 @@ impl SynchronizationProtocolHandler {
                 .protocol_config
                 .max_inflight_request_count,
             pending_requests: VecDeque::new(),
-            last_sent_transaction_hashes: HashSet::new(),
-            sent_transactions: SentTransactionContainer::new(
-                sent_transaction_window_size as usize,
-            ),
             received_transaction_count: 0,
             need_prop_trans: true,
             notified_mode: None,
@@ -2052,13 +2005,7 @@ impl SynchronizationProtocolHandler {
         priority: SendQueuePriority,
     ) -> Result<Option<Arc<TimedSyncRequests>>, Error>
     {
-        let peer_info = {
-            let syn = self.syn.read();
-            let peer_info =
-                syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info.clone()
-        };
-
+        let peer_info = self.syn.read().get_peer_info(&peer)?;
         let result = {
             let mut peer_info = peer_info.write();
             if let Some(request_id) = peer_info.get_next_request_id() {
@@ -2102,13 +2049,7 @@ impl SynchronizationProtocolHandler {
     fn match_request(
         &self, io: &NetworkContext, peer: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
-        let peer_info = {
-            let syn = self.syn.read();
-            let peer_info =
-                syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-            peer_info.clone()
-        };
-
+        let peer_info = self.syn.read().get_peer_info(&peer)?;
         let mut peer_info = peer_info.write();
         let removed_req = self.remove_request(&mut *peer_info, request_id);
         if let Some(removed_req) = removed_req {
@@ -2214,176 +2155,121 @@ impl SynchronizationProtocolHandler {
         &self, syn: &mut SynchronizationState, filter: F,
     ) -> Vec<PeerId>
     where F: Fn(&PeerId) -> bool {
-        let num_peers = syn.peers.len();
+        let num_peers = syn.peers.len() as f64;
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
 
-        // min(sqrt(x)/x, throttle_ratio) scaled to max u32
-        let fraction = ((num_peers as f64).powf(-0.5).min(throttle_ratio)
-            * (u32::max_value() as f64).round()) as u32;
-        let small = num_peers < MIN_PEERS_PROPAGATION;
-
-        let mut random = random::new();
-        syn.peers
-            .keys()
-            .cloned()
-            .filter(filter)
-            .filter(|_| small || random.next_u32() < fraction)
-            .take(MAX_PEERS_PROPAGATION)
-            .collect()
+        // min(sqrt(x)/x, throttle_ratio)
+        let chosen_size = (num_peers.powf(-0.5).min(throttle_ratio) * num_peers)
+            .round() as usize;
+        let mut peer_vec = syn.get_random_peer_vec(
+            chosen_size.max(MIN_PEERS_PROPAGATION),
+            filter,
+        );
+        peer_vec.truncate(MAX_PEERS_PROPAGATION);
+        peer_vec
     }
 
     fn propagate_transactions_to_peers(
         &self, io: &NetworkContext, peers: Vec<PeerId>,
-        transactions: Vec<Arc<SignedTransaction>>,
+        transactions: HashMap<H256, Arc<SignedTransaction>>,
     )
     {
-        let all_transactions_hashes = transactions
-            .iter()
-            .map(|tx| tx.hash())
-            .collect::<HashSet<H256>>();
-
+        if transactions.is_empty() {
+            return;
+        }
         let lucky_peers = {
             peers
                 .into_iter()
                 .filter_map(|peer_id| {
-                    let peer_info = {
-                        let syn = self.syn.read();
-                        let peer_info = syn.peers.get(&peer_id);
-                        if peer_info.is_none() {
-                            return None;
-                        }
-                        peer_info.unwrap().clone()
-                    };
-
-                    let mut sent_transactions = Vec::new();
-
-                    let mut peer_info = peer_info.write();
-                    if transactions.is_empty() || !peer_info.need_prop_trans {
-                        peer_info
-                            .sent_transactions
-                            .append_transactions(sent_transactions);
+                    let peer_info =
+                        match self.syn.read().get_peer_info(&peer_id) {
+                            Ok(peer_info) => peer_info,
+                            Err(_) => {
+                                return None;
+                            }
+                        };
+                    if !peer_info.read().need_prop_trans {
                         return None;
                     }
-
-                    // Send all transactions
-                    if peer_info.last_sent_transaction_hashes.is_empty() {
-                        let mut tx_msg = Box::new(TransactionDigests {
-                            window_index: 0,
-                            trans_short_ids: Vec::new(),
-                        });
-                        let mut total_tx_bytes = 0;
-                        for tx in transactions.iter() {
-                            total_tx_bytes += tx.rlp_size();
-                            if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPOGATE {
-                                break;
-                            }
-                            sent_transactions.push(tx.clone());
-
-                            tx_msg
-                                .trans_short_ids
-                                .push(TxPropagateId::from(tx.hash()));
-                            peer_info
-                                .last_sent_transaction_hashes
-                                .insert(tx.hash());
-                        }
-                        assert!(!tx_msg.trans_short_ids.is_empty());
-
-                        tx_msg.window_index = peer_info
-                            .sent_transactions
-                            .append_transactions(sent_transactions);
-
-                        return Some((
-                            peer_id,
-                            tx_msg.trans_short_ids.len(),
-                            tx_msg,
-                        ));
-                    }
-
-                    // Get hashes of all transactions to send to this peer
-                    let to_send = all_transactions_hashes
-                        .difference(&peer_info.last_sent_transaction_hashes)
-                        .cloned()
-                        .collect::<HashSet<_>>();
-
-                    if to_send.is_empty() {
-                        peer_info
-                            .sent_transactions
-                            .append_transactions(sent_transactions);
-                        return None;
-                    }
-
-                    // This is to remove transactions that are already out of
-                    // transaction pool
-                    // from last_sent_transaction_hashes.
-                    peer_info.last_sent_transaction_hashes =
-                        all_transactions_hashes
-                            .intersection(
-                                &peer_info.last_sent_transaction_hashes,
-                            )
-                            .cloned()
-                            .collect();
-                    let mut tx_msg = Box::new(TransactionDigests {
-                        window_index: 0,
-                        trans_short_ids: Vec::new(),
-                    });
-                    let mut total_tx_bytes = 0;
-                    for tx in &transactions {
-                        if to_send.contains(&tx.hash()) {
-                            total_tx_bytes += tx.rlp_size();
-                            if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPOGATE {
-                                break;
-                            }
-                            sent_transactions.push(tx.clone());
-                            tx_msg
-                                .trans_short_ids
-                                .push(TxPropagateId::from(tx.hash()));
-                            peer_info
-                                .last_sent_transaction_hashes
-                                .insert(tx.hash());
-                        }
-                    }
-
-                    assert!(!tx_msg.trans_short_ids.is_empty());
-
-                    tx_msg.window_index = peer_info
-                        .sent_transactions
-                        .append_transactions(sent_transactions);
-
-                    Some((peer_id, tx_msg.trans_short_ids.len(), tx_msg))
+                    Some(peer_id)
                 })
                 .collect::<Vec<_>>()
         };
+        if lucky_peers.is_empty() {
+            return;
+        }
+        let mut tx_msg = Box::new(TransactionDigests {
+            window_index: 0,
+            trans_short_ids: Vec::new(),
+        });
+        {
+            let mut syn = self.syn.write();
+            let mut total_tx_bytes = 0;
+            let mut new_last_sent_transaction_hashes =
+                HashSet::with_capacity(transactions.len());
+            let mut keep_adding = true;
+            let mut sent_transactions = Vec::new();
 
-        if lucky_peers.len() > 0 {
-            let mut max_sent = 0;
-            let lucky_peers_len = lucky_peers.len();
-            for (peer_id, sent, msg) in lucky_peers {
-                match self.send_message(
-                    io,
-                    peer_id,
-                    msg.as_ref(),
-                    SendQueuePriority::Normal,
-                ) {
-                    Ok(_) => {
-                        trace!(
-                            "{:02} <- Transactions ({} entries)",
-                            peer_id,
-                            sent
-                        );
-                        max_sent = cmp::max(max_sent, sent);
+            // After the iteration,
+            // sent_transactions =
+            // transactions.difference(last_sent_transaction_hashes)
+            // and `sent_transactions` is bounded by
+            // `MAX_TXS_BYTES_TO_PROPAGATE`
+            //
+            // new_last_sent_transaction_hashes =
+            // last_sent_transaction_hashes.intersect(transactions).
+            // union(sent_transactions)
+            for (h, tx) in transactions {
+                if syn.last_sent_transaction_hashes.contains(&h) {
+                    // Intersection part
+                    new_last_sent_transaction_hashes.insert(h);
+                } else if keep_adding {
+                    // Difference part for sent_transactions
+                    total_tx_bytes += tx.rlp_size();
+                    if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPAGATE {
+                        keep_adding = false;
+                        continue;
                     }
-                    Err(e) => {
-                        warn!(
-                            "failed to propagate transaction ids to peer, id: {}, err: {}",
-                            peer_id, e
-                        );
-                    }
+                    sent_transactions.push(tx.clone());
+                    tx_msg.trans_short_ids.push(TxPropagateId::from(h));
+                    new_last_sent_transaction_hashes.insert(h);
                 }
             }
-            debug!(
-                "Sent up to {} transaction ids to {} peers.",
-                max_sent, lucky_peers_len
-            );
+
+            syn.last_sent_transaction_hashes = new_last_sent_transaction_hashes;
+            tx_msg.window_index =
+                syn.sent_transactions.append_transactions(sent_transactions);
+        }
+        if tx_msg.trans_short_ids.is_empty() {
+            return;
+        }
+
+        debug!(
+            "Sent {} transaction ids to {} peers.",
+            tx_msg.trans_short_ids.len(),
+            lucky_peers.len()
+        );
+        for peer_id in lucky_peers {
+            match self.send_message(
+                io,
+                peer_id,
+                tx_msg.as_ref(),
+                SendQueuePriority::Normal,
+            ) {
+                Ok(_) => {
+                    trace!(
+                        "{:02} <- Transactions ({} entries)",
+                        peer_id,
+                        tx_msg.trans_short_ids.len()
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "failed to propagate transaction ids to peer, id: {}, err: {}",
+                        peer_id, e
+                    );
+                }
+            }
         }
     }
 

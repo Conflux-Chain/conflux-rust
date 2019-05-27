@@ -906,22 +906,15 @@ impl TransactionPool {
         packed_transactions
     }
 
-    pub fn transactions_to_propagate(&self) -> Vec<Arc<SignedTransaction>> {
+    pub fn transactions_to_propagate(
+        &self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
         let inner = self.inner.read();
-
-        inner
-            .pending_transactions
-            .txs
-            .values()
-            .map(|v| v.clone())
-            .chain(
-                inner
-                    .ready_transactions
-                    .treap
-                    .iter()
-                    .map(|(_, x)| x.clone()),
-            )
-            .collect()
+        let mut tx_to_prop = inner.pending_transactions.txs.clone();
+        for (h, tx) in inner.ready_transactions.treap.iter() {
+            tx_to_prop.insert(*h, tx.clone());
+        }
+        tx_to_prop
     }
 
     pub fn notify_ready(&self, address: &Address, account: &Account) {
