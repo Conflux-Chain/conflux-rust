@@ -502,7 +502,10 @@ impl SynchronizationProtocolHandler {
             .iter()
             .map(|tx| TxPropagateId::from(tx.hash()))
             .collect::<Vec<_>>();
-        self.syn.write().received_transactions.append_transaction_ids(tx_ids);
+        self.syn
+            .write()
+            .received_transactions
+            .append_transaction_ids(tx_ids);
 
         self.get_transaction_pool().insert_new_transactions(
             self.graph.consensus.best_state_block_hash(),
@@ -2156,8 +2159,7 @@ impl SynchronizationProtocolHandler {
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
 
         // min(sqrt(x)/x, throttle_ratio)
-        let chosen_size = (num_peers.powf(-0.5).min(throttle_ratio)
-            * num_peers)
+        let chosen_size = (num_peers.powf(-0.5).min(throttle_ratio) * num_peers)
             .round() as usize;
         let mut peer_vec = syn.get_random_peer_vec(
             chosen_size.max(MIN_PEERS_PROPAGATION),
