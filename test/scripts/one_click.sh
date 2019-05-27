@@ -25,7 +25,7 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 
     # Run experiments
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name $exp_name --batch-config \"$exp_config\""
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name $exp_name --batch-config \"$exp_config\" --storage-memory-mb 16"
     exit
 
     # Terminate slave instances

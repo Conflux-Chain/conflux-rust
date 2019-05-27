@@ -12,6 +12,7 @@ use network::PeerId;
 use crate::sync::{
     random, synchronization_protocol_handler::TimedSyncRequests,
 };
+use parking_lot::RwLock;
 use primitives::{SignedTransaction, TxPropagateId};
 use rand::Rng;
 use std::{
@@ -229,7 +230,7 @@ impl SentTransactionContainer {
 
     pub fn append_transactions(
         &mut self, transactions: Vec<Arc<SignedTransaction>>,
-    ) -> (usize, &mut Vec<Arc<SignedTransaction>>) {
+    ) -> usize {
         let inner = &mut self.inner;
 
         let base_window_index = inner.base_time_tick % inner.window_size;
@@ -240,10 +241,7 @@ impl SentTransactionContainer {
             inner.base_time_tick += 1;
         }
         inner.next_time_tick += 1;
-        let trans = inner.time_windowed_indices[next_window_index]
-            .as_mut()
-            .unwrap();
-        (next_time_tick, trans)
+        next_time_tick
     }
 }
 
@@ -351,7 +349,8 @@ impl SynchronizationPeerState {
     }
 }
 
-pub type SynchronizationPeers = HashMap<PeerId, SynchronizationPeerState>;
+pub type SynchronizationPeers =
+    HashMap<PeerId, Arc<RwLock<SynchronizationPeerState>>>;
 
 pub struct SynchronizationState {
     pub catch_up_mode: bool,

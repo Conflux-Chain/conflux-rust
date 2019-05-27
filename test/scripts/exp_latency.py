@@ -69,6 +69,10 @@ class RemoteSimulateConfig:
         self.num_blocks = num_blocks
         self.tps = tps
 
+        self.data_propagate_enabled = False
+        self.data_propagate_interval_ms = 500
+        self.data_propagate_size = 1000
+
     def __str__(self):
         return str(self.__dict__)
 
@@ -88,6 +92,12 @@ class RemoteSimulateConfig:
                 int(fields[3]),
                 int(fields[4]),
             ))
+
+            if len(fields) == 6:
+                config_groups[-1].data_propagate_enabled = True
+                config_groups[-1].data_propagate_interval_ms = int(fields[4])
+                config_groups[-1].data_propagate_size = int(fields[5])
+
         return config_groups
 
 class LatencyExperiment(ArgumentHolder):
@@ -104,10 +114,10 @@ class LatencyExperiment(ArgumentHolder):
         self.connect_peers = 8
         self.ips_file = "ips"
         self.throttling = "512,1024,2048"
-        self.storage_memory_mb = 16
         self.data_propagate_enabled = False
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000
+        self.storage_memory_mb = 2
 
         self.batch_config = "250:1:150000:1000:4000,250:1:150000:1000:6000,250:1:150000:1000:8000,250:1:150000:1000:12000"
 
@@ -143,7 +153,7 @@ class LatencyExperiment(ArgumentHolder):
         os.system("tar cvfz {} {} *.csv".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
-        execute("sh copy_logs.sh > /dev/null", 3, "copy_logs")
+        execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
@@ -163,11 +173,11 @@ class LatencyExperiment(ArgumentHolder):
             "--tps", str(config.tps),
         ]
 
-        if self.data_propagate_enabled:
+        if config.data_propagate_enabled:
             cmd.extend([
                 "--data-propagate-enabled",
-                "--data-propagate-interval-ms", str(self.data_propagate_interval_ms),
-                "--data-propagate-size", str(self.data_propagate_size),
+                "--data-propagate-interval-ms", str(config.data_propagate_interval_ms),
+                "--data-propagate-size", str(config.data_propagate_size),
             ])
 
         cmd.extend([">", self.simulate_log_file])
@@ -180,15 +190,22 @@ class LatencyExperiment(ArgumentHolder):
 
         os.system('grep "(ERROR)" {}'.format(self.simulate_log_file))
 
-    def stat_latency(self, block_interval_ms, block_size_kb):
+    def stat_latency(self, config:RemoteSimulateConfig):
+        block_size_kb = config.txs_per_block * config.tx_size // 1000
+
         tag = "{}ms_{}k_{}vms_{}nodes".format(
-            block_interval_ms,
+            config.block_gen_interval_ms,
             block_size_kb,
             self.vms,
             self.nodes_per_host,
         )
 
         os.system("echo ============================================================ >> {}".format(self.stat_log_file))
+
+        if config.data_propagate_enabled:
+            os.system('echo "Data propagation enabled: interval = {}, size = {}" >> {}'.format(
+                config.data_propagate_interval_ms, config.data_propagate_size, self.stat_log_file
+            ))
 
         print("begin to statistic relay latency ...")
         ret = os.system("python3 stat_latency.py {0} logs {0}.csv >> {1}".format(tag, self.stat_log_file))
@@ -198,7 +215,6 @@ class LatencyExperiment(ArgumentHolder):
             print("begin to statistic confirmation latency ...")
             ret = os.system("python3 stat_confirmation.py logs 4 >> {}".format(self.stat_log_file))
             assert ret == 0, "Failed to statistic block confirmation latency, return code = {}".format(ret)
-
 
 if __name__ == "__main__":
     LatencyExperiment().run()

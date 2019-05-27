@@ -370,7 +370,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn get_bitmap(&self) -> u16 { self.bitmap }
 
     fn set_bitmap(&mut self, bitmap: u16) {
-        /// This method is unnecessary.
+        // This method is unnecessary.
         unimplemented!()
     }
 
@@ -421,7 +421,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn get_bitmap(&self) -> u16 { self.bitmap }
 
     fn set_bitmap(&mut self, bitmap: u16) {
-        /// This method is unnecessary.
+        // This method is unnecessary.
         unimplemented!()
     }
 
@@ -475,7 +475,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn set_bitmap(&mut self, bitmap: u16) { self.bitmap = bitmap }
 
     fn set_next_child_index(&mut self, child_index: u8) {
-        /// This method is unnecessary.
+        // This method is unnecessary.
         unimplemented!()
     }
 
@@ -520,7 +520,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn set_bitmap(&mut self, bitmap: u16) { self.bitmap = bitmap }
 
     fn set_next_child_index(&mut self, child_index: u8) {
-        /// This method is unnecessary.
+        // This method is unnecessary.
         unimplemented!()
     }
 
