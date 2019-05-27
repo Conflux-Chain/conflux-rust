@@ -72,7 +72,7 @@ const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
 
-const MAX_TXS_BYTES_TO_PROPOGATE: usize = 256 * 1024; // 256KB
+const MAX_TXS_BYTES_TO_PROPOGATE: usize = 1024 * 1024; // 1MB
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
