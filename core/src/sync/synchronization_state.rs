@@ -10,7 +10,8 @@ use message::{
 use network::PeerId;
 //use slab::Slab;
 use crate::sync::{
-    random, synchronization_protocol_handler::TimedSyncRequests,
+    random, synchronization_protocol_handler::TimedSyncRequests, Error,
+    ErrorKind,
 };
 use parking_lot::RwLock;
 use primitives::{SignedTransaction, TxPropagateId};
@@ -258,13 +259,6 @@ pub struct SynchronizationPeerState {
     pub max_inflight_request_count: u64,
     pub pending_requests: VecDeque<Box<RequestMessage>>,
 
-    /// The following fields are used to control how to
-    /// propagate transactions in normal case.
-    /// Holds a set of transactions recently sent to this peer to avoid
-    /// spamming.
-    pub last_sent_transaction_hashes: HashSet<H256>,
-    pub sent_transactions: SentTransactionContainer,
-
     /// The following fields are used to control how to handle
     /// transaction propagation for nodes in catch-up mode.
     pub received_transaction_count: usize,
@@ -358,10 +352,21 @@ pub struct SynchronizationState {
     pub handshaking_peers: HashMap<PeerId, Instant>,
     pub received_transactions: ReceivedTransactionContainer,
     pub inflight_requested_transactions: HashSet<TxPropagateId>,
+
+    /// The following fields are used to control how to
+    /// propagate transactions in normal case.
+    /// Holds a set of transactions recently sent to this peer to avoid
+    /// spamming.
+    pub sent_transactions: SentTransactionContainer,
+    pub last_sent_transaction_hashes: HashSet<H256>,
 }
 
 impl SynchronizationState {
-    pub fn new(catch_up_mode: bool, received_tx_index_timeout: u64) -> Self {
+    pub fn new(
+        catch_up_mode: bool, received_tx_index_timeout: u64,
+        sent_transaction_window_size: usize,
+    ) -> Self
+    {
         SynchronizationState {
             catch_up_mode,
             peers: HashMap::new(),
@@ -370,7 +375,17 @@ impl SynchronizationState {
                 received_tx_index_timeout,
             ),
             inflight_requested_transactions: HashSet::new(),
+            last_sent_transaction_hashes: Default::default(),
+            sent_transactions: SentTransactionContainer::new(
+                sent_transaction_window_size,
+            ),
         }
+    }
+
+    pub fn get_peer_info(
+        &self, id: &PeerId,
+    ) -> Result<Arc<RwLock<SynchronizationPeerState>>, Error> {
+        Ok(self.peers.get(&id).ok_or(ErrorKind::UnknownPeer)?.clone())
     }
 
     /// Choose one random peer excluding the given `exclude` set.
@@ -380,5 +395,19 @@ impl SynchronizationState {
         let choose_from: Vec<&PeerId> = peer_set.difference(exclude).collect();
         let mut rand = random::new();
         rand.choose(&choose_from).cloned().cloned()
+    }
+
+    /// Choose a random peer set given set size
+    /// Return all peers if there are not enough peers
+    pub fn get_random_peer_vec<F>(
+        &self, size: usize, filter: F,
+    ) -> Vec<PeerId>
+    where F: Fn(&PeerId) -> bool {
+        let mut peer_vec: Vec<PeerId> =
+            self.peers.keys().cloned().filter(filter).collect();
+        let mut rand = random::new();
+        rand.shuffle(&mut peer_vec);
+        peer_vec.truncate(size);
+        peer_vec
     }
 }
