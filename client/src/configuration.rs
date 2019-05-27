@@ -8,23 +8,23 @@ use cfxcore::{
     sync::ProtocolConfiguration,
 };
 use txgen::TransactionGeneratorConfig;
-/// usage:
-/// ```
-/// build_config! {
-///     {
-///         (name, (type), default_value)
-///         ...
-///     }
-///     {
-///         (name, (type), default_value, converter)
-///     }
-/// }
-/// ```
-/// `converter` is a function used to convert a provided String to `Result<type,
-/// String>`. For each entry, field `name` of type `type` will be created in
-/// `RawConfiguration`, and it will be assigned to the value passed through
-/// commandline argument or configuration file. Commandline argument will
-/// override the configuration file if the parameter is given in both.
+// usage:
+// ```
+// build_config! {
+//     {
+//         (name, (type), default_value)
+//         ...
+//     }
+//     {
+//         (name, (type), default_value, converter)
+//     }
+// }
+// ```
+// `converter` is a function used to convert a provided String to `Result<type,
+// String>`. For each entry, field `name` of type `type` will be created in
+// `RawConfiguration`, and it will be assigned to the value passed through
+// commandline argument or configuration file. Commandline argument will
+// override the configuration file if the parameter is given in both.
 build_config! {
     {
         (port, (Option<u16>), Some(32323))
