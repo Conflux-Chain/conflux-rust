@@ -542,9 +542,9 @@ impl SynchronizationProtocolHandler {
             GetTransactionsResponse {
                 request_id: get_transactions.request_id,
                 transactions,
-            };
-            debug!("on_get_transactions request {} txs, returned {} txs", get_transactions.indices.len(), resp.transactions.len());
+            }
         };
+        debug!("on_get_transactions request {} txs, returned {} txs", get_transactions.indices.len(), resp.transactions.len());
 
         self.send_message(io, peer, &resp, SendQueuePriority::Normal)?;
         Ok(())
@@ -610,6 +610,7 @@ impl SynchronizationProtocolHandler {
             (indices, tx_ids)
         };
 
+        debug!("Request {} transactions from peer={}", indices.len(), peer);
         match self.request_transactions(io, peer, indices, tx_ids.clone()) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -620,7 +621,6 @@ impl SynchronizationProtocolHandler {
                 Err(e)
             }
         }
-        debug!("Request {} transactions from peer={}", indices.len(), peer);
     }
 
     fn on_get_blocktxn(

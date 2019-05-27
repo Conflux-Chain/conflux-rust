@@ -65,9 +65,9 @@ branch="lpl_test"
 echo "start run $branch"
 run_latency_exp $branch "latency_latest" $exp_config
 
-branch="lpl_test_old"
-echo "start run $branch"
-run_latency_exp $branch "latency_latest" $exp_config
+#branch="lpl_test_old"
+#echo "start run $branch"
+#run_latency_exp $branch "latency_latest" $exp_config
 
 # Comment this line if the data on the master instances are needed for further analysis
 # ./terminate-on-demand.sh
