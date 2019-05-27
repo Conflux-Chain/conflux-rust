@@ -282,7 +282,7 @@ impl TransactionGenerator {
             tx_to_insert.push(signed_tx.transaction);
             txgen.txpool.insert_new_transactions(
                 txgen.consensus.best_state_block_hash(),
-                tx_to_insert,
+                &tx_to_insert,
             );
             tx_n += 1;
             if tx_n % 100 == 0 {
