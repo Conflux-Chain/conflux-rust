@@ -2213,16 +2213,15 @@ impl SynchronizationProtocolHandler {
             let mut keep_adding = true;
             let mut sent_transactions = Vec::new();
 
-            /// After the iteration,
-            ///
-            /// `sent_transactions =
-            /// transactions.difference(last_sent_transaction_hashes)`
-            /// and `sent_transactions` is bounded by
-            /// `MAX_TXS_BYTES_TO_PROPAGATE`
-            ///
-            /// `new_last_sent_transaction_hashes =
-            /// last_sent_transaction_hashes.intersect(transactions).
-            /// union(sent_transactions)`
+            // After the iteration,
+            // sent_transactions =
+            // transactions.difference(last_sent_transaction_hashes)
+            // and `sent_transactions` is bounded by
+            // `MAX_TXS_BYTES_TO_PROPAGATE`
+            //
+            // new_last_sent_transaction_hashes =
+            // last_sent_transaction_hashes.intersect(transactions).
+            // union(sent_transactions)
             for (h, tx) in transactions {
                 if syn.last_sent_transaction_hashes.contains(&h) {
                     // Intersection part
