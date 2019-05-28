@@ -26,7 +26,6 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
-use num_traits::real::Real;
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -1001,8 +1000,8 @@ impl<'a, 'b> Executive<'a, 'b> {
             });
         }
 
-        // This should never happen because we have checked block gas limit before SyncGraph
-        // Validate if transaction fits into give block
+        // This should never happen because we have checked block gas limit
+        // before SyncGraph Validate if transaction fits into give block
         if self.env.gas_used + tx.gas > self.env.gas_limit {
             return Err(ExecutionError::BlockGasLimitReached {
                 gas_limit: self.env.gas_limit,
@@ -1024,7 +1023,8 @@ impl<'a, 'b> Executive<'a, 'b> {
         // Avoid unaffordable transactions
         let balance512 = U512::from(balance);
         if balance512 < total_cost {
-            // Sub tx fee if not enough cash
+            // Sub tx fee if not enough cash, and substitute all remaining
+            // balance if balance is not enough to pay the tx fee
             let actual_cost = if gas_cost > balance512 {
                 balance512
             } else {
