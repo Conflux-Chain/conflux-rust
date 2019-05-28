@@ -122,6 +122,13 @@ class P2PTest(ConfluxTestFramework):
             default=1000,
             type=int,
         )
+        # Bandwidth in Mbit/s
+        parser.add_argument(
+            "--bandwitdh",
+            dest="bandwidth",
+            default=20,
+            type=int
+        )
 
     def after_options_parsed(self):
         self.num_nodes = self.options.nodes_per_host
@@ -187,7 +194,7 @@ class P2PTest(ConfluxTestFramework):
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
         cmd_startup = "sh ./remote_start_conflux.sh {} {} {} &> start_conflux.out".format(
-            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host
+            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, self.options.bandwidth,
         )
         cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")

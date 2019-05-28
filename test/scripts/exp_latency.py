@@ -118,6 +118,7 @@ class LatencyExperiment(ArgumentHolder):
         self.data_propagate_interval_ms = 1000
         self.data_propagate_size = 1000
         self.storage_memory_mb = 2
+        self.bandwidth = 20
 
         self.batch_config = "250:1:150000:1000:4000,250:1:150000:1000:6000,250:1:150000:1000:8000,250:1:150000:1000:12000"
 
@@ -170,6 +171,7 @@ class LatencyExperiment(ArgumentHolder):
             "--storage-memory-mb", str(self.storage_memory_mb),
             "--experiment-name", self.exp_name,
             "--tps", str(config.tps),
+            "--bandwidth", str(self.bandwidth)
         ]
 
         if config.data_propagate_enabled:
