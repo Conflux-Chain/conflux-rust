@@ -13,11 +13,11 @@ from test_framework.util import *
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 8
+        self.num_nodes = 16
         self.conf_parameters["generate_tx"] = "true"
         self.conf_parameters["generate_tx_period_us"] = "100000"
         self.conf_parameters["log_level"] = "\"debug\""
-        self.rpc_timewait = 10
+        self.rpc_timewait = 10000
 
     def setup_network(self):
         self.setup_nodes()
@@ -37,6 +37,7 @@ class P2PTest(ConfluxTestFramework):
             client.send_tx(tx)
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
+            self.log.debug("%d try to generate", chosen_peer)
             block_hash = self.nodes[chosen_peer].generateoneblock(100000, 10000000)
             self.log.info("%d generate block %s", chosen_peer, block_hash)
             time.sleep(random.random()/12)
