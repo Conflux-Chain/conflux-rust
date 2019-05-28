@@ -148,6 +148,7 @@ impl VerificationConfig {
     /// body again from others. However, if the body matches the header and
     /// the body is incorrect, this means the block is invalid, and we
     /// should discard this block and all its descendants.
+    // FIXME check block_size, gas_limit, tx_count, e.t.c.
     pub fn verify_block_basic(&self, block: &Block) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 

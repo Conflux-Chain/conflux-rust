@@ -26,6 +26,7 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
+use num_traits::real::Real;
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -1000,6 +1001,7 @@ impl<'a, 'b> Executive<'a, 'b> {
             });
         }
 
+        // This should never happen because we have checked block gas limit before SyncGraph
         // Validate if transaction fits into give block
         if self.env.gas_used + tx.gas > self.env.gas_limit {
             return Err(ExecutionError::BlockGasLimitReached {
@@ -1018,16 +1020,27 @@ impl<'a, 'b> Executive<'a, 'b> {
             self.state.inc_nonce(&sender)?;
         }
 
+        let mut substate = Substate::new();
         // Avoid unaffordable transactions
         let balance512 = U512::from(balance);
         if balance512 < total_cost {
+            // Sub tx fee if not enough cash
+            let actual_cost = if gas_cost > balance512 {
+                balance512
+            } else {
+                gas_cost
+            };
+            self.state.sub_balance(
+                &sender,
+                &U256::from(actual_cost),
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
             return Err(ExecutionError::NotEnoughCash {
                 required: total_cost,
                 got: balance512,
             });
         }
 
-        let mut substate = Substate::new();
         self.state.sub_balance(
             &sender,
             &U256::from(gas_cost),
