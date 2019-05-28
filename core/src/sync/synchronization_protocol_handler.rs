@@ -2050,8 +2050,9 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         let peer_info = self.syn.read().get_peer_info(&peer)?;
+        let mut syn = self.syn.write();
         let mut peer_info = peer_info.write();
-        let removed_req = self.remove_request(&mut *peer_info, request_id);
+        let removed_req = self.remove_request(&mut *peer_info, request_id, &mut *syn);
         if let Some(removed_req) = removed_req {
             while peer_info.has_pending_requests() {
                 if let Some(new_request_id) = peer_info.get_next_request_id() {
@@ -2427,7 +2428,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn remove_request(
-        &self, peer_info: &mut SynchronizationPeerState, request_id: u64,
+        &self, peer_info: &mut SynchronizationPeerState, request_id: u64, syn: &mut SynchronizationState
     ) -> Option<RequestMessage> {
         if let Some(req) = peer_info.remove_inflight_request(request_id) {
             match *req.message {
@@ -2444,7 +2445,6 @@ impl SynchronizationProtocolHandler {
                     self.blocks_in_flight.lock().remove(&blocktxn.block_hash);
                 }
                 RequestMessage::Transactions(ref get_transactions) => {
-                    let mut syn = self.syn.write();
                     for tx_id in &get_transactions.tx_ids {
                         syn.inflight_requested_transactions.remove(tx_id);
                     }
