@@ -160,7 +160,7 @@ impl TransactionGenerator {
     pub fn generate_transactions(
         txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
     ) -> Result<(), Error> {
-        let account_count = 20;
+        let account_count = 2000;
         let mut nonce_map: HashMap<Address, U256> = HashMap::new();
         let mut balance_map: HashMap<Address, U256> = HashMap::new();
 
