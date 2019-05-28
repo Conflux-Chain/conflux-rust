@@ -124,7 +124,7 @@ class P2PTest(ConfluxTestFramework):
         )
         # Bandwidth in Mbit/s
         parser.add_argument(
-            "--bandwitdh",
+            "--bandwidth",
             dest="bandwidth",
             default=20,
             type=int

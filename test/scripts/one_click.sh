@@ -56,7 +56,7 @@ run_latency_exp () {
 # Experiments for latency with the newest code, <txs_per_block> and <tx_size> will not take effects
 latency_latest_default="250:1:1000000:2000:"
 exp_config=""
-for tps in 8000
+for tps in 4000
 do
     exp_config="${exp_config}${latency_latest_default}${tps},"
 done
