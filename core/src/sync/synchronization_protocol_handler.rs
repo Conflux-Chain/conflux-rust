@@ -1477,6 +1477,8 @@ impl SynchronizationProtocolHandler {
         Ok(need_to_relay)
     }
 
+    // TODO This is only used in tests now. Maybe we can add a rpc to send full
+    // block and remove NEW_BLOCK from p2p
     fn on_new_block(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -2052,7 +2054,8 @@ impl SynchronizationProtocolHandler {
         let peer_info = self.syn.read().get_peer_info(&peer)?;
         let mut syn = self.syn.write();
         let mut peer_info = peer_info.write();
-        let removed_req = self.remove_request(&mut *peer_info, request_id, &mut *syn);
+        let removed_req =
+            self.remove_request(&mut *peer_info, request_id, &mut *syn);
         if let Some(removed_req) = removed_req {
             while peer_info.has_pending_requests() {
                 if let Some(new_request_id) = peer_info.get_next_request_id() {
@@ -2104,28 +2107,6 @@ impl SynchronizationProtocolHandler {
             let mut exclude = HashSet::new();
             exclude.insert(failed_peer);
             syn.get_random_peer(&exclude)
-        }
-    }
-
-    pub fn announce_new_blocks(&self, io: &NetworkContext, hashes: &[H256]) {
-        let syn = self.syn.read();
-        for hash in hashes {
-            let block = self.graph.block_by_hash(hash).unwrap();
-            let msg: Box<dyn Message> = Box::new(NewBlock {
-                block: (*block).clone().into(),
-            });
-            for (id, _) in syn.peers.iter() {
-                self.send_message_with_throttling(
-                    io,
-                    *id,
-                    msg.as_ref(),
-                    SendQueuePriority::High,
-                    true,
-                )
-                .unwrap_or_else(|e| {
-                    warn!("Error sending new blocks, err={:?}", e);
-                });
-            }
         }
     }
 
@@ -2428,8 +2409,10 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn remove_request(
-        &self, peer_info: &mut SynchronizationPeerState, request_id: u64, syn: &mut SynchronizationState
-    ) -> Option<RequestMessage> {
+        &self, peer_info: &mut SynchronizationPeerState, request_id: u64,
+        syn: &mut SynchronizationState,
+    ) -> Option<RequestMessage>
+    {
         if let Some(req) = peer_info.remove_inflight_request(request_id) {
             match *req.message {
                 RequestMessage::Headers(ref get_headers) => {
