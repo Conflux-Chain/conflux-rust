@@ -18,14 +18,14 @@ run_latency_exp () {
 #     Create master instance and slave image
 #    ./create_slave_image.sh $key_pair $branch
 #    ./ip.sh --public
-    
+
     # Launch slave instances
-    master_ip=`cat ips`
-    slave_image=`cat slave_image`
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
+#    master_ip=`cat ips`
+#    slave_image=`cat slave_image`
+#    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 
     # Run experiments
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name $exp_name --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20"
+#    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name $exp_name --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20"
 #    exit
 
     # Terminate slave instances

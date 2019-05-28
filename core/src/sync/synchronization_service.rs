@@ -86,8 +86,8 @@ impl SynchronizationService {
 
     pub fn on_mined_block(&self, block: Block) {
         let hash = block.hash();
-        let need_to_relay = self.protocol_handler.on_mined_block(block);
-        self.relay_blocks(need_to_relay);
+        self.protocol_handler.on_mined_block(block);
+        self.relay_blocks(vec![hash]);
 //        self.announce_new_blocks(&[hash]);
     }
 
