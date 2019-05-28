@@ -36,10 +36,11 @@ do
 		eval $cli
 	fi
 
+    raw_net_id=`printf "%x" $i`
 	net_id=`printf "%02x" $i`
 	echo 0x100$net_id | sudo tee /sys/fs/cgroup/net_cls/limit$i/net_cls.classid;
 	
-	if [[ -n `tc class show dev $DEV|grep 1:$net_id` ]]
+	if [[ -n `tc class show dev $DEV|grep 1:$raw_net_id` ]]
 	then
 		cli="sudo tc class change dev $DEV parent 1: classid 1:$net_id htb rate ${bandwidth}mbit ceil ${bandwidth}mbit"
 		echo $cli
