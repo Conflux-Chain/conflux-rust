@@ -402,6 +402,7 @@ impl ConsensusExecutionHandler {
             let mut n_other = 0;
             let mut last_cumulative_gas_used = U256::zero();
             {
+                let mut unexecuted_transaction_addresses = unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
                 {
                     let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
@@ -468,10 +469,8 @@ impl ConsensusExecutionHandler {
                             self.data_man.insert_transaction_address_to_kv(
                                 &hash, &tx_addr,
                             );
-                            unexecuted_transaction_addresses_lock.lock().remove(&hash);
+                            unexecuted_transaction_addresses.remove(&hash);
                         } else {
-                            let mut unexecuted_transaction_addresses =
-                                unexecuted_transaction_addresses_lock.lock();
                             let mut remove = false;
                             if let Some(addr_set) =
                                 unexecuted_transaction_addresses.get_mut(&hash)
