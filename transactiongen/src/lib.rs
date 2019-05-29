@@ -166,10 +166,6 @@ impl TransactionGenerator {
 
         let initial_key_pair = txgen.key_pair.clone().expect("should exist");
         let secret_store = SecretStore::new();
-        //        let mut balance_map = HashMap::new();
-        //        balance_map
-        //            .insert(public_to_address(initial_key_pair.public()),
-        // U256::from(10000000));
         debug!(
             "tx_gen address={:?} pub_key={:?}",
             public_to_address(initial_key_pair.public()),
@@ -281,7 +277,6 @@ impl TransactionGenerator {
             *sender_nonce += U256::one();
 
             let signed_tx = tx.sign(sender_kp.secret());
-            //            txgen.txpool.add_pending(signed_tx.clone());
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
             txgen.txpool.insert_new_transactions(

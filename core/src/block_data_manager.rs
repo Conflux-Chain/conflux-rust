@@ -420,7 +420,6 @@ impl BlockDataManager {
                 return false;
             }
         }
-        debug!("Finish getting block receipts");
 
         // Recover tx address if we will skip pivot chain execution
         if on_local_pivot && self.record_tx_address {
@@ -444,7 +443,6 @@ impl BlockDataManager {
                         )
                     }
                 }
-                debug!("Finish reconstructing transaction address for {}", block_hash);
             }
         }
         true

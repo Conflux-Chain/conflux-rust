@@ -39,8 +39,7 @@ do
     sleep 5
 done
 
-# delete the instance that used to make slave image
-# echo "delete the instance that used to make slave image ..."
+# The master instance will be used to run the scripts later, so we do not terminate it
 # ./terminate-on-demand.sh
 
 echo $image_id > slave_image

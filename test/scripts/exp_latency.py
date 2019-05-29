@@ -62,12 +62,11 @@ class ArgumentHolder:
             ))
 
 class RemoteSimulateConfig:
-    def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks, tps):
+    def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks):
         self.block_gen_interval_ms = block_gen_interval_ms
         self.txs_per_block = txs_per_block
         self.tx_size = tx_size
         self.num_blocks = num_blocks
-        self.tps = tps
 
         self.data_propagate_enabled = False
         self.data_propagate_interval_ms = 500
@@ -84,13 +83,13 @@ class RemoteSimulateConfig:
             batch_config = batch_config[:-1]
         for config in batch_config.split(","):
             fields = config.split(":")
-            assert len(fields) == 5, "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:<tps>"
+            if len(fields) != 4 and len(fields) != 6:
+                raise AssertionError("invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:[<data_propagate_interval_ms>:<data_propagate_size>]")
             config_groups.append(RemoteSimulateConfig(
                 int(fields[0]),
                 int(fields[1]),
                 int(fields[2]),
                 int(fields[3]),
-                int(fields[4]),
             ))
 
             if len(fields) == 6:
@@ -119,8 +118,10 @@ class LatencyExperiment(ArgumentHolder):
         self.data_propagate_size = 1000
         self.storage_memory_mb = 2
         self.bandwidth = 20
+        self.tps = 4000
+        self.enable_tx_propagation = False
 
-        self.batch_config = "250:1:150000:1000:4000,250:1:150000:1000:6000,250:1:150000:1000:8000,250:1:150000:1000:12000"
+        self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
         ArgumentHolder.__init__(self)
 
@@ -139,6 +140,8 @@ class LatencyExperiment(ArgumentHolder):
             print("Kill remote conflux and copy logs ...")
             kill_remote_conflux(self.ips_file)
             self.copy_remote_logs()
+            # Do not cleanup logs here because they may be needed for debug later, and they will be deleted when the
+            # next run begins
             # cleanup_remote_logs(self.ips_file)
 
             print("Statistic logs ...")
@@ -169,8 +172,7 @@ class LatencyExperiment(ArgumentHolder):
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
-            "--experiment-name", self.exp_name,
-            "--tps", str(config.tps),
+            "--tps", str(self.tps),
             "--bandwidth", str(self.bandwidth)
         ]
 
@@ -180,6 +182,9 @@ class LatencyExperiment(ArgumentHolder):
                 "--data-propagate-interval-ms", str(config.data_propagate_interval_ms),
                 "--data-propagate-size", str(config.data_propagate_size),
             ])
+
+        if self.enable_tx_propagation:
+            cmd.extend(["--enable-tx-propagation"])
 
         cmd.extend([">", self.simulate_log_file])
         cmd = " ".join(cmd)
