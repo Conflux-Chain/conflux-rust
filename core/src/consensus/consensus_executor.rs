@@ -130,14 +130,14 @@ impl ConsensusExecutor {
                         // get later epochs to execute. Here we use `try_write` because some thread
                         // may wait for execution results while holding the Consensus Inner lock,
                         // if we wait on inner lock here we may get deadlock
-                        let maybe_opt_task = consensus_inner
+                        let maybe_optimistic_task = consensus_inner
                             .try_write()
                             .and_then(|mut inner|
-                                inner.get_opt_execution_task()
+                                inner.get_optimistic_execution_task()
                             );
-                        match maybe_opt_task {
+                        match maybe_optimistic_task {
                             Some(task) => {
-                                debug!("Get opt_execution_task {:?}", task);
+                                debug!("Get optimistic_execution_task {:?}", task);
                                 handler.handle_epoch_execution(task)
                             },
                             None => {

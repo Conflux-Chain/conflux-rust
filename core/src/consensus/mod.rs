@@ -145,7 +145,7 @@ pub struct ConsensusGraphInner {
     pub arena: Slab<ConsensusGraphNode>,
     pub indices: HashMap<H256, usize>,
     pub pivot_chain: Vec<usize>,
-    opt_executed_height: Option<usize>,
+    optimistic_executed_height: Option<usize>,
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
     genesis_block_state_root: H256,
@@ -186,7 +186,7 @@ impl ConsensusGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
-            opt_executed_height: None,
+            optimistic_executed_height: None,
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
             genesis_block_state_root: data_man
@@ -249,28 +249,27 @@ impl ConsensusGraphInner {
         inner
     }
 
-    pub fn get_opt_execution_task(&mut self) -> Option<EpochExecutionTask> {
-        if !self.enable_optimistic_execution {
-            return None;
-        }
-        let opt_height = self.opt_executed_height?;
-        let opt_index = self.pivot_chain[opt_height];
+    pub fn get_optimistic_execution_task(
+        &mut self,
+    ) -> Option<EpochExecutionTask> {
+        let opt_height = self.optimistic_executed_height?;
+        let epoch_index = self.pivot_chain[opt_height];
 
         // `on_local_pivot` is set to `true` because when we later skip its
         // execution on pivot chain, we will not notify tx pool, so we
         // will also notify in advance.
         let execution_task = EpochExecutionTask::new(
-            self.arena[opt_index].hash,
-            self.get_epoch_block_hashes(opt_index),
+            self.arena[epoch_index].hash,
+            self.get_epoch_block_hashes(epoch_index),
             self.get_reward_execution_info(opt_height, &self.pivot_chain),
             true,
             false,
         );
         let next_opt_height = opt_height + 1;
         if next_opt_height >= self.pivot_chain.len() {
-            self.opt_executed_height = None;
+            self.optimistic_executed_height = None;
         } else {
-            self.opt_executed_height = Some(next_opt_height);
+            self.optimistic_executed_height = Some(next_opt_height);
         }
         Some(execution_task)
     }
@@ -2306,7 +2305,7 @@ impl ConsensusGraph {
             &*sync_inner_lock.read(),
         );
         inner.pivot_chain = new_pivot_chain;
-        inner.opt_executed_height = if to_state_pos > 0 {
+        inner.optimistic_executed_height = if to_state_pos > 0 {
             Some(to_state_pos)
         } else {
             None
