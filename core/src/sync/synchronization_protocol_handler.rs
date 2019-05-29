@@ -364,7 +364,12 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
-        debug!("on_get_compact_blocks_response request_id={} compact={} block={}", resp.request_id(), resp.compact_blocks.len(), resp.blocks.len());
+        debug!(
+            "on_get_compact_blocks_response request_id={} compact={} block={}",
+            resp.request_id(),
+            resp.compact_blocks.len(),
+            resp.blocks.len()
+        );
         let req = self.match_request(io, peer, resp.request_id())?;
         let mut failed_blocks = Vec::new();
         let mut completed_blocks = Vec::new();
@@ -544,7 +549,11 @@ impl SynchronizationProtocolHandler {
                 transactions,
             }
         };
-        debug!("on_get_transactions request {} txs, returned {} txs", get_transactions.indices.len(), resp.transactions.len());
+        debug!(
+            "on_get_transactions request {} txs, returned {} txs",
+            get_transactions.indices.len(),
+            resp.transactions.len()
+        );
 
         self.send_message(io, peer, &resp, SendQueuePriority::Normal)?;
         Ok(())
@@ -2054,7 +2063,8 @@ impl SynchronizationProtocolHandler {
         let peer_info = self.syn.read().get_peer_info(&peer)?;
         let mut syn = self.syn.write();
         let mut peer_info = peer_info.write();
-        let removed_req = self.remove_request(&mut *peer_info, request_id, &mut *syn);
+        let removed_req =
+            self.remove_request(&mut *peer_info, request_id, &mut *syn);
         if let Some(removed_req) = removed_req {
             while peer_info.has_pending_requests() {
                 if let Some(new_request_id) = peer_info.get_next_request_id() {
@@ -2430,8 +2440,10 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn remove_request(
-        &self, peer_info: &mut SynchronizationPeerState, request_id: u64, syn: &mut SynchronizationState
-    ) -> Option<RequestMessage> {
+        &self, peer_info: &mut SynchronizationPeerState, request_id: u64,
+        syn: &mut SynchronizationState,
+    ) -> Option<RequestMessage>
+    {
         if let Some(req) = peer_info.remove_inflight_request(request_id) {
             match *req.message {
                 RequestMessage::Headers(ref get_headers) => {

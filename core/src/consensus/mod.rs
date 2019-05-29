@@ -129,8 +129,10 @@ pub struct ConsensusGraphInner {
 
 impl ConsensusGraphInner {
     pub fn with_genesis_block(
-        pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>, enable_opt_execution: bool
-    ) -> Self {
+        pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
+        enable_opt_execution: bool,
+    ) -> Self
+    {
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
@@ -938,7 +940,8 @@ impl ConsensusGraph {
         vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, db: Arc<SystemDB>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-        pow_config: ProofOfWorkConfig, record_tx_address: bool, enable_opt_execution: bool,
+        pow_config: ProofOfWorkConfig, record_tx_address: bool,
+        enable_opt_execution: bool,
     ) -> Self
     {
         let data_man = Arc::new(BlockDataManager::new(

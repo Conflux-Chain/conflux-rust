@@ -357,11 +357,15 @@ impl BlockDataManager {
         if !self.record_tx_address {
             return;
         }
-        self.transaction_addresses.write().entry(*hash).and_modify(|v| {
-            *v=tx_address.clone();
-            self.cache_man.lock().note_used(
-                CacheId::TransactionAddress(*hash));
-        });
+        self.transaction_addresses
+            .write()
+            .entry(*hash)
+            .and_modify(|v| {
+                *v = tx_address.clone();
+                self.cache_man
+                    .lock()
+                    .note_used(CacheId::TransactionAddress(*hash));
+            });
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_TX_ADDRESS, hash, &rlp::encode(tx_address));
         self.db

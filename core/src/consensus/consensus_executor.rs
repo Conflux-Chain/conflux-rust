@@ -402,7 +402,8 @@ impl ConsensusExecutionHandler {
             let mut n_other = 0;
             let mut last_cumulative_gas_used = U256::zero();
             {
-                let mut unexecuted_transaction_addresses = unexecuted_transaction_addresses_lock.lock();
+                let mut unexecuted_transaction_addresses =
+                    unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
                 {
                     let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;

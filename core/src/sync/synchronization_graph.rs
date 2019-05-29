@@ -1166,11 +1166,11 @@ impl SynchronizationGraph {
             .read()
             .heap_size_of_children();
         let transaction_addresses_unexecuted = self
-                .consensus
-                .txpool
-                .unexecuted_transaction_addresses
-                .lock()
-                .heap_size_of_children();
+            .consensus
+            .txpool
+            .unexecuted_transaction_addresses
+            .lock()
+            .heap_size_of_children();
         let transaction_pubkey = self
             .consensus
             .txpool
@@ -1180,7 +1180,8 @@ impl SynchronizationGraph {
         CacheSize {
             blocks,
             block_receipts,
-            transaction_addresses: transaction_addresses_data + transaction_addresses_unexecuted,
+            transaction_addresses: transaction_addresses_data
+                + transaction_addresses_unexecuted,
             compact_blocks,
             transaction_pubkey,
         }
