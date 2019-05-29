@@ -12,7 +12,7 @@ fi
 
 if [[ ! -d '/sys/fs/cgroup/net_cls' ]]
 then
-    echo "Mount cgroupo ..."
+    echo "Mount cgroup ..."
     sudo mkdir /sys/fs/cgroup/net_cls/
     sudo mount -t cgroup net_cls -o net_cls /sys/fs/cgroup/net_cls/
 fi

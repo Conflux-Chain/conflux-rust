@@ -7,14 +7,13 @@ if [ $# -lt 2 ]; then
 fi
 key_pair="$1"
 slave_count=$2
-branch="${3:-lpl_test}"
+branch="${3:-master}"
 slave_role=${key_pair}_exp_slave
 
 run_latency_exp () {
     branch=$1
-    exp_name=$2
-    exp_config=$3
-    tps=$4
+    exp_config=$2
+    tps=$3
 
 #     Create master instance and slave image
     ./create_slave_image.sh $key_pair $branch
@@ -26,7 +25,7 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 
     # Run experiments
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --exp-name $exp_name --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation"
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation"
 
     # Terminate slave instances
     rm -rf tmp_data
@@ -53,17 +52,12 @@ run_latency_exp () {
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000,250:1:150000:1000,250:1:150000:1000,250:1:150000:1000"
-# Experiments for latency with the newest code, <txs_per_block> and <tx_size> will not take effects
 exp_config="250:1:1000000:2000"
 
+# For experiments with --enable-tx-propagation , <txs_per_block> * <tx_size> will be used as block size 
 tps=4000
-branch="lpl_test"
 echo "start run $branch"
-run_latency_exp $branch "latency_latest" $exp_config $tps
-
-branch="lpl_test_old"
-echo "start run $branch"
-run_latency_exp $branch "latency_latest" $exp_config $tps
+run_latency_exp $branch $exp_config $tps
 
 # Comment this line if the data on the master instances are needed for further analysis
 # ./terminate-on-demand.sh

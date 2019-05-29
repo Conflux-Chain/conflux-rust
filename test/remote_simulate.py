@@ -105,10 +105,10 @@ class P2PTest(ConfluxTestFramework):
             default=1000,
             type=int
         )
-        # Tx propagation will also be enabled if we enable tx generation
+        # Tx generation will also be enabled if we enable tx propagation
         parser.add_argument(
-            "--enable-tx-generation",
-            dest="tx_generation_enabled",
+            "--enable-tx-propagation",
+            dest="tx_propagation_enabled",
             action="store_true"
         )
         # options for LAT_LATEST
@@ -136,7 +136,7 @@ class P2PTest(ConfluxTestFramework):
                 self.ips.append(line)
 
         # experiment name
-        self.tx_generation_enabled = self.options.tx_generation_enabled
+        self.tx_propagation_enabled = self.options.tx_propagation_enabled
 
         # throttling
         egress_settings = self.options.throttling.split(",")
@@ -168,7 +168,7 @@ class P2PTest(ConfluxTestFramework):
 
         # Do not keep track of tx address to save CPU/Disk costs because they are not used in the experiments
         self.conf_parameters["record_tx_address"] = "false"
-        if self.tx_generation_enabled:
+        if self.tx_propagation_enabled:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
         else:
@@ -218,7 +218,7 @@ class P2PTest(ConfluxTestFramework):
     def run_test(self):
         num_nodes = len(self.nodes)
 
-        if self.tx_generation_enabled:
+        if self.tx_propagation_enabled:
             # Setup balance for each node
             client = RpcClient(self.nodes[0])
             for i in range(num_nodes):
@@ -256,7 +256,7 @@ class P2PTest(ConfluxTestFramework):
                 self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
                 break
 
-            if self.tx_generation_enabled:
+            if self.tx_propagation_enabled:
                 # Generate a block with the transactions in the node's local tx pool
                 thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
             else:
