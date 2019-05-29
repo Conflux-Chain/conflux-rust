@@ -55,7 +55,7 @@ build_config! {
         (db_compaction_profile, (Option<String>), None)
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (generate_tx, (bool), false)
-        (generate_tx_period_us, (Option<u64>), Some(100))
+        (generate_tx_period_us, (Option<u64>), Some(100_000))
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
@@ -87,7 +87,7 @@ build_config! {
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
         (record_tx_address, (bool), true)
-        // Set default to true when we have new tx pool implementatio
+        // TODO Set default to true when we have new tx pool implementation
         (enable_opt_execution, (bool), false)
     }
     {
