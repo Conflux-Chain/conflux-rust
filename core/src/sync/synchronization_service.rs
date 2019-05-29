@@ -81,7 +81,7 @@ impl SynchronizationService {
     pub fn on_mined_block(&self, block: Block) {
         let hash = block.hash();
         self.protocol_handler.on_mined_block(block);
-        self.relay_blocks(vec![need_to_relay]);
+        self.relay_blocks(vec![hash]);
     }
 
     pub fn add_peer(&self, node: NodeEntry) -> Result<(), NetworkError> {
