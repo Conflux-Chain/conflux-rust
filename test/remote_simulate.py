@@ -287,10 +287,8 @@ class P2PTest(ConfluxTestFramework):
         executor = ThreadPoolExecutor()
 
         start = time.time()
-        while True:
-            # Wait for at most 120 seconds
-            if time.time() - start > 120:
-                break
+        # Wait for at most 120 seconds
+        while time.time() - start <= 120:
             block_counts = []
             best_blocks = []
             block_count_futures = []
