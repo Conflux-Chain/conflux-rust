@@ -17,14 +17,36 @@ use std::{
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 
 use crate::Error;
+use std::sync::atomic::AtomicUsize;
 
 #[derive(PartialEq, Eq)]
 pub enum WriteStatus {
     Ongoing,
+    LowPriority,
     Complete,
 }
 
 pub const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
+
+static HIGH_PRIORITY_PACKETS: AtomicUsize = AtomicUsize::new(0);
+
+fn incr_high_priority_packets() {
+    assert_ne!(
+        HIGH_PRIORITY_PACKETS.fetch_add(1, AtomicOrdering::SeqCst),
+        std::usize::MAX
+    );
+}
+
+fn decr_high_priority_packets() {
+    assert_ne!(
+        HIGH_PRIORITY_PACKETS.fetch_sub(1, AtomicOrdering::SeqCst),
+        0
+    );
+}
+
+fn has_high_priority_packets() -> bool {
+    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst) > 0
+}
 
 pub trait GenericSocket: Read + Write {}
 
@@ -55,9 +77,13 @@ impl<Socket: GenericSocket, Sizer: PacketSizer> Drop
 {
     fn drop(&mut self) {
         let mut service = THROTTLING_SERVICE.write();
-        while let Some((packet, pos)) = self.send_queue.pop_front() {
+        while let Some(((packet, pos), priority)) = self.send_queue.pop_front()
+        {
             if pos < packet.len() {
                 service.on_dequeue(packet.len() - pos);
+                if priority == SendQueuePriority::High {
+                    decr_high_priority_packets();
+                }
             }
         }
     }
@@ -71,7 +97,11 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
         loop {
             match self.socket.read(&mut buf) {
                 Ok(size) => {
-                    trace!(target: "network", "{}: Read {} bytes", self.token, size);
+                    trace!(
+                        "Succeed to read socket data, token = {}, size = {}",
+                        self.token,
+                        size
+                    );
                     if size == 0 {
                         break;
                     }
@@ -79,8 +109,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
                 }
                 Err(e) => {
                     if e.kind() != io::ErrorKind::WouldBlock {
-                        debug!(target: "network", "{}: Error reading: {:?}", self.token, e);
-                        println!("Error reading: {:?}", e);
+                        debug!("Failed to read socket data, token = {}, err = {:?}", self.token, e);
                         return Err(e);
                     }
                     break;
@@ -92,48 +121,77 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
         if size == 0 {
             Ok(None)
         } else {
+            trace!("Packet received, token = {}, size = {}", self.token, size);
             Ok(Some(self.recv_buf.split_to(size)))
+        }
+    }
+
+    fn write(&mut self) -> Result<WriteStatus, Error> {
+        if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
+            && has_high_priority_packets()
+        {
+            trace!(
+                "Give up to send socket data due to low priority, token = {}",
+                self.token
+            );
+            return Ok(WriteStatus::LowPriority);
+        }
+
+        let buf = match self.send_queue.front_mut() {
+            Some((buf, promoted)) => {
+                if promoted {
+                    trace!("Low priority packet promoted to high priority, token = {}", self.token);
+                    incr_high_priority_packets();
+                }
+                buf
+            }
+            None => return Ok(WriteStatus::Complete),
+        };
+        let len = buf.0.len();
+        let pos = buf.1;
+        if pos >= len {
+            error!(
+                "Unexpected connection data, token = {}, len = {}, pos = {}",
+                self.token, len, pos
+            );
+            return Ok(WriteStatus::Complete);
+        }
+
+        let size = self.socket.write(&buf.0[pos..])?;
+
+        trace!(
+            "Succeed to send socket data, token = {}, size = {}",
+            self.token,
+            size
+        );
+        THROTTLING_SERVICE.write().on_dequeue(size);
+
+        if pos + size < len {
+            buf.1 += size;
+            Ok(WriteStatus::Ongoing)
+        } else {
+            trace!("Packet sent, token = {}, size = {}", self.token, len);
+            decr_high_priority_packets();
+            Ok(WriteStatus::Complete)
         }
     }
 
     pub fn writable<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
-        {
-            let buf = match self.send_queue.front_mut() {
-                Some(buf) => buf,
-                None => return Ok(WriteStatus::Complete),
-            };
-            let len = buf.0.len();
-            let pos = buf.1;
-            if pos >= len {
-                warn!(target: "network", "Unexpected connection data");
-                return Ok(WriteStatus::Complete);
-            }
-            match self.socket.write(&buf.0[pos..]) {
-                Ok(size) => {
-                    THROTTLING_SERVICE.write().on_dequeue(size);
+        let status = self.write();
 
-                    if pos + size < len {
-                        buf.1 += size;
-                        Ok(WriteStatus::Ongoing)
-                    } else {
-                        trace!(target: "network", "Wrote {} bytes token={:?}", len, self.token);
-                        Ok(WriteStatus::Complete)
-                    }
-                }
-                Err(e) => Err(e)?,
-            }
-        }.and_then(|status| {
-            if status == WriteStatus::Complete {
-                self.send_queue.pop_front();
-            }
-            if self.send_queue.is_empty() {
-                self.interest.remove(Ready::writable());
-            }
-            io.update_registration(self.token)?;
-            Ok(status)
-        })
+        if let Ok(WriteStatus::Complete) = status {
+            self.send_queue.pop_front();
+        }
+
+        if self.send_queue.is_empty() {
+            self.interest.remove(Ready::writable());
+        }
+
+        io.update_registration(self.token)?;
+
+        status
     }
 
     pub fn send<Message: Sync + Send + Clone + 'static>(
@@ -142,10 +200,17 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
     ) -> Result<SendQueueStatus, Error>
     {
         if !data.is_empty() {
-            trace!(target: "network", "Sending {} bytes token={:?}", data.len(), self.token);
+            trace!(
+                "Sending packet, token = {}, size = {}",
+                self.token,
+                data.len()
+            );
             THROTTLING_SERVICE.write().on_enqueue(data.len())?;
             let message = data.to_vec();
             self.send_queue.push_back((message, 0), priority);
+            if priority == SendQueuePriority::High {
+                incr_high_priority_packets();
+            }
             if !self.interest.is_writable() {
                 self.interest.insert(Ready::writable());
             }
@@ -181,14 +246,23 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
         if self.registered.load(AtomicOrdering::SeqCst) {
             return Ok(());
         }
-        trace!(target: "network", "Connection register; token={:?} reg={:?}", self.token, reg);
+        trace!(
+            "Connection register, token = {}, reg = {:?}",
+            self.token,
+            reg
+        );
         if let Err(e) = event_loop.register(
             &self.socket,
             reg,
             self.interest,
             PollOpt::edge(),
         ) {
-            trace!(target: "network", "Error registering; token={:?} reg={:?}: {:?}", self.token, reg, e);
+            trace!(
+                "Failed to register socket, token = {}, reg = {:?}, err = {:?}",
+                self.token,
+                reg,
+                e
+            );
         }
         self.registered.store(true, AtomicOrdering::SeqCst);
         Ok(())
@@ -197,14 +271,18 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
     pub fn update_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
-        trace!(target: "network", "Connection reregister; token={:?} reg={:?}", self.token, reg);
+        trace!(
+            "Connection reregister, token = {}, reg = {:?}",
+            self.token,
+            reg
+        );
         if !self.registered.load(AtomicOrdering::SeqCst) {
             self.register_socket(reg, event_loop)
         } else {
             event_loop
                 .reregister(&self.socket, reg, self.interest, PollOpt::edge())
                 .unwrap_or_else(|e| {
-                    trace!(target: "network", "Error reregistering; token={:?} reg={:?}: {:?}", self.token, reg, e);
+                    trace!("Failed to reregister socket, token = {}, reg = {:?}, err = {:?}", self.token, reg, e);
                 });
             Ok(())
         }
@@ -213,7 +291,7 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
     pub fn deregister_socket<H: Handler>(
         &self, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
-        trace!(target: "network", "Connection deregister; token={:?}", self.token);
+        trace!("Connection deregister, token = {}", self.token);
         event_loop.deregister(&self.socket).ok();
         Ok(())
     }
@@ -352,6 +430,7 @@ mod tests {
         connection
             .send_queue
             .push_back(data, SendQueuePriority::High);
+        incr_high_priority_packets();
 
         let status = connection.writable(&test_io());
 

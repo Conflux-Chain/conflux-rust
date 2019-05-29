@@ -372,7 +372,7 @@ impl NodeTable {
         let file = match fs::File::open(&path) {
             Ok(file) => file,
             Err(e) => {
-                debug!(target: "network", "node table file not found: {:?}", e);
+                debug!("node table file not found: {:?}", e);
                 return;
             }
         };
@@ -387,13 +387,13 @@ impl NodeTable {
                                 Self::node_reputation(&node.last_contact);
                             self.add_to_reputation_level(node_rep, node);
                         } else {
-                            warn!(target: "network", "There exist multiple entries for same node id: {:?}", node.id);
+                            warn!("There exist multiple entries for same node id: {:?}", node.id);
                         }
                     }
                 }
             }
             Err(e) => {
-                warn!(target: "network", "Error reading node table file: {:?}", e);
+                warn!("Error reading node table file: {:?}", e);
             }
         }
     }
@@ -768,7 +768,7 @@ impl NodeTable {
             None => return,
         };
         if let Err(e) = fs::create_dir_all(&path) {
-            warn!(target: "network", "Error creating node table directory: {:?}", e);
+            warn!("Error creating node table directory: {:?}", e);
             return;
         }
         if self.trusted {
@@ -791,11 +791,11 @@ impl NodeTable {
         match fs::File::create(&path) {
             Ok(file) => {
                 if let Err(e) = serde_json::to_writer_pretty(file, &table) {
-                    warn!(target: "network", "Error writing node table file: {:?}", e);
+                    warn!("Error writing node table file: {:?}", e);
                 }
             }
             Err(e) => {
-                warn!(target: "network", "Error creating node table file: {:?}", e);
+                warn!("Error creating node table file: {:?}", e);
             }
         }
     }

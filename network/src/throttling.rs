@@ -51,6 +51,11 @@ impl Service {
         self.queue_capacity = cap;
         self.min_throttle_queue_size = min_throttle_mb * mb;
         self.max_throttle_queue_size = max_throttle_mb * mb;
+
+        info!(
+            "throttling.initialize: min = {}M, max = {}M, cap = {}M",
+            min_throttle_mb, max_throttle_mb, cap_mb
+        );
     }
 
     pub(crate) fn on_enqueue(

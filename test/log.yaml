@@ -17,7 +17,7 @@ root:
 loggers:
     network:
         level: trace
-    core:
+    cfxcore:
         level: trace
     rpc:
         level: trace

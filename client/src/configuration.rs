@@ -8,23 +8,23 @@ use cfxcore::{
     sync::ProtocolConfiguration,
 };
 use txgen::TransactionGeneratorConfig;
-/// usage:
-/// ```
-/// build_config! {
-///     {
-///         (name, (type), default_value)
-///         ...
-///     }
-///     {
-///         (name, (type), default_value, converter)
-///     }
-/// }
-/// ```
-/// `converter` is a function used to convert a provided String to `Result<type,
-/// String>`. For each entry, field `name` of type `type` will be created in
-/// `RawConfiguration`, and it will be assigned to the value passed through
-/// commandline argument or configuration file. Commandline argument will
-/// override the configuration file if the parameter is given in both.
+// usage:
+// ```
+// build_config! {
+//     {
+//         (name, (type), default_value)
+//         ...
+//     }
+//     {
+//         (name, (type), default_value, converter)
+//     }
+// }
+// ```
+// `converter` is a function used to convert a provided String to `Result<type,
+// String>`. For each entry, field `name` of type `type` will be created in
+// `RawConfiguration`, and it will be assigned to the value passed through
+// commandline argument or configuration file. Commandline argument will
+// override the configuration file if the parameter is given in both.
 build_config! {
     {
         (port, (Option<u16>), Some(32323))
@@ -44,6 +44,9 @@ build_config! {
         (public_address, (Option<String>), None)
         (ledger_cache_size, (Option<usize>), Some(2048))
         (enable_discovery, (bool), true)
+        (discovery_fast_refresh_timeout_ms, (u64), 10000)
+        (discovery_round_timeout_ms, (u64), 500)
+        (discovery_housekeeping_timeout_ms, (u64), 1000)
         (node_table_timeout, (Option<u64>), Some(300))
         (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
         (fast_recover, (bool), true)
@@ -64,8 +67,11 @@ build_config! {
         (persist_terminal_period_ms, (u64), 60_000)
         (headers_request_timeout_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 120_000)
+        (transaction_request_timeout_ms, (u64), 30_000)
+        (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
         (max_inflight_request_count, (u64), 32)
         (start_as_catch_up_mode, (bool), false)
+        (received_tx_index_maintain_timeout_ms, (u64), 600_000)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (request_block_with_public, (bool), false)
         (load_test_chain, (Option<String>), None)
@@ -158,6 +164,14 @@ impl Configuration {
         }
         network_config.test_mode = self.raw_conf.test_mode;
         network_config.nodes_per_ip = self.raw_conf.p2p_nodes_per_ip;
+        network_config.fast_discovery_refresh_timeout = Duration::from_millis(
+            self.raw_conf.discovery_fast_refresh_timeout_ms,
+        );
+        network_config.discovery_round_timeout =
+            Duration::from_millis(self.raw_conf.discovery_round_timeout_ms);
+        network_config.housekeeping_timeout = Duration::from_millis(
+            self.raw_conf.discovery_housekeeping_timeout_ms,
+        );
         network_config
     }
 
@@ -242,11 +256,20 @@ impl Configuration {
             blocks_request_timeout: Duration::from_millis(
                 self.raw_conf.blocks_request_timeout_ms,
             ),
+            transaction_request_timeout: Duration::from_millis(
+                self.raw_conf.transaction_request_timeout_ms,
+            ),
+            tx_maintained_for_peer_timeout: Duration::from_millis(
+                self.raw_conf.tx_maintained_for_peer_timeout_ms,
+            ),
             max_inflight_request_count: self
                 .raw_conf
                 .max_inflight_request_count,
             request_block_with_public: self.raw_conf.request_block_with_public,
             start_as_catch_up_mode: self.raw_conf.start_as_catch_up_mode,
+            received_tx_index_maintain_timeout: Duration::from_millis(
+                self.raw_conf.received_tx_index_maintain_timeout_ms,
+            ),
             max_trans_count_received_in_catch_up: self
                 .raw_conf
                 .max_trans_count_received_in_catch_up,

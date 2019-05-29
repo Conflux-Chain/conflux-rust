@@ -36,11 +36,8 @@ impl SessionManager {
         self.sessions.read().get(idx).cloned()
     }
 
-    pub fn visit<F>(&self, mut visitor: F)
-    where F: FnMut(&Arc<RwLock<Session>>) {
-        for session in self.sessions.read().iter() {
-            visitor(session);
-        }
+    pub fn all(&self) -> Vec<Arc<RwLock<Session>>> {
+        self.sessions.read().iter().map(|s| s.clone()).collect()
     }
 
     /// Retrieves the session count of handshakes, egress and ingress.
@@ -75,6 +72,11 @@ impl SessionManager {
         io: &IoContext<NetworkIoMessage>, host: &NetworkServiceInner,
     ) -> Result<usize, String>
     {
+        debug!(
+            "SessionManager.create: enter, address = {:?}, id = {:?}",
+            address, id
+        );
+
         let mut sessions = self.sessions.write();
         let mut node_id_index = self.node_id_index.write();
         let mut ip_limit = self.ip_limit.write();
@@ -82,6 +84,9 @@ impl SessionManager {
         // ensure the node id is unique if specified.
         if let Some(node_id) = id {
             if node_id_index.contains_key(node_id) {
+                debug!(
+                    "SessionManager.create: leave on node_id already exists"
+                );
                 return Err(format!(
                     "session already exists, nodeId = {:?}",
                     node_id
@@ -92,6 +97,7 @@ impl SessionManager {
         // validate against node IP policy.
         let ip = address.ip();
         if !ip_limit.is_ip_allowed(&ip) {
+            debug!("SessionManager.create: leave on IP policy limited");
             return Err(format!(
                 "IP policy limited, nodeId = {:?}, addr = {:?}",
                 id, address
@@ -99,11 +105,17 @@ impl SessionManager {
         }
 
         let index = match sessions.vacant_entry() {
-            None => Err(String::from("Max sessions reached")),
+            None => {
+                debug!("SessionManager.create: leave on MAX sessions reached");
+                Err(String::from("Max sessions reached"))
+            }
             Some(entry) => {
                 match Session::new(io, socket, address, id, entry.index(), host)
                 {
-                    Err(e) => Err(format!("{:?}", e)),
+                    Err(e) => {
+                        debug!("SessionManager.create: leave on session creation failed");
+                        Err(format!("{:?}", e))
+                    }
                     Ok(session) => {
                         Ok(entry.insert(Arc::new(RwLock::new(session))).index())
                     }
@@ -118,37 +130,39 @@ impl SessionManager {
 
         ip_limit.on_add(ip);
 
+        debug!("SessionManager.create: leave");
+
         Ok(index)
     }
 
-    /// Removes an expired session with specified `idx`.
-    pub fn remove(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
+    pub fn remove(&self, session: &Session) {
+        debug!("SessionManager.remove: enter");
+
         let mut sessions = self.sessions.write();
-        let session = sessions.get(idx).cloned()?;
-        let sess = session.write();
 
-        if !sess.expired() {
-            return None;
+        if sessions.remove(session.token()).is_some() {
+            if let Some(node_id) = session.id() {
+                self.node_id_index.write().remove(node_id);
+            }
+
+            self.ip_limit.write().on_delete(session.address().ip());
+
+            debug!("SessionManager.remove: session removed");
         }
 
-        let removed = sessions.remove(idx)?;
-
-        if let Some(node_id) = sess.id() {
-            self.node_id_index.write().remove(node_id);
-        }
-
-        self.ip_limit.write().on_delete(sess.address().ip());
-
-        Some(removed)
+        debug!("SessionManager.remove: leave");
     }
 
     pub fn update_ingress_node_id(
         &self, idx: usize, node_id: &NodeId,
     ) -> Result<(), String> {
+        debug!("SessionManager.update_ingress_node_id: enter");
+
         let sessions = self.sessions.read();
         let mut node_id_index = self.node_id_index.write();
 
         if !sessions.contains(idx) {
+            debug!("SessionManager.update_ingress_node_id: leave on session not found");
             return Err(format!(
                 "session not found, index = {}, node_id = {:?}",
                 idx,
@@ -158,10 +172,13 @@ impl SessionManager {
 
         // ensure the node id is unique
         if let Some(cur_idx) = node_id_index.get(node_id) {
+            debug!("SessionManager.update_ingress_node_id: leave on node_id already exists");
             return Err(format!("session already exists, node_id = {:?}, cur_idx = {}, new_idx = {}", node_id.clone(), *cur_idx, idx));
         }
 
         node_id_index.insert(node_id.clone(), idx);
+
+        debug!("SessionManager.update_ingress_node_id: leave");
 
         Ok(())
     }

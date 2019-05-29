@@ -10,9 +10,13 @@ elif [ $# -eq 4 ]; then
     image="$4"
     type="m5.xlarge"
     public=""
+elif [[ -f slave_image ]]; then
+    image=`cat slave_image`
+    type="m5.xlarge"
+    public=""
 else
     # create master instances
-    image="ami-0afc9060cdd4c2aab" # experiment image
+    image="ami-087ea399212e0aab4" # experiment image
     type="m5.2xlarge"
     public="--public"
 fi

@@ -15,13 +15,12 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
-from scripts.exp_latency import pscp, pssh, kill_remote_conflux, cleanup_remote_logs
+from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
-        self.rpc_timewait = 30
         self.conf_parameters = {
             "log_level": "\"debug\"",
             "fast_recover": "true",
@@ -92,8 +91,7 @@ class P2PTest(ConfluxTestFramework):
         parser.add_argument(
             "--data-propagate-enabled",
             dest="data_propagate_enabled",
-            default=False,
-            type=bool
+            action='store_true',
         )
         parser.add_argument(
             "--data-propagate-interval-ms",
@@ -150,15 +148,16 @@ class P2PTest(ConfluxTestFramework):
         pscp(self.options.ips_file, zipped_conf_file, "~", 3, "copy conflux configuration files to remote nodes")
         os.remove(zipped_conf_file)
 
-        self.log.info("setup conflux runtime environment ...")
-        pssh(self.options.ips_file, "tar zxf conflux_conf.tgz -C /tmp", 3, "decompress conflux configuration files")
-        pssh(self.options.ips_file, "rm conflux_conf.tgz", 3, "delete conflux configuration files")
-
-        # start conflux on all nodes
-        self.log.info("start conflux on remote nodes ...")
-        pssh(self.options.ips_file, "sh ./remote_start_conflux.sh {} {} {} > start_conflux.out".format(
+        # setup on remote nodes and start conflux
+        self.log.info("setup conflux runtime environment and start conflux on remote nodes ...")
+        cmd_kill_conflux = "killall -9 conflux || echo already killed"
+        cmd_cleanup = "rm -rf /tmp/conflux_test_*"
+        cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
+        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} > start_conflux.out".format(
             self.options.tmpdir, p2p_port(0), self.options.nodes_per_host
-        ))
+        )
+        cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
+        pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
 
     def setup_network(self):
         self.setup_remote_conflux()
@@ -246,16 +245,12 @@ class P2PTest(ConfluxTestFramework):
                 best_block_futures.append(executor.submit(n.getbestblockhash))
 
             for f in block_count_futures:
-                if f.exception() is not None:
-                    self.log.error("failed to get block count: {}".format(f.exception()))
-                else:
-                    block_counts.append(f.result())
+                assert f.exception() is None, "failed to get block count: {}".format(f.exception())
+                block_counts.append(f.result())
 
             for f in best_block_futures:
-                if f.exception() is not None:
-                    self.log.error("failed to get best block: {}".format(f.exception()))
-                else:
-                    best_blocks.append(f.result())
+                assert f.exception() is None, "failed to get best block: {}".format(f.exception())
+                best_blocks.append(f.result())
 
             self.log.info("blocks: {}".format(Counter(block_counts)))
 

@@ -1,4 +1,5 @@
-set -eux
+set -eu
+
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 SCRIPT_DIR="$( cd "$(dirname "$0")" ; pwd -P )"
 
@@ -6,22 +7,40 @@ if [[ $# -lt 1 ]]; then
     echo "Parameters required: <keypair> [<branch>]"
     exit 1
 fi
+
 key_pair="$1"
 branch="${2:-master}"
-tmp_dir="tmp_data"
 
-if [[ -d "$tmp_dir" ]]; then
-    mv $tmp_dir ${tmp_dir}_backup
-fi
-mkdir $tmp_dir
-cd $tmp_dir
-$SCRIPT_DIR/launch-on-demand.sh 1 $key_pair ${key_pair}_master 
+echo "create an instance to make slave image ..."
+$SCRIPT_DIR/launch-on-demand.sh 1 $key_pair ${key_pair}_master
 
+echo "setup before making slave image ..."
 master_ip=`cat ips`
 master_id=`cat instances`
 setup_script="setup_image.sh"
 scp -o "StrictHostKeyChecking no" $SCRIPT_DIR/$setup_script ubuntu@$master_ip:~
 ssh ubuntu@$master_ip ./$setup_script $branch
 
+# create slave image
+echo "create slave image ..."
 res=`aws ec2 create-image --instance-id $master_id --name ${key_pair}_slave_image --no-reboot`
-echo $res|jq ".ImageId"
+image_id=`echo $res | jq ".ImageId" | tr -d '"'`
+echo "slave image created: $image_id"
+
+# wait until image is available
+while true
+do
+    image_info=`aws ec2 describe-images --image-ids $image_id`
+    image_status=`echo $image_info | jq ".Images[].State" | tr -d '"'`
+    echo "image is $image_status"
+    if [ "$image_status" != "pending" ]; then
+        break
+    fi
+    sleep 5
+done
+
+# delete the instance that used to make slave image
+echo "delete the instance that used to make slave image ..."
+./terminate-on-demand.sh
+
+echo $image_id > slave_image

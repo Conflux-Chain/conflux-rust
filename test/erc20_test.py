@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
 from eth_utils import decode_hex
+
+from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, privtoaddr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
@@ -91,6 +93,11 @@ class P2PTest(ConfluxTestFramework):
                     self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 if i == 2:
                         raise AssertionError("Tx {} not confirmed after 30 seconds".format(tx.hash_hex()))
+        # After having optimistic execution, get_receipts may get receipts with not deferred block, these extra blocks
+        # ensure that later get_balance can get correct executed balance for all transactions
+        client = RpcClient(self.nodes[0])
+        for _ in range(5):
+            client.generate_block()
 
     def get_balance(self, contract, token_address, nonce):
         tx = contract.functions.balanceOf(Web3.toChecksumAddress(encode_hex(token_address))).buildTransaction(self.tx_conf)
