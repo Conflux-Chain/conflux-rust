@@ -745,7 +745,7 @@ impl ConsensusGraphInner {
     ) -> Option<(usize, usize)> {
         if state_at > REWARD_EPOCH_COUNT as usize {
             let epoch_num = state_at - REWARD_EPOCH_COUNT as usize;
-            let anticone_penality_cutoff_epoch_index =
+            let anticone_penalty_cutoff_epoch_index =
                 epoch_num + ANTICONE_PENALTY_UPPER_EPOCH_COUNT as usize;
             let pivot_index = chain[epoch_num];
             debug_assert!(epoch_num == self.arena[pivot_index].height as usize);
@@ -753,7 +753,7 @@ impl ConsensusGraphInner {
                 epoch_num
                     == *self.arena[pivot_index].data.epoch_number.borrow()
             );
-            Some((pivot_index, chain[anticone_penality_cutoff_epoch_index]))
+            Some((pivot_index, chain[anticone_penalty_cutoff_epoch_index]))
         } else {
             None
         }
@@ -763,7 +763,7 @@ impl ConsensusGraphInner {
         &self, reward_index: Option<(usize, usize)>,
     ) -> Option<RewardExecutionInfo> {
         reward_index.map(
-            |(pivot_index, anticone_penality_cutoff_epoch_index)| {
+            |(pivot_index, anticone_penalty_cutoff_epoch_index)| {
                 let pivot_hash = self.arena[pivot_index].hash;
                 let epoch_block_hashes =
                     self.get_epoch_block_hashes(pivot_index);
@@ -775,15 +775,8 @@ impl ConsensusGraphInner {
                     Vec::with_capacity(epoch_block_hashes.len());
                 for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
                     // TODO: partial invalidity is with respect to a certain
-                    // pivot chain block. TODO: When pivot
-                    // chain is reverted before the block, anticone should be
-                    // TODO: recomputed.
-                    //
-                    // TODO: It is not entirely correct to directly mark partial
-                    // invalid. For incentive
-                    // TODO: the definition of partial invalid is that anticone
-                    // penalty is greater TODO: than or
-                    // equal to block reward.
+                    // TODO: pivot chain block. When pivot chain is reverted
+                    // TODO: before the block, anticone should be recomputed.
                     let mut anticone_overlimited =
                         self.arena[*index].data.partial_invalid;
                     let mut anticone_difficulty: U512 = 0.into();
@@ -797,7 +790,7 @@ impl ConsensusGraphInner {
                             .anticone
                             .difference(
                                 &self.arena
-                                    [anticone_penality_cutoff_epoch_index]
+                                    [anticone_penalty_cutoff_epoch_index]
                                     .data
                                     .anticone,
                             )
@@ -820,7 +813,7 @@ impl ConsensusGraphInner {
                         {
                             anticone_overlimited = true;
                         }
-                    // LINT.ThenChange(consensus/consensus_executor.rs)
+                        // LINT.ThenChange(consensus/consensus_executor.rs)
                     } else {
                         anticone_set_size = 0;
                     }
@@ -1509,14 +1502,14 @@ impl ConsensusGraph {
             {
                 let epoch_num =
                     fork_height + fork_at - REWARD_EPOCH_COUNT as usize;
-                let anticone_penality_cutoff_epoch_index =
+                let anticone_penalty_cutoff_epoch_index =
                     epoch_num + ANTICONE_PENALTY_UPPER_EPOCH_COUNT as usize;
-                let pivot_block_upper = if anticone_penality_cutoff_epoch_index
+                let pivot_block_upper = if anticone_penalty_cutoff_epoch_index
                     > fork_height
                 {
-                    chain[anticone_penality_cutoff_epoch_index - fork_height]
+                    chain[anticone_penalty_cutoff_epoch_index - fork_height]
                 } else {
-                    inner.pivot_chain[anticone_penality_cutoff_epoch_index]
+                    inner.pivot_chain[anticone_penalty_cutoff_epoch_index]
                 };
                 let pivot_index = if epoch_num > fork_height {
                     chain[epoch_num - fork_height]

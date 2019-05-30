@@ -364,7 +364,6 @@ impl ConsensusExecutionHandler {
             // All transaction fees are shared among blocks inside one epoch
             self.process_rewards_and_fees(
                 &mut state,
-                &reward_execution_info.pivot_hash,
                 &reward_execution_info,
                 on_local_pivot,
                 debug_record,
@@ -558,7 +557,7 @@ impl ConsensusExecutionHandler {
     /// `epoch_block_states` includes if a block is partial invalid and its
     /// anticone difficulty
     fn process_rewards_and_fees(
-        &self, state: &mut State, pivot_hash: &H256,
+        &self, state: &mut State,
         reward_info: &RewardExecutionInfo, on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
@@ -571,6 +570,7 @@ impl ConsensusExecutionHandler {
             .blocks_by_hash_list(&reward_info.epoch_block_hashes, false)
             .expect("blocks exist");
         let pivot_block = epoch_blocks.last().expect("Not empty");
+        let pivot_hash = &reward_info.pivot_hash;
         assert!(pivot_block.hash() == *pivot_hash);
         debug!("Process rewards and fees for {:?}", pivot_hash,);
         // TODO: use light difficulty.
