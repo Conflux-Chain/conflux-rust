@@ -33,11 +33,16 @@ use primitives::{
 use rand::prelude::*;
 use rlp::Encodable;
 use secret_store::{SecretStore, SharedSecretStore};
-use std::{collections::HashMap, sync::Arc, thread, time};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    thread,
+    time::{self, Instant},
+};
+use time::Duration;
 
 pub mod propagate;
 
-#[allow(unused)]
 enum TransGenState {
     Start,
     Stop,
@@ -52,7 +57,7 @@ impl TransactionGeneratorConfig {
     pub fn new(generate_tx: bool, period_ms: u64) -> Self {
         TransactionGeneratorConfig {
             generate_tx,
-            period: time::Duration::from_millis(period_ms),
+            period: time::Duration::from_micros(period_ms),
         }
     }
 }
@@ -83,6 +88,10 @@ impl TransactionGenerator {
             state: RwLock::new(TransGenState::Start),
             key_pair,
         }
+    }
+
+    pub fn stop(&self) {
+        *self.state.write() = TransGenState::Stop;
     }
 
     pub fn get_best_state_at(&self, block_hash: &H256) -> State {
@@ -158,29 +167,26 @@ impl TransactionGenerator {
     pub fn generate_transactions(
         txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
     ) -> Result<(), Error> {
+        let account_count = 2000;
         let mut nonce_map: HashMap<Address, U256> = HashMap::new();
         let mut balance_map: HashMap<Address, U256> = HashMap::new();
 
-        let key_pair = txgen.key_pair.clone().expect("should exist");
+        let initial_key_pair = txgen.key_pair.clone().expect("should exist");
         let secret_store = SecretStore::new();
-        //        let mut balance_map = HashMap::new();
-        //        balance_map
-        //            .insert(public_to_address(key_pair.public()),
-        // U256::from(10000000));
         debug!(
             "tx_gen address={:?} pub_key={:?}",
-            public_to_address(key_pair.public()),
-            key_pair.public()
+            public_to_address(initial_key_pair.public()),
+            initial_key_pair.public()
         );
-        debug!("{:?} {:?}", tx_config.generate_tx, tx_config.period);
-        secret_store.insert(key_pair);
+        debug!(
+            "Tx Generation Config {:?} {:?}",
+            tx_config.generate_tx, tx_config.period
+        );
+        secret_store.insert(initial_key_pair.clone());
         let mut tx_n = 0;
+        let mut start_time = Instant::now();
+        // Wait for initial tx
         loop {
-            match *txgen.state.read() {
-                TransGenState::Stop => return Ok(()),
-                _ => {}
-            }
-
             let state = State::new(
                 StateDb::new(
                     txgen
@@ -191,71 +197,77 @@ impl TransactionGenerator {
                 0.into(),
                 Default::default(),
             );
-
-            // Randomly select sender and receiver.
-            // Sender must exist in the account list.
-            // Receiver can be not in the account list which
-            // leads to generate a new account
-            let account_count = secret_store.count();
-            let mut sender_index: usize = random();
-            sender_index %= account_count;
-            let sender_kp = secret_store.get_keypair(sender_index);
-
-            // Randomly generate the to-be-transferred value
-            // based on the balance of sender
-            let sender_address = public_to_address(sender_kp.public());
+            let sender_address = initial_key_pair.address();
             let sender_balance = state.balance(&sender_address).ok();
-
-            trace!(
-                "choose sender addr={:?} balance={:?}",
-                sender_address,
-                sender_balance
-            );
             if sender_balance.is_none()
                 || sender_balance.clone().unwrap() == 0.into()
             {
-                thread::sleep(tx_config.period);
+                thread::sleep(Duration::from_millis(100));
                 continue;
-            }
-            let sender_balance = balance_map
-                .entry(sender_address)
-                .or_insert(sender_balance.unwrap());
-            if *sender_balance < 42000.into() {
-                secret_store.remove_keypair(sender_index);
-                if secret_store.count() == 0 {
-                    break;
-                }
-                continue;
-            }
-
-            let mut balance_to_transfer = U256::from(0);
-            let mut receiver_kp: KeyPair;
-            let mut receiver_index: usize = random();
-            receiver_index %= account_count;
-            if sender_index == receiver_index && secret_store.count() < 20000 {
-                balance_to_transfer = *sender_balance / 2;
-                // Create a new receiver account
-                loop {
-                    receiver_kp = Random.generate()?;
-                    if secret_store.insert(receiver_kp.clone()) {
-                        break;
-                    }
-                }
             } else {
-                receiver_kp = secret_store.get_keypair(receiver_index);
+                balance_map
+                    .insert(sender_address.clone(), sender_balance.unwrap());
+                nonce_map.insert(sender_address, 0.into());
+                break;
             }
-            *sender_balance -= balance_to_transfer + 21000;
-            // Generate nonce for the transaction
-            let sender_state_nonce = state.nonce(&sender_address).unwrap();
-            let entry = nonce_map
-                .entry(sender_address)
-                .or_insert(sender_state_nonce);
-            if sender_state_nonce > *entry {
-                *entry = sender_state_nonce;
-            }
-            let sender_nonce = *entry;
-            *entry += U256::one();
+        }
 
+        // Generate more tx
+        loop {
+            match *txgen.state.read() {
+                TransGenState::Stop => return Ok(()),
+                _ => {}
+            }
+
+            let (sender_kp, receiver_kp, balance_to_transfer) =
+                if secret_store.count() < account_count {
+                    let mut receiver_kp: KeyPair;
+                    let sender_address = initial_key_pair.address();
+                    let sender_balance =
+                        balance_map.get_mut(&sender_address).unwrap();
+                    let balance_to_transfer = *sender_balance / account_count;
+                    // Create a new receiver account
+                    loop {
+                        receiver_kp = Random.generate()?;
+                        if secret_store.insert(receiver_kp.clone()) {
+                            nonce_map.insert(receiver_kp.address(), 0.into());
+                            break;
+                        }
+                    }
+                    *sender_balance -= balance_to_transfer + 21000;
+                    (initial_key_pair.clone(), receiver_kp, balance_to_transfer)
+                } else {
+                    // Randomly select sender and receiver.
+                    // Sender must exist in the account list.
+                    // Receiver can be not in the account list which
+                    // leads to generate a new account
+                    let account_count = secret_store.count();
+                    let mut receiver_index: usize = random();
+                    receiver_index %= account_count;
+                    let receiver_kp = secret_store.get_keypair(receiver_index);
+                    let mut sender_index: usize = random();
+                    sender_index %= account_count;
+                    let sender_kp = secret_store.get_keypair(sender_index);
+
+                    // Randomly generate the to-be-transferred value
+                    // based on the balance of sender
+                    let sender_address = public_to_address(sender_kp.public());
+                    let sender_balance =
+                        balance_map.get_mut(&sender_address).unwrap();
+
+                    if *sender_balance < 42000.into() {
+                        secret_store.remove_keypair(sender_index);
+                        if secret_store.count() == 0 {
+                            break;
+                        }
+                        continue;
+                    }
+                    let balance_to_transfer = U256::from(0);
+                    *sender_balance -= balance_to_transfer + 21000;
+                    (sender_kp, receiver_kp, balance_to_transfer)
+                };
+            // Generate nonce for the transaction
+            let sender_nonce = nonce_map.get_mut(&sender_kp.address()).unwrap();
             let receiver_address = public_to_address(receiver_kp.public());
             trace!(
                 "receiver={:?} value={:?} nonce={:?}",
@@ -268,16 +280,16 @@ impl TransactionGenerator {
             // Generate the transaction, sign it, and push into the transaction
             // pool
             let tx = Transaction {
-                nonce: sender_nonce,
+                nonce: *sender_nonce,
                 gas_price: U256::from(1u64),
                 gas: U256::from(21000u64),
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 data: Bytes::new(),
             };
+            *sender_nonce += U256::one();
 
             let signed_tx = tx.sign(sender_kp.secret());
-            //            txgen.txpool.add_pending(signed_tx.clone());
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
             txgen.txpool.insert_new_transactions(
@@ -288,7 +300,15 @@ impl TransactionGenerator {
             if tx_n % 100 == 0 {
                 info!("Generated {} transactions", tx_n);
             }
-            thread::sleep(tx_config.period);
+            let now = Instant::now();
+            let time_elapsed = now.duration_since(start_time);
+            if let Some(time_left) = tx_config.period.checked_sub(time_elapsed)
+            {
+                thread::sleep(time_left);
+            } else {
+                debug!("Elapsed time larger than the time needed for sleep: time_elapsed={:?}", time_elapsed);
+            }
+            start_time = Instant::now();
         }
         Ok(())
     }

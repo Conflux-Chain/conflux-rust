@@ -1,6 +1,5 @@
-rm -rf ~/.ssh/known_hosts
+#!/usr/bin/env bash
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
-touch ~/.ssh/known_hosts
 
 # terminate all instances
 if [[ -f instances ]]; then

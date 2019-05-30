@@ -254,7 +254,7 @@ impl SynchronizationProtocolHandler {
             debug!("Error sending message: {:?}", e);
             return Err(e);
         };
-        debug!(
+        trace!(
             "Send message({}) to {:?}",
             msg.msg_id(),
             io.get_peer_node_id(peer)
@@ -364,7 +364,12 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
-        debug!("on_get_compact_blocks_response {:?}", resp);
+        debug!(
+            "on_get_compact_blocks_response request_id={} compact={} block={}",
+            resp.request_id(),
+            resp.compact_blocks.len(),
+            resp.blocks.len()
+        );
         let req = self.match_request(io, peer, resp.request_id())?;
         let mut failed_blocks = Vec::new();
         let mut completed_blocks = Vec::new();
@@ -486,7 +491,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp = rlp.as_val::<GetTransactionsResponse>()?;
-        debug!("on_get_transactions_response {:?}", resp);
+        debug!("on_get_transactions_response {:?}", resp.request_id());
 
         self.match_request(io, peer, resp.request_id())?;
         // FIXME: Do some check based on transaction request.
@@ -544,6 +549,11 @@ impl SynchronizationProtocolHandler {
                 transactions,
             }
         };
+        debug!(
+            "on_get_transactions request {} txs, returned {} txs",
+            get_transactions.indices.len(),
+            resp.transactions.len()
+        );
 
         self.send_message(io, peer, &resp, SendQueuePriority::Normal)?;
         Ok(())
@@ -609,6 +619,7 @@ impl SynchronizationProtocolHandler {
             (indices, tx_ids)
         };
 
+        debug!("Request {} transactions from peer={}", indices.len(), peer);
         match self.request_transactions(io, peer, indices, tx_ids.clone()) {
             Ok(_) => Ok(()),
             Err(e) => {

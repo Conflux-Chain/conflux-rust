@@ -84,11 +84,20 @@ class LogAnalyzer:
         block_size_list = []
         block_timestamp_list = []
         referee_count_list = []
+        max_time = 0
+        min_time = 10 ** 40
         for block in self.agg.blocks.values():
             block_txs_list.append(block.txs)
             block_size_list.append(block.size)
             block_timestamp_list.append(block.timestamp)
             referee_count_list.append(len(block.referees))
+            # Ignore the empty warm-up blocks at the start
+            if block.txs > 0:
+                ts = block.timestamp
+                if ts < min_time:
+                    min_time = ts
+                if ts > max_time:
+                    max_time = ts
 
         table.add_data("block txs", "%d", block_txs_list)
         table.add_data("block size", "%d", block_size_list)
@@ -107,6 +116,9 @@ class LogAnalyzer:
             else:
                 table.add_stat(name, "%d", self.agg.stat_sync_cons_gap(p))
 
+        tx_sum = sum(block_txs_list)
+        print("{} txs generated".format(tx_sum))
+        print("Throughput is {}".format(tx_sum / (max_time - min_time)))
         table.pretty_print()
         if self.csv_output is not None:
             table.output_csv(self.csv_output)

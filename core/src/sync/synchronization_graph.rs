@@ -1160,17 +1160,17 @@ impl SynchronizationGraph {
         let blocks = self.data_man.blocks.read().heap_size_of_children();
         let block_receipts =
             self.data_man.block_receipts.read().heap_size_of_children();
-        let transaction_addresses = self
+        let transaction_addresses_data = self
             .data_man
             .transaction_addresses
             .read()
-            .heap_size_of_children()
-            + self
-                .consensus
-                .txpool
-                .unexecuted_transaction_addresses
-                .lock()
-                .heap_size_of_children();
+            .heap_size_of_children();
+        let transaction_addresses_unexecuted = self
+            .consensus
+            .txpool
+            .unexecuted_transaction_addresses
+            .lock()
+            .heap_size_of_children();
         let transaction_pubkey = self
             .consensus
             .txpool
@@ -1180,7 +1180,8 @@ impl SynchronizationGraph {
         CacheSize {
             blocks,
             block_receipts,
-            transaction_addresses,
+            transaction_addresses: transaction_addresses_data
+                + transaction_addresses_unexecuted,
             compact_blocks,
             transaction_pubkey,
         }
@@ -1192,7 +1193,6 @@ impl SynchronizationGraph {
         let current_size = self.cache_size().total();
         let mut blocks = self.data_man.blocks.write();
         let mut executed_results = self.data_man.block_receipts.write();
-        let mut tx_address = self.data_man.transaction_addresses.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut transaction_pubkey_cache =
             self.consensus.txpool.transaction_pubkey_cache.write();
@@ -1201,6 +1201,7 @@ impl SynchronizationGraph {
             .txpool
             .unexecuted_transaction_addresses
             .lock();
+        let mut tx_address = self.data_man.transaction_addresses.write();
         let mut cache_man = self.cache_man.lock();
         info!(
             "Before gc cache_size={} {} {} {} {} {} {}",
