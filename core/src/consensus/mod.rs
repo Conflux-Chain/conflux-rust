@@ -21,7 +21,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256, U512};
-use link_cut_tree::{LinkCutTree, SignedBigNum};
+use link_cut_tree::{MinLinkCutTree, SignedBigNum};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
@@ -119,7 +119,7 @@ pub struct ConsensusGraphInner {
     genesis_block_state_root: H256,
     genesis_block_receipts_root: H256,
     indices_in_epochs: HashMap<usize, Vec<usize>>,
-    weight_tree: LinkCutTree,
+    weight_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
     pub current_difficulty: U256,
     data_man: Arc<BlockDataManager>,
@@ -147,7 +147,7 @@ impl ConsensusGraphInner {
                 .deferred_receipts_root()
                 .clone(),
             indices_in_epochs: HashMap::new(),
-            weight_tree: LinkCutTree::new(),
+            weight_tree: MinLinkCutTree::new(),
             pow_config,
             current_difficulty: pow_config.initial_difficulty.into(),
             data_man: data_man.clone(),
@@ -166,7 +166,7 @@ impl ConsensusGraphInner {
         );
         inner.genesis_block_index = genesis_index;
         inner.weight_tree.make_tree(inner.genesis_block_index);
-        inner.weight_tree.update_weight(
+        inner.weight_tree.path_apply(
             inner.genesis_block_index,
             &SignedBigNum::pos(
                 *data_man.genesis_block().block_header.difficulty(),
@@ -226,12 +226,12 @@ impl ConsensusGraphInner {
         let mut index = parent_index;
         let mut parent = self.arena[index].parent;
         let total_difficulty =
-            self.weight_tree.subtree_weight(self.genesis_block_index);
+            U256::from(self.weight_tree.get(self.genesis_block_index));
 
         while index != self.genesis_block_index {
             debug_assert!(parent != NULL);
             let m = total_difficulty - self.arena[parent].past_difficulty;
-            let n = self.weight_tree.subtree_weight(index);
+            let n = U256::from(self.weight_tree.get(index));
             if ((U512::from(2) * U512::from(m - n)) > U512::from(n))
                 && (U512::from(m)
                     > (U512::from(HEAVY_BLOCK_THRESHOLD)
@@ -282,7 +282,7 @@ impl ConsensusGraphInner {
             let total_difficulty_to_minus = difficulties_to_minus
                 .iter()
                 .fold(U256::from(0), |acc, (_, difficulty)| acc + difficulty);
-            self.weight_tree.subtree_weight(self.genesis_block_index)
+            U256::from(self.weight_tree.get(self.genesis_block_index))
                 - total_difficulty_to_minus
         };
 
@@ -294,7 +294,7 @@ impl ConsensusGraphInner {
             }
 
             let m = total_difficulty - self.arena[parent].past_difficulty;
-            let mut n = self.weight_tree.subtree_weight(index);
+            let mut n = U256::from(self.weight_tree.get(index));
             assert!(n > difficulty_to_minus);
             n = n - difficulty_to_minus;
             if ((U512::from(2) * U512::from(m - n)) > U512::from(n))
@@ -386,7 +386,7 @@ impl ConsensusGraphInner {
             }
             let difficulty = self.arena[*index].difficulty;
             self.weight_tree
-                .update_weight(*index, &SignedBigNum::neg(difficulty));
+                .path_apply(*index, &SignedBigNum::neg(difficulty));
         }
 
         // Check the pivot selection decision.
@@ -415,8 +415,8 @@ impl ConsensusGraphInner {
                 .weight_tree
                 .ancestor_at(parent, self.arena[lca].height as usize + 1);
 
-            let fork_subtree_weight = self.weight_tree.subtree_weight(fork);
-            let pivot_subtree_weight = self.weight_tree.subtree_weight(pivot);
+            let fork_subtree_weight = self.weight_tree.get(fork);
+            let pivot_subtree_weight = self.weight_tree.get(pivot);
 
             if (fork_subtree_weight > pivot_subtree_weight)
                 || ((fork_subtree_weight == pivot_subtree_weight)
@@ -434,7 +434,7 @@ impl ConsensusGraphInner {
             }
             let difficulty = self.arena[*index].difficulty;
             self.weight_tree
-                .update_weight(*index, &SignedBigNum::pos(difficulty));
+                .path_apply(*index, &SignedBigNum::pos(difficulty));
         }
 
         valid
@@ -993,7 +993,7 @@ impl ConsensusGraph {
     pub fn get_block_total_difficulty(&self, hash: &H256) -> Option<U256> {
         let mut w = self.inner.write();
         if let Some(idx) = w.indices.get(hash).cloned() {
-            Some(w.weight_tree.subtree_weight(idx))
+            Some(U256::from(w.weight_tree.get(idx)))
         } else {
             None
         }
@@ -1474,7 +1474,7 @@ impl ConsensusGraph {
             let mut heaviest = NULL;
             let mut heaviest_weight = U256::zero();
             for index in &inner.arena[u].children {
-                let weight = inner.weight_tree.subtree_weight(*index);
+                let weight = U256::from(inner.weight_tree.get(*index));
                 if heaviest == NULL
                     || weight > heaviest_weight
                     || (weight == heaviest_weight
@@ -1667,7 +1667,7 @@ impl ConsensusGraph {
 
         inner.weight_tree.make_tree(me);
         inner.weight_tree.link(inner.arena[me].parent, me);
-        inner.weight_tree.update_weight(
+        inner.weight_tree.path_apply(
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
         );
@@ -1758,7 +1758,7 @@ impl ConsensusGraph {
 
         inner.weight_tree.make_tree(me);
         inner.weight_tree.link(inner.arena[me].parent, me);
-        inner.weight_tree.update_weight(
+        inner.weight_tree.path_apply(
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
         );
@@ -1774,9 +1774,9 @@ impl ConsensusGraph {
 
             let fork_at = inner.arena[lca].height as usize + 1;
             let prev = inner.pivot_chain[fork_at];
-            let prev_weight = inner.weight_tree.subtree_weight(prev);
+            let prev_weight = inner.weight_tree.get(prev);
             let new = inner.weight_tree.ancestor_at(me, fork_at as usize);
-            let new_weight = inner.weight_tree.subtree_weight(new);
+            let new_weight = inner.weight_tree.get(new);
 
             if prev_weight < new_weight
                 || (prev_weight == new_weight
@@ -1790,7 +1790,7 @@ impl ConsensusGraph {
                     let mut heaviest = NULL;
                     let mut heaviest_weight = U256::zero();
                     for index in &inner.arena[u].children {
-                        let weight = inner.weight_tree.subtree_weight(*index);
+                        let weight = U256::from(inner.weight_tree.get(*index));
                         if heaviest == NULL
                             || weight > heaviest_weight
                             || (weight == heaviest_weight
