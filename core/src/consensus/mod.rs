@@ -360,6 +360,7 @@ impl ConsensusGraphInner {
             "Block {} inserted into Consensus with index={} past_difficulty={}",
             hash, index, past_difficulty
         );
+        self.weight_tree.make_tree(index);
 
         (index, self.indices.len())
     }
@@ -1756,7 +1757,6 @@ impl ConsensusGraph {
         }
         debug!("Block {} is fully valid", inner.arena[me].hash);
 
-        inner.weight_tree.make_tree(me);
         inner.weight_tree.link(inner.arena[me].parent, me);
         inner.weight_tree.update_weight(
             me,
