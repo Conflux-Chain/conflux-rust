@@ -13,10 +13,10 @@ from test_framework.util import *
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 16
+        self.num_nodes = 8
         self.conf_parameters["generate_tx"] = "true"
         # Every node generates 1 tx every second
-        self.conf_parameters["generate_tx_period_us"] = "1000000"
+        self.conf_parameters["generate_tx_period_us"] = "100000"
         self.conf_parameters["log_level"] = "\"debug\""
 
     def setup_network(self):

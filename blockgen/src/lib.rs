@@ -146,8 +146,11 @@ impl BlockGenerator {
 
     /// Stop mining
     pub fn stop(bg: &BlockGenerator) {
-        let mut write = bg.state.write();
-        *write = MiningState::Stop;
+        {
+            let mut write = bg.state.write();
+            *write = MiningState::Stop;
+        }
+        bg.txgen.stop()
     }
 
     /// Send new PoW problem to workers

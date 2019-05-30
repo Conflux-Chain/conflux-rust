@@ -43,7 +43,6 @@ use time::Duration;
 
 pub mod propagate;
 
-#[allow(unused)]
 enum TransGenState {
     Start,
     Stop,
@@ -89,6 +88,10 @@ impl TransactionGenerator {
             state: RwLock::new(TransGenState::Start),
             key_pair,
         }
+    }
+
+    pub fn stop(&self) {
+        *self.state.write() = TransGenState::Stop;
     }
 
     pub fn get_best_state_at(&self, block_hash: &H256) -> State {
