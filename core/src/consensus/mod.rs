@@ -978,6 +978,11 @@ impl ConsensusGraph {
         }
     }
 
+    pub fn wait_for_best_state_block_execution(&self) {
+        let best_state_block = self.inner.read().best_state_block_hash();
+        self.executor.wait_for_result(best_state_block);
+    }
+
     pub fn check_mining_heavy_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         light_difficulty: &U256,
