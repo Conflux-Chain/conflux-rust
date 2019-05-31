@@ -220,7 +220,9 @@ impl Configuration {
                 .debug_dump_dir_invalid_state_root
                 .clone(),
             record_tx_address: self.raw_conf.record_tx_address,
-            enable_optimistic_execution: self.raw_conf.enable_optimistic_execution,
+            enable_optimistic_execution: self
+                .raw_conf
+                .enable_optimistic_execution,
             bench_mode: false,
         }
     }
