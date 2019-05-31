@@ -10,7 +10,7 @@ use super::consensus::consensus_executor::ConsensusExecutor;
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager},
-    consensus::consensus_executor::{EpochExecutionTask, RewardExecutionInfo},
+    consensus::consensus_executor::EpochExecutionTask,
     db::COL_MISC,
     ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
@@ -57,6 +57,7 @@ pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
 /// lead to performance downgrade
 const REWARD_EPOCH_COUNT: u64 = 12;
 const ANTICONE_PENALTY_UPPER_EPOCH_COUNT: u64 = 10;
+// TODO: this ratio seems too small.
 const ANTICONE_PENALTY_RATIO: u64 = 100;
 /// 900 Conflux tokens
 const BASE_MINING_REWARD: u64 = 900;
@@ -140,6 +141,30 @@ impl ConsensusGraphNodeData {
 /// is 2 *  SubTW(B, x) + x.weight + PastW(x.parent).
 ///
 /// adaptive could be computed in a similar manner.
+pub struct ConsensusGraphNode {
+    pub hash: H256,
+    pub height: u64,
+    pub is_heavy: bool,
+    pub difficulty: U256,
+    /// The total difficulty of its past set (include itself)
+    pub past_difficulty: U256,
+    pub pow_quality: U256,
+    pub parent: usize,
+    pub children: Vec<usize>,
+    pub referrers: Vec<usize>,
+    pub referees: Vec<usize>,
+    pub data: ConsensusGraphNodeData,
+}
+
+impl ConsensusGraphNode {
+    pub fn light_difficulty(&self) -> U256 {
+        if self.is_heavy {
+            self.difficulty / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+        } else {
+            self.difficulty
+        }
+    }
+}
 
 pub struct ConsensusGraphInner {
     pub arena: Slab<ConsensusGraphNode>,
@@ -219,6 +244,7 @@ impl ConsensusGraphInner {
         let (genesis_index, _) = inner.insert(
             data_man.genesis_block().as_ref(),
             *data_man.genesis_block().block_header.difficulty(),
+            false,
         );
         inner.genesis_block_index = genesis_index;
         inner.weight_tree.make_tree(inner.genesis_block_index);
@@ -261,7 +287,7 @@ impl ConsensusGraphInner {
         let execution_task = EpochExecutionTask::new(
             self.arena[epoch_index].hash,
             self.get_epoch_block_hashes(epoch_index),
-            self.get_reward_execution_info(opt_height, &self.pivot_chain),
+            self.get_pivot_reward_hashes(opt_height, &self.pivot_chain),
             true,
             false,
         );
@@ -469,7 +495,7 @@ impl ConsensusGraphInner {
     }
 
     pub fn insert(
-        &mut self, block: &Block, past_difficulty: U256,
+        &mut self, block: &Block, past_difficulty: U256, is_heavy: bool,
     ) -> (usize, usize) {
         let hash = block.hash();
 
@@ -493,6 +519,7 @@ impl ConsensusGraphInner {
         let index = self.arena.insert(ConsensusGraphNode {
             hash,
             height: block.block_header.height(),
+            is_heavy: is_heavy,
             difficulty: *block.block_header.difficulty(),
             past_difficulty,
             pow_quality: block.block_header.pow_quality,
@@ -740,9 +767,9 @@ impl ConsensusGraphInner {
     /// Return the consensus graph indexes of the pivot block where the rewards
     /// of its epoch should be computed The rewards are needed to compute
     /// the state of the epoch at height `state_at` of `chain`
-    fn get_pivot_reward_index(
+    fn get_pivot_reward_hashes(
         &self, state_at: usize, chain: &Vec<usize>,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<(H256, H256)> {
         if state_at > REWARD_EPOCH_COUNT as usize {
             let epoch_num = state_at - REWARD_EPOCH_COUNT as usize;
             let anticone_penalty_cutoff_epoch_index =
@@ -753,91 +780,13 @@ impl ConsensusGraphInner {
                 epoch_num
                     == *self.arena[pivot_index].data.epoch_number.borrow()
             );
-            Some((pivot_index, chain[anticone_penalty_cutoff_epoch_index]))
+            Some((
+                self.arena[pivot_index].hash,
+                self.arena[chain[anticone_penalty_cutoff_epoch_index]].hash,
+            ))
         } else {
             None
         }
-    }
-
-    fn get_reward_execution_info_from_index(
-        &self, reward_index: Option<(usize, usize)>,
-    ) -> Option<RewardExecutionInfo> {
-        reward_index.map(
-            |(pivot_index, anticone_penalty_cutoff_epoch_index)| {
-                let pivot_hash = self.arena[pivot_index].hash;
-                let epoch_block_hashes =
-                    self.get_epoch_block_hashes(pivot_index);
-                let mut epoch_block_anticone_overlimited =
-                    Vec::with_capacity(epoch_block_hashes.len());
-                let mut epoch_block_anticone_set_sizes =
-                    Vec::with_capacity(epoch_block_hashes.len());
-                let mut epoch_block_anticone_difficulties =
-                    Vec::with_capacity(epoch_block_hashes.len());
-                for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
-                    // TODO: partial invalidity is with respect to a certain
-                    // TODO: pivot chain block. When pivot chain is reverted
-                    // TODO: before the block, anticone should be recomputed.
-                    let mut anticone_overlimited =
-                        self.arena[*index].data.partial_invalid;
-                    let mut anticone_difficulty: U512 = 0.into();
-                    // If a block is partial_invalid, it won't have reward and
-                    // anticone_difficulty will not be used, so it's okay to set
-                    // it to 0.
-                    let anticone_set_size;
-                    if !anticone_overlimited {
-                        let anticone_set = self.arena[*index]
-                            .data
-                            .anticone
-                            .difference(
-                                &self.arena
-                                    [anticone_penalty_cutoff_epoch_index]
-                                    .data
-                                    .anticone,
-                            )
-                            .cloned()
-                            .collect::<HashSet<_>>();
-                        anticone_set_size = anticone_set.len();
-
-                        for a_index in anticone_set {
-                            // TODO: Use base difficulty.
-                            anticone_difficulty +=
-                                U512::from(self.arena[a_index].difficulty);
-                        }
-
-                        // TODO: What is the rational to use difficulty instead
-                        // of block count?
-                        // LINT.IfChange(ANTICONE_PENALTY)
-                        if anticone_difficulty
-                            / U512::from(self.arena[*index].difficulty)
-                            >= U512::from(ANTICONE_PENALTY_RATIO)
-                        {
-                            anticone_overlimited = true;
-                        }
-                        // LINT.ThenChange(consensus/consensus_executor.rs)
-                    } else {
-                        anticone_set_size = 0;
-                    }
-                    epoch_block_anticone_set_sizes.push(anticone_set_size);
-                    epoch_block_anticone_overlimited.push(anticone_overlimited);
-                    epoch_block_anticone_difficulties.push(anticone_difficulty);
-                }
-                RewardExecutionInfo {
-                    pivot_hash,
-                    epoch_block_hashes,
-                    epoch_block_anticone_overlimited,
-                    epoch_block_anticone_set_sizes,
-                    epoch_block_anticone_difficulties,
-                }
-            },
-        )
-    }
-
-    fn get_reward_execution_info(
-        &self, state_at: usize, chain: &Vec<usize>,
-    ) -> Option<RewardExecutionInfo> {
-        self.get_reward_execution_info_from_index(
-            self.get_pivot_reward_index(state_at, chain),
-        )
     }
 
     pub fn adjust_difficulty(
@@ -1481,14 +1430,13 @@ impl ConsensusGraph {
         last_state_height += 1;
         while last_state_height <= fork_height {
             let epoch_index = inner.pivot_chain[last_state_height];
-            let reward_execution_info = inner.get_reward_execution_info(
-                last_state_height,
-                &inner.pivot_chain,
-            );
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
-                reward_execution_info,
+                inner.get_pivot_reward_hashes(
+                    last_state_height,
+                    &inner.pivot_chain,
+                ),
                 false,
                 false,
             ));
@@ -1502,30 +1450,30 @@ impl ConsensusGraph {
             {
                 let epoch_num =
                     fork_height + fork_at - REWARD_EPOCH_COUNT as usize;
-                let anticone_penalty_cutoff_epoch_index =
+                let anticone_penalty_cutoff_epoch_num =
                     epoch_num + ANTICONE_PENALTY_UPPER_EPOCH_COUNT as usize;
-                let pivot_block_upper = if anticone_penalty_cutoff_epoch_index
-                    > fork_height
-                {
-                    chain[anticone_penalty_cutoff_epoch_index - fork_height]
-                } else {
-                    inner.pivot_chain[anticone_penalty_cutoff_epoch_index]
-                };
-                let pivot_index = if epoch_num > fork_height {
+                let anticone_penalty_cutoff_epoch_index =
+                    if anticone_penalty_cutoff_epoch_num > fork_height {
+                        chain[anticone_penalty_cutoff_epoch_num - fork_height]
+                    } else {
+                        inner.pivot_chain[anticone_penalty_cutoff_epoch_num]
+                    };
+                let reward_epoch_index = if epoch_num > fork_height {
                     chain[epoch_num - fork_height]
                 } else {
                     inner.pivot_chain[epoch_num]
                 };
-                Some((pivot_index, pivot_block_upper))
+                Some((
+                    inner.arena[reward_epoch_index].hash,
+                    inner.arena[anticone_penalty_cutoff_epoch_index].hash,
+                ))
             } else {
                 None
             };
-            let reward_execution_info =
-                inner.get_reward_execution_info_from_index(reward_index);
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
-                reward_execution_info,
+                reward_index,
                 false,
                 false,
             ));
@@ -1587,35 +1535,38 @@ impl ConsensusGraph {
             .unwrap();
 
         // Recompute epoch.
-        let anticone_cut_height =
+        let anticone_cutoff_height =
             REWARD_EPOCH_COUNT - ANTICONE_PENALTY_UPPER_EPOCH_COUNT;
-        let mut anticone_penalty_cutoff_epoch_block = parent_index;
-        for _i in 1..anticone_cut_height {
-            if anticone_penalty_cutoff_epoch_block == NULL {
+        let mut anticone_penalty_cutoff_epoch_block_index = parent_index;
+        for _i in 1..anticone_cutoff_height {
+            if anticone_penalty_cutoff_epoch_block_index == NULL {
                 break;
             }
-            anticone_penalty_cutoff_epoch_block =
-                inner.arena[anticone_penalty_cutoff_epoch_block].parent;
+            anticone_penalty_cutoff_epoch_block_index =
+                inner.arena[anticone_penalty_cutoff_epoch_block_index].parent;
         }
-        let mut reward_epoch_block = anticone_penalty_cutoff_epoch_block;
+        let mut reward_epoch_block_index =
+            anticone_penalty_cutoff_epoch_block_index;
         for _i in 0..ANTICONE_PENALTY_UPPER_EPOCH_COUNT {
-            if reward_epoch_block == NULL {
+            if reward_epoch_block_index == NULL {
                 break;
             }
-            reward_epoch_block = inner.arena[reward_epoch_block].parent;
+            reward_epoch_block_index =
+                inner.arena[reward_epoch_block_index].parent;
         }
-        let reward_index = if reward_epoch_block == NULL {
+        let reward_index = if reward_epoch_block_index == NULL {
             None
         } else {
-            Some((reward_epoch_block, anticone_penalty_cutoff_epoch_block))
+            Some((
+                inner.arena[reward_epoch_block_index].hash,
+                inner.arena[anticone_penalty_cutoff_epoch_block_index].hash,
+            ))
         };
 
-        let reward_execution_info =
-            inner.get_reward_execution_info_from_index(reward_index);
         let task = EpochExecutionTask::new(
             epoch_block_hash,
             epoch_block_hashes.clone(),
-            reward_execution_info,
+            reward_index,
             false,
             true,
         );
@@ -1626,14 +1577,18 @@ impl ConsensusGraph {
 
             debug_record.parent_block_hash = parent_block_hash;
             debug_record.parent_state_root = parent_state_root;
-            debug_record.reward_epoch_hash = if reward_epoch_block != NULL {
-                Some(inner.arena[reward_epoch_block].hash)
+            debug_record.reward_epoch_hash = if reward_epoch_block_index != NULL
+            {
+                Some(inner.arena[reward_epoch_block_index].hash)
             } else {
                 None
             };
             debug_record.anticone_penalty_cutoff_epoch_hash =
-                if anticone_penalty_cutoff_epoch_block != NULL {
-                    Some(inner.arena[anticone_penalty_cutoff_epoch_block].hash)
+                if anticone_penalty_cutoff_epoch_block_index != NULL {
+                    Some(
+                        inner.arena[anticone_penalty_cutoff_epoch_block_index]
+                            .hash,
+                    )
                 } else {
                     None
                 };
@@ -1837,156 +1792,177 @@ impl ConsensusGraph {
     }
 
     pub fn construct_pivot(&self, sync_inner: &SynchronizationGraphInner) {
-        let mut inner = &mut *self.inner.write();
+        {
+            let mut inner = &mut *self.inner.write();
 
-        assert_eq!(inner.pivot_chain.len(), 1);
-        assert_eq!(inner.pivot_chain[0], inner.genesis_block_index);
+            assert_eq!(inner.pivot_chain.len(), 1);
+            assert_eq!(inner.pivot_chain[0], inner.genesis_block_index);
 
-        let mut new_pivot_chain = Vec::new();
-        let mut u = inner.genesis_block_index;
-        loop {
-            new_pivot_chain.push(u);
-            let mut heaviest = NULL;
-            let mut heaviest_weight = U256::zero();
-            for index in &inner.arena[u].children {
-                let weight = U256::from(inner.weight_tree.get(*index));
-                if heaviest == NULL
-                    || weight > heaviest_weight
-                    || (weight == heaviest_weight
-                        && inner.arena[*index].hash
-                            > inner.arena[heaviest].hash)
-                {
-                    heaviest = *index;
-                    heaviest_weight = weight;
-                }
-            }
-            if heaviest == NULL {
-                break;
-            }
-            u = heaviest;
-        }
-
-        // Construct epochs
-        let mut height = 1;
-        while height < new_pivot_chain.len() {
-            // First, identify all the blocks in the current epoch
-            let mut queue = Vec::new();
-            {
-                let copy_of_fork_at = height;
-                let enqueue_if_new = |queue: &mut Vec<usize>, index| {
-                    let mut epoch_number =
-                        inner.arena[index].data.epoch_number.borrow_mut();
-                    if *epoch_number == NULL {
-                        *epoch_number = copy_of_fork_at;
-                        queue.push(index);
+            let mut new_pivot_chain = Vec::new();
+            let mut u = inner.genesis_block_index;
+            loop {
+                new_pivot_chain.push(u);
+                let mut heaviest = NULL;
+                let mut heaviest_weight = U256::zero();
+                for index in &inner.arena[u].children {
+                    let weight = inner.weight_tree.subtree_weight(*index);
+                    if heaviest == NULL
+                        || weight > heaviest_weight
+                        || (weight == heaviest_weight
+                            && inner.arena[*index].hash
+                                > inner.arena[heaviest].hash)
+                    {
+                        heaviest = *index;
+                        heaviest_weight = weight;
                     }
-                };
-
-                let mut at = 0;
-                enqueue_if_new(&mut queue, new_pivot_chain[height]);
-                while at < queue.len() {
-                    let me = queue[at];
-                    for referee in &inner.arena[me].referees {
-                        enqueue_if_new(&mut queue, *referee);
-                    }
-                    enqueue_if_new(&mut queue, inner.arena[me].parent);
-                    at += 1;
                 }
-            }
-
-            // Second, sort all the blocks based on their topological order
-            // and break ties with block hash
-            let reversed_indices = inner.topological_sort(&queue);
-            debug!(
-                "Construct epoch_id={}, block_count={}",
-                inner.arena[new_pivot_chain[height]].hash,
-                reversed_indices.len()
-            );
-            inner
-                .indices_in_epochs
-                .insert(new_pivot_chain[height], reversed_indices);
-
-            // Construct in-memory receipts root
-            if new_pivot_chain.len() >= DEFERRED_STATE_EPOCH_COUNT as usize
-                && height
-                    < new_pivot_chain.len()
-                        - DEFERRED_STATE_EPOCH_COUNT as usize
-            {
-                // This block's deferred block is pivot_index, so the
-                // deferred_receipts_root in its header is the
-                // receipts_root of pivot_index
-                let future_block_hash = inner.arena[new_pivot_chain
-                    [height + DEFERRED_STATE_EPOCH_COUNT as usize]]
-                    .hash
-                    .clone();
-                self.data_man.insert_receipts_root(
-                    inner.arena[new_pivot_chain[height]].hash,
-                    self.data_man
-                        .block_header_by_hash(&future_block_hash)
-                        .unwrap()
-                        .deferred_receipts_root()
-                        .clone(),
-                );
-            }
-
-            height += 1;
-        }
-
-        // If the db is not corrupted, all unwrap in the following should pass.
-        // TODO Verify db state in case of data missing
-        // TODO Recompute missing data if needed
-        inner.adjust_difficulty(
-            *new_pivot_chain.last().expect("not empty"),
-            sync_inner,
-        );
-        inner.pivot_chain = new_pivot_chain;
-        // Compute receipts root for the deferred block of the mining block,
-        // which is not in the db
-        if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
-            let state_height =
-                inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize;
-            let pivot_index = inner.pivot_chain[state_height];
-            let pivot_hash = inner.arena[pivot_index].hash.clone();
-            let epoch_indexes =
-                inner.indices_in_epochs.get(&pivot_index).unwrap().clone();
-            let mut epoch_receipts = Vec::with_capacity(epoch_indexes.len());
-
-            let mut receipts_correct = true;
-            for i in epoch_indexes {
-                if let Some(r) = self.data_man.block_results_by_hash_with_epoch(
-                    &inner.arena[i].hash,
-                    &pivot_hash,
-                    true,
-                ) {
-                    epoch_receipts.push(r.receipts);
-                } else {
-                    // Constructed pivot chain does not match receipts in db, so
-                    // we have to recompute the receipts of this epoch
-                    receipts_correct = false;
+                if heaviest == NULL {
                     break;
                 }
+                u = heaviest;
             }
-            if receipts_correct {
-                self.data_man.insert_receipts_root(
-                    pivot_hash,
-                    BlockHeaderBuilder::compute_block_receipts_root(
-                        &epoch_receipts,
-                    ),
+
+            // Construct epochs
+            let mut height = 1;
+            while height < new_pivot_chain.len() {
+                // First, identify all the blocks in the current epoch
+                let mut queue = Vec::new();
+                {
+                    let copy_of_fork_at = height;
+                    let enqueue_if_new = |queue: &mut Vec<usize>, index| {
+                        let mut epoch_number =
+                            inner.arena[index].data.epoch_number.borrow_mut();
+                        if *epoch_number == NULL {
+                            *epoch_number = copy_of_fork_at;
+                            queue.push(index);
+                        }
+                    };
+
+                    let mut at = 0;
+                    enqueue_if_new(&mut queue, new_pivot_chain[height]);
+                    while at < queue.len() {
+                        let me = queue[at];
+                        for referee in &inner.arena[me].referees {
+                            enqueue_if_new(&mut queue, *referee);
+                        }
+                        enqueue_if_new(&mut queue, inner.arena[me].parent);
+                        at += 1;
+                    }
+                }
+
+                // Second, sort all the blocks based on their topological order
+                // and break ties with block hash
+                let reversed_indices = inner.topological_sort(&queue);
+                debug!(
+                    "Construct epoch_id={}, block_count={}",
+                    inner.arena[new_pivot_chain[height]].hash,
+                    reversed_indices.len()
                 );
-            } else {
-                let reward_execution_info = inner.get_reward_execution_info(
-                    state_height,
-                    &inner.pivot_chain,
-                );
-                let epoch_block_hashes = inner
-                    .get_epoch_block_hashes(inner.pivot_chain[state_height]);
-                self.executor.compute_epoch(EpochExecutionTask::new(
-                    pivot_hash,
-                    epoch_block_hashes,
-                    reward_execution_info,
-                    true,
-                    false,
-                ));
+                inner
+                    .indices_in_epochs
+                    .insert(new_pivot_chain[height], reversed_indices);
+
+                // Construct in-memory receipts root
+                if new_pivot_chain.len() >= DEFERRED_STATE_EPOCH_COUNT as usize
+                    && height
+                        < new_pivot_chain.len()
+                            - DEFERRED_STATE_EPOCH_COUNT as usize
+                {
+                    // This block's deferred block is pivot_index, so the
+                    // deferred_receipts_root in its header is the
+                    // receipts_root of pivot_index
+                    let future_block_hash = inner.arena[new_pivot_chain
+                        [height + DEFERRED_STATE_EPOCH_COUNT as usize]]
+                        .hash
+                        .clone();
+                    self.data_man.insert_receipts_root(
+                        inner.arena[new_pivot_chain[height]].hash,
+                        self.data_man
+                            .block_header_by_hash(&future_block_hash)
+                            .unwrap()
+                            .deferred_receipts_root()
+                            .clone(),
+                    );
+                }
+
+                height += 1;
+            }
+
+            // If the db is not corrupted, all unwrap in the following should
+            // pass. TODO Verify db state in case of data missing
+            // TODO Recompute missing data if needed
+            inner.adjust_difficulty(
+                *new_pivot_chain.last().expect("not empty"),
+                sync_inner,
+            );
+            inner.pivot_chain = new_pivot_chain;
+        }
+
+        {
+            let inner_read_guard = Some(self.inner.read());
+            let inner = &*inner_read_guard.as_ref().unwrap();
+
+            // Compute receipts root for the deferred block of the mining block,
+            // which is not in the db
+            if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
+                let state_height = inner.pivot_chain.len()
+                    - DEFERRED_STATE_EPOCH_COUNT as usize;
+                let pivot_index = inner.pivot_chain[state_height];
+                let pivot_hash = inner.arena[pivot_index].hash.clone();
+                let epoch_indexes =
+                    inner.indices_in_epochs.get(&pivot_index).unwrap().clone();
+                let mut epoch_receipts =
+                    Vec::with_capacity(epoch_indexes.len());
+
+                let mut receipts_correct = true;
+                for i in epoch_indexes {
+                    if let Some(r) =
+                        self.data_man.block_results_by_hash_with_epoch(
+                            &inner.arena[i].hash,
+                            &pivot_hash,
+                            true,
+                        )
+                    {
+                        epoch_receipts.push(r.receipts);
+                    } else {
+                        // Constructed pivot chain does not match receipts in
+                        // db, so we have to recompute
+                        // the receipts of this epoch
+                        receipts_correct = false;
+                        break;
+                    }
+                }
+                if receipts_correct {
+                    self.data_man.insert_receipts_root(
+                        pivot_hash,
+                        BlockHeaderBuilder::compute_block_receipts_root(
+                            &epoch_receipts,
+                        ),
+                    );
+                } else {
+                    let epoch_block_hashes = inner.get_epoch_block_hashes(
+                        inner.pivot_chain[state_height],
+                    );
+
+                    let reward_index = inner.get_pivot_reward_hashes(
+                        state_height,
+                        &inner.pivot_chain,
+                    );
+
+                    // compute_epoch may acquire read lock when necessary.
+                    drop(inner_read_guard);
+
+                    self.executor.compute_epoch(
+                        EpochExecutionTask::new(
+                            pivot_hash,
+                            epoch_block_hashes,
+                            reward_index,
+                            true,
+                            false,
+                        ),
+                        &self.inner,
+                    );
+                }
             }
         }
     }
@@ -2004,7 +1980,11 @@ impl ConsensusGraph {
         let past_difficulty =
             inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
 
-        let (me, indices_len) = inner.insert(block.as_ref(), past_difficulty);
+        let (me, indices_len) = inner.insert(
+            block.as_ref(),
+            past_difficulty,
+            sync_inner.arena[*sync_inner.indices.get(hash).unwrap()].is_heavy,
+        );
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
         inner.compute_anticone(me);
@@ -2099,14 +2079,22 @@ impl ConsensusGraph {
 
         let mut inner = &mut *self.inner.write();
 
-        let difficulty_in_my_epoch =
-            sync_inner_lock.read().total_difficulty_in_own_epoch(hash);
+        let difficulty_in_my_epoch;
+        let is_heavy;
+        {
+            let sync_inner = &*sync_inner_lock.read();
+            difficulty_in_my_epoch =
+                sync_inner.total_difficulty_in_own_epoch(hash);
+            is_heavy = sync_inner.arena[*sync_inner.indices.get(hash).unwrap()]
+                .is_heavy;
+        }
         let parent_idx =
             *inner.indices.get(block.block_header.parent_hash()).unwrap();
         let past_difficulty =
             inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
 
-        let (me, indices_len) = inner.insert(block.as_ref(), past_difficulty);
+        let (me, indices_len) =
+            inner.insert(block.as_ref(), past_difficulty, is_heavy);
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
 
@@ -2281,12 +2269,10 @@ impl ConsensusGraph {
         // Apply transactions in the determined total order
         while state_at < to_state_pos {
             let epoch_index = new_pivot_chain[state_at];
-            let reward_execution_info =
-                inner.get_reward_execution_info(state_at, &new_pivot_chain);
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
-                reward_execution_info,
+                inner.get_pivot_reward_hashes(state_at, &new_pivot_chain),
                 true,
                 false,
             ));
