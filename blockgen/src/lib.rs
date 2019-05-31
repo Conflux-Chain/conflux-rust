@@ -21,8 +21,7 @@ use primitives::{
 };
 use std::{
     sync::{mpsc, Arc},
-    thread::{self, sleep},
-    time::{self, Duration},
+    thread, time,
 };
 use time::{SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
