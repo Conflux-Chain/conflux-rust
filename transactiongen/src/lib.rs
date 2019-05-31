@@ -90,9 +90,7 @@ impl TransactionGenerator {
         }
     }
 
-    pub fn stop(&self) {
-        *self.state.write() = TransGenState::Stop;
-    }
+    pub fn stop(&self) { *self.state.write() = TransGenState::Stop; }
 
     pub fn get_best_state_at(&self, block_hash: &H256) -> State {
         State::new(
