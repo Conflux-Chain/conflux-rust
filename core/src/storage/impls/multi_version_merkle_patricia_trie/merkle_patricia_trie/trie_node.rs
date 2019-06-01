@@ -83,11 +83,13 @@ const EMPTY_KEY_PART: KeyPart = &[];
 impl<CacheAlgoDataT: CacheAlgoDataTrait> Drop for TrieNode<CacheAlgoDataT> {
     fn drop(&mut self) {
         unsafe {
-            let size = self.value_size as usize;
-            if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
-                self.value.ptr_into_vec(size);
+            // Check whether the value of this node is already deleted
+            if self.value_size != Self::VALUE_TOMBSTONE {
+                let size = self.value_size as usize;
+                if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
+                    self.value.ptr_into_vec(size);
+                }
             }
-
             self.clear_path();
         }
     }
