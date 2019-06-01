@@ -369,10 +369,8 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
 
     fn get_bitmap(&self) -> u16 { self.bitmap }
 
-    fn set_bitmap(&mut self, bitmap: u16) {
-        // This method is unnecessary.
-        unimplemented!()
-    }
+    /// This method is unnecessary.
+    fn set_bitmap(&mut self, bitmap: u16) { unimplemented!() }
 
     fn set_next_child_index(&mut self, child_index: u8) {
         self.next_child_index = child_index;
@@ -420,10 +418,8 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
 
     fn get_bitmap(&self) -> u16 { self.bitmap }
 
-    fn set_bitmap(&mut self, bitmap: u16) {
-        // This method is unnecessary.
-        unimplemented!()
-    }
+    /// This method is unnecessary.
+    fn set_bitmap(&mut self, bitmap: u16) { unimplemented!() }
 
     fn set_next_child_index(&mut self, child_index: u8) {
         self.next_child_index = child_index;
@@ -474,10 +470,8 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
 
     fn set_bitmap(&mut self, bitmap: u16) { self.bitmap = bitmap }
 
-    fn set_next_child_index(&mut self, child_index: u8) {
-        // This method is unnecessary.
-        unimplemented!()
-    }
+    /// This method is unnecessary.
+    fn set_next_child_index(&mut self, child_index: u8) { unimplemented!() }
 
     fn get_current_element(&self) -> &'a NodeRefT { unsafe { &*self.elements } }
 
@@ -519,10 +513,8 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
 
     fn set_bitmap(&mut self, bitmap: u16) { self.bitmap = bitmap }
 
-    fn set_next_child_index(&mut self, child_index: u8) {
-        // This method is unnecessary.
-        unimplemented!()
-    }
+    /// This method is unnecessary.
+    fn set_next_child_index(&mut self, child_index: u8) { unimplemented!() }
 
     fn get_current_element(&self) -> &'a mut NodeRefT {
         unsafe { &mut *self.elements }
