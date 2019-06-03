@@ -195,6 +195,7 @@ impl Client {
             pow_config.clone(),
             conf.raw_conf.record_tx_address,
             conf.raw_conf.enable_opt_execution,
+            false,
         ));
 
         let verification_config = conf.verification_config();

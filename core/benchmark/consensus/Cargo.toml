@@ -1,0 +1,28 @@
+[package]
+description = "Conflux consensus benchmark"
+homepage = "http://www.conflux-chain.org"
+license = "GPL-3.0"
+name = "consensus_bench"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+cfx-types = { path = "../../../cfx_types" }
+cfxcore = { path = "../../../core" }
+primitives = { path = "../../../primitives" }
+db = { path = "../../../db" }
+threadpool = "1.0"
+parking_lot = "0.6"
+log4rs = "0.8.1"
+log = "0.4"
+
+[dev-dependencies]
+
+[workspace]
+# Note: try to list it in the top level workspace and to exclude it from cfxcore.
+
+[patch.crates-io]
+heapsize = { git = "https://github.com/cheme/heapsize.git", branch = "ec-macfix" }
+
+[profile.release]
+debug = true

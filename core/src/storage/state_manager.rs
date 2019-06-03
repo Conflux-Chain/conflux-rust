@@ -2,7 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{impls::errors::*, state::State};
+use super::{
+    impls::{defaults, errors::*},
+    state::State,
+};
 use crate::snapshot::snapshot::Snapshot;
 use primitives::EpochId;
 use std::sync::Arc;
@@ -36,4 +39,16 @@ pub struct StorageConfiguration {
     pub idle_size: u32,
     pub node_map_size: u32,
     pub recent_lfu_factor: f64,
+}
+
+impl Default for StorageConfiguration {
+    fn default() -> Self {
+        StorageConfiguration {
+            cache_start_size: defaults::DEFAULT_CACHE_START_SIZE,
+            cache_size: defaults::DEFAULT_CACHE_SIZE,
+            idle_size: defaults::DEFAULT_IDLE_SIZE,
+            node_map_size: defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
+            recent_lfu_factor: defaults::DEFAULT_RECENT_LFU_FACTOR,
+        }
+    }
 }
