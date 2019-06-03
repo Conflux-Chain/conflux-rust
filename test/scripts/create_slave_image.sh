@@ -23,7 +23,7 @@ ssh ubuntu@$master_ip ./$setup_script $branch
 
 # create slave image
 echo "create slave image ..."
-res=`aws ec2 create-image --instance-id $master_id --name ${key_pair}_slave_image --no-reboot`
+res=`aws ec2 create-image --instance-id $master_id --name ${key_pair}_slave_image`
 image_id=`echo $res | jq ".ImageId" | tr -d '"'`
 echo "slave image created: $image_id"
 
@@ -39,8 +39,7 @@ do
     sleep 5
 done
 
-# delete the instance that used to make slave image
-echo "delete the instance that used to make slave image ..."
-./terminate-on-demand.sh
+# The master instance will be used to run the scripts later, so we do not terminate it
+# ./terminate-on-demand.sh
 
 echo $image_id > slave_image

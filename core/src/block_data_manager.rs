@@ -29,6 +29,8 @@ pub struct BlockDataManager {
     pub transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     block_receipts_root: RwLock<HashMap<H256, H256>>,
 
+    pub record_tx_address: bool,
+
     pub txpool: SharedTransactionPool,
     pub genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
@@ -40,7 +42,7 @@ impl BlockDataManager {
     pub fn new(
         genesis_block: Arc<Block>, txpool: SharedTransactionPool,
         db: Arc<SystemDB>, storage_manager: Arc<StorageManager>,
-        cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        cache_man: Arc<Mutex<CacheManager<CacheId>>>, record_tx_address: bool,
     ) -> Self
     {
         let data_man = Self {
@@ -54,6 +56,7 @@ impl BlockDataManager {
             db,
             storage_manager,
             cache_man,
+            record_tx_address,
         };
 
         data_man.insert_receipts_root(
@@ -351,6 +354,18 @@ impl BlockDataManager {
     pub fn insert_transaction_address_to_kv(
         &self, hash: &H256, tx_address: &TransactionAddress,
     ) {
+        if !self.record_tx_address {
+            return;
+        }
+        self.transaction_addresses
+            .write()
+            .entry(*hash)
+            .and_modify(|v| {
+                *v = tx_address.clone();
+                self.cache_man
+                    .lock()
+                    .note_used(CacheId::TransactionAddress(*hash));
+            });
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_TX_ADDRESS, hash, &rlp::encode(tx_address));
         self.db
@@ -411,7 +426,7 @@ impl BlockDataManager {
         }
 
         // Recover tx address if we will skip pivot chain execution
-        if on_local_pivot {
+        if on_local_pivot && self.record_tx_address {
             for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
             {
                 let block =

@@ -1,6 +1,5 @@
 use crate::{
     block_data_manager::BlockDataManager,
-    cache_manager::CacheId,
     consensus::{
         ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
         CONFLUX_TOKEN,
@@ -403,11 +402,6 @@ impl ConsensusExecutionHandler {
             let mut n_other = 0;
             let mut last_cumulative_gas_used = U256::zero();
             {
-                // TODO We acquire the lock at the start to avoid acquiring it
-                // for every tx. But if the server does not need
-                // to handle tx related rpc, the lock is not needed.
-                let mut transaction_addresses =
-                    self.data_man.transaction_addresses.write();
                 let mut unexecuted_transaction_addresses =
                     unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
@@ -476,12 +470,6 @@ impl ConsensusExecutionHandler {
                             self.data_man.insert_transaction_address_to_kv(
                                 &hash, &tx_addr,
                             );
-                            if transaction_addresses.contains_key(&hash) {
-                                transaction_addresses.insert(hash, tx_addr);
-                                self.data_man.cache_man.lock().note_used(
-                                    CacheId::TransactionAddress(hash),
-                                );
-                            }
                             unexecuted_transaction_addresses.remove(&hash);
                         } else {
                             let mut remove = false;

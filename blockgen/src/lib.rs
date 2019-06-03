@@ -21,8 +21,7 @@ use primitives::{
 };
 use std::{
     sync::{mpsc, Arc},
-    thread::{self, sleep},
-    time::{self, Duration},
+    thread, time,
 };
 use time::{SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
@@ -146,8 +145,11 @@ impl BlockGenerator {
 
     /// Stop mining
     pub fn stop(bg: &BlockGenerator) {
-        let mut write = bg.state.write();
-        *write = MiningState::Stop;
+        {
+            let mut write = bg.state.write();
+            *write = MiningState::Stop;
+        }
+        bg.txgen.stop()
     }
 
     /// Send new PoW problem to workers
@@ -429,18 +431,7 @@ impl BlockGenerator {
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
-        while self
-            .graph
-            .consensus
-            .inner
-            .read()
-            .indices
-            .get(&hash)
-            .is_none()
-        {
-            // FIXME: change to a notification by future later.
-            sleep(Duration::from_millis(100));
-        }
+        self.graph.consensus.wait_for_best_state_block_execution();
 
         hash
     }

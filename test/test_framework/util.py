@@ -509,6 +509,7 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
     latencies = [{} for _ in nodes]
     threads = []
     num_nodes = len(nodes)
+    sample = min(num_nodes - 1, sample)
 
     for i in range(num_nodes):
         # make sure all nodes are reachable

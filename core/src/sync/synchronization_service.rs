@@ -69,12 +69,6 @@ impl SynchronizationService {
         Ok(())
     }
 
-    pub fn announce_new_blocks(&self, hashes: &[H256]) {
-        self.network.with_context(self.protocol, |io| {
-            self.protocol_handler.announce_new_blocks(io, hashes);
-        });
-    }
-
     pub fn relay_blocks(&self, need_to_relay: Vec<H256>) {
         self.network.with_context(self.protocol, |io| {
             // FIXME: We may need to propagate the error up
@@ -86,9 +80,8 @@ impl SynchronizationService {
 
     pub fn on_mined_block(&self, block: Block) {
         let hash = block.hash();
-        let need_to_relay = self.protocol_handler.on_mined_block(block);
-        self.relay_blocks(need_to_relay);
-        self.announce_new_blocks(&[hash]);
+        self.protocol_handler.on_mined_block(block);
+        self.relay_blocks(vec![hash]);
     }
 
     pub fn add_peer(&self, node: NodeEntry) -> Result<(), NetworkError> {

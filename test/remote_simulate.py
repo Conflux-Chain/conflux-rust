@@ -20,11 +20,11 @@ from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
+        self.rpc_timewait = 60
         self.num_nodes = 1
         self.conf_parameters = {
             "log_level": "\"debug\"",
             "fast_recover": "true",
-            "send_tx_period_ms": "31536000000", # one year to disable txs propagation
         }
 
     def add_options(self, parser:ArgumentParser):
@@ -105,9 +105,38 @@ class P2PTest(ConfluxTestFramework):
             default=1000,
             type=int
         )
+        # Tx generation will also be enabled if we enable tx propagation
+        parser.add_argument(
+            "--enable-tx-propagation",
+            dest="tx_propagation_enabled",
+            action="store_true"
+        )
+        # options for LAT_LATEST
+        parser.add_argument(
+            "--tps",
+            dest="tps",
+            default=1000,
+            type=int,
+        )
+        # Bandwidth in Mbit/s
+        parser.add_argument(
+            "--bandwidth",
+            dest="bandwidth",
+            default=20,
+            type=int
+        )
 
     def after_options_parsed(self):
         self.num_nodes = self.options.nodes_per_host
+
+        self.ips = []
+        with open(self.options.ips_file, 'r') as ip_file:
+            for line in ip_file.readlines():
+                line = line[:-1]
+                self.ips.append(line)
+
+        # experiment name
+        self.tx_propagation_enabled = self.options.tx_propagation_enabled
 
         # throttling
         egress_settings = self.options.throttling.split(",")
@@ -119,11 +148,13 @@ class P2PTest(ConfluxTestFramework):
         target_memory = 16
 
         # storage
-        self.conf_parameters["ledger_cache_size"] = str(2048 // target_memory * self.options.storage_memory_mb)
+        # FIXME ledger_cache_size is set to 8G because duplicated transactions in blocks will be counted multiple times,
+        # But as Arc they will not actually take that much space
+        self.conf_parameters["ledger_cache_size"] = str(8000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_start_size"] = str(1000000 // target_memory * self.options.storage_memory_mb)
-        # self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_cache_size"] = "200000"
+        self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
+        # self.conf_parameters["storage_cache_size"] = "200000"
         self.conf_parameters["storage_idle_size"] = str(200000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_node_map_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
 
@@ -134,6 +165,14 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
         self.conf_parameters["data_propagate_interval_ms"] = str(self.options.data_propagate_interval_ms)
         self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
+
+        # Do not keep track of tx address to save CPU/Disk costs because they are not used in the experiments
+        self.conf_parameters["record_tx_address"] = "false"
+        if self.tx_propagation_enabled:
+            self.conf_parameters["generate_tx"] = "true"
+            self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
+        else:
+            self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
@@ -153,8 +192,8 @@ class P2PTest(ConfluxTestFramework):
         cmd_kill_conflux = "killall -9 conflux || echo already killed"
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
-        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} > start_conflux.out".format(
-            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host
+        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} {} &> start_conflux.out".format(
+            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, self.options.bandwidth,
         )
         cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
@@ -163,10 +202,8 @@ class P2PTest(ConfluxTestFramework):
         self.setup_remote_conflux()
 
         # add remote nodes and start all
-        with open(self.options.ips_file, 'r') as ip_file:
-            for line in ip_file.readlines():
-                line = line[:-1]
-                self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=line)
+        for ip in self.ips:
+            self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=ip)
         for i in range(len(self.nodes)):
             self.log.info("Node[{}]: ip={}, p2p_port={}, rpc_port={}".format(
                 i, self.nodes[i].ip, self.nodes[i].port, self.nodes[i].rpcport))
@@ -181,9 +218,20 @@ class P2PTest(ConfluxTestFramework):
     def run_test(self):
         num_nodes = len(self.nodes)
 
+        if self.tx_propagation_enabled:
+            # Setup balance for each node
+            client = RpcClient(self.nodes[0])
+            for i in range(num_nodes):
+                pub_key = self.nodes[i].key
+                addr = self.nodes[i].addr
+                self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
+                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/num_nodes) - 21000, receiver=encode_hex(addr), nonce=i)
+                client.send_tx(tx)
+
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
-        monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count,), daemon=True)
+        # The monitor will check the block_count of nodes[0]
+        monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count, 100), daemon=True)
         monitor_thread.start()
 
         # generate blocks
@@ -208,7 +256,12 @@ class P2PTest(ConfluxTestFramework):
                 self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
                 break
 
-            thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+            if self.tx_propagation_enabled:
+                # Generate a block with the transactions in the node's local tx pool
+                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+            else:
+                # Generate a fixed-size block with fake tx
+                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
             thread.start()
             threads[p] = thread
 
@@ -233,7 +286,9 @@ class P2PTest(ConfluxTestFramework):
 
         executor = ThreadPoolExecutor()
 
-        while True:
+        start = time.time()
+        # Wait for at most 120 seconds
+        while time.time() - start <= 120:
             block_counts = []
             best_blocks = []
             block_count_futures = []
@@ -261,9 +316,10 @@ class P2PTest(ConfluxTestFramework):
 
         executor.shutdown()
 
-    def monitor(self, cur_block_count:int):
+    def monitor(self, cur_block_count:int, retry_max:int):
         pre_block_count = 0
 
+        retry = 0
         while pre_block_count < self.options.num_blocks + cur_block_count:
             time.sleep(self.options.generation_period_ms / 1000 / 2)
 
@@ -272,8 +328,15 @@ class P2PTest(ConfluxTestFramework):
             if block_count != pre_block_count:
                 self.log.info("current blocks: %d", block_count)
                 pre_block_count = block_count
+                retry = 0
+            else:
+                retry += 1
+                if retry >= retry_max:
+                    self.log.error("No block generated after %d average block generation intervals", retry_max / 2)
+                    break
 
         self.log.info("monitor completed.")
+
 
 class GenerateThread(threading.Thread):
     def __init__(self, nodes, i, tx_n, tx_data_len, log, rpc_times:list):
@@ -301,6 +364,18 @@ class GenerateThread(threading.Thread):
             start = time.time()
             h = self.nodes[self.i].test_generateblockwithfaketxs(encoded_txs, self.tx_data_len)
             self.rpc_times.append(round(time.time() - start, 3))
+            self.log.debug("node %d actually generate block %s", self.i, h)
+        except Exception as e:
+            self.log.error("Node %d fails to generate block", self.i)
+            self.log.error(str(e))
+
+
+class SimpleGenerateThread(GenerateThread):
+    def run(self):
+        try:
+            client = RpcClient(self.nodes[self.i])
+            # Do not limit num tx in blocks, only limit it with block size
+            h = client.generate_block(10000000, self.tx_n * self.tx_data_len)
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
             self.log.error("Node %d fails to generate block", self.i)

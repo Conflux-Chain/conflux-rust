@@ -4,6 +4,8 @@
 
 use std::{hint::unreachable_unchecked, mem::swap};
 
+/// While mutable references can only be passed around as method parameters,
+/// ReturnAfterUse can pass mutable object in classes.
 pub struct ReturnAfterUse<'a, T: 'a> {
     origin: Option<&'a mut Option<T>>,
     current: Option<T>,

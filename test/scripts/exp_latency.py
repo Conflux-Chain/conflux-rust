@@ -3,6 +3,7 @@
 import argparse
 import os
 
+
 def execute(cmd, retry, cmd_description):
     while True:
         ret = os.system(cmd)
@@ -77,11 +78,13 @@ class RemoteSimulateConfig:
     @staticmethod
     def parse(batch_config):
         config_groups = []
+        if batch_config[-1] == ",":
+            # Ignore trailing comma
+            batch_config = batch_config[:-1]
         for config in batch_config.split(","):
             fields = config.split(":")
             if len(fields) != 4 and len(fields) != 6:
                 raise AssertionError("invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:[<data_propagate_interval_ms>:<data_propagate_size>]")
-
             config_groups.append(RemoteSimulateConfig(
                 int(fields[0]),
                 int(fields[1]),
@@ -104,12 +107,19 @@ class LatencyExperiment(ArgumentHolder):
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
 
-        self.nodes_per_host = 10
+        self.exp_name = "latency_latest"
+        self.nodes_per_host = 1
         self.block_sync_step = 10
         self.connect_peers = 8
         self.ips_file = "ips"
         self.throttling = "512,1024,2048"
+        self.data_propagate_enabled = False
+        self.data_propagate_interval_ms = 1000
+        self.data_propagate_size = 1000
         self.storage_memory_mb = 2
+        self.bandwidth = 20
+        self.tps = 4000
+        self.enable_tx_propagation = False
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
@@ -130,7 +140,9 @@ class LatencyExperiment(ArgumentHolder):
             print("Kill remote conflux and copy logs ...")
             kill_remote_conflux(self.ips_file)
             self.copy_remote_logs()
-            cleanup_remote_logs(self.ips_file)
+            # Do not cleanup logs here because they may be needed for debug later, and they will be deleted when the
+            # next run begins
+            # cleanup_remote_logs(self.ips_file)
 
             print("Statistic logs ...")
             os.system("echo throttling logs: `grep -i thrott -r logs | wc -l`")
@@ -160,6 +172,8 @@ class LatencyExperiment(ArgumentHolder):
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
+            "--tps", str(self.tps),
+            "--bandwidth", str(self.bandwidth)
         ]
 
         if config.data_propagate_enabled:
@@ -168,6 +182,9 @@ class LatencyExperiment(ArgumentHolder):
                 "--data-propagate-interval-ms", str(config.data_propagate_interval_ms),
                 "--data-propagate-size", str(config.data_propagate_size),
             ])
+
+        if self.enable_tx_propagation:
+            cmd.extend(["--enable-tx-propagation"])
 
         cmd.extend([">", self.simulate_log_file])
         cmd = " ".join(cmd)

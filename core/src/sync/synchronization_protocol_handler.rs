@@ -267,7 +267,12 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
-        debug!("on_get_compact_blocks_response {:?}", resp);
+        debug!(
+            "on_get_compact_blocks_response request_id={} compact={} block={}",
+            resp.request_id(),
+            resp.compact_blocks.len(),
+            resp.blocks.len()
+        );
         let req =
             self.request_manager
                 .match_request(io, peer, resp.request_id())?;
@@ -383,7 +388,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp = rlp.as_val::<GetTransactionsResponse>()?;
-        debug!("on_get_transactions_response {:?}", resp);
+        debug!("on_get_transactions_response {:?}", resp.request_id());
 
         let req =
             self.request_manager
@@ -431,6 +436,11 @@ impl SynchronizationProtocolHandler {
             request_id: get_transactions.request_id,
             transactions,
         };
+        debug!(
+            "on_get_transactions request {} txs, returned {} txs",
+            get_transactions.indices.len(),
+            resp.transactions.len()
+        );
 
         send_message(io, peer, &resp, SendQueuePriority::Normal)?;
         Ok(())
@@ -1253,6 +1263,8 @@ impl SynchronizationProtocolHandler {
         Ok(need_to_relay)
     }
 
+    // TODO This is only used in tests now. Maybe we can add a rpc to send full
+    // block and remove NEW_BLOCK from p2p
     fn on_new_block(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
