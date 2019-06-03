@@ -1772,8 +1772,11 @@ impl ConsensusGraph {
         return true;
     }
 
-    pub fn construct_pivot(&self, sync_inner: &SynchronizationGraphInner) {
+    pub fn construct_pivot(
+        &self, sync_inner_lock: &RwLock<SynchronizationGraphInner>,
+    ) {
         {
+            let sync_inner = &*sync_inner_lock.read();
             let mut inner = &mut *self.inner.write();
 
             assert_eq!(inner.pivot_chain.len(), 1);
@@ -1954,18 +1957,21 @@ impl ConsensusGraph {
         let block = self.data_man.block_by_hash(hash, false).unwrap();
 
         let inner = &mut *self.inner.write();
-        let difficulty_in_my_epoch =
-            sync_inner.total_difficulty_in_own_epoch(hash);
+        let difficulty_in_my_epoch;
+        let is_heavy;
+        {
+            difficulty_in_my_epoch =
+                sync_inner.total_difficulty_in_own_epoch(hash);
+            is_heavy = sync_inner.arena[*sync_inner.indices.get(hash).unwrap()]
+                .is_heavy;
+        }
         let parent_idx =
             *inner.indices.get(block.block_header.parent_hash()).unwrap();
         let past_difficulty =
             inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
 
-        let (me, indices_len) = inner.insert(
-            block.as_ref(),
-            past_difficulty,
-            sync_inner.arena[*sync_inner.indices.get(hash).unwrap()].is_heavy,
-        );
+        let (me, indices_len) =
+            inner.insert(block.as_ref(), past_difficulty, is_heavy);
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
         inner.compute_anticone(me);
