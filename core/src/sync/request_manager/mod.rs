@@ -27,7 +27,7 @@ use tx_handler::{ReceivedTransactionContainer, SentTransactionContainer};
 mod request_handler;
 mod tx_handler;
 
-#[derive(Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
     Header(H256),
     Block(H256),
@@ -215,6 +215,7 @@ impl RequestManager {
                     }
                 }
             } else {
+                debug!("preprocess_block_request: {:?} already in flight", hash);
                 false
             }
         });
@@ -518,6 +519,7 @@ impl RequestManager {
         peer: Option<PeerId>, with_public: bool,
     )
     {
+        debug!("blocks_received: req_hashes={:?} received_blocks={:?} peer={:?}", req_hashes, received_blocks, peer);
         let missing_blocks = {
             let mut blocks_in_flight = self.blocks_in_flight.lock();
             let mut block_waittime = self.block_request_waittime.lock();
@@ -602,16 +604,19 @@ impl RequestManager {
     }
 
     pub fn resend_timeout_requests(&self, io: &NetworkContext) {
+        debug!("resend_timeout_requests: start");
         let timeout_requests = self.request_handler.get_timeout_requests(io);
         for req in timeout_requests {
+            debug!("Timeout requests: {:?}", req);
             self.remove_mismatch_request(io, &req);
         }
     }
 
+    /// Send waiting requests that their backoff delay have passes
     pub fn resend_waiting_requests(
         &self, io: &NetworkContext, with_public: bool,
     ) {
-        // Send waiting requests that their backoff delay have passes
+        debug!("resend_waiting_requests: start");
         let mut headers_waittime = self.header_request_waittime.lock();
         let mut blocks_waittime = self.block_request_waittime.lock();
         let mut waiting_requests = self.waiting_requests.lock();
@@ -632,6 +637,7 @@ impl RequestManager {
                             break;
                         }
                     };
+                debug!("Send waiting req {:?} to peer={}", req, chosen_peer);
 
                 // Waiting requests are already in-flight, so send them without
                 // checking
