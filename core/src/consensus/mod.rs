@@ -1078,13 +1078,14 @@ pub struct ConsensusGraph {
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
 
 impl ConsensusGraph {
+    /// The execution will be skipped if bench_mode sets to true.
     pub fn with_genesis_block(
         genesis_block: Block, storage_manager: Arc<StorageManager>,
         vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, db: Arc<SystemDB>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
         pow_config: ProofOfWorkConfig, record_tx_address: bool,
-        enable_opt_execution: bool,
+        enable_opt_execution: bool, bench_mode: bool,
     ) -> Self
     {
         let data_man = Arc::new(BlockDataManager::new(
@@ -1105,6 +1106,7 @@ impl ConsensusGraph {
             data_man.clone(),
             vm,
             inner.clone(),
+            bench_mode,
         ));
 
         ConsensusGraph {
