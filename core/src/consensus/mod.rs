@@ -1763,7 +1763,6 @@ impl ConsensusGraph {
                         inner,
                     )
                     .ok();
-                    // FIXME: log reward computations.
                 }
 
                 *block.block_header.deferred_state_root() == state_root
