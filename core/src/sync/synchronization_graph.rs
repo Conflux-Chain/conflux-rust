@@ -591,8 +591,11 @@ impl SynchronizationGraph {
 
             if let Some(mut block) = self.block_by_hash_from_db(&hash) {
                 // This is for constructing synchronization graph.
-                let res =
-                    self.insert_block_header(&mut block.block_header, true);
+                let res = self.insert_block_header(
+                    &mut block.block_header,
+                    true,
+                    false,
+                );
                 assert!(res.0);
 
                 let parent = block.block_header.parent_hash().clone();
@@ -658,8 +661,11 @@ impl SynchronizationGraph {
 
             if let Some(mut block) = self.block_by_hash_from_db(&hash) {
                 // This is for constructing synchronization graph.
-                let res =
-                    self.insert_block_header(&mut block.block_header, true);
+                let res = self.insert_block_header(
+                    &mut block.block_header,
+                    true,
+                    false,
+                );
                 assert!(res.0);
 
                 let parent = block.block_header.parent_hash().clone();
@@ -851,7 +857,7 @@ impl SynchronizationGraph {
     }
 
     pub fn insert_block_header(
-        &self, header: &mut BlockHeader, need_to_verify: bool,
+        &self, header: &mut BlockHeader, need_to_verify: bool, bench_mode: bool,
     ) -> (bool, Vec<H256>) {
         let mut inner = self.inner.write();
         let hash = header.hash();
@@ -876,9 +882,11 @@ impl SynchronizationGraph {
                     .verify_header_params(header)
                     .is_err())
         } else {
-            self.verification_config
-                .verify_pow(header)
-                .expect("local mined block should pass this check!");
+            if !bench_mode {
+                self.verification_config
+                    .verify_pow(header)
+                    .expect("local mined block should pass this check!");
+            }
             true
         };
 
@@ -1254,8 +1262,10 @@ impl SynchronizationGraph {
         });
     }
 
-    // Manage statistics
+    /// Get the current number of blocks in the synchronization graph
+    pub fn block_count(&self) -> usize { self.data_man.blocks.read().len() }
 
+    // Manage statistics
     pub fn stat_inc_inserted_count(&self) {
         let mut inner = self.statistics.inner.write();
         inner.sync_graph.inserted_block_count += 1;

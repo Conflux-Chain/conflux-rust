@@ -986,7 +986,8 @@ impl SynchronizationProtocolHandler {
             parent_hash = header.parent_hash().clone();
             parent_height = header.height();
 
-            let res = self.graph.insert_block_header(header, true);
+            let res = self.graph.insert_block_header(header, true, false);
+
             if res.0 {
                 // Valid block based on header
                 if !self.graph.contains_block(&hash) {
@@ -1177,7 +1178,9 @@ impl SynchronizationProtocolHandler {
             match self.graph.block_header_by_hash(&hash) {
                 Some(header) => block.block_header = header,
                 None => {
+                    // This should not happen for correct peer 
                     warn!("Received blocks with header not received {}", hash);
+                    continue;
                 }
             }
 
@@ -1231,9 +1234,11 @@ impl SynchronizationProtocolHandler {
 
         assert!(self.graph.contains_block_header(&parent_hash));
         assert!(!self.graph.contains_block_header(&hash));
-        let res = self
-            .graph
-            .insert_block_header(&mut block.block_header, false);
+        let res = self.graph.insert_block_header(
+            &mut block.block_header,
+            false,
+            false,
+        );
         assert!(res.0);
 
         assert!(!self.graph.contains_block(&hash));
@@ -1254,6 +1259,7 @@ impl SynchronizationProtocolHandler {
                 let res = self.graph.insert_block_header(
                     &mut block.block_header,
                     need_to_verify,
+                    false,
                 );
                 if res.0 {
                     need_to_relay.extend(res.1);

@@ -29,6 +29,8 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use hash::{KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
+
 /// The struct includes all the information to compute rewards for old epochs
 #[derive(Debug)]
 pub struct RewardExecutionInfo {
@@ -87,12 +89,14 @@ pub struct ConsensusExecutor {
     /// transactions It is used both asynchronously by `self.thread` and
     /// synchronously by the executor itself
     pub handler: Arc<ConsensusExecutionHandler>,
+
+    bench_mode: bool,
 }
 
 impl ConsensusExecutor {
     pub fn start(
         data_man: Arc<BlockDataManager>, vm: VmFactory,
-        consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
+        consensus_inner: Arc<RwLock<ConsensusGraphInner>>, bench_mode: bool,
     ) -> Self
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(data_man, vm));
@@ -102,6 +106,7 @@ impl ConsensusExecutor {
             thread: Mutex::new(None),
             sender: Mutex::new(sender),
             handler: handler.clone(),
+            bench_mode: bench_mode,
         };
         // It receives blocks hashes from on_new_block and execute them
         let handle = thread::Builder::new()
@@ -163,30 +168,40 @@ impl ConsensusExecutor {
     /// computed when all the tasks before are finished.
     // TODO Release Consensus inner lock if possible when the function is called
     pub fn wait_for_result(&self, epoch_hash: H256) -> (H256, H256) {
-        let (sender, receiver) = channel();
-        self.sender
-            .lock()
-            .send(ExecutionTask::GetResult(GetExecutionResultTask {
-                epoch_hash,
-                sender,
-            }))
-            .expect("Cannot fail");
-        receiver.recv().unwrap()
+        if self.bench_mode {
+            (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP)
+        } else {
+            let (sender, receiver) = channel();
+            self.sender
+                .lock()
+                .send(ExecutionTask::GetResult(GetExecutionResultTask {
+                    epoch_hash,
+                    sender,
+                }))
+                .expect("Cannot fail");
+            receiver.recv().unwrap()
+        }
     }
 
     /// Enqueue the epoch to be executed by the background execution thread
     /// The parameters are needed for the thread to execute this epoch without
     /// holding inner lock.
     pub fn enqueue_epoch(&self, task: EpochExecutionTask) -> bool {
-        self.sender
-            .lock()
-            .send(ExecutionTask::ExecuteEpoch(task))
-            .is_ok()
+        if !self.bench_mode {
+            self.sender
+                .lock()
+                .send(ExecutionTask::ExecuteEpoch(task))
+                .is_ok()
+        } else {
+            true
+        }
     }
 
     /// Execute the epoch synchronously
     pub fn compute_epoch(&self, task: EpochExecutionTask) {
-        self.handler.handle_epoch_execution(task)
+        if !self.bench_mode {
+            self.handler.handle_epoch_execution(task)
+        }
     }
 
     pub fn call_virtual(
