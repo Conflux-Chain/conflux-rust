@@ -156,6 +156,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
+        // TODO remove this check
         if !self.syn.contains_peer(&peer) {
             debug!(
                 "dispatch_message: Peer does not exist: peer={} msg_id={}",

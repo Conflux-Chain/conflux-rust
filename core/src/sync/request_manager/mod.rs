@@ -50,7 +50,9 @@ pub struct RequestManager {
     header_request_waittime: Mutex<HashMap<H256, Duration>>,
     blocks_in_flight: Mutex<HashSet<H256>>,
     block_request_waittime: Mutex<HashMap<H256, Duration>>,
-    waiting_requests: Mutex<BinaryHeap<(Instant, WaitingRequest)>>,
+
+    /// Each element is (timeout_time, request, chosen_peer)
+    waiting_requests: Mutex<BinaryHeap<(Instant, WaitingRequest, Option<PeerId>)>>,
 
     /// The following fields are used to control how to
     /// propagate transactions in normal case.
@@ -113,7 +115,7 @@ impl RequestManager {
                 let t = e.get_mut();
                 self.waiting_requests
                     .lock()
-                    .push((Instant::now() + *t, WaitingRequest::Header(*hash)));
+                    .push((Instant::now() + *t, WaitingRequest::Header(*hash), peer_id));
                 *t += *REQUEST_START_WAITING_TIME;
                 debug!(
                     "Block header request is delayed peer={:?} hash={:?}",
@@ -130,6 +132,7 @@ impl RequestManager {
                     self.waiting_requests.lock().push((
                         Instant::now() + *REQUEST_START_WAITING_TIME,
                         WaitingRequest::Header(*hash),
+                        peer_id,
                     ));
                     debug!(
                         "Block header request is delayed peer={:?} hash={:?}",
@@ -161,6 +164,7 @@ impl RequestManager {
             self.waiting_requests.lock().push((
                 Instant::now() + *REQUEST_START_WAITING_TIME,
                 WaitingRequest::Header(*hash),
+                None,
             ));
         } else {
             debug!(
@@ -187,6 +191,7 @@ impl RequestManager {
                             self.waiting_requests.lock().push((
                                 Instant::now() + *REQUEST_START_WAITING_TIME,
                                 WaitingRequest::Block(*hash),
+                                *peer_id,
                             ));
                             debug!(
                                 "Block {:?} request is delayed for later",
@@ -209,6 +214,7 @@ impl RequestManager {
                         self.waiting_requests.lock().push((
                             Instant::now() + *t,
                             WaitingRequest::Block(*hash),
+                            *peer_id,
                         ));
                         *t += *REQUEST_START_WAITING_TIME;
                         false
@@ -257,6 +263,7 @@ impl RequestManager {
                 self.waiting_requests.lock().push((
                     Instant::now() + *REQUEST_START_WAITING_TIME,
                     WaitingRequest::Block(hash),
+                    None,
                 ));
             }
         } else {
@@ -353,6 +360,7 @@ impl RequestManager {
                 self.waiting_requests.lock().push((
                     Instant::now() + *REQUEST_START_WAITING_TIME,
                     WaitingRequest::Block(hash),
+                    None,
                 ));
             }
         } else {
@@ -630,8 +638,9 @@ impl RequestManager {
                 waiting_requests.push(req);
                 break;
             } else {
-                let chosen_peer =
-                    match self.syn.get_random_peer(&HashSet::new()) {
+                let maybe_peer =
+                    req.2.or_else(|| self.syn.get_random_peer(&HashSet::new()));
+                let chosen_peer = match maybe_peer {
                         Some(p) => p,
                         None => {
                             break;
@@ -669,6 +678,7 @@ impl RequestManager {
                                         })
                                         .or_insert(*REQUEST_START_WAITING_TIME),
                                 WaitingRequest::Header(*h),
+                                None,
                             ));
                         }
                     }
@@ -702,6 +712,7 @@ impl RequestManager {
                                                 *REQUEST_START_WAITING_TIME,
                                             ),
                                     WaitingRequest::Block(hash),
+                                    None,
                                 ));
                             }
                         }
