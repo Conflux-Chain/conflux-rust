@@ -1,7 +1,7 @@
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     cache_manager::CacheManager,
-    consensus::ConsensusGraph,
+    consensus::{ConsensusConfig, ConsensusGraph},
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -104,6 +104,12 @@ fn initialize_consensus_graph_for_test(
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
     let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+        ConsensusConfig {
+            debug_dump_dir_invalid_state_root: "./invalid_state_root/".to_string(),
+            record_tx_address: true,
+            enable_optimistic_execution: false,
+            bench_mode: true, // Set bench_mode to true so that we skip execution
+        },
         genesis_block,
         storage_manager.clone(),
         vm.clone(),
@@ -112,9 +118,6 @@ fn initialize_consensus_graph_for_test(
         ledger_db.clone(),
         cache_man.clone(),
         pow_config.clone(),
-        true,
-        false,
-        true, // Set bench_mode to true so that we skip execution
     ));
 
     let verification_config = VerificationConfig::new(true);
