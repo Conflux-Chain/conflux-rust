@@ -536,7 +536,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
-        let hash = resp.block_hash;
+        let resp_hash = resp.block_hash;
         let req =
             self.request_manager
                 .match_request(io, peer, resp.request_id())?;
@@ -550,18 +550,20 @@ impl SynchronizationProtocolHandler {
         };
         let mut request_again = false;
         let mut request_from_same_peer = false;
-        if hash != req.block_hash {
-            warn!("Response blocktxn is not the requested block, req={:?}, resp={:?}", req.block_hash, hash);
+        if resp_hash != req.block_hash {
+            warn!("Response blocktxn is not the requested block, req={:?}, resp={:?}", req.block_hash, resp_hash);
             request_again = true;
         } else {
-            if self.graph.contains_block(&hash) {
+            if self.graph.contains_block(&resp_hash) {
                 debug!(
                     "Get blocktxn, but full block already received, hash={}",
-                    hash
+                    resp_hash
                 );
             } else {
-                if let Some(header) = self.graph.block_header_by_hash(&hash) {
-                    debug!("Process blocktxn hash={:?}", hash);
+                if let Some(header) =
+                    self.graph.block_header_by_hash(&resp_hash)
+                {
+                    debug!("Process blocktxn hash={:?}", resp_hash);
                     let signed_txes = Self::batch_recover_with_cache(
                         &resp.block_txn,
                         &mut *self
@@ -570,7 +572,7 @@ impl SynchronizationProtocolHandler {
                             .write(),
                         &mut *self.graph.cache_man.lock(),
                     )?;
-                    match self.graph.compact_block_by_hash(&hash) {
+                    match self.graph.compact_block_by_hash(&resp_hash) {
                         Some(cmpct) => {
                             let mut trans = Vec::with_capacity(
                                 cmpct.reconstructed_txes.len(),
@@ -595,7 +597,7 @@ impl SynchronizationProtocolHandler {
                             );
 
                             let mut blocks = Vec::new();
-                            blocks.push(hash);
+                            blocks.push(resp_hash);
                             if success {
                                 request_again = false;
                             } else {
@@ -619,27 +621,33 @@ impl SynchronizationProtocolHandler {
                         }
                         None => {
                             request_again = true;
-                            warn!("Get blocktxn, but misses compact block, hash={}", hash);
+                            warn!("Get blocktxn, but misses compact block, hash={}", resp_hash);
                         }
                     }
                 } else {
                     request_again = true;
                     warn!(
                         "Get blocktxn, but header not received, hash={}",
-                        hash
+                        resp_hash
                     );
                 }
             }
         }
         if request_again {
-            let mut req = HashSet::new();
-            req.insert(hash);
+            let mut req_hashes = HashSet::new();
+            req_hashes.insert(req.block_hash);
             let req_peer = if request_from_same_peer {
                 Some(peer)
             } else {
                 None
             };
-            self.blocks_received(io, req, HashSet::new(), true, req_peer);
+            self.blocks_received(
+                io,
+                req_hashes,
+                HashSet::new(),
+                true,
+                req_peer,
+            );
         }
         Ok(())
     }

@@ -42,6 +42,8 @@ enum WaitingRequest {
 ///
 /// No lock is held when we call another function in this struct, and all locks
 /// are acquired in the same order, so there should exist no deadlocks.
+// TODO A non-existing block request will remain in the struct forever, and we
+// need garbage collect
 pub struct RequestManager {
     inflight_requested_transactions: Mutex<HashSet<TxPropagateId>>,
     headers_in_flight: Mutex<HashSet<H256>>,
@@ -225,6 +227,7 @@ impl RequestManager {
     {
         self.preprocess_block_request(&mut hashes, &peer_id);
         if hashes.is_empty() {
+            debug!("All blocks in_flight, skip requesting");
             return;
         }
         self.request_blocks_unchecked(io, peer_id.unwrap(), hashes, with_public)
@@ -323,6 +326,7 @@ impl RequestManager {
     {
         self.preprocess_block_request(&mut hashes, &peer_id);
         if hashes.is_empty() {
+            debug!("All blocks in_flight, skip requesting");
             return;
         }
         self.request_compact_block_unchecked(io, peer_id, hashes)
@@ -341,7 +345,7 @@ impl RequestManager {
             SendQueuePriority::High,
         ) {
             warn!(
-                "Error requesting blocks peer={:?} hashes={:?} err={:?}",
+                "Error requesting compact blocks peer={:?} hashes={:?} err={:?}",
                 peer_id, hashes, e
             );
             for hash in hashes {
@@ -351,7 +355,10 @@ impl RequestManager {
                 ));
             }
         } else {
-            debug!("Requesting blocks peer={:?} hashes={:?}", peer_id, hashes);
+            debug!(
+                "Requesting compact blocks peer={:?} hashes={:?}",
+                peer_id, hashes
+            );
         }
     }
 
@@ -605,16 +612,17 @@ impl RequestManager {
         &self, io: &NetworkContext, with_public: bool,
     ) {
         // Send waiting requests that their backoff delay have passes
-        let headers_waittime = self.header_request_waittime.lock();
-        let blocks_waittime = self.block_request_waittime.lock();
+        let mut headers_waittime = self.header_request_waittime.lock();
+        let mut blocks_waittime = self.block_request_waittime.lock();
         let mut waiting_requests = self.waiting_requests.lock();
         let now = Instant::now();
         loop {
             if waiting_requests.is_empty() {
                 break;
             }
-            let peek_req = waiting_requests.pop().expect("queue not empty");
-            if peek_req.0 >= now {
+            let req = waiting_requests.pop().expect("queue not empty");
+            if req.0 >= now {
+                waiting_requests.push(req);
                 break;
             } else {
                 let chosen_peer =
@@ -627,7 +635,7 @@ impl RequestManager {
 
                 // Waiting requests are already in-flight, so send them without
                 // checking
-                match &peek_req.1 {
+                match &req.1 {
                     WaitingRequest::Header(h) => {
                         if let Err(e) = self.request_handler.send_request(
                             io,
@@ -642,11 +650,18 @@ impl RequestManager {
                             SendQueuePriority::High,
                         ) {
                             warn!("Error requesting waiting block header peer={:?} hash={} max_blocks={} err={:?}", chosen_peer, h, 1, e);
-                            // `h` is got from `waiting_requests`, so it should
-                            // be in `headers_waittime`
+                            // TODO `h` is got from `waiting_requests`, so it
+                            // should
+                            // be in `headers_waittime`, and thus we can remove
+                            // `or_insert`
                             waiting_requests.push((
                                 Instant::now()
-                                    + *headers_waittime.get(h).unwrap(),
+                                    + *headers_waittime
+                                        .entry(*h)
+                                        .and_modify(|t| {
+                                            *t += *REQUEST_START_WAITING_TIME
+                                        })
+                                        .or_insert(*REQUEST_START_WAITING_TIME),
                                 WaitingRequest::Header(*h),
                             ));
                         }
@@ -664,10 +679,22 @@ impl RequestManager {
                             SendQueuePriority::High,
                         ) {
                             warn!("Error requesting waiting blocks peer={:?} hashes={:?} err={:?}", chosen_peer, blocks, e);
+                            // TODO `blocks` is got from `waiting_requests`, so
+                            // it should
+                            // be in `blocks_waittime`, and thus we can remove
+                            // `or_insert`
                             for hash in blocks {
                                 waiting_requests.push((
                                     Instant::now()
-                                        + *blocks_waittime.get(&hash).unwrap(),
+                                        + *blocks_waittime
+                                            .entry(*h)
+                                            .and_modify(|t| {
+                                                *t +=
+                                                    *REQUEST_START_WAITING_TIME
+                                            })
+                                            .or_insert(
+                                                *REQUEST_START_WAITING_TIME,
+                                            ),
                                     WaitingRequest::Block(hash),
                                 ));
                             }
