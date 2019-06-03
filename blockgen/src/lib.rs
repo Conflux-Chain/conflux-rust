@@ -166,7 +166,7 @@ impl BlockGenerator {
         &self, parent_hash: H256, referee: Vec<H256>,
         deferred_state_root: H256, deferred_receipts_root: H256,
         block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
-        consensus_inner: &mut ConsensusGraphInner,
+        difficulty: u64, consensus_inner: &mut ConsensusGraphInner,
     ) -> Block
     {
         let parent_height =
@@ -188,6 +188,9 @@ impl BlockGenerator {
             );
             expected_difficulty =
                 U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO) * expected_difficulty;
+        }
+        if U256::from(difficulty) > expected_difficulty {
+            expected_difficulty = U256::from(difficulty);
         }
 
         let block_header = BlockHeaderBuilder::new()
@@ -219,7 +222,9 @@ impl BlockGenerator {
     /// only
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-    ) -> Block {
+        difficulty: u64,
+    ) -> Block
+    {
         let (state_root, receipts_root) =
             self.graph.consensus.compute_deferred_state_for_block(
                 &parent_hash,
@@ -243,6 +248,7 @@ impl BlockGenerator {
             receipts_root,
             block_gas_limit,
             transactions,
+            difficulty,
             &mut *self.graph.consensus.inner.write(),
         )
     }
@@ -281,6 +287,7 @@ impl BlockGenerator {
             best_info.deferred_receipts_root,
             block_gas_limit,
             transactions,
+            0,
             &mut *RwLockUpgradableReadGuard::upgrade(guarded),
         )
     }
@@ -337,9 +344,15 @@ impl BlockGenerator {
 
     pub fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-    ) -> H256 {
-        let block =
-            self.assemble_new_fixed_block(parent_hash, referee, num_txs);
+        difficulty: u64,
+    ) -> H256
+    {
+        let block = self.assemble_new_fixed_block(
+            parent_hash,
+            referee,
+            num_txs,
+            difficulty,
+        );
         self.generate_block_impl(block)
     }
 
@@ -374,6 +387,7 @@ impl BlockGenerator {
             best_info.deferred_receipts_root,
             block_gas_limit,
             transactions,
+            0,
             &mut *RwLockUpgradableReadGuard::upgrade(consensus_guard),
         );
 
@@ -398,6 +412,7 @@ impl BlockGenerator {
             receipts_root,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             transactions,
+            0,
             &mut *self.graph.consensus.inner.write(),
         );
 
@@ -406,11 +421,11 @@ impl BlockGenerator {
 
     fn generate_block_impl(&self, block_init: Block) -> H256 {
         let mut block = block_init;
-        let test_diff = self.pow_config.initial_difficulty.into();
+        let difficulty = block.block_header.difficulty();
         let problem = ProofOfWorkProblem {
             block_hash: block.block_header.problem_hash(),
-            difficulty: test_diff,
-            boundary: difficulty_to_boundary(&test_diff),
+            difficulty: *difficulty,
+            boundary: difficulty_to_boundary(difficulty),
         };
         loop {
             let nonce = rand::random();
