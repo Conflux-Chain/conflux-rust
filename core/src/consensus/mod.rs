@@ -780,21 +780,15 @@ impl ConsensusGraphInner {
         }
     }
 
+    // TODO: consider moving the logic to consensus graph.
     pub fn adjust_difficulty(
         &mut self, new_best_index: usize,
         sync_inner: &SynchronizationGraphInner,
     )
     {
         let new_best_hash = self.arena[new_best_index].hash.clone();
-        let new_best_index_in_sync =
-            *sync_inner.indices.get(&new_best_hash).unwrap();
         let new_best_light_difficulty =
-            if sync_inner.arena[new_best_index_in_sync].is_heavy {
-                self.arena[new_best_index].difficulty
-                    / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-            } else {
-                self.arena[new_best_index].difficulty
-            };
+            self.arena[new_best_index].light_difficulty();
         let old_best_index = *self.pivot_chain.last().expect("not empty");
         if old_best_index == self.arena[new_best_index].parent {
             // Pivot chain prolonged
@@ -1676,10 +1670,7 @@ impl ConsensusGraph {
         }
 
         // Check heavy block
-        let my_hash = inner.arena[new].hash;
-        let my_index_in_sync_graph = *sync_graph.indices.get(&my_hash).unwrap();
-        let is_heavy = sync_graph.arena[my_index_in_sync_graph].is_heavy;
-        if is_heavy {
+        if inner.arena[new].is_heavy {
             if !inner.check_heavy_block(new) {
                 warn!(
                     "Partially invalid due to invalid heavy block. {:?}",
