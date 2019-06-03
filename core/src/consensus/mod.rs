@@ -356,7 +356,7 @@ impl ConsensusGraphInner {
 
         let stable = !(U256::from(self.stable_tree.path_aggregate(parent))
             < total_difficulty * U256::from(ADAPTIVE_WEIGHT_ALPHA_NUM));
-        let mut adaptive = false;
+        let adaptive = false;
 
         if !stable {
             parent = self.arena[me].parent;
