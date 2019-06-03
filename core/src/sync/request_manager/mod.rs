@@ -1,20 +1,28 @@
-use parking_lot::{Mutex, RwLock};
-use std::collections::{HashSet, HashMap};
-use primitives::{TxPropagateId, SignedTransaction, TransactionWithSignature};
+use super::{
+    synchronization_protocol_handler::{
+        ProtocolConfiguration, REQUEST_START_WAITING_TIME,
+    },
+    synchronization_state::SynchronizationState,
+};
+use crate::sync::Error;
 use cfx_types::H256;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use std::collections::binary_heap::BinaryHeap;
-use std::sync::Arc;
-use message::{TransIndex, GetBlockHeaders, GetBlocks, GetTransactions, GetCompactBlocks, GetBlockTxn, RequestId};
-use super::synchronization_protocol_handler::{ProtocolConfiguration, REQUEST_START_WAITING_TIME};
-pub use request_handler::{RequestHandler, RequestMessage, SynchronizationPeerRequest};
-use tx_handler::{SentTransactionContainer, ReceivedTransactionContainer};
+use message::{
+    GetBlockHeaders, GetBlockTxn, GetBlocks, GetCompactBlocks, GetTransactions,
+    TransIndex,
+};
 use network::{NetworkContext, PeerId};
-use std::collections::hash_map::Entry;
+use parking_lot::{Mutex, RwLock};
+use primitives::{SignedTransaction, TransactionWithSignature, TxPropagateId};
 use priority_send_queue::SendQueuePriority;
-use super::msg_sender::send_message;
-use crate::sync::{ErrorKind, Error};
-use super::synchronization_state::SynchronizationState;
+pub use request_handler::{
+    RequestHandler, RequestMessage, SynchronizationPeerRequest,
+};
+use std::{
+    collections::{binary_heap::BinaryHeap, hash_map::Entry, HashMap, HashSet},
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tx_handler::{ReceivedTransactionContainer, SentTransactionContainer};
 
 mod request_handler;
 mod tx_handler;
@@ -46,8 +54,9 @@ pub struct RequestManager {
 }
 
 impl RequestManager {
-    pub fn new(protocol_config: &ProtocolConfiguration, syn: Arc<SynchronizationState>
-               ) -> Self {
+    pub fn new(
+        protocol_config: &ProtocolConfiguration, syn: Arc<SynchronizationState>,
+    ) -> Self {
         let received_tx_index_maintain_timeout =
             protocol_config.received_tx_index_maintain_timeout;
 
@@ -56,9 +65,11 @@ impl RequestManager {
             protocol_config.tx_maintained_for_peer_timeout.as_millis()
                 / protocol_config.send_tx_period.as_millis();
         Self {
-            received_transactions: RwLock::new(ReceivedTransactionContainer::new(
-                received_tx_index_maintain_timeout.as_secs(),
-            )),
+            received_transactions: RwLock::new(
+                ReceivedTransactionContainer::new(
+                    received_tx_index_maintain_timeout.as_secs(),
+                ),
+            ),
             inflight_requested_transactions: Default::default(),
             sent_transactions: RwLock::new(SentTransactionContainer::new(
                 sent_transaction_window_size as usize,
@@ -82,28 +93,35 @@ impl RequestManager {
             // Already inflight, return directly
             return;
         }
-        let mut header_request_waittime =
-            self.header_request_waittime.lock();
+        let mut header_request_waittime = self.header_request_waittime.lock();
         match header_request_waittime.entry(*hash) {
             Entry::Occupied(mut e) => {
                 // Requested before, so wait for the stored time and increase it
                 let t = e.get_mut();
-                self.waiting_requests.lock().push((
-                    Instant::now() + *t,
-                    WaitingRequest::Header(*hash),
-                ));
+                self.waiting_requests
+                    .lock()
+                    .push((Instant::now() + *t, WaitingRequest::Header(*hash)));
                 *t += *REQUEST_START_WAITING_TIME;
+                debug!(
+                    "Block header request is delayed peer={:?} hash={:?}",
+                    peer_id, hash
+                );
                 return;
             }
-            Entry::Vacant(mut e) => {
+            Entry::Vacant(e) => {
                 // Not requested before, so store the initial wait time
                 e.insert(*REQUEST_START_WAITING_TIME);
                 if peer_id.is_none() {
-                    // No available peer, so add to the waiting queue directly to be sent later
+                    // No available peer, so add to the waiting queue directly
+                    // to be sent later
                     self.waiting_requests.lock().push((
                         Instant::now() + *REQUEST_START_WAITING_TIME,
                         WaitingRequest::Header(*hash),
                     ));
+                    debug!(
+                        "Block header request is delayed peer={:?} hash={:?}",
+                        peer_id, hash
+                    );
                     return;
                 }
             }
@@ -120,37 +138,47 @@ impl RequestManager {
             SendQueuePriority::High,
         ) {
             debug!("Error requesting block header peer={:?} hash={} max_blocks={} err={:?}", peer_id, hash, max_blocks, e);
+
             // TODO handle different errors
-            // Currently we just queue the request and send it later with the same logic
-            // as delayed requests, so we do not remove it from `headers_in_flight`.
-            // We can reach here only if the request is not waited before, so we just wait for
+            // Currently we just queue the request and send it later with the
+            // same logic as delayed requests, so we do not remove
+            // it from `headers_in_flight`. We can reach here only
+            // if the request is not waited before, so we just wait for
             // the initial value.
-            self.waiting_requests
-                .lock()
-                .push((Instant::now() + *REQUEST_START_WAITING_TIME, WaitingRequest::Header(*hash)));
+            self.waiting_requests.lock().push((
+                Instant::now() + *REQUEST_START_WAITING_TIME,
+                WaitingRequest::Header(*hash),
+            ));
+        } else {
+            debug!(
+                "Requesting block header peer={:?} hash={} max_blocks={}",
+                peer_id, hash, max_blocks
+            );
         }
     }
 
-
     /// Remove in-flight blocks, and blocks requested before will be delayed.
-    /// If `peer_id` is `None`, all blocks will be delayed and `hashes` will always become empty.
+    /// If `peer_id` is `None`, all blocks will be delayed and `hashes` will
+    /// always become empty.
     fn preprocess_block_request(
         &self, hashes: &mut Vec<H256>, peer_id: &Option<PeerId>,
     ) {
         let mut blocks_in_flight = self.blocks_in_flight.lock();
         let mut block_request_waittime = self.block_request_waittime.lock();
         hashes.retain(|hash| {
-            if !blocks_in_flight.insert(*hash) {
+            if blocks_in_flight.insert(*hash) {
                 match block_request_waittime.entry(*hash) {
                     Entry::Vacant(entry) => {
-                        entry.insert(
-                            *REQUEST_START_WAITING_TIME
-                        );
+                        entry.insert(*REQUEST_START_WAITING_TIME);
                         if peer_id.is_none() {
                             self.waiting_requests.lock().push((
                                 Instant::now() + *REQUEST_START_WAITING_TIME,
                                 WaitingRequest::Block(*hash),
                             ));
+                            debug!(
+                                "Block {:?} request is delayed for later",
+                                hash
+                            );
                             false
                         } else {
                             true
@@ -179,7 +207,6 @@ impl RequestManager {
         });
     }
 
-
     pub fn request_blocks(
         &self, io: &NetworkContext, peer_id: Option<PeerId>,
         mut hashes: Vec<H256>, with_public: bool,
@@ -192,8 +219,11 @@ impl RequestManager {
         self.request_blocks_unchecked(io, peer_id.unwrap(), hashes, with_public)
     }
 
-    pub fn request_blocks_unchecked(&self, io: &NetworkContext, peer_id: PeerId,
-                                    mut hashes: Vec<H256>, with_public: bool) {
+    pub fn request_blocks_unchecked(
+        &self, io: &NetworkContext, peer_id: PeerId, hashes: Vec<H256>,
+        with_public: bool,
+    )
+    {
         if let Err(e) = self.request_handler.send_request(
             io,
             peer_id,
@@ -203,47 +233,53 @@ impl RequestManager {
                 hashes: hashes.clone(),
             })),
             SendQueuePriority::High,
-        ){
-            debug!("Error requesting blocks peer={:?} hashes={:?} err={:?}", peer_id, hashes, e);
+        ) {
+            debug!(
+                "Error requesting blocks peer={:?} hashes={:?} err={:?}",
+                peer_id, hashes, e
+            );
             for hash in hashes {
-                self.waiting_requests
-                    .lock()
-                    .push((Instant::now() + *REQUEST_START_WAITING_TIME, WaitingRequest::Block(hash)));
+                self.waiting_requests.lock().push((
+                    Instant::now() + *REQUEST_START_WAITING_TIME,
+                    WaitingRequest::Block(hash),
+                ));
             }
+        } else {
+            debug!("Requesting blocks peer={:?} hashes={:?}", peer_id, hashes);
         }
     }
 
     pub fn request_transactions(
-        &self, io: &NetworkContext, peer_id: PeerId, window_index: usize, received_tx_ids: &Vec<TxPropagateId>,
+        &self, io: &NetworkContext, peer_id: PeerId, window_index: usize,
+        received_tx_ids: &Vec<TxPropagateId>,
     )
     {
         if received_tx_ids.is_empty() {
-            return ;
+            return;
         }
-        let mut inflight_transactions = self.inflight_requested_transactions.lock();
+        let mut inflight_transactions =
+            self.inflight_requested_transactions.lock();
         let received_transactions = self.received_transactions.read();
 
         let (indices, tx_ids) = {
             let mut tx_ids = HashSet::new();
-            let mut indices= Vec::new();
+            let mut indices = Vec::new();
 
-            for (idx, tx_id) in received_tx_ids.iter().enumerate()
-                {
-                    if !inflight_transactions.insert(*tx_id) {
-                        // Already being requested
-                        continue;
-                    }
-
-                    if received_transactions.contains(tx_id) {
-                        // Already received
-                        continue;
-                    }
-
-                    let index =
-                        TransIndex::new((window_index, idx));
-                    indices.push(index);
-                    tx_ids.insert(*tx_id);
+            for (idx, tx_id) in received_tx_ids.iter().enumerate() {
+                if !inflight_transactions.insert(*tx_id) {
+                    // Already being requested
+                    continue;
                 }
+
+                if received_transactions.contains(tx_id) {
+                    // Already received
+                    continue;
+                }
+
+                let index = TransIndex::new((window_index, idx));
+                indices.push(index);
+                tx_ids.insert(*tx_id);
+            }
 
             (indices, tx_ids)
         };
@@ -256,8 +292,13 @@ impl RequestManager {
                 tx_ids: tx_ids.clone(),
             })),
             SendQueuePriority::Normal,
-        ){
-            debug!("Error requesting transactions peer={:?} count={} err={:?}", peer_id, tx_ids.len(), e);
+        ) {
+            debug!(
+                "Error requesting transactions peer={:?} count={} err={:?}",
+                peer_id,
+                tx_ids.len(),
+                e
+            );
             for tx_id in tx_ids {
                 inflight_transactions.remove(&tx_id);
             }
@@ -267,7 +308,8 @@ impl RequestManager {
     pub fn request_compact_blocks(
         &self, io: &NetworkContext, peer_id: Option<PeerId>,
         mut hashes: Vec<H256>,
-    ) {
+    )
+    {
         self.preprocess_block_request(&mut hashes, &peer_id);
         if hashes.is_empty() {
             return;
@@ -276,10 +318,8 @@ impl RequestManager {
     }
 
     pub fn request_compact_block_unchecked(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>,
-        mut hashes: Vec<H256>,
-    )
-    {
+        &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
+    ) {
         if let Err(e) = self.request_handler.send_request(
             io,
             peer_id.unwrap(),
@@ -288,13 +328,19 @@ impl RequestManager {
                 hashes: hashes.clone(),
             })),
             SendQueuePriority::High,
-        ){
-            debug!("Error requesting blocks peer={:?} hashes={:?} err={:?}", peer_id, hashes, e);
+        ) {
+            debug!(
+                "Error requesting blocks peer={:?} hashes={:?} err={:?}",
+                peer_id, hashes, e
+            );
             for hash in hashes {
-                self.waiting_requests
-                    .lock()
-                    .push((Instant::now() + *REQUEST_START_WAITING_TIME, WaitingRequest::Block(hash)));
+                self.waiting_requests.lock().push((
+                    Instant::now() + *REQUEST_START_WAITING_TIME,
+                    WaitingRequest::Block(hash),
+                ));
             }
+        } else {
+            debug!("Requesting blocks peer={:?} hashes={:?}", peer_id, hashes);
         }
     }
 
@@ -313,11 +359,21 @@ impl RequestManager {
             })),
             SendQueuePriority::High,
         ) {
-            debug!("Error requesting blocktxn peer={:?} hash={} err={:?}", peer_id, block_hash, e);
+            debug!(
+                "Error requesting blocktxn peer={:?} hash={} err={:?}",
+                peer_id, block_hash, e
+            );
+        } else {
+            debug!(
+                "Requesting blocktxn peer={:?} hash={}",
+                peer_id, block_hash
+            );
         }
     }
 
-    pub fn send_request_again(&self,io: &NetworkContext , request: &RequestMessage, ) {
+    pub fn send_request_again(
+        &self, io: &NetworkContext, request: &RequestMessage,
+    ) {
         let chosen_peer = self.syn.get_random_peer(&HashSet::new());
         match request {
             RequestMessage::Headers(get_headers) => {
@@ -329,10 +385,20 @@ impl RequestManager {
                 );
             }
             RequestMessage::Blocks(get_blocks) => {
-                self.request_blocks(io, chosen_peer, get_blocks.hashes.clone(), true);
+                self.request_blocks(
+                    io,
+                    chosen_peer,
+                    get_blocks.hashes.clone(),
+                    true,
+                );
             }
             RequestMessage::Compact(get_compact) => {
-                self.request_blocks(io, chosen_peer, get_compact.hashes.clone(), true);
+                self.request_blocks(
+                    io,
+                    chosen_peer,
+                    get_compact.hashes.clone(),
+                    true,
+                );
             }
             RequestMessage::BlockTxn(blocktxn) => {
                 let mut hashes = Vec::new();
@@ -344,7 +410,7 @@ impl RequestManager {
     }
 
     pub fn remove_mismatch_request(
-        &self, io: &NetworkContext, req: &RequestMessage
+        &self, io: &NetworkContext, req: &RequestMessage,
     ) {
         match req {
             RequestMessage::Headers(ref get_headers) => {
@@ -366,12 +432,12 @@ impl RequestManager {
                 self.blocks_in_flight.lock().remove(&blocktxn.block_hash);
             }
             RequestMessage::Transactions(ref get_transactions) => {
-                let mut inflight_requested_transactions = self.inflight_requested_transactions.lock();
+                let mut inflight_requested_transactions =
+                    self.inflight_requested_transactions.lock();
                 for tx_id in &get_transactions.tx_ids {
                     inflight_requested_transactions.remove(tx_id);
                 }
             }
-            _ => {}
         }
         self.send_request_again(io, req);
     }
@@ -383,16 +449,22 @@ impl RequestManager {
     }
 
     /// Remove headers_in_flight when a header is received
-    /// If a peer does not exist, the requests in its container is supposed to be handled properly
-    /// when it's disconnected, so we can just ignore the response.
-    pub fn header_received(&self, io: &NetworkContext, peer_id: &PeerId, req_hash: &H256, max_blocks: u64, mut returned_headers: HashSet<H256>) -> Result<(), Error> {
+    /// If a peer does not exist, the requests in its container is supposed to
+    /// be handled properly when it's disconnected, so we can just ignore
+    /// the response.
+    pub fn header_received(
+        &self, io: &NetworkContext, req_hash: &H256, max_blocks: u64,
+        mut returned_headers: HashSet<H256>,
+    )
+    {
         let missing = {
             let mut missing = false;
             let mut headers_in_flight = self.headers_in_flight.lock();
             let mut header_waittime = self.header_request_waittime.lock();
             if !returned_headers.remove(req_hash) {
-                // If `req_hash` is not in `headers_in_flight`, it may has been received or requested
-                // again by another thread, so we do not need to request it in that case
+                // If `req_hash` is not in `headers_in_flight`, it may has been
+                // received or requested again by another
+                // thread, so we do not need to request it in that case
                 if headers_in_flight.remove(req_hash) {
                     missing = true;
                 }
@@ -408,26 +480,36 @@ impl RequestManager {
             missing
         };
         // If `req_hash` is not returned, we need to request it again
-        // TODO decrease reputation if the returned headers do not contain the requested one
+        // TODO decrease reputation if the returned headers do not contain the
+        // requested one
         if missing {
             let chosen_peer = self.syn.get_random_peer(&HashSet::new());
             self.request_block_headers(io, chosen_peer, &req_hash, max_blocks);
         }
-        Ok(())
     }
 
-    /// `peer` is needed for the case that a compact block is received and a full block is
-    /// reconstructed, but the full block is incorrect. We should ask the same peer for the full block instead of choosing a random peer.
-    /// If a request is removed from `req_hashes`, it's the caller's responsibility to ensure that the removed request either has already received or will be requested by the caller (the case for `Blocktxn`).
-    pub fn blocks_received(&self, io: &NetworkContext, req_hashes: HashSet<H256>, mut returned_blocks: HashSet<H256>, ask_full_block: bool, peer: Option<PeerId>, with_public: bool, ) -> Result<(), Error> {
+    /// `peer` is needed for the case that a compact block is received and a
+    /// full block is reconstructed, but the full block is incorrect. We
+    /// should ask the same peer for the full block instead of choosing a random
+    /// peer. If a request is removed from `req_hashes`, it's the caller's
+    /// responsibility to ensure that the removed request either has already
+    /// received or will be requested by the caller (the case for `Blocktxn`).
+    pub fn blocks_received(
+        &self, io: &NetworkContext, req_hashes: HashSet<H256>,
+        mut returned_blocks: HashSet<H256>, ask_full_block: bool,
+        peer: Option<PeerId>, with_public: bool,
+    )
+    {
         let missing_blocks = {
             let mut blocks_in_flight = self.blocks_in_flight.lock();
             let mut block_waittime = self.block_request_waittime.lock();
             let mut missing_blocks = Vec::new();
             for req_hash in &req_hashes {
                 if !returned_blocks.remove(req_hash) {
-                    // If `req_hash` is not in `blocks_in_flight`, it may has been received or requested
-                    // again by another thread, so we do not need to request it in that case
+                    // If `req_hash` is not in `blocks_in_flight`, it may has
+                    // been received or requested
+                    // again by another thread, so we do not need to request it
+                    // in that case
                     if blocks_in_flight.remove(&req_hash) {
                         missing_blocks.push(*req_hash);
                     }
@@ -443,25 +525,36 @@ impl RequestManager {
             missing_blocks
         };
         if !missing_blocks.is_empty() {
-            let chosen_peer = peer.or_else(|| self.syn.get_random_peer(&HashSet::new()));
+            let chosen_peer =
+                peer.or_else(|| self.syn.get_random_peer(&HashSet::new()));
             if ask_full_block {
-                self.request_blocks(io, chosen_peer, missing_blocks, with_public);
+                self.request_blocks(
+                    io,
+                    chosen_peer,
+                    missing_blocks,
+                    with_public,
+                );
             } else {
                 self.request_compact_blocks(io, chosen_peer, missing_blocks);
             }
         }
-        Ok(())
     }
 
-    /// We do not need `io` in this function because we do not request missing transactions
-    pub fn transactions_received(&self, received_transactions: &HashSet<TxPropagateId>,) {
-        let mut inflight_transactions = self.inflight_requested_transactions.lock();
+    /// We do not need `io` in this function because we do not request missing
+    /// transactions
+    pub fn transactions_received(
+        &self, received_transactions: &HashSet<TxPropagateId>,
+    ) {
+        let mut inflight_transactions =
+            self.inflight_requested_transactions.lock();
         for tx in received_transactions {
             inflight_transactions.remove(tx);
         }
     }
 
-    pub fn get_sent_transactions(&self, indices: &Vec<TransIndex>, ) -> Vec<TransactionWithSignature> {
+    pub fn get_sent_transactions(
+        &self, indices: &Vec<TransIndex>,
+    ) -> Vec<TransactionWithSignature> {
         let sent_transactions = self.sent_transactions.read();
         let mut txs = Vec::with_capacity(indices.len());
         for index in indices {
@@ -472,22 +565,30 @@ impl RequestManager {
         txs
     }
 
-    pub fn append_sent_transactions(&self, transactions: Vec<Arc<SignedTransaction>>) -> usize {
-        self.sent_transactions.write().append_transactions(transactions)
+    pub fn append_sent_transactions(
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+    ) -> usize {
+        self.sent_transactions
+            .write()
+            .append_transactions(transactions)
     }
 
     pub fn append_received_transaction_ids(&self, tx_ids: Vec<TxPropagateId>) {
-        self.received_transactions.write().append_transaction_ids(tx_ids)
+        self.received_transactions
+            .write()
+            .append_transaction_ids(tx_ids)
     }
 
     pub fn resend_timeout_requests(&self, io: &NetworkContext) {
         let timeout_requests = self.request_handler.get_timeout_requests(io);
         for req in timeout_requests {
-            self.send_request_again(io, &req);
+            self.remove_mismatch_request(io, &req);
         }
     }
 
-    pub fn resend_waiting_requests(&self, io: &NetworkContext, with_public: bool) {
+    pub fn resend_waiting_requests(
+        &self, io: &NetworkContext, with_public: bool,
+    ) {
         // Send waiting requests that their backoff delay have passes
         let headers_waittime = self.header_request_waittime.lock();
         let blocks_waittime = self.block_request_waittime.lock();
@@ -501,13 +602,13 @@ impl RequestManager {
             if peek_req.0 >= now {
                 break;
             } else {
-                let chosen_peer = match self.syn.get_random_peer(&HashSet::new())
-                {
-                    Some(p) => p,
-                    None => {
-                        break;
-                    }
-                };
+                let chosen_peer =
+                    match self.syn.get_random_peer(&HashSet::new()) {
+                        Some(p) => p,
+                        None => {
+                            break;
+                        }
+                    };
 
                 // Waiting requests are already in-flight, so send them without
                 // checking
@@ -516,17 +617,23 @@ impl RequestManager {
                         if let Err(e) = self.request_handler.send_request(
                             io,
                             chosen_peer,
-                            Box::new(RequestMessage::Headers(GetBlockHeaders {
-                                request_id: 0.into(),
-                                hash: *h,
-                                max_blocks: 1,
-                            })),
+                            Box::new(RequestMessage::Headers(
+                                GetBlockHeaders {
+                                    request_id: 0.into(),
+                                    hash: *h,
+                                    max_blocks: 1,
+                                },
+                            )),
                             SendQueuePriority::High,
                         ) {
                             debug!("Error requesting waiting block header peer={:?} hash={} max_blocks={} err={:?}", chosen_peer, h, 1, e);
-                            // `h` is got from `waiting_requests`, so it should be in `headers_waittime`
-                            waiting_requests
-                                .push((Instant::now() + *headers_waittime.get(h).unwrap(), WaitingRequest::Header(*h)));
+                            // `h` is got from `waiting_requests`, so it should
+                            // be in `headers_waittime`
+                            waiting_requests.push((
+                                Instant::now()
+                                    + *headers_waittime.get(h).unwrap(),
+                                WaitingRequest::Header(*h),
+                            ));
                         }
                     }
                     WaitingRequest::Block(h) => {
@@ -540,11 +647,14 @@ impl RequestManager {
                                 hashes: blocks.clone(),
                             })),
                             SendQueuePriority::High,
-                        ){
+                        ) {
                             debug!("Error requesting waiting blocks peer={:?} hashes={:?} err={:?}", chosen_peer, blocks, e);
                             for hash in blocks {
-                                waiting_requests
-                                    .push((Instant::now() + *blocks_waittime.get(&hash).unwrap(), WaitingRequest::Block(hash)));
+                                waiting_requests.push((
+                                    Instant::now()
+                                        + *blocks_waittime.get(&hash).unwrap(),
+                                    WaitingRequest::Block(hash),
+                                ));
                             }
                         }
                     }
@@ -558,45 +668,47 @@ impl RequestManager {
     }
 
     pub fn on_peer_disconnected(&self, io: &NetworkContext, peer: PeerId) {
-        if let Some(unfinished_requests) = self.request_handler.remove_peer(peer) {
-            for request in unfinished_requests {
-                match &*request {
-                    RequestMessage::Headers(get_headers) => {
-                        self.headers_in_flight.lock().remove(&get_headers.hash);
-                        self.header_request_waittime
-                            .lock()
-                            .remove(&get_headers.hash);
-                    }
-                    RequestMessage::Blocks(get_blocks) => {
-                        let mut blocks_in_flight = self.blocks_in_flight.lock();
-                        let mut waittime = self.block_request_waittime.lock();
-                        for hash in &get_blocks.hashes {
-                            blocks_in_flight.remove(hash);
-                            waittime.remove(hash);
+        if let Some(unfinished_requests) =
+            self.request_handler.remove_peer(peer)
+        {
+            {
+                let mut headers_in_flight = self.headers_in_flight.lock();
+                let mut header_waittime = self.header_request_waittime.lock();
+                let mut blocks_in_flight = self.blocks_in_flight.lock();
+                let mut block_waittime = self.block_request_waittime.lock();
+                let mut inflight_transactions =
+                    self.inflight_requested_transactions.lock();
+                for request in &unfinished_requests {
+                    match &**request {
+                        RequestMessage::Headers(get_headers) => {
+                            headers_in_flight.remove(&get_headers.hash);
+                            header_waittime.remove(&get_headers.hash);
+                        }
+                        RequestMessage::Blocks(get_blocks) => {
+                            for hash in &get_blocks.hashes {
+                                blocks_in_flight.remove(hash);
+                                block_waittime.remove(hash);
+                            }
+                        }
+                        RequestMessage::Compact(get_compact) => {
+                            for hash in &get_compact.hashes {
+                                blocks_in_flight.remove(hash);
+                                block_waittime.remove(hash);
+                            }
+                        }
+                        RequestMessage::BlockTxn(blocktxn) => {
+                            blocks_in_flight.remove(&blocktxn.block_hash);
+                            block_waittime.remove(&blocktxn.block_hash);
+                        }
+                        RequestMessage::Transactions(get_transactions) => {
+                            for tx_id in &get_transactions.tx_ids {
+                                inflight_transactions.remove(tx_id);
+                            }
                         }
                     }
-                    RequestMessage::Compact(get_compact) => {
-                        let mut blocks_in_flight = self.blocks_in_flight.lock();
-                        let mut waittime = self.block_request_waittime.lock();
-                        for hash in &get_compact.hashes {
-                            blocks_in_flight.remove(hash);
-                            waittime.remove(hash);
-                        }
-                    }
-                    RequestMessage::BlockTxn(blocktxn) => {
-                        self.blocks_in_flight.lock().remove(&blocktxn.block_hash);
-                        self.block_request_waittime
-                            .lock()
-                            .remove(&blocktxn.block_hash);
-                    }
-                    RequestMessage::Transactions(get_transactions) => {
-                        let mut inflight_transactions = self.inflight_requested_transactions.lock();
-                        for tx_id in &get_transactions.tx_ids {
-                            inflight_transactions.remove(tx_id);
-                        }
-                    }
-                    _ => {}
                 }
+            }
+            for request in unfinished_requests {
                 self.send_request_again(io, &*request);
             }
         } else {

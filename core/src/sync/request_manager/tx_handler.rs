@@ -1,8 +1,10 @@
-use std::collections::HashSet;
-use primitives::{TxPropagateId, SignedTransaction};
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::sync::Arc;
 use message::TransIndex;
+use primitives::{SignedTransaction, TxPropagateId};
+use std::{
+    collections::HashSet,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 

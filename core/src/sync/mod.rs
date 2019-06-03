@@ -3,11 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 mod error;
+mod request_manager;
 mod synchronization_graph;
 mod synchronization_protocol_handler;
 mod synchronization_service;
 mod synchronization_state;
-mod request_manager;
 
 pub use self::{
     error::{Error, ErrorKind},
@@ -23,10 +23,7 @@ pub use self::{
     synchronization_service::{
         SharedSynchronizationService, SynchronizationService,
     },
-    synchronization_state::{
-        SynchronizationPeerState,
-        SynchronizationState,
-    },
+    synchronization_state::{SynchronizationPeerState, SynchronizationState},
 };
 
 pub mod random {
@@ -35,11 +32,13 @@ pub mod random {
 }
 
 pub mod msg_sender {
-    use network::{NetworkContext, PeerId, throttling::THROTTLING_SERVICE};
-    use message::Message;
-    use priority_send_queue::SendQueuePriority;
     use cfx_bytes::Bytes;
-    use network::Error as NetworkError;
+    use message::Message;
+    use network::{
+        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
+        PeerId,
+    };
+    use priority_send_queue::SendQueuePriority;
 
     pub fn send_message(
         io: &NetworkContext, peer: PeerId, msg: &Message,

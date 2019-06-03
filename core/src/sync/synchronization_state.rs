@@ -3,31 +3,16 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::H256;
-use message::{
-    GetBlockHeaders, GetBlockTxn, GetBlocks, GetCompactBlocks,
-    GetTerminalBlockHashes, GetTransactions, Message, TransIndex,
-};
-use network::{PeerId, NetworkContext};
+use network::PeerId;
 //use slab::Slab;
-use crate::sync::{
-    random,  Error,
-    ErrorKind,
-};
-use parking_lot::{RwLock, Mutex};
-use primitives::{SignedTransaction, TxPropagateId};
+use crate::sync::{random, Error, ErrorKind};
+use parking_lot::RwLock;
 use rand::Rng;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    mem,
-    sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    collections::{HashMap, HashSet},
+    sync::{atomic::AtomicBool, Arc},
+    time::Instant,
 };
-use priority_send_queue::SendQueuePriority;
-use std::collections::binary_heap::BinaryHeap;
-use super::synchronization_protocol_handler::ProtocolConfiguration;
-use super::request_manager::RequestManager;
-use std::sync::atomic::AtomicBool;
-
 
 pub struct SynchronizationPeerState {
     pub id: PeerId,
@@ -53,10 +38,7 @@ pub struct SynchronizationState {
 }
 
 impl SynchronizationState {
-    pub fn new(
-        catch_up_mode: bool, protocol_config: &ProtocolConfiguration
-    ) -> Self
-    {
+    pub fn new(catch_up_mode: bool) -> Self {
         SynchronizationState {
             catch_up_mode: AtomicBool::new(catch_up_mode),
             peers: Default::default(),
@@ -75,8 +57,12 @@ impl SynchronizationState {
         }
     }
 
-    pub fn peer_connected(&self, peer: PeerId, state: SynchronizationPeerState) {
-        self.peers.write().insert(peer, Arc::new(RwLock::new(state)));
+    pub fn peer_connected(
+        &self, peer: PeerId, state: SynchronizationPeerState,
+    ) {
+        self.peers
+            .write()
+            .insert(peer, Arc::new(RwLock::new(state)));
     }
 
     pub fn contains_peer(&self, peer: &PeerId) -> bool {
@@ -86,13 +72,19 @@ impl SynchronizationState {
     pub fn get_peer_info(
         &self, id: &PeerId,
     ) -> Result<Arc<RwLock<SynchronizationPeerState>>, Error> {
-        Ok(self.peers.read().get(&id).ok_or(ErrorKind::UnknownPeer)?.clone())
+        Ok(self
+            .peers
+            .read()
+            .get(&id)
+            .ok_or(ErrorKind::UnknownPeer)?
+            .clone())
     }
 
     /// Choose one random peer excluding the given `exclude` set.
     /// Return None if there is no peer to choose from
     pub fn get_random_peer(&self, exclude: &HashSet<PeerId>) -> Option<PeerId> {
-        let peer_set: HashSet<PeerId> = self.peers.read().keys().cloned().collect();
+        let peer_set: HashSet<PeerId> =
+            self.peers.read().keys().cloned().collect();
         let choose_from: Vec<&PeerId> = peer_set.difference(exclude).collect();
         let mut rand = random::new();
         rand.choose(&choose_from).cloned().cloned()

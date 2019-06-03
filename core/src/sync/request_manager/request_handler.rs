@@ -1,16 +1,24 @@
-use std::collections::{VecDeque, HashMap, BinaryHeap};
-use std::sync::Arc;
-use network::{PeerId, NetworkContext};
-use crate::sync::{Error, ErrorKind};
-use priority_send_queue::SendQueuePriority;
-use std::mem;
-use crate::sync::msg_sender::send_message;
-use crate::sync::synchronization_protocol_handler::ProtocolConfiguration;
+use crate::sync::{
+    msg_sender::send_message,
+    synchronization_protocol_handler::ProtocolConfiguration, Error, ErrorKind,
+};
+use message::{
+    GetBlockHeaders, GetBlockTxn, GetBlocks, GetCompactBlocks, GetTransactions,
+    Message,
+};
+use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;
-use message::{GetBlockHeaders, GetBlocks, GetCompactBlocks, GetBlockTxn, GetTerminalBlockHashes, GetTransactions, Message};
-use std::cmp::Ordering;
-use std::time::{Instant, Duration};
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use priority_send_queue::SendQueuePriority;
+use std::{
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap, VecDeque},
+    mem,
+    sync::{
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
 
 pub struct RequestHandler {
     protocol_config: ProtocolConfiguration,
@@ -34,12 +42,17 @@ impl RequestHandler {
         for _i in 0..self.protocol_config.max_inflight_request_count {
             requests_vec.push(None);
         }
-        self.peers.lock().insert(peer_id, RequestContainer{
+        self.peers.lock().insert(
             peer_id,
-            inflight_requests: requests_vec,
-            max_inflight_request_count: self.protocol_config.max_inflight_request_count,
-            ..Default::default()
-        });
+            RequestContainer {
+                peer_id,
+                inflight_requests: requests_vec,
+                max_inflight_request_count: self
+                    .protocol_config
+                    .max_inflight_request_count,
+                ..Default::default()
+            },
+        );
     }
 
     pub fn match_request(
@@ -48,7 +61,12 @@ impl RequestHandler {
         let mut peers = self.peers.lock();
         let mut requests_queue = self.requests_queue.lock();
         if let Some(peer) = peers.get_mut(&peer_id) {
-            peer.match_request(io, request_id, &mut *requests_queue, &self.protocol_config)
+            peer.match_request(
+                io,
+                request_id,
+                &mut *requests_queue,
+                &self.protocol_config,
+            )
         } else {
             bail!(ErrorKind::UnknownPeer);
         }
@@ -57,7 +75,8 @@ impl RequestHandler {
     pub fn send_request(
         &self, io: &NetworkContext, peer: PeerId, mut msg: Box<RequestMessage>,
         priority: SendQueuePriority,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    {
         let mut peers = self.peers.lock();
         let mut requests_queue = self.requests_queue.lock();
         if let Some(peer_info) = peers.get_mut(&peer) {
@@ -86,20 +105,21 @@ impl RequestHandler {
         }
 
         // TODO this is supposed to be handled properly by disconnect now
-//            {
-//                let syn = self.syn.read();
-//                let cur_peer_info =
-//                    syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-//
-//                if !Arc::ptr_eq(&cur_peer_info, &peer_info) {
-//                    return Err(ErrorKind::UnknownPeer.into());
-//                }
-//            }
-
-
+        //            {
+        //                let syn = self.syn.read();
+        //                let cur_peer_info =
+        //
+        // syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
+        //
+        //                if !Arc::ptr_eq(&cur_peer_info, &peer_info) {
+        //                    return Err(ErrorKind::UnknownPeer.into());
+        //                }
+        //            }
     }
 
-    pub fn get_timeout_requests(&self, io: &NetworkContext) -> Vec<RequestMessage> {
+    pub fn get_timeout_requests(
+        &self, io: &NetworkContext,
+    ) -> Vec<RequestMessage> {
         // Check if in-flight requests timeout
         let now = Instant::now();
         let mut timeout_requests = Vec::new();
@@ -118,8 +138,11 @@ impl RequestHandler {
                     break;
                 } else {
                     // TODO And should handle timeout peers.
-                    if let Ok(req) =
-                        self.match_request(io, sync_req.peer_id, sync_req.request_id) {
+                    if let Ok(req) = self.match_request(
+                        io,
+                        sync_req.peer_id,
+                        sync_req.request_id,
+                    ) {
                         timeout_requests.push(req);
                     } else {
                         debug!("Timeout a removed request {:?}", sync_req);
@@ -131,8 +154,13 @@ impl RequestHandler {
     }
 
     /// Return unfinished_requests
-    pub fn remove_peer(&self, peer_id: PeerId) -> Option<Vec<Box<RequestMessage>>> {
-        self.peers.lock().remove(&peer_id).map(|mut p| p.get_unfinished_requests())
+    pub fn remove_peer(
+        &self, peer_id: PeerId,
+    ) -> Option<Vec<Box<RequestMessage>>> {
+        self.peers
+            .lock()
+            .remove(&peer_id)
+            .map(|mut p| p.get_unfinished_requests())
     }
 }
 
@@ -182,8 +210,8 @@ impl RequestContainer {
         request_id < self.next_request_id
             && request_id >= self.lowest_request_id
             && self.inflight_requests
-            [(request_id % self.max_inflight_request_count) as usize]
-            .is_some()
+                [(request_id % self.max_inflight_request_count) as usize]
+                .is_some()
     }
 
     pub fn has_pending_requests(&self) -> bool {
@@ -212,9 +240,9 @@ impl RequestContainer {
                     as usize]
                     .is_none()
                     && self.lowest_request_id < self.next_request_id
-                    {
-                        self.lowest_request_id += 1;
-                    }
+                {
+                    self.lowest_request_id += 1;
+                }
             }
             save_req
         } else {
@@ -224,15 +252,20 @@ impl RequestContainer {
     }
 
     pub fn match_request(
-        &mut self, io: &NetworkContext, request_id: u64, requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>, protocol_config: &ProtocolConfiguration
-    ) -> Result<RequestMessage, Error> {
+        &mut self, io: &NetworkContext, request_id: u64,
+        requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
+        protocol_config: &ProtocolConfiguration,
+    ) -> Result<RequestMessage, Error>
+    {
         let removed_req = self.remove_inflight_request(request_id);
         if let Some(removed_req) = removed_req {
-            removed_req.timed_req.removed.store(true, AtomicOrdering::Relaxed);
+            removed_req
+                .timed_req
+                .removed
+                .store(true, AtomicOrdering::Relaxed);
             while self.has_pending_requests() {
                 if let Some(new_request_id) = self.get_next_request_id() {
-                    let mut pending_msg =
-                        self.pop_pending_request().unwrap();
+                    let mut pending_msg = self.pop_pending_request().unwrap();
                     pending_msg.set_request_id(new_request_id);
                     // FIXME: May need to set priority more precisely.
                     // Simply treat request as high priority for now.
@@ -275,9 +308,7 @@ impl RequestContainer {
         let mut unfinished_requests = Vec::new();
         while let Some(maybe_req) = self.inflight_requests.pop() {
             if let Some(req) = maybe_req {
-                req.timed_req
-                    .removed
-                    .store(true, AtomicOrdering::Relaxed);
+                req.timed_req.removed.store(true, AtomicOrdering::Relaxed);
                 unfinished_requests.push(req.message);
             }
         }
@@ -295,14 +326,12 @@ pub struct SynchronizationPeerRequest {
     pub timed_req: Arc<TimedSyncRequests>,
 }
 
-
 #[derive(Debug)]
 pub enum RequestMessage {
     Headers(GetBlockHeaders),
     Blocks(GetBlocks),
     Compact(GetCompactBlocks),
     BlockTxn(GetBlockTxn),
-    Terminals(GetTerminalBlockHashes),
     Transactions(GetTransactions),
 }
 
@@ -321,9 +350,6 @@ impl RequestMessage {
             RequestMessage::BlockTxn(ref mut msg) => {
                 msg.set_request_id(request_id)
             }
-            RequestMessage::Terminals(ref mut msg) => {
-                msg.set_request_id(request_id)
-            }
             RequestMessage::Transactions(ref mut msg) => {
                 msg.set_request_id(request_id)
             }
@@ -336,12 +362,10 @@ impl RequestMessage {
             RequestMessage::Blocks(ref msg) => msg,
             RequestMessage::Compact(ref msg) => msg,
             RequestMessage::BlockTxn(ref msg) => msg,
-            RequestMessage::Terminals(ref msg) => msg,
             RequestMessage::Transactions(ref msg) => msg,
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct TimedSyncRequests {
@@ -374,7 +398,6 @@ impl TimedSyncRequests {
             | RequestMessage::Compact(_)
             | RequestMessage::BlockTxn(_) => conf.blocks_request_timeout,
             RequestMessage::Transactions(_) => conf.transaction_request_timeout,
-            _ => Duration::default(),
         };
         TimedSyncRequests::new(peer_id, timeout, request_id)
     }
