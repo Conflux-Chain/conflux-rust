@@ -1,3 +1,4 @@
+#![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     cache_manager::CacheManager,
@@ -20,6 +21,8 @@ use log4rs::{
     encode::pattern::PatternEncoder,
 };
 use log::LevelFilter;
+use std::fs;
+use std::str::FromStr;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
@@ -181,18 +184,47 @@ fn main() {
         create_simple_block_impl(H256::default(), vec![], 0, 0, U256::from(10));
 
     let (sync, consensus) = initialize_consensus_graph_for_test(
-        genesis_block,
+        genesis_block.clone(),
         "./__consensus_bench_db",
     );
 
-    let mut last_hash = genesis_hash;
+    let input_file = "./seq.in";
+
+    let mut hashes = Vec::new();
+    hashes.push(genesis_block.hash());
+    let content = fs::read_to_string(input_file).expect("Cannot open the block sequence input file!");
+    let lines = content.split("\n");
+
     let start_time = time::SystemTime::now();
-    for i in 0..10000 {
+    for s in lines {
+        if s.starts_with("//") {
+            continue;
+        }
+        let tokens = s.split_whitespace();
+        let mut first = true;
+        let mut parent_idx = 0;
+        let mut ref_idxs = Vec::new();
+        for w in tokens {
+            if first {
+                parent_idx = usize::from_str(w).expect("Cannot parse the input file!");
+                first = false;
+            } else {
+                let ref_idx = usize::from_str(w).expect("Cannot parse the input file!");
+                ref_idxs.push(ref_idx);
+            }
+        }
+        if first {
+            continue;
+        }
+        let mut ref_hashes = Vec::new();
+        for ref_idx in ref_idxs.iter() {
+            ref_hashes.push(hashes[*ref_idx]);
+        }
         let (new_hash, mut new_block) =
-            create_simple_block(sync.clone(), last_hash, vec![]);
+            create_simple_block(sync.clone(), hashes[parent_idx], ref_hashes);
+        hashes.push(new_hash);
         sync.insert_block_header(&mut new_block.block_header, false, true);
         sync.insert_block(new_block, false, false, false);
-        last_hash = new_hash;
     }
 
     while sync.block_count() != consensus.block_count() {
@@ -201,6 +233,6 @@ fn main() {
 
     println!("Block count: {}", consensus.block_count());
     println!("Pivot chain hash: {}", consensus.best_block_hash());
-    println!("Last block hash: {}", last_hash);
+    println!("Last block hash: {}", hashes[hashes.len() - 1]);
     println!("Elapsed {}", start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
 }
