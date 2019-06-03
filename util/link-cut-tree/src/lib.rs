@@ -17,7 +17,7 @@ pub struct SignedBigNum {
 }
 
 impl SignedBigNum {
-    fn zero() -> Self {
+    pub fn zero() -> Self {
         Self {
             sign: false,
             num: U256::zero(),
@@ -390,10 +390,10 @@ impl MinLinkCutTree {
         NULL
     }
 
-    pub fn set(&mut self, v: usize, value: &U256) {
+    pub fn set(&mut self, v: usize, value: &SignedBigNum) {
         self.access(v);
 
-        self.tree[v].value = SignedBigNum::pos(*value);
+        self.tree[v].value = *value;
         self.update(v);
     }
 
@@ -446,11 +446,11 @@ mod tests {
         tree.link(1, 3);
         tree.link(0, 4);
 
-        tree.set(0, &U256::from(10));
-        tree.set(1, &U256::from(9));
-        tree.set(2, &U256::from(8));
-        tree.set(3, &U256::from(7));
-        tree.set(4, &U256::from(6));
+        tree.set(0, &SignedBigNum::from(U256::from(10)));
+        tree.set(1, &SignedBigNum::from(U256::from(9)));
+        tree.set(2, &SignedBigNum::from(U256::from(8)));
+        tree.set(3, &SignedBigNum::from(U256::from(7)));
+        tree.set(4, &SignedBigNum::from(U256::from(6)));
 
         assert_eq!(tree.path_aggregate(0), SignedBigNum::pos(U256::from(10)));
         assert_eq!(tree.path_aggregate(1), SignedBigNum::pos(U256::from(9)));
