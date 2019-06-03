@@ -1105,7 +1105,8 @@ impl ConsensusGraph {
         let executor = Arc::new(ConsensusExecutor::start(
             data_man.clone(),
             vm,
-            inner.clone(), bench_mode,
+            inner.clone(),
+            bench_mode,
         ));
 
         ConsensusGraph {

@@ -857,10 +857,8 @@ impl SynchronizationGraph {
     }
 
     pub fn insert_block_header(
-        &self, header: &mut BlockHeader, need_to_verify: bool,
-        bench_mode: bool,
-    ) -> (bool, Vec<H256>)
-    {
+        &self, header: &mut BlockHeader, need_to_verify: bool, bench_mode: bool,
+    ) -> (bool, Vec<H256>) {
         let mut inner = self.inner.write();
         let hash = header.hash();
 
@@ -1265,9 +1263,7 @@ impl SynchronizationGraph {
     }
 
     /// Get the current number of blocks in the synchronization graph
-    pub fn block_count(&self) -> usize {
-        self.data_man.blocks.read().len()
-    }
+    pub fn block_count(&self) -> usize { self.data_man.blocks.read().len() }
 
     // Manage statistics
     pub fn stat_inc_inserted_count(&self) {

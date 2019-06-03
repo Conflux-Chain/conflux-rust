@@ -96,8 +96,7 @@ pub struct ConsensusExecutor {
 impl ConsensusExecutor {
     pub fn start(
         data_man: Arc<BlockDataManager>, vm: VmFactory,
-        consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        bench_mode: bool,
+        consensus_inner: Arc<RwLock<ConsensusGraphInner>>, bench_mode: bool,
     ) -> Self
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(data_man, vm));
