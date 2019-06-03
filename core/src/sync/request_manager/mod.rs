@@ -33,6 +33,15 @@ enum WaitingRequest {
     Block(H256),
 }
 
+/// When a header or block is requested by the `RequestManager`, it is ensured
+/// that if it's not fully received, its hash exists
+/// in `in_flight` after every function call.
+///
+/// The thread who removes a hash from `in_flight` is responsible to request it
+/// again if it's not received.
+///
+/// No lock is held when we call another function in this struct, and all locks
+/// are acquired in the same order, so there should exist no deadlocks.
 pub struct RequestManager {
     inflight_requested_transactions: Mutex<HashSet<TxPropagateId>>,
     headers_in_flight: Mutex<HashSet<H256>>,
@@ -84,6 +93,8 @@ impl RequestManager {
         }
     }
 
+    /// Request a header if it's not already in_flight. The request is delayed
+    /// if the header is requested before.
     pub fn request_block_headers(
         &self, io: &NetworkContext, peer_id: Option<PeerId>, hash: &H256,
         max_blocks: u64,
@@ -137,7 +148,7 @@ impl RequestManager {
             })),
             SendQueuePriority::High,
         ) {
-            debug!("Error requesting block header peer={:?} hash={} max_blocks={} err={:?}", peer_id, hash, max_blocks, e);
+            warn!("Error requesting block header peer={:?} hash={} max_blocks={} err={:?}", peer_id, hash, max_blocks, e);
 
             // TODO handle different errors
             // Currently we just queue the request and send it later with the
@@ -234,7 +245,7 @@ impl RequestManager {
             })),
             SendQueuePriority::High,
         ) {
-            debug!(
+            warn!(
                 "Error requesting blocks peer={:?} hashes={:?} err={:?}",
                 peer_id, hashes, e
             );
@@ -293,7 +304,7 @@ impl RequestManager {
             })),
             SendQueuePriority::Normal,
         ) {
-            debug!(
+            warn!(
                 "Error requesting transactions peer={:?} count={} err={:?}",
                 peer_id,
                 tx_ids.len(),
@@ -329,7 +340,7 @@ impl RequestManager {
             })),
             SendQueuePriority::High,
         ) {
-            debug!(
+            warn!(
                 "Error requesting blocks peer={:?} hashes={:?} err={:?}",
                 peer_id, hashes, e
             );
@@ -359,7 +370,7 @@ impl RequestManager {
             })),
             SendQueuePriority::High,
         ) {
-            debug!(
+            warn!(
                 "Error requesting blocktxn peer={:?} hash={} err={:?}",
                 peer_id, block_hash, e
             );
@@ -448,20 +459,20 @@ impl RequestManager {
         self.request_handler.match_request(io, peer_id, request_id)
     }
 
-    /// Remove headers_in_flight when a header is received
+    /// Remove from `headers_in_flight` when a header is received.
     /// If a peer does not exist, the requests in its container is supposed to
     /// be handled properly when it's disconnected, so we can just ignore
     /// the response.
     pub fn header_received(
         &self, io: &NetworkContext, req_hash: &H256, max_blocks: u64,
-        mut returned_headers: HashSet<H256>,
+        mut received_headers: HashSet<H256>,
     )
     {
         let missing = {
             let mut missing = false;
             let mut headers_in_flight = self.headers_in_flight.lock();
             let mut header_waittime = self.header_request_waittime.lock();
-            if !returned_headers.remove(req_hash) {
+            if !received_headers.remove(req_hash) {
                 // If `req_hash` is not in `headers_in_flight`, it may has been
                 // received or requested again by another
                 // thread, so we do not need to request it in that case
@@ -473,7 +484,7 @@ impl RequestManager {
                 headers_in_flight.remove(req_hash);
                 header_waittime.remove(req_hash);
             }
-            for h in &returned_headers {
+            for h in &received_headers {
                 headers_in_flight.remove(h);
                 header_waittime.remove(h);
             }
@@ -488,15 +499,15 @@ impl RequestManager {
         }
     }
 
-    /// `peer` is needed for the case that a compact block is received and a
-    /// full block is reconstructed, but the full block is incorrect. We
-    /// should ask the same peer for the full block instead of choosing a random
-    /// peer. If a request is removed from `req_hashes`, it's the caller's
+    /// Remove from `blocks_in_flight` when a block is received.
+    ///
+    /// If a request is removed from `req_hashes`, it's the caller's
     /// responsibility to ensure that the removed request either has already
-    /// received or will be requested by the caller (the case for `Blocktxn`).
+    /// received or will be requested by the caller again (the case for
+    /// `Blocktxn`).
     pub fn blocks_received(
         &self, io: &NetworkContext, req_hashes: HashSet<H256>,
-        mut returned_blocks: HashSet<H256>, ask_full_block: bool,
+        mut received_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<PeerId>, with_public: bool,
     )
     {
@@ -505,7 +516,7 @@ impl RequestManager {
             let mut block_waittime = self.block_request_waittime.lock();
             let mut missing_blocks = Vec::new();
             for req_hash in &req_hashes {
-                if !returned_blocks.remove(req_hash) {
+                if !received_blocks.remove(req_hash) {
                     // If `req_hash` is not in `blocks_in_flight`, it may has
                     // been received or requested
                     // again by another thread, so we do not need to request it
@@ -518,13 +529,17 @@ impl RequestManager {
                     block_waittime.remove(req_hash);
                 }
             }
-            for h in &returned_blocks {
+            for h in &received_blocks {
                 blocks_in_flight.remove(h);
                 block_waittime.remove(h);
             }
             missing_blocks
         };
         if !missing_blocks.is_empty() {
+            // `peer` is passed in for the case that a compact block is received
+            // and a full block is reconstructed, but the full block
+            // is incorrect. We should ask the same peer for the
+            // full block instead of choosing a random peer.
             let chosen_peer =
                 peer.or_else(|| self.syn.get_random_peer(&HashSet::new()));
             if ask_full_block {
@@ -626,7 +641,7 @@ impl RequestManager {
                             )),
                             SendQueuePriority::High,
                         ) {
-                            debug!("Error requesting waiting block header peer={:?} hash={} max_blocks={} err={:?}", chosen_peer, h, 1, e);
+                            warn!("Error requesting waiting block header peer={:?} hash={} max_blocks={} err={:?}", chosen_peer, h, 1, e);
                             // `h` is got from `waiting_requests`, so it should
                             // be in `headers_waittime`
                             waiting_requests.push((
@@ -648,7 +663,7 @@ impl RequestManager {
                             })),
                             SendQueuePriority::High,
                         ) {
-                            debug!("Error requesting waiting blocks peer={:?} hashes={:?} err={:?}", chosen_peer, blocks, e);
+                            warn!("Error requesting waiting blocks peer={:?} hashes={:?} err={:?}", chosen_peer, blocks, e);
                             for hash in blocks {
                                 waiting_requests.push((
                                     Instant::now()
