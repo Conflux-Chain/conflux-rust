@@ -157,6 +157,8 @@ pub struct MinLinkCutTree {
 impl MinLinkCutTree {
     pub fn new() -> Self { Self { tree: Vec::new() } }
 
+    pub fn size(&self) -> usize { self.tree.len() }
+
     pub fn make_tree(&mut self, v: usize) {
         if self.tree.len() <= v {
             self.tree.resize(v + 1, MinNode::default());

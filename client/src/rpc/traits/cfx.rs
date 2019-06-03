@@ -156,7 +156,7 @@ build_rpc_trait! {
         fn generate(&self, usize, usize) -> RpcResult<Vec<H256>>;
 
         #[rpc(name = "generatefixedblock")]
-        fn generate_fixed_block(&self, H256, Vec<H256>, usize) -> RpcResult<H256>;
+        fn generate_fixed_block(&self, H256, Vec<H256>, usize, Trailing<u64>) -> RpcResult<H256>;
 
         #[rpc(name = "addnode")]
         fn add_peer(&self, NodeId, SocketAddr) -> RpcResult<()>;

@@ -361,14 +361,19 @@ impl RpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-    ) -> RpcResult<H256> {
+        difficulty: u64,
+    ) -> RpcResult<H256>
+    {
         info!(
-            "RPC Request: generate_fixed_block({:?}, {:?}, {:?})",
-            parent_hash, referee, num_txs
+            "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
+            parent_hash, referee, num_txs, difficulty
         );
-        let hash =
-            self.block_gen
-                .generate_fixed_block(parent_hash, referee, num_txs);
+        let hash = self.block_gen.generate_fixed_block(
+            parent_hash,
+            referee,
+            num_txs,
+            difficulty,
+        );
         Ok(hash)
     }
 
@@ -783,9 +788,15 @@ impl TestRpc for TestRpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-    ) -> RpcResult<H256> {
-        self.rpc_impl
-            .generate_fixed_block(parent_hash, referee, num_txs)
+        difficulty: Trailing<u64>,
+    ) -> RpcResult<H256>
+    {
+        self.rpc_impl.generate_fixed_block(
+            parent_hash,
+            referee,
+            num_txs,
+            difficulty.unwrap_or(0),
+        )
     }
 
     fn generate_one_block(
