@@ -103,18 +103,6 @@ impl RequestHandler {
         } else {
             Err(ErrorKind::UnknownPeer.into())
         }
-
-        // TODO this is supposed to be handled properly by disconnect now
-        //            {
-        //                let syn = self.syn.read();
-        //                let cur_peer_info =
-        //
-        // syn.peers.get(&peer).ok_or(ErrorKind::UnknownPeer)?;
-        //
-        //                if !Arc::ptr_eq(&cur_peer_info, &peer_info) {
-        //                    return Err(ErrorKind::UnknownPeer.into());
-        //                }
-        //            }
     }
 
     pub fn get_timeout_requests(
