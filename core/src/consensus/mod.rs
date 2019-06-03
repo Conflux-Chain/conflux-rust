@@ -141,20 +141,6 @@ impl ConsensusGraphNodeData {
 /// is 2 *  SubTW(B, x) + x.weight + PastW(x.parent).
 ///
 /// adaptive could be computed in a similar manner.
-pub struct ConsensusGraphNode {
-    pub hash: H256,
-    pub height: u64,
-    pub is_heavy: bool,
-    pub difficulty: U256,
-    /// The total difficulty of its past set (include itself)
-    pub past_difficulty: U256,
-    pub pow_quality: U256,
-    pub parent: usize,
-    pub children: Vec<usize>,
-    pub referrers: Vec<usize>,
-    pub referees: Vec<usize>,
-    pub data: ConsensusGraphNodeData,
-}
 
 impl ConsensusGraphNode {
     pub fn light_difficulty(&self) -> U256 {
@@ -189,6 +175,7 @@ pub struct ConsensusGraphInner {
 pub struct ConsensusGraphNode {
     pub hash: H256,
     pub height: u64,
+    pub is_heavy: bool,
     pub difficulty: U256,
     /// The total difficulty of its past set (include itself)
     pub past_difficulty: U256,
@@ -278,6 +265,10 @@ impl ConsensusGraphInner {
     pub fn get_optimistic_execution_task(
         &mut self,
     ) -> Option<EpochExecutionTask> {
+        if !self.enable_optimistic_execution {
+            return None;
+        }
+
         let opt_height = self.optimistic_executed_height?;
         let epoch_index = self.pivot_chain[opt_height];
 
@@ -1805,7 +1796,7 @@ impl ConsensusGraph {
                 let mut heaviest = NULL;
                 let mut heaviest_weight = U256::zero();
                 for index in &inner.arena[u].children {
-                    let weight = inner.weight_tree.subtree_weight(*index);
+                    let weight = U256::from(inner.weight_tree.get(*index));
                     if heaviest == NULL
                         || weight > heaviest_weight
                         || (weight == heaviest_weight
