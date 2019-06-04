@@ -163,7 +163,7 @@ impl SynchronizationProtocolHandler {
             );
             // We may only receive status message from a peer not in `syn.peers`,
             // and this peer should be in `syn.handshaking_peers`
-            if !self.syn.handshaking_peers.read().contains_key(&peer) || !msg_id != MsgId::STATUS {
+            if !self.syn.handshaking_peers.read().contains_key(&peer) || msg_id != MsgId::STATUS {
                 warn!("Message from unknown peer {:?}", msg_id);
                 return;
             }
