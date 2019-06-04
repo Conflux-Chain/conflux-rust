@@ -47,14 +47,10 @@ impl SynchronizationState {
         }
     }
 
-    pub fn on_status(&self, peer: PeerId) {
+    pub fn on_status(&self, peer: PeerId) -> bool {
         let peers = self.peers.read();
         let mut handshaking_peers = self.handshaking_peers.write();
-        if handshaking_peers.remove(&peer).is_none()
-            || peers.contains_key(&peer)
-        {
-            debug!("Unexpected status message: peer={:?}", peer);
-        }
+        handshaking_peers.remove(&peer).is_some() && !peers.contains_key(&peer)
     }
 
     pub fn peer_connected(

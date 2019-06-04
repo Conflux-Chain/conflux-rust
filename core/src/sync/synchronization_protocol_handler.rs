@@ -156,12 +156,17 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
-        // TODO remove this check
         if !self.syn.contains_peer(&peer) {
             debug!(
                 "dispatch_message: Peer does not exist: peer={} msg_id={}",
                 peer, msg_id
             );
+            // We may only receive status message from a peer not in `syn.peers`,
+            // and this peer should be in `syn.handshaking_peers`
+            if !self.syn.handshaking_peers.read().contains_key(&peer) || !msg_id != MsgId::STATUS {
+                warn!("Message from unknown peer {:?}", msg_id);
+                return;
+            }
         }
         match msg_id {
             MsgId::STATUS => self.on_status(io, peer, &rlp),
@@ -893,7 +898,10 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let mut status = rlp.as_val::<Status>()?;
-        self.syn.on_status(peer);
+        if !self.syn.on_status(peer) {
+            warn!("Unexpected Status message from peer={}", peer);
+            return Err(ErrorKind::UnknownPeer.into());
+        }
         debug!("on_status, msg=:{:?}", status);
         let genesis_hash = self.graph.genesis_hash();
         if genesis_hash != status.genesis_hash {
