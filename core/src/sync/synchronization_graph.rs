@@ -699,7 +699,7 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        self.consensus.construct_pivot(&*self.inner.read());
+        self.consensus.construct_pivot(&self.inner);
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 

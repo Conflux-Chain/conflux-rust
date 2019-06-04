@@ -4,6 +4,7 @@
 
 use blockgen::BlockGeneratorConfig;
 use cfxcore::{
+    consensus::ConsensusConfig,
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
@@ -88,7 +89,8 @@ build_config! {
         (data_propagate_size, (usize), 1000)
         (record_tx_address, (bool), true)
         // TODO Set default to true when we have new tx pool implementation
-        (enable_opt_execution, (bool), false)
+        (enable_optimistic_execution, (bool), false)
+        (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
     }
     {
         (
@@ -209,6 +211,20 @@ impl Configuration {
             compact_profile,
             NUM_COLUMNS.clone(),
         )
+    }
+
+    pub fn consensus_config(&self) -> ConsensusConfig {
+        ConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+            record_tx_address: self.raw_conf.record_tx_address,
+            enable_optimistic_execution: self
+                .raw_conf
+                .enable_optimistic_execution,
+            bench_mode: false,
+        }
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
