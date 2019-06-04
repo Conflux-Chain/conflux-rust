@@ -3,7 +3,7 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::{
         ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
-        CONFLUX_TOKEN, HEAVY_BLOCK_DIFFICULTY_RATIO,
+        CONFLUX_TOKEN,
     },
     executive::{ExecutionError, Executive},
     machine::new_machine,
@@ -32,6 +32,18 @@ use std::{
 
 use hash::{KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
 
+// TODO: Parallelize anticone calculation by moving calculation into task.
+/// The struct includes most information to compute rewards for old epochs
+#[derive(Debug)]
+pub struct RewardExecutionInfo {
+    pub epoch_block_hashes: Vec<H256>,
+    pub epoch_block_light_difficulties: Vec<U256>,
+    pub epoch_block_is_heavy: Vec<bool>,
+    pub epoch_block_anticone_overlimited: Vec<bool>,
+    pub epoch_block_anticone_set_sizes: Vec<usize>,
+    pub epoch_block_anticone_difficulties: Vec<U512>,
+}
+
 #[derive(Debug)]
 enum ExecutionTask {
     ExecuteEpoch(EpochExecutionTask),
@@ -44,7 +56,7 @@ enum ExecutionTask {
 pub struct EpochExecutionTask {
     pub epoch_hash: H256,
     pub epoch_block_hashes: Vec<H256>,
-    pub reward_epoch_hashes: Option<(H256, H256)>,
+    pub reward_info: Option<RewardExecutionInfo>,
     pub on_local_pivot: bool,
     pub debug_record: Arc<Mutex<Option<ComputeEpochDebugRecord>>>,
 }
@@ -52,14 +64,14 @@ pub struct EpochExecutionTask {
 impl EpochExecutionTask {
     pub fn new(
         epoch_hash: H256, epoch_block_hashes: Vec<H256>,
-        reward_epoch_hashes: Option<(H256, H256)>, on_local_pivot: bool,
+        reward_info: Option<RewardExecutionInfo>, on_local_pivot: bool,
         debug_record: bool,
     ) -> Self
     {
         Self {
             epoch_hash,
             epoch_block_hashes,
-            reward_epoch_hashes,
+            reward_info,
             on_local_pivot,
             debug_record: if debug_record {
                 Arc::new(Mutex::new(Some(ComputeEpochDebugRecord::default())))
@@ -127,7 +139,7 @@ impl ConsensusExecutor {
                         match maybe_optimistic_task {
                             Some(task) => {
                                 debug!("Get optimistic_execution_task {:?}", task);
-                                handler.handle_epoch_execution(task, &consensus_inner)
+                                handler.handle_epoch_execution(task)
                             },
                             None => {
                                 debug!("No optimistic tasks to execute, block for new tasks");
@@ -136,7 +148,7 @@ impl ConsensusExecutor {
                                 //  New optimistic tasks will only exist if pivot_chain changes,
                                 //  and new tasks will be sent to `receiver` in this case, so this
                                 // waiting will not prevent new optimistic tasks from being executed
-                                if !handler.handle_recv_result(receiver.recv(), &consensus_inner)
+                                if !handler.handle_recv_result(receiver.recv())
                                 {
                                     break;
                                 }
@@ -150,7 +162,6 @@ impl ConsensusExecutor {
                         // meaning as `RecvError` for `recv()`
                         if !handler.handle_recv_result(
                             maybe_error.map_err(|_| RecvError),
-                            &consensus_inner
                         ) {
                             break;
                         }
@@ -199,13 +210,9 @@ impl ConsensusExecutor {
     }
 
     /// Execute the epoch synchronously
-    pub fn compute_epoch(
-        &self, task: EpochExecutionTask,
-        consensus_inner: &RwLock<ConsensusGraphInner>,
-    )
-    {
+    pub fn compute_epoch(&self, task: EpochExecutionTask) {
         if !self.bench_mode {
-            self.handler.handle_epoch_execution(task, consensus_inner)
+            self.handler.handle_epoch_execution(task)
         }
     }
 
@@ -241,15 +248,13 @@ impl ConsensusExecutionHandler {
     /// contain `Empty` case.
     fn handle_recv_result(
         &self, maybe_task: Result<ExecutionTask, RecvError>,
-        consensus_inner: &RwLock<ConsensusGraphInner>,
-    ) -> bool
-    {
+    ) -> bool {
         match maybe_task {
             Ok(ExecutionTask::Stop) => {
                 debug!("Consensus Executor stopped by receiving STOP task");
                 false
             }
-            Ok(task) => self.handle_execution_work(task, consensus_inner),
+            Ok(task) => self.handle_execution_work(task),
             Err(e) => {
                 warn!("Consensus Executor stopped by Err={:?}", e);
                 false
@@ -258,15 +263,11 @@ impl ConsensusExecutionHandler {
     }
 
     /// Always return `true` for now
-    fn handle_execution_work(
-        &self, task: ExecutionTask,
-        consensus_inner: &RwLock<ConsensusGraphInner>,
-    ) -> bool
-    {
+    fn handle_execution_work(&self, task: ExecutionTask) -> bool {
         debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
-                self.handle_epoch_execution(task, consensus_inner)
+                self.handle_epoch_execution(task)
             }
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
             _ => {}
@@ -274,16 +275,11 @@ impl ConsensusExecutionHandler {
         true
     }
 
-    fn handle_epoch_execution(
-        &self, mut task: EpochExecutionTask,
-        consensus_inner: &RwLock<ConsensusGraphInner>,
-    )
-    {
+    fn handle_epoch_execution(&self, task: EpochExecutionTask) {
         self.compute_epoch(
             &task.epoch_hash,
             &task.epoch_block_hashes,
-            consensus_inner,
-            task.reward_epoch_hashes.take(),
+            &task.reward_info,
             task.on_local_pivot,
             &mut *task.debug_record.lock(),
         );
@@ -316,8 +312,8 @@ impl ConsensusExecutionHandler {
     /// be recycled.
     pub fn compute_epoch(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
-        consensus_inner: &RwLock<ConsensusGraphInner>,
-        reward_epoch_hashes: Option<(H256, H256)>, on_local_pivot: bool,
+        reward_execution_info: &Option<RewardExecutionInfo>,
+        on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
     {
@@ -364,16 +360,12 @@ impl ConsensusExecutionHandler {
             on_local_pivot,
         );
 
-        if let Some((reward_epoch_hash, anticone_penalty_cutoff_epoch_hash)) =
-            reward_epoch_hashes
-        {
+        if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
             // All transaction fees are shared among blocks inside one epoch
             self.process_rewards_and_fees(
-                consensus_inner,
                 &mut state,
-                &reward_epoch_hash,
-                &anticone_penalty_cutoff_epoch_hash,
+                &reward_execution_info,
                 on_local_pivot,
                 debug_record,
             );
@@ -566,175 +558,102 @@ impl ConsensusExecutionHandler {
     /// `epoch_block_states` includes if a block is partial invalid and its
     /// anticone difficulty
     fn process_rewards_and_fees(
-        &self, consensus_inner: &RwLock<ConsensusGraphInner>,
-        state: &mut State, reward_epoch_hash: &H256,
-        anticone_penalty_cutoff_epoch_hash: &H256, on_local_pivot: bool,
+        &self, state: &mut State, reward_info: &RewardExecutionInfo,
+        on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
     {
         /// (Fee, SetOfPackingBlockHash)
         struct TxExecutionInfo(U256, BTreeSet<H256>);
 
+        let epoch_blocks = self
+            .data_man
+            .blocks_by_hash_list(&reward_info.epoch_block_hashes, false)
+            .expect("blocks exist");
+        let pivot_block = epoch_blocks.last().expect("Not empty");
+        let reward_epoch_hash = pivot_block.hash();
         debug!("Process rewards and fees for {:?}", reward_epoch_hash);
+        let epoch_light_difficulty = reward_info
+            .epoch_block_light_difficulties
+            .last()
+            .expect("Not empty");
 
-        let reward_epoch_index;
-        let epoch_light_difficulty;
-        let mut epoch_blocks;
-        // Used later in tx fee distribution.
-        let mut epoch_block_anticone_overlimited;
-        let mut epoch_block_total_rewards;
-        // Compute block reward and anticone penalties.
-        {
-            let inner = &*consensus_inner.read();
-            reward_epoch_index = *inner.indices.get(reward_epoch_hash).unwrap();
-            epoch_light_difficulty =
-                inner.arena[reward_epoch_index].light_difficulty();
+        let epoch_size = epoch_blocks.len();
+        let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
 
-            let anticone_penalty_cutoff_epoch_index = *inner
-                .indices
-                .get(anticone_penalty_cutoff_epoch_hash)
-                .unwrap();
-            let anticone_cutoff_epoch_anticone_set = &inner.arena
-                [anticone_penalty_cutoff_epoch_index]
-                .data
-                .anticone;
+        // Base reward and anticone penalties.
+        for (enum_idx, block) in epoch_blocks.iter().enumerate() {
+            let block_light_difficulty =
+                reward_info.epoch_block_light_difficulties[enum_idx];
 
-            let epoch_block_indices =
-                inner.indices_in_epochs.get(&reward_epoch_index).unwrap();
-            let epoch_size = epoch_block_indices.len();
-            epoch_blocks = Vec::with_capacity(epoch_size);
-            epoch_block_anticone_overlimited = Vec::with_capacity(epoch_size);
-            epoch_block_total_rewards = Vec::with_capacity(epoch_size);
-            for index in epoch_block_indices {
-                let block_consensus_node = &inner.arena[*index];
-                let block = self
-                    .data_man
-                    .block_by_hash(&block_consensus_node.hash, false)
-                    .expect("Exist");
-                epoch_blocks.push(block.clone());
+            let anticone_overlimited =
+                reward_info.epoch_block_anticone_overlimited[enum_idx];
 
-                let block_light_difficulty =
-                    block_consensus_node.light_difficulty();
-
-                // TODO: partial invalidity is with respect to a certain
-                // TODO: pivot chain block. When pivot chain is reverted
-                // TODO: before the block, anticone should be recomputed.
-                let mut anticone_overlimited =
-                    block_consensus_node.data.partial_invalid;
-                let mut anticone_difficulty: U512 = 0.into();
-                // If a block is partial_invalid, it won't have reward and
-                // anticone_difficulty will not be used, so it's okay to set
-                // it to 0.
-                let anticone_set_size;
-                if !anticone_overlimited {
-                    let anticone_set = block_consensus_node
-                        .data
-                        .anticone
-                        .difference(anticone_cutoff_epoch_anticone_set)
-                        .cloned()
-                        .collect::<HashSet<_>>();
-                    anticone_set_size = anticone_set.len();
-
-                    for a_index in anticone_set {
-                        // TODO: Use base epoch_light_difficulty.
-                        anticone_difficulty +=
-                            U512::from(inner.arena[a_index].light_difficulty());
-                    }
-
-                    // TODO: check the clear definition of anticone penalty,
-                    // around the time of difficulty
-                    // adjustment.
-                    // Lint.IfChange(ANTICONE_PENALTY_1)
-                    if anticone_difficulty / U512::from(epoch_light_difficulty)
-                        >= U512::from(ANTICONE_PENALTY_RATIO)
-                    {
-                        anticone_overlimited = true;
-                    }
-                // Lint.ThenChange(consensus_executor.rs#ANTICONE_PENALTY_2)
+            if anticone_overlimited {
+                epoch_block_total_rewards.push(U256::from(0));
+                if debug_record.is_some() {
+                    let debug_out = debug_record.as_mut().unwrap();
+                    debug_out.anticone_overlimit_blocks.push(block.hash());
+                }
+            } else {
+                let is_heavy_block = reward_info.epoch_block_is_heavy[enum_idx];
+                let mut reward = if U512::from(block.block_header.pow_quality)
+                    * U512::from(block_light_difficulty)
+                    >= U512::from(epoch_light_difficulty)
+                        * U512::from(block.block_header.difficulty())
+                {
+                    U512::from(BASE_MINING_REWARD) * U512::from(CONFLUX_TOKEN)
                 } else {
-                    anticone_set_size = 0;
+                    debug!(
+                        "Block {} pow_quality {} is_heavy {} is less than epoch_light_difficulty {}!",
+                        block.hash(), block.block_header.pow_quality, is_heavy_block, epoch_light_difficulty
+                    );
+                    0.into()
+                };
+
+                if debug_record.is_some() {
+                    let debug_out = debug_record.as_mut().unwrap();
+                    debug_out.block_rewards.push(BlockHashAuthorValue(
+                        block.hash(),
+                        block.block_header.author().clone(),
+                        U256::from(reward),
+                    ));
                 }
 
-                epoch_block_anticone_overlimited.push(anticone_overlimited);
+                if reward > 0.into() {
+                    let anticone_difficulty =
+                        reward_info.epoch_block_anticone_difficulties[enum_idx];
+                    // LINT.IfChange(ANTICONE_PENALTY_2)
+                    let anticone_penalty = reward * anticone_difficulty
+                        / U512::from(epoch_light_difficulty)
+                        * anticone_difficulty
+                        / U512::from(epoch_light_difficulty)
+                        / U512::from(ANTICONE_PENALTY_RATIO)
+                        / U512::from(ANTICONE_PENALTY_RATIO);
+                    // Lint.ThenChange(consensus/mod.rs#ANTICONE_PENALTY_1)
 
-                if anticone_overlimited {
-                    epoch_block_total_rewards.push(U256::from(0));
+                    debug_assert!(reward > anticone_penalty);
+                    reward -= anticone_penalty;
+
                     if debug_record.is_some() {
                         let debug_out = debug_record.as_mut().unwrap();
-                        debug_out
-                            .anticone_overlimit_blocks
-                            .push(block_consensus_node.hash);
-                    }
-                } else {
-                    let block_hash = block_consensus_node.hash;
-                    let is_heavy_block = block_consensus_node.is_heavy;
-
-                    // Block may not have sufficient difficulty across
-                    // difficulty adjustment.
-                    // In this scenario base reward is determined by whether
-                    // pow_quality is sufficient instead of
-                    // block difficulty.
-                    let mut reward = if U512::from(
-                        block.block_header.pow_quality,
-                    ) * U512::from(block_light_difficulty)
-                        >= U512::from(epoch_light_difficulty)
-                            * U512::from(block.block_header.difficulty())
-                    {
-                        U512::from(BASE_MINING_REWARD)
-                            * U512::from(CONFLUX_TOKEN)
-                    } else {
-                        debug!(
-                            "Block {} pow_quality {} is less than epoch_light_difficulty {}!",
-                            block_hash, block.block_header.pow_quality, epoch_light_difficulty
+                        debug_out.anticone_penalties.push(
+                            BlockHashAuthorValue(
+                                block.hash(),
+                                block.block_header.author().clone(),
+                                U256::from(anticone_penalty),
+                            ),
                         );
-                        0.into()
-                    };
-                    if is_heavy_block {
-                        reward *= U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO);
-                    }
-
-                    if debug_record.is_some() {
-                        let debug_out = debug_record.as_mut().unwrap();
-                        debug_out.block_rewards.push(BlockHashAuthorValue(
-                            block_hash,
-                            block.block_header.author().clone(),
-                            U256::from(reward),
+                        debug_out.anticone_set_size.push(BlockHashValue(
+                            block.hash(),
+                            reward_info.epoch_block_anticone_set_sizes
+                                [enum_idx],
                         ));
                     }
-
-                    if reward > 0.into() {
-                        // LINT.IfChange(ANTICONE_PENALTY_2)
-                        let anticone_penalty = reward * anticone_difficulty
-                            / U512::from(epoch_light_difficulty)
-                            * anticone_difficulty
-                            / U512::from(epoch_light_difficulty)
-                            / U512::from(ANTICONE_PENALTY_RATIO)
-                            / U512::from(ANTICONE_PENALTY_RATIO);
-                        // Lint.ThenChange(consensus_executor.rs#
-                        // ANTICONE_PENALTY_1)
-
-                        debug_assert!(reward > anticone_penalty);
-                        reward -= anticone_penalty;
-
-                        if debug_record.is_some() {
-                            let debug_out = debug_record.as_mut().unwrap();
-                            debug_out.anticone_penalties.push(
-                                BlockHashAuthorValue(
-                                    block_hash,
-                                    block.block_header.author().clone(),
-                                    U256::from(anticone_penalty),
-                                ),
-                            );
-                            debug_out.anticone_set_size.push(BlockHashValue(
-                                block_hash,
-                                anticone_set_size,
-                            ));
-                        }
-                    }
-
-                    debug_assert!(reward <= U512::from(U256::max_value()));
-                    epoch_block_total_rewards.push(U256::from(reward));
                 }
+
+                debug_assert!(reward <= U512::from(U256::max_value()));
+                epoch_block_total_rewards.push(U256::from(reward));
             }
         }
 
@@ -749,7 +668,7 @@ impl ConsensusExecutionHandler {
             // TODO: better redesign to avoid recomputation.
             let receipts = match self.data_man.block_results_by_hash_with_epoch(
                 &block_hash,
-                reward_epoch_hash,
+                &reward_epoch_hash,
                 true,
             ) {
                 Some(receipts) => receipts.receipts,
@@ -761,7 +680,7 @@ impl ConsensusExecutionHandler {
                     // collection before we try get it
                     if epoch_receipts.is_none() {
                         epoch_receipts = Some(self.recompute_states(
-                            reward_epoch_hash,
+                            &reward_epoch_hash,
                             &epoch_blocks,
                         ));
                     }
@@ -779,7 +698,9 @@ impl ConsensusExecutionHandler {
                     .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
                 // `false` means the block is fully valid
                 // Partial invalid blocks will not share the tx fee
-                if epoch_block_anticone_overlimited[enum_idx] == false {
+                if reward_info.epoch_block_anticone_overlimited[enum_idx]
+                    == false
+                {
                     info.1.insert(block_hash);
                 }
                 // The same transaction is executed only once.
@@ -816,14 +737,13 @@ impl ConsensusExecutionHandler {
 
         let mut merged_rewards = BTreeMap::new();
 
-        for (idx, block) in epoch_blocks.iter().enumerate() {
+        for (enum_idx, block) in epoch_blocks.iter().enumerate() {
+            let reward = &mut epoch_block_total_rewards[enum_idx];
             let block_hash = block.hash();
-            let reward = &mut epoch_block_total_rewards[idx];
-
             // Add tx fee to reward.
             if let Some(fee) = block_tx_fees.get(&block_hash) {
                 *reward += *fee;
-                if debug_record.is_some() {
+                if !debug_record.is_none() {
                     let debug_out = debug_record.as_mut().unwrap();
                     debug_out.tx_fees.push(BlockHashAuthorValue(
                         block_hash,
@@ -851,7 +771,7 @@ impl ConsensusExecutionHandler {
             }
         }
 
-        debug!("Give rewards reward={:?}", merged_rewards);
+        debug!("Give rewards merged_reward={:?}", merged_rewards);
 
         for (address, reward) in merged_rewards {
             state
@@ -866,7 +786,7 @@ impl ConsensusExecutionHandler {
                 debug_out.state_ops.push(StateOp::OpNameKeyMaybeValue {
                     op_name: "add_balance".to_string(),
                     key: address.hex().as_bytes().to_vec(),
-                    maybe_value: Some(reward.to_string().as_bytes().to_vec()),
+                    maybe_value: Some(reward.to_hex().as_bytes().to_vec()),
                 });
             }
         }
