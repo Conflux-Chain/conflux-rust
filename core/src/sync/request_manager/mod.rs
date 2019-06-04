@@ -52,7 +52,8 @@ pub struct RequestManager {
     block_request_waittime: Mutex<HashMap<H256, Duration>>,
 
     /// Each element is (timeout_time, request, chosen_peer)
-    waiting_requests: Mutex<BinaryHeap<(Instant, WaitingRequest, Option<PeerId>)>>,
+    waiting_requests:
+        Mutex<BinaryHeap<(Instant, WaitingRequest, Option<PeerId>)>>,
 
     /// The following fields are used to control how to
     /// propagate transactions in normal case.
@@ -113,9 +114,11 @@ impl RequestManager {
             Entry::Occupied(mut e) => {
                 // Requested before, so wait for the stored time and increase it
                 let t = e.get_mut();
-                self.waiting_requests
-                    .lock()
-                    .push((Instant::now() + *t, WaitingRequest::Header(*hash), peer_id));
+                self.waiting_requests.lock().push((
+                    Instant::now() + *t,
+                    WaitingRequest::Header(*hash),
+                    peer_id,
+                ));
                 *t += *REQUEST_START_WAITING_TIME;
                 debug!(
                     "Block header request is delayed peer={:?} hash={:?}",
@@ -221,7 +224,10 @@ impl RequestManager {
                     }
                 }
             } else {
-                debug!("preprocess_block_request: {:?} already in flight", hash);
+                debug!(
+                    "preprocess_block_request: {:?} already in flight",
+                    hash
+                );
                 false
             }
         });
@@ -527,7 +533,10 @@ impl RequestManager {
         peer: Option<PeerId>, with_public: bool,
     )
     {
-        debug!("blocks_received: req_hashes={:?} received_blocks={:?} peer={:?}", req_hashes, received_blocks, peer);
+        debug!(
+            "blocks_received: req_hashes={:?} received_blocks={:?} peer={:?}",
+            req_hashes, received_blocks, peer
+        );
         let missing_blocks = {
             let mut blocks_in_flight = self.blocks_in_flight.lock();
             let mut block_waittime = self.block_request_waittime.lock();
@@ -641,11 +650,11 @@ impl RequestManager {
                 let maybe_peer =
                     req.2.or_else(|| self.syn.get_random_peer(&HashSet::new()));
                 let chosen_peer = match maybe_peer {
-                        Some(p) => p,
-                        None => {
-                            break;
-                        }
-                    };
+                    Some(p) => p,
+                    None => {
+                        break;
+                    }
+                };
                 debug!("Send waiting req {:?} to peer={}", req, chosen_peer);
 
                 // Waiting requests are already in-flight, so send them without

@@ -44,9 +44,9 @@ use std::{
     io::Write,
     iter::FromIterator,
     sync::Arc,
+    thread::sleep,
+    time::Duration,
 };
-use std::thread::sleep;
-use std::time::Duration;
 
 const HEAVY_BLOCK_THRESHOLD: usize = 2000;
 pub const HEAVY_BLOCK_DIFFICULTY_RATIO: usize = 240;
@@ -2262,10 +2262,6 @@ impl ConsensusGraph {
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
         );
-
-        let total_difficulty =
-            U256::from(inner.weight_tree.get(inner.genesis_block_index));
-        debug!("total_difficulty after insert: {}", total_difficulty);
 
         inner.stable_tree.make_tree(me);
         inner.stable_tree.link(parent, me);
