@@ -62,7 +62,7 @@ build_config! {
         (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
         (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (send_tx_period_ms, (u64), 1300)
-        (check_request_period_ms, (u64), 5000)
+        (check_request_period_ms, (u64), 1000)
         (block_cache_gc_period_ms, (u64), 5000)
         (persist_terminal_period_ms, (u64), 60_000)
         (headers_request_timeout_ms, (u64), 30_000)
