@@ -120,16 +120,17 @@ impl ConsensusGraphNodeData {
 /// To efficiently compute stable, we maintain a link-cut tree called
 /// stable_tree.
 ///
-/// Assume alpha = n / d, then
-///     g(a) / f(a) < n / d
-///         => d * g(a) < n * f(a)
-///         => d * SubTW(B, x) < n * {PastW(b) - PastW(x.parent) -
-/// x.parent.weight}         => d * SubTW(B, x) + n * x.parent.weight + n *
-/// PastW(x.parent) < n * PastW(b) PastW(b) Note that for a given block b,
-/// PastW(b) is a constant, so in order to calculate stable, it is suffice to
-/// calculate argmin{d *  SubTW(B, x) + n * x.parent.weight + n *
-/// PastW(x.parent)}. Therefore, in the stable_tree, the value for x
-/// is d * SubTW(B, x) + n * x.parent.weight + PastW(x.parent).
+/// Assume alpha = n / d, then g(a) / f(a) < n / d
+///   => d * g(a) < n * f(a)
+///   => d * SubTW(B, x) < n * (PastW(b) - PastW(x.parent) - x.parent.weight)
+///   => d * SubTW(B, x) + n * PastW(x.parent) + n * x.parent.weight < n *
+/// PastW(b)
+///
+/// Note that for a given block b, PastW(b) is a constant,
+/// so in order to calculate stable, it is suffice to calculate
+/// argmin{d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent)}.
+/// Therefore, in the stable_tree, the value for x is
+/// d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent).
 ///
 /// adaptive could be computed in a similar manner.
 
