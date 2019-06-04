@@ -31,10 +31,10 @@ use std::{
 };
 
 use hash::{KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
+use std::fmt::{Debug, Formatter};
 
 // TODO: Parallelize anticone calculation by moving calculation into task.
 /// The struct includes most information to compute rewards for old epochs
-#[derive(Debug)]
 pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_light_difficulties: Vec<U256>,
@@ -42,6 +42,20 @@ pub struct RewardExecutionInfo {
     pub epoch_block_anticone_overlimited: Vec<bool>,
     pub epoch_block_anticone_set_sizes: Vec<usize>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
+}
+
+impl Debug for RewardExecutionInfo {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "RewardExecutionInfo{{ epoch_blocks: {:?} epoch_block_light_difficulties: {:?}, epoch_block_is_heavy: {:?},\
+             epoch_block_anticone_overlimited: {:?} epoch_block_anticone_set_sizes: {:?} \
+             epoch_block_anticone_difficulties: {:?}}}",
+            self.epoch_blocks.iter().map(|b| b.hash()).collect::<Vec<H256>>(), self.epoch_block_light_difficulties, self.epoch_block_is_heavy,
+            self.epoch_block_anticone_overlimited, self.epoch_block_anticone_set_sizes,
+            self.epoch_block_anticone_difficulties
+        )
+    }
 }
 
 #[derive(Debug)]
