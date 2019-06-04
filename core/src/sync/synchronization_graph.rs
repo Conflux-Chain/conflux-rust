@@ -402,19 +402,6 @@ impl SynchronizationGraphInner {
         Ok(is_heavy_block)
     }
 
-    /// The input `my_hash` must have been inserted to sync_graph, otherwise
-    /// it'll panic.
-    pub fn total_difficulty_in_own_epoch(&self, my_hash: &H256) -> U256 {
-        let my_index = *self.indices.get(my_hash).expect("exist");
-        self.arena[my_index]
-            .blockset_in_own_view_of_epoch
-            .iter()
-            .fold(
-                self.arena[my_index].block_header.difficulty().clone(),
-                |acc, x| acc + *self.arena[*x].block_header.difficulty(),
-            )
-    }
-
     /// The input `cur_hash` must have been inserted to sync_graph, otherwise
     /// it'll panic.
     pub fn target_difficulty(&self, cur_hash: &H256) -> U256 {
