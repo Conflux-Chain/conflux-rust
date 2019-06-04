@@ -1181,6 +1181,29 @@ impl ConsensusGraphInner {
         dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
         self.data_man.db.key_value().write(dbops).expect("db error");
     }
+
+    /// The input `my_hash` must have been inserted to sync_graph, otherwise
+    /// it'll panic.
+    pub fn total_difficulty_in_own_epoch(
+        &self, sync: &SynchronizationGraphInner, my_hash: &H256,
+    ) -> U256 {
+        let my_sync_index = *sync.indices.get(my_hash).expect("exist");
+        let mut total_difficulty =
+            sync.arena[my_sync_index].block_header.difficulty().clone();
+        for index_in_sync in sync.arena[my_sync_index]
+            .blockset_in_own_view_of_epoch
+            .iter()
+        {
+            let hash = sync.arena[*index_in_sync].block_header.hash();
+            let index_in_consensus = self.indices.get(&hash).unwrap();
+            if self.arena[*index_in_consensus].data.partial_invalid {
+                continue;
+            }
+            total_difficulty +=
+                sync.arena[*index_in_sync].block_header.difficulty().clone();
+        }
+        total_difficulty
+    }
 }
 
 pub struct ConsensusGraph {
@@ -2076,7 +2099,7 @@ impl ConsensusGraph {
         let is_heavy;
         {
             difficulty_in_my_epoch =
-                sync_inner.total_difficulty_in_own_epoch(hash);
+                inner.total_difficulty_in_own_epoch(sync_inner, hash);
             is_heavy = sync_inner.arena[*sync_inner.indices.get(hash).unwrap()]
                 .is_heavy;
         }
@@ -2213,7 +2236,7 @@ impl ConsensusGraph {
             is_heavy = sync_inner.arena[*sync_inner.indices.get(hash).unwrap()]
                 .is_heavy;
             difficulty_in_my_epoch =
-                sync_inner.total_difficulty_in_own_epoch(hash);
+                inner.total_difficulty_in_own_epoch(&*sync_inner, hash);
         }
 
         let parent_idx =
