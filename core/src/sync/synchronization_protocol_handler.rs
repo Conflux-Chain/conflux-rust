@@ -161,9 +161,12 @@ impl SynchronizationProtocolHandler {
                 "dispatch_message: Peer does not exist: peer={} msg_id={}",
                 peer, msg_id
             );
-            // We may only receive status message from a peer not in `syn.peers`,
-            // and this peer should be in `syn.handshaking_peers`
-            if !self.syn.handshaking_peers.read().contains_key(&peer) || msg_id != MsgId::STATUS {
+            // We may only receive status message from a peer not in
+            // `syn.peers`, and this peer should be in
+            // `syn.handshaking_peers`
+            if !self.syn.handshaking_peers.read().contains_key(&peer)
+                || msg_id != MsgId::STATUS
+            {
                 warn!("Message from unknown peer {:?}", msg_id);
                 return;
             }
@@ -1186,7 +1189,7 @@ impl SynchronizationProtocolHandler {
             match self.graph.block_header_by_hash(&hash) {
                 Some(header) => block.block_header = header,
                 None => {
-                    // This should not happen for correct peer 
+                    // This should not happen for correct peer
                     warn!("Received blocks with header not received {}", hash);
                     continue;
                 }
