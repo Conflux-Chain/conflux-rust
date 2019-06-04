@@ -124,6 +124,8 @@ pub struct Block {
     pub difficulty: U256,
     /// Referee hashes
     pub referee_hashes: Vec<H256>,
+    /// Stable
+    pub stable: Option<bool>,
     /// Nonce of the block
     pub nonce: U256,
     /// Transactions
@@ -213,6 +215,7 @@ impl Block {
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
             // PrimitiveBlock does not contain this information
+            stable: consensus_inner.is_stable(&b.block_header.hash()),
             referee_hashes: b
                 .block_header
                 .referee_hashes()

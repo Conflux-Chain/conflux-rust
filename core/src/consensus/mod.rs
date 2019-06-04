@@ -61,8 +61,9 @@ const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
 const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
 const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
-const _ADAPTIVE_WEIGHT_INVERSE_ALPHA: u64 = 2;
-const _ADAPTIVE_WEIGHT_BETA: u64 = 1000;
+const ADAPTIVE_WEIGHT_ALPHA_NUM: u64 = 2;
+const ADAPTIVE_WEIGHT_ALPHA_DEN: u64 = 3;
+const ADAPTIVE_WEIGHT_BETA: u64 = 1000;
 
 const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
@@ -109,7 +110,7 @@ impl ConsensusGraphNodeData {
 /// 1   B = Past(b)
 /// 2   a = b.parent
 /// 3   stable = True
-/// 4   Let f(x) = PastW(b) - PastW(x.parent) - x.weight
+/// 4   Let f(x) = PastW(b) - PastW(x.parent) - x.parent.weight
 /// 5   Let g(x) = SubTW(B, x)
 /// 6   while a.parent != Nil do
 /// 7       if f(a) > beta and g(a) / f(a) < alpha then
@@ -119,14 +120,16 @@ impl ConsensusGraphNodeData {
 /// To efficiently compute stable, we maintain a link-cut tree called
 /// stable_tree.
 ///
-/// Assume alpha = 0.5, then
-///     g(a) / f(a) < 0.5 => 2 g(a) < f(a)
-///                       => 2 * SubTW(B, x) < PastW(b) - PastW(x.parent) -
-///                       => 2 * SubTW(B, x) + x.weight + PastW(x.parent) <
-/// PastW(b) Note that for a given block b, PastW(b) is a constant, so in order
-/// to calculate stable, it is suffice to calculate argmin_x{2 *  SubTW(B, x) +
-/// x.weight + PastW(x.parent)}. Therefore, in the stable_tree, the value for x
-/// is 2 *  SubTW(B, x) + x.weight + PastW(x.parent).
+/// Assume alpha = n / d, then
+///     g(a) / f(a) < n / d
+///         => d * g(a) < n * f(a)
+///         => d * SubTW(B, x) < n * {PastW(b) - PastW(x.parent) -
+/// x.parent.weight}         => d * SubTW(B, x) + n * x.parent.weight + n *
+/// PastW(x.parent) < n * PastW(b) PastW(b) Note that for a given block b,
+/// PastW(b) is a constant, so in order to calculate stable, it is suffice to
+/// calculate argmin{d *  SubTW(B, x) + n * x.parent.weight + n *
+/// PastW(x.parent)}. Therefore, in the stable_tree, the value for x
+/// is d * SubTW(B, x) + n * x.parent.weight + PastW(x.parent).
 ///
 /// adaptive could be computed in a similar manner.
 
@@ -321,35 +324,39 @@ impl ConsensusGraphInner {
                 .path_apply(*index, &SignedBigNum::neg(difficulty));
             self.stable_tree.path_apply(
                 *index,
-                &SignedBigNum::neg(difficulty + difficulty),
+                &SignedBigNum::neg(
+                    difficulty * U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN),
+                ),
             );
-            if self.arena[*index].stable {
-                self.adaptive_tree.path_apply(
-                    *index,
-                    &SignedBigNum::neg(difficulty + difficulty),
-                );
-            }
-            self.adaptive_tree
-                .path_apply(parent, &SignedBigNum::pos(difficulty));
+            //            if self.arena[*index].stable {
+            //                self.adaptive_tree.path_apply(
+            //                    *index,
+            //                    &SignedBigNum::neg(difficulty + difficulty),
+            //                );
+            //            }
+            //            self.adaptive_tree
+            //                .path_apply(parent,
+            // &SignedBigNum::pos(difficulty));
         }
 
         let total_difficulty =
             U256::from(self.weight_tree.get(self.genesis_block_index));
+        debug!("total_difficulty: {}", total_difficulty);
 
         while parent != self.genesis_block_index {
             let grandparent = self.arena[parent].parent;
             let w = total_difficulty
                 - self.arena[grandparent].past_difficulty
                 - self.arena[parent].difficulty;
-            if w > U256::from(_ADAPTIVE_WEIGHT_BETA) {
+            if w > U256::from(ADAPTIVE_WEIGHT_BETA) {
                 break;
             }
             parent = grandparent;
         }
 
-        let stable = !(self.stable_tree.path_aggregate(parent)
-            < SignedBigNum::pos(total_difficulty));
-        let mut adaptive = false;
+        let stable = !(U256::from(self.stable_tree.path_aggregate(parent))
+            < total_difficulty * U256::from(ADAPTIVE_WEIGHT_ALPHA_NUM));
+        let adaptive = false;
 
         if !stable {
             parent = self.arena[me].parent;
@@ -357,18 +364,18 @@ impl ConsensusGraphInner {
             while parent != self.genesis_block_index {
                 let grandparent = self.arena[parent].parent;
                 let w = U256::from(self.weight_tree.get(grandparent));
-                if w > U256::from(_ADAPTIVE_WEIGHT_BETA) {
+                if w > U256::from(ADAPTIVE_WEIGHT_BETA) {
                     break;
                 }
                 parent = grandparent;
             }
 
             if parent != self.genesis_block_index {
-                if self.adaptive_tree.path_aggregate(parent)
-                    < SignedBigNum::zero()
-                {
-                    adaptive = true;
-                }
+                //                if self.adaptive_tree.path_aggregate(parent)
+                //                    < SignedBigNum::zero()
+                //                {
+                //                    adaptive = true;
+                //                }
             }
         }
 
@@ -381,16 +388,19 @@ impl ConsensusGraphInner {
                 .path_apply(*index, &SignedBigNum::pos(difficulty));
             self.stable_tree.path_apply(
                 *index,
-                &SignedBigNum::pos(difficulty + difficulty),
+                &SignedBigNum::pos(
+                    difficulty * U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN),
+                ),
             );
-            if self.arena[*index].stable {
-                self.adaptive_tree.path_apply(
-                    *index,
-                    &SignedBigNum::pos(difficulty + difficulty),
-                );
-            }
-            self.adaptive_tree
-                .path_apply(parent, &SignedBigNum::neg(difficulty));
+            //            if self.arena[*index].stable {
+            //                self.adaptive_tree.path_apply(
+            //                    *index,
+            //                    &SignedBigNum::pos(difficulty + difficulty),
+            //                );
+            //            }
+            //            self.adaptive_tree
+            //                .path_apply(parent,
+            // &SignedBigNum::neg(difficulty));
         }
 
         (stable, adaptive)
@@ -994,6 +1004,12 @@ impl ConsensusGraphInner {
                 .block_results_by_hash_with_epoch(hash, &epoch, update_cache)
                 .map(|r| r.receipts)
         })
+    }
+
+    pub fn is_stable(&self, block_hash: &H256) -> Option<bool> {
+        self.indices
+            .get(block_hash)
+            .and_then(|block_index| Some(self.arena[*block_index].stable))
     }
 
     pub fn get_transaction_receipt_with_address(
@@ -1826,11 +1842,36 @@ impl ConsensusGraph {
             return;
         }
 
+        let (stable, _adaptive) = inner.adaptive_weight(me);
+        inner.arena[me].stable = stable;
+
+        let parent = inner.arena[me].parent;
+
         inner.weight_tree.make_tree(me);
-        inner.weight_tree.link(inner.arena[me].parent, me);
+        inner.weight_tree.link(parent, me);
         inner.weight_tree.path_apply(
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
+        );
+
+        inner.stable_tree.make_tree(me);
+        inner.stable_tree.link(parent, me);
+        inner.stable_tree.set(
+            me,
+            &SignedBigNum::pos(
+                U256::from(ADAPTIVE_WEIGHT_ALPHA_NUM)
+                    * U256::from(
+                        inner.arena[parent].difficulty
+                            + inner.arena[parent].past_difficulty,
+                    ),
+            ),
+        );
+        inner.stable_tree.path_apply(
+            me,
+            &SignedBigNum::pos(
+                U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN)
+                    * U256::from(*block.block_header.difficulty()),
+            ),
         );
     }
 
@@ -1915,13 +1956,41 @@ impl ConsensusGraph {
             inner.arena[me].data.partial_invalid = true;
             return;
         }
-        debug!("Block {} is fully valid", inner.arena[me].hash);
+        debug!(
+            "Block {} (hash = {}) is fully valid",
+            me, inner.arena[me].hash
+        );
+
+        let (stable, _adaptive) = inner.adaptive_weight(me);
+        inner.arena[me].stable = stable;
+
+        let parent = inner.arena[me].parent;
 
         inner.weight_tree.make_tree(me);
-        inner.weight_tree.link(inner.arena[me].parent, me);
+        inner.weight_tree.link(parent, me);
         inner.weight_tree.path_apply(
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
+        );
+
+        inner.stable_tree.make_tree(me);
+        inner.stable_tree.link(parent, me);
+        inner.stable_tree.set(
+            me,
+            &SignedBigNum::pos(
+                U256::from(ADAPTIVE_WEIGHT_ALPHA_NUM)
+                    * U256::from(
+                        inner.arena[parent].difficulty
+                            + inner.arena[parent].past_difficulty,
+                    ),
+            ),
+        );
+        inner.stable_tree.path_apply(
+            me,
+            &SignedBigNum::pos(
+                U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN)
+                    * U256::from(*block.block_header.difficulty()),
+            ),
         );
 
         let last = inner.pivot_chain.last().cloned().unwrap();
