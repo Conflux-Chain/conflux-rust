@@ -321,18 +321,19 @@ mod tests {
             timestamp: 0.into(),
             difficulty: U256::default(),
             referee_hashes: Vec::new(),
+            stable: None,
             nonce: 0.into(),
             transactions: BlockTransactions::Hashes(vec![].into()),
             size: Some(69.into()),
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
 
-        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"nonce":"0x0","transactions":[],"size":"0x45"}"#);
+        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
     }
 
     #[test]
     fn test_deserialize_block() {
-        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"nonce":"0x0","transactions":[],"size":"0x45"}"#;
+        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"nonce":"0x0","transactions":[],"size":"0x45"}"#;
         let result_block = Block {
             hash: H256::default(),
             parent_hash: H256::default(),
@@ -346,6 +347,7 @@ mod tests {
             timestamp: 0.into(),
             difficulty: U256::default(),
             referee_hashes: Vec::new(),
+            stable: None,
             nonce: 0.into(),
             transactions: BlockTransactions::Full(vec![].into()),
             size: Some(69.into()),

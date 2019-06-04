@@ -1,3 +1,4 @@
+#![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     cache_manager::CacheManager,
@@ -20,6 +21,9 @@ use log4rs::{
     encode::pattern::PatternEncoder,
 };
 use log::LevelFilter;
+use std::fs;
+use std::str::FromStr;
+use std::env;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
@@ -177,30 +181,90 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
 fn main() {
     // initialize_logger("./__consensus_bench.log", LevelFilter::Info);
 
+    let args: Vec<String> = env::args().collect();
+    let mut input_file = "./seq.in";
+    if args.len() >= 2 {
+        input_file = &*args[1];
+    }
+    let db_dir = "./__consensus_bench_db";
+
     let (genesis_hash, genesis_block) =
         create_simple_block_impl(H256::default(), vec![], 0, 0, U256::from(10));
 
     let (sync, consensus) = initialize_consensus_graph_for_test(
-        genesis_block,
-        "./__consensus_bench_db",
+        genesis_block.clone(),
+        db_dir,
     );
 
-    let mut last_hash = genesis_hash;
+    let mut hashes = Vec::new();
+    hashes.push(genesis_block.hash());
+    let content = fs::read_to_string(input_file).expect("Cannot open the block sequence input file!");
+    let lines = content.split("\n");
+
     let start_time = time::SystemTime::now();
-    for i in 0..10000 {
+    let mut last_check_time = start_time;
+    let mut last_sync_block_cnt = sync.block_count();
+    let mut last_consensus_block_cnt = consensus.block_count();
+    for s in lines {
+        if s.starts_with("//") {
+            continue;
+        }
+        let tokens = s.split_whitespace();
+        let mut first = true;
+        let mut parent_idx = 0;
+        let mut ref_idxs = Vec::new();
+        for w in tokens {
+            if first {
+                parent_idx = usize::from_str(w).expect("Cannot parse the input file!");
+                first = false;
+            } else {
+                let ref_idx = usize::from_str(w).expect("Cannot parse the input file!");
+                ref_idxs.push(ref_idx);
+            }
+        }
+        if first {
+            continue;
+        }
+        let mut ref_hashes = Vec::new();
+        for ref_idx in ref_idxs.iter() {
+            ref_hashes.push(hashes[*ref_idx]);
+        }
         let (new_hash, mut new_block) =
-            create_simple_block(sync.clone(), last_hash, vec![]);
+            create_simple_block(sync.clone(), hashes[parent_idx], ref_hashes);
+        hashes.push(new_hash);
         sync.insert_block_header(&mut new_block.block_header, false, true);
         sync.insert_block(new_block, false, false, false);
-        last_hash = new_hash;
+        if last_check_time.elapsed().unwrap().as_secs() >= 5 {
+            let last_time_elapsed = last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
+            last_check_time = time::SystemTime::now();
+            let sync_block_cnt = sync.block_count();
+            let consensus_block_cnt = consensus.block_count();
+            println!("Sync count {}, Consensus count {}, Sync block {}/s, Consensus block {}/s, Elapsed {}",
+                     sync_block_cnt, consensus_block_cnt,
+                     (sync_block_cnt - last_sync_block_cnt) as f64 / last_time_elapsed,
+                     (consensus_block_cnt - last_consensus_block_cnt) as f64 / last_time_elapsed,
+                     start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
+            last_sync_block_cnt = sync_block_cnt;
+            last_consensus_block_cnt = consensus_block_cnt;
+        }
     }
 
     while sync.block_count() != consensus.block_count() {
-        thread::sleep(time::Duration::from_millis(50));
+        if last_check_time.elapsed().unwrap().as_secs() >= 5 {
+            let last_time_elapsed = last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
+            last_check_time = time::SystemTime::now();
+            let consensus_block_cnt = consensus.block_count();
+            println!("Consensus count {}, Consensus block {}/s, Elapsed {}",
+                     consensus_block_cnt,
+                     (consensus_block_cnt - last_consensus_block_cnt) as f64 / last_time_elapsed,
+                     start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
+            last_consensus_block_cnt = consensus_block_cnt;
+        }
+        thread::sleep(time::Duration::from_millis(100));
     }
 
     println!("Block count: {}", consensus.block_count());
     println!("Pivot chain hash: {}", consensus.best_block_hash());
-    println!("Last block hash: {}", last_hash);
+    println!("Last block hash: {}", hashes[hashes.len() - 1]);
     println!("Elapsed {}", start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
 }
