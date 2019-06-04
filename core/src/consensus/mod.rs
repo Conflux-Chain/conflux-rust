@@ -41,6 +41,8 @@ use std::{
     iter::FromIterator,
     sync::Arc,
 };
+use std::thread::sleep;
+use std::time::Duration;
 
 const HEAVY_BLOCK_THRESHOLD: usize = 2000;
 pub const HEAVY_BLOCK_DIFFICULTY_RATIO: usize = 240;
@@ -342,7 +344,7 @@ impl ConsensusGraphInner {
 
         let total_difficulty =
             U256::from(self.weight_tree.get(self.genesis_block_index));
-        debug!("total_difficulty: {}", total_difficulty);
+        debug!("total_difficulty before insert: {}", total_difficulty);
 
         while parent != self.genesis_block_index {
             let grandparent = self.arena[parent].parent;
@@ -1136,7 +1138,10 @@ impl ConsensusGraph {
         }
     }
 
-    pub fn wait_for_best_state_block_execution(&self) {
+    pub fn wait_for_generation(&self, hash: &H256) {
+        while !self.inner.read().indices.contains_key(hash) {
+            sleep(Duration::from_millis(100));
+        }
         let best_state_block = self.inner.read().best_state_block_hash();
         self.executor.wait_for_result(best_state_block);
     }
@@ -1973,6 +1978,10 @@ impl ConsensusGraph {
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
         );
+
+        let total_difficulty =
+            U256::from(inner.weight_tree.get(inner.genesis_block_index));
+        debug!("total_difficulty after insert: {}", total_difficulty);
 
         inner.stable_tree.make_tree(me);
         inner.stable_tree.link(parent, me);
