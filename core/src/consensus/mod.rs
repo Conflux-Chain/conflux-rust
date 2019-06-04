@@ -262,7 +262,7 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_optimistic_execution_task(
-        &mut self,
+        &mut self, data_man: &BlockDataManager,
     ) -> Option<EpochExecutionTask> {
         if !self.enable_optimistic_execution {
             return None;
@@ -277,7 +277,11 @@ impl ConsensusGraphInner {
         let execution_task = EpochExecutionTask::new(
             self.arena[epoch_index].hash,
             self.get_epoch_block_hashes(epoch_index),
-            self.get_reward_execution_info(opt_height, &self.pivot_chain),
+            self.get_reward_execution_info(
+                data_man,
+                opt_height,
+                &self.pivot_chain,
+            ),
             true,
             false,
         );
@@ -776,26 +780,44 @@ impl ConsensusGraphInner {
         }
     }
 
-    // TODO: consider moving the logic to compute_epoch when consensus locks are
+    pub fn get_epoch_blocks(
+        &self, data_man: &BlockDataManager, epoch_index: usize,
+    ) -> Vec<Arc<Block>> {
+        let mut epoch_blocks = Vec::new();
+        let reversed_indices =
+            self.indices_in_epochs.get(&epoch_index).unwrap();
+        {
+            for idx in reversed_indices {
+                let block = data_man
+                    .block_by_hash(&self.arena[*idx].hash, false)
+                    .expect("Exist");
+                epoch_blocks.push(block);
+            }
+        }
+        epoch_blocks
+    }
+
+    // TODO: consider moving the logic to background when consensus locks are
     // broken down.
     fn get_reward_execution_info_from_index(
-        &self, reward_index: Option<(usize, usize)>,
-    ) -> Option<RewardExecutionInfo> {
+        &self, data_man: &BlockDataManager,
+        reward_index: Option<(usize, usize)>,
+    ) -> Option<RewardExecutionInfo>
+    {
         reward_index.map(
             |(pivot_index, anticone_penalty_cutoff_epoch_index)| {
-                let epoch_block_hashes =
-                    self.get_epoch_block_hashes(pivot_index);
+                let epoch_blocks = self.get_epoch_blocks(data_man, pivot_index);
 
                 let mut epoch_block_light_difficulties =
-                    Vec::with_capacity(epoch_block_hashes.len());
+                    Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_is_heavy =
-                    Vec::with_capacity(epoch_block_hashes.len());
+                    Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_anticone_overlimited =
-                    Vec::with_capacity(epoch_block_hashes.len());
+                    Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_anticone_set_sizes =
-                    Vec::with_capacity(epoch_block_hashes.len());
+                    Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_anticone_difficulties =
-                    Vec::with_capacity(epoch_block_hashes.len());
+                    Vec::with_capacity(epoch_blocks.len());
 
                 let epoch_light_difficulty =
                     self.arena[pivot_index].light_difficulty();
@@ -855,7 +877,7 @@ impl ConsensusGraphInner {
                     epoch_block_anticone_difficulties.push(anticone_difficulty);
                 }
                 RewardExecutionInfo {
-                    epoch_block_hashes,
+                    epoch_blocks,
                     epoch_block_light_difficulties,
                     epoch_block_is_heavy,
                     epoch_block_anticone_overlimited,
@@ -867,9 +889,10 @@ impl ConsensusGraphInner {
     }
 
     fn get_reward_execution_info(
-        &self, state_at: usize, chain: &Vec<usize>,
+        &self, data_man: &BlockDataManager, state_at: usize, chain: &Vec<usize>,
     ) -> Option<RewardExecutionInfo> {
         self.get_reward_execution_info_from_index(
+            data_man,
             self.get_pivot_reward_index(state_at, chain),
         )
     }
@@ -1375,19 +1398,7 @@ impl ConsensusGraph {
     pub fn get_epoch_blocks(
         &self, inner: &ConsensusGraphInner, epoch_index: usize,
     ) -> Vec<Arc<Block>> {
-        let mut epoch_blocks = Vec::new();
-        let reversed_indices =
-            inner.indices_in_epochs.get(&epoch_index).unwrap();
-        {
-            for idx in reversed_indices {
-                let block = self
-                    .data_man
-                    .block_by_hash(&inner.arena[*idx].hash, false)
-                    .expect("Exist");
-                epoch_blocks.push(block);
-            }
-        }
-        epoch_blocks
+        inner.get_epoch_blocks(&self.data_man, epoch_index)
     }
 
     // TODO Merge logic.
@@ -1509,6 +1520,7 @@ impl ConsensusGraph {
         while last_state_height <= fork_height {
             let epoch_index = inner.pivot_chain[last_state_height];
             let reward_execution_info = inner.get_reward_execution_info(
+                &self.data_man,
                 last_state_height,
                 &inner.pivot_chain,
             );
@@ -1529,13 +1541,13 @@ impl ConsensusGraph {
             {
                 let epoch_num =
                     fork_height + fork_at - REWARD_EPOCH_COUNT as usize;
-                let anticone_penalty_cutoff_epoch_index =
+                let anticone_penalty_cutoff_epoch_num =
                     epoch_num + ANTICONE_PENALTY_UPPER_EPOCH_COUNT as usize;
                 let pivot_block_upper =
-                    if anticone_penalty_cutoff_epoch_index > fork_height {
-                        chain[anticone_penalty_cutoff_epoch_index - fork_height]
+                    if anticone_penalty_cutoff_epoch_num > fork_height {
+                        chain[anticone_penalty_cutoff_epoch_num - fork_height]
                     } else {
-                        inner.pivot_chain[anticone_penalty_cutoff_epoch_index]
+                        inner.pivot_chain[anticone_penalty_cutoff_epoch_num]
                     };
                 let pivot_index = if epoch_num > fork_height {
                     chain[epoch_num - fork_height]
@@ -1546,8 +1558,11 @@ impl ConsensusGraph {
             } else {
                 None
             };
-            let reward_execution_info =
-                inner.get_reward_execution_info_from_index(reward_index);
+            let reward_execution_info = inner
+                .get_reward_execution_info_from_index(
+                    &self.data_man,
+                    reward_index,
+                );
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
@@ -1636,8 +1651,8 @@ impl ConsensusGraph {
             Some((reward_epoch_block, anticone_penalty_cutoff_epoch_block))
         };
 
-        let reward_execution_info =
-            inner.get_reward_execution_info_from_index(reward_index);
+        let reward_execution_info = inner
+            .get_reward_execution_info_from_index(&self.data_man, reward_index);
         let task = EpochExecutionTask::new(
             epoch_block_hash,
             epoch_block_hashes.clone(),
@@ -1969,7 +1984,7 @@ impl ConsensusGraph {
             inner.pivot_chain = new_pivot_chain;
         }
         {
-            let inner = self.inner.read();
+            let inner = &*self.inner.read();
             // Compute receipts root for the deferred block of the mining block,
             // which is not in the db
             if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
@@ -2010,6 +2025,7 @@ impl ConsensusGraph {
                 } else {
                     let reward_execution_info = inner
                         .get_reward_execution_info(
+                            &self.data_man,
                             state_height,
                             &inner.pivot_chain,
                         );
@@ -2334,8 +2350,11 @@ impl ConsensusGraph {
         // Apply transactions in the determined total order
         while state_at < to_state_pos {
             let epoch_index = new_pivot_chain[state_at];
-            let reward_execution_info =
-                inner.get_reward_execution_info(state_at, &new_pivot_chain);
+            let reward_execution_info = inner.get_reward_execution_info(
+                &self.data_man,
+                state_at,
+                &new_pivot_chain,
+            );
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),

@@ -36,7 +36,7 @@ use hash::{KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
 /// The struct includes most information to compute rewards for old epochs
 #[derive(Debug)]
 pub struct RewardExecutionInfo {
-    pub epoch_block_hashes: Vec<H256>,
+    pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_light_difficulties: Vec<U256>,
     pub epoch_block_is_heavy: Vec<bool>,
     pub epoch_block_anticone_overlimited: Vec<bool>,
@@ -111,7 +111,8 @@ impl ConsensusExecutor {
         consensus_inner: Arc<RwLock<ConsensusGraphInner>>, bench_mode: bool,
     ) -> Self
     {
-        let handler = Arc::new(ConsensusExecutionHandler::new(data_man, vm));
+        let handler =
+            Arc::new(ConsensusExecutionHandler::new(data_man.clone(), vm));
         let (sender, receiver) = channel();
 
         let executor = ConsensusExecutor {
@@ -134,7 +135,7 @@ impl ConsensusExecutor {
                         let maybe_optimistic_task = consensus_inner
                             .try_write()
                             .and_then(|mut inner|
-                                inner.get_optimistic_execution_task()
+                                inner.get_optimistic_execution_task(&data_man)
                             );
                         match maybe_optimistic_task {
                             Some(task) => {
@@ -566,10 +567,7 @@ impl ConsensusExecutionHandler {
         /// (Fee, SetOfPackingBlockHash)
         struct TxExecutionInfo(U256, BTreeSet<H256>);
 
-        let epoch_blocks = self
-            .data_man
-            .blocks_by_hash_list(&reward_info.epoch_block_hashes, false)
-            .expect("blocks exist");
+        let epoch_blocks = &reward_info.epoch_blocks;
         let pivot_block = epoch_blocks.last().expect("Not empty");
         let reward_epoch_hash = pivot_block.hash();
         debug!("Process rewards and fees for {:?}", reward_epoch_hash);
