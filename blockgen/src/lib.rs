@@ -446,7 +446,7 @@ impl BlockGenerator {
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
-        self.graph.consensus.wait_for_best_state_block_execution();
+        self.graph.consensus.wait_for_generation(&hash);
 
         hash
     }
