@@ -75,9 +75,15 @@ const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
 
 pub struct ConsensusConfig {
+    // If we hit invalid state root, we will dump the information into a
+    // directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: String,
     pub record_tx_address: bool,
     pub enable_optimistic_execution: bool,
+    // When bench_mode is true, the PoW solution verification will be skipped.
+    // The transaction execution will also be skipped and only return the
+    // pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
+    // only
     pub bench_mode: bool,
 }
 
@@ -157,23 +163,41 @@ impl ConsensusGraphNode {
     }
 }
 
+/// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
+/// each node has an internal index. This enables fast internal implementation
+/// to use integer index instead of H256 block hashes.
 pub struct ConsensusGraphInner {
+    // This slab hold consensus graph node data and the array index is the
+    // internal index.
     pub arena: Slab<ConsensusGraphNode>,
+    // indices maps block hash to internal index.
     pub indices: HashMap<H256, usize>,
+    // The current pivot chain indexes.
     pub pivot_chain: Vec<usize>,
-    optimistic_executed_height: Option<usize>,
+    // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
     genesis_block_state_root: H256,
     genesis_block_receipts_root: H256,
+    // It maps internal index of a block to the set of internal indexes of
+    // blocks, when treat the block as the pivot chain block.
     indices_in_epochs: HashMap<usize, Vec<usize>>,
+    // weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: MinLinkCutTree,
+    // stable_tree maintains d * SubTW(B, x) + n * x.parent.weight + n *
+    // PastW(x.parent)
     stable_tree: MinLinkCutTree,
+    // adaptive_tree maintains d * SubStableTW(B, x) - n * SubTW(B, P(x))
     adaptive_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
     pub current_difficulty: U256,
+    // data_man is the handle to access raw block data
     data_man: Arc<BlockDataManager>,
-
+    // Optimistic execution is the feature to execute ahead of the deferred
+    // execution boundary. The goal is to pipeline the transaction
+    // execution and the block packaging and verification.
+    // optimistic_executed_height is the number of step to go ahead
+    optimistic_executed_height: Option<usize>,
     enable_optimistic_execution: bool,
 }
 
@@ -1182,8 +1206,9 @@ impl ConsensusGraphInner {
         self.data_man.db.key_value().write(dbops).expect("db error");
     }
 
-    /// The input `my_hash` must have been inserted to sync_graph, otherwise
-    /// it'll panic.
+    /// Compute the total difficulty in the epoch represented by the block of
+    /// my_hash The input `my_hash` must have been inserted to sync_graph,
+    /// otherwise it'll panic.
     pub fn total_difficulty_in_own_epoch(
         &self, sync: &SynchronizationGraphInner, my_hash: &H256,
     ) -> U256 {
@@ -1206,6 +1231,16 @@ impl ConsensusGraphInner {
     }
 }
 
+/// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
+/// collect all blocks that the client has received so far, but a block can only
+/// be delivered to the ConsensusGraph if 1) the whole block content is
+/// available and 2) all of its past blocks are also in the ConsensusGraph.
+///
+/// ConsensusGraph maintains the TreeGraph structure of the client and
+/// implements *GHAST*/*Conflux* algorithm to determine the block total order.
+/// It dispatches transactions in epochs to ConsensusExecutor to process. To
+/// avoid executing too many execution reroll caused by transaction order
+/// oscillation. It defers the transaction execution for a few epochs.
 pub struct ConsensusGraph {
     pub conf: ConsensusConfig,
     pub inner: Arc<RwLock<ConsensusGraphInner>>,
@@ -1219,7 +1254,8 @@ pub struct ConsensusGraph {
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
 
 impl ConsensusGraph {
-    /// The execution will be skipped if bench_mode sets to true.
+    /// Build the ConsensusGraph with a genesis block and various other
+    /// components The execution will be skipped if bench_mode sets to true.
     pub fn with_genesis_block(
         conf: ConsensusConfig, genesis_block: Block,
         storage_manager: Arc<StorageManager>, vm: VmFactory,
@@ -1260,6 +1296,8 @@ impl ConsensusGraph {
         }
     }
 
+    /// Wait for the generation and the execution completion of a block in the
+    /// consensus graph. This API is used mainly for testing purpose
     pub fn wait_for_generation(&self, hash: &H256) {
         while !self.inner.read().indices.contains_key(hash) {
             sleep(Duration::from_millis(100));
@@ -2089,6 +2127,9 @@ impl ConsensusGraph {
         }
     }
 
+    /// This is the function to insert a new block into the consensus graph
+    /// during construction. We by pass many verifications because those
+    /// blocks are from our own database so we trust them.
     pub fn on_new_block_construction_only(
         &self, hash: &H256, sync_inner: &SynchronizationGraphInner,
     ) {
@@ -2179,6 +2220,8 @@ impl ConsensusGraph {
         );
     }
 
+    /// This is the main function that SynchronizationGraph calls to deliver a
+    /// new block to the consensus graph.
     pub fn on_new_block(
         &self, hash: &H256, sync_inner_lock: &RwLock<SynchronizationGraphInner>,
     ) {
