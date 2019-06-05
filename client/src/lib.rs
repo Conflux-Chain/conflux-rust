@@ -106,6 +106,14 @@ impl Client {
     ) -> Result<ClientHandle, String> {
         info!("Working directory: {:?}", std::env::current_dir());
 
+        if conf.raw_conf.metrics_enabled {
+            metrics::enable();
+            metrics::report_file(
+                Duration::from_millis(conf.raw_conf.metrics_report_interval_ms),
+                conf.raw_conf.metrics_output_file.clone(),
+            );
+        }
+
         let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
             "Tx Recover".into(),
             WORKER_COMPUTATION_PARALLELISM,

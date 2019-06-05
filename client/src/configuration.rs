@@ -91,6 +91,9 @@ build_config! {
         // TODO Set default to true when we have new tx pool implementation
         (enable_optimistic_execution, (bool), false)
         (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
+        (metrics_enabled, (bool), false)
+        (metrics_report_interval_ms, (u64), 5000)
+        (metrics_output_file, (String), "metrics.log".to_string())
     }
     {
         (
