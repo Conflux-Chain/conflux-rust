@@ -443,6 +443,7 @@ impl BlockGenerator {
         );
         self.on_mined_block(block);
 
+        // FIXME: We should add a flag to enable/disable this wait
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
