@@ -19,7 +19,7 @@ use crate::{
 use cfx_types::{H256, U256, U512};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{block::CompactBlock, Block, BlockHeader};
+use primitives::{block::CompactBlock, Block, BlockHeader, EpochNumber};
 use rlp::Rlp;
 use slab::Slab;
 use std::{
@@ -1143,6 +1143,13 @@ impl SynchronizationGraph {
             deferred_receipts_root,
         };
         GuardedValue::new(consensus_inner, value)
+    }
+
+    pub fn get_block_hashes_by_epoch(
+        &self, epoch_number: u64,
+    ) -> Result<Vec<H256>, String> {
+        self.consensus
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_number.into()))
     }
 
     pub fn verified_invalid(&self, hash: &H256) -> bool {

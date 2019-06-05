@@ -11,9 +11,10 @@ use crate::{consensus::SharedConsensusGraph, pow::ProofOfWorkConfig};
 use cfx_types::H256;
 use io::TimerToken;
 use message::{
-    GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse,
-    GetBlocks, GetBlocksResponse, GetBlocksWithPublicResponse,
-    GetCompactBlocks, GetCompactBlocksResponse, GetTerminalBlockHashes,
+    GetBlockHashesByEpoch, GetBlockHashesResponse, GetBlockHeaders,
+    GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse, GetBlocks,
+    GetBlocksResponse, GetBlocksWithPublicResponse, GetCompactBlocks,
+    GetCompactBlocksResponse, GetTerminalBlockHashes,
     GetTerminalBlockHashesResponse, GetTransactions, GetTransactionsResponse,
     Message, MsgId, NewBlock, NewBlockHashes, Status, TransactionDigests,
     TransactionPropagationControl, Transactions,
@@ -74,6 +75,9 @@ const LOG_STATISTIC_TIMER: TimerToken = 4;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
+pub const EPOCH_RETRY_TIME_SECONDS: u64 = 1;
+pub const MAX_EPOCHS_TO_REQUEST: u64 = 10;
+
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 enum SyncHandlerWorkType {
     RecoverPublic = 1,
@@ -91,6 +95,7 @@ pub struct SynchronizationProtocolHandler {
     graph: SharedSynchronizationGraph,
     syn: Arc<SynchronizationState>,
     request_manager: Arc<RequestManager>,
+    latest_epoch_requested: Mutex<u64>,
 
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
@@ -136,6 +141,7 @@ impl SynchronizationProtocolHandler {
             )),
             syn,
             request_manager,
+            latest_epoch_requested: Mutex::new(0),
             recover_public_queue: Mutex::new(VecDeque::new()),
         }
     }
@@ -150,6 +156,18 @@ impl SynchronizationProtocolHandler {
 
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
         self.graph.block_by_hash(hash)
+    }
+
+    fn best_peer_epoch(&self) -> Option<u64> {
+        self.syn
+            .peers
+            .read()
+            .iter()
+            .map(|(_, state)| state.read().best_epoch)
+            .fold(None, |max, x| match max {
+                None => Some(x),
+                Some(max) => Some(if x > max { x } else { max }),
+            })
     }
 
     fn dispatch_message(
@@ -212,6 +230,12 @@ impl SynchronizationProtocolHandler {
             MsgId::GET_TRANSACTIONS => self.on_get_transactions(io, peer, &rlp),
             MsgId::GET_TRANSACTIONS_RESPONSE => {
                 self.on_get_transactions_response(io, peer, &rlp)
+            }
+            MsgId::GET_BLOCK_HASHES_BY_EPOCH => {
+                self.on_get_block_hashes_by_epoch(io, peer, &rlp)
+            }
+            MsgId::GET_BLOCK_HASHES_RESPONSE => {
+                self.on_block_hashes_response(io, peer, &rlp)
             }
             _ => {
                 warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
@@ -897,6 +921,78 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
+    fn on_get_block_hashes_by_epoch(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req = rlp.as_val::<GetBlockHashesByEpoch>()?;
+        debug!("on_get_block_hashes_by_epoch, msg=:{:?}", req);
+
+        let hashes = self.graph.get_block_hashes_by_epoch(req.epoch_number)?;
+        debug!("on_get_block_hashes_by_epoch, hashes=:{:?}", hashes);
+
+        let msg: Box<dyn Message> = Box::new(GetBlockHashesResponse {
+            request_id: req.request_id().into(),
+            hashes: hashes,
+        });
+        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
+        Ok(())
+    }
+
+    fn on_block_hashes_response(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let resp = rlp.as_val::<GetBlockHashesResponse>()?;
+        debug!("on_block_hashes_response, msg={:?}", resp);
+
+        let req =
+            self.request_manager
+                .match_request(io, peer, resp.request_id())?;
+
+        match req {
+            RequestMessage::Epochs(epoch_req) => {
+                self.request_manager
+                    .epoch_received(io, epoch_req.epoch_number);
+            }
+            _ => {
+                warn!("Get response not matching the request! req={:?}, resp={:?}", req, resp);
+                self.request_manager.remove_mismatch_request(io, &req);
+                return Err(ErrorKind::UnexpectedResponse.into());
+            }
+        };
+
+        // request missing blocks
+        let missing_blocks: Vec<H256> = resp
+            .hashes
+            .iter()
+            .filter(|h| !self.graph.contains_block(&h))
+            .cloned()
+            .collect();
+
+        debug!("requesting missing blocks: {:?}", missing_blocks);
+        self.request_blocks(io, Some(peer), missing_blocks);
+
+        // request missing headers
+        let missing_headers = resp
+            .hashes
+            .iter()
+            .filter(|h| !self.graph.contains_block_header(&h));
+
+        // NOTE: this is to make sure no section of the DAG is skipped
+        // e.g. if the request for epoch 4 is lost or the reply is in-
+        // correct, the request for epoch 5 should recursively request
+        // all dependent blocks (see on_block_headers_response)
+        missing_headers.for_each(|h| {
+            self.request_manager
+                .request_block_headers(io, Some(peer), h, 1);
+        });
+
+        // TODO: handle empty response
+
+        // try requesting some more epochs
+        self.start_sync(io);
+        Ok(())
+    }
+
     fn on_status(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -920,6 +1016,7 @@ impl SynchronizationProtocolHandler {
             protocol_version: status.protocol_version,
             genesis_hash: status.genesis_hash,
             best_epoch: status.best_epoch,
+            terminal_block_hashes: status.terminal_block_hashes.clone(),
             received_transaction_count: 0,
             need_prop_trans: true,
             notified_mode: None,
@@ -938,20 +1035,99 @@ impl SynchronizationProtocolHandler {
             .terminal_block_hashes
             .extend(self.graph.initial_missed_block_hashes.lock().drain());
 
-        // FIXME Need better design.
-        // Should be refactored with on_new_block_hashes.
-        for terminal_block_hash in status.terminal_block_hashes {
-            if !self.graph.contains_block_header(&terminal_block_hash) {
-                self.request_manager.request_block_headers(
-                    io,
-                    Some(peer),
-                    &terminal_block_hash,
-                    DEFAULT_GET_HEADERS_NUM,
-                );
+        self.start_sync(io);
+        Ok(())
+    }
+
+    fn start_sync(&self, io: &NetworkContext) {
+        if self.catch_up_mode() {
+            self.request_epochs(io);
+        } else {
+            self.request_missing_terminals(io);
+        }
+    }
+
+    fn request_missing_terminals(&self, io: &NetworkContext) {
+        debug!("requesting missing terminal blocks...");
+
+        let peers: Vec<PeerId> =
+            self.syn.peers.read().keys().cloned().collect();
+        let mut requested = HashSet::new();
+
+        for peer in peers {
+            if let Ok(info) = self.syn.get_peer_info(&peer) {
+                let terminals = info.read().terminal_block_hashes.clone();
+
+                for t in terminals {
+                    if !requested.contains(&t)
+                        && !self.graph.contains_block_header(&t)
+                    {
+                        self.request_manager.request_block_headers(
+                            io,
+                            Some(peer),
+                            &t,
+                            DEFAULT_GET_HEADERS_NUM,
+                        );
+                        requested.insert(t);
+                    }
+                }
             }
         }
 
-        Ok(())
+        debug!("{:?} missing terminal blocks requested", requested.len());
+    }
+
+    fn request_epochs(&self, io: &NetworkContext) {
+        // make sure only one thread can request new epochs at a time
+        let mut latest_requested = self.latest_epoch_requested.lock();
+
+        // make sure we do not request too many epochs in parallel
+        let num_in_flight = self.request_manager.num_epochs_in_flight();
+
+        if num_in_flight == MAX_EPOCHS_TO_REQUEST {
+            debug!("epoch queue full; not requesting more epochs");
+            return;
+        }
+
+        assert!(num_in_flight < MAX_EPOCHS_TO_REQUEST);
+
+        // calculate which epochs to request
+        let best_peer_epoch = self.best_peer_epoch();
+
+        if best_peer_epoch.is_none() {
+            debug!("no peer best_epoch known; not requesting more epochs");
+            return;
+        }
+
+        let best_peer_epoch = best_peer_epoch.unwrap();
+        let my_best_epoch = self.graph.best_epoch_number();
+        let num_to_request = MAX_EPOCHS_TO_REQUEST - num_in_flight;
+
+        let first = (*latest_requested + 1).max(my_best_epoch + 1);
+        let last = (first + num_to_request - 1).min(best_peer_epoch);
+
+        debug!(
+            "requesting epochs [{:?}..{:?}] (my={:?}, latest={:?}, peer's={:?})",
+            first, last, my_best_epoch, *latest_requested, best_peer_epoch
+        );
+
+        for epoch_number in first..(last + 1) {
+            let peer = self.syn.get_random_peer_satisfying(|peer| {
+                match self.syn.get_peer_info(&peer) {
+                    Err(_) => false,
+                    Ok(info) => info.read().best_epoch >= epoch_number,
+                }
+            });
+
+            info!(
+                "requesting epoch {:?}/{:?} hashes from peer {:?}",
+                epoch_number, best_peer_epoch, peer
+            );
+
+            self.request_manager
+                .request_epoch_hashes(io, peer, epoch_number);
+            *latest_requested = epoch_number;
+        }
     }
 
     fn on_block_headers_response(
@@ -1965,6 +2141,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_catch_up_mode(io);
+                self.start_sync(io);
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();

@@ -55,6 +55,8 @@ GET_CMPCT_BLOCKS_RESPONSE = 0x10
 GET_BLOCK_TXN = 0x11
 GET_BLOCK_TXN_RESPONSE = 0x12
 
+GET_BLOCK_HASHES_BY_EPOCH = 0x17
+
 class Capability(rlp.Serializable):
     fields = [
         ("protocol", binary),
@@ -147,6 +149,19 @@ class GetBlockHashes(rlp.Serializable):
             reqid=reqid,
             hash=hash,
             max_blocks=max_blocks,
+        )
+
+
+class GetBlockHashesByEpoch(rlp.Serializable):
+    fields = [
+        ("reqid", big_endian_int),
+        ("epoch_number", big_endian_int),
+    ]
+
+    def __init__(self, epoch_number, reqid=0):
+        super().__init__(
+            reqid=reqid,
+            epoch_number=epoch_number
         )
 
 
@@ -403,6 +418,7 @@ msg_id_dict = {
     GetCompactBlocksResponse: GET_CMPCT_BLOCKS_RESPONSE,
     GetBlockTxn: GET_BLOCK_TXN,
     GetBlockTxnResponse: GET_BLOCK_TXN_RESPONSE,
+    GetBlockHashesByEpoch: GET_BLOCK_HASHES_BY_EPOCH,
 }
 
 msg_class_dict = {}
