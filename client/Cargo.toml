@@ -41,6 +41,7 @@ kvdb-rocksdb = "0.1.3"
 tempdir = "0.3"
 rustc-hex= "1.0"
 threadpool = "1.0"
+metrics = { path = "../util/metrics" }
 
 [dev-dependencies]
 criterion = "0.2"

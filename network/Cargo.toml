@@ -31,3 +31,4 @@ keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", pac
 lazy_static = "1.2.0"
 byte-unit = "1.1.0"
 priority-send-queue = { path = "../util/priority-send-queue" }
+metrics = { path = "../util/metrics" }
