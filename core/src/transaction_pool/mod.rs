@@ -784,8 +784,11 @@ impl TransactionPool {
         state: State<'a>,
     ) -> Vec<Arc<SignedTransaction>>
     {
-        let mut inner = self.inner.write();
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
+        if num_txs == 0 {
+            return packed_transactions;
+        }
+        let mut inner = self.inner.write();
         let num_txs = min(num_txs, inner.ready_transactions.len());
         let mut nonce_map = HashMap::new();
         let mut future_txs = HashMap::new();

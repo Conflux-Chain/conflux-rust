@@ -402,19 +402,6 @@ impl SynchronizationGraphInner {
         Ok(is_heavy_block)
     }
 
-    /// The input `my_hash` must have been inserted to sync_graph, otherwise
-    /// it'll panic.
-    pub fn total_difficulty_in_own_epoch(&self, my_hash: &H256) -> U256 {
-        let my_index = *self.indices.get(my_hash).expect("exist");
-        self.arena[my_index]
-            .blockset_in_own_view_of_epoch
-            .iter()
-            .fold(
-                self.arena[my_index].block_header.difficulty().clone(),
-                |acc, x| acc + *self.arena[*x].block_header.difficulty(),
-            )
-    }
-
     /// The input `cur_hash` must have been inserted to sync_graph, otherwise
     /// it'll panic.
     pub fn target_difficulty(&self, cur_hash: &H256) -> U256 {
@@ -591,8 +578,11 @@ impl SynchronizationGraph {
 
             if let Some(mut block) = self.block_by_hash_from_db(&hash) {
                 // This is for constructing synchronization graph.
-                let res =
-                    self.insert_block_header(&mut block.block_header, true);
+                let res = self.insert_block_header(
+                    &mut block.block_header,
+                    true,
+                    false,
+                );
                 assert!(res.0);
 
                 let parent = block.block_header.parent_hash().clone();
@@ -658,8 +648,11 @@ impl SynchronizationGraph {
 
             if let Some(mut block) = self.block_by_hash_from_db(&hash) {
                 // This is for constructing synchronization graph.
-                let res =
-                    self.insert_block_header(&mut block.block_header, true);
+                let res = self.insert_block_header(
+                    &mut block.block_header,
+                    true,
+                    false,
+                );
                 assert!(res.0);
 
                 let parent = block.block_header.parent_hash().clone();
@@ -693,7 +686,7 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        self.consensus.construct_pivot(&*self.inner.read());
+        self.consensus.construct_pivot(&self.inner);
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -851,7 +844,7 @@ impl SynchronizationGraph {
     }
 
     pub fn insert_block_header(
-        &self, header: &mut BlockHeader, need_to_verify: bool,
+        &self, header: &mut BlockHeader, need_to_verify: bool, bench_mode: bool,
     ) -> (bool, Vec<H256>) {
         let mut inner = self.inner.write();
         let hash = header.hash();
@@ -876,9 +869,11 @@ impl SynchronizationGraph {
                     .verify_header_params(header)
                     .is_err())
         } else {
-            self.verification_config
-                .verify_pow(header)
-                .expect("local mined block should pass this check!");
+            if !bench_mode {
+                self.verification_config
+                    .verify_pow(header)
+                    .expect("local mined block should pass this check!");
+            }
             true
         };
 
@@ -1160,17 +1155,17 @@ impl SynchronizationGraph {
         let blocks = self.data_man.blocks.read().heap_size_of_children();
         let block_receipts =
             self.data_man.block_receipts.read().heap_size_of_children();
-        let transaction_addresses = self
+        let transaction_addresses_data = self
             .data_man
             .transaction_addresses
             .read()
-            .heap_size_of_children()
-            + self
-                .consensus
-                .txpool
-                .unexecuted_transaction_addresses
-                .lock()
-                .heap_size_of_children();
+            .heap_size_of_children();
+        let transaction_addresses_unexecuted = self
+            .consensus
+            .txpool
+            .unexecuted_transaction_addresses
+            .lock()
+            .heap_size_of_children();
         let transaction_pubkey = self
             .consensus
             .txpool
@@ -1180,7 +1175,8 @@ impl SynchronizationGraph {
         CacheSize {
             blocks,
             block_receipts,
-            transaction_addresses,
+            transaction_addresses: transaction_addresses_data
+                + transaction_addresses_unexecuted,
             compact_blocks,
             transaction_pubkey,
         }
@@ -1192,7 +1188,6 @@ impl SynchronizationGraph {
         let current_size = self.cache_size().total();
         let mut blocks = self.data_man.blocks.write();
         let mut executed_results = self.data_man.block_receipts.write();
-        let mut tx_address = self.data_man.transaction_addresses.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut transaction_pubkey_cache =
             self.consensus.txpool.transaction_pubkey_cache.write();
@@ -1201,6 +1196,7 @@ impl SynchronizationGraph {
             .txpool
             .unexecuted_transaction_addresses
             .lock();
+        let mut tx_address = self.data_man.transaction_addresses.write();
         let mut cache_man = self.cache_man.lock();
         info!(
             "Before gc cache_size={} {} {} {} {} {} {}",
@@ -1253,8 +1249,10 @@ impl SynchronizationGraph {
         });
     }
 
-    // Manage statistics
+    /// Get the current number of blocks in the synchronization graph
+    pub fn block_count(&self) -> usize { self.data_man.blocks.read().len() }
 
+    // Manage statistics
     pub fn stat_inc_inserted_count(&self) {
         let mut inner = self.statistics.inner.write();
         inner.sync_graph.inserted_block_count += 1;

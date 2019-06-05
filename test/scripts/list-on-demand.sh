@@ -1,4 +1,7 @@
+#!/usr/bin/env bash
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
+SCRIPT_DIR="$( cd "$(dirname "$0")" ; pwd -P )"
+
 mv instances instances_old
 mv instances_all instances_all_old
 #mv requests requests_old
@@ -25,4 +28,4 @@ do
     echo $i >> instances_all
 done
 #echo "$res"|grep STATE|grep running > state
-./ip.sh
+#${SCRIPT_DIR}/ip.sh

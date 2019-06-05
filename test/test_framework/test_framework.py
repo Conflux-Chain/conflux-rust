@@ -21,6 +21,7 @@ from . import coverage
 from .mininode import start_p2p_connection
 from .test_node import TestNode
 from .util import (
+    CONFLUX_RPC_WAIT_TIMEOUT,
     MAX_NODES,
     PortSeed,
     assert_equal,
@@ -70,7 +71,7 @@ class ConfluxTestFramework:
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
-        self.rpc_timewait = 3  # Wait for up to 5 seconds for the RPC server to respond
+        self.rpc_timewait = CONFLUX_RPC_WAIT_TIMEOUT
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
@@ -435,7 +436,7 @@ class ConfluxTestFramework:
                         extra_conf=["bind=127.0.0.1"],
                         extra_args=[],
                         rpchost=None,
-                        timewait=self.rpc_timewait,
+                        rpc_timeout=self.rpc_timewait,
                         bitcoind=self.options.bitcoind,
                         bitcoin_cli=self.options.bitcoincli,
                         mocktime=self.mocktime,

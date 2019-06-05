@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod error;
+mod request_manager;
 mod synchronization_graph;
 mod synchronization_protocol_handler;
 mod synchronization_service;
@@ -22,13 +23,55 @@ pub use self::{
     synchronization_service::{
         SharedSynchronizationService, SynchronizationService,
     },
-    synchronization_state::{
-        SentTransactionContainer, SynchronizationPeerState,
-        SynchronizationState,
-    },
+    synchronization_state::{SynchronizationPeerState, SynchronizationState},
 };
 
 pub mod random {
     use rand;
     pub fn new() -> rand::ThreadRng { rand::thread_rng() }
+}
+
+pub mod msg_sender {
+    use cfx_bytes::Bytes;
+    use message::Message;
+    use network::{
+        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
+        PeerId,
+    };
+    use priority_send_queue::SendQueuePriority;
+
+    pub fn send_message(
+        io: &NetworkContext, peer: PeerId, msg: &Message,
+        priority: SendQueuePriority,
+    ) -> Result<(), NetworkError>
+    {
+        send_message_with_throttling(io, peer, msg, priority, false)
+    }
+
+    pub fn send_message_with_throttling(
+        io: &NetworkContext, peer: PeerId, msg: &Message,
+        priority: SendQueuePriority, throttling_disabled: bool,
+    ) -> Result<(), NetworkError>
+    {
+        if !throttling_disabled && msg.is_size_sensitive() {
+            if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
+                debug!("Throttling failure: {:?}", e);
+                return Err(e);
+            }
+        }
+        let mut raw = Bytes::new();
+        raw.push(msg.msg_id().into());
+        raw.extend(msg.rlp_bytes().iter());
+        if let Err(e) = io.send(peer, raw, priority) {
+            debug!("Error sending message: {:?}", e);
+            return Err(e);
+        };
+        debug!(
+            "Send message({}) to {:?}",
+            msg.msg_id(),
+            io.get_peer_node_id(peer)
+        );
+        Ok(())
+    }
+
 }

@@ -12,13 +12,13 @@ class P2PTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 8
         self.n_shard = 2
+        self.shard_size = int(self.num_nodes / self.n_shard)
 
     def setup_network(self):
         self.setup_nodes()
         assert self.num_nodes % self.n_shard == 0, "each shard should have the same size"
-        shard_size = int(self.num_nodes / self.n_shard)
         for s in range(self.n_shard):
-            for i in range(s * shard_size, (s + 1) * shard_size - 1):
+            for i in range(s * self.shard_size, (s + 1) * self.shard_size - 1):
                 connect_nodes(self.nodes, i, i + 1)
 
     def run_test(self):
@@ -28,12 +28,11 @@ class P2PTest(ConfluxTestFramework):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         tx_n = 100
         gas_price = 1
-        shard_size = int(self.num_nodes / self.n_shard)
         shard_balance = []
 
         for s in range(self.n_shard):
             ''' Send random transactions to this shard s '''
-            shard_nodes = self.nodes[s * shard_size: (s + 1) * shard_size]
+            shard_nodes = self.nodes[s * self.shard_size: (s + 1) * self.shard_size]
             receiver_sk, _ = ec_random_keys()
             value = default_config["TOTAL_COIN"] - 21000
             balance_map = {receiver_sk: value}
@@ -55,7 +54,7 @@ class P2PTest(ConfluxTestFramework):
                     balance_map[receiver_sk] += value
                 tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
                                         gas_price=gas_price)
-                r = random.randint(0, shard_size - 1)
+                r = random.randint(0, self.shard_size - 1)
                 shard_nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000
@@ -75,7 +74,8 @@ class P2PTest(ConfluxTestFramework):
         wait_until(lambda: epochCheck(self.nodes[0]))
         wait_until(lambda: epochCheck(self.nodes[int(self.num_nodes / self.n_shard)]))
         for s in range(self.n_shard):
-            connect_nodes(self.nodes, s * shard_size - 1, s * shard_size)
+            for idx in range(self.shard_size):
+                connect_nodes(self.nodes, s * self.shard_size - 1 + idx, s * self.shard_size + idx)
         block_gen_thread.stop()
         block_gen_thread.join()
         sync_blocks(self.nodes)

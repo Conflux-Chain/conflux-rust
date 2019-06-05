@@ -17,6 +17,8 @@ import threading
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
 
+CONFLUX_RPC_WAIT_TIMEOUT = 60
+
 logger = logging.getLogger("TestFramework.utils")
 
 # Assert functions
@@ -446,7 +448,7 @@ class PortSeed:
     n = None
 
 
-def get_rpc_proxy(url, node_number, timeout=None, coveragedir=None):
+def get_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT, coveragedir=None):
     """
     Args:
         url (str): URL of the RPC server to call
@@ -509,6 +511,7 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
     latencies = [{} for _ in nodes]
     threads = []
     num_nodes = len(nodes)
+    sample = min(num_nodes - 1, sample)
 
     for i in range(num_nodes):
         # make sure all nodes are reachable

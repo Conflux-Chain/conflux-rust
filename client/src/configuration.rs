@@ -4,6 +4,7 @@
 
 use blockgen::BlockGeneratorConfig;
 use cfxcore::{
+    consensus::ConsensusConfig,
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
@@ -55,14 +56,14 @@ build_config! {
         (db_compaction_profile, (Option<String>), None)
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (generate_tx, (bool), false)
-        (generate_tx_period_ms, (Option<u64>), Some(100))
+        (generate_tx_period_us, (Option<u64>), Some(100_000))
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
         (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
         (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (send_tx_period_ms, (u64), 1300)
-        (check_request_period_ms, (u64), 5000)
+        (check_request_period_ms, (u64), 1000)
         (block_cache_gc_period_ms, (u64), 5000)
         (persist_terminal_period_ms, (u64), 60_000)
         (headers_request_timeout_ms, (u64), 30_000)
@@ -86,6 +87,10 @@ build_config! {
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
+        (record_tx_address, (bool), true)
+        // TODO Set default to true when we have new tx pool implementation
+        (enable_optimistic_execution, (bool), false)
+        (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
     }
     {
         (
@@ -208,6 +213,20 @@ impl Configuration {
         )
     }
 
+    pub fn consensus_config(&self) -> ConsensusConfig {
+        ConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+            record_tx_address: self.raw_conf.record_tx_address,
+            enable_optimistic_execution: self
+                .raw_conf
+                .enable_optimistic_execution,
+            bench_mode: false,
+        }
+    }
+
     pub fn pow_config(&self) -> ProofOfWorkConfig {
         ProofOfWorkConfig::new(
             self.raw_conf.test_mode,
@@ -222,7 +241,7 @@ impl Configuration {
     pub fn tx_gen_config(&self) -> TransactionGeneratorConfig {
         TransactionGeneratorConfig::new(
             self.raw_conf.generate_tx,
-            self.raw_conf.generate_tx_period_ms.expect("has default"),
+            self.raw_conf.generate_tx_period_us.expect("has default"),
         )
     }
 

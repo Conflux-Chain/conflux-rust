@@ -20,8 +20,6 @@ from conflux.utils import get_nodeid, sha3, encode_int32
 from .authproxy import JSONRPCException
 from .util import *
 
-CONFLUX_RPC_WAIT_TIMEOUT = 60
-
 
 class FailedToStartError(Exception):
     """Raised when a node fails to start correctly."""

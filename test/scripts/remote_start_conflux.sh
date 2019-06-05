@@ -4,6 +4,7 @@ ip_addr=`hostname --ip-address`
 root_dir=$1
 p2p_port_start=$2
 num=$3
+bandwidth="${4:-20}"
 
 echo "root_dir = $1"
 echo "p2p_port_start = $2"
@@ -11,6 +12,7 @@ echo "num_conflux = $3"
 
 export RUST_BACKTRACE=full
 
+./throttle_bitcoin_bandwidth.sh $bandwidth $num
 for i in `seq 1 $num`
 do
 	nid=$(($i-1))
