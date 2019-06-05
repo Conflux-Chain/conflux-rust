@@ -11,10 +11,13 @@ matrix:
             timeout: 300
             cargo: true
         install:
+            - if [ -f target/Cargo.lock ]; then mv target/Cargo.lock .; fi
             - export RUSTFLAGS="-D warnings"
             - cargo build --release
         script:
             - cargo test --release --all
+        before_cache:
+            - cp Cargo.lock target
       # benchmark tests
       - env:
             - CACHE_NAME=bench
@@ -22,9 +25,12 @@ matrix:
             timeout: 300
             cargo: true
         install:
+            - if [ -f target/Cargo.lock ]; then mv target/Cargo.lock .; fi
             - export RUSTFLAGS="-g -D warnings"
         script:
             - cargo bench --all --no-run
+        before_cache:
+            - cp Cargo.lock target
       # integration tests
       - env:
             - CACHE_NAME=integration_tests
@@ -41,7 +47,10 @@ matrix:
             - chmod +x solc
             - export PATH=$PATH:$PWD
         install:
+            - if [ -f target/Cargo.lock ]; then mv target/Cargo.lock .; fi
             - export RUSTFLAGS="-g -D warnings"
             - cargo build --release
         script:
             - ./test/test_all.py
+        before_cache:
+            - cp Cargo.lock target
