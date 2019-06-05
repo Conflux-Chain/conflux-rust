@@ -206,7 +206,7 @@ pub struct ConsensusGraphNode {
     pub height: u64,
     pub is_heavy: bool,
     pub difficulty: U256,
-    /// The total difficulty of its past set (include itself)
+    /// The total difficulty of its past set (exclude itself)
     pub past_difficulty: U256,
     pub pow_quality: U256,
     pub stable: bool,
@@ -1213,8 +1213,7 @@ impl ConsensusGraphInner {
         &self, sync: &SynchronizationGraphInner, my_hash: &H256,
     ) -> U256 {
         let my_sync_index = *sync.indices.get(my_hash).expect("exist");
-        let mut total_difficulty =
-            sync.arena[my_sync_index].block_header.difficulty().clone();
+        let mut total_difficulty = U256::zero();
         for index_in_sync in sync.arena[my_sync_index]
             .blockset_in_own_view_of_epoch
             .iter()
@@ -2146,8 +2145,9 @@ impl ConsensusGraph {
         }
         let parent_idx =
             *inner.indices.get(block.block_header.parent_hash()).unwrap();
-        let past_difficulty =
-            inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
+        let past_difficulty = inner.arena[parent_idx].past_difficulty
+            + inner.arena[parent_idx].difficulty
+            + difficulty_in_my_epoch;
 
         let (me, indices_len) =
             inner.insert(block.as_ref(), past_difficulty, is_heavy);
@@ -2284,8 +2284,9 @@ impl ConsensusGraph {
 
         let parent_idx =
             *inner.indices.get(block.block_header.parent_hash()).unwrap();
-        let past_difficulty =
-            inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
+        let past_difficulty = inner.arena[parent_idx].past_difficulty
+            + inner.arena[parent_idx].difficulty
+            + difficulty_in_my_epoch;
 
         let (me, indices_len) =
             inner.insert(block.as_ref(), past_difficulty, is_heavy);
