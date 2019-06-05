@@ -1137,6 +1137,12 @@ impl ConsensusGraphInner {
             .and_then(|block_index| Some(self.arena[*block_index].stable))
     }
 
+    pub fn is_partial_invalid(&self, block_hash: &H256) -> Option<bool> {
+        self.indices
+            .get(block_hash)
+            .and_then(|block_index| Some(self.arena[*block_index].data.partial_invalid))
+    }
+
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
     ) -> Option<(Receipt, TransactionAddress)> {

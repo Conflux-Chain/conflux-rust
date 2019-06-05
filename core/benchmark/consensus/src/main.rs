@@ -28,6 +28,7 @@ use log::LevelFilter;
 use std::fs;
 use std::str::FromStr;
 use std::env;
+use std::collections::HashSet;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
@@ -209,25 +210,32 @@ fn main() {
     let mut last_check_time = start_time;
     let mut last_sync_block_cnt = sync.block_count();
     let mut last_consensus_block_cnt = consensus.block_count();
+    let mut valid_indices = HashSet::new();
     for s in lines {
         if s.starts_with("//") {
             continue;
         }
         let tokens = s.split_whitespace();
-        let mut first = true;
+        let mut cnt = 0;
         let mut parent_idx = 0;
         let mut ref_idxs = Vec::new();
+        let mut is_valid = 0;
         for w in tokens {
-            if first {
+            if cnt == 0 {
+                is_valid = u32::from_str(w).expect("Cannot parse the input file!");
+            } else if cnt == 1 {
                 parent_idx = usize::from_str(w).expect("Cannot parse the input file!");
-                first = false;
             } else {
                 let ref_idx = usize::from_str(w).expect("Cannot parse the input file!");
                 ref_idxs.push(ref_idx);
             }
+            cnt += 1;
         }
-        if first {
+        if cnt == 0 {
             continue;
+        }
+        if is_valid == 1 {
+            valid_indices.insert(hashes.len());
         }
         let mut ref_hashes = Vec::new();
         for ref_idx in ref_idxs.iter() {
@@ -271,4 +279,12 @@ fn main() {
     println!("Pivot chain hash: {}", consensus.best_block_hash());
     println!("Last block hash: {}", hashes[hashes.len() - 1]);
     println!("Elapsed {}", start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
+
+    let n = hashes.len();
+    for i in 1..n {
+        let partial_invalid = consensus.inner.read().is_partial_invalid(&hashes[i]).unwrap();
+        let invalid = !valid_indices.contains(&i);
+        assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
+    }
+
 }
