@@ -27,6 +27,10 @@ pub struct StateDb<'a> {
 impl<'a> StateDb<'a> {
     pub fn new(storage: Storage<'a>) -> Self { StateDb { storage } }
 
+    pub fn get_storage_mut(&mut self) -> &mut Storage<'a> {
+        &mut self.storage
+    }
+
     pub fn get<T>(&self, key: &StorageKey) -> Result<Option<T>>
     where T: ::rlp::Decodable {
         let raw = match self.storage.get(key.as_ref()) {

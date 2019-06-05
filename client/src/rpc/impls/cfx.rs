@@ -26,7 +26,7 @@ use primitives::{
     TransactionWithSignature,
 };
 use rlp::Rlp;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc, thread};
 
 pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
@@ -579,11 +579,12 @@ impl RpcImpl {
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, pending_len) = self.tx_pool.stats();
+        let (ready_len, pending_len, total_received) = self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
         ret.insert("pending".into(), pending_len);
+        ret.insert("received".into(), total_received);
 
         Ok(ret)
     }

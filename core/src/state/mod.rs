@@ -283,15 +283,34 @@ impl<'a> State<'a> {
     ) -> DbResult<()> {
         assert!(self.checkpoints.borrow().is_empty());
 
+        let mut accounts_for_txpool = vec![];
+
         let mut accounts = self.cache.borrow_mut();
         debug!("Notify for epoch {}", epoch_id);
+        let mut sorted_dirty_addresses = accounts
+            .iter()
+            .filter_map(|(address, entry)| {
+                if entry.is_dirty() {
+                    Some(address.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        sorted_dirty_addresses.sort();
+        for address in &sorted_dirty_addresses {
+            let entry = accounts.get_mut(address).unwrap();
+            // FIXME: use a fixed order to sort accounts.
+            /*
+        }
         for (address, ref mut entry) in accounts
-            .iter_mut()
-            .filter(|&(_, ref entry)| entry.is_dirty())
-        {
+                .iter_mut()
+                .filter(|&(_, ref entry)| entry.is_dirty())
+            {
+            */
             entry.state = AccountState::Committed;
             if let Some(ref mut account) = entry.account {
-                txpool.notify_ready(address, &account.as_account());
+                accounts_for_txpool.push(account.as_account());
                 account.commit(&mut self.db)?;
                 self.db.set::<Account>(
                     &StorageKey::new_account_key(address),
@@ -302,6 +321,14 @@ impl<'a> State<'a> {
             }
         }
         self.db.commit(epoch_id)?;
+        {
+            let txpool_clone = txpool.clone();
+            std::thread::Builder::new()
+                .name("txpool_update_state".into())
+                .spawn(move || {
+                    txpool_clone.notify_state_start(accounts_for_txpool);
+                });
+        }
         Ok(())
     }
 
