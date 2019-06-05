@@ -2145,8 +2145,9 @@ impl ConsensusGraph {
         }
         let parent_idx =
             *inner.indices.get(block.block_header.parent_hash()).unwrap();
-        let past_difficulty =
-            inner.arena[parent_idx].past_difficulty + difficulty_in_my_epoch;
+        let past_difficulty = inner.arena[parent_idx].past_difficulty
+            + inner.arena[parent_idx].difficulty
+            + difficulty_in_my_epoch;
 
         let (me, indices_len) =
             inner.insert(block.as_ref(), past_difficulty, is_heavy);
@@ -2283,8 +2284,9 @@ impl ConsensusGraph {
 
         let parent_idx =
             *inner.indices.get(block.block_header.parent_hash()).unwrap();
-        let past_difficulty =
-            inner.arena[parent_idx].past_difficulty + inner.arena[parent_idx].difficulty + difficulty_in_my_epoch;
+        let past_difficulty = inner.arena[parent_idx].past_difficulty
+            + inner.arena[parent_idx].difficulty
+            + difficulty_in_my_epoch;
 
         let (me, indices_len) =
             inner.insert(block.as_ref(), past_difficulty, is_heavy);
