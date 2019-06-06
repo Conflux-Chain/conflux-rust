@@ -4,7 +4,11 @@
 
 use blockgen::BlockGeneratorConfig;
 use cfxcore::{
-    consensus::ConsensusConfig,
+    consensus::{
+        ConsensusConfig, ConsensusInnerConfig,
+        ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
+        ADAPTIVE_WEIGHT_DEFAULT_BETA,
+    },
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
@@ -223,9 +227,14 @@ impl Configuration {
                 .debug_dump_dir_invalid_state_root
                 .clone(),
             record_tx_address: self.raw_conf.record_tx_address,
-            enable_optimistic_execution: self
-                .raw_conf
-                .enable_optimistic_execution,
+            inner_conf: ConsensusInnerConfig {
+                adaptive_weight_alpha_num: ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
+                adaptive_weight_alpha_den: ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN,
+                adaptive_weight_beta: ADAPTIVE_WEIGHT_DEFAULT_BETA,
+                enable_optimistic_execution: self
+                    .raw_conf
+                    .enable_optimistic_execution,
+            },
             bench_mode: false,
         }
     }
