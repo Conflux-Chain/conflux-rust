@@ -94,6 +94,9 @@ build_config! {
         (record_tx_address, (bool), true)
         // TODO Set default to true when we have new tx pool implementation
         (enable_optimistic_execution, (bool), false)
+        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
+        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
+        (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 5000)
@@ -228,9 +231,9 @@ impl Configuration {
                 .clone(),
             record_tx_address: self.raw_conf.record_tx_address,
             inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-                adaptive_weight_alpha_den: ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN,
-                adaptive_weight_beta: ADAPTIVE_WEIGHT_DEFAULT_BETA,
+                adaptive_weight_alpha_num: self.raw_conf.adaptive_weight_alpha_num,
+                adaptive_weight_alpha_den: self.raw_conf.adaptive_weight_alpha_den,
+                adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 enable_optimistic_execution: self
                     .raw_conf
                     .enable_optimistic_execution,

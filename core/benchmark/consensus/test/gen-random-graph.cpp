@@ -6,7 +6,11 @@
 #include <cstring>
 #include <unistd.h>
 
-const int N = 10000;
+const int ALPHA_NUM = 2;
+const int ALPHA_DEN = 3;
+const int BETA = 8;
+const double ALPHA = ((double)ALPHA_NUM) / ALPHA_DEN;
+const int N = 12;
 const int M = 3;
 const int MIN_GAP = 2;
 const int MAX_GAP = 30;
@@ -16,9 +20,10 @@ int local_clock[N + 1][M];
 int current_clock[M];
 int parent[N + 1];
 int block_group[N + 1], block_gidx[N + 1];
-int is_valid[N + 1];
+int is_valid[N + 1], is_stable[N + 1];
 
 int subtree_weight[N + 1];
+int past_weight[N + 1];
 bool consider[N + 1];
 
 bool should_consider(int v, int g) {
@@ -29,9 +34,12 @@ bool should_consider(int v, int g) {
     return true;
 }
 
+int tot_cnt;
+
 void mark_consider(int v, int g) {
     if (!should_consider(v, g)) return;
     consider[v] = true;
+    tot_cnt ++;
     for (int i = 0; i < children[v].size(); i++) {
         mark_consider(children[v][i], g);
     }
@@ -50,13 +58,16 @@ void compute_subtree(int v) {
     subtree_weight[v] = sum;
 }
 
-int find_parent(int n, int g) {
+void process(int n, int g) {
     memset(subtree_weight, 0, sizeof(subtree_weight));
     memset(consider, 0, sizeof(consider));
+    tot_cnt = 0;
     mark_consider(0, g);
     compute_subtree(0);
 
+    int last = -1;
     int current = 0;
+    is_stable[n] = 1;
     while (true) {
         int largest_child = -1;
         int largest_weight = -1;
@@ -73,12 +84,21 @@ int find_parent(int n, int g) {
             }
         if (cnt > 1) {
             //fprintf(stderr, "current %d weight %d\n", current, largest_weight);
-            return -1;
+            parent[n] = -1;
+            return;
         }
         if (largest_child == -1) break;
+        last = current;
         current = largest_child;
+
+        int g = tot_cnt - past_weight[last] - 1;
+        int f = subtree_weight[current];
+        if (g > BETA && f - g * ALPHA < 0) {
+            is_stable[n] = 0;
+        }
     }
-    return current;
+    parent[n] = current;
+    past_weight[n] = tot_cnt;
 }
 
 int main() {
@@ -87,11 +107,12 @@ int main() {
     children[0].clear();
     parent[0] = -1;
     is_valid[0] = 1;
+    is_stable[0] = 1;
     block_group[0] = -1;
     block_gidx[0] = -1;
 
     unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 1497907772;
+    // unsigned seed = 1827927864;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
@@ -103,6 +124,7 @@ int main() {
         children[0].push_back(i);
         parent[i] = 0;
         is_valid[i] = 1;
+        is_stable[i] = 1;
         groups[i - 1].push_back(0);
         groups[i - 1].push_back(i);
         for (int j = 0; j < M; j++)
@@ -122,20 +144,16 @@ int main() {
                 current_clock[j] = local_clock[last_bidx][j];
             std::vector<int> tmp;
             tmp.clear();
-            // refs[i].clear();
             for (int j = 0; j < M; j++) {
                 if (j == g) continue;
                 if (groups[j].size() - 1 - current_clock[j] < MIN_GAP)
                     continue;
                 if (groups[j].size() - 1 - current_clock[j] > MAX_GAP) {
                     tmp.push_back(groups[j][groups[j].size() - 1 - MAX_GAP]);
-                    // refs[i].push_back(groups[j][tips_idx[g][j]]);
                 } else {
                     int step = rand() % 3;
                     if (step > 0) {
-                        // tips_idx[g][j] += step;
                         tmp.push_back(groups[j][current_clock[j] + step]);
-                        // refs[i].push_back(groups[j][tips_idx[g][j]]);
                     }
                 }
             }
@@ -153,7 +171,7 @@ int main() {
                             current_clock[k] = local_clock[bidx][k];
                 }
             }
-            parent[i] = find_parent(i, g);
+            process(i, g);
         } while (parent[i] == -1);
 
         is_valid[i] = 1;
@@ -189,8 +207,9 @@ int main() {
 
     std::ofstream fout;
     fout.open("rand.in", std::ios::out);
+    fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << "\n";
     for (int i = 1; i <=N; i++) {
-        fout << is_valid[i] << " " << parent[i];
+        fout << is_valid[i] << " " << is_stable[i] << " " << parent[i];
         for (int j = 0; j < refs[i].size(); j++)
             if (refs[i][j] != parent[i])
                 fout << " " << refs[i][j];

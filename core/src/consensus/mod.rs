@@ -424,18 +424,27 @@ impl ConsensusGraphInner {
             let w = total_difficulty
                 - self.arena[grandparent].past_difficulty
                 - self.arena[parent].difficulty;
-            if w > U256::from(self.inner_conf.adaptive_weight_beta) {
+            if w > U256::from(self.inner_conf.adaptive_weight_beta)
+                * self.current_difficulty
+            {
                 break;
             }
             parent = grandparent;
         }
 
-        let stable = !(U256::from(self.stable_tree.path_aggregate(parent))
-            < total_difficulty
-                * U256::from(self.inner_conf.adaptive_weight_alpha_num));
+        let a = U256::from(self.stable_tree.path_aggregate(parent));
+        let b = total_difficulty
+            * U256::from(self.inner_conf.adaptive_weight_alpha_num);
+
+        let stable = if parent != self.genesis_block_index {
+            !(a < b)
+        } else {
+            true
+        };
         let adaptive = false;
 
         if !stable {
+            debug!("block is unstable: {:?} < {:?}!", a, b);
             parent = self.arena[me].parent;
 
             while parent != self.genesis_block_index {
@@ -454,6 +463,8 @@ impl ConsensusGraphInner {
                 //                    adaptive = true;
                 //                }
             }
+        } else {
+            debug!("block is unstable: {:?} >= {:?}!", a, b);
         }
 
         for index in anticone {
