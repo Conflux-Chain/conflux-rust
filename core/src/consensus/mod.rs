@@ -308,6 +308,12 @@ impl ConsensusGraphInner {
         inner
     }
 
+    pub fn is_heavier(
+        a: (&SignedBigNum, &H256), b: (&SignedBigNum, &H256),
+    ) -> bool {
+        (*a.0 > *b.0) || ((*a.0 == *b.0) && (*a.1 > *b.1))
+    }
+
     pub fn get_optimistic_execution_task(
         &mut self, data_man: &BlockDataManager,
     ) -> Option<EpochExecutionTask> {
@@ -669,10 +675,10 @@ impl ConsensusGraphInner {
             let fork_subtree_weight = self.weight_tree.get(fork);
             let pivot_subtree_weight = self.weight_tree.get(pivot);
 
-            if (fork_subtree_weight > pivot_subtree_weight)
-                || ((fork_subtree_weight == pivot_subtree_weight)
-                    && (self.arena[fork].hash > self.arena[pivot].hash))
-            {
+            if ConsensusGraphInner::is_heavier(
+                (&fork_subtree_weight, &self.arena[fork].hash),
+                (&pivot_subtree_weight, &self.arena[pivot].hash),
+            ) {
                 valid = false;
                 break;
             }
@@ -2013,14 +2019,14 @@ impl ConsensusGraph {
             loop {
                 new_pivot_chain.push(u);
                 let mut heaviest = NULL;
-                let mut heaviest_weight = U256::zero();
+                let mut heaviest_weight = SignedBigNum::zero();
                 for index in &inner.arena[u].children {
-                    let weight = U256::from(inner.weight_tree.get(*index));
+                    let weight = inner.weight_tree.get(*index);
                     if heaviest == NULL
-                        || weight > heaviest_weight
-                        || (weight == heaviest_weight
-                            && inner.arena[*index].hash
-                                > inner.arena[heaviest].hash)
+                        || ConsensusGraphInner::is_heavier(
+                            (&weight, &inner.arena[*index].hash),
+                            (&heaviest_weight, &inner.arena[heaviest].hash),
+                        )
                     {
                         heaviest = *index;
                         heaviest_weight = weight;
@@ -2408,24 +2414,24 @@ impl ConsensusGraph {
             let new = inner.weight_tree.ancestor_at(me, fork_at as usize);
             let new_weight = inner.weight_tree.get(new);
 
-            if prev_weight < new_weight
-                || (prev_weight == new_weight
-                    && inner.arena[prev].hash < inner.arena[new].hash)
-            {
+            if ConsensusGraphInner::is_heavier(
+                (&new_weight, &inner.arena[new].hash),
+                (&prev_weight, &inner.arena[prev].hash),
+            ) {
                 // The new subtree is heavier, update pivot chain
                 new_pivot_chain.truncate(fork_at);
                 let mut u = new;
                 loop {
                     new_pivot_chain.push(u);
                     let mut heaviest = NULL;
-                    let mut heaviest_weight = U256::zero();
+                    let mut heaviest_weight = SignedBigNum::zero();
                     for index in &inner.arena[u].children {
-                        let weight = U256::from(inner.weight_tree.get(*index));
+                        let weight = inner.weight_tree.get(*index);
                         if heaviest == NULL
-                            || weight > heaviest_weight
-                            || (weight == heaviest_weight
-                                && inner.arena[*index].hash
-                                    > inner.arena[heaviest].hash)
+                            || ConsensusGraphInner::is_heavier(
+                                (&weight, &inner.arena[*index].hash),
+                                (&heaviest_weight, &inner.arena[heaviest].hash),
+                            )
                         {
                             heaviest = *index;
                             heaviest_weight = weight;
