@@ -31,6 +31,18 @@ impl Gauge {
         }
     }
 
+    pub fn add(&self, delta: i64) {
+        if let Some(ref gauge) = self.inner {
+            gauge.add(delta);
+        }
+    }
+
+    pub fn sub(&self, delta: i64) {
+        if let Some(ref gauge) = self.inner {
+            gauge.sub(delta);
+        }
+    }
+
     pub fn update(&self, value: i64) {
         if let Some(ref gauge) = self.inner {
             gauge.set(value);
