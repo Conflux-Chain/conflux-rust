@@ -273,10 +273,10 @@ impl ConsensusGraphInner {
         // At current point, genesis block is not in synchronization graph,
         // so we cannot compute its past_difficulty from
         // sync_graph.total_difficulty_in_own_epoch().
-        // For genesis block, its past_difficulty is simply its own difficulty.
+        // For genesis block, its past_difficulty is simply zero.
         let (genesis_index, _) = inner.insert(
             data_man.genesis_block().as_ref(),
-            *data_man.genesis_block().block_header.difficulty(),
+            U256::zero(),
             false,
         );
         inner.genesis_block_index = genesis_index;
@@ -425,13 +425,15 @@ impl ConsensusGraphInner {
             U256::from(self.weight_tree.get(self.genesis_block_index));
         debug!("total_difficulty before insert: {}", total_difficulty);
 
+        let adjusted_beta = U256::from(self.inner_conf.adaptive_weight_beta)
+            * self.current_difficulty;
+
         while parent != self.genesis_block_index {
             let grandparent = self.arena[parent].parent;
             let w = total_difficulty
                 - self.arena[grandparent].past_difficulty
-                - self.arena[parent].difficulty;
-            if w > U256::from(self.inner_conf.adaptive_weight_beta)
-                * self.current_difficulty
+                - self.arena[grandparent].difficulty;
+            if w > adjusted_beta
             {
                 break;
             }
@@ -456,7 +458,7 @@ impl ConsensusGraphInner {
             while parent != self.genesis_block_index {
                 let grandparent = self.arena[parent].parent;
                 let w = U256::from(self.weight_tree.get(grandparent));
-                if w > U256::from(self.inner_conf.adaptive_weight_beta) {
+                if w > adjusted_beta {
                     break;
                 }
                 parent = grandparent;
@@ -470,7 +472,11 @@ impl ConsensusGraphInner {
                 //                }
             }
         } else {
-            debug!("block is unstable: {:?} >= {:?}!", a, b);
+            if parent != self.genesis_block_index {
+                debug!("block is stable: {:?} >= {:?}", a, b);
+            } else {
+                debug!("block is stable: too close to genesis, adjusted beta {:?}", adjusted_beta);
+            }
         }
 
         for index in anticone {
