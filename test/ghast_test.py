@@ -23,6 +23,8 @@ class GHASTTest(ConfluxTestFramework):
         # print(client0.block_by_hash(genesis))
 
         a = self.nodes[0].generatefixedblock(genesis, [], 0, INITIAL_DIFFICULTY)
+        block_a = client0.block_by_hash(a)
+        assert(block_a['stable'] == True)
         b = self.nodes[0].generatefixedblock(a, [], 0, INITIAL_DIFFICULTY)
         c = self.nodes[0].generatefixedblock(genesis, [], 0, INITIAL_DIFFICULTY)
         d = self.nodes[0].generatefixedblock(c, [], 0, INITIAL_DIFFICULTY)
