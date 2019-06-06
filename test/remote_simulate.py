@@ -127,6 +127,8 @@ class P2PTest(ConfluxTestFramework):
         )
 
     def after_options_parsed(self):
+        ConfluxTestFramework.after_options_parsed(self)
+
         self.num_nodes = self.options.nodes_per_host
 
         self.ips = []
