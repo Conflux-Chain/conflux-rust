@@ -61,7 +61,7 @@ fn create_simple_block(
         .inner
         .read()
         .expected_difficulty(&parent_hash);
-    assert!(exp_diff == U256::from(10), "Difficuulty hike is not simple!");
+    assert!(exp_diff == U256::from(10), "Difficulty hike in bench is not supported yet!");
     let nonce = sync.block_count() as u64 + 1;
     create_simple_block_impl(
         parent_hash,
