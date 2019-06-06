@@ -7,6 +7,10 @@ use cfx_types::{Address, H256, U256};
 use cfxcore::{
     cache_manager::CacheManager,
     consensus::{ConsensusConfig, ConsensusGraph},
+    consensus::ConsensusInnerConfig,
+    consensus::ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN,
+    consensus::ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
+    consensus::ADAPTIVE_WEIGHT_DEFAULT_BETA,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -116,7 +120,12 @@ fn initialize_consensus_graph_for_test(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/".to_string(),
             record_tx_address: true,
-            enable_optimistic_execution: false,
+            inner_conf: ConsensusInnerConfig {
+                adaptive_weight_alpha_num: ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
+                adaptive_weight_alpha_den: ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN,
+                adaptive_weight_beta: ADAPTIVE_WEIGHT_DEFAULT_BETA,
+                enable_optimistic_execution: false,
+            },
             bench_mode: true, // Set bench_mode to true so that we skip execution
         },
         genesis_block,
