@@ -183,11 +183,11 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
             {
                 conf_builder = conf_builder.logger(
                     Logger::builder()
-                        .build(*crate_name, LevelFilter::Debug),
+                        .build(*crate_name, log_level),
                 );
             }
         conf_builder
-            .build(root_builder.build(LevelFilter::Debug))
+            .build(root_builder.build(log_level))
             .unwrap()
     };
 
@@ -195,7 +195,7 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
 }
 
 fn main() {
-    // initialize_logger("./__consensus_bench.log", LevelFilter::Info);
+    initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
 
     let args: Vec<String> = env::args().collect();
     let mut input_file = "./seq.in";

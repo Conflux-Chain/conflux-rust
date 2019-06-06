@@ -8,9 +8,9 @@
 
 const int ALPHA_NUM = 2;
 const int ALPHA_DEN = 3;
-const int BETA = 10;
+const int BETA = 8;
 const double ALPHA = ((double)ALPHA_NUM) / ALPHA_DEN;
-const int N = 30;
+const int N = 12;
 const int M = 3;
 const int MIN_GAP = 2;
 const int MAX_GAP = 30;
@@ -144,20 +144,16 @@ int main() {
                 current_clock[j] = local_clock[last_bidx][j];
             std::vector<int> tmp;
             tmp.clear();
-            // refs[i].clear();
             for (int j = 0; j < M; j++) {
                 if (j == g) continue;
                 if (groups[j].size() - 1 - current_clock[j] < MIN_GAP)
                     continue;
                 if (groups[j].size() - 1 - current_clock[j] > MAX_GAP) {
                     tmp.push_back(groups[j][groups[j].size() - 1 - MAX_GAP]);
-                    // refs[i].push_back(groups[j][tips_idx[g][j]]);
                 } else {
                     int step = rand() % 3;
                     if (step > 0) {
-                        // tips_idx[g][j] += step;
                         tmp.push_back(groups[j][current_clock[j] + step]);
-                        // refs[i].push_back(groups[j][tips_idx[g][j]]);
                     }
                 }
             }

@@ -462,6 +462,8 @@ impl ConsensusGraphInner {
                 //                    adaptive = true;
                 //                }
             }
+        } else {
+            debug!("block is unstable: {:?} >= {:?}!", a, b);
         }
 
         for index in anticone {
