@@ -273,7 +273,7 @@ impl ConsensusGraphInner {
         // At current point, genesis block is not in synchronization graph,
         // so we cannot compute its past_difficulty from
         // sync_graph.total_difficulty_in_own_epoch().
-        // For genesis block, its past_difficulty is simply its own difficulty.
+        // For genesis block, its past_difficulty is simply zero.
         let (genesis_index, _) = inner.insert(
             data_man.genesis_block().as_ref(),
             U256::zero(),
