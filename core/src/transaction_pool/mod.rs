@@ -35,6 +35,11 @@ use std::{
     sync::{mpsc::channel, Arc},
 };
 use threadpool::ThreadPool;
+use metrics::Gauge;
+
+lazy_static! {
+    static ref TX_POOL_GAUGE: Gauge = Gauge::register("tx_pool_size");
+}
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
 pub const DEFAULT_MAX_TRANSACTION_GAS_LIMIT: u64 = 100_000_000;
@@ -372,6 +377,10 @@ impl TransactionPool {
                 .map(|tx| tx.clone())
                 .filter(|tx| {
                     let tx_hash = tx.hash();
+                    // Sample 1/128 transactions
+                    if tx_hash[0] & 254 == 0 {
+                        debug!("Sampled transaction {:?}", tx_hash);
+                    }
                     let inserted = tx_cache.contains_key(&tx_hash)
                         || unexecuted_transaction_addresses
                             .contains_key(&tx_hash);
@@ -510,6 +519,7 @@ impl TransactionPool {
                 }
             }
         }
+        TX_POOL_GAUGE.update(self.len() as i64);
 
         transactions
             .iter()

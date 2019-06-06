@@ -378,6 +378,7 @@ impl RequestManager {
             (indices, tx_ids)
         };
         TX_REQUEST_GAUGE.update(tx_ids.len() as i64);
+        debug!("Request {} tx from peer={}", tx_ids.len(), peer_id);
         if let Err(e) = self.request_handler.send_request(
             io,
             peer_id,
