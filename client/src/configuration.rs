@@ -231,8 +231,12 @@ impl Configuration {
                 .clone(),
             record_tx_address: self.raw_conf.record_tx_address,
             inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: self.raw_conf.adaptive_weight_alpha_num,
-                adaptive_weight_alpha_den: self.raw_conf.adaptive_weight_alpha_den,
+                adaptive_weight_alpha_num: self
+                    .raw_conf
+                    .adaptive_weight_alpha_num,
+                adaptive_weight_alpha_den: self
+                    .raw_conf
+                    .adaptive_weight_alpha_den,
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 enable_optimistic_execution: self
                     .raw_conf

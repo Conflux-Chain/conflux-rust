@@ -112,6 +112,7 @@ impl RequestHandler {
         let now = Instant::now();
         let mut timeout_requests = Vec::new();
         {
+            let mut peers = self.peers.lock();
             let mut requests = self.requests_queue.lock();
             loop {
                 if requests.is_empty() {
@@ -126,11 +127,17 @@ impl RequestHandler {
                     break;
                 } else {
                     // TODO And should handle timeout peers.
-                    if let Ok(req) = self.match_request(
-                        io,
-                        sync_req.peer_id,
-                        sync_req.request_id,
-                    ) {
+                    if let Some(req) =
+                        peers.get_mut(&sync_req.peer_id).and_then(|peer| {
+                            peer.match_request(
+                                io,
+                                sync_req.request_id,
+                                &mut *requests,
+                                &self.protocol_config,
+                            )
+                            .ok()
+                        })
+                    {
                         timeout_requests.push(req);
                     } else {
                         debug!("Timeout a removed request {:?}", sync_req);
