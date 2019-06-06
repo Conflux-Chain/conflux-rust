@@ -206,6 +206,7 @@ pub struct ConsensusGraphInner {
     // adaptive_tree maintains d * SubStableTW(B, x) - n * SubTW(B, P(x))
     adaptive_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
+    // It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
     // data_man is the handle to access raw block data
     data_man: Arc<BlockDataManager>,
