@@ -120,6 +120,7 @@ class LatencyExperiment(ArgumentHolder):
         self.bandwidth = 20
         self.tps = 4000
         self.enable_tx_propagation = False
+        self.metrics_report_interval_ms = 3000
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
@@ -151,9 +152,12 @@ class LatencyExperiment(ArgumentHolder):
             print("Computing latencies ...")
             self.stat_latency(config)
 
+            print("Collecting metrics ...")
+            execute("sh copy_metrics.sh {} > /dev/null".format(self.tag(config)), 3, "collect metrics")
+
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
-        os.system("tar cvfz {} {} *.csv".format(self.stat_archive_file, self.stat_log_file))
+        os.system("tar cvfz {} {} *.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
         execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
@@ -173,7 +177,8 @@ class LatencyExperiment(ArgumentHolder):
             "--throttling", self.throttling,
             "--storage-memory-mb", str(self.storage_memory_mb),
             "--tps", str(self.tps),
-            "--bandwidth", str(self.bandwidth)
+            "--bandwidth", str(self.bandwidth),
+            "--metrics-report-interval-ms", str(self.metrics_report_interval_ms),
         ]
 
         if config.data_propagate_enabled:
@@ -196,16 +201,16 @@ class LatencyExperiment(ArgumentHolder):
 
         os.system('grep "(ERROR)" {}'.format(self.simulate_log_file))
 
-    def stat_latency(self, config:RemoteSimulateConfig):
+    def tag(self, config:RemoteSimulateConfig):
         block_size_kb = config.txs_per_block * config.tx_size // 1000
-
-        tag = "{}ms_{}k_{}vms_{}nodes".format(
+        return "{}ms_{}k_{}vms_{}nodes".format(
             config.block_gen_interval_ms,
             block_size_kb,
             self.vms,
             self.nodes_per_host,
         )
 
+    def stat_latency(self, config:RemoteSimulateConfig):
         os.system("echo ============================================================ >> {}".format(self.stat_log_file))
 
         if config.data_propagate_enabled:
@@ -214,7 +219,7 @@ class LatencyExperiment(ArgumentHolder):
             ))
 
         print("begin to statistic relay latency ...")
-        ret = os.system("python3 stat_latency.py {0} logs {0}.csv >> {1}".format(tag, self.stat_log_file))
+        ret = os.system("python3 stat_latency.py {0} logs {0}.csv >> {1}".format(self.tag(config), self.stat_log_file))
         assert ret == 0, "Failed to statistic block relay latency, return code = {}".format(ret)
 
         if self.stat_confirmation_latency:
