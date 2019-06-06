@@ -8,9 +8,9 @@
 
 const int ALPHA_NUM = 2;
 const int ALPHA_DEN = 3;
-const int BETA = 8;
+const int BETA = 100;
 const double ALPHA = ((double)ALPHA_NUM) / ALPHA_DEN;
-const int N = 12;
+const int N = 100;
 const int M = 3;
 const int MIN_GAP = 2;
 const int MAX_GAP = 30;
@@ -111,8 +111,8 @@ int main() {
     block_group[0] = -1;
     block_gidx[0] = -1;
 
-    unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 1827927864;
+    // unsigned seed = (unsigned) time(NULL) * getpid();
+    unsigned seed = 1320762925;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
