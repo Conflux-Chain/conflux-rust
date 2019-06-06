@@ -338,6 +338,7 @@ impl MinLinkCutTree {
             self.tree[u].parent = NULL;
             self.splay(leftmost);
 
+            assert_eq!(self.tree[v].catepillar_delta, SignedBigNum::zero());
             self.tree[leftmost].value =
                 self.tree[leftmost].value - self.tree[v].catepillar_value;
             self.tree[leftmost].delta =
@@ -374,6 +375,7 @@ impl MinLinkCutTree {
                 self.tree[u].parent = NULL;
                 self.splay(leftmost);
 
+                assert_eq!(self.tree[w].catepillar_delta, SignedBigNum::zero());
                 self.tree[leftmost].value =
                     self.tree[leftmost].value - self.tree[w].catepillar_value;
                 self.update(leftmost);
