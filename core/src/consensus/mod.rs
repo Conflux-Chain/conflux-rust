@@ -1897,14 +1897,12 @@ impl ConsensusGraph {
         }
 
         // Check whether the new block select the correct parent block
-        if inner.arena[new].parent != *inner.pivot_chain.last().unwrap() {
-            if !inner.check_correct_parent(new, sync_graph) {
-                warn!(
-                    "Partially invalid due to picking incorrect parent. {:?}",
-                    block.block_header.clone()
-                );
-                return false;
-            }
+        if !inner.check_correct_parent(new, sync_graph) {
+            warn!(
+                "Partially invalid due to picking incorrect parent. {:?}",
+                block.block_header.clone()
+            );
+            return false;
         }
 
         // Check heavy block
