@@ -433,8 +433,7 @@ impl ConsensusGraphInner {
             let w = total_difficulty
                 - self.arena[grandparent].past_difficulty
                 - self.arena[grandparent].difficulty;
-            if w > adjusted_beta
-            {
+            if w > adjusted_beta {
                 break;
             }
             parent = grandparent;
@@ -475,7 +474,10 @@ impl ConsensusGraphInner {
             if parent != self.genesis_block_index {
                 debug!("block is stable: {:?} >= {:?}", a, b);
             } else {
-                debug!("block is stable: too close to genesis, adjusted beta {:?}", adjusted_beta);
+                debug!(
+                    "block is stable: too close to genesis, adjusted beta {:?}",
+                    adjusted_beta
+                );
             }
         }
 
@@ -1897,14 +1899,12 @@ impl ConsensusGraph {
         }
 
         // Check whether the new block select the correct parent block
-        if inner.arena[new].parent != *inner.pivot_chain.last().unwrap() {
-            if !inner.check_correct_parent(new, sync_graph) {
-                warn!(
-                    "Partially invalid due to picking incorrect parent. {:?}",
-                    block.block_header.clone()
-                );
-                return false;
-            }
+        if !inner.check_correct_parent(new, sync_graph) {
+            warn!(
+                "Partially invalid due to picking incorrect parent. {:?}",
+                block.block_header.clone()
+            );
+            return false;
         }
 
         // Check heavy block
@@ -2221,9 +2221,9 @@ impl ConsensusGraph {
             &SignedBigNum::pos(
                 U256::from(inner.inner_conf.adaptive_weight_alpha_num)
                     * U256::from(
-                    inner.arena[parent].difficulty
-                        + inner.arena[parent].past_difficulty,
-                ),
+                        inner.arena[parent].difficulty
+                            + inner.arena[parent].past_difficulty,
+                    ),
             ),
         );
 
@@ -2351,7 +2351,6 @@ impl ConsensusGraph {
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
 
-
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
         for tx in block.transactions.iter() {
@@ -2381,9 +2380,9 @@ impl ConsensusGraph {
             &SignedBigNum::pos(
                 U256::from(inner.inner_conf.adaptive_weight_alpha_num)
                     * U256::from(
-                    inner.arena[parent].difficulty
-                        + inner.arena[parent].past_difficulty,
-                ),
+                        inner.arena[parent].difficulty
+                            + inner.arena[parent].past_difficulty,
+                    ),
             ),
         );
 
