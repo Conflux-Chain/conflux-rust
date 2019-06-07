@@ -7,6 +7,10 @@ use cfx_types::{Address, H256, U256};
 use cfxcore::{
     cache_manager::CacheManager,
     consensus::{ConsensusConfig, ConsensusGraph},
+    consensus::ConsensusInnerConfig,
+    consensus::ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN,
+    consensus::ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
+    consensus::ADAPTIVE_WEIGHT_DEFAULT_BETA,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -28,6 +32,7 @@ use log::LevelFilter;
 use std::fs;
 use std::str::FromStr;
 use std::env;
+use std::collections::HashSet;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
@@ -56,6 +61,7 @@ fn create_simple_block(
         .inner
         .read()
         .expected_difficulty(&parent_hash);
+    assert!(exp_diff == U256::from(10), "Difficulty hike in bench is not supported yet!");
     let nonce = sync.block_count() as u64 + 1;
     create_simple_block_impl(
         parent_hash,
@@ -68,6 +74,7 @@ fn create_simple_block(
 
 fn initialize_consensus_graph_for_test(
     genesis_block: Block, db_dir: &str,
+    alpha_den: u64, alpha_num: u64, beta: u64,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -115,7 +122,12 @@ fn initialize_consensus_graph_for_test(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/".to_string(),
             record_tx_address: true,
-            enable_optimistic_execution: false,
+            inner_conf: ConsensusInnerConfig {
+                adaptive_weight_alpha_num: alpha_num,
+                adaptive_weight_alpha_den: alpha_den,
+                adaptive_weight_beta: beta,
+                enable_optimistic_execution: false,
+            },
             bench_mode: true, // Set bench_mode to true so that we skip execution
         },
         genesis_block,
@@ -171,11 +183,11 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
             {
                 conf_builder = conf_builder.logger(
                     Logger::builder()
-                        .build(*crate_name, LevelFilter::Info),
+                        .build(*crate_name, log_level),
                 );
             }
         conf_builder
-            .build(root_builder.build(LevelFilter::Info))
+            .build(root_builder.build(log_level))
             .unwrap()
     };
 
@@ -183,7 +195,7 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
 }
 
 fn main() {
-    // initialize_logger("./__consensus_bench.log", LevelFilter::Info);
+    // initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
 
     let args: Vec<String> = env::args().collect();
     let mut input_file = "./seq.in";
@@ -192,42 +204,67 @@ fn main() {
     }
     let db_dir = "./__consensus_bench_db";
 
+    // Parse adaptive weight parameters
+    let content = fs::read_to_string(input_file).expect("Cannot open the block sequence input file!");
+    let mut lines = content.split("\n");
+    let line = lines.next().unwrap();
+    let mut tokens = line.split_whitespace();
+    let alpha_num = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
+    let alpha_den = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
+    let beta = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
+    println!("alpha = {}/{} beta = {}", alpha_num, alpha_den, beta);
+
     let (genesis_hash, genesis_block) =
         create_simple_block_impl(H256::default(), vec![], 0, 0, U256::from(10));
 
     let (sync, consensus) = initialize_consensus_graph_for_test(
         genesis_block.clone(),
         db_dir,
+        alpha_den,
+        alpha_num,
+        beta,
     );
 
     let mut hashes = Vec::new();
     hashes.push(genesis_block.hash());
-    let content = fs::read_to_string(input_file).expect("Cannot open the block sequence input file!");
-    let lines = content.split("\n");
 
     let start_time = time::SystemTime::now();
     let mut last_check_time = start_time;
     let mut last_sync_block_cnt = sync.block_count();
     let mut last_consensus_block_cnt = consensus.block_count();
+    let mut valid_indices = HashSet::new();
+    let mut stable_indices = HashSet::new();
     for s in lines {
         if s.starts_with("//") {
             continue;
         }
         let tokens = s.split_whitespace();
-        let mut first = true;
+        let mut cnt = 0;
         let mut parent_idx = 0;
         let mut ref_idxs = Vec::new();
+        let mut is_valid = 0;
+        let mut is_stable = 0;
         for w in tokens {
-            if first {
+            if cnt == 0 {
+                is_valid = u32::from_str(w).expect("Cannot parse the input file!");
+            } else if cnt == 1 {
+                is_stable = u32::from_str(w).expect("Cannot parse the input file!");
+            } else if cnt == 2 {
                 parent_idx = usize::from_str(w).expect("Cannot parse the input file!");
-                first = false;
             } else {
                 let ref_idx = usize::from_str(w).expect("Cannot parse the input file!");
                 ref_idxs.push(ref_idx);
             }
+            cnt += 1;
         }
-        if first {
+        if cnt == 0 {
             continue;
+        }
+        if is_valid == 1 {
+            valid_indices.insert(hashes.len());
+        }
+        if is_stable == 1 {
+            stable_indices.insert(hashes.len());
         }
         let mut ref_hashes = Vec::new();
         for ref_idx in ref_idxs.iter() {
@@ -271,4 +308,17 @@ fn main() {
     println!("Pivot chain hash: {}", consensus.best_block_hash());
     println!("Last block hash: {}", hashes[hashes.len() - 1]);
     println!("Elapsed {}", start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
+
+    let n = hashes.len();
+    for i in 1..n {
+        let partial_invalid = consensus.inner.read().is_partial_invalid(&hashes[i]).unwrap();
+        let invalid = !valid_indices.contains(&i);
+        assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
+        if (!invalid) {
+            let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
+            let stable1 = stable_indices.contains(&i);
+            assert!(stable0 == stable1, "Block {} stable status: Consensus graph {} != actual {}", i, stable0, stable1);
+        }
+    }
+
 }

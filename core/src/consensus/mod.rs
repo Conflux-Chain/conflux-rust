@@ -67,24 +67,40 @@ const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
 const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
 const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
-const ADAPTIVE_WEIGHT_ALPHA_NUM: u64 = 2;
-const ADAPTIVE_WEIGHT_ALPHA_DEN: u64 = 3;
-const ADAPTIVE_WEIGHT_BETA: u64 = 1000;
+pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM: u64 = 2;
+pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN: u64 = 3;
+pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
 
 const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
+
+#[derive(Copy, Clone)]
+pub struct ConsensusInnerConfig {
+    // num/den is the actual adaptive alpha parameter in GHAST. We use a
+    // fraction to get around the floating point problem
+    pub adaptive_weight_alpha_num: u64,
+    pub adaptive_weight_alpha_den: u64,
+    // Beta is the threshold in GHAST algorithm
+    pub adaptive_weight_beta: u64,
+    // Optimistic execution is the feature to execute ahead of the deferred
+    // execution boundary. The goal is to pipeline the transaction
+    // execution and the block packaging and verification.
+    // optimistic_executed_height is the number of step to go ahead
+    pub enable_optimistic_execution: bool,
+}
 
 pub struct ConsensusConfig {
     // If we hit invalid state root, we will dump the information into a
     // directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: String,
     pub record_tx_address: bool,
-    pub enable_optimistic_execution: bool,
     // When bench_mode is true, the PoW solution verification will be skipped.
     // The transaction execution will also be skipped and only return the
     // pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
     // only
     pub bench_mode: bool,
+    // The configuration used by inner data
+    pub inner_conf: ConsensusInnerConfig,
 }
 
 #[derive(Debug)]
@@ -190,6 +206,7 @@ pub struct ConsensusGraphInner {
     // adaptive_tree maintains d * SubStableTW(B, x) - n * SubTW(B, P(x))
     adaptive_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
+    // It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
     // data_man is the handle to access raw block data
     data_man: Arc<BlockDataManager>,
@@ -198,7 +215,7 @@ pub struct ConsensusGraphInner {
     // execution and the block packaging and verification.
     // optimistic_executed_height is the number of step to go ahead
     optimistic_executed_height: Option<usize>,
-    enable_optimistic_execution: bool,
+    inner_conf: ConsensusInnerConfig,
 }
 
 pub struct ConsensusGraphNode {
@@ -220,7 +237,7 @@ pub struct ConsensusGraphNode {
 impl ConsensusGraphInner {
     pub fn with_genesis_block(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
-        enable_optimistic_execution: bool,
+        inner_conf: ConsensusInnerConfig,
     ) -> Self
     {
         let mut inner = ConsensusGraphInner {
@@ -247,7 +264,7 @@ impl ConsensusGraphInner {
             pow_config,
             current_difficulty: pow_config.initial_difficulty.into(),
             data_man: data_man.clone(),
-            enable_optimistic_execution,
+            inner_conf,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -256,10 +273,10 @@ impl ConsensusGraphInner {
         // At current point, genesis block is not in synchronization graph,
         // so we cannot compute its past_difficulty from
         // sync_graph.total_difficulty_in_own_epoch().
-        // For genesis block, its past_difficulty is simply its own difficulty.
+        // For genesis block, its past_difficulty is simply zero.
         let (genesis_index, _) = inner.insert(
             data_man.genesis_block().as_ref(),
-            *data_man.genesis_block().block_header.difficulty(),
+            U256::zero(),
             false,
         );
         inner.genesis_block_index = genesis_index;
@@ -291,10 +308,16 @@ impl ConsensusGraphInner {
         inner
     }
 
+    pub fn is_heavier(
+        a: (&SignedBigNum, &H256), b: (&SignedBigNum, &H256),
+    ) -> bool {
+        (*a.0 > *b.0) || ((*a.0 == *b.0) && (*a.1 > *b.1))
+    }
+
     pub fn get_optimistic_execution_task(
         &mut self, data_man: &BlockDataManager,
     ) -> Option<EpochExecutionTask> {
-        if !self.enable_optimistic_execution {
+        if !self.inner_conf.enable_optimistic_execution {
             return None;
         }
 
@@ -383,7 +406,8 @@ impl ConsensusGraphInner {
             self.stable_tree.path_apply(
                 *index,
                 &SignedBigNum::neg(
-                    difficulty * U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN),
+                    difficulty
+                        * U256::from(self.inner_conf.adaptive_weight_alpha_den),
                 ),
             );
             //            if self.arena[*index].stable {
@@ -401,28 +425,40 @@ impl ConsensusGraphInner {
             U256::from(self.weight_tree.get(self.genesis_block_index));
         debug!("total_difficulty before insert: {}", total_difficulty);
 
+        let adjusted_beta = U256::from(self.inner_conf.adaptive_weight_beta)
+            * self.current_difficulty;
+
         while parent != self.genesis_block_index {
             let grandparent = self.arena[parent].parent;
             let w = total_difficulty
                 - self.arena[grandparent].past_difficulty
-                - self.arena[parent].difficulty;
-            if w > U256::from(ADAPTIVE_WEIGHT_BETA) {
+                - self.arena[grandparent].difficulty;
+            if w > adjusted_beta
+            {
                 break;
             }
             parent = grandparent;
         }
 
-        let stable = !(U256::from(self.stable_tree.path_aggregate(parent))
-            < total_difficulty * U256::from(ADAPTIVE_WEIGHT_ALPHA_NUM));
+        let a = U256::from(self.stable_tree.path_aggregate(parent));
+        let b = total_difficulty
+            * U256::from(self.inner_conf.adaptive_weight_alpha_num);
+
+        let stable = if parent != self.genesis_block_index {
+            !(a < b)
+        } else {
+            true
+        };
         let adaptive = false;
 
         if !stable {
+            debug!("block is unstable: {:?} < {:?}!", a, b);
             parent = self.arena[me].parent;
 
             while parent != self.genesis_block_index {
                 let grandparent = self.arena[parent].parent;
                 let w = U256::from(self.weight_tree.get(grandparent));
-                if w > U256::from(ADAPTIVE_WEIGHT_BETA) {
+                if w > adjusted_beta {
                     break;
                 }
                 parent = grandparent;
@@ -434,6 +470,12 @@ impl ConsensusGraphInner {
                 //                {
                 //                    adaptive = true;
                 //                }
+            }
+        } else {
+            if parent != self.genesis_block_index {
+                debug!("block is stable: {:?} >= {:?}", a, b);
+            } else {
+                debug!("block is stable: too close to genesis, adjusted beta {:?}", adjusted_beta);
             }
         }
 
@@ -447,7 +489,8 @@ impl ConsensusGraphInner {
             self.stable_tree.path_apply(
                 *index,
                 &SignedBigNum::pos(
-                    difficulty * U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN),
+                    difficulty
+                        * U256::from(self.inner_conf.adaptive_weight_alpha_den),
                 ),
             );
             //            if self.arena[*index].stable {
@@ -638,10 +681,10 @@ impl ConsensusGraphInner {
             let fork_subtree_weight = self.weight_tree.get(fork);
             let pivot_subtree_weight = self.weight_tree.get(pivot);
 
-            if (fork_subtree_weight > pivot_subtree_weight)
-                || ((fork_subtree_weight == pivot_subtree_weight)
-                    && (self.arena[fork].hash > self.arena[pivot].hash))
-            {
+            if ConsensusGraphInner::is_heavier(
+                (&fork_subtree_weight, &self.arena[fork].hash),
+                (&pivot_subtree_weight, &self.arena[pivot].hash),
+            ) {
                 valid = false;
                 break;
             }
@@ -1137,6 +1180,12 @@ impl ConsensusGraphInner {
             .and_then(|block_index| Some(self.arena[*block_index].stable))
     }
 
+    pub fn is_partial_invalid(&self, block_hash: &H256) -> Option<bool> {
+        self.indices.get(block_hash).and_then(|block_index| {
+            Some(self.arena[*block_index].data.partial_invalid)
+        })
+    }
+
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
     ) -> Option<(Receipt, TransactionAddress)> {
@@ -1275,7 +1324,7 @@ impl ConsensusGraph {
             Arc::new(RwLock::new(ConsensusGraphInner::with_genesis_block(
                 pow_config,
                 data_man.clone(),
-                conf.enable_optimistic_execution,
+                conf.inner_conf.clone(),
             )));
         let executor = Arc::new(ConsensusExecutor::start(
             data_man.clone(),
@@ -1976,14 +2025,14 @@ impl ConsensusGraph {
             loop {
                 new_pivot_chain.push(u);
                 let mut heaviest = NULL;
-                let mut heaviest_weight = U256::zero();
+                let mut heaviest_weight = SignedBigNum::zero();
                 for index in &inner.arena[u].children {
-                    let weight = U256::from(inner.weight_tree.get(*index));
+                    let weight = inner.weight_tree.get(*index);
                     if heaviest == NULL
-                        || weight > heaviest_weight
-                        || (weight == heaviest_weight
-                            && inner.arena[*index].hash
-                                > inner.arena[heaviest].hash)
+                        || ConsensusGraphInner::is_heavier(
+                            (&weight, &inner.arena[*index].hash),
+                            (&heaviest_weight, &inner.arena[heaviest].hash),
+                        )
                     {
                         heaviest = *index;
                         heaviest_weight = weight;
@@ -2210,7 +2259,7 @@ impl ConsensusGraph {
         inner.stable_tree.set(
             me,
             &SignedBigNum::pos(
-                U256::from(ADAPTIVE_WEIGHT_ALPHA_NUM)
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
                     * U256::from(
                         inner.arena[parent].difficulty
                             + inner.arena[parent].past_difficulty,
@@ -2220,7 +2269,7 @@ impl ConsensusGraph {
         inner.stable_tree.path_apply(
             me,
             &SignedBigNum::pos(
-                U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN)
+                U256::from(inner.inner_conf.adaptive_weight_alpha_den)
                     * U256::from(*block.block_header.difficulty()),
             ),
         );
@@ -2341,7 +2390,7 @@ impl ConsensusGraph {
         inner.stable_tree.set(
             me,
             &SignedBigNum::pos(
-                U256::from(ADAPTIVE_WEIGHT_ALPHA_NUM)
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
                     * U256::from(
                         inner.arena[parent].difficulty
                             + inner.arena[parent].past_difficulty,
@@ -2351,7 +2400,7 @@ impl ConsensusGraph {
         inner.stable_tree.path_apply(
             me,
             &SignedBigNum::pos(
-                U256::from(ADAPTIVE_WEIGHT_ALPHA_DEN)
+                U256::from(inner.inner_conf.adaptive_weight_alpha_den)
                     * U256::from(*block.block_header.difficulty()),
             ),
         );
@@ -2371,24 +2420,24 @@ impl ConsensusGraph {
             let new = inner.weight_tree.ancestor_at(me, fork_at as usize);
             let new_weight = inner.weight_tree.get(new);
 
-            if prev_weight < new_weight
-                || (prev_weight == new_weight
-                    && inner.arena[prev].hash < inner.arena[new].hash)
-            {
+            if ConsensusGraphInner::is_heavier(
+                (&new_weight, &inner.arena[new].hash),
+                (&prev_weight, &inner.arena[prev].hash),
+            ) {
                 // The new subtree is heavier, update pivot chain
                 new_pivot_chain.truncate(fork_at);
                 let mut u = new;
                 loop {
                     new_pivot_chain.push(u);
                     let mut heaviest = NULL;
-                    let mut heaviest_weight = U256::zero();
+                    let mut heaviest_weight = SignedBigNum::zero();
                     for index in &inner.arena[u].children {
-                        let weight = U256::from(inner.weight_tree.get(*index));
+                        let weight = inner.weight_tree.get(*index);
                         if heaviest == NULL
-                            || weight > heaviest_weight
-                            || (weight == heaviest_weight
-                                && inner.arena[*index].hash
-                                    > inner.arena[heaviest].hash)
+                            || ConsensusGraphInner::is_heavier(
+                                (&weight, &inner.arena[*index].hash),
+                                (&heaviest_weight, &inner.arena[heaviest].hash),
+                            )
                         {
                             heaviest = *index;
                             heaviest_weight = weight;
