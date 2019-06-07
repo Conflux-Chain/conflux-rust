@@ -105,37 +105,42 @@ impl RequestHandler {
         }
     }
 
+    fn get_timeout_sync_requests(&self) -> Vec<Arc<TimedSyncRequests>> {
+        let mut requests = self.requests_queue.lock();
+        let mut timeout_requests = Vec::new();
+        let now = Instant::now();
+        loop {
+            if requests.is_empty() {
+                break;
+            }
+            let sync_req = requests.pop().expect("queue not empty");
+            if sync_req.removed.load(AtomicOrdering::Relaxed) == true {
+                continue;
+            }
+            if sync_req.timeout_time >= now {
+                requests.push(sync_req);
+                break;
+            } else {
+                debug!("Timeout request {:?}", sync_req);
+                // TODO And should handle timeout peers.
+                timeout_requests.push(sync_req);
+            }
+        }
+        timeout_requests
+    }
+
     pub fn get_timeout_requests(
         &self, io: &NetworkContext,
     ) -> Vec<RequestMessage> {
         // Check if in-flight requests timeout
-        let now = Instant::now();
         let mut timeout_requests = Vec::new();
-        {
-            let mut requests = self.requests_queue.lock();
-            loop {
-                if requests.is_empty() {
-                    break;
-                }
-                let sync_req = requests.pop().expect("queue not empty");
-                if sync_req.removed.load(AtomicOrdering::Relaxed) == true {
-                    continue;
-                }
-                if sync_req.timeout_time >= now {
-                    requests.push(sync_req);
-                    break;
-                } else {
-                    // TODO And should handle timeout peers.
-                    if let Ok(req) = self.match_request(
-                        io,
-                        sync_req.peer_id,
-                        sync_req.request_id,
-                    ) {
-                        timeout_requests.push(req);
-                    } else {
-                        debug!("Timeout a removed request {:?}", sync_req);
-                    }
-                }
+        for sync_req in self.get_timeout_sync_requests() {
+            if let Ok(req) =
+                self.match_request(io, sync_req.peer_id, sync_req.request_id)
+            {
+                timeout_requests.push(req);
+            } else {
+                debug!("Timeout a removed request {:?}", sync_req);
             }
         }
         timeout_requests
