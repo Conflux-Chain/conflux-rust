@@ -1119,7 +1119,7 @@ impl SynchronizationProtocolHandler {
                 }
             });
 
-            info!(
+            debug!(
                 "requesting epoch {:?}/{:?} hashes from peer {:?}",
                 epoch_number, best_peer_epoch, peer
             );
