@@ -6,24 +6,27 @@
 #include <cstring>
 #include <unistd.h>
 
-const int ALPHA_NUM = 2;
-const int ALPHA_DEN = 3;
-const int BETA = 10;
-const int N = 50;
-const int M = 3;
-const int MIN_GAP = 2;
-const int MAX_GAP = 30;
-std::vector<int> groups[M];
-std::vector<int> refs[N + 1], children[N + 1];
-int local_clock[N + 1][M];
-int current_clock[M];
-int parent[N + 1];
-int block_group[N + 1], block_gidx[N + 1];
-int is_valid[N + 1], is_stable[N + 1];
+const int MAXN = 100000;
+const int MAXM = 5;
 
-int subtree_weight[N + 1];
-int past_weight[N + 1];
-bool consider[N + 1];
+int N = 10000;
+int ALPHA_NUM = 2;
+int ALPHA_DEN = 3;
+int BETA = 150;
+int M = 3;
+int MIN_GAP = 2;
+int MAX_GAP = 30;
+std::vector<int> groups[MAXM];
+std::vector<int> refs[MAXN + 1], children[MAXN + 1];
+int local_clock[MAXN + 1][MAXM];
+int current_clock[MAXM];
+int parent[MAXN + 1];
+int block_group[MAXN + 1], block_gidx[MAXN + 1];
+int is_valid[MAXN + 1], is_stable[MAXN + 1];
+
+int subtree_weight[MAXN + 1];
+int past_weight[MAXN + 1];
+bool consider[MAXN + 1];
 
 bool should_consider(int v, int g) {
     if (v == 0) return true;
@@ -100,7 +103,20 @@ void process(int n, int g) {
     past_weight[n] = tot_cnt;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc > 1) {
+        N = atoi(argv[1]);
+    }
+    if (argc > 4) {
+        ALPHA_NUM = atoi(argv[2]);
+        ALPHA_DEN = atoi(argv[3]);
+        BETA = atoi(argv[4]);
+    }
+    if (argc > 6) {
+        MIN_GAP = atoi(argv[5]);
+        MAX_GAP = atoi(argv[6]);
+    }
+
     // Initialize genesis
     refs[0].clear();
     children[0].clear();
