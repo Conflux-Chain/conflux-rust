@@ -8,9 +8,8 @@
 
 const int ALPHA_NUM = 2;
 const int ALPHA_DEN = 3;
-const int BETA = 100;
-const double ALPHA = ((double)ALPHA_NUM) / ALPHA_DEN;
-const int N = 100;
+const int BETA = 10;
+const int N = 50;
 const int M = 3;
 const int MIN_GAP = 2;
 const int MAX_GAP = 30;
@@ -93,7 +92,7 @@ void process(int n, int g) {
 
         int g = tot_cnt - past_weight[last] - 1;
         int f = subtree_weight[current];
-        if (g > BETA && f - g * ALPHA < 0) {
+        if (g > BETA && f * ALPHA_DEN - g * ALPHA_NUM < 0) {
             is_stable[n] = 0;
         }
     }
@@ -111,8 +110,8 @@ int main() {
     block_group[0] = -1;
     block_gidx[0] = -1;
 
-    // unsigned seed = (unsigned) time(NULL) * getpid();
-    unsigned seed = 1320762925;
+    unsigned seed = (unsigned) time(NULL) * getpid();
+    // unsigned seed = 1493099032;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
@@ -132,6 +131,7 @@ int main() {
 
         block_group[i] = i - 1;
         block_gidx[i] = 1;
+        past_weight[i] = 1;
     }
 
     // Randomly generate the remaining blocks

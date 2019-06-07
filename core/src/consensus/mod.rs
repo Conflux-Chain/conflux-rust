@@ -433,8 +433,7 @@ impl ConsensusGraphInner {
             let w = total_difficulty
                 - self.arena[grandparent].past_difficulty
                 - self.arena[grandparent].difficulty;
-            if w > adjusted_beta
-            {
+            if w > adjusted_beta {
                 break;
             }
             parent = grandparent;
@@ -475,7 +474,10 @@ impl ConsensusGraphInner {
             if parent != self.genesis_block_index {
                 debug!("block is stable: {:?} >= {:?}", a, b);
             } else {
-                debug!("block is stable: too close to genesis, adjusted beta {:?}", adjusted_beta);
+                debug!(
+                    "block is stable: too close to genesis, adjusted beta {:?}",
+                    adjusted_beta
+                );
             }
         }
 
@@ -1897,14 +1899,12 @@ impl ConsensusGraph {
         }
 
         // Check whether the new block select the correct parent block
-        if inner.arena[new].parent != *inner.pivot_chain.last().unwrap() {
-            if !inner.check_correct_parent(new, sync_graph) {
-                warn!(
-                    "Partially invalid due to picking incorrect parent. {:?}",
-                    block.block_header.clone()
-                );
-                return false;
-            }
+        if !inner.check_correct_parent(new, sync_graph) {
+            warn!(
+                "Partially invalid due to picking incorrect parent. {:?}",
+                block.block_header.clone()
+            );
+            return false;
         }
 
         // Check heavy block
@@ -2208,6 +2208,25 @@ impl ConsensusGraph {
             inner.insert(block.as_ref(), past_difficulty, is_heavy);
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
+
+        let parent = inner.arena[me].parent;
+
+        inner.weight_tree.make_tree(me);
+        inner.weight_tree.link(parent, me);
+
+        inner.stable_tree.make_tree(me);
+        inner.stable_tree.link(parent, me);
+        inner.stable_tree.set(
+            me,
+            &SignedBigNum::pos(
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
+                    * U256::from(
+                        inner.arena[parent].difficulty
+                            + inner.arena[parent].past_difficulty,
+                    ),
+            ),
+        );
+
         inner.compute_anticone(me);
         let fully_valid = if let Some(partial_invalid) =
             self.data_man.block_status_from_db(hash)
@@ -2245,27 +2264,11 @@ impl ConsensusGraph {
         let (stable, _adaptive) = inner.adaptive_weight(me);
         inner.arena[me].stable = stable;
 
-        let parent = inner.arena[me].parent;
-
-        inner.weight_tree.make_tree(me);
-        inner.weight_tree.link(parent, me);
         inner.weight_tree.path_apply(
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
         );
 
-        inner.stable_tree.make_tree(me);
-        inner.stable_tree.link(parent, me);
-        inner.stable_tree.set(
-            me,
-            &SignedBigNum::pos(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
-                    * U256::from(
-                        inner.arena[parent].difficulty
-                            + inner.arena[parent].past_difficulty,
-                    ),
-            ),
-        );
         inner.stable_tree.path_apply(
             me,
             &SignedBigNum::pos(
@@ -2364,26 +2367,11 @@ impl ConsensusGraph {
             &*sync_inner_lock.read(),
         );
         self.data_man.insert_block_status_to_db(hash, !fully_valid);
-        if !fully_valid {
-            inner.arena[me].data.partial_invalid = true;
-            return;
-        }
-        debug!(
-            "Block {} (hash = {}) is fully valid",
-            me, inner.arena[me].hash
-        );
-
-        let (stable, _adaptive) = inner.adaptive_weight(me);
-        inner.arena[me].stable = stable;
 
         let parent = inner.arena[me].parent;
 
         inner.weight_tree.make_tree(me);
         inner.weight_tree.link(parent, me);
-        inner.weight_tree.path_apply(
-            me,
-            &SignedBigNum::pos(*block.block_header.difficulty()),
-        );
 
         inner.stable_tree.make_tree(me);
         inner.stable_tree.link(parent, me);
@@ -2396,6 +2384,23 @@ impl ConsensusGraph {
                             + inner.arena[parent].past_difficulty,
                     ),
             ),
+        );
+
+        if !fully_valid {
+            inner.arena[me].data.partial_invalid = true;
+            return;
+        }
+        debug!(
+            "Block {} (hash = {}) is fully valid",
+            me, inner.arena[me].hash
+        );
+
+        let (stable, _adaptive) = inner.adaptive_weight(me);
+        inner.arena[me].stable = stable;
+
+        inner.weight_tree.path_apply(
+            me,
+            &SignedBigNum::pos(*block.block_header.difficulty()),
         );
         inner.stable_tree.path_apply(
             me,

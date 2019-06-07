@@ -349,20 +349,25 @@ impl MinLinkCutTree {
             self.update(leftmost);
 
             self.tree[v].right_child = NULL;
+            assert_eq!(self.tree[leftmost].path_parent, v);
             self.update(v);
         }
     }
 
-    fn access(&mut self, v: usize) {
+    fn access(&mut self, v: usize) -> usize {
         if v == NULL {
-            return;
+            return NULL;
         }
 
         self.splay(v);
         self.remove_preferred_child(v);
 
+        let mut last = v;
+
         while self.tree[v].path_parent != NULL {
             let w = self.tree[v].path_parent;
+            last = w;
+
             self.splay(w);
             let u = self.tree[w].right_child;
             if u != NULL {
@@ -379,6 +384,8 @@ impl MinLinkCutTree {
                 self.tree[leftmost].value =
                     self.tree[leftmost].value - self.tree[w].catepillar_value;
                 self.update(leftmost);
+
+                assert_eq!(self.tree[leftmost].path_parent, w);
             }
 
             let mut leftmost = v;
@@ -391,11 +398,15 @@ impl MinLinkCutTree {
             self.update(leftmost);
 
             self.tree[leftmost].parent = w;
+            self.tree[leftmost].path_parent = NULL;
+
             self.tree[w].right_child = leftmost;
             self.update(w);
 
             self.splay(v);
         }
+
+        last
     }
 
     #[allow(dead_code)]
@@ -426,32 +437,7 @@ impl MinLinkCutTree {
 
     pub fn lca(&mut self, v: usize, w: usize) -> usize {
         self.access(v);
-
-        self.splay(w);
-        self.remove_preferred_child(w);
-
-        let mut x = w;
-        let mut y = w;
-        while self.tree[y].path_parent != NULL {
-            let z = self.tree[y].path_parent;
-            self.splay(z);
-            if self.tree[z].path_parent == NULL {
-                x = z;
-            }
-            let u = self.tree[z].right_child;
-            if u != NULL {
-                self.tree[u].path_parent = z;
-                self.tree[u].parent = NULL;
-            }
-            self.tree[z].right_child = y;
-            self.update(z);
-            self.tree[y].parent = z;
-            self.tree[y].path_parent = NULL;
-            y = z;
-        }
-        self.splay(w);
-
-        x
+        self.access(w)
     }
 
     pub fn ancestor_at(&mut self, v: usize, at: usize) -> usize {
