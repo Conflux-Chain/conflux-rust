@@ -2208,6 +2208,25 @@ impl ConsensusGraph {
             inner.insert(block.as_ref(), past_difficulty, is_heavy);
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
+
+        let parent = inner.arena[me].parent;
+
+        inner.weight_tree.make_tree(me);
+        inner.weight_tree.link(parent, me);
+
+        inner.stable_tree.make_tree(me);
+        inner.stable_tree.link(parent, me);
+        inner.stable_tree.set(
+            me,
+            &SignedBigNum::pos(
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
+                    * U256::from(
+                    inner.arena[parent].difficulty
+                        + inner.arena[parent].past_difficulty,
+                ),
+            ),
+        );
+
         inner.compute_anticone(me);
         let fully_valid = if let Some(partial_invalid) =
             self.data_man.block_status_from_db(hash)
@@ -2245,27 +2264,11 @@ impl ConsensusGraph {
         let (stable, _adaptive) = inner.adaptive_weight(me);
         inner.arena[me].stable = stable;
 
-        let parent = inner.arena[me].parent;
-
-        inner.weight_tree.make_tree(me);
-        inner.weight_tree.link(parent, me);
         inner.weight_tree.path_apply(
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
         );
 
-        inner.stable_tree.make_tree(me);
-        inner.stable_tree.link(parent, me);
-        inner.stable_tree.set(
-            me,
-            &SignedBigNum::pos(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
-                    * U256::from(
-                        inner.arena[parent].difficulty
-                            + inner.arena[parent].past_difficulty,
-                    ),
-            ),
-        );
         inner.stable_tree.path_apply(
             me,
             &SignedBigNum::pos(
@@ -2348,6 +2351,7 @@ impl ConsensusGraph {
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
 
+
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
         for tx in block.transactions.iter() {
@@ -2364,6 +2368,25 @@ impl ConsensusGraph {
             &*sync_inner_lock.read(),
         );
         self.data_man.insert_block_status_to_db(hash, !fully_valid);
+
+        let parent = inner.arena[me].parent;
+
+        inner.weight_tree.make_tree(me);
+        inner.weight_tree.link(parent, me);
+
+        inner.stable_tree.make_tree(me);
+        inner.stable_tree.link(parent, me);
+        inner.stable_tree.set(
+            me,
+            &SignedBigNum::pos(
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
+                    * U256::from(
+                    inner.arena[parent].difficulty
+                        + inner.arena[parent].past_difficulty,
+                ),
+            ),
+        );
+
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
             return;
@@ -2376,26 +2399,9 @@ impl ConsensusGraph {
         let (stable, _adaptive) = inner.adaptive_weight(me);
         inner.arena[me].stable = stable;
 
-        let parent = inner.arena[me].parent;
-
-        inner.weight_tree.make_tree(me);
-        inner.weight_tree.link(parent, me);
         inner.weight_tree.path_apply(
             me,
             &SignedBigNum::pos(*block.block_header.difficulty()),
-        );
-
-        inner.stable_tree.make_tree(me);
-        inner.stable_tree.link(parent, me);
-        inner.stable_tree.set(
-            me,
-            &SignedBigNum::pos(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
-                    * U256::from(
-                        inner.arena[parent].difficulty
-                            + inner.arena[parent].past_difficulty,
-                    ),
-            ),
         );
         inner.stable_tree.path_apply(
             me,
