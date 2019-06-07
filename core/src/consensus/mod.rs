@@ -227,6 +227,7 @@ pub struct ConsensusGraphNode {
     pub past_difficulty: U256,
     pub pow_quality: U256,
     pub stable: bool,
+    pub adaptive: bool,
     pub parent: usize,
     pub children: Vec<usize>,
     pub referrers: Vec<usize>,
@@ -600,6 +601,7 @@ impl ConsensusGraphInner {
             past_difficulty,
             pow_quality: block.block_header.pow_quality,
             stable: true,
+            adaptive: false,
             parent,
             children: Vec::new(),
             referees,
@@ -1180,6 +1182,12 @@ impl ConsensusGraphInner {
         self.indices
             .get(block_hash)
             .and_then(|block_index| Some(self.arena[*block_index].stable))
+    }
+
+    pub fn is_adaptive(&self, block_hash: &H256) -> Option<bool> {
+        self.indices
+            .get(block_hash)
+            .and_then(|block_index| Some(self.arena[*block_index].adaptive))
     }
 
     pub fn is_partial_invalid(&self, block_hash: &H256) -> Option<bool> {
@@ -2261,8 +2269,9 @@ impl ConsensusGraph {
             return;
         }
 
-        let (stable, _adaptive) = inner.adaptive_weight(me);
+        let (stable, adaptive) = inner.adaptive_weight(me);
         inner.arena[me].stable = stable;
+        inner.arena[me].adaptive = adaptive;
 
         inner.weight_tree.path_apply(
             me,
@@ -2395,8 +2404,9 @@ impl ConsensusGraph {
             me, inner.arena[me].hash
         );
 
-        let (stable, _adaptive) = inner.adaptive_weight(me);
+        let (stable, adaptive) = inner.adaptive_weight(me);
         inner.arena[me].stable = stable;
+        inner.arena[me].adaptive = adaptive;
 
         inner.weight_tree.path_apply(
             me,
