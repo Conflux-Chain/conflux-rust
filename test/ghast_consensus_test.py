@@ -29,7 +29,8 @@ TEST_INPUT = [
     "stable-case3.in",
     "partial-invalid-case1.in",
     "partial-invalid-case2.in",
-    "adaptive-case1.in"]
+    "adaptive-case1.in",
+    "adaptive-case2.in"]
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
 consensus_bench_dir = test_dir + "/../core/benchmark/consensus"

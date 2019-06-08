@@ -50,11 +50,12 @@ void mark_consider(int v, int g) {
 void compute_subtree(int v) {
     if (!consider[v]) {
         subtree_weight[v] = 0;
+        subtree_stable_weight[v] = 0;
         return;
     }
     int sum = 1;
     int sums = 1;
-    if (is_stable[v])
+    if (!is_stable[v])
         sums = 0;
     for (int i = 0; i < children[v].size(); i++) {
         compute_subtree(children[v][i]);
@@ -113,6 +114,7 @@ void process(int n, int g) {
         for (int i = 0; i < tmp.size(); i++) {
             int px = tmp[i].first;
             int x = tmp[i].second;
+            // fprintf(stderr, "%d %d %d %d\n", x, px, subtree_stable_weight[x], subtree_weight[px]);
             if (subtree_weight[px] > BETA &&
                 subtree_stable_weight[x] * ALPHA_DEN - subtree_weight[px] * ALPHA_NUM < 0) {
                 is_adaptive[n] = 1;
@@ -150,7 +152,7 @@ int main(int argc, char* argv[]) {
     block_gidx[0] = -1;
 
     unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 1493099032;
+    // unsigned seed = 2802582656;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
