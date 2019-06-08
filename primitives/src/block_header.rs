@@ -198,6 +198,7 @@ impl BlockHeader {
 
     /// Place this header(except nonce) into an RLP stream `stream`.
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
             .begin_list(11)
             .append(&self.parent_hash)
@@ -208,13 +209,14 @@ impl BlockHeader {
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
             .append(&self.difficulty)
-            .append(&self.adaptive)
+            .append(&adaptive_n)
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes);
     }
 
     /// Place this header into an RLP stream `stream`.
     fn stream_rlp(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
             .begin_list(12)
             .append(&self.parent_hash)
@@ -225,7 +227,7 @@ impl BlockHeader {
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
             .append(&self.difficulty)
-            .append(&self.adaptive)
+            .append(&adaptive_n)
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
             .append(&self.nonce);
@@ -396,7 +398,7 @@ impl Decodable for BlockHeader {
                 deferred_state_root: r.val_at(5)?,
                 deferred_receipts_root: r.val_at(6)?,
                 difficulty: r.val_at(7)?,
-                adaptive: r.val_at(8)?,
+                adaptive: r.val_at::<u8>(8)? == 1,
                 gas_limit: r.val_at(9)?,
                 referee_hashes: r.list_at(10)?,
                 nonce: r.val_at(11)?,

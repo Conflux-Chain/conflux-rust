@@ -197,6 +197,7 @@ class BlockHeader(rlp.Serializable):
         ("deferred_state_root", binary),
         ("deferred_receipts_root", binary),
         ("difficulty", big_endian_int),
+        ("adaptive", big_endian_int),
         ("gas_limit", big_endian_int),
         ("referee_hashes", CountableList(binary)),
         ("nonce", big_endian_int),
@@ -213,6 +214,7 @@ class BlockHeader(rlp.Serializable):
                  difficulty=default_config['GENESIS_DIFFICULTY'],
                  gas_limit=0,
                  referee_hashes=[],
+                 adaptive=0,
                  nonce=0):
         # at the beginning of a method, locals() is a dict of all arguments
         fields = {k: v for k, v in locals().items() if

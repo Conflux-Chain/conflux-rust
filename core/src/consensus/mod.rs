@@ -1238,7 +1238,7 @@ impl ConsensusGraphInner {
             if self.arena[*index_in_consensus].data.partial_invalid {
                 continue;
             }
-            total_weight += self.block_weight(*index_in_sync);
+            total_weight += self.block_weight(*index_in_consensus);
 //                sync.arena[*index_in_sync].block_header.difficulty().clone();
         }
         total_weight
