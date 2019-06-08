@@ -289,10 +289,13 @@ impl ConsensusGraphInner {
             ),
         );
         inner.stable_tree.make_tree(inner.genesis_block_index);
+        // The genesis node can be zero in stable_tree because it is never used!
         inner
             .stable_tree
             .set(inner.genesis_block_index, &SignedBigNum::zero());
         inner.adaptive_tree.make_tree(inner.genesis_block_index);
+        // The genesis node can be zero in adaptive_tree because it is never
+        // used!
         inner
             .adaptive_tree
             .set(inner.genesis_block_index, &SignedBigNum::zero());
@@ -411,15 +414,24 @@ impl ConsensusGraphInner {
                         * U256::from(self.inner_conf.adaptive_weight_alpha_den),
                 ),
             );
-            //            if self.arena[*index].stable {
-            //                self.adaptive_tree.path_apply(
-            //                    *index,
-            //                    &SignedBigNum::neg(difficulty + difficulty),
-            //                );
-            //            }
-            //            self.adaptive_tree
-            //                .path_apply(parent,
-            // &SignedBigNum::pos(difficulty));
+            if self.arena[*index].stable {
+                self.adaptive_tree.path_apply(
+                    *index,
+                    &SignedBigNum::neg(
+                        difficulty
+                            * U256::from(
+                                self.inner_conf.adaptive_weight_alpha_den,
+                            ),
+                    ),
+                );
+            }
+            self.adaptive_tree.catepillar_apply(
+                parent,
+                &SignedBigNum::pos(
+                    difficulty
+                        * U256::from(self.inner_conf.adaptive_weight_alpha_num),
+                ),
+            );
         }
 
         let total_difficulty =
@@ -449,7 +461,7 @@ impl ConsensusGraphInner {
         } else {
             true
         };
-        let adaptive = false;
+        let mut adaptive = false;
 
         if !stable {
             debug!("block is unstable: {:?} < {:?}!", a, b);
@@ -465,11 +477,11 @@ impl ConsensusGraphInner {
             }
 
             if parent != self.genesis_block_index {
-                //                if self.adaptive_tree.path_aggregate(parent)
-                //                    < SignedBigNum::zero()
-                //                {
-                //                    adaptive = true;
-                //                }
+                if self.adaptive_tree.path_aggregate(parent)
+                    < SignedBigNum::zero()
+                {
+                    adaptive = true;
+                }
             }
         } else {
             if parent != self.genesis_block_index {
@@ -496,15 +508,24 @@ impl ConsensusGraphInner {
                         * U256::from(self.inner_conf.adaptive_weight_alpha_den),
                 ),
             );
-            //            if self.arena[*index].stable {
-            //                self.adaptive_tree.path_apply(
-            //                    *index,
-            //                    &SignedBigNum::pos(difficulty + difficulty),
-            //                );
-            //            }
-            //            self.adaptive_tree
-            //                .path_apply(parent,
-            // &SignedBigNum::neg(difficulty));
+            if self.arena[*index].stable {
+                self.adaptive_tree.path_apply(
+                    *index,
+                    &SignedBigNum::pos(
+                        difficulty
+                            * U256::from(
+                                self.inner_conf.adaptive_weight_alpha_den,
+                            ),
+                    ),
+                );
+            }
+            self.adaptive_tree.catepillar_apply(
+                parent,
+                &SignedBigNum::neg(
+                    difficulty
+                        * U256::from(self.inner_conf.adaptive_weight_alpha_num),
+                ),
+            );
         }
 
         (stable, adaptive)
@@ -2235,6 +2256,9 @@ impl ConsensusGraph {
             ),
         );
 
+        inner.adaptive_tree.make_tree(me);
+        inner.adaptive_tree.link(parent, me);
+
         inner.compute_anticone(me);
         let fully_valid = if let Some(partial_invalid) =
             self.data_man.block_status_from_db(hash)
@@ -2282,6 +2306,22 @@ impl ConsensusGraph {
             me,
             &SignedBigNum::pos(
                 U256::from(inner.inner_conf.adaptive_weight_alpha_den)
+                    * U256::from(*block.block_header.difficulty()),
+            ),
+        );
+        if stable {
+            inner.adaptive_tree.path_apply(
+                me,
+                &SignedBigNum::pos(
+                    U256::from(inner.inner_conf.adaptive_weight_alpha_den)
+                        * U256::from(*block.block_header.difficulty()),
+                ),
+            );
+        }
+        inner.adaptive_tree.catepillar_apply(
+            parent,
+            &SignedBigNum::neg(
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
                     * U256::from(*block.block_header.difficulty()),
             ),
         );
@@ -2395,6 +2435,9 @@ impl ConsensusGraph {
             ),
         );
 
+        inner.adaptive_tree.make_tree(me);
+        inner.adaptive_tree.link(parent, me);
+
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
             return;
@@ -2416,6 +2459,23 @@ impl ConsensusGraph {
             me,
             &SignedBigNum::pos(
                 U256::from(inner.inner_conf.adaptive_weight_alpha_den)
+                    * U256::from(*block.block_header.difficulty()),
+            ),
+        );
+
+        if stable {
+            inner.adaptive_tree.path_apply(
+                me,
+                &SignedBigNum::pos(
+                    U256::from(inner.inner_conf.adaptive_weight_alpha_den)
+                        * U256::from(*block.block_header.difficulty()),
+                ),
+            );
+        }
+        inner.adaptive_tree.catepillar_apply(
+            parent,
+            &SignedBigNum::neg(
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
                     * U256::from(*block.block_header.difficulty()),
             ),
         );
