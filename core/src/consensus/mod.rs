@@ -2258,6 +2258,11 @@ impl ConsensusGraph {
 
         inner.adaptive_tree.make_tree(me);
         inner.adaptive_tree.link(parent, me);
+        let parent_w = inner.weight_tree.get(parent);
+        inner.adaptive_tree.set(
+            me,
+            &SignedBigNum::neg(U256::from(parent_w) * U256::from(inner.inner_conf.adaptive_weight_alpha_num)),
+        );
 
         inner.compute_anticone(me);
         let fully_valid = if let Some(partial_invalid) =
@@ -2437,6 +2442,11 @@ impl ConsensusGraph {
 
         inner.adaptive_tree.make_tree(me);
         inner.adaptive_tree.link(parent, me);
+        let parent_w = inner.weight_tree.get(parent);
+        inner.adaptive_tree.set(
+            me,
+            &SignedBigNum::neg(U256::from(parent_w) * U256::from(inner.inner_conf.adaptive_weight_alpha_num)),
+        );
 
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
