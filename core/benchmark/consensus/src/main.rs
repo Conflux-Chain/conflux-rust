@@ -32,7 +32,7 @@ use log::LevelFilter;
 use std::fs;
 use std::str::FromStr;
 use std::env;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
@@ -54,6 +54,7 @@ fn create_simple_block_impl(
 fn create_simple_block(
     sync: Arc<SynchronizationGraph>,
     parent_hash: H256, ref_hashes: Vec<H256>,
+    block_weight: u32,
 ) -> (H256, Block)
 {
     let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
@@ -68,7 +69,7 @@ fn create_simple_block(
         ref_hashes,
         parent_header.height() + 1,
         nonce,
-        exp_diff,
+        exp_diff * block_weight,
     )
 }
 
@@ -232,8 +233,9 @@ fn main() {
     let mut last_check_time = start_time;
     let mut last_sync_block_cnt = sync.block_count();
     let mut last_consensus_block_cnt = consensus.block_count();
-    let mut valid_indices = HashSet::new();
-    let mut stable_indices = HashSet::new();
+    let mut valid_indices = HashMap::new();
+    let mut stable_indices = HashMap::new();
+    let mut adaptive_indices = HashMap::new();
     for s in lines {
         if s.starts_with("//") {
             continue;
@@ -244,12 +246,18 @@ fn main() {
         let mut ref_idxs = Vec::new();
         let mut is_valid = 0;
         let mut is_stable = 0;
+        let mut is_adaptive = 0;
+        let mut block_weight = 1;
         for w in tokens {
             if cnt == 0 {
-                is_valid = u32::from_str(w).expect("Cannot parse the input file!");
+                is_valid = i32::from_str(w).expect("Cannot parse the input file!");
             } else if cnt == 1 {
-                is_stable = u32::from_str(w).expect("Cannot parse the input file!");
+                is_stable = i32::from_str(w).expect("Cannot parse the input file!");
             } else if cnt == 2 {
+                is_adaptive = i32::from_str(w).expect("Cannot parse the input file!");
+            } else if cnt == 3 {
+                block_weight = u32::from_str(w).expect("Cannot parse the input file!");
+            } else if cnt == 4 {
                 parent_idx = usize::from_str(w).expect("Cannot parse the input file!");
             } else {
                 let ref_idx = usize::from_str(w).expect("Cannot parse the input file!");
@@ -260,18 +268,16 @@ fn main() {
         if cnt == 0 {
             continue;
         }
-        if is_valid == 1 {
-            valid_indices.insert(hashes.len());
-        }
-        if is_stable == 1 {
-            stable_indices.insert(hashes.len());
-        }
+        let idx = hashes.len();
+        valid_indices.insert(idx, is_valid);
+        stable_indices.insert(idx, is_stable);
+        adaptive_indices.insert(idx, is_adaptive);
         let mut ref_hashes = Vec::new();
         for ref_idx in ref_idxs.iter() {
             ref_hashes.push(hashes[*ref_idx]);
         }
         let (new_hash, mut new_block) =
-            create_simple_block(sync.clone(), hashes[parent_idx], ref_hashes);
+            create_simple_block(sync.clone(), hashes[parent_idx], ref_hashes, block_weight);
         hashes.push(new_hash);
         sync.insert_block_header(&mut new_block.block_header, false, true);
         sync.insert_block(new_block, false, false, false);
@@ -312,12 +318,22 @@ fn main() {
     let n = hashes.len();
     for i in 1..n {
         let partial_invalid = consensus.inner.read().is_partial_invalid(&hashes[i]).unwrap();
-        let invalid = !valid_indices.contains(&i);
-        assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
-        if (!invalid) {
-            let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
-            let stable1 = stable_indices.contains(&i);
+        let valid = *valid_indices.get(&i).unwrap();
+        let invalid = (valid == 0);
+        if valid != -1 {
+            assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
+        }
+        let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
+        let stable_v = *stable_indices.get(&i).unwrap();
+        if !invalid && stable_v != -1 {
+            let stable1 = (stable_v == 1);
             assert!(stable0 == stable1, "Block {} stable status: Consensus graph {} != actual {}", i, stable0, stable1);
+        }
+        let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
+        let adaptive_v = *adaptive_indices.get(&i).unwrap();
+        if !invalid && adaptive_v != -1 {
+            let adaptive1 = (adaptive_v == 1);
+            assert!(adaptive0 == adaptive1, "Block {} adaptive status: Consensus graph {} != actual {}", i, adaptive0, adaptive1);
         }
     }
 
