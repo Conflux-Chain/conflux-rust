@@ -126,6 +126,8 @@ pub struct Block {
     pub referee_hashes: Vec<H256>,
     /// Stable
     pub stable: Option<bool>,
+    /// Adaptive
+    pub adaptive: bool,
     /// Nonce of the block
     pub nonce: U256,
     /// Transactions
@@ -216,6 +218,7 @@ impl Block {
             difficulty: b.block_header.difficulty().clone().into(),
             // PrimitiveBlock does not contain this information
             stable: consensus_inner.is_stable(&b.block_header.hash()),
+            adaptive: b.block_header.adaptive(),
             referee_hashes: b
                 .block_header
                 .referee_hashes()
@@ -245,6 +248,7 @@ impl Block {
                         self.deferred_receipts_root.into(),
                     )
                     .with_difficulty(self.difficulty.into())
+                    .with_adaptive(self.adaptive)
                     .with_gas_limit(self.gas_limit.into())
                     .with_referee_hashes(
                         self.referee_hashes
@@ -322,6 +326,7 @@ mod tests {
             difficulty: U256::default(),
             referee_hashes: Vec::new(),
             stable: None,
+            adaptive: false,
             nonce: 0.into(),
             transactions: BlockTransactions::Hashes(vec![].into()),
             size: Some(69.into()),
@@ -348,6 +353,7 @@ mod tests {
             difficulty: U256::default(),
             referee_hashes: Vec::new(),
             stable: None,
+            adaptive: false,
             nonce: 0.into(),
             transactions: BlockTransactions::Full(vec![].into()),
             size: Some(69.into()),

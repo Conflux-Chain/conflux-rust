@@ -176,18 +176,19 @@ impl BlockGenerator {
 
         let mut expected_difficulty =
             self.graph.inner.read().expected_difficulty(&parent_hash);
-        if self.graph.check_mining_heavy_block(
+        let adaptive = self.graph.check_mining_adaptive_block(
             consensus_inner,
             &parent_hash,
             &expected_difficulty,
-        ) {
+        );
+        if adaptive {
             assert!(
                 U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
                     * U512::from(expected_difficulty)
                     < U512::from(U256::max_value())
             );
-            expected_difficulty =
-                U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO) * expected_difficulty;
+//            expected_difficulty =
+//                U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO) * expected_difficulty;
         }
         if U256::from(difficulty) > expected_difficulty {
             expected_difficulty = U256::from(difficulty);
@@ -210,6 +211,7 @@ impl BlockGenerator {
             .with_deferred_state_root(deferred_state_root)
             .with_deferred_receipts_root(deferred_receipts_root)
             .with_difficulty(expected_difficulty)
+            .with_adaptive(adaptive)
             .with_referee_hashes(referee)
             .with_nonce(0)
             .with_gas_limit(block_gas_limit)
