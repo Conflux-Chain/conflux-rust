@@ -6,24 +6,27 @@
 #include <cstring>
 #include <unistd.h>
 
-const int ALPHA_NUM = 2;
-const int ALPHA_DEN = 3;
-const int BETA = 10;
-const int N = 50;
-const int M = 3;
-const int MIN_GAP = 2;
-const int MAX_GAP = 30;
-std::vector<int> groups[M];
-std::vector<int> refs[N + 1], children[N + 1];
-int local_clock[N + 1][M];
-int current_clock[M];
-int parent[N + 1];
-int block_group[N + 1], block_gidx[N + 1];
-int is_valid[N + 1], is_stable[N + 1];
+const int MAXN = 100000;
+const int MAXM = 5;
 
-int subtree_weight[N + 1];
-int past_weight[N + 1];
-bool consider[N + 1];
+int N = 10000;
+int ALPHA_NUM = 2;
+int ALPHA_DEN = 3;
+int BETA = 150;
+int M = 3;
+int MIN_GAP = 2;
+int MAX_GAP = 30;
+std::vector<int> groups[MAXM];
+std::vector<int> refs[MAXN + 1], children[MAXN + 1];
+int local_clock[MAXN + 1][MAXM];
+int current_clock[MAXM];
+int parent[MAXN + 1];
+int block_group[MAXN + 1], block_gidx[MAXN + 1];
+int is_valid[MAXN + 1], is_stable[MAXN + 1], is_adaptive[MAXN + 1];
+
+int subtree_weight[MAXN + 1], subtree_stable_weight[MAXN + 1];
+int past_weight[MAXN + 1];
+bool consider[MAXN + 1];
 
 bool should_consider(int v, int g) {
     if (v == 0) return true;
@@ -47,14 +50,20 @@ void mark_consider(int v, int g) {
 void compute_subtree(int v) {
     if (!consider[v]) {
         subtree_weight[v] = 0;
+        subtree_stable_weight[v] = 0;
         return;
     }
     int sum = 1;
+    int sums = 1;
+    if (!is_stable[v])
+        sums = 0;
     for (int i = 0; i < children[v].size(); i++) {
         compute_subtree(children[v][i]);
         sum += subtree_weight[children[v][i]];
+        sums += subtree_stable_weight[children[v][i]];
     }
     subtree_weight[v] = sum;
+    subtree_stable_weight[v] = sums;
 }
 
 void process(int n, int g) {
@@ -67,6 +76,8 @@ void process(int n, int g) {
     int last = -1;
     int current = 0;
     is_stable[n] = 1;
+    std::vector<std::pair<int, int> > tmp;
+    tmp.clear();
     while (true) {
         int largest_child = -1;
         int largest_weight = -1;
@@ -95,23 +106,53 @@ void process(int n, int g) {
         if (g > BETA && f * ALPHA_DEN - g * ALPHA_NUM < 0) {
             is_stable[n] = 0;
         }
+        tmp.push_back(std::make_pair(last, current));
     }
+
+    is_adaptive[n] = 0;
+    if (!is_stable[n]) {
+        for (int i = 0; i < tmp.size(); i++) {
+            int px = tmp[i].first;
+            int x = tmp[i].second;
+            // fprintf(stderr, "%d %d %d %d\n", x, px, subtree_stable_weight[x], subtree_weight[px]);
+            if (subtree_weight[px] > BETA &&
+                subtree_stable_weight[x] * ALPHA_DEN - subtree_weight[px] * ALPHA_NUM < 0) {
+                is_adaptive[n] = 1;
+                break;
+            }
+        }
+    }
+
     parent[n] = current;
     past_weight[n] = tot_cnt;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc > 1) {
+        N = atoi(argv[1]);
+    }
+    if (argc > 4) {
+        ALPHA_NUM = atoi(argv[2]);
+        ALPHA_DEN = atoi(argv[3]);
+        BETA = atoi(argv[4]);
+    }
+    if (argc > 6) {
+        MIN_GAP = atoi(argv[5]);
+        MAX_GAP = atoi(argv[6]);
+    }
+
     // Initialize genesis
     refs[0].clear();
     children[0].clear();
     parent[0] = -1;
     is_valid[0] = 1;
     is_stable[0] = 1;
+    is_adaptive[0] = 0;
     block_group[0] = -1;
     block_gidx[0] = -1;
 
     unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 1493099032;
+    // unsigned seed = 2802582656;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
@@ -132,6 +173,7 @@ int main() {
         block_group[i] = i - 1;
         block_gidx[i] = 1;
         past_weight[i] = 1;
+        is_adaptive[i] = 0;
     }
 
     // Randomly generate the remaining blocks
@@ -209,7 +251,7 @@ int main() {
     fout.open("rand.in", std::ios::out);
     fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << "\n";
     for (int i = 1; i <=N; i++) {
-        fout << is_valid[i] << " " << is_stable[i] << " " << parent[i];
+        fout << is_valid[i] << " " << is_stable[i] << " " << is_adaptive[i] << " " << 1 << " " << parent[i];
         for (int j = 0; j < refs[i].size(); j++)
             if (refs[i][j] != parent[i])
                 fout << " " << refs[i][j];
