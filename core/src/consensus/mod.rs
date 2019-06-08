@@ -425,8 +425,9 @@ impl ConsensusGraphInner {
                     ),
                 );
             }
+            let parent_idx = self.arena[*index].parent;
             self.adaptive_tree.catepillar_apply(
-                parent,
+                parent_idx,
                 &SignedBigNum::pos(
                     difficulty
                         * U256::from(self.inner_conf.adaptive_weight_alpha_num),
@@ -477,9 +478,10 @@ impl ConsensusGraphInner {
             }
 
             if parent != self.genesis_block_index {
-                if self.adaptive_tree.path_aggregate(parent)
-                    < SignedBigNum::zero()
+                let min_agg = self.adaptive_tree.path_aggregate(parent);
+                if min_agg < SignedBigNum::zero()
                 {
+                    debug!("block is adaptive: {:?}", min_agg);
                     adaptive = true;
                 }
             }
@@ -519,8 +521,9 @@ impl ConsensusGraphInner {
                     ),
                 );
             }
+            let parent_idx = self.arena[*index].parent;
             self.adaptive_tree.catepillar_apply(
-                parent,
+                parent_idx,
                 &SignedBigNum::neg(
                     difficulty
                         * U256::from(self.inner_conf.adaptive_weight_alpha_num),
@@ -2443,9 +2446,11 @@ impl ConsensusGraph {
         inner.adaptive_tree.make_tree(me);
         inner.adaptive_tree.link(parent, me);
         let parent_w = inner.weight_tree.get(parent);
+        let start_adaptive_weight = &SignedBigNum::neg(U256::from(parent_w)
+                * U256::from(inner.inner_conf.adaptive_weight_alpha_num));
         inner.adaptive_tree.set(
             me,
-            &SignedBigNum::neg(U256::from(parent_w) * U256::from(inner.inner_conf.adaptive_weight_alpha_num)),
+            &start_adaptive_weight,
         );
 
         if !fully_valid {
