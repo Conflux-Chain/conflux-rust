@@ -7,7 +7,6 @@ use crate::{
     cache_manager::{CacheId, CacheManager, CacheSize},
     consensus::{
         ConsensusGraphInner, SharedConsensusGraph,
-        // HEAVY_BLOCK_DIFFICULTY_RATIO,
     },
     db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
@@ -17,7 +16,7 @@ use crate::{
     storage::GuardedValue,
     verification::*,
 };
-use cfx_types::{H256, U256/*, U512*/};
+use cfx_types::{H256, U256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{block::CompactBlock, Block, BlockHeader, EpochNumber};
@@ -69,8 +68,6 @@ pub struct SynchronizationGraphNode {
     pub block_header: Arc<BlockHeader>,
     /// The status of graph connectivity in the current block view.
     pub graph_status: u8,
-    /// Whether the block is a heavy block
-//    pub is_heavy: bool,
     /// Whether the block body is ready.
     pub block_ready: bool,
     /// The index of the parent of the block.
@@ -92,17 +89,6 @@ pub struct SynchronizationGraphNode {
     /// blocks including itself.
     pub min_epoch_in_other_views: u64,
 }
-
-//impl SynchronizationGraphNode {
-//    pub fn light_difficulty(&self) -> U256 {
-//        if self.is_heavy {
-//            *self.block_header.difficulty()
-//                / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-//        } else {
-//            *self.block_header.difficulty()
-//        }
-//    }
-//}
 
 pub struct SynchronizationGraphInner {
     pub arena: Slab<SynchronizationGraphNode>,
@@ -138,7 +124,6 @@ impl SynchronizationGraphInner {
         let hash = header.hash();
         let me = self.arena.insert(SynchronizationGraphNode {
             graph_status: BLOCK_INVALID,
-//            is_heavy: false,
             block_ready: false,
             parent: NULL,
             children: Vec::new(),
@@ -182,7 +167,6 @@ impl SynchronizationGraphInner {
             } else {
                 BLOCK_HEADER_ONLY
             },
-//            is_heavy: false,
             block_ready: *header.parent_hash() == H256::default(),
             parent: NULL,
             children: Vec::new(),
@@ -346,7 +330,6 @@ impl SynchronizationGraphInner {
     fn verify_header_graph_ready_block(
         &self, index: usize,
     ) -> Result<(), Error> {
-//        let mut is_heavy_block = false;
         let epoch = self.arena[index].block_header.height();
         let parent = self.arena[index].parent;
         // Verify the height and epoch numbers are correct
@@ -385,12 +368,6 @@ impl SynchronizationGraphInner {
             .expected_difficulty(self.arena[index].block_header.parent_hash());
         let my_difficulty = *self.arena[index].block_header.difficulty();
 
-//        if U512::from(my_difficulty)
-//            == U512::from(expected_difficulty)
-//                * U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-//        {
-//            is_heavy_block = true;
-//        } else
         if my_difficulty != expected_difficulty {
             warn!(
                 "expected_difficulty {}; difficulty {}",
@@ -403,7 +380,6 @@ impl SynchronizationGraphInner {
             })));
         }
 
-//        Ok(is_heavy_block)
         Ok(())
     }
 
@@ -426,20 +402,6 @@ impl SynchronizationGraphInner {
         let mut min_time = u64::max_value();
         for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
             block_count += self.arena[cur].blockset_in_own_view_of_epoch.len() as u64 + 1;
-//            for index in self.arena[cur].blockset_in_own_view_of_epoch.iter() {
-//                if self.arena[*index].is_heavy {
-//                    block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
-//                } else {
-//                    block_count += 1;
-//                }
-//            }
-
-//            if self.arena[cur].is_heavy {
-//                block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
-//            } else {
-//                block_count += 1;
-//            }
-
             max_time = max(max_time, self.arena[cur].block_header.timestamp());
             min_time = min(min_time, self.arena[cur].block_header.timestamp());
             cur = self.arena[cur].parent;
@@ -916,10 +878,6 @@ impl SynchronizationGraph {
                 debug_assert!(inner.arena[index].parent != NULL);
 
                 let r = inner.verify_header_graph_ready_block(index);
-//                inner.arena[index].is_heavy = match r {
-//                    Ok(is_heavy) => is_heavy,
-//                    _ => false,
-//                };
 
                 if need_to_verify && r.is_err() {
                     warn!(

@@ -187,8 +187,6 @@ impl BlockGenerator {
                     * U512::from(expected_difficulty)
                     < U512::from(U256::max_value())
             );
-//            expected_difficulty =
-//                U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO) * expected_difficulty;
         }
         if U256::from(difficulty) > expected_difficulty {
             expected_difficulty = U256::from(difficulty);

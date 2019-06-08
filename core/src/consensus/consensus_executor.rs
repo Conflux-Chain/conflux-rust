@@ -38,7 +38,6 @@ use std::fmt::{Debug, Formatter};
 pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_light_difficulties: Vec<U256>,
-//    pub epoch_block_is_heavy: Vec<bool>,
     pub epoch_block_anticone_overlimited: Vec<bool>,
     pub epoch_block_anticone_set_sizes: Vec<usize>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
@@ -52,7 +51,6 @@ impl Debug for RewardExecutionInfo {
              epoch_block_anticone_overlimited: {:?} epoch_block_anticone_set_sizes: {:?} \
              epoch_block_anticone_difficulties: {:?}}}",
             self.epoch_blocks.iter().map(|b| b.hash()).collect::<Vec<H256>>(), self.epoch_block_light_difficulties,
-//            self.epoch_block_is_heavy,
             self.epoch_block_anticone_overlimited, self.epoch_block_anticone_set_sizes,
             self.epoch_block_anticone_difficulties
         )
@@ -609,7 +607,6 @@ impl ConsensusExecutionHandler {
                     debug_out.anticone_overlimit_blocks.push(block.hash());
                 }
             } else {
-//                let is_heavy_block = reward_info.epoch_block_is_heavy[enum_idx];
                 let mut reward = if U512::from(block.block_header.pow_quality)
                     * U512::from(block_light_difficulty)
                     >= U512::from(epoch_light_difficulty)
