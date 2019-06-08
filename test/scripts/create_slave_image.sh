@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -eu
 
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
