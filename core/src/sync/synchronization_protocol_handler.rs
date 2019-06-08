@@ -960,16 +960,18 @@ impl SynchronizationProtocolHandler {
             }
         };
 
+        // NOTE: We may still follow the rule of requesting header
+        // before requesting block even in catch-up mode.
         // request missing blocks
-        let missing_blocks: Vec<H256> = resp
-            .hashes
-            .iter()
-            .filter(|h| !self.graph.contains_block(&h))
-            .cloned()
-            .collect();
+        //let missing_blocks: Vec<H256> = resp
+        //    .hashes
+        //    .iter()
+        //    .filter(|h| !self.graph.contains_block(&h))
+        //    .cloned()
+        //    .collect();
 
-        debug!("requesting missing blocks: {:?}", missing_blocks);
-        self.request_blocks(io, Some(peer), missing_blocks);
+        //debug!("requesting missing blocks: {:?}", missing_blocks);
+        //self.request_blocks(io, Some(peer), missing_blocks);
 
         // request missing headers
         let missing_headers = resp
@@ -1119,7 +1121,7 @@ impl SynchronizationProtocolHandler {
                 }
             });
 
-            info!(
+            debug!(
                 "requesting epoch {:?}/{:?} hashes from peer {:?}",
                 epoch_number, best_peer_epoch, peer
             );

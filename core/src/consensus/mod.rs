@@ -1556,7 +1556,7 @@ impl ConsensusGraph {
     ) -> (H256, H256) {
         // If we already computed the state of the block before, we should not
         // do it again FIXME: propagate the error up
-        info!("compute_state_for_block {:?}", block_hash);
+        debug!("compute_state_for_block {:?}", block_hash);
         {
             let cached_state = self
                 .data_man
