@@ -22,10 +22,11 @@ subscription_id=`az account show --query id -o tsv`
 
 echo "launch $2 slave VMs ..."
 # We need an extra data disk to store data because the OS or Temporary disk in azure has very limited throughput
+# 1024GB disk is supposed to provide 200MB/s throughput and 5000 IOPS
 az vmss create -n expvmss -l $location -g $group --instance-count $num_slaves \
     --admin-username ubuntu --generate-ssh-key \
     --vm-sku Standard_D4s_v3 --image exp-slave-image \
-    --data-disk-sizes-gb 64 --storage-sku Premium_LRS --upgrade-policy-mode automatic
+    --data-disk-sizes-gb 1024 --storage-sku Premium_LRS --upgrade-policy-mode automatic
 
 # Mount new data disk to /tmp
 az vmss extension set \
