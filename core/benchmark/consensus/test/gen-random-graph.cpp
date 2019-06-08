@@ -22,9 +22,9 @@ int local_clock[MAXN + 1][MAXM];
 int current_clock[MAXM];
 int parent[MAXN + 1];
 int block_group[MAXN + 1], block_gidx[MAXN + 1];
-int is_valid[MAXN + 1], is_stable[MAXN + 1];
+int is_valid[MAXN + 1], is_stable[MAXN + 1], is_adaptive[MAXN + 1];
 
-int subtree_weight[MAXN + 1];
+int subtree_weight[MAXN + 1], subtree_stable_weight[MAXN + 1];
 int past_weight[MAXN + 1];
 bool consider[MAXN + 1];
 
@@ -53,11 +53,16 @@ void compute_subtree(int v) {
         return;
     }
     int sum = 1;
+    int sums = 1;
+    if (is_stable[v])
+        sums = 0;
     for (int i = 0; i < children[v].size(); i++) {
         compute_subtree(children[v][i]);
         sum += subtree_weight[children[v][i]];
+        sums += subtree_stable_weight[children[v][i]];
     }
     subtree_weight[v] = sum;
+    subtree_stable_weight[v] = sums;
 }
 
 void process(int n, int g) {
@@ -70,6 +75,8 @@ void process(int n, int g) {
     int last = -1;
     int current = 0;
     is_stable[n] = 1;
+    std::vector<std::pair<int, int> > tmp;
+    tmp.clear();
     while (true) {
         int largest_child = -1;
         int largest_weight = -1;
@@ -98,7 +105,22 @@ void process(int n, int g) {
         if (g > BETA && f * ALPHA_DEN - g * ALPHA_NUM < 0) {
             is_stable[n] = 0;
         }
+        tmp.push_back(std::make_pair(last, current));
     }
+
+    is_adaptive[n] = 0;
+    if (!is_stable[n]) {
+        for (int i = 0; i < tmp.size(); i++) {
+            int px = tmp[i].first;
+            int x = tmp[i].second;
+            if (subtree_weight[px] > BETA &&
+                subtree_stable_weight[x] * ALPHA_DEN - subtree_weight[px] * ALPHA_NUM < 0) {
+                is_adaptive[n] = 1;
+                break;
+            }
+        }
+    }
+
     parent[n] = current;
     past_weight[n] = tot_cnt;
 }
@@ -123,6 +145,7 @@ int main(int argc, char* argv[]) {
     parent[0] = -1;
     is_valid[0] = 1;
     is_stable[0] = 1;
+    is_adaptive[0] = 0;
     block_group[0] = -1;
     block_gidx[0] = -1;
 
@@ -148,6 +171,7 @@ int main(int argc, char* argv[]) {
         block_group[i] = i - 1;
         block_gidx[i] = 1;
         past_weight[i] = 1;
+        is_adaptive[i] = 0;
     }
 
     // Randomly generate the remaining blocks
@@ -225,7 +249,7 @@ int main(int argc, char* argv[]) {
     fout.open("rand.in", std::ios::out);
     fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << "\n";
     for (int i = 1; i <=N; i++) {
-        fout << is_valid[i] << " " << is_stable[i] << " " << parent[i];
+        fout << is_valid[i] << " " << is_stable[i] << " " << is_adaptive[i] << " " << 1 << " " << parent[i];
         for (int j = 0; j < refs[i].size(); j++)
             if (refs[i][j] != parent[i])
                 fout << " " << refs[i][j];
