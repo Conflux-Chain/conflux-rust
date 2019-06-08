@@ -479,8 +479,7 @@ impl ConsensusGraphInner {
 
             if parent != self.genesis_block_index {
                 let min_agg = self.adaptive_tree.path_aggregate(parent);
-                if min_agg < SignedBigNum::zero()
-                {
+                if min_agg < SignedBigNum::zero() {
                     debug!("block is adaptive: {:?}", min_agg);
                     adaptive = true;
                 }
@@ -2264,7 +2263,10 @@ impl ConsensusGraph {
         let parent_w = inner.weight_tree.get(parent);
         inner.adaptive_tree.set(
             me,
-            &SignedBigNum::neg(U256::from(parent_w) * U256::from(inner.inner_conf.adaptive_weight_alpha_num)),
+            &SignedBigNum::neg(
+                U256::from(parent_w)
+                    * U256::from(inner.inner_conf.adaptive_weight_alpha_num),
+            ),
         );
 
         inner.compute_anticone(me);
@@ -2446,12 +2448,11 @@ impl ConsensusGraph {
         inner.adaptive_tree.make_tree(me);
         inner.adaptive_tree.link(parent, me);
         let parent_w = inner.weight_tree.get(parent);
-        let start_adaptive_weight = &SignedBigNum::neg(U256::from(parent_w)
-                * U256::from(inner.inner_conf.adaptive_weight_alpha_num));
-        inner.adaptive_tree.set(
-            me,
-            &start_adaptive_weight,
+        let start_adaptive_weight = &SignedBigNum::neg(
+            U256::from(parent_w)
+                * U256::from(inner.inner_conf.adaptive_weight_alpha_num),
         );
+        inner.adaptive_tree.set(me, &start_adaptive_weight);
 
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;

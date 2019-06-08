@@ -22,6 +22,7 @@ use crate::{
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
+use metrics::Gauge;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     Account, Action, EpochId, SignedTransaction, TransactionAddress,
@@ -35,7 +36,6 @@ use std::{
     sync::{mpsc::channel, Arc},
 };
 use threadpool::ThreadPool;
-use metrics::Gauge;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Gauge = Gauge::register("tx_pool_size");
