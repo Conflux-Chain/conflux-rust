@@ -27,6 +27,7 @@ TEST_INPUT = [
     "stable-case1.in",
     "stable-case2.in",
     "stable-case3.in",
+    "stable-case4.in",
     "partial-invalid-case1.in",
     "partial-invalid-case2.in",
     "adaptive-case1.in",
