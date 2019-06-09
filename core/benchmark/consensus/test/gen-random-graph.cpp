@@ -264,7 +264,7 @@ int main(int argc, char* argv[]) {
 
     std::ofstream fout;
     fout.open("rand.in", std::ios::out);
-    fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << "\n";
+    fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << " " << HEAVY_BLOCK_RATIO << "\n";
     for (int i = 1; i <=N; i++) {
         fout << is_valid[i] << " " << is_stable[i] << " " << is_adaptive[i] << " "
              << ((weight[i] < 1) ? 1 : weight[i])

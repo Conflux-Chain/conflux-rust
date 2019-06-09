@@ -82,6 +82,7 @@ fn create_simple_block(
 fn initialize_consensus_graph_for_test(
     genesis_block: Block, db_dir: &str,
     alpha_den: u64, alpha_num: u64, beta: u64,
+    h: u64,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>) {
     let ledger_db = db::open_database(
         db_dir,
@@ -133,6 +134,7 @@ fn initialize_consensus_graph_for_test(
                 adaptive_weight_alpha_num: alpha_num,
                 adaptive_weight_alpha_den: alpha_den,
                 adaptive_weight_beta: beta,
+                heavy_block_difficulty_ratio: h,
                 enable_optimistic_execution: false,
             },
             bench_mode: true, // Set bench_mode to true so that we skip execution
@@ -219,7 +221,8 @@ fn main() {
     let alpha_num = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
     let alpha_den = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
     let beta = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
-    println!("alpha = {}/{} beta = {}", alpha_num, alpha_den, beta);
+    let h_ratio = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
+    println!("alpha = {}/{} beta = {} h = {}", alpha_num, alpha_den, beta, h_ratio);
 
     let (genesis_hash, genesis_block) =
         create_simple_block_impl(H256::default(), vec![], 0, 0, U256::from(10), 1);
@@ -230,6 +233,7 @@ fn main() {
         alpha_den,
         alpha_num,
         beta,
+        h_ratio,
     );
 
     let mut hashes = Vec::new();
