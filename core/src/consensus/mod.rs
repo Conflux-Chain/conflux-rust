@@ -167,7 +167,22 @@ impl ConsensusGraphNodeData {
 /// Therefore, in the stable_tree, the value for x is
 /// d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent).
 ///
-/// adaptive could be computed in a similar manner.
+/// adaptive could be computed in a similar manner:
+///
+/// 1   B = Past(b)
+/// 2   a = b.parent
+/// 3   Let f(x) = SubTW(B, x.parent)
+/// 4   Let g(x) = SubStableTW(B, x)
+/// 5   adaptive = False
+/// 6   while a.parent != Nil do
+/// 7       if f(a) > beta and g(a) / f(a) < alpha then
+/// 8           adaptive = True
+/// 9       a = a.parent
+///
+/// The only difference is that when maintaining g(x) * d - f(x) * n, we need to do
+/// special caterpillar update in the Link-Cut-Tree, i.e., given a node X, we need to
+/// update the values of all of those nodes A such that A is the child of one of the
+/// node in the path from Genesis to X.
 ///
 /// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
 /// each node has an internal index. This enables fast internal implementation
@@ -1204,6 +1219,11 @@ impl ConsensusGraphInner {
         self.data_man.db.key_value().write(dbops).expect("db error");
     }
 
+    /// Compute the block weight following the GHAST algorithm:
+    /// For partially invalid block, the weight is always 0
+    /// If a block is not adaptive, the weight is its difficulty
+    /// If a block is adaptive, then for the heavy blocks, it equals to
+    /// the heavy block ratio. Otherwise, it is zero.
     fn block_weight(&self, me: usize) -> U256 {
         if self.arena[me].data.partial_invalid {
             return U256::from(0);
