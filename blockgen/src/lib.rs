@@ -4,10 +4,7 @@
 
 use cfx_types::{Address, H256, U256, U512};
 use cfxcore::{
-    consensus::{
-        ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
-        HEAVY_BLOCK_DIFFICULTY_RATIO,
-    },
+    consensus::{ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT},
     pow::*,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedSynchronizationGraph, SharedSynchronizationService,
@@ -188,8 +185,9 @@ impl BlockGenerator {
         };
         if adaptive {
             assert!(
-                U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-                    * U512::from(expected_difficulty)
+                U512::from(
+                    consensus_inner.inner_conf.heavy_block_difficulty_ratio
+                ) * U512::from(expected_difficulty)
                     < U512::from(U256::max_value())
             );
         }

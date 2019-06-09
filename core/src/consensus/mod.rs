@@ -67,7 +67,7 @@ const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM: u64 = 2;
 pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN: u64 = 3;
 pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
-pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: usize = 240;
+pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 240;
 
 const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
@@ -220,7 +220,7 @@ pub struct ConsensusGraphInner {
     // execution and the block packaging and verification.
     // optimistic_executed_height is the number of step to go ahead
     optimistic_executed_height: Option<usize>,
-    inner_conf: ConsensusInnerConfig,
+    pub inner_conf: ConsensusInnerConfig,
 }
 
 pub struct ConsensusGraphNode {
