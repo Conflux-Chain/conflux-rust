@@ -855,8 +855,6 @@ impl ConsensusGraphInner {
             |(pivot_index, anticone_penalty_cutoff_epoch_index)| {
                 let epoch_blocks = self.get_epoch_blocks(data_man, pivot_index);
 
-                let mut epoch_block_difficulties =
-                    Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_anticone_overlimited =
                     Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_anticone_set_sizes =
@@ -871,9 +869,6 @@ impl ConsensusGraphInner {
                     .anticone;
                 for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
                     let block_consensus_node = &self.arena[*index];
-
-                    epoch_block_difficulties
-                        .push(block_consensus_node.difficulty);
 
                     // TODO: partial invalidity is with respect to a certain
                     // TODO: pivot chain block. When pivot chain is reverted
@@ -904,8 +899,7 @@ impl ConsensusGraphInner {
                         // normally and around the time of difficulty
                         // adjustment.
                         // LINT.IfChange(ANTICONE_PENALTY_1)
-                        if anticone_difficulty
-                            / U512::from(epoch_difficulty)
+                        if anticone_difficulty / U512::from(epoch_difficulty)
                             >= U512::from(ANTICONE_PENALTY_RATIO)
                         {
                             anticone_overlimited = true;
@@ -921,7 +915,6 @@ impl ConsensusGraphInner {
                 }
                 RewardExecutionInfo {
                     epoch_blocks,
-                    epoch_block_difficulties,
                     epoch_block_anticone_overlimited,
                     epoch_block_anticone_set_sizes,
                     epoch_block_anticone_difficulties,

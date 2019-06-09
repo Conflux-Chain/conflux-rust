@@ -37,7 +37,6 @@ use std::fmt::{Debug, Formatter};
 /// The struct includes most information to compute rewards for old epochs
 pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
-    pub epoch_block_difficulties: Vec<U256>,
     pub epoch_block_anticone_overlimited: Vec<bool>,
     pub epoch_block_anticone_set_sizes: Vec<usize>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
@@ -47,10 +46,10 @@ impl Debug for RewardExecutionInfo {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "RewardExecutionInfo{{ epoch_blocks: {:?} epoch_block_difficulties: {:?}, \
+            "RewardExecutionInfo{{ epoch_blocks: {:?} \
              epoch_block_anticone_overlimited: {:?} epoch_block_anticone_set_sizes: {:?} \
              epoch_block_anticone_difficulties: {:?}}}",
-            self.epoch_blocks.iter().map(|b| b.hash()).collect::<Vec<H256>>(), self.epoch_block_difficulties,
+            self.epoch_blocks.iter().map(|b| b.hash()).collect::<Vec<H256>>(),
             self.epoch_block_anticone_overlimited, self.epoch_block_anticone_set_sizes,
             self.epoch_block_anticone_difficulties
         )
@@ -584,19 +583,13 @@ impl ConsensusExecutionHandler {
         let pivot_block = epoch_blocks.last().expect("Not empty");
         let reward_epoch_hash = pivot_block.hash();
         debug!("Process rewards and fees for {:?}", reward_epoch_hash);
-        let epoch_difficulty = reward_info
-            .epoch_block_difficulties
-            .last()
-            .expect("Not empty");
+        let epoch_difficulty = pivot_block.block_header.difficulty();
 
         let epoch_size = epoch_blocks.len();
         let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
 
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
-            let block_difficulty =
-                reward_info.epoch_block_difficulties[enum_idx];
-
             let anticone_overlimited =
                 reward_info.epoch_block_anticone_overlimited[enum_idx];
 
@@ -607,10 +600,8 @@ impl ConsensusExecutionHandler {
                     debug_out.anticone_overlimit_blocks.push(block.hash());
                 }
             } else {
-                let mut reward = if U512::from(block.block_header.pow_quality)
-                    * U512::from(block_difficulty)
-                    >= U512::from(epoch_difficulty)
-                        * U512::from(block.block_header.difficulty())
+                let mut reward = if block.block_header.pow_quality
+                    >= *epoch_difficulty
                 {
                     U512::from(BASE_MINING_REWARD) * U512::from(CONFLUX_TOKEN)
                 } else {
