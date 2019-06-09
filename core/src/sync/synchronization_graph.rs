@@ -5,9 +5,7 @@
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager, CacheSize},
-    consensus::{
-        ConsensusGraphInner, SharedConsensusGraph, HEAVY_BLOCK_DIFFICULTY_RATIO,
-    },
+    consensus::{ConsensusGraphInner, SharedConsensusGraph},
     db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
@@ -16,7 +14,7 @@ use crate::{
     storage::GuardedValue,
     verification::*,
 };
-use cfx_types::{H256, U256, U512};
+use cfx_types::{H256, U256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{block::CompactBlock, Block, BlockHeader, EpochNumber};
@@ -68,8 +66,6 @@ pub struct SynchronizationGraphNode {
     pub block_header: Arc<BlockHeader>,
     /// The status of graph connectivity in the current block view.
     pub graph_status: u8,
-    /// Whether the block is a heavy block
-    pub is_heavy: bool,
     /// Whether the block body is ready.
     pub block_ready: bool,
     /// The index of the parent of the block.
@@ -90,17 +86,6 @@ pub struct SynchronizationGraphNode {
     /// The minimum epoch number of the block in the view of other
     /// blocks including itself.
     pub min_epoch_in_other_views: u64,
-}
-
-impl SynchronizationGraphNode {
-    pub fn light_difficulty(&self) -> U256 {
-        if self.is_heavy {
-            *self.block_header.difficulty()
-                / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-        } else {
-            *self.block_header.difficulty()
-        }
-    }
 }
 
 pub struct SynchronizationGraphInner {
@@ -137,7 +122,6 @@ impl SynchronizationGraphInner {
         let hash = header.hash();
         let me = self.arena.insert(SynchronizationGraphNode {
             graph_status: BLOCK_INVALID,
-            is_heavy: false,
             block_ready: false,
             parent: NULL,
             children: Vec::new(),
@@ -181,7 +165,6 @@ impl SynchronizationGraphInner {
             } else {
                 BLOCK_HEADER_ONLY
             },
-            is_heavy: false,
             block_ready: *header.parent_hash() == H256::default(),
             parent: NULL,
             children: Vec::new(),
@@ -344,10 +327,10 @@ impl SynchronizationGraphInner {
 
     fn verify_header_graph_ready_block(
         &self, index: usize,
-    ) -> Result<bool, Error> {
-        let mut is_heavy_block = false;
+    ) -> Result<(), Error> {
         let epoch = self.arena[index].block_header.height();
         let parent = self.arena[index].parent;
+        // Verify the height and epoch numbers are correct
         if self.arena[parent].block_header.height() + 1 != epoch {
             warn!(
                 "Invalid height. mine {}, parent {}",
@@ -370,6 +353,7 @@ impl SynchronizationGraphInner {
         );
         let gas_upper = parent_gas_limit + parent_gas_limit / gas_limit_divisor;
         let self_gas_limit = *self.arena[index].block_header.gas_limit();
+        // Verify the gas limit is respected
         if self_gas_limit <= gas_lower || self_gas_limit >= gas_upper {
             return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
                 min: Some(gas_lower),
@@ -382,12 +366,7 @@ impl SynchronizationGraphInner {
             .expected_difficulty(self.arena[index].block_header.parent_hash());
         let my_difficulty = *self.arena[index].block_header.difficulty();
 
-        if U512::from(my_difficulty)
-            == U512::from(expected_difficulty)
-                * U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-        {
-            is_heavy_block = true;
-        } else if my_difficulty != expected_difficulty {
+        if my_difficulty != expected_difficulty {
             warn!(
                 "expected_difficulty {}; difficulty {}",
                 expected_difficulty,
@@ -399,7 +378,7 @@ impl SynchronizationGraphInner {
             })));
         }
 
-        Ok(is_heavy_block)
+        Ok(())
     }
 
     /// The input `cur_hash` must have been inserted to sync_graph, otherwise
@@ -415,25 +394,13 @@ impl SynchronizationGraphInner {
         );
 
         let mut cur = cur_index;
-        let cur_difficulty = self.arena[cur].light_difficulty();
+        let cur_difficulty = self.arena[cur].block_header.difficulty();
         let mut block_count = 0 as u64;
         let mut max_time = u64::min_value();
         let mut min_time = u64::max_value();
         for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
-            for index in self.arena[cur].blockset_in_own_view_of_epoch.iter() {
-                if self.arena[*index].is_heavy {
-                    block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
-                } else {
-                    block_count += 1;
-                }
-            }
-
-            if self.arena[cur].is_heavy {
-                block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
-            } else {
-                block_count += 1;
-            }
-
+            block_count +=
+                self.arena[cur].blockset_in_own_view_of_epoch.len() as u64 + 1;
             max_time = max(max_time, self.arena[cur].block_header.timestamp());
             min_time = min(min_time, self.arena[cur].block_header.timestamp());
             cur = self.arena[cur].parent;
@@ -445,12 +412,18 @@ impl SynchronizationGraphInner {
         )
     }
 
+    /// Compute the expected difficulty (light_difficulty) for a block given its
+    /// parent hash
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
         let index = *self.indices.get(parent_hash).unwrap();
         let epoch = self.arena[index].block_header.height();
         if epoch < self.pow_config.difficulty_adjustment_epoch_period {
+            // Use initial difficulty for early epochs
             self.pow_config.initial_difficulty.into()
         } else {
+            // FIXME: I believe for most cases, we should be able to reuse the
+            // parent difficulty! Only those in the boundary need to
+            // be recomputed!
             let last_period_upper = (epoch
                 / self.pow_config.difficulty_adjustment_epoch_period)
                 * self.pow_config.difficulty_adjustment_epoch_period;
@@ -690,12 +663,12 @@ impl SynchronizationGraph {
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
-    pub fn check_mining_heavy_block(
+    pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         light_difficulty: &U256,
     ) -> bool
     {
-        self.consensus.check_mining_heavy_block(
+        self.consensus.check_mining_adaptive_block(
             inner,
             parent_hash,
             light_difficulty,
@@ -906,10 +879,6 @@ impl SynchronizationGraph {
                 debug_assert!(inner.arena[index].parent != NULL);
 
                 let r = inner.verify_header_graph_ready_block(index);
-                inner.arena[index].is_heavy = match r {
-                    Ok(is_heavy) => is_heavy,
-                    _ => false,
-                };
 
                 if need_to_verify && r.is_err() {
                     warn!(

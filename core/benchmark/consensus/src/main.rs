@@ -36,17 +36,22 @@ use std::collections::{HashSet, HashMap};
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
-    diff: U256,
+    diff: U256, block_weight: u32,
 ) -> (H256, Block)
 {
     let mut b = BlockHeaderBuilder::new();
-    let header = b
+    let mut header = b
         .with_parent_hash(parent_hash)
         .with_height(height)
         .with_referee_hashes(ref_hashes)
         .with_nonce(nonce)
         .with_difficulty(diff)
         .build();
+    header.pow_quality = if block_weight > 1 {
+        diff * block_weight
+    } else {
+        diff
+    };
     let block = Block::new(header, vec![]);
     (block.hash(), block)
 }
@@ -69,7 +74,8 @@ fn create_simple_block(
         ref_hashes,
         parent_header.height() + 1,
         nonce,
-        exp_diff * block_weight,
+        exp_diff,
+        block_weight,
     )
 }
 
@@ -216,7 +222,7 @@ fn main() {
     println!("alpha = {}/{} beta = {}", alpha_num, alpha_den, beta);
 
     let (genesis_hash, genesis_block) =
-        create_simple_block_impl(H256::default(), vec![], 0, 0, U256::from(10));
+        create_simple_block_impl(H256::default(), vec![], 0, 0, U256::from(10), 1);
 
     let (sync, consensus) = initialize_consensus_graph_for_test(
         genesis_block.clone(),

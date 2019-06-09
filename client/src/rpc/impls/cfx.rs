@@ -361,7 +361,7 @@ impl RpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: u64,
+        difficulty: u64, adaptive: bool,
     ) -> RpcResult<H256>
     {
         info!(
@@ -373,6 +373,7 @@ impl RpcImpl {
             referee,
             num_txs,
             difficulty,
+            adaptive,
         );
         Ok(hash)
     }
@@ -412,7 +413,9 @@ impl RpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-    ) -> RpcResult<H256> {
+        adaptive: bool,
+    ) -> RpcResult<H256>
+    {
         info!("RPC Request: generate_custom_block()");
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
@@ -421,6 +424,7 @@ impl RpcImpl {
             parent_hash,
             referee,
             transactions,
+            adaptive,
         );
 
         Ok(hash)
@@ -788,7 +792,7 @@ impl TestRpc for TestRpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: Trailing<u64>,
+        adaptive: bool, difficulty: Trailing<u64>,
     ) -> RpcResult<H256>
     {
         self.rpc_impl.generate_fixed_block(
@@ -796,6 +800,7 @@ impl TestRpc for TestRpcImpl {
             referee,
             num_txs,
             difficulty.unwrap_or(0),
+            adaptive,
         )
     }
 
@@ -820,9 +825,15 @@ impl TestRpc for TestRpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-    ) -> RpcResult<H256> {
-        self.rpc_impl
-            .generate_custom_block(parent_hash, referee, raw_txs)
+        adaptive: Trailing<bool>,
+    ) -> RpcResult<H256>
+    {
+        self.rpc_impl.generate_custom_block(
+            parent_hash,
+            referee,
+            raw_txs,
+            adaptive.unwrap_or(false),
+        )
     }
 
     fn generate_block_with_fake_txs(
