@@ -455,6 +455,25 @@ impl SynchronizationGraphInner {
         }
         false
     }
+
+    /// This function translate the blockset_in_own_epoch from sync_index to consensus_index.
+    /// It assumes all past blocks are in the consensus graph already. Otherwise, this function
+    /// will panic!
+    pub fn translate_blockset_in_own_epoch(&self, my_hash: &H256,
+                                           consensus: SharedConsensusGraph) -> HashSet<usize> {
+        let consensus_inner = consensus.inner.read();
+        let my_sync_index = self.indices.get(my_hash).expect("exist");
+        let mut consensus_blockset_in_own_epoch = HashSet::new();
+        for index_in_sync in self.arena[*my_sync_index]
+            .blockset_in_own_view_of_epoch
+            .iter()
+            {
+                let hash = self.arena[*index_in_sync].block_header.hash();
+                let index_in_consensus = consensus_inner.indices.get(&hash).unwrap();
+                consensus_blockset_in_own_epoch.insert(*index_in_consensus);
+            }
+        consensus_blockset_in_own_epoch
+    }
 }
 
 pub struct SynchronizationGraph {
@@ -506,7 +525,10 @@ impl SynchronizationGraph {
             .name("Consensus Worker".into())
             .spawn(move || loop {
                 match consensus_receiver.recv() {
-                    Ok(hash) => consensus.on_new_block(&hash, inner.as_ref()),
+                    Ok(hash) => {
+                        let translated_blockset = inner.read().translate_blockset_in_own_epoch(&hash, consensus.clone());
+                        consensus.on_new_block(&hash, translated_blockset)
+                    },
                     Err(_) => break,
                 }
             })
@@ -659,7 +681,7 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        self.consensus.construct_pivot(&self.inner);
+        self.consensus.construct_pivot();
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -1055,7 +1077,8 @@ impl SynchronizationGraph {
                     // asynchronously
                     self.consensus_sender.lock().send(h).expect("Cannot fail");
                 } else {
-                    self.consensus.on_new_block_construction_only(&h, &*inner);
+                    let translated_blockset = inner.translate_blockset_in_own_epoch(&hash, self.consensus.clone());
+                    self.consensus.on_new_block_construction_only(&h, translated_blockset);
                 }
 
                 for child in &inner.arena[index].children {
