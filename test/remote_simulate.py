@@ -125,6 +125,19 @@ class P2PTest(ConfluxTestFramework):
             default=20,
             type=int
         )
+        # Peer propagation count
+        parser.add_argument(
+            "--min-peers-propagation",
+            dest="min_peers_propagation",
+            default=8,
+            type=int,
+        )
+        parser.add_argument(
+            "--max-peers-propagation",
+            dest="max_peers_propagation",
+            default=128,
+            type=int,
+        )
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
@@ -175,6 +188,10 @@ class P2PTest(ConfluxTestFramework):
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
+
+        # tx propagation setting
+        self.conf_parameters["min_peers_propagation"] = str(self.options.min_peers_propagation)
+        self.conf_parameters["max_peers_propagation"] = str(self.options.max_peers_propagation)
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)

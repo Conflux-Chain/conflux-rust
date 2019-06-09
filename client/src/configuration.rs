@@ -101,6 +101,8 @@ build_config! {
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 5000)
         (metrics_output_file, (String), "metrics.log".to_string())
+        (min_peers_propagation, (usize), 8)
+        (max_peers_propagation, (usize), 128)
     }
     {
         (
@@ -311,6 +313,8 @@ impl Configuration {
             max_trans_count_received_in_catch_up: self
                 .raw_conf
                 .max_trans_count_received_in_catch_up,
+            min_peers_propagation: self.raw_conf.min_peers_propagation,
+            max_peers_propagation: self.raw_conf.max_peers_propagation,
         }
     }
 

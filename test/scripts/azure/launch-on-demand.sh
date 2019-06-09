@@ -21,9 +21,22 @@ template_group="conflux-experiment"
 subscription_id=`az account show --query id -o tsv`
 
 echo "launch $2 slave VMs ..."
+# We need an extra SSD data disk to store data because the OS or Temporary disk in azure has very limited throughput
+# 1024GB disk of Premium_LRS is supposed to provide 200MB/s throughput and 5000 IOPS
 az vmss create -n expvmss -l $location -g $group --instance-count $num_slaves \
     --admin-username ubuntu --generate-ssh-key \
-    --vm-sku Standard_D4s_v3 --image exp-slave-image
+    --vm-sku Standard_D4s_v3 --image exp-slave-image \
+    --data-disk-sizes-gb 1024 --storage-sku Premium_LRS --upgrade-policy-mode automatic
+
+# Mount new data disk to /tmp
+az vmss extension set \
+  --publisher Microsoft.Azure.Extensions \
+  --version 2.0 \
+  --name CustomScript \
+  --resource-group $group \
+  --vmss-name expvmss \
+  --settings '{"commandToExecute":"mkfs.ext4 /dev/sdc; rm -rf /tmp; mkdir /tmp; mount /dev/sdc /tmp; chmod 777 /tmp"}'
+az vmss update -n expvmss -g $group
 
 echo "retrieve private IPs of slave VMs ..."
 while true

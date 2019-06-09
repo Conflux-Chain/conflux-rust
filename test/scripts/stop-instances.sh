@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 aws ec2 stop-instances --force --instance-ids `cat instances`
 #for region in us-east-2 us-west-1 ap-southeast-1 ap-southeast-2 eu-central-1 sa-east-1

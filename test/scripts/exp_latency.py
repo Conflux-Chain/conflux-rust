@@ -120,6 +120,8 @@ class LatencyExperiment(ArgumentHolder):
         self.bandwidth = 20
         self.tps = 4000
         self.enable_tx_propagation = False
+        self.min_peers_propagate = 8
+        self.max_peers_propagate = 128
         self.metrics_report_interval_ms = 3000
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"

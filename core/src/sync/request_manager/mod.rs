@@ -11,6 +11,7 @@ use message::{
     GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
     GetCompactBlocks, GetTransactions, TransIndex,
 };
+use metrics::Gauge;
 use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature, TxPropagateId};
@@ -28,6 +29,9 @@ use tx_handler::{ReceivedTransactionContainer, SentTransactionContainer};
 mod request_handler;
 mod tx_handler;
 
+lazy_static! {
+    static ref TX_REQUEST_GAUGE: Gauge = Gauge::register("tx_diff_set_size");
+}
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
     Header(H256),
@@ -373,6 +377,8 @@ impl RequestManager {
 
             (indices, tx_ids)
         };
+        TX_REQUEST_GAUGE.update(tx_ids.len() as i64);
+        debug!("Request {} tx from peer={}", tx_ids.len(), peer_id);
         if let Err(e) = self.request_handler.send_request(
             io,
             peer_id,

@@ -33,7 +33,7 @@ az vm create -l $location -g $group -n exp-master \
 echo "create slave VM to make image ..."
 az vm create -l $location -g $group -n exp-slave \
     --admin-username ubuntu --generate-ssh-keys \
-    --nsg $template_group-nsg --size Standard_D4s_v3 \
+    --nsg $template_group-nsg --size Standard_F8s \
     --image /subscriptions/$subscription_id/resourceGroups/$template_group/providers/Microsoft.Compute/images/$template_group-image
 
 echo "setup on slave VM ..."

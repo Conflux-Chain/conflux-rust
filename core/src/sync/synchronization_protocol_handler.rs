@@ -36,6 +36,7 @@ use crate::{
     pow::WORKER_COMPUTATION_PARALLELISM,
     verification::VerificationConfig,
 };
+use metrics::Gauge;
 use primitives::{
     Block, SignedTransaction, TransactionWithSignature, TxPropagateId,
 };
@@ -49,6 +50,10 @@ use std::{
     time::{Duration, Instant},
 };
 use threadpool::ThreadPool;
+lazy_static! {
+    static ref TX_PROPAGATE_GAUGE: Gauge =
+        Gauge::register("tx_propagate_set_size");
+}
 
 const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
 
@@ -57,8 +62,6 @@ pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 pub const MAX_HEADERS_TO_SEND: u64 = 512;
 pub const MAX_BLOCKS_TO_SEND: u64 = 256;
 const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
-const MIN_PEERS_PROPAGATION: usize = 8;
-const MAX_PEERS_PROPAGATION: usize = 128;
 const DEFAULT_GET_HEADERS_NUM: u64 = 1;
 const DEFAULT_GET_PARENT_HEADERS_NUM: u64 = 30;
 lazy_static! {
@@ -116,6 +119,8 @@ pub struct ProtocolConfiguration {
     pub received_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
+    pub min_peers_propagation: usize,
+    pub max_peers_propagation: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -1648,10 +1653,10 @@ impl SynchronizationProtocolHandler {
         let chosen_size = (num_peers.powf(-0.5).min(throttle_ratio) * num_peers)
             .round() as usize;
         let mut peer_vec = self.syn.get_random_peer_vec(
-            chosen_size.max(MIN_PEERS_PROPAGATION),
+            chosen_size.max(self.protocol_config.min_peers_propagation),
             filter,
         );
-        peer_vec.truncate(MAX_PEERS_PROPAGATION);
+        peer_vec.truncate(self.protocol_config.max_peers_propagation);
         peer_vec
     }
 
@@ -1726,6 +1731,7 @@ impl SynchronizationProtocolHandler {
             tx_msg.window_index = self
                 .request_manager
                 .append_sent_transactions(sent_transactions);
+            TX_PROPAGATE_GAUGE.update(tx_msg.trans_short_ids.len() as i64);
         }
         if tx_msg.trans_short_ids.is_empty() {
             return;
