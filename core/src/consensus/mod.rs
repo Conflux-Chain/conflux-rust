@@ -370,16 +370,16 @@ impl ConsensusGraphInner {
     }
 
     pub fn check_mining_adaptive_block(
-        &mut self, parent_index: usize, light_difficulty: U256,
+        &mut self, parent_index: usize, difficulty: U256,
     ) -> bool {
         let (_stable, adaptive) =
-            self.adaptive_weight_impl(parent_index, None, &light_difficulty);
+            self.adaptive_weight_impl(parent_index, None, &difficulty);
         adaptive
     }
 
     fn adaptive_weight_impl(
         &mut self, parent_0: usize, anticone_from: Option<usize>,
-        light_difficulty: &U256,
+        difficulty: &U256,
     ) -> (bool, bool)
     {
         let mut parent = parent_0;
@@ -430,7 +430,7 @@ impl ConsensusGraphInner {
         debug!("total_weight before insert: {}", total_weight);
 
         let adjusted_beta =
-            U256::from(self.inner_conf.adaptive_weight_beta) * light_difficulty;
+            U256::from(self.inner_conf.adaptive_weight_beta) * difficulty;
 
         while parent != self.genesis_block_index {
             let grandparent = self.arena[parent].parent;
@@ -527,9 +527,9 @@ impl ConsensusGraphInner {
         let parent = self.arena[me].parent;
         assert!(parent != NULL);
 
-        let light_difficulty = &self.arena[me].difficulty.clone();
+        let difficulty = &self.arena[me].difficulty.clone();
 
-        self.adaptive_weight_impl(parent, Some(me), light_difficulty)
+        self.adaptive_weight_impl(parent, Some(me), difficulty)
     }
 
     pub fn insert(
@@ -855,7 +855,7 @@ impl ConsensusGraphInner {
             |(pivot_index, anticone_penalty_cutoff_epoch_index)| {
                 let epoch_blocks = self.get_epoch_blocks(data_man, pivot_index);
 
-                let mut epoch_block_light_difficulties =
+                let mut epoch_block_difficulties =
                     Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_anticone_overlimited =
                     Vec::with_capacity(epoch_blocks.len());
@@ -864,7 +864,7 @@ impl ConsensusGraphInner {
                 let mut epoch_block_anticone_difficulties =
                     Vec::with_capacity(epoch_blocks.len());
 
-                let epoch_light_difficulty = self.arena[pivot_index].difficulty;
+                let epoch_difficulty = self.arena[pivot_index].difficulty;
                 let anticone_cutoff_epoch_anticone_set = &self.arena
                     [anticone_penalty_cutoff_epoch_index]
                     .data
@@ -872,7 +872,7 @@ impl ConsensusGraphInner {
                 for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
                     let block_consensus_node = &self.arena[*index];
 
-                    epoch_block_light_difficulties
+                    epoch_block_difficulties
                         .push(block_consensus_node.difficulty);
 
                     // TODO: partial invalidity is with respect to a certain
@@ -905,7 +905,7 @@ impl ConsensusGraphInner {
                         // adjustment.
                         // LINT.IfChange(ANTICONE_PENALTY_1)
                         if anticone_difficulty
-                            / U512::from(epoch_light_difficulty)
+                            / U512::from(epoch_difficulty)
                             >= U512::from(ANTICONE_PENALTY_RATIO)
                         {
                             anticone_overlimited = true;
@@ -921,7 +921,7 @@ impl ConsensusGraphInner {
                 }
                 RewardExecutionInfo {
                     epoch_blocks,
-                    epoch_block_light_difficulties,
+                    epoch_block_difficulties,
                     epoch_block_anticone_overlimited,
                     epoch_block_anticone_set_sizes,
                     epoch_block_anticone_difficulties,
@@ -945,11 +945,11 @@ impl ConsensusGraphInner {
     )
     {
         let new_best_hash = self.arena[new_best_index].hash.clone();
-        let new_best_light_difficulty = self.arena[new_best_index].difficulty;
+        let new_best_difficulty = self.arena[new_best_index].difficulty;
         let old_best_index = *self.pivot_chain.last().expect("not empty");
         if old_best_index == self.arena[new_best_index].parent {
             // Pivot chain prolonged
-            assert!(self.current_difficulty == new_best_light_difficulty);
+            assert!(self.current_difficulty == new_best_difficulty);
         }
 
         let epoch = self.arena[new_best_index].height;
@@ -964,7 +964,7 @@ impl ConsensusGraphInner {
             self.current_difficulty =
                 sync_inner.target_difficulty(&new_best_hash);
         } else {
-            self.current_difficulty = new_best_light_difficulty;
+            self.current_difficulty = new_best_difficulty;
         }
     }
 
@@ -1347,11 +1347,11 @@ impl ConsensusGraph {
     /// not
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        light_difficulty: &U256,
+        difficulty: &U256,
     ) -> bool
     {
         let parent_index = *inner.indices.get(parent_hash).unwrap();
-        inner.check_mining_adaptive_block(parent_index, *light_difficulty)
+        inner.check_mining_adaptive_block(parent_index, *difficulty)
     }
 
     pub fn get_height_from_epoch_number(

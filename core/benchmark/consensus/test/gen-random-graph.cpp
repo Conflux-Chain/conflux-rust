@@ -13,6 +13,7 @@ int N = 10000;
 int ALPHA_NUM = 2;
 int ALPHA_DEN = 3;
 int BETA = 150;
+int HEAVY_BLOCK_RATIO = 10;
 int M = 3;
 int MIN_GAP = 2;
 int MAX_GAP = 30;
@@ -23,6 +24,7 @@ int current_clock[MAXM];
 int parent[MAXN + 1];
 int block_group[MAXN + 1], block_gidx[MAXN + 1];
 int is_valid[MAXN + 1], is_stable[MAXN + 1], is_adaptive[MAXN + 1];
+int weight[MAXN + 1];
 
 int subtree_weight[MAXN + 1], subtree_stable_weight[MAXN + 1];
 int past_weight[MAXN + 1];
@@ -53,8 +55,8 @@ void compute_subtree(int v) {
         subtree_stable_weight[v] = 0;
         return;
     }
-    int sum = 1;
-    int sums = 1;
+    int sum = weight[v];
+    int sums = weight[v];
     if (!is_stable[v])
         sums = 0;
     for (int i = 0; i < children[v].size(); i++) {
@@ -125,20 +127,31 @@ void process(int n, int g) {
 
     parent[n] = current;
     past_weight[n] = tot_cnt;
+    if (is_adaptive[n]) {
+        int x = rand() % HEAVY_BLOCK_RATIO;
+        if (x == 0)
+            weight[n] = HEAVY_BLOCK_RATIO;
+        else
+            weight[n] = 0;
+    } else {
+        weight[n] = 1;
+    }
+
 }
 
 int main(int argc, char* argv[]) {
     if (argc > 1) {
         N = atoi(argv[1]);
     }
-    if (argc > 4) {
+    if (argc > 5) {
         ALPHA_NUM = atoi(argv[2]);
         ALPHA_DEN = atoi(argv[3]);
         BETA = atoi(argv[4]);
+        HEAVY_BLOCK_RATIO = atoi(argv[5]);
     }
-    if (argc > 6) {
-        MIN_GAP = atoi(argv[5]);
-        MAX_GAP = atoi(argv[6]);
+    if (argc > 7) {
+        MIN_GAP = atoi(argv[6]);
+        MAX_GAP = atoi(argv[7]);
     }
 
     // Initialize genesis
@@ -150,6 +163,7 @@ int main(int argc, char* argv[]) {
     is_adaptive[0] = 0;
     block_group[0] = -1;
     block_gidx[0] = -1;
+    weight[0] = 1;
 
     unsigned seed = (unsigned) time(NULL) * getpid();
     // unsigned seed = 2802582656;
@@ -174,6 +188,7 @@ int main(int argc, char* argv[]) {
         block_gidx[i] = 1;
         past_weight[i] = 1;
         is_adaptive[i] = 0;
+        weight[i] = 1;
     }
 
     // Randomly generate the remaining blocks
@@ -251,7 +266,9 @@ int main(int argc, char* argv[]) {
     fout.open("rand.in", std::ios::out);
     fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << "\n";
     for (int i = 1; i <=N; i++) {
-        fout << is_valid[i] << " " << is_stable[i] << " " << is_adaptive[i] << " " << 1 << " " << parent[i];
+        fout << is_valid[i] << " " << is_stable[i] << " " << is_adaptive[i] << " "
+             << ((weight[i] < 1) ? 1 : weight[i])
+             << " " << parent[i];
         for (int j = 0; j < refs[i].size(); j++)
             if (refs[i][j] != parent[i])
                 fout << " " << refs[i][j];
