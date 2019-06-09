@@ -48,9 +48,6 @@ use std::{
     time::Duration,
 };
 
-// const HEAVY_BLOCK_THRESHOLD: usize = 2000;
-pub const HEAVY_BLOCK_DIFFICULTY_RATIO: usize = 240;
-
 pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
 
 /// `REWARD_EPOCH_COUNT` needs to be larger than
@@ -70,6 +67,7 @@ const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM: u64 = 2;
 pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN: u64 = 3;
 pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
+pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 240;
 
 const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
@@ -82,6 +80,8 @@ pub struct ConsensusInnerConfig {
     pub adaptive_weight_alpha_den: u64,
     // Beta is the threshold in GHAST algorithm
     pub adaptive_weight_beta: u64,
+    // The heavy block ratio (h) in GHAST algorithm
+    pub heavy_block_difficulty_ratio: u64,
     // Optimistic execution is the feature to execute ahead of the deferred
     // execution boundary. The goal is to pipeline the transaction
     // execution and the block packaging and verification.
@@ -220,7 +220,7 @@ pub struct ConsensusGraphInner {
     // execution and the block packaging and verification.
     // optimistic_executed_height is the number of step to go ahead
     optimistic_executed_height: Option<usize>,
-    inner_conf: ConsensusInnerConfig,
+    pub inner_conf: ConsensusInnerConfig,
 }
 
 pub struct ConsensusGraphNode {
@@ -1228,7 +1228,7 @@ impl ConsensusGraphInner {
         let is_adaptive = self.arena[me].adaptive;
         if is_adaptive {
             if is_heavy {
-                U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+                U256::from(self.inner_conf.heavy_block_difficulty_ratio)
                     * self.arena[me].difficulty
             } else {
                 U256::from(0)
@@ -2187,7 +2187,7 @@ impl ConsensusGraph {
             weight_in_my_epoch =
                 inner.total_weight_in_own_epoch(sync_inner, hash);
             is_heavy = U512::from(block.block_header.pow_quality)
-                >= U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+                >= U512::from(inner.inner_conf.heavy_block_difficulty_ratio)
                     * U512::from(block.block_header.difficulty());
         }
 
@@ -2353,7 +2353,7 @@ impl ConsensusGraph {
         {
             let sync_inner = sync_inner_lock.read();
             is_heavy = U512::from(block.block_header.pow_quality)
-                >= U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
+                >= U512::from(inner.inner_conf.heavy_block_difficulty_ratio)
                     * U512::from(block.block_header.difficulty());
             weight_in_my_epoch =
                 inner.total_weight_in_own_epoch(&*sync_inner, hash);

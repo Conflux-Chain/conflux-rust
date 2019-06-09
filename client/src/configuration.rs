@@ -7,7 +7,7 @@ use cfxcore::{
     consensus::{
         ConsensusConfig, ConsensusInnerConfig,
         ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-        ADAPTIVE_WEIGHT_DEFAULT_BETA,
+        ADAPTIVE_WEIGHT_DEFAULT_BETA, HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO,
     },
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
@@ -97,6 +97,7 @@ build_config! {
         (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
         (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
+        (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 5000)
@@ -240,6 +241,9 @@ impl Configuration {
                     .raw_conf
                     .adaptive_weight_alpha_den,
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
+                heavy_block_difficulty_ratio: self
+                    .raw_conf
+                    .heavy_block_difficulty_ratio,
                 enable_optimistic_execution: self
                     .raw_conf
                     .enable_optimistic_execution,

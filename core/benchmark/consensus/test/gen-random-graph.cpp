@@ -38,12 +38,12 @@ bool should_consider(int v, int g) {
     return true;
 }
 
-int tot_cnt;
+int tot_weight;
 
 void mark_consider(int v, int g) {
     if (!should_consider(v, g)) return;
     consider[v] = true;
-    tot_cnt ++;
+    tot_weight += weight[v];
     for (int i = 0; i < children[v].size(); i++) {
         mark_consider(children[v][i], g);
     }
@@ -71,7 +71,7 @@ void compute_subtree(int v) {
 void process(int n, int g) {
     memset(subtree_weight, 0, sizeof(subtree_weight));
     memset(consider, 0, sizeof(consider));
-    tot_cnt = 0;
+    tot_weight = 0;
     mark_consider(0, g);
     compute_subtree(0);
 
@@ -80,6 +80,7 @@ void process(int n, int g) {
     is_stable[n] = 1;
     std::vector<std::pair<int, int> > tmp;
     tmp.clear();
+    // fprintf(stderr, "Process %d\n", n);
     while (true) {
         int largest_child = -1;
         int largest_weight = -1;
@@ -103,9 +104,10 @@ void process(int n, int g) {
         last = current;
         current = largest_child;
 
-        int g = tot_cnt - past_weight[last] - 1;
+        int g = tot_weight - past_weight[last] - weight[last];
         int f = subtree_weight[current];
         if (g > BETA && f * ALPHA_DEN - g * ALPHA_NUM < 0) {
+            // fprintf(stderr, "%d %d %d %d\n", last, current, g, f);
             is_stable[n] = 0;
         }
         tmp.push_back(std::make_pair(last, current));
@@ -126,7 +128,7 @@ void process(int n, int g) {
     }
 
     parent[n] = current;
-    past_weight[n] = tot_cnt;
+    past_weight[n] = tot_weight;
     if (is_adaptive[n]) {
         int x = rand() % HEAVY_BLOCK_RATIO;
         if (x == 0)
@@ -166,7 +168,7 @@ int main(int argc, char* argv[]) {
     weight[0] = 1;
 
     unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 2802582656;
+    // unsigned seed = 3659410378;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
@@ -264,7 +266,7 @@ int main(int argc, char* argv[]) {
 
     std::ofstream fout;
     fout.open("rand.in", std::ios::out);
-    fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << "\n";
+    fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << " " << HEAVY_BLOCK_RATIO << "\n";
     for (int i = 1; i <=N; i++) {
         fout << is_valid[i] << " " << is_stable[i] << " " << is_adaptive[i] << " "
              << ((weight[i] < 1) ? 1 : weight[i])
