@@ -38,7 +38,7 @@ use rlp::*;
 use slab::Slab;
 use std::{
     cell::RefCell,
-    cmp::min, cmp::max,
+    cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
     iter::FromIterator,
@@ -535,8 +535,10 @@ impl ConsensusGraphInner {
     }
 
     pub fn insert(
-        &mut self, block: &Block, past_weight: U256, is_heavy: bool, num_blocks_in_own_epoch: usize,
-    ) -> (usize, usize) {
+        &mut self, block: &Block, past_weight: U256, is_heavy: bool,
+        num_blocks_in_own_epoch: usize,
+    ) -> (usize, usize)
+    {
         let hash = block.hash();
 
         let parent = if *block.block_header.parent_hash() != H256::default() {
@@ -614,8 +616,7 @@ impl ConsensusGraphInner {
         }
 
         // Check the pivot selection decision.
-        for consensus_index_in_epoch in blockset_in_own_epoch
-        {
+        for consensus_index_in_epoch in blockset_in_own_epoch {
             if self.arena[consensus_index_in_epoch].data.partial_invalid {
                 continue;
             }
@@ -922,14 +923,16 @@ impl ConsensusGraphInner {
         )
     }
 
-    fn target_difficulty(&self, cur_hash: &H256, data_man: Arc<BlockDataManager>) -> U256 {
+    fn target_difficulty(
+        &self, cur_hash: &H256, data_man: Arc<BlockDataManager>,
+    ) -> U256 {
         let cur_index = *self.indices.get(cur_hash).expect("exist");
         let epoch = self.arena[cur_index].height;
         assert_ne!(epoch, 0);
         debug_assert!(
             epoch
                 == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
-                * self.pow_config.difficulty_adjustment_epoch_period
+                    * self.pow_config.difficulty_adjustment_epoch_period
         );
 
         let mut cur = cur_index;
@@ -939,9 +942,9 @@ impl ConsensusGraphInner {
         let mut min_time = u64::max_value();
         for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
             let block_headers_r = data_man.block_headers.read();
-            let block_header = block_headers_r.get(&self.arena[cur].hash).unwrap();
-            block_count +=
-                self.arena[cur].num_blocks_in_own_epoch as u64 + 1;
+            let block_header =
+                block_headers_r.get(&self.arena[cur].hash).unwrap();
+            block_count += self.arena[cur].num_blocks_in_own_epoch as u64 + 1;
             max_time = max(max_time, block_header.timestamp());
             min_time = min(min_time, block_header.timestamp());
             cur = self.arena[cur].parent;
@@ -954,9 +957,8 @@ impl ConsensusGraphInner {
     }
 
     pub fn adjust_difficulty(
-        &mut self, new_best_index: usize, data_man: Arc<BlockDataManager>
-    )
-    {
+        &mut self, new_best_index: usize, data_man: Arc<BlockDataManager>,
+    ) {
         let new_best_hash = self.arena[new_best_index].hash.clone();
         let new_best_difficulty = self.arena[new_best_index].difficulty;
         let old_best_index = *self.pivot_chain.last().expect("not empty");
@@ -1264,9 +1266,7 @@ impl ConsensusGraphInner {
         &self, blockset_in_own_epoch: &HashSet<usize>,
     ) -> U256 {
         let mut total_weight = U256::zero();
-        for index in blockset_in_own_epoch
-            .iter()
-        {
+        for index in blockset_in_own_epoch.iter() {
             if self.arena[*index].data.partial_invalid {
                 continue;
             }
@@ -2014,9 +2014,7 @@ impl ConsensusGraph {
     /// construct_pivot() should be used after on_new_block_construction_only()
     /// calls. It builds the pivot chain and ists state at once, avoiding
     /// intermediate redundant computation triggered by on_new_block().
-    pub fn construct_pivot(
-        &self,
-    ) {
+    pub fn construct_pivot(&self) {
         {
             let mut inner = &mut *self.inner.write();
 
@@ -2211,8 +2209,12 @@ impl ConsensusGraph {
             + inner.block_weight(parent_idx)
             + weight_in_my_epoch;
 
-        let (me, indices_len) =
-            inner.insert(block.as_ref(), past_weight, is_heavy, blockset_in_own_epoch.len());
+        let (me, indices_len) = inner.insert(
+            block.as_ref(),
+            past_weight,
+            is_heavy,
+            blockset_in_own_epoch.len(),
+        );
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
 
@@ -2378,8 +2380,12 @@ impl ConsensusGraph {
             + inner.block_weight(parent_idx)
             + weight_in_my_epoch;
 
-        let (me, indices_len) =
-            inner.insert(block.as_ref(), past_weight, is_heavy, blockset_in_own_epoch.len());
+        let (me, indices_len) = inner.insert(
+            block.as_ref(),
+            past_weight,
+            is_heavy,
+            blockset_in_own_epoch.len(),
+        );
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
 
@@ -2627,7 +2633,7 @@ impl ConsensusGraph {
 
         inner.adjust_difficulty(
             *new_pivot_chain.last().expect("not empty"),
-            self.data_man.clone()
+            self.data_man.clone(),
         );
         inner.pivot_chain = new_pivot_chain;
         inner.optimistic_executed_height = if to_state_pos > 0 {
