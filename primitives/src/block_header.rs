@@ -34,6 +34,8 @@ pub struct BlockHeaderRlpPart {
     deferred_receipts_root: H256,
     /// Block difficulty.
     difficulty: U256,
+    /// Whether it is an adaptive block (from GHAST algorithm)
+    adaptive: bool,
     /// Gas limit.
     gas_limit: U256,
     /// Referee hashes
@@ -52,6 +54,7 @@ impl PartialEq for BlockHeaderRlpPart {
             && self.deferred_state_root == o.deferred_state_root
             && self.deferred_receipts_root == o.deferred_receipts_root
             && self.difficulty == o.difficulty
+            && self.adaptive == o.adaptive
             && self.gas_limit == o.gas_limit
             && self.referee_hashes == o.referee_hashes
     }
@@ -149,6 +152,9 @@ impl BlockHeader {
     /// Get the difficulty field of the header.
     pub fn difficulty(&self) -> &U256 { &self.difficulty }
 
+    /// Get the adaptive field of the header
+    pub fn adaptive(&self) -> bool { self.adaptive }
+
     /// Get the gas limit field of the header.
     pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
 
@@ -192,22 +198,7 @@ impl BlockHeader {
 
     /// Place this header(except nonce) into an RLP stream `stream`.
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(10)
-            .append(&self.parent_hash)
-            .append(&self.height)
-            .append(&self.timestamp)
-            .append(&self.author)
-            .append(&self.transactions_root)
-            .append(&self.deferred_state_root)
-            .append(&self.deferred_receipts_root)
-            .append(&self.difficulty)
-            .append(&self.gas_limit)
-            .append_list(&self.referee_hashes);
-    }
-
-    /// Place this header into an RLP stream `stream`.
-    fn stream_rlp(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
             .begin_list(11)
             .append(&self.parent_hash)
@@ -218,6 +209,25 @@ impl BlockHeader {
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
             .append(&self.difficulty)
+            .append(&adaptive_n)
+            .append(&self.gas_limit)
+            .append_list(&self.referee_hashes);
+    }
+
+    /// Place this header into an RLP stream `stream`.
+    fn stream_rlp(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        stream
+            .begin_list(12)
+            .append(&self.parent_hash)
+            .append(&self.height)
+            .append(&self.timestamp)
+            .append(&self.author)
+            .append(&self.transactions_root)
+            .append(&self.deferred_state_root)
+            .append(&self.deferred_receipts_root)
+            .append(&self.difficulty)
+            .append(&adaptive_n)
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
             .append(&self.nonce);
@@ -239,6 +249,7 @@ pub struct BlockHeaderBuilder {
     deferred_state_root: H256,
     deferred_receipts_root: H256,
     difficulty: U256,
+    adaptive: bool,
     gas_limit: U256,
     referee_hashes: Vec<H256>,
     nonce: u64,
@@ -255,6 +266,7 @@ impl BlockHeaderBuilder {
             deferred_state_root: KECCAK_NULL_RLP,
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
             difficulty: U256::default(),
+            adaptive: false,
             gas_limit: U256::zero(),
             referee_hashes: Vec::new(),
             nonce: 0,
@@ -307,6 +319,11 @@ impl BlockHeaderBuilder {
         self
     }
 
+    pub fn with_adaptive(&mut self, adaptive: bool) -> &mut Self {
+        self.adaptive = adaptive;
+        self
+    }
+
     pub fn with_gas_limit(&mut self, gas_limit: U256) -> &mut Self {
         self.gas_limit = gas_limit;
         self
@@ -335,6 +352,7 @@ impl BlockHeaderBuilder {
                 deferred_state_root: self.deferred_state_root,
                 deferred_receipts_root: self.deferred_receipts_root,
                 difficulty: self.difficulty,
+                adaptive: self.adaptive,
                 gas_limit: self.gas_limit,
                 referee_hashes: self.referee_hashes.clone(),
                 nonce: self.nonce,
@@ -380,9 +398,10 @@ impl Decodable for BlockHeader {
                 deferred_state_root: r.val_at(5)?,
                 deferred_receipts_root: r.val_at(6)?,
                 difficulty: r.val_at(7)?,
-                gas_limit: r.val_at(8)?,
-                referee_hashes: r.list_at(9)?,
-                nonce: r.val_at(10)?,
+                adaptive: r.val_at::<u8>(8)? == 1,
+                gas_limit: r.val_at(9)?,
+                referee_hashes: r.list_at(10)?,
+                nonce: r.val_at(11)?,
             },
             hash: keccak(r.as_raw()).into(),
             pow_quality: U256::zero(),
