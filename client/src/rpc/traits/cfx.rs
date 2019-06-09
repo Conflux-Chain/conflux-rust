@@ -156,7 +156,7 @@ build_rpc_trait! {
         fn generate(&self, usize, usize) -> RpcResult<Vec<H256>>;
 
         #[rpc(name = "generatefixedblock")]
-        fn generate_fixed_block(&self, H256, Vec<H256>, usize, Trailing<u64>) -> RpcResult<H256>;
+        fn generate_fixed_block(&self, H256, Vec<H256>, usize, bool, Trailing<u64>) -> RpcResult<H256>;
 
         #[rpc(name = "addnode")]
         fn add_peer(&self, NodeId, SocketAddr) -> RpcResult<()>;
@@ -190,7 +190,7 @@ build_rpc_trait! {
         fn generate_one_block_special(&self, usize, usize, usize, usize) -> RpcResult<()>;
 
         #[rpc(name = "test_generatecustomblock")]
-        fn generate_custom_block(&self, H256, Vec<H256>, Bytes) -> RpcResult<H256>;
+        fn generate_custom_block(&self, H256, Vec<H256>, Bytes, Trailing<bool>) -> RpcResult<H256>;
 
         #[rpc(name = "test_generateblockwithfaketxs")]
         fn generate_block_with_fake_txs(&self, Bytes, Trailing<usize>) -> RpcResult<H256>;

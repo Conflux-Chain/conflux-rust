@@ -5,9 +5,7 @@
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager, CacheSize},
-    consensus::{
-        ConsensusGraphInner, SharedConsensusGraph,
-    },
+    consensus::{ConsensusGraphInner, SharedConsensusGraph},
     db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
@@ -401,7 +399,8 @@ impl SynchronizationGraphInner {
         let mut max_time = u64::min_value();
         let mut min_time = u64::max_value();
         for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
-            block_count += self.arena[cur].blockset_in_own_view_of_epoch.len() as u64 + 1;
+            block_count +=
+                self.arena[cur].blockset_in_own_view_of_epoch.len() as u64 + 1;
             max_time = max(max_time, self.arena[cur].block_header.timestamp());
             min_time = min(min_time, self.arena[cur].block_header.timestamp());
             cur = self.arena[cur].parent;
@@ -413,7 +412,8 @@ impl SynchronizationGraphInner {
         )
     }
 
-    /// Compute the expected difficulty (light_difficulty) for a block given its parent hash
+    /// Compute the expected difficulty (light_difficulty) for a block given its
+    /// parent hash
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
         let index = *self.indices.get(parent_hash).unwrap();
         let epoch = self.arena[index].block_header.height();
@@ -421,8 +421,9 @@ impl SynchronizationGraphInner {
             // Use initial difficulty for early epochs
             self.pow_config.initial_difficulty.into()
         } else {
-            // FIXME: I believe for most cases, we should be able to reuse the parent difficulty!
-            // Only those in the boundary need to be recomputed!
+            // FIXME: I believe for most cases, we should be able to reuse the
+            // parent difficulty! Only those in the boundary need to
+            // be recomputed!
             let last_period_upper = (epoch
                 / self.pow_config.difficulty_adjustment_epoch_period)
                 * self.pow_config.difficulty_adjustment_epoch_period;
