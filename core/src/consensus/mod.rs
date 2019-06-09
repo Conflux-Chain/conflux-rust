@@ -1239,7 +1239,6 @@ impl ConsensusGraphInner {
                 continue;
             }
             total_weight += self.block_weight(*index_in_consensus);
-//                sync.arena[*index_in_sync].block_header.difficulty().clone();
         }
         total_weight
     }
@@ -1320,6 +1319,7 @@ impl ConsensusGraph {
         self.executor.wait_for_result(best_state_block);
     }
 
+    /// Determine whether the next mined block should have adaptive weight or not
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         light_difficulty: &U256,
@@ -1686,6 +1686,8 @@ impl ConsensusGraph {
         (state_root, receipts_root)
     }
 
+    /// Force the engine to recompute the deferred state root for a particular
+    /// block given a delay.
     pub fn compute_deferred_state_for_block(
         &self, block_hash: &H256, delay: usize,
     ) -> (H256, H256) {
@@ -1871,7 +1873,9 @@ impl ConsensusGraph {
             return false;
         }
 
-        // Check adaptivity match
+        // Check adaptivity match. Note that in bench mode we do not check
+        // the adaptive field correctness. We simply override its value
+        // with the right one.
         if !self.conf.bench_mode {
             if inner.arena[new].adaptive != adaptive {
                 warn!(
@@ -1974,6 +1978,9 @@ impl ConsensusGraph {
         return true;
     }
 
+    /// construct_pivot() should be used after on_new_block_construction_only() calls. It
+    /// builds the pivot chain and ists state at once, avoiding intermediate redundant computation
+    /// triggered by on_new_block().
     pub fn construct_pivot(
         &self, sync_inner_lock: &RwLock<SynchronizationGraphInner>,
     ) {
@@ -2147,7 +2154,9 @@ impl ConsensusGraph {
 
     /// This is the function to insert a new block into the consensus graph
     /// during construction. We by pass many verifications because those
-    /// blocks are from our own database so we trust them.
+    /// blocks are from our own database so we trust them. After inserting
+    /// all blocks with this function, we need to call construct_pivot() to
+    /// finish the building from db!ss
     pub fn on_new_block_construction_only(
         &self, hash: &H256, sync_inner: &SynchronizationGraphInner,
     ) {
@@ -2647,6 +2656,7 @@ impl ConsensusGraph {
         self.inner.read().best_state_block_hash()
     }
 
+    /// Returns the total number of blocks in consensus graph
     pub fn block_count(&self) -> usize { self.inner.read().indices.len() }
 
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
