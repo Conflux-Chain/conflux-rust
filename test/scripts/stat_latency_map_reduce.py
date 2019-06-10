@@ -30,11 +30,11 @@ class Transaction:
     @staticmethod
     def receive(log_line:str):
         log_timestamp = parse_log_timestamp(log_line)
-        tx_hash = parse_value(log_line, "Sampled transaction ", None)
+        tx_hash = parse_value(log_line, "Sampled transaction ", "\n")
         return Transaction(tx_hash, log_timestamp)
 
     @staticmethod
-    def add_or_merge(self, txs:dict, tx):
+    def add_or_merge(txs:dict, tx):
         if txs.get(tx.hash) is None:
             txs[tx.hash] = tx
         else:
@@ -185,7 +185,7 @@ class NodeLogMapper:
             assert sync_len >= cons_len, "invalid statistics for sync/cons gap, log line = {}".format(line)
             self.sync_cons_gaps.append(sync_len - cons_len)
 
-        if "Sampled transactions" in line:
+        if "Sampled transaction" in line:
             tx = Transaction.receive(line)
             Transaction.add_or_merge(self.txs, tx)
 
