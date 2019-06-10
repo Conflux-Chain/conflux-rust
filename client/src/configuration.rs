@@ -4,7 +4,11 @@
 
 use blockgen::BlockGeneratorConfig;
 use cfxcore::{
-    consensus::ConsensusConfig,
+    consensus::{
+        ConsensusConfig, ConsensusInnerConfig,
+        ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
+        ADAPTIVE_WEIGHT_DEFAULT_BETA, HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO,
+    },
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
@@ -90,7 +94,16 @@ build_config! {
         (record_tx_address, (bool), true)
         // TODO Set default to true when we have new tx pool implementation
         (enable_optimistic_execution, (bool), false)
+        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
+        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
+        (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
+        (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
+        (metrics_enabled, (bool), false)
+        (metrics_report_interval_ms, (u64), 5000)
+        (metrics_output_file, (String), "metrics.log".to_string())
+        (min_peers_propagation, (usize), 8)
+        (max_peers_propagation, (usize), 128)
     }
     {
         (
@@ -220,9 +233,21 @@ impl Configuration {
                 .debug_dump_dir_invalid_state_root
                 .clone(),
             record_tx_address: self.raw_conf.record_tx_address,
-            enable_optimistic_execution: self
-                .raw_conf
-                .enable_optimistic_execution,
+            inner_conf: ConsensusInnerConfig {
+                adaptive_weight_alpha_num: self
+                    .raw_conf
+                    .adaptive_weight_alpha_num,
+                adaptive_weight_alpha_den: self
+                    .raw_conf
+                    .adaptive_weight_alpha_den,
+                adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
+                heavy_block_difficulty_ratio: self
+                    .raw_conf
+                    .heavy_block_difficulty_ratio,
+                enable_optimistic_execution: self
+                    .raw_conf
+                    .enable_optimistic_execution,
+            },
             bench_mode: false,
         }
     }
@@ -292,6 +317,8 @@ impl Configuration {
             max_trans_count_received_in_catch_up: self
                 .raw_conf
                 .max_trans_count_received_in_catch_up,
+            min_peers_propagation: self.raw_conf.min_peers_propagation,
+            max_peers_propagation: self.raw_conf.max_peers_propagation,
         }
     }
 

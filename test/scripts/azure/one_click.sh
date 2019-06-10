@@ -19,7 +19,7 @@ branch="${4:-master}"
 master_ip=`cat ips_master`
 scp -o "StrictHostKeyChecking no" ips ubuntu@$master_ip:~/conflux-rust/test/scripts
 echo "begin to run experiment on master VM ..."
-ssh ubuntu@$master_ip "cd ./conflux-rust/test/scripts; python3 ./exp_latency.py --batch-config $exp_config --tps 100 --enable-tx-propagation"
+ssh ubuntu@$master_ip "cd ./conflux-rust/test/scripts;git fetch; git checkout origin/$branch; python3 ./exp_latency.py --batch-config $exp_config --tps 4000 --storage-memory-mb 16 --bandwidth 20 --enable-tx-propagation"
 
 scp ubuntu@$master_ip:~/conflux-rust/test/scripts/exp_stat_latency.tgz .
 scp ubuntu@$master_ip:~/conflux-rust/test/scripts/exp_stat_latency.log .

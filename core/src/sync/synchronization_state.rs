@@ -19,6 +19,7 @@ pub struct SynchronizationPeerState {
     pub protocol_version: u8,
     pub genesis_hash: H256,
     pub best_epoch: u64,
+    pub terminal_block_hashes: Vec<H256>,
 
     /// The following fields are used to control how to handle
     /// transaction propagation for nodes in catch-up mode.
@@ -82,6 +83,20 @@ impl SynchronizationState {
         let peer_set: HashSet<PeerId> =
             self.peers.read().keys().cloned().collect();
         let choose_from: Vec<&PeerId> = peer_set.difference(exclude).collect();
+        let mut rand = random::new();
+        rand.choose(&choose_from).cloned().cloned()
+    }
+
+    /// Choose one random peer that satisfies `predicate`.
+    /// Return None if there is no peer to choose from
+    pub fn get_random_peer_satisfying<F>(
+        &self, predicate: F,
+    ) -> Option<PeerId>
+    where F: Fn(&&PeerId) -> bool {
+        let peer_set: HashSet<PeerId> =
+            self.peers.read().keys().cloned().collect();
+        let choose_from: Vec<&PeerId> =
+            peer_set.iter().filter(predicate).collect();
         let mut rand = random::new();
         rand.choose(&choose_from).cloned().cloned()
     }

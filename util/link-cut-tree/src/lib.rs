@@ -27,6 +27,17 @@ impl SignedBigNum {
     pub fn neg(num: U256) -> Self { Self { sign: true, num } }
 
     pub fn pos(num: U256) -> Self { Self { sign: false, num } }
+
+    pub fn negate(signed_num: &SignedBigNum) -> SignedBigNum {
+        if signed_num.num == U256::zero() {
+            signed_num.clone()
+        } else {
+            SignedBigNum {
+                sign: !signed_num.sign,
+                num: signed_num.num.clone(),
+            }
+        }
+    }
 }
 
 impl convert::From<U256> for SignedBigNum {
@@ -78,6 +89,20 @@ impl ops::AddAssign<SignedBigNum> for SignedBigNum {
         } else {
             self.num -= other.num;
         }
+    }
+}
+
+impl ops::Sub<SignedBigNum> for SignedBigNum {
+    type Output = SignedBigNum;
+
+    fn sub(self, other: SignedBigNum) -> SignedBigNum {
+        self + SignedBigNum::negate(&other)
+    }
+}
+
+impl ops::SubAssign<SignedBigNum> for SignedBigNum {
+    fn sub_assign(&mut self, other: SignedBigNum) {
+        *self += SignedBigNum::negate(&other);
     }
 }
 
@@ -133,6 +158,8 @@ struct MinNode {
     value: SignedBigNum,
     min: SignedBigNum,
     delta: SignedBigNum,
+    catepillar_value: SignedBigNum,
+    catepillar_delta: SignedBigNum,
 }
 
 impl Default for MinNode {
@@ -146,6 +173,8 @@ impl Default for MinNode {
             value: SignedBigNum::zero(),
             min: SignedBigNum::zero(),
             delta: SignedBigNum::zero(),
+            catepillar_value: SignedBigNum::zero(),
+            catepillar_delta: SignedBigNum::zero(),
         }
     }
 }
@@ -197,6 +226,11 @@ impl MinLinkCutTree {
             self.tree[v].value + self.tree[v].delta + self.tree[parent].delta;
         self.tree[v].value = value;
 
+        let cv = self.tree[v].catepillar_value
+            + self.tree[v].catepillar_delta
+            + self.tree[parent].catepillar_delta;
+        self.tree[v].catepillar_value = cv;
+
         if self.tree[parent].left_child == v {
             let u = self.tree[v].right_child;
             let w = self.tree[v].left_child;
@@ -204,15 +238,21 @@ impl MinLinkCutTree {
             if u != NULL {
                 self.tree[u].parent = parent;
                 self.tree[u].delta = self.tree[u].delta + self.tree[v].delta;
+                self.tree[u].catepillar_delta = self.tree[u].catepillar_delta
+                    + self.tree[v].catepillar_delta;
                 self.update(u);
             }
             if w != NULL {
                 self.tree[w].delta = self.tree[w].delta
                     + self.tree[v].delta
                     + self.tree[parent].delta;
+                self.tree[w].catepillar_delta = self.tree[w].catepillar_delta
+                    + self.tree[v].catepillar_delta
+                    + self.tree[parent].catepillar_delta;
                 self.update(w);
             }
             self.tree[v].delta = SignedBigNum::zero();
+            self.tree[v].catepillar_delta = SignedBigNum::zero();
             self.tree[v].right_child = parent;
             self.tree[parent].parent = v;
             self.update(parent);
@@ -224,15 +264,21 @@ impl MinLinkCutTree {
             if u != NULL {
                 self.tree[u].parent = parent;
                 self.tree[u].delta = self.tree[u].delta + self.tree[v].delta;
+                self.tree[u].catepillar_delta = self.tree[u].catepillar_delta
+                    + self.tree[v].catepillar_delta;
                 self.update(u);
             }
             if w != NULL {
                 self.tree[w].delta = self.tree[w].delta
                     + self.tree[v].delta
                     + self.tree[parent].delta;
+                self.tree[w].catepillar_delta = self.tree[w].catepillar_delta
+                    + self.tree[v].catepillar_delta
+                    + self.tree[parent].catepillar_delta;
                 self.update(w);
             }
             self.tree[v].delta = SignedBigNum::zero();
+            self.tree[v].catepillar_delta = SignedBigNum::zero();
             self.tree[v].left_child = parent;
             self.tree[parent].parent = v;
             self.update(parent);
@@ -283,34 +329,84 @@ impl MinLinkCutTree {
 
         let u = self.tree[v].right_child;
         if u != NULL {
+            let mut leftmost = u;
+            while self.tree[leftmost].left_child != NULL {
+                leftmost = self.tree[leftmost].left_child;
+            }
+
             self.tree[u].path_parent = v;
             self.tree[u].parent = NULL;
+            self.splay(leftmost);
+
+            assert_eq!(self.tree[v].catepillar_delta, SignedBigNum::zero());
+            self.tree[leftmost].value =
+                self.tree[leftmost].value - self.tree[v].catepillar_value;
+            self.tree[leftmost].delta =
+                self.tree[leftmost].delta + self.tree[v].delta;
+            self.tree[leftmost].catepillar_delta = self.tree[leftmost]
+                .catepillar_delta
+                + self.tree[v].catepillar_delta;
+            self.update(leftmost);
+
             self.tree[v].right_child = NULL;
+            assert_eq!(self.tree[leftmost].path_parent, v);
             self.update(v);
         }
     }
 
-    fn access(&mut self, v: usize) {
+    fn access(&mut self, v: usize) -> usize {
         if v == NULL {
-            return;
+            return NULL;
         }
 
         self.splay(v);
         self.remove_preferred_child(v);
 
+        let mut last = v;
+
         while self.tree[v].path_parent != NULL {
             let w = self.tree[v].path_parent;
+            last = w;
+
             self.splay(w);
             let u = self.tree[w].right_child;
             if u != NULL {
+                let mut leftmost = u;
+                while self.tree[leftmost].left_child != NULL {
+                    leftmost = self.tree[leftmost].left_child;
+                }
+
                 self.tree[u].path_parent = w;
                 self.tree[u].parent = NULL;
+                self.splay(leftmost);
+
+                assert_eq!(self.tree[w].catepillar_delta, SignedBigNum::zero());
+                self.tree[leftmost].value =
+                    self.tree[leftmost].value - self.tree[w].catepillar_value;
+                self.update(leftmost);
+
+                assert_eq!(self.tree[leftmost].path_parent, w);
             }
-            self.tree[w].right_child = v;
+
+            let mut leftmost = v;
+            while self.tree[leftmost].left_child != NULL {
+                leftmost = self.tree[leftmost].left_child;
+            }
+            self.splay(leftmost);
+            self.tree[leftmost].value =
+                self.tree[leftmost].value + self.tree[w].catepillar_value;
+            self.update(leftmost);
+
+            self.tree[leftmost].parent = w;
+            self.tree[leftmost].path_parent = NULL;
+
+            self.tree[w].right_child = leftmost;
             self.update(w);
-            self.tree[v].parent = w;
+
             self.splay(v);
         }
+
+        last
     }
 
     #[allow(dead_code)]
@@ -322,6 +418,10 @@ impl MinLinkCutTree {
             println!("\tparent={}", self.tree[v].parent as i64);
             println!("\tpath_parent={}", self.tree[v].path_parent as i64);
             println!("\tsize={}", self.tree[v].size as i64);
+            println!("\tv={:?}", self.tree[v].value);
+            println!("\td={:?}", self.tree[v].delta);
+            println!("\tcv={:?}", self.tree[v].catepillar_value);
+            println!("\tcd={:?}", self.tree[v].catepillar_delta);
         }
     }
 
@@ -337,32 +437,7 @@ impl MinLinkCutTree {
 
     pub fn lca(&mut self, v: usize, w: usize) -> usize {
         self.access(v);
-
-        self.splay(w);
-        self.remove_preferred_child(w);
-
-        let mut x = w;
-        let mut y = w;
-        while self.tree[y].path_parent != NULL {
-            let z = self.tree[y].path_parent;
-            self.splay(z);
-            if self.tree[z].path_parent == NULL {
-                x = z;
-            }
-            let u = self.tree[z].right_child;
-            if u != NULL {
-                self.tree[u].path_parent = z;
-                self.tree[u].parent = NULL;
-            }
-            self.tree[z].right_child = y;
-            self.update(z);
-            self.tree[y].parent = z;
-            self.tree[y].path_parent = NULL;
-            y = z;
-        }
-        self.splay(w);
-
-        x
+        self.access(w)
     }
 
     pub fn ancestor_at(&mut self, v: usize, at: usize) -> usize {
@@ -411,6 +486,22 @@ impl MinLinkCutTree {
         self.update(v);
     }
 
+    pub fn catepillar_apply(
+        &mut self, v: usize, catepillar_delta: &SignedBigNum,
+    ) {
+        self.access(v);
+
+        self.tree[v].catepillar_value += *catepillar_delta;
+        self.tree[v].value += *catepillar_delta;
+        let u = self.tree[v].left_child;
+        if u != NULL {
+            self.tree[u].catepillar_delta += *catepillar_delta;
+            self.tree[u].delta += *catepillar_delta;
+            self.update(u);
+        }
+        self.update(v);
+    }
+
     pub fn path_aggregate(&mut self, v: usize) -> SignedBigNum {
         self.access(v);
 
@@ -420,7 +511,7 @@ impl MinLinkCutTree {
     pub fn get(&mut self, v: usize) -> SignedBigNum {
         self.access(v);
 
-        self.tree[v].value + self.tree[v].delta
+        self.tree[v].value
     }
 }
 
@@ -546,5 +637,36 @@ mod tests {
         assert_eq!(tree.ancestor_at(5, 2), 3);
         assert_eq!(tree.ancestor_at(3, 1), 1);
         assert_eq!(tree.ancestor_at(4, 1), 4);
+    }
+
+    #[test]
+    fn test_catepillar_apply() {
+        let mut tree = MinLinkCutTree::new();
+        tree.make_tree(5);
+        tree.link(0, 1);
+        tree.link(1, 2);
+        tree.link(1, 3);
+        tree.link(0, 4);
+        tree.link(3, 5);
+
+        tree.catepillar_apply(3, &SignedBigNum::pos(U256::from(1)));
+        assert_eq!(tree.get(0), SignedBigNum::pos(U256::from(1)));
+        assert_eq!(tree.get(1), SignedBigNum::pos(U256::from(1)));
+        assert_eq!(tree.get(2), SignedBigNum::pos(U256::from(1)));
+        assert_eq!(tree.get(3), SignedBigNum::pos(U256::from(1)));
+        assert_eq!(tree.get(4), SignedBigNum::pos(U256::from(1)));
+        assert_eq!(tree.get(5), SignedBigNum::pos(U256::from(1)));
+
+        tree.catepillar_apply(2, &SignedBigNum::pos(U256::from(2)));
+        assert_eq!(tree.get(0), SignedBigNum::pos(U256::from(3)));
+        assert_eq!(tree.get(1), SignedBigNum::pos(U256::from(3)));
+        assert_eq!(tree.get(2), SignedBigNum::pos(U256::from(3)));
+        assert_eq!(tree.get(3), SignedBigNum::pos(U256::from(3)));
+        assert_eq!(tree.get(4), SignedBigNum::pos(U256::from(3)));
+        assert_eq!(tree.get(5), SignedBigNum::pos(U256::from(1)));
+
+        assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(3)));
+        tree.path_apply(0, &SignedBigNum::neg(U256::from(1)));
+        assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(2)));
     }
 }

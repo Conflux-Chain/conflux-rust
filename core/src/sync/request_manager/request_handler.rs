@@ -3,8 +3,8 @@ use crate::sync::{
     synchronization_protocol_handler::ProtocolConfiguration, Error, ErrorKind,
 };
 use message::{
-    GetBlockHeaders, GetBlockTxn, GetBlocks, GetCompactBlocks, GetTransactions,
-    Message,
+    GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
+    GetCompactBlocks, GetTransactions, Message,
 };
 use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;
@@ -105,37 +105,42 @@ impl RequestHandler {
         }
     }
 
+    fn get_timeout_sync_requests(&self) -> Vec<Arc<TimedSyncRequests>> {
+        let mut requests = self.requests_queue.lock();
+        let mut timeout_requests = Vec::new();
+        let now = Instant::now();
+        loop {
+            if requests.is_empty() {
+                break;
+            }
+            let sync_req = requests.pop().expect("queue not empty");
+            if sync_req.removed.load(AtomicOrdering::Relaxed) == true {
+                continue;
+            }
+            if sync_req.timeout_time >= now {
+                requests.push(sync_req);
+                break;
+            } else {
+                debug!("Timeout request {:?}", sync_req);
+                // TODO And should handle timeout peers.
+                timeout_requests.push(sync_req);
+            }
+        }
+        timeout_requests
+    }
+
     pub fn get_timeout_requests(
         &self, io: &NetworkContext,
     ) -> Vec<RequestMessage> {
         // Check if in-flight requests timeout
-        let now = Instant::now();
         let mut timeout_requests = Vec::new();
-        {
-            let mut requests = self.requests_queue.lock();
-            loop {
-                if requests.is_empty() {
-                    break;
-                }
-                let sync_req = requests.pop().expect("queue not empty");
-                if sync_req.removed.load(AtomicOrdering::Relaxed) == true {
-                    continue;
-                }
-                if sync_req.timeout_time >= now {
-                    requests.push(sync_req);
-                    break;
-                } else {
-                    // TODO And should handle timeout peers.
-                    if let Ok(req) = self.match_request(
-                        io,
-                        sync_req.peer_id,
-                        sync_req.request_id,
-                    ) {
-                        timeout_requests.push(req);
-                    } else {
-                        debug!("Timeout a removed request {:?}", sync_req);
-                    }
-                }
+        for sync_req in self.get_timeout_sync_requests() {
+            if let Ok(req) =
+                self.match_request(io, sync_req.peer_id, sync_req.request_id)
+            {
+                timeout_requests.push(req);
+            } else {
+                debug!("Timeout a removed request {:?}", sync_req);
             }
         }
         timeout_requests
@@ -321,6 +326,7 @@ pub enum RequestMessage {
     Compact(GetCompactBlocks),
     BlockTxn(GetBlockTxn),
     Transactions(GetTransactions),
+    Epochs(GetBlockHashesByEpoch),
 }
 
 impl RequestMessage {
@@ -341,6 +347,9 @@ impl RequestMessage {
             RequestMessage::Transactions(ref mut msg) => {
                 msg.set_request_id(request_id)
             }
+            RequestMessage::Epochs(ref mut msg) => {
+                msg.set_request_id(request_id)
+            }
         }
     }
 
@@ -351,6 +360,7 @@ impl RequestMessage {
             RequestMessage::Compact(ref msg) => msg,
             RequestMessage::BlockTxn(ref msg) => msg,
             RequestMessage::Transactions(ref msg) => msg,
+            RequestMessage::Epochs(ref msg) => msg,
         }
     }
 }
@@ -382,6 +392,7 @@ impl TimedSyncRequests {
     {
         let timeout = match *msg {
             RequestMessage::Headers(_) => conf.headers_request_timeout,
+            RequestMessage::Epochs(_) => conf.headers_request_timeout,
             RequestMessage::Blocks(_)
             | RequestMessage::Compact(_)
             | RequestMessage::BlockTxn(_) => conf.blocks_request_timeout,

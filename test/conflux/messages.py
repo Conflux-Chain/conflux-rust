@@ -55,6 +55,8 @@ GET_CMPCT_BLOCKS_RESPONSE = 0x10
 GET_BLOCK_TXN = 0x11
 GET_BLOCK_TXN_RESPONSE = 0x12
 
+GET_BLOCK_HASHES_BY_EPOCH = 0x17
+
 class Capability(rlp.Serializable):
     fields = [
         ("protocol", binary),
@@ -150,6 +152,19 @@ class GetBlockHashes(rlp.Serializable):
         )
 
 
+class GetBlockHashesByEpoch(rlp.Serializable):
+    fields = [
+        ("reqid", big_endian_int),
+        ("epoch_number", big_endian_int),
+    ]
+
+    def __init__(self, epoch_number, reqid=0):
+        super().__init__(
+            reqid=reqid,
+            epoch_number=epoch_number
+        )
+
+
 class BlockHashes(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
@@ -182,6 +197,7 @@ class BlockHeader(rlp.Serializable):
         ("deferred_state_root", binary),
         ("deferred_receipts_root", binary),
         ("difficulty", big_endian_int),
+        ("adaptive", big_endian_int),
         ("gas_limit", big_endian_int),
         ("referee_hashes", CountableList(binary)),
         ("nonce", big_endian_int),
@@ -198,6 +214,7 @@ class BlockHeader(rlp.Serializable):
                  difficulty=default_config['GENESIS_DIFFICULTY'],
                  gas_limit=0,
                  referee_hashes=[],
+                 adaptive=0,
                  nonce=0):
         # at the beginning of a method, locals() is a dict of all arguments
         fields = {k: v for k, v in locals().items() if
@@ -403,6 +420,7 @@ msg_id_dict = {
     GetCompactBlocksResponse: GET_CMPCT_BLOCKS_RESPONSE,
     GetBlockTxn: GET_BLOCK_TXN,
     GetBlockTxnResponse: GET_BLOCK_TXN_RESPONSE,
+    GetBlockHashesByEpoch: GET_BLOCK_HASHES_BY_EPOCH,
 }
 
 msg_class_dict = {}

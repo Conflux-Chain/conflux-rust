@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # sudo rm -rf /etc/hosts
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 

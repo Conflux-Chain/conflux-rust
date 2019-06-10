@@ -2,17 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{H256, U256};
+use crate::{Message, MsgId, RequestId};
+use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
-use Message;
-use MsgId;
-use RequestId;
 
 #[derive(Debug, PartialEq)]
 pub struct GetBlockHashesResponse {
-    request_id: RequestId,
-    hashes: Vec<H256>,
+    pub request_id: RequestId,
+    pub hashes: Vec<H256>,
 }
 
 impl Message for GetBlockHashesResponse {
@@ -20,13 +18,13 @@ impl Message for GetBlockHashesResponse {
 }
 
 impl Deref for GetBlockHashesResponse {
-    type Target = RequestID;
+    type Target = RequestId;
 
     fn deref(&self) -> &Self::Target { &self.request_id }
 }
 
 impl DerefMut for GetBlockHashesResponse {
-    fn deref_mut(&mut self) -> &mut RequestID { &mut self.request_id }
+    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlockHashesResponse {
@@ -39,7 +37,7 @@ impl Encodable for GetBlockHashesResponse {
 }
 
 impl Decodable for GetBlockHashesResponse {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+    fn decode(rlp: &Rlp) -> Result<GetBlockHashesResponse, DecoderError> {
         Ok(GetBlockHashesResponse {
             request_id: rlp.val_at(0)?,
             hashes: rlp.list_at(1)?,

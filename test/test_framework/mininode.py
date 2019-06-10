@@ -350,6 +350,9 @@ class P2PInterface(P2PConnection):
                 elif packet_type == GET_BLOCK_TXN:
                     self._log_message("receive", "GET_BLOCK_TXN, hash={}".format(len(msg.block_hash)))
                     self.on_get_blocktxn(msg)
+                elif packet_type == GET_BLOCK_HASHES_BY_EPOCH:
+                    self._log_message("receive", "GET_BLOCK_HASHES_BY_EPOCH, epoch number: {}".format(msg.epoch_number))
+                    self.on_get_block_hashes_by_epoch(msg)
                 else:
                     self._log_message("receive", "Unknown packet {}".format(packet_type))
                     return
@@ -416,6 +419,11 @@ class P2PInterface(P2PConnection):
     def on_get_blocktxn(self, msg):
         resp = GetBlockTxnResponse(reqid=msg.reqid, block_hash=b'\x00'*32, block_txn=[])
         self.send_protocol_msg(resp)
+
+    def on_get_block_hashes_by_epoch(self, msg):
+        resp = BlockHashes(reqid=msg.reqid, hashes=[])
+        self.send_protocol_msg(resp)
+
 # Keep our own socket map for asyncore, so that we can track disconnects
 # ourselves (to work around an issue with closing an asyncore socket when
 # using select)

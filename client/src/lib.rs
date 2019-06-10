@@ -59,7 +59,7 @@ use txgen::{
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
 const TESTNET_VERSION: &'static str =
-    "0000000000000000000000000000000000000003";
+    "0000000000000000000000000000000000000004";
 
 pub struct ClientHandle {
     pub debug_rpc_http_server: Option<HttpServer>,
@@ -105,6 +105,14 @@ impl Client {
         conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<ClientHandle, String> {
         info!("Working directory: {:?}", std::env::current_dir());
+
+        if conf.raw_conf.metrics_enabled {
+            metrics::enable();
+            metrics::report_file(
+                Duration::from_millis(conf.raw_conf.metrics_report_interval_ms),
+                conf.raw_conf.metrics_output_file.clone(),
+            );
+        }
 
         let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
             "Tx Recover".into(),

@@ -150,6 +150,11 @@ class ConfluxTestFramework:
             dest="random_seed",
             type=int,
             help="Set a random seed")
+        parser.add_argument(
+            "--metrics-report-interval-ms",
+            dest="metrics_report_interval_ms",
+            default=0,
+            type=int)
         self.add_options(parser)
         self.options = parser.parse_args()
         self.after_options_parsed()
@@ -258,8 +263,9 @@ class ConfluxTestFramework:
         pass
 
     def after_options_parsed(self):
-        """Override this method to initialize test with command-line options"""
-        pass
+        if self.options.metrics_report_interval_ms > 0:
+            self.conf_parameters["metrics_enabled"] = "true"
+            self.conf_parameters["metrics_report_interval_ms"] = str(self.options.metrics_report_interval_ms)
 
     def setup_chain(self):
         """Override this method to customize blockchain setup"""
