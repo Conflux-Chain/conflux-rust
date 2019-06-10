@@ -31,7 +31,6 @@ use rlp::*;
 use std::{
     cmp::{min, Ordering},
     collections::{hash_map::HashMap, BTreeMap, HashSet, VecDeque},
-    fmt::Debug,
     ops::{Deref, DerefMut},
     sync::{mpsc::channel, Arc},
 };
@@ -454,7 +453,7 @@ impl ReadyTransactionPool {
     }
 
     fn remove_below(&mut self, address: &Address, nonce: &U256) {
-        let (tx_hashes, empty_after_removal) =
+        let (tx_hashes, _empty_after_removal) =
             self.nonce_pool.remove_below(address, nonce);
         for hash in tx_hashes {
             self.treap.remove(&hash);
@@ -1114,10 +1113,10 @@ impl TransactionPool {
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        state: State<'a>,
+        _state: State<'a>,
     ) -> Vec<Arc<SignedTransaction>>
     {
-        let mut inner = self.inner.write();
+        let mut _inner = self.inner.write();
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return packed_transactions;

@@ -1589,8 +1589,8 @@ impl SynchronizationProtocolHandler {
             }
         }
 
-        let transactions =
-            self.get_transaction_pool().transactions_to_propagate();
+        let transactions: HashMap<H256, Arc<SignedTransaction>> =
+            self.get_transaction_pool().transactions_to_propagate().into_iter().map(|tx| (tx.hash(), tx.clone())).collect();
         if transactions.is_empty() {
             return;
         }
