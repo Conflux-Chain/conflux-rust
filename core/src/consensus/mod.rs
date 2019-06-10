@@ -2404,11 +2404,10 @@ impl ConsensusGraph {
         self.update_lcts_finalize(inner, me, stable);
 
         let last = inner.pivot_chain.last().cloned().unwrap();
-        // TODO: constructing new_pivot_chain without cloning!
-        let mut new_pivot_chain = inner.pivot_chain.clone();
+        let old_pivot_chain_len = inner.pivot_chain.len();
         let fork_at = if inner.arena[me].parent == last {
-            new_pivot_chain.push(me);
-            inner.pivot_chain.len()
+            inner.pivot_chain.push(me);
+            old_pivot_chain_len
         } else {
             let lca = inner.weight_tree.lca(last, me);
 
@@ -2423,10 +2422,10 @@ impl ConsensusGraph {
                 (&prev_weight, &inner.arena[prev].hash),
             ) {
                 // The new subtree is heavier, update pivot chain
-                new_pivot_chain.truncate(fork_at);
+                inner.pivot_chain.truncate(fork_at);
                 let mut u = new;
                 loop {
-                    new_pivot_chain.push(u);
+                    inner.pivot_chain.push(u);
                     let mut heaviest = NULL;
                     let mut heaviest_weight = SignedBigNum::zero();
                     for index in &inner.arena[u].children {
@@ -2450,12 +2449,12 @@ impl ConsensusGraph {
             } else {
                 // The previous subtree is still heavier, nothing is updated
                 debug!("Finish Consensus.on_new_block() with pivot chain unchanged");
-                inner.pivot_chain.len()
+                old_pivot_chain_len
             }
         };
-        debug!("Forked at index {}", new_pivot_chain[fork_at - 1]);
+        debug!("Forked at index {}", inner.pivot_chain[fork_at - 1]);
 
-        if fork_at < inner.pivot_chain.len() {
+        if fork_at < old_pivot_chain_len {
             let enqueue_if_obsolete = |queue: &mut VecDeque<usize>, index| {
                 let mut epoch_number =
                     inner.arena[index].data.epoch_number.borrow_mut();
@@ -2479,7 +2478,7 @@ impl ConsensusGraph {
 
         // Construct epochs
         let mut pivot_index = fork_at;
-        while pivot_index < new_pivot_chain.len() {
+        while pivot_index < inner.pivot_chain.len() {
             // First, identify all the blocks in the current epoch
             let mut queue = Vec::new();
             {
@@ -2494,7 +2493,7 @@ impl ConsensusGraph {
                 };
 
                 let mut at = 0;
-                enqueue_if_new(&mut queue, new_pivot_chain[pivot_index]);
+                enqueue_if_new(&mut queue, inner.pivot_chain[pivot_index]);
                 while at < queue.len() {
                     let me = queue[at];
                     for referee in &inner.arena[me].referees {
@@ -2511,30 +2510,29 @@ impl ConsensusGraph {
 
             debug!(
                 "Construct epoch_id={}, block_count={}",
-                inner.arena[new_pivot_chain[pivot_index]].hash,
+                inner.arena[inner.pivot_chain[pivot_index]].hash,
                 reversed_indices.len()
             );
 
             inner
                 .indices_in_epochs
-                .insert(new_pivot_chain[pivot_index], reversed_indices);
+                .insert(inner.pivot_chain[pivot_index], reversed_indices);
 
             pivot_index += 1;
         }
 
-        let to_state_pos =
-            if new_pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
-                0 as usize
-            } else {
-                new_pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
-            };
+        let to_state_pos = if inner.pivot_chain.len()
+            < DEFERRED_STATE_EPOCH_COUNT as usize
+        {
+            0 as usize
+        } else {
+            inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
+        };
 
         let mut state_at = fork_at;
-        if fork_at + DEFERRED_STATE_EPOCH_COUNT as usize
-            > inner.pivot_chain.len()
-        {
-            if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
-                state_at = inner.pivot_chain.len()
+        if fork_at + DEFERRED_STATE_EPOCH_COUNT as usize > old_pivot_chain_len {
+            if old_pivot_chain_len > DEFERRED_STATE_EPOCH_COUNT as usize {
+                state_at = old_pivot_chain_len
                     - DEFERRED_STATE_EPOCH_COUNT as usize
                     + 1;
             } else {
@@ -2544,11 +2542,11 @@ impl ConsensusGraph {
 
         // Apply transactions in the determined total order
         while state_at < to_state_pos {
-            let epoch_index = new_pivot_chain[state_at];
+            let epoch_index = inner.pivot_chain[state_at];
             let reward_execution_info = inner.get_reward_execution_info(
                 &self.data_man,
                 state_at,
-                &new_pivot_chain,
+                &inner.pivot_chain,
             );
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
@@ -2560,8 +2558,8 @@ impl ConsensusGraph {
             state_at += 1;
         }
 
-        inner.adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
-        inner.pivot_chain = new_pivot_chain;
+        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
+        //inner.pivot_chain = new_pivot_chain;
         inner.optimistic_executed_height = if to_state_pos > 0 {
             Some(to_state_pos)
         } else {
