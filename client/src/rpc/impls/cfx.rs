@@ -26,7 +26,7 @@ use primitives::{
     TransactionWithSignature,
 };
 use rlp::Rlp;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc, thread};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,

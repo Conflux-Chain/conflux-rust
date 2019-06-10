@@ -747,7 +747,7 @@ impl TransactionPool {
             let mut cache_man = self.cache_man.lock();
 
             let mut inner = self.inner.write();
-            let mut inner = &mut *inner;
+            let inner = &mut *inner;
 
             for txes in signed_trans {
                 for tx in txes {

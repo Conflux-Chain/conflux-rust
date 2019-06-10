@@ -327,7 +327,7 @@ impl<'a> State<'a> {
                 .name("txpool_update_state".into())
                 .spawn(move || {
                     txpool_clone.notify_state_start(accounts_for_txpool);
-                });
+                }).expect("can not notify tx pool to start state");
         }
         Ok(())
     }
