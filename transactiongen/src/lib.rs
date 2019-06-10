@@ -165,7 +165,7 @@ impl TransactionGenerator {
     pub fn generate_transactions(
         txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
     ) -> Result<(), Error> {
-        let account_count = 2000;
+        let account_count = 20000;
         let mut nonce_map: HashMap<Address, U256> = HashMap::new();
         let mut balance_map: HashMap<Address, U256> = HashMap::new();
 
@@ -182,7 +182,6 @@ impl TransactionGenerator {
         );
         secret_store.insert(initial_key_pair.clone());
         let mut tx_n = 0;
-        let mut start_time = Instant::now();
         // Wait for initial tx
         loop {
             let state = State::new(
@@ -210,6 +209,7 @@ impl TransactionGenerator {
             }
         }
 
+        let start_time = Instant::now();
         // Generate more tx
         loop {
             match *txgen.state.read() {
@@ -300,13 +300,13 @@ impl TransactionGenerator {
             }
             let now = Instant::now();
             let time_elapsed = now.duration_since(start_time);
-            if let Some(time_left) = tx_config.period.checked_sub(time_elapsed)
+            if let Some(time_left) =
+                (tx_config.period * tx_n).checked_sub(time_elapsed)
             {
                 thread::sleep(time_left);
             } else {
                 debug!("Elapsed time larger than the time needed for sleep: time_elapsed={:?}", time_elapsed);
             }
-            start_time = Instant::now();
         }
         Ok(())
     }

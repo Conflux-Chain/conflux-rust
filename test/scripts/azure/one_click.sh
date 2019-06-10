@@ -26,5 +26,5 @@ scp ubuntu@$master_ip:~/conflux-rust/test/scripts/exp_stat_latency.log .
 
 tar xfvz $archive_file exp_stat_latency.tgz
 
-echo "cleanup ..."
-./terminate-on-demand.sh $group
+#echo "cleanup ..."
+#./terminate-on-demand.sh $group
