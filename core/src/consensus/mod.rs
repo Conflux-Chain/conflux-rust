@@ -19,7 +19,6 @@ use crate::{
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::{state::StateTrait, StorageManager, StorageManagerTrait},
-    sync::SynchronizationGraphInner,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
@@ -234,6 +233,8 @@ pub struct ConsensusGraphNode {
     pub stable: bool,
     pub adaptive: bool,
     pub parent: usize,
+    /// The number of nodes in the epoch represented by this block
+    pub num_blocks_in_own_epoch: usize,
     pub children: Vec<usize>,
     pub referrers: Vec<usize>,
     pub referees: Vec<usize>,
@@ -284,6 +285,7 @@ impl ConsensusGraphInner {
             data_man.genesis_block().as_ref(),
             U256::zero(),
             false,
+            0,
         );
         inner.genesis_block_index = genesis_index;
         inner.weight_tree.make_tree(inner.genesis_block_index);
@@ -534,7 +536,9 @@ impl ConsensusGraphInner {
 
     pub fn insert(
         &mut self, block: &Block, past_weight: U256, is_heavy: bool,
-    ) -> (usize, usize) {
+        num_blocks_in_own_epoch: usize,
+    ) -> (usize, usize)
+    {
         let hash = block.hash();
 
         let parent = if *block.block_header.parent_hash() != H256::default() {
@@ -566,6 +570,7 @@ impl ConsensusGraphInner {
             // own computation
             adaptive: block.block_header.adaptive(),
             parent,
+            num_blocks_in_own_epoch,
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
@@ -592,14 +597,9 @@ impl ConsensusGraphInner {
 
     fn check_correct_parent(
         &mut self, me_in_consensus: usize,
-        sync_graph: &SynchronizationGraphInner,
+        blockset_in_own_epoch: HashSet<usize>,
     ) -> bool
     {
-        let me_in_sync = *sync_graph
-            .indices
-            .get(&self.arena[me_in_consensus].hash)
-            .unwrap();
-
         let anticone = &self.arena[me_in_consensus].data.anticone;
 
         let mut valid = true;
@@ -616,16 +616,7 @@ impl ConsensusGraphInner {
         }
 
         // Check the pivot selection decision.
-        for sync_index_in_epoch in
-            &sync_graph.arena[me_in_sync].blockset_in_own_view_of_epoch
-        {
-            let consensus_index_in_epoch = *self
-                .indices
-                .get(
-                    &sync_graph.arena[*sync_index_in_epoch].block_header.hash(),
-                )
-                .expect("In consensus graph");
-
+        for consensus_index_in_epoch in blockset_in_own_epoch {
             if self.arena[consensus_index_in_epoch].data.partial_invalid {
                 continue;
             }
@@ -934,9 +925,7 @@ impl ConsensusGraphInner {
 
     pub fn adjust_difficulty(
         &mut self, new_best_index: usize,
-        sync_inner: &SynchronizationGraphInner,
-    )
-    {
+    ) {
         let new_best_hash = self.arena[new_best_index].hash.clone();
         let new_best_difficulty = self.arena[new_best_index].difficulty;
         let old_best_index = *self.pivot_chain.last().expect("not empty");
@@ -955,7 +944,11 @@ impl ConsensusGraphInner {
                 * self.pow_config.difficulty_adjustment_epoch_period
         {
             self.current_difficulty =
-                sync_inner.target_difficulty(&new_best_hash);
+                self.data_man.target_difficulty(&self.pow_config, &new_best_hash,
+                    |h| {
+                        let index = self.indices.get(h).unwrap();
+                        self.arena[*index].num_blocks_in_own_epoch
+                    });
         } else {
             self.current_difficulty = new_best_difficulty;
         }
@@ -1239,23 +1232,16 @@ impl ConsensusGraphInner {
     }
 
     /// Compute the total weight in the epoch represented by the block of
-    /// my_hash The input `my_hash` must have been inserted to sync_graph,
-    /// otherwise it'll panic.
+    /// my_hash.
     pub fn total_weight_in_own_epoch(
-        &self, sync: &SynchronizationGraphInner, my_hash: &H256,
+        &self, blockset_in_own_epoch: &HashSet<usize>,
     ) -> U256 {
-        let my_sync_index = *sync.indices.get(my_hash).expect("exist");
         let mut total_weight = U256::zero();
-        for index_in_sync in sync.arena[my_sync_index]
-            .blockset_in_own_view_of_epoch
-            .iter()
-        {
-            let hash = sync.arena[*index_in_sync].block_header.hash();
-            let index_in_consensus = self.indices.get(&hash).unwrap();
-            if self.arena[*index_in_consensus].data.partial_invalid {
+        for index in blockset_in_own_epoch.iter() {
+            if self.arena[*index].data.partial_invalid {
                 continue;
             }
-            total_weight += self.block_weight(*index_in_consensus);
+            total_weight += self.block_weight(*index);
         }
         total_weight
     }
@@ -1871,7 +1857,7 @@ impl ConsensusGraph {
 
     fn check_block_full_validity(
         &self, new: usize, block: &Block, inner: &mut ConsensusGraphInner,
-        sync_graph: &SynchronizationGraphInner, adaptive: bool,
+        blockset_in_own_epoch: HashSet<usize>, adaptive: bool,
     ) -> bool
     {
         if inner.arena[inner.arena[new].parent].data.partial_invalid {
@@ -1883,7 +1869,7 @@ impl ConsensusGraph {
         }
 
         // Check whether the new block select the correct parent block
-        if !inner.check_correct_parent(new, sync_graph) {
+        if !inner.check_correct_parent(new, blockset_in_own_epoch) {
             warn!(
                 "Partially invalid due to picking incorrect parent. {:?}",
                 block.block_header.clone()
@@ -1999,11 +1985,8 @@ impl ConsensusGraph {
     /// construct_pivot() should be used after on_new_block_construction_only()
     /// calls. It builds the pivot chain and ists state at once, avoiding
     /// intermediate redundant computation triggered by on_new_block().
-    pub fn construct_pivot(
-        &self, sync_inner_lock: &RwLock<SynchronizationGraphInner>,
-    ) {
+    pub fn construct_pivot(&self) {
         {
-            let sync_inner = &*sync_inner_lock.read();
             let mut inner = &mut *self.inner.write();
 
             assert_eq!(inner.pivot_chain.len(), 1);
@@ -2105,7 +2088,6 @@ impl ConsensusGraph {
             // TODO Recompute missing data if needed
             inner.adjust_difficulty(
                 *new_pivot_chain.last().expect("not empty"),
-                sync_inner,
             );
             inner.pivot_chain = new_pivot_chain;
         }
@@ -2176,7 +2158,7 @@ impl ConsensusGraph {
     /// all blocks with this function, we need to call construct_pivot() to
     /// finish the building from db!ss
     pub fn on_new_block_construction_only(
-        &self, hash: &H256, sync_inner: &SynchronizationGraphInner,
+        &self, hash: &H256, blockset_in_own_epoch: HashSet<usize>,
     ) {
         let block = self.data_man.block_by_hash(hash, false).unwrap();
 
@@ -2185,7 +2167,7 @@ impl ConsensusGraph {
         let is_heavy;
         {
             weight_in_my_epoch =
-                inner.total_weight_in_own_epoch(sync_inner, hash);
+                inner.total_weight_in_own_epoch(&blockset_in_own_epoch);
             is_heavy = U512::from(block.block_header.pow_quality)
                 >= U512::from(inner.inner_conf.heavy_block_difficulty_ratio)
                     * U512::from(block.block_header.difficulty());
@@ -2197,8 +2179,12 @@ impl ConsensusGraph {
             + inner.block_weight(parent_idx)
             + weight_in_my_epoch;
 
-        let (me, indices_len) =
-            inner.insert(block.as_ref(), past_weight, is_heavy);
+        let (me, indices_len) = inner.insert(
+            block.as_ref(),
+            past_weight,
+            is_heavy,
+            blockset_in_own_epoch.len(),
+        );
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
 
@@ -2299,7 +2285,7 @@ impl ConsensusGraph {
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
     pub fn on_new_block(
-        &self, hash: &H256, sync_inner_lock: &RwLock<SynchronizationGraphInner>,
+        &self, hash: &H256, blockset_in_own_epoch: HashSet<usize>,
     ) {
         let block = self.data_man.block_by_hash(hash, true).unwrap();
 
@@ -2351,12 +2337,11 @@ impl ConsensusGraph {
         let is_heavy;
         let weight_in_my_epoch;
         {
-            let sync_inner = sync_inner_lock.read();
             is_heavy = U512::from(block.block_header.pow_quality)
                 >= U512::from(inner.inner_conf.heavy_block_difficulty_ratio)
                     * U512::from(block.block_header.difficulty());
             weight_in_my_epoch =
-                inner.total_weight_in_own_epoch(&*sync_inner, hash);
+                inner.total_weight_in_own_epoch(&blockset_in_own_epoch);
         }
 
         let parent_idx =
@@ -2365,8 +2350,12 @@ impl ConsensusGraph {
             + inner.block_weight(parent_idx)
             + weight_in_my_epoch;
 
-        let (me, indices_len) =
-            inner.insert(block.as_ref(), past_weight, is_heavy);
+        let (me, indices_len) = inner.insert(
+            block.as_ref(),
+            past_weight,
+            is_heavy,
+            blockset_in_own_epoch.len(),
+        );
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
 
@@ -2412,7 +2401,7 @@ impl ConsensusGraph {
             me,
             block.as_ref(),
             inner,
-            &*sync_inner_lock.read(),
+            blockset_in_own_epoch,
             adaptive,
         );
         self.data_man.insert_block_status_to_db(hash, !fully_valid);
@@ -2614,7 +2603,6 @@ impl ConsensusGraph {
 
         inner.adjust_difficulty(
             *new_pivot_chain.last().expect("not empty"),
-            &*sync_inner_lock.read(),
         );
         inner.pivot_chain = new_pivot_chain;
         inner.optimistic_executed_height = if to_state_pos > 0 {

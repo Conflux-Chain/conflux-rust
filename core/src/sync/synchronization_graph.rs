@@ -91,6 +91,7 @@ pub struct SynchronizationGraphNode {
 pub struct SynchronizationGraphInner {
     pub arena: Slab<SynchronizationGraphNode>,
     pub indices: HashMap<H256, usize>,
+    pub data_man: Arc<BlockDataManager>,
     pub genesis_block_index: usize,
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
@@ -99,11 +100,12 @@ pub struct SynchronizationGraphInner {
 
 impl SynchronizationGraphInner {
     pub fn with_genesis_block(
-        genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
+        genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
     ) -> Self {
         let mut inner = SynchronizationGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
+            data_man,
             genesis_block_index: NULL,
             children_by_hash: HashMap::new(),
             referrers_by_hash: HashMap::new(),
@@ -381,37 +383,6 @@ impl SynchronizationGraphInner {
         Ok(())
     }
 
-    /// The input `cur_hash` must have been inserted to sync_graph, otherwise
-    /// it'll panic.
-    pub fn target_difficulty(&self, cur_hash: &H256) -> U256 {
-        let cur_index = *self.indices.get(cur_hash).expect("exist");
-        let epoch = self.arena[cur_index].block_header.height();
-        assert_ne!(epoch, 0);
-        debug_assert!(
-            epoch
-                == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
-                    * self.pow_config.difficulty_adjustment_epoch_period
-        );
-
-        let mut cur = cur_index;
-        let cur_difficulty = self.arena[cur].block_header.difficulty();
-        let mut block_count = 0 as u64;
-        let mut max_time = u64::min_value();
-        let mut min_time = u64::max_value();
-        for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
-            block_count +=
-                self.arena[cur].blockset_in_own_view_of_epoch.len() as u64 + 1;
-            max_time = max(max_time, self.arena[cur].block_header.timestamp());
-            min_time = min(min_time, self.arena[cur].block_header.timestamp());
-            cur = self.arena[cur].parent;
-        }
-        self.pow_config.target_difficulty(
-            block_count,
-            max_time - min_time,
-            &cur_difficulty,
-        )
-    }
-
     /// Compute the expected difficulty (light_difficulty) for a block given its
     /// parent hash
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
@@ -431,7 +402,12 @@ impl SynchronizationGraphInner {
             while self.arena[cur].block_header.height() > last_period_upper {
                 cur = self.arena[cur].parent;
             }
-            self.target_difficulty(&self.arena[cur].block_header.hash())
+            // self.target_difficulty(&self.arena[cur].block_header.hash())
+            self.data_man.target_difficulty(&self.pow_config, &self.arena[cur].block_header.hash(),
+                |h| {
+                    let index = self.indices.get(h).unwrap();
+                    self.arena[*index].blockset_in_own_view_of_epoch.len()
+                })
         }
     }
 
@@ -454,6 +430,27 @@ impl SynchronizationGraphInner {
             cur_pivot = self.arena[cur_pivot].parent;
         }
         false
+    }
+
+    /// This function translate the blockset_in_own_epoch from sync_index to
+    /// consensus_index. It assumes all past blocks are in the consensus
+    /// graph already. Otherwise, this function will panic!
+    pub fn translate_blockset_in_own_epoch(
+        &self, my_hash: &H256, consensus: SharedConsensusGraph,
+    ) -> HashSet<usize> {
+        let consensus_inner = consensus.inner.read();
+        let my_sync_index = self.indices.get(my_hash).expect("exist");
+        let mut consensus_blockset_in_own_epoch = HashSet::new();
+        for index_in_sync in self.arena[*my_sync_index]
+            .blockset_in_own_view_of_epoch
+            .iter()
+        {
+            let hash = self.arena[*index_in_sync].block_header.hash();
+            let index_in_consensus =
+                consensus_inner.indices.get(&hash).unwrap();
+            consensus_blockset_in_own_epoch.insert(*index_in_consensus);
+        }
+        consensus_blockset_in_own_epoch
     }
 }
 
@@ -486,6 +483,7 @@ impl SynchronizationGraph {
             SynchronizationGraphInner::with_genesis_block(
                 Arc::new(data_man.genesis_block().block_header.clone()),
                 pow_config,
+                data_man.clone(),
             ),
         ));
         let mut sync_graph = SynchronizationGraph {
@@ -506,7 +504,14 @@ impl SynchronizationGraph {
             .name("Consensus Worker".into())
             .spawn(move || loop {
                 match consensus_receiver.recv() {
-                    Ok(hash) => consensus.on_new_block(&hash, inner.as_ref()),
+                    Ok(hash) => {
+                        let translated_blockset =
+                            inner.read().translate_blockset_in_own_epoch(
+                                &hash,
+                                consensus.clone(),
+                            );
+                        consensus.on_new_block(&hash, translated_blockset)
+                    }
                     Err(_) => break,
                 }
             })
@@ -659,7 +664,7 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        self.consensus.construct_pivot(&self.inner);
+        self.consensus.construct_pivot();
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -856,6 +861,8 @@ impl SynchronizationGraph {
         } else {
             inner.insert_invalid(header_arc.clone())
         };
+         debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {}",
+               header.hash(), me, need_to_verify, bench_mode);
 
         // Start to pass influence to descendants
         let mut need_to_relay: Vec<H256> = Vec::new();
@@ -874,60 +881,70 @@ impl SynchronizationGraph {
                     &mut invalid_set,
                     index,
                 );
-            } else if inner.new_to_be_header_graph_ready(index) {
-                inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
-                debug_assert!(inner.arena[index].parent != NULL);
+            } else {
+                if inner.new_to_be_header_graph_ready(index) {
+                    inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
+                    debug_assert!(inner.arena[index].parent != NULL);
+                    debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
+                           inner.arena[index].parent, inner.arena[index].block_header.hash());
 
-                let r = inner.verify_header_graph_ready_block(index);
+                    let r = inner.verify_header_graph_ready_block(index);
 
-                if need_to_verify && r.is_err() {
-                    warn!(
-                        "Invalid header_arc! inserted_header={:?} err={:?}",
-                        header_arc, r
-                    );
-                    if me == index {
-                        me_invalid = true;
+                    if need_to_verify && r.is_err() {
+                        warn!(
+                            "Invalid header_arc! inserted_header={:?} err={:?}",
+                            header_arc.clone(), r
+                        );
+                        if me == index {
+                            me_invalid = true;
+                        }
+                        inner.arena[index].graph_status = BLOCK_INVALID;
+                        Self::set_and_propagate_invalid(
+                            inner.deref_mut(),
+                            &mut queue,
+                            &mut invalid_set,
+                            index,
+                        );
+                        continue;
                     }
-                    inner.arena[index].graph_status = BLOCK_INVALID;
-                    Self::set_and_propagate_invalid(
-                        inner.deref_mut(),
-                        &mut queue,
-                        &mut invalid_set,
-                        index,
-                    );
-                    continue;
-                }
+                    // Passed verification on header_arc.
+                    if inner.arena[index].block_ready {
+                        need_to_relay.push(inner.arena[index].block_header.hash());
+                    }
 
-                // Passed verification on header_arc.
-                if inner.arena[index].block_ready {
-                    need_to_relay.push(inner.arena[index].block_header.hash());
-                }
+                    inner.collect_blockset_in_own_view_of_epoch(index);
 
-                inner.collect_blockset_in_own_view_of_epoch(index);
-
-                for child in &inner.arena[index].children {
-                    debug_assert!(
-                        inner.arena[*child].graph_status
-                            < BLOCK_HEADER_GRAPH_READY
-                    );
-                    queue.push_back(*child);
+                    for child in &inner.arena[index].children {
+                        debug_assert!(
+                            inner.arena[*child].graph_status
+                                < BLOCK_HEADER_GRAPH_READY
+                        );
+                        queue.push_back(*child);
+                    }
+                    for referrer in &inner.arena[index].referrers {
+                        debug_assert!(
+                            inner.arena[*referrer].graph_status
+                                < BLOCK_HEADER_GRAPH_READY
+                        );
+                        queue.push_back(*referrer);
+                    }
+                } else if inner.new_to_be_header_parental_tree_ready(index) {
+                    inner.arena[index].graph_status =
+                        BLOCK_HEADER_PARENTAL_TREE_READY;
+                    for child in &inner.arena[index].children {
+                        debug_assert!(
+                            inner.arena[*child].graph_status
+                                < BLOCK_HEADER_PARENTAL_TREE_READY
+                        );
+                        queue.push_back(*child);
+                    }
                 }
-                for referrer in &inner.arena[index].referrers {
-                    debug_assert!(
-                        inner.arena[*referrer].graph_status
-                            < BLOCK_HEADER_GRAPH_READY
-                    );
-                    queue.push_back(*referrer);
-                }
-            } else if inner.new_to_be_header_parental_tree_ready(index) {
-                inner.arena[index].graph_status =
-                    BLOCK_HEADER_PARENTAL_TREE_READY;
-                for child in &inner.arena[index].children {
-                    debug_assert!(
-                        inner.arena[*child].graph_status
-                            < BLOCK_HEADER_PARENTAL_TREE_READY
-                    );
-                    queue.push_back(*child);
+                // Note that we have to insert it here immediately instead of after the loop because
+                // its children may become ready and being processed in the loop later. It requires
+                // this block already being inserted into the BlockDataManager!
+                if me == index {
+                    self.data_man
+                        .insert_block_header(header_arc.hash(), header_arc.clone());
                 }
             }
         }
@@ -939,8 +956,6 @@ impl SynchronizationGraph {
             return (false, need_to_relay);
         }
 
-        self.data_man
-            .insert_block_header(header_arc.hash(), header_arc);
         (true, need_to_relay)
     }
 
@@ -1055,7 +1070,15 @@ impl SynchronizationGraph {
                     // asynchronously
                     self.consensus_sender.lock().send(h).expect("Cannot fail");
                 } else {
-                    self.consensus.on_new_block_construction_only(&h, &*inner);
+                    let translated_blockset = inner
+                        .translate_blockset_in_own_epoch(
+                            &hash,
+                            self.consensus.clone(),
+                        );
+                    self.consensus.on_new_block_construction_only(
+                        &h,
+                        translated_blockset,
+                    );
                 }
 
                 for child in &inner.arena[index].children {
