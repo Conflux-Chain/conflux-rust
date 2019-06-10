@@ -38,7 +38,7 @@ use rlp::*;
 use slab::Slab;
 use std::{
     cell::RefCell,
-    cmp::{max, min},
+    cmp::min,
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
     iter::FromIterator,
@@ -923,41 +923,8 @@ impl ConsensusGraphInner {
         )
     }
 
-    fn target_difficulty(
-        &self, cur_hash: &H256, data_man: Arc<BlockDataManager>,
-    ) -> U256 {
-        let cur_index = *self.indices.get(cur_hash).expect("exist");
-        let epoch = self.arena[cur_index].height;
-        assert_ne!(epoch, 0);
-        debug_assert!(
-            epoch
-                == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
-                    * self.pow_config.difficulty_adjustment_epoch_period
-        );
-
-        let mut cur = cur_index;
-        let cur_difficulty = self.arena[cur].difficulty;
-        let mut block_count = 0 as u64;
-        let mut max_time = u64::min_value();
-        let mut min_time = u64::max_value();
-        for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
-            let block_headers_r = data_man.block_headers.read();
-            let block_header =
-                block_headers_r.get(&self.arena[cur].hash).unwrap();
-            block_count += self.arena[cur].num_blocks_in_own_epoch as u64 + 1;
-            max_time = max(max_time, block_header.timestamp());
-            min_time = min(min_time, block_header.timestamp());
-            cur = self.arena[cur].parent;
-        }
-        self.pow_config.target_difficulty(
-            block_count,
-            max_time - min_time,
-            &cur_difficulty,
-        )
-    }
-
     pub fn adjust_difficulty(
-        &mut self, new_best_index: usize, data_man: Arc<BlockDataManager>,
+        &mut self, new_best_index: usize,
     ) {
         let new_best_hash = self.arena[new_best_index].hash.clone();
         let new_best_difficulty = self.arena[new_best_index].difficulty;
@@ -977,7 +944,11 @@ impl ConsensusGraphInner {
                 * self.pow_config.difficulty_adjustment_epoch_period
         {
             self.current_difficulty =
-                self.target_difficulty(&new_best_hash, data_man);
+                self.data_man.target_difficulty(&self.pow_config, &new_best_hash,
+                    |h| {
+                        let index = self.indices.get(h).unwrap();
+                        self.arena[*index].num_blocks_in_own_epoch
+                    });
         } else {
             self.current_difficulty = new_best_difficulty;
         }
@@ -2117,7 +2088,6 @@ impl ConsensusGraph {
             // TODO Recompute missing data if needed
             inner.adjust_difficulty(
                 *new_pivot_chain.last().expect("not empty"),
-                self.data_man.clone(),
             );
             inner.pivot_chain = new_pivot_chain;
         }
@@ -2633,7 +2603,6 @@ impl ConsensusGraph {
 
         inner.adjust_difficulty(
             *new_pivot_chain.last().expect("not empty"),
-            self.data_man.clone(),
         );
         inner.pivot_chain = new_pivot_chain;
         inner.optimistic_executed_height = if to_state_pos > 0 {
