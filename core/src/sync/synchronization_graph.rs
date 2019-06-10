@@ -100,8 +100,10 @@ pub struct SynchronizationGraphInner {
 
 impl SynchronizationGraphInner {
     pub fn with_genesis_block(
-        genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
-    ) -> Self {
+        genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
+        data_man: Arc<BlockDataManager>,
+    ) -> Self
+    {
         let mut inner = SynchronizationGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
@@ -403,11 +405,14 @@ impl SynchronizationGraphInner {
                 cur = self.arena[cur].parent;
             }
             // self.target_difficulty(&self.arena[cur].block_header.hash())
-            self.data_man.target_difficulty(&self.pow_config, &self.arena[cur].block_header.hash(),
+            self.data_man.target_difficulty(
+                &self.pow_config,
+                &self.arena[cur].block_header.hash(),
                 |h| {
                     let index = self.indices.get(h).unwrap();
                     self.arena[*index].blockset_in_own_view_of_epoch.len()
-                })
+                },
+            )
         }
     }
 
@@ -861,7 +866,7 @@ impl SynchronizationGraph {
         } else {
             inner.insert_invalid(header_arc.clone())
         };
-         debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {}",
+        debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {}",
                header.hash(), me, need_to_verify, bench_mode);
 
         // Start to pass influence to descendants
@@ -893,7 +898,8 @@ impl SynchronizationGraph {
                     if need_to_verify && r.is_err() {
                         warn!(
                             "Invalid header_arc! inserted_header={:?} err={:?}",
-                            header_arc.clone(), r
+                            header_arc.clone(),
+                            r
                         );
                         if me == index {
                             me_invalid = true;
@@ -909,7 +915,8 @@ impl SynchronizationGraph {
                     }
                     // Passed verification on header_arc.
                     if inner.arena[index].block_ready {
-                        need_to_relay.push(inner.arena[index].block_header.hash());
+                        need_to_relay
+                            .push(inner.arena[index].block_header.hash());
                     }
 
                     inner.collect_blockset_in_own_view_of_epoch(index);
@@ -939,12 +946,16 @@ impl SynchronizationGraph {
                         queue.push_back(*child);
                     }
                 }
-                // Note that we have to insert it here immediately instead of after the loop because
-                // its children may become ready and being processed in the loop later. It requires
-                // this block already being inserted into the BlockDataManager!
+                // Note that we have to insert it here immediately instead of
+                // after the loop because its children may
+                // become ready and being processed in the loop later. It
+                // requires this block already being inserted
+                // into the BlockDataManager!
                 if me == index {
-                    self.data_man
-                        .insert_block_header(header_arc.hash(), header_arc.clone());
+                    self.data_man.insert_block_header(
+                        header_arc.hash(),
+                        header_arc.clone(),
+                    );
                 }
             }
         }
