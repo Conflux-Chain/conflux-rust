@@ -2521,17 +2521,16 @@ impl ConsensusGraph {
             pivot_index += 1;
         }
 
-        let to_state_pos =
-            if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
-                0 as usize
-            } else {
-                inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
-            };
+        let to_state_pos = if inner.pivot_chain.len()
+            < DEFERRED_STATE_EPOCH_COUNT as usize
+        {
+            0 as usize
+        } else {
+            inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
+        };
 
         let mut state_at = fork_at;
-        if fork_at + DEFERRED_STATE_EPOCH_COUNT as usize
-            > old_pivot_chain_len
-        {
+        if fork_at + DEFERRED_STATE_EPOCH_COUNT as usize > old_pivot_chain_len {
             if old_pivot_chain_len > DEFERRED_STATE_EPOCH_COUNT as usize {
                 state_at = old_pivot_chain_len
                     - DEFERRED_STATE_EPOCH_COUNT as usize
