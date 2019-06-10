@@ -6,10 +6,10 @@ use crate::{
     cache_manager::{CacheId, CacheManager},
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
     ext_db::SystemDB,
+    pow::ProofOfWorkConfig,
     storage::StorageManager,
     verification::VerificationConfig,
     SharedTransactionPool,
-    pow::ProofOfWorkConfig,
 };
 use cfx_types::{Bloom, H256, U256};
 use heapsize::HeapSizeOf;
@@ -19,8 +19,11 @@ use primitives::{
     Block, BlockHeader, SignedTransaction, TransactionAddress,
 };
 use rlp::{Rlp, RlpStream};
-use std::{collections::HashMap, sync::Arc};
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    collections::HashMap,
+    sync::Arc,
+};
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
@@ -454,18 +457,24 @@ impl BlockDataManager {
         true
     }
 
-    // The input `cur_hash` must have been inserted to BlockDataManager, otherwise
-    // it'll panic.
+    // The input `cur_hash` must have been inserted to BlockDataManager,
+    // otherwise it'll panic.
     pub fn target_difficulty<F>(
-        &self, pow_config: &ProofOfWorkConfig, cur_hash: &H256, num_blocks_in_epoch: F) -> U256
-    where F: Fn(&H256) -> usize {
-        let mut cur_header = self.block_header_by_hash(cur_hash).expect("Must already in BlockDataManager block_header");
+        &self, pow_config: &ProofOfWorkConfig, cur_hash: &H256,
+        num_blocks_in_epoch: F,
+    ) -> U256
+    where
+        F: Fn(&H256) -> usize,
+    {
+        let mut cur_header = self
+            .block_header_by_hash(cur_hash)
+            .expect("Must already in BlockDataManager block_header");
         let epoch = cur_header.height();
         assert_ne!(epoch, 0);
         debug_assert!(
             epoch
                 == (epoch / pow_config.difficulty_adjustment_epoch_period)
-                * pow_config.difficulty_adjustment_epoch_period
+                    * pow_config.difficulty_adjustment_epoch_period
         );
 
         let mut cur = cur_hash.clone();

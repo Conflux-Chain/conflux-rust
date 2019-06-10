@@ -923,9 +923,7 @@ impl ConsensusGraphInner {
         )
     }
 
-    pub fn adjust_difficulty(
-        &mut self, new_best_index: usize,
-    ) {
+    pub fn adjust_difficulty(&mut self, new_best_index: usize) {
         let new_best_hash = self.arena[new_best_index].hash.clone();
         let new_best_difficulty = self.arena[new_best_index].difficulty;
         let old_best_index = *self.pivot_chain.last().expect("not empty");
@@ -943,12 +941,14 @@ impl ConsensusGraphInner {
             == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
                 * self.pow_config.difficulty_adjustment_epoch_period
         {
-            self.current_difficulty =
-                self.data_man.target_difficulty(&self.pow_config, &new_best_hash,
-                    |h| {
-                        let index = self.indices.get(h).unwrap();
-                        self.arena[*index].num_blocks_in_own_epoch
-                    });
+            self.current_difficulty = self.data_man.target_difficulty(
+                &self.pow_config,
+                &new_best_hash,
+                |h| {
+                    let index = self.indices.get(h).unwrap();
+                    self.arena[*index].num_blocks_in_own_epoch
+                },
+            );
         } else {
             self.current_difficulty = new_best_difficulty;
         }
@@ -2086,9 +2086,8 @@ impl ConsensusGraph {
             // pass.
             // TODO Verify db state in case of data missing
             // TODO Recompute missing data if needed
-            inner.adjust_difficulty(
-                *new_pivot_chain.last().expect("not empty"),
-            );
+            inner
+                .adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
             inner.pivot_chain = new_pivot_chain;
         }
         {
@@ -2152,17 +2151,12 @@ impl ConsensusGraph {
         }
     }
 
-    /// This is the function to insert a new block into the consensus graph
-    /// during construction. We by pass many verifications because those
-    /// blocks are from our own database so we trust them. After inserting
-    /// all blocks with this function, we need to call construct_pivot() to
-    /// finish the building from db!ss
-    pub fn on_new_block_construction_only(
-        &self, hash: &H256, blockset_in_own_epoch: HashSet<usize>,
-    ) {
-        let block = self.data_man.block_by_hash(hash, false).unwrap();
-
-        let inner = &mut *self.inner.write();
+    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    fn insert_block_initial(
+        &self, inner: &mut ConsensusGraphInner, block: Arc<Block>,
+        blockset_in_own_epoch: &HashSet<usize>,
+    ) -> usize
+    {
         let weight_in_my_epoch;
         let is_heavy;
         {
@@ -2187,7 +2181,11 @@ impl ConsensusGraph {
         );
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
+        me
+    }
 
+    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    fn update_lcts_initial(&self, inner: &mut ConsensusGraphInner, me: usize) {
         let parent = inner.arena[me].parent;
 
         inner.weight_tree.make_tree(me);
@@ -2215,6 +2213,57 @@ impl ConsensusGraph {
                 U256::from(parent_w)
                     * U256::from(inner.inner_conf.adaptive_weight_alpha_num),
             ),
+        );
+    }
+
+    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    fn update_lcts_finalize(
+        &self, inner: &mut ConsensusGraphInner, me: usize, stable: bool,
+    ) {
+        let parent = inner.arena[me].parent;
+        let weight = inner.block_weight(me);
+
+        inner.weight_tree.path_apply(me, &SignedBigNum::pos(weight));
+
+        inner.stable_tree.path_apply(
+            me,
+            &SignedBigNum::pos(
+                U256::from(inner.inner_conf.adaptive_weight_alpha_den) * weight,
+            ),
+        );
+        if stable {
+            inner.adaptive_tree.path_apply(
+                me,
+                &SignedBigNum::pos(
+                    U256::from(inner.inner_conf.adaptive_weight_alpha_den)
+                        * weight,
+                ),
+            );
+        }
+        inner.adaptive_tree.catepillar_apply(
+            parent,
+            &SignedBigNum::neg(
+                U256::from(inner.inner_conf.adaptive_weight_alpha_num) * weight,
+            ),
+        );
+    }
+
+    /// This is the function to insert a new block into the consensus graph
+    /// during construction. We by pass many verifications because those
+    /// blocks are from our own database so we trust them. After inserting
+    /// all blocks with this function, we need to call construct_pivot() to
+    /// finish the building from db!ss
+    pub fn on_new_block_construction_only(
+        &self, hash: &H256, blockset_in_own_epoch: HashSet<usize>,
+    ) {
+        let block = self.data_man.block_by_hash(hash, false).unwrap();
+
+        let inner = &mut *self.inner.write();
+
+        let me = self.insert_block_initial(
+            inner,
+            block.clone(),
+            &blockset_in_own_epoch,
         );
 
         inner.compute_anticone(me);
@@ -2251,35 +2300,13 @@ impl ConsensusGraph {
             return;
         }
 
+        self.update_lcts_initial(inner, me);
+
         let (stable, adaptive) = inner.adaptive_weight(me);
         inner.arena[me].stable = stable;
         inner.arena[me].adaptive = adaptive;
 
-        let weight = inner.block_weight(me);
-
-        inner.weight_tree.path_apply(me, &SignedBigNum::pos(weight));
-
-        inner.stable_tree.path_apply(
-            me,
-            &SignedBigNum::pos(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_den) * weight,
-            ),
-        );
-        if stable {
-            inner.adaptive_tree.path_apply(
-                me,
-                &SignedBigNum::pos(
-                    U256::from(inner.inner_conf.adaptive_weight_alpha_den)
-                        * weight,
-                ),
-            );
-        }
-        inner.adaptive_tree.catepillar_apply(
-            parent,
-            &SignedBigNum::neg(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_num) * weight,
-            ),
-        );
+        self.update_lcts_finalize(inner, me, stable);
     }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
@@ -2334,30 +2361,11 @@ impl ConsensusGraph {
 
         let mut inner = &mut *self.inner.write();
 
-        let is_heavy;
-        let weight_in_my_epoch;
-        {
-            is_heavy = U512::from(block.block_header.pow_quality)
-                >= U512::from(inner.inner_conf.heavy_block_difficulty_ratio)
-                    * U512::from(block.block_header.difficulty());
-            weight_in_my_epoch =
-                inner.total_weight_in_own_epoch(&blockset_in_own_epoch);
-        }
-
-        let parent_idx =
-            *inner.indices.get(block.block_header.parent_hash()).unwrap();
-        let past_weight = inner.arena[parent_idx].past_weight
-            + inner.block_weight(parent_idx)
-            + weight_in_my_epoch;
-
-        let (me, indices_len) = inner.insert(
-            block.as_ref(),
-            past_weight,
-            is_heavy,
-            blockset_in_own_epoch.len(),
+        let me = self.insert_block_initial(
+            inner,
+            block.clone(),
+            &blockset_in_own_epoch,
         );
-        self.statistics
-            .set_consensus_graph_inserted_block_count(indices_len);
 
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
@@ -2368,32 +2376,7 @@ impl ConsensusGraph {
 
         inner.compute_anticone(me);
 
-        let parent = inner.arena[me].parent;
-
-        inner.weight_tree.make_tree(me);
-        inner.weight_tree.link(parent, me);
-
-        inner.stable_tree.make_tree(me);
-        inner.stable_tree.link(parent, me);
-        inner.stable_tree.set(
-            me,
-            &SignedBigNum::pos(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_num)
-                    * U256::from(
-                        inner.block_weight(parent)
-                            + inner.arena[parent].past_weight,
-                    ),
-            ),
-        );
-
-        inner.adaptive_tree.make_tree(me);
-        inner.adaptive_tree.link(parent, me);
-        let parent_w = inner.weight_tree.get(parent);
-        let start_adaptive_weight = &SignedBigNum::neg(
-            U256::from(parent_w)
-                * U256::from(inner.inner_conf.adaptive_weight_alpha_num),
-        );
-        inner.adaptive_tree.set(me, &start_adaptive_weight);
+        self.update_lcts_initial(inner, me);
 
         let (stable, adaptive) = inner.adaptive_weight(me);
 
@@ -2418,31 +2401,7 @@ impl ConsensusGraph {
         inner.arena[me].stable = stable;
         inner.arena[me].adaptive = adaptive;
 
-        let weight = inner.block_weight(me);
-
-        inner.weight_tree.path_apply(me, &SignedBigNum::pos(weight));
-        inner.stable_tree.path_apply(
-            me,
-            &SignedBigNum::pos(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_den) * weight,
-            ),
-        );
-
-        if stable {
-            inner.adaptive_tree.path_apply(
-                me,
-                &SignedBigNum::pos(
-                    U256::from(inner.inner_conf.adaptive_weight_alpha_den)
-                        * weight,
-                ),
-            );
-        }
-        inner.adaptive_tree.catepillar_apply(
-            parent,
-            &SignedBigNum::neg(
-                U256::from(inner.inner_conf.adaptive_weight_alpha_num) * weight,
-            ),
-        );
+        self.update_lcts_finalize(inner, me, stable);
 
         let last = inner.pivot_chain.last().cloned().unwrap();
         // TODO: constructing new_pivot_chain without cloning!
@@ -2601,9 +2560,7 @@ impl ConsensusGraph {
             state_at += 1;
         }
 
-        inner.adjust_difficulty(
-            *new_pivot_chain.last().expect("not empty"),
-        );
+        inner.adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
         inner.pivot_chain = new_pivot_chain;
         inner.optimistic_executed_height = if to_state_pos > 0 {
             Some(to_state_pos)
