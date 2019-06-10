@@ -905,28 +905,28 @@ impl SynchronizationGraph {
                             &mut invalid_set,
                             index,
                         );
-                    } else {
-                        // Passed verification on header_arc.
-                        if inner.arena[index].block_ready {
-                            need_to_relay.push(inner.arena[index].block_header.hash());
-                        }
+                        continue;
+                    }
+                    // Passed verification on header_arc.
+                    if inner.arena[index].block_ready {
+                        need_to_relay.push(inner.arena[index].block_header.hash());
+                    }
 
-                        inner.collect_blockset_in_own_view_of_epoch(index);
+                    inner.collect_blockset_in_own_view_of_epoch(index);
 
-                        for child in &inner.arena[index].children {
-                            debug_assert!(
-                                inner.arena[*child].graph_status
-                                    < BLOCK_HEADER_GRAPH_READY
-                            );
-                            queue.push_back(*child);
-                        }
-                        for referrer in &inner.arena[index].referrers {
-                            debug_assert!(
-                                inner.arena[*referrer].graph_status
-                                    < BLOCK_HEADER_GRAPH_READY
-                            );
-                            queue.push_back(*referrer);
-                        }
+                    for child in &inner.arena[index].children {
+                        debug_assert!(
+                            inner.arena[*child].graph_status
+                                < BLOCK_HEADER_GRAPH_READY
+                        );
+                        queue.push_back(*child);
+                    }
+                    for referrer in &inner.arena[index].referrers {
+                        debug_assert!(
+                            inner.arena[*referrer].graph_status
+                                < BLOCK_HEADER_GRAPH_READY
+                        );
+                        queue.push_back(*referrer);
                     }
                 } else if inner.new_to_be_header_parental_tree_ready(index) {
                     inner.arena[index].graph_status =

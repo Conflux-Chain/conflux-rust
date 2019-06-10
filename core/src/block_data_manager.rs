@@ -459,11 +459,7 @@ impl BlockDataManager {
     pub fn target_difficulty<F>(
         &self, pow_config: &ProofOfWorkConfig, cur_hash: &H256, num_blocks_in_epoch: F) -> U256
     where F: Fn(&H256) -> usize {
-        let block_headers = self.block_headers.read();
-        if !block_headers.contains_key(cur_hash) {
-            warn!("Block {} not in DataManager!!!", cur_hash);
-        }
-        let mut cur_header = block_headers.get(cur_hash).expect("Must already in BlockDataManager block_header");
+        let mut cur_header = self.block_header_by_hash(cur_hash).expect("Must already in BlockDataManager block_header");
         let epoch = cur_header.height();
         assert_ne!(epoch, 0);
         debug_assert!(
@@ -472,17 +468,17 @@ impl BlockDataManager {
                 * pow_config.difficulty_adjustment_epoch_period
         );
 
-        let mut cur = cur_hash;
-        let cur_difficulty = cur_header.difficulty();
+        let mut cur = cur_hash.clone();
+        let cur_difficulty = cur_header.difficulty().clone();
         let mut block_count = 0 as u64;
         let mut max_time = u64::min_value();
         let mut min_time = u64::max_value();
         for _ in 0..pow_config.difficulty_adjustment_epoch_period {
-            block_count += num_blocks_in_epoch(cur) as u64 + 1;
+            block_count += num_blocks_in_epoch(&cur) as u64 + 1;
             max_time = max(max_time, cur_header.timestamp());
             min_time = min(min_time, cur_header.timestamp());
-            cur = &cur_header.parent_hash();
-            cur_header = block_headers.get(cur).unwrap();
+            cur = cur_header.parent_hash().clone();
+            cur_header = self.block_header_by_hash(&cur).unwrap();
         }
         pow_config.target_difficulty(
             block_count,
