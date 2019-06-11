@@ -2563,6 +2563,43 @@ impl ConsensusGraph {
         weight
     }
 
+    /// Preliminarily check whether a block is partially invalid or not due to
+    /// incorrect parent selection!
+    fn preliminary_check_validity(
+        &self, inner: &mut ConsensusGraphInner, me: usize,
+    ) -> bool {
+        let last = inner.pivot_chain.last().cloned().unwrap();
+        let parent = inner.arena[me].parent;
+        if last == parent {
+            return true;
+        }
+        let lca = inner.weight_tree.lca(last, me);
+        let fork_at = inner.arena[lca].height as usize + 1;
+        let a = inner.weight_tree.ancestor_at(me, fork_at as usize);
+        let s = inner.pivot_chain[fork_at];
+
+        let mut last_pivot = inner.arena[parent].last_pivot_in_past;
+        for referee in &inner.arena[me].referees {
+            last_pivot =
+                max(last_pivot, inner.arena[*referee].last_pivot_in_past);
+        }
+        let total_weight = inner.weight_tree.get(inner.genesis_block_index);
+        let before_last_epoch_weight =
+            inner.arena[inner.pivot_chain[last_pivot]].past_weight;
+        let subtree_s_weight = inner.weight_tree.get(s);
+
+        let lower_bound_s_weight = SignedBigNum::from(before_last_epoch_weight)
+            + subtree_s_weight
+            - total_weight;
+        if lower_bound_s_weight < SignedBigNum::zero() {
+            return true;
+        }
+        let estimate_weight = inner.block_weight(me);
+        let upper_bound_a_weight =
+            inner.weight_tree.get(a) + SignedBigNum::from(estimate_weight);
+        return upper_bound_a_weight >= lower_bound_s_weight;
+    }
+
     /// This is the function to insert a new block into the consensus graph
     /// during construction. We by pass many verifications because those
     /// blocks are from our own database so we trust them. After inserting
@@ -2695,13 +2732,17 @@ impl ConsensusGraph {
 
         let (stable, adaptive) = inner.adaptive_weight(me);
 
-        let fully_valid = self.check_block_full_validity(
-            me,
-            block.as_ref(),
-            inner,
-            blockset_in_own_epoch,
-            adaptive,
-        );
+        let fully_valid = if self.preliminary_check_validity(inner, me) {
+            self.check_block_full_validity(
+                me,
+                block.as_ref(),
+                inner,
+                blockset_in_own_epoch,
+                adaptive,
+            )
+        } else {
+            false
+        };
         self.data_man.insert_block_status_to_db(hash, !fully_valid);
 
         if !fully_valid {
