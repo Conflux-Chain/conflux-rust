@@ -9,7 +9,7 @@ pub use ethereum_types::{
     H512, H520, H64, U128, U256, U512, U64,
 };
 use std::{
-    cmp::{min, Ordering},
+    cmp::Ordering,
     convert, ops,
 };
 
