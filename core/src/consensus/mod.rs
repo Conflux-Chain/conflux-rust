@@ -399,39 +399,74 @@ impl ConsensusGraphInner {
         } else {
             anticone = empty_set;
         }
+
+        let mut ds = HashMap::new();
+        for index in anticone {
+            ds.insert(index, *index);
+        }
+        for index in anticone {
+            let parent = self.arena[*index].parent;
+            if ds.contains_key(&parent) {
+                *ds.get_mut(&index).unwrap() = ds[&parent];
+            }
+        }
+
+        let mut weight_delta = HashMap::new();
+        let mut stable_delta = HashMap::new();
+        let mut adaptive_path_delta = HashMap::new();
+        let mut adaptive_catepillar_delta = HashMap::new();
+
         for index in anticone {
             if self.arena[*index].data.partial_invalid {
                 continue;
             }
+
+            let mut root = ds[index];
+            while ds[&root] != root {
+                root = ds[&root];
+            }
+            let mut current_index = *index;
+            while current_index != root {
+                let next = ds[&current_index];
+                *ds.get_mut(&current_index).unwrap() = root;
+                current_index = next;
+            }
+
             let weight = self.block_weight(*index);
-            self.weight_tree
-                .path_apply(*index, &SignedBigNum::neg(weight));
-            self.stable_tree.path_apply(
-                *index,
-                &SignedBigNum::neg(
+            *weight_delta.entry(root).or_insert(SignedBigNum::zero()) +=
+                SignedBigNum::neg(weight);
+            *stable_delta.entry(root).or_insert(SignedBigNum::zero()) +=
+                SignedBigNum::neg(
                     weight
                         * U256::from(self.inner_conf.adaptive_weight_alpha_den),
-                ),
-            );
+                );
             if self.arena[*index].stable {
-                self.adaptive_tree.path_apply(
-                    *index,
-                    &SignedBigNum::neg(
-                        weight
-                            * U256::from(
-                                self.inner_conf.adaptive_weight_alpha_den,
-                            ),
-                    ),
+                *adaptive_path_delta
+                    .entry(root)
+                    .or_insert(SignedBigNum::zero()) += SignedBigNum::neg(
+                    weight
+                        * U256::from(self.inner_conf.adaptive_weight_alpha_den),
                 );
             }
-            let parent_idx = self.arena[*index].parent;
-            self.adaptive_tree.catepillar_apply(
-                parent_idx,
-                &SignedBigNum::pos(
-                    weight
-                        * U256::from(self.inner_conf.adaptive_weight_alpha_num),
-                ),
+            *adaptive_catepillar_delta
+                .entry(root)
+                .or_insert(SignedBigNum::zero()) += SignedBigNum::pos(
+                weight * U256::from(self.inner_conf.adaptive_weight_alpha_num),
             );
+        }
+
+        for (index, delta) in &weight_delta {
+            self.weight_tree.path_apply(*index, delta);
+        }
+        for (index, delta) in &stable_delta {
+            self.stable_tree.path_apply(*index, delta);
+        }
+        for (index, delta) in &adaptive_path_delta {
+            self.adaptive_tree.path_apply(*index, delta);
+        }
+        for (index, delta) in &adaptive_catepillar_delta {
+            let parent = self.arena[*index].parent;
+            self.adaptive_tree.catepillar_apply(parent, delta);
         }
 
         let total_weight =
@@ -494,39 +529,22 @@ impl ConsensusGraphInner {
             }
         }
 
-        for index in anticone {
-            if self.arena[*index].data.partial_invalid {
-                continue;
-            }
-            let weight = self.block_weight(*index);
+        for (index, delta) in &weight_delta {
             self.weight_tree
-                .path_apply(*index, &SignedBigNum::pos(weight));
-            self.stable_tree.path_apply(
-                *index,
-                &SignedBigNum::pos(
-                    weight
-                        * U256::from(self.inner_conf.adaptive_weight_alpha_den),
-                ),
-            );
-            if self.arena[*index].stable {
-                self.adaptive_tree.path_apply(
-                    *index,
-                    &SignedBigNum::pos(
-                        weight
-                            * U256::from(
-                                self.inner_conf.adaptive_weight_alpha_den,
-                            ),
-                    ),
-                );
-            }
-            let parent_idx = self.arena[*index].parent;
-            self.adaptive_tree.catepillar_apply(
-                parent_idx,
-                &SignedBigNum::neg(
-                    weight
-                        * U256::from(self.inner_conf.adaptive_weight_alpha_num),
-                ),
-            );
+                .path_apply(*index, &SignedBigNum::negate(delta));
+        }
+        for (index, delta) in &stable_delta {
+            self.stable_tree
+                .path_apply(*index, &SignedBigNum::negate(delta));
+        }
+        for (index, delta) in &adaptive_path_delta {
+            self.adaptive_tree
+                .path_apply(*index, &SignedBigNum::negate(delta));
+        }
+        for (index, delta) in &adaptive_catepillar_delta {
+            let parent = self.arena[*index].parent;
+            self.adaptive_tree
+                .catepillar_apply(parent, &SignedBigNum::negate(delta));
         }
 
         (stable, adaptive)
@@ -612,14 +630,43 @@ impl ConsensusGraphInner {
         let mut valid = true;
         let parent = self.arena[me_in_consensus].parent;
 
+        let mut ds = HashMap::new();
+        for index in anticone {
+            ds.insert(index, *index);
+        }
+        for index in anticone {
+            let parent = self.arena[*index].parent;
+            if ds.contains_key(&parent) {
+                *ds.get_mut(&index).unwrap() = ds[&parent];
+            }
+        }
+
+        let mut weight_delta = HashMap::new();
+
         // Remove weight contribution of anticone
         for index in anticone {
             if self.arena[*index].data.partial_invalid {
                 continue;
             }
+
+            let mut root = ds[index];
+            while ds[&root] != root {
+                root = ds[&root];
+            }
+            let mut current_index = *index;
+            while current_index != root {
+                let next = ds[&current_index];
+                *ds.get_mut(&current_index).unwrap() = root;
+                current_index = next;
+            }
+
             let weight = self.block_weight(*index);
-            self.weight_tree
-                .path_apply(*index, &SignedBigNum::neg(weight));
+            *weight_delta.entry(root).or_insert(SignedBigNum::zero()) +=
+                SignedBigNum::neg(weight);
+        }
+
+        for (index, delta) in &weight_delta {
+            self.weight_tree.path_apply(*index, delta);
         }
 
         // Check the pivot selection decision.
@@ -655,14 +702,9 @@ impl ConsensusGraphInner {
             }
         }
 
-        // Add back weight contribution of anticone
-        for index in anticone {
-            if self.arena[*index].data.partial_invalid {
-                continue;
-            }
-            let weight = self.block_weight(*index);
+        for (index, delta) in &weight_delta {
             self.weight_tree
-                .path_apply(*index, &SignedBigNum::pos(weight));
+                .path_apply(*index, &SignedBigNum::negate(delta));
         }
 
         valid
