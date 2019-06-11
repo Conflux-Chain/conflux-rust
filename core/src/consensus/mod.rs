@@ -141,7 +141,8 @@ impl ConsensusGraphNodeData {
 }
 
 pub struct ConsensusGraphPivotData {
-    /// The set of blocks whose last_pivot_in_past point to this pivot chain location
+    /// The set of blocks whose last_pivot_in_past point to this pivot chain
+    /// location
     pub last_pivot_in_past_blocks: HashSet<usize>,
 }
 
@@ -2233,20 +2234,29 @@ impl ConsensusGraph {
     }
 
     /// Recompute metadata associated information on pivot chain changes
-    fn recompute_metadata(&self, inner: &mut ConsensusGraphInner, start_at: usize, mut to_update: HashSet<usize>) {
-        inner.pivot_chain_metadata.resize_with(inner.pivot_chain.len(),
-                                               Default::default);
+    fn recompute_metadata(
+        &self, inner: &mut ConsensusGraphInner, start_at: usize,
+        mut to_update: HashSet<usize>,
+    )
+    {
+        inner
+            .pivot_chain_metadata
+            .resize_with(inner.pivot_chain.len(), Default::default);
         for i in start_at..inner.pivot_chain.len() {
             let me = inner.pivot_chain[i];
             inner.arena[me].last_pivot_in_past = i;
-            inner.pivot_chain_metadata[i].last_pivot_in_past_blocks.clear();
-            inner.pivot_chain_metadata[i].last_pivot_in_past_blocks.insert(me);
+            inner.pivot_chain_metadata[i]
+                .last_pivot_in_past_blocks
+                .clear();
+            inner.pivot_chain_metadata[i]
+                .last_pivot_in_past_blocks
+                .insert(me);
             to_update.remove(&me);
         }
         let mut stack = Vec::new();
         let to_visit = to_update.clone();
         for i in &to_update {
-            stack.push((0, *i) );
+            stack.push((0, *i));
         }
         while !stack.is_empty() {
             let (stage, me) = stack.pop().unwrap();
@@ -2260,7 +2270,7 @@ impl ConsensusGraph {
                     stack.push((1, me));
                     stack.push((0, parent));
                     for referee in &inner.arena[me].referees {
-                        stack.push( (0, *referee));
+                        stack.push((0, *referee));
                     }
                 }
             } else if stage == 1 && me != 0 {
@@ -2270,7 +2280,9 @@ impl ConsensusGraph {
                     last_pivot = max(last_pivot, x);
                 }
                 inner.arena[me].last_pivot_in_past = last_pivot;
-                inner.pivot_chain_metadata[last_pivot].last_pivot_in_past_blocks.insert(me);
+                inner.pivot_chain_metadata[last_pivot]
+                    .last_pivot_in_past_blocks
+                    .insert(me);
             }
         }
     }
@@ -2383,7 +2395,8 @@ impl ConsensusGraph {
                 .adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
             inner.pivot_chain = new_pivot_chain;
 
-            // Now we construct pivot_chain_metadata and compute last_pivot_in_past
+            // Now we construct pivot_chain_metadata and compute
+            // last_pivot_in_past
             let mut metadata_to_update = HashSet::new();
             for i in 1..inner.arena.len() {
                 metadata_to_update.insert(i);
@@ -2745,9 +2758,12 @@ impl ConsensusGraph {
                             let weight = inner.weight_tree.get(*index);
                             if heaviest == NULL
                                 || ConsensusGraphInner::is_heavier(
-                                (&weight, &inner.arena[*index].hash),
-                                (&heaviest_weight, &inner.arena[heaviest].hash),
-                            )
+                                    (&weight, &inner.arena[*index].hash),
+                                    (
+                                        &heaviest_weight,
+                                        &inner.arena[heaviest].hash,
+                                    ),
+                                )
                             {
                                 heaviest = *index;
                                 heaviest_weight = weight;
@@ -2768,14 +2784,15 @@ impl ConsensusGraph {
             debug!("Forked at index {}", inner.pivot_chain[fork_at - 1]);
 
             if fork_at < old_pivot_chain_len {
-                let enqueue_if_obsolete = |queue: &mut VecDeque<usize>, index| {
-                    let mut epoch_number =
-                        inner.arena[index].data.epoch_number.borrow_mut();
-                    if *epoch_number != NULL && *epoch_number >= fork_at {
-                        *epoch_number = NULL;
-                        queue.push_back(index);
-                    }
-                };
+                let enqueue_if_obsolete =
+                    |queue: &mut VecDeque<usize>, index| {
+                        let mut epoch_number =
+                            inner.arena[index].data.epoch_number.borrow_mut();
+                        if *epoch_number != NULL && *epoch_number >= fork_at {
+                            *epoch_number = NULL;
+                            queue.push_back(index);
+                        }
+                    };
 
                 let mut queue = VecDeque::new();
                 enqueue_if_obsolete(&mut queue, last);
@@ -2836,13 +2853,16 @@ impl ConsensusGraph {
         }
 
         // Now compute last_pivot_in_block and update pivot_metadata.
-        // Note that we need to do this for partially invalid blocks to propagate information!
+        // Note that we need to do this for partially invalid blocks to
+        // propagate information!
         if !extend_pivot {
             let update_at = fork_at - 1;
             let mut last_pivot_to_update = HashSet::new();
             last_pivot_to_update.insert(me);
             for pivot_index in update_at..old_pivot_chain_len {
-                for x in &inner.pivot_chain_metadata[pivot_index].last_pivot_in_past_blocks {
+                for x in &inner.pivot_chain_metadata[pivot_index]
+                    .last_pivot_in_past_blocks
+                {
                     last_pivot_to_update.insert(*x);
                 }
             }
@@ -2850,7 +2870,9 @@ impl ConsensusGraph {
         } else {
             let height = inner.arena[me].height as usize;
             inner.arena[me].last_pivot_in_past = height;
-            inner.pivot_chain_metadata[height].last_pivot_in_past_blocks.insert(me);
+            inner.pivot_chain_metadata[height]
+                .last_pivot_in_past_blocks
+                .insert(me);
         }
 
         // Now we can safely return
