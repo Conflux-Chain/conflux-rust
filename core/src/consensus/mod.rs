@@ -42,7 +42,7 @@ use rlp::*;
 use slab::Slab;
 use std::{
     cell::RefCell,
-    cmp::min,
+    cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
     iter::FromIterator,
@@ -140,6 +140,20 @@ impl ConsensusGraphNodeData {
     }
 }
 
+pub struct ConsensusGraphPivotData {
+    /// The set of blocks whose last_pivot_in_past point to this pivot chain
+    /// location
+    pub last_pivot_in_past_blocks: HashSet<usize>,
+}
+
+impl Default for ConsensusGraphPivotData {
+    fn default() -> Self {
+        ConsensusGraphPivotData {
+            last_pivot_in_past_blocks: HashSet::new(),
+        }
+    }
+}
+
 ///
 /// Implementation details of the GHAST algorithm
 ///
@@ -201,6 +215,8 @@ pub struct ConsensusGraphInner {
     pub indices: HashMap<H256, usize>,
     // The current pivot chain indexes.
     pub pivot_chain: Vec<usize>,
+    // The metadata associated with each pivot chain block
+    pub pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
@@ -242,6 +258,7 @@ pub struct ConsensusGraphNode {
     pub parent: usize,
     /// The number of nodes in the epoch represented by this block
     pub num_blocks_in_own_epoch: usize,
+    pub last_pivot_in_past: usize,
     pub children: Vec<usize>,
     pub referrers: Vec<usize>,
     pub referees: Vec<usize>,
@@ -258,6 +275,7 @@ impl ConsensusGraphInner {
             arena: Slab::new(),
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
+            pivot_chain_metadata: Vec::new(),
             optimistic_executed_height: None,
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
@@ -318,6 +336,11 @@ impl ConsensusGraphInner {
             .epoch_number
             .borrow_mut() = 0;
         inner.pivot_chain.push(inner.genesis_block_index);
+        let mut last_pivot_in_past_blocks = HashSet::new();
+        last_pivot_in_past_blocks.insert(inner.genesis_block_index);
+        inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
+            last_pivot_in_past_blocks,
+        });
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
         inner
             .indices_in_epochs
@@ -596,6 +619,7 @@ impl ConsensusGraphInner {
             adaptive: block.block_header.adaptive(),
             parent,
             num_blocks_in_own_epoch,
+            last_pivot_in_past: 0,
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
@@ -2209,6 +2233,60 @@ impl ConsensusGraph {
         return true;
     }
 
+    /// Recompute metadata associated information on pivot chain changes
+    fn recompute_metadata(
+        &self, inner: &mut ConsensusGraphInner, start_at: usize,
+        mut to_update: HashSet<usize>,
+    )
+    {
+        inner
+            .pivot_chain_metadata
+            .resize_with(inner.pivot_chain.len(), Default::default);
+        for i in start_at..inner.pivot_chain.len() {
+            let me = inner.pivot_chain[i];
+            inner.arena[me].last_pivot_in_past = i;
+            inner.pivot_chain_metadata[i]
+                .last_pivot_in_past_blocks
+                .clear();
+            inner.pivot_chain_metadata[i]
+                .last_pivot_in_past_blocks
+                .insert(me);
+            to_update.remove(&me);
+        }
+        let mut stack = Vec::new();
+        let to_visit = to_update.clone();
+        for i in &to_update {
+            stack.push((0, *i));
+        }
+        while !stack.is_empty() {
+            let (stage, me) = stack.pop().unwrap();
+            if !to_visit.contains(&me) {
+                continue;
+            }
+            let parent = inner.arena[me].parent;
+            if stage == 0 {
+                if to_update.contains(&me) {
+                    to_update.remove(&me);
+                    stack.push((1, me));
+                    stack.push((0, parent));
+                    for referee in &inner.arena[me].referees {
+                        stack.push((0, *referee));
+                    }
+                }
+            } else if stage == 1 && me != 0 {
+                let mut last_pivot = inner.arena[parent].last_pivot_in_past;
+                for referee in &inner.arena[me].referees {
+                    let x = inner.arena[*referee].last_pivot_in_past;
+                    last_pivot = max(last_pivot, x);
+                }
+                inner.arena[me].last_pivot_in_past = last_pivot;
+                inner.pivot_chain_metadata[last_pivot]
+                    .last_pivot_in_past_blocks
+                    .insert(me);
+            }
+        }
+    }
+
     /// construct_pivot() should be used after on_new_block_construction_only()
     /// calls. It builds the pivot chain and ists state at once, avoiding
     /// intermediate redundant computation triggered by on_new_block().
@@ -2316,6 +2394,14 @@ impl ConsensusGraph {
             inner
                 .adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
             inner.pivot_chain = new_pivot_chain;
+
+            // Now we construct pivot_chain_metadata and compute
+            // last_pivot_in_past
+            let mut metadata_to_update = HashSet::new();
+            for i in 1..inner.arena.len() {
+                metadata_to_update.insert(i);
+            }
+            self.recompute_metadata(inner, 0, metadata_to_update);
         }
         {
             let inner = &*self.inner.read();
@@ -2620,136 +2706,178 @@ impl ConsensusGraph {
 
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
-            return;
+            debug!(
+                "Block {} (hash = {}) is partially invalid",
+                me, inner.arena[me].hash
+            );
+        } else {
+            debug!(
+                "Block {} (hash = {}) is fully valid",
+                me, inner.arena[me].hash
+            );
         }
-        debug!(
-            "Block {} (hash = {}) is fully valid",
-            me, inner.arena[me].hash
-        );
 
         inner.arena[me].stable = stable;
         inner.arena[me].adaptive = adaptive;
 
-        let my_weight = self.update_lcts_finalize(inner, me, stable);
-
-        self.aggregate_total_weight_in_past(my_weight);
-
-        let last = inner.pivot_chain.last().cloned().unwrap();
+        let mut extend_pivot = false;
+        let mut fork_at = inner.pivot_chain.len() + 1;
         let old_pivot_chain_len = inner.pivot_chain.len();
-        let fork_at = if inner.arena[me].parent == last {
-            inner.pivot_chain.push(me);
-            old_pivot_chain_len
-        } else {
-            let lca = inner.weight_tree.lca(last, me);
+        if fully_valid {
+            let my_weight = self.update_lcts_finalize(inner, me, stable);
 
-            let fork_at = inner.arena[lca].height as usize + 1;
-            let prev = inner.pivot_chain[fork_at];
-            let prev_weight = inner.weight_tree.get(prev);
-            let new = inner.weight_tree.ancestor_at(me, fork_at as usize);
-            let new_weight = inner.weight_tree.get(new);
+            self.aggregate_total_weight_in_past(my_weight);
 
-            if ConsensusGraphInner::is_heavier(
-                (&new_weight, &inner.arena[new].hash),
-                (&prev_weight, &inner.arena[prev].hash),
-            ) {
-                // The new subtree is heavier, update pivot chain
-                inner.pivot_chain.truncate(fork_at);
-                let mut u = new;
-                loop {
-                    inner.pivot_chain.push(u);
-                    let mut heaviest = NULL;
-                    let mut heaviest_weight = SignedBigNum::zero();
-                    for index in &inner.arena[u].children {
-                        let weight = inner.weight_tree.get(*index);
-                        if heaviest == NULL
-                            || ConsensusGraphInner::is_heavier(
-                                (&weight, &inner.arena[*index].hash),
-                                (&heaviest_weight, &inner.arena[heaviest].hash),
-                            )
-                        {
-                            heaviest = *index;
-                            heaviest_weight = weight;
-                        }
-                    }
-                    if heaviest == NULL {
-                        break;
-                    }
-                    u = heaviest;
-                }
-                fork_at
-            } else {
-                // The previous subtree is still heavier, nothing is updated
-                debug!("Finish Consensus.on_new_block() with pivot chain unchanged");
+            let last = inner.pivot_chain.last().cloned().unwrap();
+            fork_at = if inner.arena[me].parent == last {
+                inner.pivot_chain.push(me);
+                inner.pivot_chain_metadata.push(Default::default());
+                extend_pivot = true;
                 old_pivot_chain_len
-            }
-        };
-        debug!("Forked at index {}", inner.pivot_chain[fork_at - 1]);
+            } else {
+                let lca = inner.weight_tree.lca(last, me);
 
-        if fork_at < old_pivot_chain_len {
-            let enqueue_if_obsolete = |queue: &mut VecDeque<usize>, index| {
-                let mut epoch_number =
-                    inner.arena[index].data.epoch_number.borrow_mut();
-                if *epoch_number != NULL && *epoch_number >= fork_at {
-                    *epoch_number = NULL;
-                    queue.push_back(index);
+                let fork_at = inner.arena[lca].height as usize + 1;
+                let prev = inner.pivot_chain[fork_at];
+                let prev_weight = inner.weight_tree.get(prev);
+                let new = inner.weight_tree.ancestor_at(me, fork_at as usize);
+                let new_weight = inner.weight_tree.get(new);
+
+                if ConsensusGraphInner::is_heavier(
+                    (&new_weight, &inner.arena[new].hash),
+                    (&prev_weight, &inner.arena[prev].hash),
+                ) {
+                    // The new subtree is heavier, update pivot chain
+                    inner.pivot_chain.truncate(fork_at);
+                    let mut u = new;
+                    loop {
+                        inner.pivot_chain.push(u);
+                        let mut heaviest = NULL;
+                        let mut heaviest_weight = SignedBigNum::zero();
+                        for index in &inner.arena[u].children {
+                            let weight = inner.weight_tree.get(*index);
+                            if heaviest == NULL
+                                || ConsensusGraphInner::is_heavier(
+                                    (&weight, &inner.arena[*index].hash),
+                                    (
+                                        &heaviest_weight,
+                                        &inner.arena[heaviest].hash,
+                                    ),
+                                )
+                            {
+                                heaviest = *index;
+                                heaviest_weight = weight;
+                            }
+                        }
+                        if heaviest == NULL {
+                            break;
+                        }
+                        u = heaviest;
+                    }
+                    fork_at
+                } else {
+                    // The previous subtree is still heavier, nothing is updated
+                    debug!("Finish Consensus.on_new_block() with pivot chain unchanged");
+                    old_pivot_chain_len
                 }
             };
+            debug!("Forked at index {}", inner.pivot_chain[fork_at - 1]);
 
-            let mut queue = VecDeque::new();
-            enqueue_if_obsolete(&mut queue, last);
-            while let Some(me) = queue.pop_front() {
-                for referee in inner.arena[me].referees.clone() {
-                    enqueue_if_obsolete(&mut queue, referee);
+            if fork_at < old_pivot_chain_len {
+                let enqueue_if_obsolete =
+                    |queue: &mut VecDeque<usize>, index| {
+                        let mut epoch_number =
+                            inner.arena[index].data.epoch_number.borrow_mut();
+                        if *epoch_number != NULL && *epoch_number >= fork_at {
+                            *epoch_number = NULL;
+                            queue.push_back(index);
+                        }
+                    };
+
+                let mut queue = VecDeque::new();
+                enqueue_if_obsolete(&mut queue, last);
+                while let Some(me) = queue.pop_front() {
+                    for referee in inner.arena[me].referees.clone() {
+                        enqueue_if_obsolete(&mut queue, referee);
+                    }
+                    enqueue_if_obsolete(&mut queue, inner.arena[me].parent);
                 }
-                enqueue_if_obsolete(&mut queue, inner.arena[me].parent);
+            }
+
+            assert_ne!(fork_at, 0);
+
+            // Construct epochs
+            let mut pivot_index = fork_at;
+            while pivot_index < inner.pivot_chain.len() {
+                // First, identify all the blocks in the current epoch
+                let mut queue = Vec::new();
+                {
+                    let copy_of_fork_at = pivot_index;
+                    let enqueue_if_new = |queue: &mut Vec<usize>, index| {
+                        let mut epoch_number =
+                            inner.arena[index].data.epoch_number.borrow_mut();
+                        if *epoch_number == NULL {
+                            *epoch_number = copy_of_fork_at;
+                            queue.push(index);
+                        }
+                    };
+
+                    let mut at = 0;
+                    enqueue_if_new(&mut queue, inner.pivot_chain[pivot_index]);
+                    while at < queue.len() {
+                        let me = queue[at];
+                        for referee in &inner.arena[me].referees {
+                            enqueue_if_new(&mut queue, *referee);
+                        }
+                        enqueue_if_new(&mut queue, inner.arena[me].parent);
+                        at += 1;
+                    }
+                }
+
+                // Second, sort all the blocks based on their topological order
+                // and break ties with block hash
+                let reversed_indices = inner.topological_sort(&queue);
+
+                debug!(
+                    "Construct epoch_id={}, block_count={}",
+                    inner.arena[inner.pivot_chain[pivot_index]].hash,
+                    reversed_indices.len()
+                );
+
+                inner
+                    .indices_in_epochs
+                    .insert(inner.pivot_chain[pivot_index], reversed_indices);
+
+                pivot_index += 1;
             }
         }
 
-        assert_ne!(fork_at, 0);
-
-        // Construct epochs
-        let mut pivot_index = fork_at;
-        while pivot_index < inner.pivot_chain.len() {
-            // First, identify all the blocks in the current epoch
-            let mut queue = Vec::new();
-            {
-                let copy_of_fork_at = pivot_index;
-                let enqueue_if_new = |queue: &mut Vec<usize>, index| {
-                    let mut epoch_number =
-                        inner.arena[index].data.epoch_number.borrow_mut();
-                    if *epoch_number == NULL {
-                        *epoch_number = copy_of_fork_at;
-                        queue.push(index);
-                    }
-                };
-
-                let mut at = 0;
-                enqueue_if_new(&mut queue, inner.pivot_chain[pivot_index]);
-                while at < queue.len() {
-                    let me = queue[at];
-                    for referee in &inner.arena[me].referees {
-                        enqueue_if_new(&mut queue, *referee);
-                    }
-                    enqueue_if_new(&mut queue, inner.arena[me].parent);
-                    at += 1;
+        // Now compute last_pivot_in_block and update pivot_metadata.
+        // Note that we need to do this for partially invalid blocks to
+        // propagate information!
+        if !extend_pivot {
+            let update_at = fork_at - 1;
+            let mut last_pivot_to_update = HashSet::new();
+            last_pivot_to_update.insert(me);
+            for pivot_index in update_at..old_pivot_chain_len {
+                for x in &inner.pivot_chain_metadata[pivot_index]
+                    .last_pivot_in_past_blocks
+                {
+                    last_pivot_to_update.insert(*x);
                 }
             }
+            self.recompute_metadata(inner, fork_at, last_pivot_to_update);
+        } else {
+            let height = inner.arena[me].height as usize;
+            inner.arena[me].last_pivot_in_past = height;
+            inner.pivot_chain_metadata[height]
+                .last_pivot_in_past_blocks
+                .insert(me);
+        }
 
-            // Second, sort all the blocks based on their topological order
-            // and break ties with block hash
-            let reversed_indices = inner.topological_sort(&queue);
-
-            debug!(
-                "Construct epoch_id={}, block_count={}",
-                inner.arena[inner.pivot_chain[pivot_index]].hash,
-                reversed_indices.len()
-            );
-
-            inner
-                .indices_in_epochs
-                .insert(inner.pivot_chain[pivot_index], reversed_indices);
-
-            pivot_index += 1;
+        // Now we can safely return
+        if !fully_valid {
+            return;
         }
 
         let to_state_pos = if inner.pivot_chain.len()
