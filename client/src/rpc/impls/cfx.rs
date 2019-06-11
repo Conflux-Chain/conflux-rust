@@ -185,10 +185,6 @@ impl RpcImpl {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
-        if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
-            return Ok(Some(RpcTransaction::from_signed(&transaction, None)));
-        }
-
         if let Some((transaction, receipt, tx_address)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
@@ -197,6 +193,13 @@ impl RpcImpl {
                 Some(Receipt::new(transaction.clone(), receipt, tx_address)),
             )))
         } else {
+            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
+                return Ok(Some(RpcTransaction::from_signed(
+                    &transaction,
+                    None,
+                )));
+            }
+
             Ok(None)
         }
     }

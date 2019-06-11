@@ -923,9 +923,7 @@ impl ConsensusGraphInner {
         )
     }
 
-    pub fn adjust_difficulty(
-        &mut self, new_best_index: usize,
-    ) {
+    pub fn adjust_difficulty(&mut self, new_best_index: usize) {
         let new_best_hash = self.arena[new_best_index].hash.clone();
         let new_best_difficulty = self.arena[new_best_index].difficulty;
         let old_best_index = *self.pivot_chain.last().expect("not empty");
@@ -943,12 +941,14 @@ impl ConsensusGraphInner {
             == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
                 * self.pow_config.difficulty_adjustment_epoch_period
         {
-            self.current_difficulty =
-                self.data_man.target_difficulty(&self.pow_config, &new_best_hash,
-                    |h| {
-                        let index = self.indices.get(h).unwrap();
-                        self.arena[*index].num_blocks_in_own_epoch
-                    });
+            self.current_difficulty = self.data_man.target_difficulty(
+                &self.pow_config,
+                &new_best_hash,
+                |h| {
+                    let index = self.indices.get(h).unwrap();
+                    self.arena[*index].num_blocks_in_own_epoch
+                },
+            );
         } else {
             self.current_difficulty = new_best_difficulty;
         }
@@ -2086,9 +2086,8 @@ impl ConsensusGraph {
             // pass.
             // TODO Verify db state in case of data missing
             // TODO Recompute missing data if needed
-            inner.adjust_difficulty(
-                *new_pivot_chain.last().expect("not empty"),
-            );
+            inner
+                .adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
             inner.pivot_chain = new_pivot_chain;
         }
         {
@@ -2367,7 +2366,11 @@ impl ConsensusGraph {
         }
 
         let (_ready, pending, total) = self.txpool.stats();
-        info!("Total transaction received {}, total txs packed by chain {}", total, total - pending);
+        info!(
+            "Total transaction received {}, total txs packed by chain {}",
+            total,
+            total - pending
+        );
 
         inner.compute_anticone(me);
 
@@ -2604,9 +2607,7 @@ impl ConsensusGraph {
             state_at += 1;
         }
 
-        inner.adjust_difficulty(
-            *new_pivot_chain.last().expect("not empty"),
-        );
+        inner.adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
         inner.pivot_chain = new_pivot_chain;
         inner.optimistic_executed_height = if to_state_pos > 0 {
             Some(to_state_pos)

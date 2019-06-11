@@ -302,12 +302,12 @@ impl<'a> State<'a> {
             let entry = accounts.get_mut(address).unwrap();
             // FIXME: use a fixed order to sort accounts.
             /*
-        }
-        for (address, ref mut entry) in accounts
-                .iter_mut()
-                .filter(|&(_, ref entry)| entry.is_dirty())
-            {
-            */
+            }
+            for (address, ref mut entry) in accounts
+                    .iter_mut()
+                    .filter(|&(_, ref entry)| entry.is_dirty())
+                {
+                */
             entry.state = AccountState::Committed;
             if let Some(ref mut account) = entry.account {
                 accounts_for_txpool.push(account.as_account());
@@ -327,7 +327,8 @@ impl<'a> State<'a> {
                 .name("txpool_update_state".into())
                 .spawn(move || {
                     txpool_clone.notify_state_start(accounts_for_txpool);
-                }).expect("can not notify tx pool to start state");
+                })
+                .expect("can not notify tx pool to start state");
         }
         Ok(())
     }
