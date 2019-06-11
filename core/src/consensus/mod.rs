@@ -2596,7 +2596,7 @@ impl ConsensusGraph {
         }
         let estimate_weight = inner.block_weight(me);
         let upper_bound_a_weight =
-            inner.weight_tree.get(a) + SignedBigNum(estimate_weight);
+            inner.weight_tree.get(a) + SignedBigNum::from(estimate_weight);
         return upper_bound_a_weight >= lower_bound_s_weight;
     }
 
