@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod confirmation;
 mod consensus_executor;
 mod debug;
 
@@ -10,7 +11,10 @@ use super::consensus::consensus_executor::ConsensusExecutor;
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::{CacheId, CacheManager},
-    consensus::consensus_executor::{EpochExecutionTask, RewardExecutionInfo},
+    consensus::{
+        confirmation::ConfirmationTrait,
+        consensus_executor::{EpochExecutionTask, RewardExecutionInfo},
+    },
     db::COL_MISC,
     ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
@@ -1255,7 +1259,7 @@ pub struct FinalityManager {
     pub risks_less_than: VecDeque<f64>,
 }
 
-pub struct TotalDifficultyInPast {
+pub struct TotalWeightInPast {
     pub old: U256,
     pub cur: U256,
     pub delta: U256,
@@ -1280,10 +1284,45 @@ pub struct ConsensusGraph {
     executor: Arc<ConsensusExecutor>,
     pub statistics: SharedStatistics,
     finality_manager: RwLock<FinalityManager>,
-    pub total_difficulty_in_past_2d: RwLock<TotalDifficultyInPast>,
+    pub total_weight_in_past_2d: RwLock<TotalWeightInPast>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
+
+impl ConfirmationTrait for ConsensusGraph {
+    fn confirmation_risk_by_hash(&self, hash: H256) -> Option<f64> {
+        let inner = self.inner.read();
+        let index = *inner.indices.get(&hash)?;
+        let epoch_num = inner.arena[index].data.epoch_number.borrow().clone();
+        if epoch_num == NULL {
+            return None;
+        }
+
+        if epoch_num == 0 {
+            return Some(0.0);
+        }
+
+        let finality = self.finality_manager.read();
+
+        if epoch_num < finality.lowest_epoch_num {
+            return Some(MIN_MAINTAINED_RISK);
+        }
+
+        let idx = epoch_num - finality.lowest_epoch_num;
+        if idx < finality.risks_less_than.len() {
+            let mut max_risk = 0.0;
+            for i in 0..idx + 1 {
+                let risk = *finality.risks_less_than.get(i).unwrap();
+                if max_risk < risk {
+                    max_risk = risk;
+                }
+            }
+            Some(max_risk)
+        } else {
+            None
+        }
+    }
+}
 
 impl ConsensusGraph {
     /// Build the ConsensusGraph with a genesis block and various other
@@ -1329,7 +1368,7 @@ impl ConsensusGraph {
                 lowest_epoch_num: 0,
                 risks_less_than: VecDeque::new(),
             }),
-            total_difficulty_in_past_2d: RwLock::new(TotalDifficultyInPast {
+            total_weight_in_past_2d: RwLock::new(TotalWeightInPast {
                 old: U256::zero(),
                 cur: U256::zero(),
                 delta: U256::zero(),
@@ -1337,20 +1376,20 @@ impl ConsensusGraph {
         }
     }
 
-    pub fn update_total_difficulty_in_past(&self) {
-        let mut total_diff = self.total_difficulty_in_past_2d.write();
-        total_diff.delta = total_diff.cur - total_diff.old;
-        total_diff.old = total_diff.cur;
+    pub fn update_total_weight_in_past(&self) {
+        let mut total_weight = self.total_weight_in_past_2d.write();
+        total_weight.delta = total_weight.cur - total_weight.old;
+        total_weight.old = total_weight.cur;
     }
 
-    pub fn aggregate_total_difficulty_in_past(&self, difficulty: &U256) {
-        let mut total_diff = self.total_difficulty_in_past_2d.write();
-        total_diff.cur += *difficulty;
+    pub fn aggregate_total_weight_in_past(&self, weight: U256) {
+        let mut total_weight = self.total_weight_in_past_2d.write();
+        total_weight.cur += weight;
     }
 
-    pub fn get_total_difficulty_in_past(&self) -> U256 {
-        let total_diff = self.total_difficulty_in_past_2d.read();
-        total_diff.delta
+    pub fn get_total_weight_in_past(&self) -> U256 {
+        let total_weight = self.total_weight_in_past_2d.read();
+        total_weight.delta
     }
 
     fn confirmation_risk(
@@ -1360,23 +1399,23 @@ impl ConsensusGraph {
     {
         // Compute w_1
         let idx = inner.pivot_chain[epoch_num];
-        let w_1 = U256::from(inner.weight_tree.get(idx));
+        let w_1 = inner.block_weight(idx);
 
         // Compute w_2
         let parent = inner.arena[idx].parent;
         assert!(parent != NULL);
-        let mut max_diff = U256::zero();
+        let mut max_weight = U256::zero();
         for child in inner.arena[parent].children.iter() {
             if *child == idx || inner.arena[*child].data.partial_invalid {
                 continue;
             }
 
-            let child_weight = U256::from(inner.weight_tree.get(*child));
-            if child_weight > max_diff {
-                max_diff = child_weight;
+            let child_weight = inner.block_weight(*child);
+            if child_weight > max_weight {
+                max_weight = child_weight;
             }
         }
-        let w_2 = max_diff;
+        let w_2 = max_weight;
 
         // Compute w_3
         let w_3 = inner.arena[idx].past_weight;
@@ -1455,39 +1494,6 @@ impl ConsensusGraph {
             let mut finality = self.finality_manager.write();
             finality.lowest_epoch_num = epoch_num;
             finality.risks_less_than = risks;
-        }
-    }
-
-    pub fn confirmation_risk_by_hash(&self, hash: H256) -> Option<f64> {
-        let inner = self.inner.read();
-        let index = *inner.indices.get(&hash)?;
-        let epoch_num = inner.arena[index].data.epoch_number.borrow().clone();
-        if epoch_num == NULL {
-            return None;
-        }
-
-        if epoch_num == 0 {
-            return Some(0.0);
-        }
-
-        let finality = self.finality_manager.read();
-
-        if epoch_num < finality.lowest_epoch_num {
-            return Some(MIN_MAINTAINED_RISK);
-        }
-
-        let idx = epoch_num - finality.lowest_epoch_num;
-        if idx < finality.risks_less_than.len() {
-            let mut max_risk = 0.0;
-            for i in 0..idx + 1 {
-                let risk = *finality.risks_less_than.get(i).unwrap();
-                if max_risk < risk {
-                    max_risk = risk;
-                }
-            }
-            Some(max_risk)
-        } else {
-            None
         }
     }
 
@@ -2398,7 +2404,7 @@ impl ConsensusGraph {
     /// Subroutine called by on_new_block() and on_new_block_construction_only()
     fn update_lcts_finalize(
         &self, inner: &mut ConsensusGraphInner, me: usize, stable: bool,
-    ) {
+    ) -> U256 {
         let parent = inner.arena[me].parent;
         let weight = inner.block_weight(me);
 
@@ -2425,6 +2431,8 @@ impl ConsensusGraph {
                 U256::from(inner.inner_conf.adaptive_weight_alpha_num) * weight,
             ),
         );
+
+        weight
     }
 
     /// This is the function to insert a new block into the consensus graph
@@ -2494,10 +2502,6 @@ impl ConsensusGraph {
         &self, hash: &H256, blockset_in_own_epoch: HashSet<usize>,
     ) {
         let block = self.data_man.block_by_hash(hash, true).unwrap();
-
-        self.aggregate_total_difficulty_in_past(
-            block.block_header.difficulty(),
-        );
 
         debug!(
             "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
@@ -2584,7 +2588,9 @@ impl ConsensusGraph {
         inner.arena[me].stable = stable;
         inner.arena[me].adaptive = adaptive;
 
-        self.update_lcts_finalize(inner, me, stable);
+        let my_weight = self.update_lcts_finalize(inner, me, stable);
+
+        self.aggregate_total_weight_in_past(my_weight);
 
         let last = inner.pivot_chain.last().cloned().unwrap();
         let old_pivot_chain_len = inner.pivot_chain.len();
@@ -2743,10 +2749,7 @@ impl ConsensusGraph {
 
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
 
-        self.update_confirmation_risks(
-            inner,
-            self.get_total_difficulty_in_past(),
-        );
+        self.update_confirmation_risks(inner, self.get_total_weight_in_past());
 
         inner.optimistic_executed_height = if to_state_pos > 0 {
             Some(to_state_pos)
