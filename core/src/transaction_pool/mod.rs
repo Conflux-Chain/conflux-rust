@@ -381,7 +381,7 @@ impl TransactionPool {
                     let tx_hash = tx.hash();
                     // Sample 1/128 transactions
                     if tx_hash[0] & 254 == 0 {
-                        debug!("Sampled transaction {:?}", tx_hash);
+                        debug!("Sampled transaction {:?} in tx pool", tx_hash);
                     }
                     let inserted = tx_cache.contains_key(&tx_hash)
                         || unexecuted_transaction_addresses

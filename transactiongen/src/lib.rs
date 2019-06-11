@@ -51,13 +51,15 @@ enum TransGenState {
 pub struct TransactionGeneratorConfig {
     pub generate_tx: bool,
     pub period: time::Duration,
+    pub account_count: usize,
 }
 
 impl TransactionGeneratorConfig {
-    pub fn new(generate_tx: bool, period_ms: u64) -> Self {
+    pub fn new(generate_tx: bool, period_ms: u64, account_count: usize) -> Self {
         TransactionGeneratorConfig {
             generate_tx,
             period: time::Duration::from_micros(period_ms),
+            account_count,
         }
     }
 }
@@ -165,7 +167,7 @@ impl TransactionGenerator {
     pub fn generate_transactions(
         txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
     ) -> Result<(), Error> {
-        let account_count = 20000;
+        let account_count = tx_config.account_count;
         let mut nonce_map: HashMap<Address, U256> = HashMap::new();
         let mut balance_map: HashMap<Address, U256> = HashMap::new();
 
@@ -208,7 +210,78 @@ impl TransactionGenerator {
                 break;
             }
         }
+        debug!("Get initial transaction");
+        let mut last_account = None;
+        // Setup accounts
+        loop {
+            match *txgen.state.read() {
+                TransGenState::Stop => return Ok(()),
+                _ => {}
+            }
+            if secret_store.count() < account_count {
+                let mut receiver_kp: KeyPair;
+                let sender_address = initial_key_pair.address();
+                let sender_balance =
+                    balance_map.get_mut(&sender_address).unwrap();
+                let balance_to_transfer = *sender_balance / account_count;
+                // Create a new receiver account
+                loop {
+                    receiver_kp = Random.generate()?;
+                    if secret_store.insert(receiver_kp.clone()) {
+                        nonce_map.insert(receiver_kp.address(), 0.into());
+                        break;
+                    }
+                }
+                *sender_balance -= balance_to_transfer + 21000;
+                // Generate nonce for the transaction
+                let sender_nonce = nonce_map.get_mut(&initial_key_pair.address()).unwrap();
+                let receiver_address = public_to_address(receiver_kp.public());
+                *balance_map.entry(receiver_address).or_insert(0.into()) +=
+                    balance_to_transfer;
+                // Generate the transaction, sign it, and push into the transaction
+                // pool
+                let tx = Transaction {
+                    nonce: *sender_nonce,
+                    gas_price: U256::from(1u64),
+                    gas: U256::from(21000u64),
+                    value: balance_to_transfer,
+                    action: Action::Call(receiver_address.clone()),
+                    data: Bytes::new(),
+                };
+                *sender_nonce += U256::one();
+                let signed_tx = tx.sign(initial_key_pair.secret());
+                let mut tx_to_insert = Vec::new();
+                tx_to_insert.push(signed_tx.transaction);
+                txgen.txpool.insert_new_transactions(
+                    txgen.consensus.best_state_block_hash(),
+                    &tx_to_insert,
+                );
+                last_account = Some(receiver_address);
+            } else {
+                // Wait for preparation
+                let state = State::new(
+                    StateDb::new(
+                        txgen
+                            .storage_manager
+                            .get_state_at(txgen.consensus.best_state_block_hash())
+                            .unwrap(),
+                    ),
+                    0.into(),
+                    Default::default(),
+                );
+                let sender_balance = state.balance(&last_account.unwrap()).ok();
+                if sender_balance.is_none()
+                    || sender_balance.clone().unwrap() == 0.into()
+                {
+                    thread::sleep(Duration::from_millis(100));
+                    continue;
+                } else {
+                    break;
+                }
+            }
+        }
 
+        info!("Start Generating Workload");
         let start_time = Instant::now();
         // Generate more tx
         loop {

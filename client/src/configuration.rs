@@ -104,6 +104,7 @@ build_config! {
         (metrics_output_file, (String), "metrics.log".to_string())
         (min_peers_propagation, (usize), 8)
         (max_peers_propagation, (usize), 128)
+        (txgen_account_count, (usize), 10)
     }
     {
         (
@@ -267,6 +268,7 @@ impl Configuration {
         TransactionGeneratorConfig::new(
             self.raw_conf.generate_tx,
             self.raw_conf.generate_tx_period_us.expect("has default"),
+            self.raw_conf.txgen_account_count,
         )
     }
 

@@ -1798,7 +1798,12 @@ impl SynchronizationProtocolHandler {
     {
         let mut recovered_transactions = Vec::with_capacity(transactions.len());
         for transaction in transactions {
-            match tx_cache.get(&transaction.hash()) {
+            let tx_hash = transaction.hash();
+            // Sample 1/128 transactions
+            if tx_hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in block", tx_hash);
+            }
+            match tx_cache.get(&tx_hash) {
                 Some(tx) => recovered_transactions.push(tx.clone()),
                 None => match transaction.recover_public() {
                     Ok(public) => {
@@ -1836,7 +1841,7 @@ impl SynchronizationProtocolHandler {
             let tx_hash = transaction.hash();
             // Sample 1/128 transactions
             if tx_hash[0] & 254 == 0 {
-                debug!("Sampled transaction {:?}", tx_hash);
+                debug!("Sampled transaction {:?} in block", tx_hash);
             }
             match tx_cache.get(&tx_hash) {
                 Some(tx) => recovered_transactions.push(tx.clone()),
