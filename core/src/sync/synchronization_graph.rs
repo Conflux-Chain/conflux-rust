@@ -1194,6 +1194,10 @@ impl SynchronizationGraph {
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
+    pub fn update_total_weight_in_past(&self) {
+        self.consensus.update_total_weight_in_past();
+    }
+
     pub fn block_cache_gc(&self) {
         let current_size = self.cache_size().total();
         let mut blocks = self.data_man.blocks.write();

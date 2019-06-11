@@ -75,6 +75,7 @@ const CHECK_REQUEST_TIMER: TimerToken = 1;
 const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
+const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -1969,6 +1970,10 @@ impl SynchronizationProtocolHandler {
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
+    fn update_total_weight_in_past(&self) {
+        self.graph.update_total_weight_in_past();
+    }
+
     fn update_catch_up_mode(&self, io: &NetworkContext) {
         let mut peer_best_epoches = {
             let peers = self.syn.peers.read();
@@ -2094,6 +2099,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
             .expect("Error registering log_statistics timer");
+        io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(60))
+            .expect("Error registering total_weight_in_past timer");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2153,6 +2160,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();
+            }
+            TOTAL_WEIGHT_IN_PAST_TIMER => {
+                self.update_total_weight_in_past();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
