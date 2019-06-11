@@ -1,0 +1,7 @@
+[package]
+name = "fenwick-tree"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+cfx-types = { path = "../../cfx_types" }
