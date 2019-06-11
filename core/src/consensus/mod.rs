@@ -26,8 +26,8 @@ use crate::{
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
-use cfx_types::{Bloom, H160, H256, U256, U512};
-use link_cut_tree::{MinLinkCutTree, SignedBigNum};
+use cfx_types::{Bloom, SignedBigNum, H160, H256, U256, U512};
+use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
