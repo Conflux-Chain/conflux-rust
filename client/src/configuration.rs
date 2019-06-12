@@ -66,7 +66,7 @@ build_config! {
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
         (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
         (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
-        (send_tx_period_ms, (u64), 1300)
+        (send_tx_period_ms, (u64), 1000)
         (check_request_period_ms, (u64), 1000)
         (block_cache_gc_period_ms, (u64), 5000)
         (persist_terminal_period_ms, (u64), 60_000)
@@ -89,7 +89,7 @@ build_config! {
         (egress_max_throttle, (usize), 64)
         (p2p_nodes_per_ip, (usize), 1)
         (data_propagate_enabled, (bool), false)
-        (data_propagate_interval_ms, (u64), 1000)
+        (data_propagate_interval_ms, (u64), 1300)
         (data_propagate_size, (usize), 1000)
         (record_tx_address, (bool), true)
         // TODO Set default to true when we have new tx pool implementation

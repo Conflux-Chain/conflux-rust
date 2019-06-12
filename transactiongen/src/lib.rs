@@ -212,6 +212,7 @@ impl TransactionGenerator {
         }
         debug!("Get initial transaction");
         let mut last_account = None;
+        let mut wait_count = 0;
         // Setup accounts
         loop {
             match *txgen.state.read() {
@@ -270,9 +271,11 @@ impl TransactionGenerator {
                     Default::default(),
                 );
                 let sender_balance = state.balance(&last_account.unwrap()).ok();
-                if sender_balance.is_none()
-                    || sender_balance.clone().unwrap() == 0.into()
+                // Wait for at most 200*0.1=20 seconds
+                if wait_count < 200 && (sender_balance.is_none()
+                    || sender_balance.clone().unwrap() == 0.into())
                 {
+                    wait_count += 1;
                     thread::sleep(Duration::from_millis(100));
                     continue;
                 } else {

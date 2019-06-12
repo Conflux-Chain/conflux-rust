@@ -314,21 +314,24 @@ class LogAggregator:
             Transaction.add_or_merge(self.txs, tx)
             if tx.by_block:
                 by_block_cnt += 1
+        # This data only work for one node per host
         self.host_by_block_ratio.append(by_block_cnt / len(host_log.txs))
 
     def validate(self):
         num_nodes = len(self.sync_cons_gap_stats)
 
-        for b in self.blocks.values():
-            count_sync = b.latency_count(BlockLatencyType.Sync)
+        for block_hash in list(self.blocks.keys()):
+            count_sync = self.blocks[block_hash].latency_count(BlockLatencyType.Sync)
             if count_sync != num_nodes:
-                print("sync graph missed block {}: received = {}, total = {}".format(b.hash, count_sync, num_nodes))
+                print("sync graph missed block {}: received = {}, total = {}".format(block_hash, count_sync, num_nodes))
+                del self.blocks[block_hash]
         missing_tx = 0
         for tx_hash in list(self.txs.keys()):
             if self.txs[tx_hash].latency_count() != num_nodes:
                 del self.txs[tx_hash]
                 missing_tx += 1
-        print("removed tx count", missing_tx)
+        print("Removed tx count", missing_tx)
+        print("Remaining tx count", len(self.txs))
 
     def stat_sync_cons_gap(self, p:Percentile):
         data = []
