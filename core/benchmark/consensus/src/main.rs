@@ -6,11 +6,11 @@
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     cache_manager::CacheManager,
-    consensus::{ConsensusConfig, ConsensusGraph},
-    consensus::ConsensusInnerConfig,
-    consensus::ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN,
-    consensus::ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-    consensus::ADAPTIVE_WEIGHT_DEFAULT_BETA,
+    consensus::{
+        ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
+        ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
+        ADAPTIVE_WEIGHT_DEFAULT_BETA,
+    },
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -19,20 +19,23 @@ use cfxcore::{
     vm_factory::VmFactory,
     TransactionPool,
 };
-use parking_lot::Mutex;
-use primitives::{Block, BlockHeader, BlockHeaderBuilder};
-use std::{path::Path, sync::Arc, thread, time};
-use threadpool::ThreadPool;
+use log::LevelFilter;
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
     config::{Appender, Config as LogConfig, Logger, Root},
     encode::pattern::PatternEncoder,
 };
-use log::LevelFilter;
-use std::fs;
-use std::str::FromStr;
-use std::env;
-use std::collections::{HashSet, HashMap};
+use parking_lot::Mutex;
+use primitives::{Block, BlockHeader, BlockHeaderBuilder};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+    path::Path,
+    str::FromStr,
+    sync::Arc,
+    thread, time,
+};
+use threadpool::ThreadPool;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
@@ -57,17 +60,16 @@ fn create_simple_block_impl(
 }
 
 fn create_simple_block(
-    sync: Arc<SynchronizationGraph>,
-    parent_hash: H256, ref_hashes: Vec<H256>,
+    sync: Arc<SynchronizationGraph>, parent_hash: H256, ref_hashes: Vec<H256>,
     block_weight: u32,
 ) -> (H256, Block)
 {
     let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
-    let exp_diff = sync
-        .inner
-        .read()
-        .expected_difficulty(&parent_hash);
-    assert!(exp_diff == U256::from(10), "Difficulty hike in bench is not supported yet!");
+    let exp_diff = sync.inner.read().expected_difficulty(&parent_hash);
+    assert!(
+        exp_diff == U256::from(10),
+        "Difficulty hike in bench is not supported yet!"
+    );
     let nonce = sync.block_count() as u64 + 1;
     create_simple_block_impl(
         parent_hash,
@@ -80,10 +82,10 @@ fn create_simple_block(
 }
 
 fn initialize_consensus_graph_for_test(
-    genesis_block: Block, db_dir: &str,
-    alpha_den: u64, alpha_num: u64, beta: u64,
-    h: u64,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>) {
+    genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
+    beta: u64, h: u64,
+) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
+{
     let ledger_db = db::open_database(
         db_dir,
         &db::db_config(
@@ -128,7 +130,8 @@ fn initialize_consensus_graph_for_test(
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
     let consensus = Arc::new(ConsensusGraph::with_genesis_block(
         ConsensusConfig {
-            debug_dump_dir_invalid_state_root: "./invalid_state_root/".to_string(),
+            debug_dump_dir_invalid_state_root: "./invalid_state_root/"
+                .to_string(),
             record_tx_address: true,
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_alpha_num: alpha_num,
@@ -137,7 +140,8 @@ fn initialize_consensus_graph_for_test(
                 heavy_block_difficulty_ratio: h,
                 enable_optimistic_execution: false,
             },
-            bench_mode: true, // Set bench_mode to true so that we skip execution
+            bench_mode: true, /* Set bench_mode to true so that we skip
+                               * execution */
         },
         genesis_block,
         storage_manager.clone(),
@@ -162,19 +166,24 @@ fn initialize_consensus_graph_for_test(
 
 fn initialize_logger(log_file: &str, log_level: LevelFilter) {
     let log_config = {
-        let mut conf_builder =
-            LogConfig::builder().appender(Appender::builder().build(
-                "stdout",
-                Box::new(ConsoleAppender::builder().build()),
-            ));
+        let mut conf_builder = LogConfig::builder().appender(
+            Appender::builder()
+                .build("stdout", Box::new(ConsoleAppender::builder().build())),
+        );
         let mut root_builder = Root::builder().appender("stdout");
-        conf_builder =
-            conf_builder.appender(Appender::builder().build(
+        conf_builder = conf_builder.appender(
+            Appender::builder().build(
                 "logfile",
                 Box::new(
-                    FileAppender::builder().encoder(Box::new(PatternEncoder::new("{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"))).build("./__consensus_bench.log").unwrap(),
+                    FileAppender::builder()
+                        .encoder(Box::new(PatternEncoder::new(
+                            "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}",
+                        )))
+                        .build("./__consensus_bench.log")
+                        .unwrap(),
                 ),
-            ));
+            ),
+        );
         root_builder = root_builder.appender("logfile");
         // Should add new crate names here
         for crate_name in [
@@ -188,16 +197,12 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
             "client",
             "primitives",
         ]
-            .iter()
-            {
-                conf_builder = conf_builder.logger(
-                    Logger::builder()
-                        .build(*crate_name, log_level),
-                );
-            }
-        conf_builder
-            .build(root_builder.build(log_level))
-            .unwrap()
+        .iter()
+        {
+            conf_builder = conf_builder
+                .logger(Logger::builder().build(*crate_name, log_level));
+        }
+        conf_builder.build(root_builder.build(log_level)).unwrap()
     };
 
     log4rs::init_config(log_config).unwrap();
@@ -214,18 +219,32 @@ fn main() {
     let db_dir = "./__consensus_bench_db";
 
     // Parse adaptive weight parameters
-    let content = fs::read_to_string(input_file).expect("Cannot open the block sequence input file!");
+    let content = fs::read_to_string(input_file)
+        .expect("Cannot open the block sequence input file!");
     let mut lines = content.split("\n");
     let line = lines.next().unwrap();
     let mut tokens = line.split_whitespace();
-    let alpha_num = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
-    let alpha_den = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
-    let beta = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
-    let h_ratio = u64::from_str(tokens.next().unwrap()).expect("Cannot parse the input file!");
-    println!("alpha = {}/{} beta = {} h = {}", alpha_num, alpha_den, beta, h_ratio);
+    let alpha_num = u64::from_str(tokens.next().unwrap())
+        .expect("Cannot parse the input file!");
+    let alpha_den = u64::from_str(tokens.next().unwrap())
+        .expect("Cannot parse the input file!");
+    let beta = u64::from_str(tokens.next().unwrap())
+        .expect("Cannot parse the input file!");
+    let h_ratio = u64::from_str(tokens.next().unwrap())
+        .expect("Cannot parse the input file!");
+    println!(
+        "alpha = {}/{} beta = {} h = {}",
+        alpha_num, alpha_den, beta, h_ratio
+    );
 
-    let (genesis_hash, genesis_block) =
-        create_simple_block_impl(H256::default(), vec![], 0, 0, U256::from(10), 1);
+    let (genesis_hash, genesis_block) = create_simple_block_impl(
+        H256::default(),
+        vec![],
+        0,
+        0,
+        U256::from(10),
+        1,
+    );
 
     let (sync, consensus) = initialize_consensus_graph_for_test(
         genesis_block.clone(),
@@ -260,17 +279,23 @@ fn main() {
         let mut block_weight = 1;
         for w in tokens {
             if cnt == 0 {
-                is_valid = i32::from_str(w).expect("Cannot parse the input file!");
+                is_valid =
+                    i32::from_str(w).expect("Cannot parse the input file!");
             } else if cnt == 1 {
-                is_stable = i32::from_str(w).expect("Cannot parse the input file!");
+                is_stable =
+                    i32::from_str(w).expect("Cannot parse the input file!");
             } else if cnt == 2 {
-                is_adaptive = i32::from_str(w).expect("Cannot parse the input file!");
+                is_adaptive =
+                    i32::from_str(w).expect("Cannot parse the input file!");
             } else if cnt == 3 {
-                block_weight = u32::from_str(w).expect("Cannot parse the input file!");
+                block_weight =
+                    u32::from_str(w).expect("Cannot parse the input file!");
             } else if cnt == 4 {
-                parent_idx = usize::from_str(w).expect("Cannot parse the input file!");
+                parent_idx =
+                    usize::from_str(w).expect("Cannot parse the input file!");
             } else {
-                let ref_idx = usize::from_str(w).expect("Cannot parse the input file!");
+                let ref_idx =
+                    usize::from_str(w).expect("Cannot parse the input file!");
                 ref_idxs.push(ref_idx);
             }
             cnt += 1;
@@ -286,13 +311,18 @@ fn main() {
         for ref_idx in ref_idxs.iter() {
             ref_hashes.push(hashes[*ref_idx]);
         }
-        let (new_hash, mut new_block) =
-            create_simple_block(sync.clone(), hashes[parent_idx], ref_hashes, block_weight);
+        let (new_hash, mut new_block) = create_simple_block(
+            sync.clone(),
+            hashes[parent_idx],
+            ref_hashes,
+            block_weight,
+        );
         hashes.push(new_hash);
         sync.insert_block_header(&mut new_block.block_header, false, true);
         sync.insert_block(new_block, false, false, false);
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
-            let last_time_elapsed = last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
+            let last_time_elapsed =
+                last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
             last_check_time = time::SystemTime::now();
             let sync_block_cnt = sync.block_count();
             let consensus_block_cnt = consensus.block_count();
@@ -308,13 +338,17 @@ fn main() {
 
     while sync.block_count() != consensus.block_count() {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
-            let last_time_elapsed = last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
+            let last_time_elapsed =
+                last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
             last_check_time = time::SystemTime::now();
             let consensus_block_cnt = consensus.block_count();
-            println!("Consensus count {}, Consensus block {}/s, Elapsed {}",
-                     consensus_block_cnt,
-                     (consensus_block_cnt - last_consensus_block_cnt) as f64 / last_time_elapsed,
-                     start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
+            println!(
+                "Consensus count {}, Consensus block {}/s, Elapsed {}",
+                consensus_block_cnt,
+                (consensus_block_cnt - last_consensus_block_cnt) as f64
+                    / last_time_elapsed,
+                start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0
+            );
             last_consensus_block_cnt = consensus_block_cnt;
         }
         thread::sleep(time::Duration::from_millis(100));
@@ -323,11 +357,18 @@ fn main() {
     println!("Block count: {}", consensus.block_count());
     println!("Pivot chain hash: {}", consensus.best_block_hash());
     println!("Last block hash: {}", hashes[hashes.len() - 1]);
-    println!("Elapsed {}", start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
+    println!(
+        "Elapsed {}",
+        start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0
+    );
 
     let n = hashes.len();
     for i in 1..n {
-        let partial_invalid = consensus.inner.read().is_partial_invalid(&hashes[i]).unwrap();
+        let partial_invalid = consensus
+            .inner
+            .read()
+            .is_partial_invalid(&hashes[i])
+            .unwrap();
         let valid = *valid_indices.get(&i).unwrap();
         let invalid = (valid == 0);
         if valid != -1 {
@@ -337,14 +378,25 @@ fn main() {
         let stable_v = *stable_indices.get(&i).unwrap();
         if !invalid && stable_v != -1 {
             let stable1 = (stable_v == 1);
-            assert!(stable0 == stable1, "Block {} stable status: Consensus graph {} != actual {}", i, stable0, stable1);
+            assert!(
+                stable0 == stable1,
+                "Block {} stable status: Consensus graph {} != actual {}",
+                i,
+                stable0,
+                stable1
+            );
         }
         let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
         let adaptive_v = *adaptive_indices.get(&i).unwrap();
         if !invalid && adaptive_v != -1 {
             let adaptive1 = (adaptive_v == 1);
-            assert!(adaptive0 == adaptive1, "Block {} adaptive status: Consensus graph {} != actual {}", i, adaptive0, adaptive1);
+            assert!(
+                adaptive0 == adaptive1,
+                "Block {} adaptive status: Consensus graph {} != actual {}",
+                i,
+                adaptive0,
+                adaptive1
+            );
         }
     }
-
 }
