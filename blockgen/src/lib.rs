@@ -2,16 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, H256, U256, U512};
+use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    consensus::{ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT},
-    pow::*,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    SharedSynchronizationGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, SharedSynchronizationGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use log::{info, trace, warn};
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
     *,
@@ -253,6 +251,7 @@ impl BlockGenerator {
         additional_transactions: Vec<Arc<SignedTransaction>>,
     ) -> Block
     {
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
         // NOTE: We need to lock consensus inner during `pack_transactions` to
         // ensure transaction pool consistency.
         let (best_info, transactions) = {
@@ -274,11 +273,12 @@ impl BlockGenerator {
             (best_info, transactions)
         };
 
+        let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
-        referee.retain(|r| *r != best_info.best_block_hash);
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+        referee.retain(|r| *r != best_block_hash);
+
         self.assemble_new_block_impl(
-            best_info.best_block_hash,
+            best_block_hash,
             referee,
             best_info.deferred_state_root,
             best_info.deferred_receipts_root,
