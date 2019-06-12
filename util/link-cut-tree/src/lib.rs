@@ -377,8 +377,8 @@ impl MinLinkCutTree {
 #[cfg(test)]
 mod tests {
     use super::MinLinkCutTree;
-    use cfx_types::U256;
     use crate::SignedBigNum;
+    use cfx_types::U256;
 
     #[test]
     fn test_min() {

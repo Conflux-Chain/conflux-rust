@@ -27,8 +27,8 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, SignedBigNum, H160, H256, U256, U512};
-use link_cut_tree::MinLinkCutTree;
 use fenwick_tree::FenwickTree;
+use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
@@ -346,9 +346,12 @@ impl ConsensusGraphInner {
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
             last_pivot_in_past_blocks,
         });
-        inner.pivot_future_weights.add(0, &SignedBigNum::pos(
-            *data_man.genesis_block().block_header.difficulty(),
-        ));
+        inner.pivot_future_weights.add(
+            0,
+            &SignedBigNum::pos(
+                *data_man.genesis_block().block_header.difficulty(),
+            ),
+        );
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
         inner
             .indices_in_epochs

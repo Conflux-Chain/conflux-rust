@@ -37,6 +37,12 @@ keccak-hash = "0.1.2"
 rand = "0.5"
 kvdb-rocksdb = "0.1.3"
 client = { path = "client" }
+cfx-types = { path = "cfx_types" }
+threadpool = "1.7"
+
+[[bin]]
+name = "consensus_bench"
+path = "core/benchmark/consensus/src/main.rs"
 
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
