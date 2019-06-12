@@ -1083,7 +1083,7 @@ impl SynchronizationGraph {
                 } else {
                     let translated_blockset = inner
                         .translate_blockset_in_own_epoch(
-                            &hash,
+                            &h,
                             self.consensus.clone(),
                         );
                     self.consensus.on_new_block_construction_only(
