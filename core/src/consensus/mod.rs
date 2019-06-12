@@ -26,8 +26,9 @@ use crate::{
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
-use cfx_types::{Bloom, H160, H256, U256, U512};
-use link_cut_tree::{MinLinkCutTree, SignedBigNum};
+use cfx_types::{Bloom, SignedBigNum, H160, H256, U256, U512};
+use link_cut_tree::MinLinkCutTree;
+use fenwick_tree::FenwickTree;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
@@ -217,6 +218,9 @@ pub struct ConsensusGraphInner {
     pub pivot_chain: Vec<usize>,
     // The metadata associated with each pivot chain block
     pub pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
+    // The weight of all future blocks for each pivot block maintained in
+    // a fenwick tree.
+    pub pivot_future_weights: FenwickTree,
     // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
@@ -276,6 +280,7 @@ impl ConsensusGraphInner {
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
             pivot_chain_metadata: Vec::new(),
+            pivot_future_weights: FenwickTree::new(),
             optimistic_executed_height: None,
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
@@ -341,6 +346,9 @@ impl ConsensusGraphInner {
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
             last_pivot_in_past_blocks,
         });
+        inner.pivot_future_weights.add(0, &SignedBigNum::pos(
+            *data_man.genesis_block().block_header.difficulty(),
+        ));
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
         inner
             .indices_in_epochs
