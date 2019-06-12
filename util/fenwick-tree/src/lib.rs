@@ -48,12 +48,12 @@ impl FenwickTree {
         }
     }
 
-    pub fn add(&mut self, me: usize, val: SignedBigNum) {
+    pub fn add(&mut self, me: usize, val: &SignedBigNum) {
         let mut i = (me + 1) as i64;
         self.grow_if_required(i as usize);
         while i as usize <= self.n {
             let lsb = i & (-i);
-            self.a[i as usize] += val;
+            self.a[i as usize] += *val;
             i += lsb;
         }
     }
