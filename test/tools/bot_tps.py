@@ -24,6 +24,8 @@ class Sender:
         self.balance = balance
         self.nonce = nonce
 
+        self.init_tx_hash = None
+
     @staticmethod
     def new(rpc_url:str, addr:str, priv_key_hex:str):
         client = new_client(rpc_url)
@@ -42,16 +44,23 @@ class Sender:
         client = self.client if rpc_url is None else new_client(rpc_url)
         sender = Sender(client, addr, priv_key, amount, 0)
 
+        sender.init_tx_hash = tx.hash_hex()
+
         return sender
 
     def wait_for_balance(self, interval=3):
-        while True:
+        print("waiting for balance: tx = {}".format(self.init_tx_hash))
+        for _ in range(40):
+            print("\tgetting balance ...", end=' ')
             balance = self.client.get_balance(self.addr)
+            print(balance)
             if balance > 0:
                 assert_equal(balance, self.balance)
-                break
+                return True
             else:
                 time.sleep(interval)
+
+        return False
 
     def account_nonce(self):
         return self.client.get_nonce(self.addr)
@@ -108,6 +117,8 @@ def new_client(rpc_url):
     return RpcClient(node=get_rpc_proxy(rpc_url, 3))
 
 def work(faucet_addr, faucet_priv_key_hex, rpc_urls:list, num_threads:int, num_receivers:int):
+    print("bootnodes:", len(rpc_urls))
+
     # init faucet
     print("Initialize faucet ...")
     faucet = Sender.new(rpc_urls[0], faucet_addr, faucet_priv_key_hex)
@@ -116,6 +127,7 @@ def work(faucet_addr, faucet_priv_key_hex, rpc_urls:list, num_threads:int, num_r
     # init global sender for all nodes, so that only 1 tx required from faucet account.
     print("Initialize global sender ...")
     global_sender = faucet.new_sender((len(rpc_urls) * num_threads + 1) * DRIPS_PER_CFX)
+    print("waiting for balance of global sender ...")
     global_sender.wait_for_balance()
     print("Global sender: balance = {}, nonce = {}".format(global_sender.balance, global_sender.nonce))
 
@@ -126,9 +138,17 @@ def work(faucet_addr, faucet_priv_key_hex, rpc_urls:list, num_threads:int, num_r
         for _ in range(num_threads):
             sender = global_sender.new_sender(DRIPS_PER_CFX, url)
             senders.append(sender)
+            print("{}: {}", url, sender.addr)
+    print("{} senders created.".format(len(senders)))
     for s in senders:
-        s.wait_for_balance()
-        # print("\tnode sender: balance = {}, nonce = {}".format(s.balance, s.nonce))
+        if not s.wait_for_balance():
+            print("===============================================================")
+            print("wait for balance timeout")
+            print("Sender: address = {}, timeout_tx = {}".format(s.addr, s.init_tx_hash))
+            print("timeout tx:", s.client.get_tx(s.init_tx_hash))
+            sys.exit(1)
+        else:
+            print("node sender: balance = {}, nonce = {}".format(s.balance, s.nonce))
 
     # start threads to send txs to different nodes
     print("begin to send txs ...")
