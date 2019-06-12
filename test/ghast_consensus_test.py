@@ -36,12 +36,9 @@ TEST_INPUT = [
     "adaptive-case4.in"]
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
-consensus_bench_dir = test_dir + "/../core/benchmark/consensus"
 cur_dir = os.getcwd()
-os.chdir(consensus_bench_dir)
-os.system("cargo build --release")
 os.chdir(cur_dir)
-bench_cmd = test_dir + "/../core/benchmark/consensus/target/release/consensus_bench"
+bench_cmd = test_dir + "/../target/release/consensus_bench"
 test_input_dir = test_dir + "/../core/benchmark/consensus/test/"
 
 failed = set()
