@@ -252,7 +252,7 @@ class P2PTest(ConfluxTestFramework):
                 pub_key = self.nodes[i].key
                 addr = self.nodes[i].addr
                 self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/num_nodes) - 21000, receiver=encode_hex(addr), nonce=i)
+                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/(num_nodes + 1)) - 21000, receiver=encode_hex(addr), nonce=i)
                 client.send_tx(tx)
 
         # setup monitor to report the current block count periodically
