@@ -55,7 +55,9 @@ pub struct TransactionGeneratorConfig {
 }
 
 impl TransactionGeneratorConfig {
-    pub fn new(generate_tx: bool, period_ms: u64, account_count: usize) -> Self {
+    pub fn new(
+        generate_tx: bool, period_ms: u64, account_count: usize,
+    ) -> Self {
         TransactionGeneratorConfig {
             generate_tx,
             period: time::Duration::from_micros(period_ms),
@@ -235,12 +237,13 @@ impl TransactionGenerator {
                 }
                 *sender_balance -= balance_to_transfer + 21000;
                 // Generate nonce for the transaction
-                let sender_nonce = nonce_map.get_mut(&initial_key_pair.address()).unwrap();
+                let sender_nonce =
+                    nonce_map.get_mut(&initial_key_pair.address()).unwrap();
                 let receiver_address = public_to_address(receiver_kp.public());
                 *balance_map.entry(receiver_address).or_insert(0.into()) +=
                     balance_to_transfer;
-                // Generate the transaction, sign it, and push into the transaction
-                // pool
+                // Generate the transaction, sign it, and push into the
+                // transaction pool
                 let tx = Transaction {
                     nonce: *sender_nonce,
                     gas_price: U256::from(1u64),
@@ -264,7 +267,9 @@ impl TransactionGenerator {
                     StateDb::new(
                         txgen
                             .storage_manager
-                            .get_state_at(txgen.consensus.best_state_block_hash())
+                            .get_state_at(
+                                txgen.consensus.best_state_block_hash(),
+                            )
                             .unwrap(),
                     ),
                     0.into(),
@@ -272,8 +277,9 @@ impl TransactionGenerator {
                 );
                 let sender_balance = state.balance(&last_account.unwrap()).ok();
                 // Wait for at most 200*0.1=20 seconds
-                if wait_count < 200 && (sender_balance.is_none()
-                    || sender_balance.clone().unwrap() == 0.into())
+                if wait_count < 200
+                    && (sender_balance.is_none()
+                        || sender_balance.clone().unwrap() == 0.into())
                 {
                     wait_count += 1;
                     thread::sleep(Duration::from_millis(100));
