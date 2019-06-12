@@ -171,3 +171,4 @@ bootnodes = load_boot_nodes()
 num_threads = 1 if len(sys.argv) < 3 else int(sys.argv[2])
 num_receivers = 20 if len(sys.argv) < 4 else int(sys.argv[3])
 work(faucet_addr, faucet_priv_key, bootnodes, num_threads, num_receivers)
+# 2
