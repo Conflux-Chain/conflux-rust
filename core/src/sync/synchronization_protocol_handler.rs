@@ -80,8 +80,10 @@ const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
 pub const EPOCH_RETRY_TIME_SECONDS: u64 = 1;
-const EPOCH_SYNC_MAX_INFLIGHT: u64 = 30;
-const EPOCH_SYNC_STRIDE: u64 = 20;
+const EPOCH_SYNC_MAX_INFLIGHT: u64 = 10;
+
+// make sure we do not request overlapping regions of the DAG
+const EPOCH_SYNC_STRIDE: u64 = DEFAULT_GET_PARENT_HEADERS_NUM;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 enum SyncHandlerWorkType {
