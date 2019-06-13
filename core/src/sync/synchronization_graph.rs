@@ -280,13 +280,13 @@ impl SynchronizationGraphInner {
 
     fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
         let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
         for referee in &self.arena[pivot].referees {
+            visited.insert(*referee);
             queue.push_back(*referee);
         }
 
-        let mut visited = HashSet::new();
         while let Some(index) = queue.pop_front() {
-            visited.insert(index);
             let mut in_old_epoch = false;
             let mut cur_pivot = pivot;
             loop {
@@ -311,10 +311,12 @@ impl SynchronizationGraphInner {
             if !in_old_epoch {
                 let parent = self.arena[index].parent;
                 if !visited.contains(&parent) {
+                    visited.insert(parent);
                     queue.push_back(parent);
                 }
                 for referee in &self.arena[index].referees {
                     if !visited.contains(referee) {
+                        visited.insert(*referee);
                         queue.push_back(*referee);
                     }
                 }
