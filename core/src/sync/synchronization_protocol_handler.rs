@@ -80,7 +80,10 @@ const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
 pub const EPOCH_RETRY_TIME_SECONDS: u64 = 1;
-pub const MAX_EPOCHS_TO_REQUEST: u64 = 10;
+const EPOCH_SYNC_MAX_INFLIGHT: u64 = 10;
+
+// make sure we do not request overlapping regions of the DAG
+const EPOCH_SYNC_STRIDE: u64 = DEFAULT_GET_PARENT_HEADERS_NUM;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
 enum SyncHandlerWorkType {
@@ -1004,7 +1007,7 @@ impl SynchronizationProtocolHandler {
     fn on_status(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let mut status = rlp.as_val::<Status>()?;
+        let status = rlp.as_val::<Status>()?;
         if !self.syn.on_status(peer) {
             warn!("Unexpected Status message from peer={}", peer);
             return Err(ErrorKind::UnknownPeer.into());
@@ -1019,12 +1022,16 @@ impl SynchronizationProtocolHandler {
             return Err(ErrorKind::Invalid.into());
         }
 
+        let mut latest: HashSet<H256> =
+            status.terminal_block_hashes.into_iter().collect();
+        latest.extend(self.graph.initial_missed_block_hashes.lock().drain());
+
         let peer_state = SynchronizationPeerState {
             id: peer,
             protocol_version: status.protocol_version,
             genesis_hash: status.genesis_hash,
             best_epoch: status.best_epoch,
-            terminal_block_hashes: status.terminal_block_hashes.clone(),
+            latest_block_hashes: latest,
             received_transaction_count: 0,
             need_prop_trans: true,
             notified_mode: None,
@@ -1039,10 +1046,6 @@ impl SynchronizationProtocolHandler {
         self.syn.peer_connected(peer, peer_state);
         self.request_manager.on_peer_connected(peer);
 
-        status
-            .terminal_block_hashes
-            .extend(self.graph.initial_missed_block_hashes.lock().drain());
-
         self.start_sync(io);
         Ok(())
     }
@@ -1056,15 +1059,18 @@ impl SynchronizationProtocolHandler {
     }
 
     fn request_missing_terminals(&self, io: &NetworkContext) {
-        debug!("requesting missing terminal blocks...");
-
         let peers: Vec<PeerId> =
             self.syn.peers.read().keys().cloned().collect();
         let mut requested = HashSet::new();
 
         for peer in peers {
             if let Ok(info) = self.syn.get_peer_info(&peer) {
-                let terminals = info.read().terminal_block_hashes.clone();
+                let terminals = {
+                    let mut info = info.write();
+                    let ts = info.latest_block_hashes.clone();
+                    info.latest_block_hashes.clear();
+                    ts
+                };
 
                 for t in terminals {
                     if !requested.contains(&t)
@@ -1082,60 +1088,55 @@ impl SynchronizationProtocolHandler {
             }
         }
 
-        debug!("{:?} missing terminal blocks requested", requested.len());
+        if requested.len() > 0 {
+            debug!("{:?} missing terminal block(s) requested", requested.len());
+        }
     }
 
     fn request_epochs(&self, io: &NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
+        let best_peer_epoch = self.best_peer_epoch().unwrap_or(0);
 
-        // make sure we do not request too many epochs in parallel
-        let num_in_flight = self.request_manager.num_epochs_in_flight();
+        while self.request_manager.num_epochs_in_flight()
+            < EPOCH_SYNC_MAX_INFLIGHT
+            && *latest_requested < best_peer_epoch
+        {
+            let next = {
+                let my_best_epoch = self.graph.best_epoch_number();
+                let last = (*latest_requested).max(my_best_epoch);
 
-        if num_in_flight == MAX_EPOCHS_TO_REQUEST {
-            debug!("epoch queue full; not requesting more epochs");
-            return;
-        }
+                // request one-by-one near the end to avoid getting stuck
+                let stride = if last + EPOCH_SYNC_STRIDE > best_peer_epoch {
+                    1
+                } else {
+                    EPOCH_SYNC_STRIDE
+                };
 
-        assert!(num_in_flight < MAX_EPOCHS_TO_REQUEST);
+                (last + stride).min(best_peer_epoch)
+            };
 
-        // calculate which epochs to request
-        let best_peer_epoch = self.best_peer_epoch();
-
-        if best_peer_epoch.is_none() {
-            debug!("no peer best_epoch known; not requesting more epochs");
-            return;
-        }
-
-        let best_peer_epoch = best_peer_epoch.unwrap();
-        let my_best_epoch = self.graph.best_epoch_number();
-        let num_to_request = MAX_EPOCHS_TO_REQUEST - num_in_flight;
-
-        let first = (*latest_requested + 1).max(my_best_epoch + 1);
-        let last = (first + num_to_request - 1).min(best_peer_epoch);
-
-        debug!(
-            "requesting epochs [{:?}..{:?}] (my={:?}, latest={:?}, peer's={:?})",
-            first, last, my_best_epoch, *latest_requested, best_peer_epoch
-        );
-
-        for epoch_number in first..(last + 1) {
             let peer = self.syn.get_random_peer_satisfying(|peer| {
                 match self.syn.get_peer_info(&peer) {
                     Err(_) => false,
-                    Ok(info) => info.read().best_epoch >= epoch_number,
+                    Ok(info) => info.read().best_epoch >= next,
                 }
             });
 
             debug!(
-                "requesting epoch {:?}/{:?} hashes from peer {:?}",
-                epoch_number, best_peer_epoch, peer
+                "requesting epoch {:?}/{:?} from peer {:?}",
+                next, best_peer_epoch, peer
             );
 
-            self.request_manager
-                .request_epoch_hashes(io, peer, epoch_number);
-            *latest_requested = epoch_number;
+            self.request_manager.request_epoch_hashes(io, peer, next);
+
+            *latest_requested = next;
         }
+
+        debug_assert!(
+            self.request_manager.num_epochs_in_flight()
+                <= EPOCH_SYNC_MAX_INFLIGHT
+        );
     }
 
     fn on_block_headers_response(
@@ -1539,6 +1540,16 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let new_block_hashes = rlp.as_val::<NewBlockHashes>()?;
         debug!("on_new_block_hashes, msg={:?}", new_block_hashes);
+
+        if self.catch_up_mode() {
+            if let Ok(info) = self.syn.get_peer_info(&peer) {
+                let mut info = info.write();
+                new_block_hashes.block_hashes.iter().for_each(|h| {
+                    info.latest_block_hashes.insert(h.clone());
+                });
+            }
+            return Ok(());
+        }
 
         for hash in new_block_hashes.block_hashes.iter() {
             if !self.graph.contains_block_header(hash) {
@@ -2017,7 +2028,11 @@ impl SynchronizationProtocolHandler {
                 need_notify.push(*peer);
             }
         }
-        info!("Catch-up mode: {}", catch_up_mode);
+        info!(
+            "Catch-up mode: {}, latest epoch: {}",
+            catch_up_mode,
+            self.graph.best_epoch_number()
+        );
 
         let trans_prop_ctrl_msg: Box<dyn Message> =
             Box::new(TransactionPropagationControl { catch_up_mode });

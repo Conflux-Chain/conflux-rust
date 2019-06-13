@@ -19,7 +19,7 @@ pub struct SynchronizationPeerState {
     pub protocol_version: u8,
     pub genesis_hash: H256,
     pub best_epoch: u64,
-    pub terminal_block_hashes: Vec<H256>,
+    pub latest_block_hashes: HashSet<H256>,
 
     /// The following fields are used to control how to handle
     /// transaction propagation for nodes in catch-up mode.
