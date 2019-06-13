@@ -138,6 +138,12 @@ class P2PTest(ConfluxTestFramework):
             default=128,
             type=int,
         )
+        parser.add_argument(
+            "--send-tx-period-ms",
+            dest="send_tx_period_ms",
+            default=1300,
+            type=int,
+        )
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
@@ -186,12 +192,14 @@ class P2PTest(ConfluxTestFramework):
         if self.tx_propagation_enabled:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
+            self.conf_parameters["txgen_account_count"] = str(10000)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
 
         # tx propagation setting
         self.conf_parameters["min_peers_propagation"] = str(self.options.min_peers_propagation)
         self.conf_parameters["max_peers_propagation"] = str(self.options.max_peers_propagation)
+        self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
@@ -244,7 +252,7 @@ class P2PTest(ConfluxTestFramework):
                 pub_key = self.nodes[i].key
                 addr = self.nodes[i].addr
                 self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/num_nodes) - 21000, receiver=encode_hex(addr), nonce=i)
+                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/(num_nodes + 1)) - 21000, receiver=encode_hex(addr), nonce=i)
                 client.send_tx(tx)
 
         # setup monitor to report the current block count periodically

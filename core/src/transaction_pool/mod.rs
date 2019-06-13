@@ -39,6 +39,8 @@ use threadpool::ThreadPool;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Gauge = Gauge::register("tx_pool_size");
+    static ref TX_POOL_READY_GAUGE: Gauge =
+        Gauge::register("tx_pool_ready_size");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
@@ -379,7 +381,7 @@ impl TransactionPool {
                     let tx_hash = tx.hash();
                     // Sample 1/128 transactions
                     if tx_hash[0] & 254 == 0 {
-                        debug!("Sampled transaction {:?}", tx_hash);
+                        debug!("Sampled transaction {:?} in tx pool", tx_hash);
                     }
                     let inserted = tx_cache.contains_key(&tx_hash)
                         || unexecuted_transaction_addresses
@@ -520,6 +522,8 @@ impl TransactionPool {
             }
         }
         TX_POOL_GAUGE.update(self.len() as i64);
+        TX_POOL_READY_GAUGE
+            .update(self.inner.read().ready_transactions.len() as i64);
 
         transactions
             .iter()
