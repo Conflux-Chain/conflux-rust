@@ -1,5 +1,4 @@
 # Conflux-Rust
-[![Travis](https://travis-ci.com/Conflux-Chain/conflux-rust.svg?branch=master)](https://travis-ci.com/Conflux-Chain/conflux-rust#)
 
 Conflux-rust is a rust-based implementation of Conflux protocol, it is fast and reliable. Please follow the [Conflux Documentation](https://conflux-chain.github.io/conflux-doc/) to [build](https://conflux-chain.github.io/conflux-doc/install/) and [run](https://conflux-chain.github.io/conflux-doc/get_started/) Conflux.
 
