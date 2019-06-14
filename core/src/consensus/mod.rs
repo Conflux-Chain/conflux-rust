@@ -1344,6 +1344,32 @@ impl ConsensusGraphInner {
         let future_weight = total_weight - x;
         future_weight.into()
     }
+
+    /// Estimate the anticone size lower bound respecting the past of a pivot
+    /// chain block. The idea is to identify the last pivot block in the
+    /// past and then all future of the next pivot block will be the
+    /// anticone of this block. To estimate this in the past view of the
+    /// pivot block at the pivot_index. We eliminate the number of all non
+    /// past blocks of the reference pivot block at pivot_index.
+    pub fn estimate_lower_bound(
+        &mut self, me: usize, pivot_index: usize,
+    ) -> U256 {
+        let total_weight = self.weight_tree.get(self.genesis_block_index);
+        let past_weight = self.arena[self.pivot_chain[pivot_index]].past_weight;
+        let last_pivot_in_past = self.arena[me].last_pivot_in_past;
+        if last_pivot_in_past + 1 >= self.pivot_chain.len() {
+            return U256::zero();
+        }
+        let future_weight =
+            self.total_weight_in_future_for_pivot_block(last_pivot_in_past + 1);
+        let adjustment = total_weight - SignedBigNum::pos(past_weight);
+        let future_adjusted = SignedBigNum::pos(future_weight) - adjustment;
+        if future_adjusted < SignedBigNum::zero() {
+            U256::zero()
+        } else {
+            future_adjusted.into()
+        }
+    }
 }
 
 pub struct FinalityManager {
