@@ -219,7 +219,8 @@ pub struct ConsensusGraphInner {
     // The metadata associated with each pivot chain block
     pub pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     // The weight of all future blocks for each pivot block maintained in
-    // a fenwick tree.
+    // a fenwick tree. See compute_future_weights() to see how it can be used
+    // to compute future total weights.
     pub pivot_future_weights: FenwickTree,
     // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
@@ -1328,6 +1329,20 @@ impl ConsensusGraphInner {
             total_weight += self.block_weight(*index);
         }
         total_weight
+    }
+
+    /// Compute the total future weight of a pivot chain block
+    pub fn total_weight_in_future_for_pivot_block(
+        &mut self, pivot_index: usize,
+    ) -> U256 {
+        let total_weight = self.weight_tree.get(self.genesis_block_index);
+        let x = if pivot_index == 0 {
+            total_weight
+        } else {
+            self.pivot_future_weights.get_sum(pivot_index - 1).unwrap()
+        };
+        let future_weight = total_weight - x;
+        future_weight.into()
     }
 }
 
