@@ -1336,10 +1336,10 @@ impl ConsensusGraphInner {
         &mut self, pivot_index: usize,
     ) -> U256 {
         let total_weight = self.weight_tree.get(self.genesis_block_index);
-        let x = if pivot_idex == 0 {
+        let x = if pivot_index == 0 {
             total_weight
         } else {
-            self.pivot_future_weights.get_sum(pivot_index - 1);
+            self.pivot_future_weights.get_sum(pivot_index - 1).unwrap()
         };
         let future_weight = total_weight - x;
         future_weight.into()
