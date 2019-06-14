@@ -29,6 +29,9 @@ impl FenwickTree {
     }
 
     pub fn get(&self, me: usize) -> Option<SignedBigNum> {
+        if me == 0 {
+            return self.get_sum(0);
+        }
         if let Some(a) = self.get_sum(me) {
             if let Some(b) = self.get_sum(me - 1) {
                 Some(a - b)
