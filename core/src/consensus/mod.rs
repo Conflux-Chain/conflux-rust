@@ -2252,7 +2252,9 @@ impl ConsensusGraph {
     {
         for i in start_at..inner.pivot_chain_metadata.len() {
             let old_val = inner.pivot_future_weights.get(i).unwrap();
-            inner.pivot_future_weights.add(i, &(SignedBigNum::zero()-old_val));
+            inner
+                .pivot_future_weights
+                .add(i, &(SignedBigNum::zero() - old_val));
         }
         inner
             .pivot_chain_metadata
@@ -2266,7 +2268,9 @@ impl ConsensusGraph {
             inner.pivot_chain_metadata[i]
                 .last_pivot_in_past_blocks
                 .insert(me);
-            inner.pivot_future_weights.add(i, &SignedBigNum::pos(inner.block_weight(me)));
+            inner
+                .pivot_future_weights
+                .add(i, &SignedBigNum::pos(inner.block_weight(me)));
             to_update.remove(&me);
         }
         let mut stack = Vec::new();
@@ -2299,7 +2303,10 @@ impl ConsensusGraph {
                 inner.pivot_chain_metadata[last_pivot]
                     .last_pivot_in_past_blocks
                     .insert(me);
-                inner.pivot_future_weights.add(last_pivot, &SignedBigNum::pos(inner.block_weight(me)));
+                inner.pivot_future_weights.add(
+                    last_pivot,
+                    &SignedBigNum::pos(inner.block_weight(me)),
+                );
             }
         }
     }
@@ -2931,7 +2938,9 @@ impl ConsensusGraph {
             inner.pivot_chain_metadata[height]
                 .last_pivot_in_past_blocks
                 .insert(me);
-            inner.pivot_future_weights.add(height, &SignedBigNum::pos(inner.block_weight(me)));
+            inner
+                .pivot_future_weights
+                .add(height, &SignedBigNum::pos(inner.block_weight(me)));
         }
 
         // Now we can safely return
