@@ -1462,24 +1462,14 @@ impl ConsensusGraph {
         }
 
         let b_idx = b_idx.unwrap();
-        let b_epoch_num =
-            inner.arena[*b_idx].data.epoch_number.borrow().clone();
-        if b_epoch_num == NULL {
-            return false;
-        }
 
         if a_idx.is_none() {
             return true;
         }
 
         let a_idx = a_idx.unwrap();
-        let a_epoch_num =
-            inner.arena[*a_idx].data.epoch_number.borrow().clone();
-        if a_epoch_num == NULL {
-            return true;
-        }
 
-        if a_epoch_num > b_epoch_num {
+        if a_idx > b_idx {
             return true;
         } else {
             return false;
