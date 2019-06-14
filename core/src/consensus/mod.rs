@@ -1453,6 +1453,39 @@ impl ConsensusGraph {
         }
     }
 
+    pub fn later_than(&self, a: &H256, b: &H256) -> bool {
+        let inner = self.inner.read();
+        let a_idx = inner.indices.get(a);
+        let b_idx = inner.indices.get(b);
+        if b_idx.is_none() {
+            return false;
+        }
+
+        let b_idx = b_idx.unwrap();
+        let b_epoch_num =
+            inner.arena[*b_idx].data.epoch_number.borrow().clone();
+        if b_epoch_num == NULL {
+            return false;
+        }
+
+        if a_idx.is_none() {
+            return true;
+        }
+
+        let a_idx = a_idx.unwrap();
+        let a_epoch_num =
+            inner.arena[*a_idx].data.epoch_number.borrow().clone();
+        if a_epoch_num == NULL {
+            return true;
+        }
+
+        if a_epoch_num > b_epoch_num {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     pub fn update_total_weight_in_past(&self) {
         let mut total_weight = self.total_weight_in_past_2d.write();
         total_weight.delta = total_weight.cur - total_weight.old;
