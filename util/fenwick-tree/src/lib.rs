@@ -14,6 +14,7 @@ impl FenwickTree {
     }
 
     pub fn get_sum(&self, me: usize) -> Option<SignedBigNum> {
+        // We increment the id by one to handle the 0 case
         let mut i = (me + 1) as i64;
         if me + 1 > self.n {
             return None;
@@ -28,8 +29,8 @@ impl FenwickTree {
     }
 
     pub fn get(&self, me: usize) -> Option<SignedBigNum> {
-        if let Some(a) = self.get_sum(me + 1) {
-            if let Some(b) = self.get_sum(me) {
+        if let Some(a) = self.get_sum(me) {
+            if let Some(b) = self.get_sum(me - 1) {
                 Some(a - b)
             } else {
                 None
@@ -49,6 +50,7 @@ impl FenwickTree {
     }
 
     pub fn add(&mut self, me: usize, val: &SignedBigNum) {
+        // We increment the id by one to handle the 0 case
         let mut i = (me + 1) as i64;
         self.grow_if_required(i as usize);
         while i as usize <= self.n {
