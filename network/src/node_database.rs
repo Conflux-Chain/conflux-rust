@@ -227,6 +227,14 @@ impl NodeDatabase {
         }
     }
 
+    pub fn demote(&mut self, node_id: &NodeId) {
+        if let Some(removed_trusted_node) =
+            self.trusted_nodes.remove_with_id(node_id)
+        {
+            self.untrusted_nodes.add_node(removed_trusted_node, false);
+        }
+    }
+
     /// Remove node from database for the specified id
     pub fn remove(&mut self, id: &NodeId) -> Option<Node> {
         let node = self
@@ -647,6 +655,23 @@ mod tests {
             assert_eq!(db.remove(&entry2.id).is_some(), true);
 
             assert_eq!(db.ip_limit.ip_to_nodes.len(), 0);
+        }
+
+        #[test]
+        fn test_demote() {
+            let mut db = NodeDatabase::new(None, 1);
+
+            // add a trusted node
+            let entry = new_entry(None, "127.0.0.1:999");
+            assert_eq!(
+                db.insert_trusted(entry.clone()),
+                Some(InsertResult::Added)
+            );
+
+            // demote the trusted node to untrusted
+            db.demote(&entry.id);
+            assert_eq!(db.get(&entry.id, true), None);
+            assert!(db.get(&entry.id, false).is_some());
         }
     }
 }

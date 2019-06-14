@@ -21,7 +21,7 @@ use message::{
 };
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
-    NetworkContext, NetworkProtocolHandler, PeerId,
+    NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::Mutex;
 use rand::Rng;
@@ -514,7 +514,7 @@ impl SynchronizationProtocolHandler {
             }
         };
         if should_disconnect {
-            io.disconnect_peer(peer);
+            io.disconnect_peer(peer, None);
             return Err(ErrorKind::TooManyTrans.into());
         }
         self.request_manager.request_transactions(
@@ -726,7 +726,7 @@ impl SynchronizationProtocolHandler {
         };
 
         if should_disconnect {
-            io.disconnect_peer(peer);
+            io.disconnect_peer(peer, None);
             return Err(ErrorKind::TooManyTrans.into());
         }
 
@@ -2151,7 +2151,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
-            io.disconnect_peer(peer);
+            io.disconnect_peer(peer, Some(UpdateNodeOperation::Failure));
         } else {
             self.syn
                 .handshaking_peers

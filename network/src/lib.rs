@@ -213,6 +213,11 @@ pub trait NetworkProtocolHandler: Sync + Send {
     }
 }
 
+pub enum UpdateNodeOperation {
+    Failure,
+    Demotion,
+}
+
 pub trait NetworkContext {
     fn get_peer_node_id(&self, peer: PeerId) -> NodeId;
 
@@ -220,7 +225,7 @@ pub trait NetworkContext {
         &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error>;
 
-    fn disconnect_peer(&self, peer: PeerId);
+    fn disconnect_peer(&self, peer: PeerId, op: Option<UpdateNodeOperation>);
 
     /// Register a new IO timer. 'IoHandler::timeout' will be called with the
     /// token.
