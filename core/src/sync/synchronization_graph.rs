@@ -278,7 +278,9 @@ impl SynchronizationGraphInner {
             })
     }
 
-    fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
+    fn collect_blockset_in_own_view_of_epoch(
+        &mut self, consensus: SharedConsensusGraph, pivot: usize,
+    ) {
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
         for referee in &self.arena[pivot].referees {
@@ -294,6 +296,10 @@ impl SynchronizationGraphInner {
                 debug_assert!(parent != NULL);
                 if self.arena[parent].block_header.height()
                     < self.arena[index].min_epoch_in_other_views
+                    || consensus.later_than(
+                        &self.arena[index].block_header.hash(),
+                        &self.arena[parent].block_header.hash(),
+                    )
                 {
                     break;
                 }
@@ -921,7 +927,10 @@ impl SynchronizationGraph {
                             .push(inner.arena[index].block_header.hash());
                     }
 
-                    inner.collect_blockset_in_own_view_of_epoch(index);
+                    inner.collect_blockset_in_own_view_of_epoch(
+                        self.consensus.clone(),
+                        index,
+                    );
 
                     for child in &inner.arena[index].children {
                         debug_assert!(
