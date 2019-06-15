@@ -8,7 +8,6 @@ use crate::{
         SendQueueStatus, MAX_PAYLOAD_SIZE,
     },
     hash::keccak,
-    node_database::InsertResult,
     node_table::{NodeEndpoint, NodeEntry, NodeId},
     service::NetworkServiceInner,
     Capability, DisconnectReason, Error, ErrorKind, ProtocolId,
@@ -325,11 +324,7 @@ impl Session {
             return Err(self.disconnect(io, DisconnectReason::IpLimited));
         } else {
             debug!("Received valid endpoint {:?}, session = {:?}", entry, self);
-            if host.node_db.write().insert_with_token(entry, self.token())
-                == InsertResult::IpLimited
-            {
-                return Err(self.disconnect(io, DisconnectReason::IpLimited));
-            }
+            host.node_db.write().insert_with_token(entry, self.token());
         }
 
         self.send_ping(io)?;
