@@ -13,6 +13,7 @@ use crate::{
     Capability, Error, ErrorKind, HandlerWorkType, IpFilter,
     NetworkConfiguration, NetworkContext as NetworkContextTrait,
     NetworkIoMessage, NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
+    UpdateNodeOperation,
 };
 use cfx_bytes::Bytes;
 use keccak_hash::keccak;
@@ -336,6 +337,7 @@ impl DelayedQueue {
                     context.peer,
                     &context.io,
                     true,
+                    Some(UpdateNodeOperation::Failure),
                 );
             }
         };
@@ -675,7 +677,12 @@ impl NetworkServiceInner {
         }
         let mut w = self.dropped_nodes.write();
         for token in w.iter() {
-            self.kill_connection(*token, io, true);
+            self.kill_connection(
+                *token,
+                io,
+                true,
+                Some(UpdateNodeOperation::Failure),
+            );
         }
         w.clear();
     }
@@ -788,7 +795,12 @@ impl NetworkServiceInner {
         &self, stream: StreamToken, io: &IoContext<NetworkIoMessage>,
     ) {
         trace!("Connection closed: {}", stream);
-        self.kill_connection(stream, io, true);
+        self.kill_connection(
+            stream,
+            io,
+            true,
+            Some(UpdateNodeOperation::Failure),
+        );
     }
 
     fn session_readable(
@@ -841,7 +853,12 @@ impl NetworkServiceInner {
         }
 
         if kill {
-            self.kill_connection(stream, io, true);
+            self.kill_connection(
+                stream,
+                io,
+                true,
+                Some(UpdateNodeOperation::Failure),
+            );
         }
 
         let handlers = self.handlers.read();
@@ -911,7 +928,7 @@ impl NetworkServiceInner {
 
     fn kill_connection(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
-        remote: bool,
+        remote: bool, op: Option<UpdateNodeOperation>,
     )
     {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
@@ -941,7 +958,17 @@ impl NetworkServiceInner {
         }
         if let Some(id) = failure_id {
             if remote {
-                self.node_db.write().note_failure(&id, true, false);
+                if let Some(op) = op {
+                    match op {
+                        UpdateNodeOperation::Failure => {
+                            self.node_db.write().note_failure(&id, true, false);
+                        }
+                        UpdateNodeOperation::Demotion => {
+                            self.node_db.write().demote(&id);
+                            self.node_db.write().note_failure(&id, true, false);
+                        }
+                    }
+                }
             }
         }
         for p in to_disconnect {
@@ -1465,8 +1492,9 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         Ok(())
     }
 
-    fn disconnect_peer(&self, peer: PeerId) {
-        self.network_service.kill_connection(peer, self.io, true);
+    fn disconnect_peer(&self, peer: PeerId, op: Option<UpdateNodeOperation>) {
+        self.network_service
+            .kill_connection(peer, self.io, true, op);
     }
 
     fn register_timer(
