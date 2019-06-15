@@ -3,13 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    ip_limit::NodeIpLimit,
     node_table::{Node, NodeContact, NodeEntry, NodeId, NodeTable},
     IpFilter,
 };
 use io::StreamToken;
-use std::time::Duration;
-use crate::ip_limit::NodeIpLimit;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 /// Node database maintains all P2P nodes in trusted and untrusted node tables,
 /// and support to limit the number of nodes for the same IP address.
@@ -36,9 +35,15 @@ impl NodeDatabase {
     }
 
     /// add or update a node with the specified `entry` and `stream_token`.
-    pub fn insert_with_token(&mut self, entry: NodeEntry, stream_token: StreamToken) {
+    pub fn insert_with_token(
+        &mut self, entry: NodeEntry, stream_token: StreamToken,
+    ) {
         if self.trusted_nodes.contains(&entry.id) {
-            self.trusted_nodes.note_success(&entry.id, true, Some(stream_token));
+            self.trusted_nodes.note_success(
+                &entry.id,
+                true,
+                Some(stream_token),
+            );
             return;
         }
 
@@ -48,7 +53,9 @@ impl NodeDatabase {
         node.stream_token = Some(stream_token);
 
         match self.pre_insert_untrusted(&node) {
-            InsertResult::Added | InsertResult::Updated | InsertResult::IpUpdated => {
+            InsertResult::Added
+            | InsertResult::Updated
+            | InsertResult::IpUpdated => {
                 self.untrusted_nodes.add_node(node, false);
             }
             InsertResult::IpLimited => {
@@ -72,7 +79,9 @@ impl NodeDatabase {
                 self.untrusted_nodes.update_last_contact(node);
             }
             InsertResult::IpUpdated => {
-                if let Some(old_node) = self.untrusted_nodes.remove_with_id(&entry.id) {
+                if let Some(old_node) =
+                    self.untrusted_nodes.remove_with_id(&entry.id)
+                {
                     node.last_connected = old_node.last_connected;
                     node.stream_token = old_node.stream_token;
                 }
@@ -97,8 +106,12 @@ impl NodeDatabase {
         node.last_contact = Some(NodeContact::success());
 
         match self.pre_insert_untrusted(&node) {
-            InsertResult::Added | InsertResult::Updated | InsertResult::IpUpdated => {
-                if let Some(old_node) = self.untrusted_nodes.remove_with_id(&entry.id) {
+            InsertResult::Added
+            | InsertResult::Updated
+            | InsertResult::IpUpdated => {
+                if let Some(old_node) =
+                    self.untrusted_nodes.remove_with_id(&entry.id)
+                {
                     node.last_connected = old_node.last_connected;
                     node.stream_token = old_node.stream_token;
                 }
@@ -121,8 +134,12 @@ impl NodeDatabase {
         let mut node = Node::new(entry.id.clone(), entry.endpoint.clone());
 
         match self.pre_insert_untrusted(&node) {
-            InsertResult::Added | InsertResult::Updated | InsertResult::IpUpdated => {
-                if let Some(old_node) = self.untrusted_nodes.remove_with_id(&entry.id) {
+            InsertResult::Added
+            | InsertResult::Updated
+            | InsertResult::IpUpdated => {
+                if let Some(old_node) =
+                    self.untrusted_nodes.remove_with_id(&entry.id)
+                {
                     node.last_contact = old_node.last_contact;
                     node.last_connected = old_node.last_connected;
                     node.stream_token = old_node.stream_token;
@@ -293,12 +310,10 @@ impl NodeDatabase {
             let priority = if trusted { 10 } else { 0 };
             match node.last_contact {
                 None => (priority, SystemTime::UNIX_EPOCH),
-                Some(contact) => {
-                    match contact {
-                        NodeContact::Failure(t) => (priority + 1, t),
-                        NodeContact::Success(t) => (priority + 2, t),
-                    }
-                }
+                Some(contact) => match contact {
+                    NodeContact::Failure(t) => (priority + 1, t),
+                    NodeContact::Success(t) => (priority + 2, t),
+                },
             }
         };
 
@@ -307,7 +322,8 @@ impl NodeDatabase {
 
         for id in node_ids {
             let mut cur_node = None;
-            let cur_priority = if let Some(node) = self.untrusted_nodes.get(id) {
+            let cur_priority = if let Some(node) = self.untrusted_nodes.get(id)
+            {
                 cur_node = Some(node);
                 get_priority(false, node)
             } else if let Some(node) = self.trusted_nodes.get(id) {
@@ -321,10 +337,11 @@ impl NodeDatabase {
                 continue;
             }
 
-            if cur_priority.0 < min_priority.0 || cur_priority.1 < min_priority.1 {
+            if cur_priority.0 < min_priority.0
+                || cur_priority.1 < min_priority.1
+            {
                 min_priority = cur_priority;
                 min_node = cur_node;
-
             }
         }
 
@@ -348,20 +365,20 @@ impl NodeDatabase {
 
 #[derive(Debug, PartialEq, Eq)]
 enum InsertResult {
-    Added,      // add a new node
-    Updated,    // update a node without IP address changed
-    IpUpdated,  // update a node with IP address changed
-    IpLimited,  // maximum nodes reached per IP address
+    Added,     // add a new node
+    Updated,   // update a node without IP address changed
+    IpUpdated, // update a node with IP address changed
+    IpLimited, // maximum nodes reached per IP address
 }
-
 
 #[cfg(test)]
 mod tests {
-    use super::NodeDatabase;
-    use crate::node_table::{Node, NodeEndpoint, NodeEntry, NodeId, NodeTable};
+    use super::{InsertResult, NodeDatabase};
+    use crate::{
+        ip_limit::NodeIpLimit,
+        node_table::{Node, NodeEndpoint, NodeEntry, NodeId, NodeTable},
+    };
     use std::{net::IpAddr, str::FromStr};
-    use crate::ip_limit::NodeIpLimit;
-    use super::InsertResult;
 
     fn new_node(addr: &str) -> Node {
         Node::new(NodeId::random(), NodeEndpoint::from_str(addr).unwrap())
@@ -372,7 +389,7 @@ mod tests {
     fn new_entry(addr: &str) -> NodeEntry {
         NodeEntry {
             id: NodeId::random(),
-            endpoint: NodeEndpoint::from_str(addr).unwrap()
+            endpoint: NodeEndpoint::from_str(addr).unwrap(),
         }
     }
 
@@ -444,7 +461,7 @@ mod tests {
         // add new node with old IP address, previous node will be replaced.
         let entry = new_entry("127.0.0.1:999");
         db.insert_with_token(entry.clone(), 9);
-        assert_eq!(db.get(&node_id, false), None);       // old node was repalced
+        assert_eq!(db.get(&node_id, false), None); // old node was repalced
         let node = db.get(&entry.id, false).unwrap();
         assert_eq!(node.endpoint, entry.endpoint);
         assert_eq!(node.stream_token, Some(9));
@@ -579,32 +596,32 @@ mod tests {
         let node = new_node("127.0.0.3:999");
         let ip3 = new_ip("127.0.0.3");
         assert_eq!(db.pre_insert_untrusted(&node), InsertResult::Added);
-        assert_eq!(db.ip_limit.get_keys(&ip3).unwrap().len(), 1);   // new ip added
+        assert_eq!(db.ip_limit.get_keys(&ip3).unwrap().len(), 1); // new ip added
 
         // new added with same IP
         let node = new_node("127.0.0.1:999");
         assert_eq!(db.pre_insert_untrusted(&node), InsertResult::IpLimited);
-        assert_eq!(db.ip_limit.get_keys(&ip1).unwrap().len(), 1);   // not added
+        assert_eq!(db.ip_limit.get_keys(&ip1).unwrap().len(), 1); // not added
 
         // updated with same IP
         let mut node = new_node("127.0.0.1:999");
         node.id = id1.clone();
         assert_eq!(db.pre_insert_untrusted(&node), InsertResult::Updated);
-        assert_eq!(db.ip_limit.get_keys(&ip1).unwrap().len(), 1);   // nothing changed
+        assert_eq!(db.ip_limit.get_keys(&ip1).unwrap().len(), 1); // nothing changed
 
         // updated with existing IP
         let mut node = new_node("127.0.0.2:999");
         node.id = id1.clone();
         assert_eq!(db.pre_insert_untrusted(&node), InsertResult::IpLimited);
-        assert_eq!(db.ip_limit.get_keys(&ip1).unwrap().len(), 1);   // IP1 not changed
-        assert_eq!(db.ip_limit.get_keys(&ip2).unwrap().len(), 1);   // IP2 not changed
+        assert_eq!(db.ip_limit.get_keys(&ip1).unwrap().len(), 1); // IP1 not changed
+        assert_eq!(db.ip_limit.get_keys(&ip2).unwrap().len(), 1); // IP2 not changed
 
         // updated with different IP
         let mut node = new_node("127.0.0.4:999");
         node.id = id1.clone();
         let ip4 = new_ip("127.0.0.4");
         assert_eq!(db.pre_insert_untrusted(&node), InsertResult::IpUpdated);
-        assert_eq!(db.ip_limit.get_keys(&ip1), None);               // IP1 removed
-        assert_eq!(db.ip_limit.get_keys(&ip4).unwrap().len(), 1);   // IP4 added
+        assert_eq!(db.ip_limit.get_keys(&ip1), None); // IP1 removed
+        assert_eq!(db.ip_limit.get_keys(&ip4).unwrap().len(), 1); // IP4 added
     }
 }
