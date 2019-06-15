@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    ip_limit::SessionIpLimit, node_table::NodeId,
-    service::NetworkServiceInner, session::Session, NetworkIoMessage,
+    ip_limit::SessionIpLimit, node_table::NodeId, service::NetworkServiceInner,
+    session::Session, NetworkIoMessage,
 };
 use io::IoContext;
 use mio::net::TcpStream;
@@ -145,7 +145,10 @@ impl SessionManager {
                 self.node_id_index.write().remove(node_id);
             }
 
-            assert!(self.ip_limit.write().on_delete(&session.address().ip(), &session.token()));
+            assert!(self
+                .ip_limit
+                .write()
+                .on_delete(&session.address().ip(), &session.token()));
 
             debug!("SessionManager.remove: session removed");
         }

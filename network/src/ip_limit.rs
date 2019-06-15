@@ -2,11 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::collections::HashMap;
-use std::net::IpAddr;
-use std::collections::HashSet;
-use std::hash::Hash;
 use crate::node_table::NodeId;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    net::IpAddr,
+};
 
 pub type SessionIpLimit = IpLimit<usize>;
 pub type NodeIpLimit = IpLimit<NodeId>;
@@ -59,7 +60,10 @@ impl<KEY: Hash + Eq> IpLimit<KEY> {
             }
         }
 
-        self.ip_to_keys.entry(ip).or_insert_with(|| HashSet::new()).insert(key)
+        self.ip_to_keys
+            .entry(ip)
+            .or_insert_with(|| HashSet::new())
+            .insert(key)
     }
 
     /// Update the number of nodes for the specified IP address when deleting a
@@ -93,8 +97,7 @@ impl<KEY: Hash + Eq> IpLimit<KEY> {
 #[cfg(test)]
 mod tests {
     use super::SessionIpLimit;
-    use std::net::IpAddr;
-    use std::str::FromStr;
+    use std::{net::IpAddr, str::FromStr};
 
     fn new_ip(ip: &str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
 
@@ -136,7 +139,7 @@ mod tests {
         assert_eq!(limit.on_add(ip, 2), true);
         assert_eq!(limit.get_keys(&ip).unwrap().len(), 2);
 
-        assert_eq!(limit.on_delete(&ip, &3), false);    // invalid key
+        assert_eq!(limit.on_delete(&ip, &3), false); // invalid key
         assert_eq!(limit.on_delete(&ip, &2), true);
         assert_eq!(limit.get_keys(&ip).unwrap().len(), 1);
         assert_eq!(limit.on_delete(&ip, &1), true);
