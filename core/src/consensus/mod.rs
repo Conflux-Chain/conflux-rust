@@ -42,7 +42,6 @@ use rayon::prelude::*;
 use rlp::*;
 use slab::Slab;
 use std::{
-    cell::RefCell,
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
@@ -124,17 +123,15 @@ impl ConsensusGraphStatistics {
 }
 
 pub struct ConsensusGraphNodeData {
-    pub epoch_number: RefCell<usize>,
+    pub epoch_number: usize,
     pub partial_invalid: bool,
     pub anticone: HashSet<usize>,
 }
 
-unsafe impl Sync for ConsensusGraphNodeData {}
-
 impl ConsensusGraphNodeData {
     pub fn new(epoch_number: usize) -> Self {
         ConsensusGraphNodeData {
-            epoch_number: RefCell::new(epoch_number),
+            epoch_number,
             partial_invalid: false,
             anticone: HashSet::new(),
         }
@@ -337,10 +334,7 @@ impl ConsensusGraphInner {
         inner
             .adaptive_tree
             .set(inner.genesis_block_index, &SignedBigNum::zero());
-        *inner.arena[inner.genesis_block_index]
-            .data
-            .epoch_number
-            .borrow_mut() = 0;
+        inner.arena[inner.genesis_block_index].data.epoch_number = 0;
         inner.pivot_chain.push(inner.genesis_block_index);
         let mut last_pivot_in_past_blocks = HashSet::new();
         last_pivot_in_past_blocks.insert(inner.genesis_block_index);
@@ -894,8 +888,7 @@ impl ConsensusGraphInner {
             let pivot_index = chain[epoch_num];
             debug_assert!(epoch_num == self.arena[pivot_index].height as usize);
             debug_assert!(
-                epoch_num
-                    == *self.arena[pivot_index].data.epoch_number.borrow()
+                epoch_num == self.arena[pivot_index].data.epoch_number
             );
             Some((pivot_index, chain[anticone_penalty_cutoff_epoch_index]))
         } else {
@@ -1121,8 +1114,7 @@ impl ConsensusGraphInner {
 
     pub fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
         self.indices.get(hash).and_then(|block_index| {
-            let epoch_number =
-                self.arena[*block_index].data.epoch_number.borrow().clone();
+            let epoch_number = self.arena[*block_index].data.epoch_number;
             self.epoch_hash(epoch_number)
         })
     }
@@ -1152,7 +1144,7 @@ impl ConsensusGraphInner {
 
     pub fn get_block_epoch_number(&self, hash: &H256) -> Option<usize> {
         if let Some(idx) = self.indices.get(hash) {
-            Some(self.arena[*idx].data.epoch_number.borrow().clone())
+            Some(self.arena[*idx].data.epoch_number)
         } else {
             None
         }
@@ -1411,7 +1403,7 @@ impl ConfirmationTrait for ConsensusGraph {
     fn confirmation_risk_by_hash(&self, hash: H256) -> Option<f64> {
         let inner = self.inner.read();
         let index = *inner.indices.get(&hash)?;
-        let epoch_num = inner.arena[index].data.epoch_number.borrow().clone();
+        let epoch_num = inner.arena[index].data.epoch_number;
         if epoch_num == NULL {
             return None;
         }
@@ -1892,10 +1884,8 @@ impl ConsensusGraph {
                     |queue: &mut Vec<usize>,
                      epoch_number_map: &mut HashMap<usize, usize>,
                      index| {
-                        let epoch_number =
-                            inner.arena[index].data.epoch_number.borrow();
-                        if (*epoch_number == NULL
-                            || *epoch_number > fork_height)
+                        let epoch_number = inner.arena[index].data.epoch_number;
+                        if (epoch_number == NULL || epoch_number > fork_height)
                             && !epoch_number_map.contains_key(&index)
                         {
                             epoch_number_map.insert(index, new_epoch_number);
@@ -2416,23 +2406,30 @@ impl ConsensusGraph {
                 let mut queue = Vec::new();
                 {
                     let copy_of_fork_at = height;
-                    let enqueue_if_new = |queue: &mut Vec<usize>, index| {
-                        let mut epoch_number =
-                            inner.arena[index].data.epoch_number.borrow_mut();
-                        if *epoch_number == NULL {
-                            *epoch_number = copy_of_fork_at;
-                            queue.push(index);
-                        }
-                    };
+                    let enqueue_if_new =
+                        |inner: &mut ConsensusGraphInner,
+                         queue: &mut Vec<usize>,
+                         index| {
+                            if inner.arena[index].data.epoch_number == NULL {
+                                inner.arena[index].data.epoch_number =
+                                    copy_of_fork_at;
+                                queue.push(index);
+                            }
+                        };
 
                     let mut at = 0;
-                    enqueue_if_new(&mut queue, new_pivot_chain[height]);
+                    enqueue_if_new(inner, &mut queue, new_pivot_chain[height]);
                     while at < queue.len() {
                         let me = queue[at];
-                        for referee in &inner.arena[me].referees {
-                            enqueue_if_new(&mut queue, *referee);
+                        let tmp = inner.arena[me].referees.clone();
+                        for referee in tmp {
+                            enqueue_if_new(inner, &mut queue, referee);
                         }
-                        enqueue_if_new(&mut queue, inner.arena[me].parent);
+                        enqueue_if_new(
+                            inner,
+                            &mut queue,
+                            inner.arena[me].parent,
+                        );
                         at += 1;
                     }
                 }
@@ -2914,22 +2911,28 @@ impl ConsensusGraph {
 
             if fork_at < old_pivot_chain_len {
                 let enqueue_if_obsolete =
-                    |queue: &mut VecDeque<usize>, index| {
-                        let mut epoch_number =
-                            inner.arena[index].data.epoch_number.borrow_mut();
-                        if *epoch_number != NULL && *epoch_number >= fork_at {
-                            *epoch_number = NULL;
+                    |inner: &mut ConsensusGraphInner,
+                     queue: &mut VecDeque<usize>,
+                     index| {
+                        let epoch_number = inner.arena[index].data.epoch_number;
+                        if epoch_number != NULL && epoch_number >= fork_at {
+                            inner.arena[index].data.epoch_number = NULL;
                             queue.push_back(index);
                         }
                     };
 
                 let mut queue = VecDeque::new();
-                enqueue_if_obsolete(&mut queue, last);
+                enqueue_if_obsolete(inner, &mut queue, last);
                 while let Some(me) = queue.pop_front() {
-                    for referee in inner.arena[me].referees.clone() {
-                        enqueue_if_obsolete(&mut queue, referee);
+                    let tmp = inner.arena[me].referees.clone();
+                    for referee in tmp {
+                        enqueue_if_obsolete(inner, &mut queue, referee);
                     }
-                    enqueue_if_obsolete(&mut queue, inner.arena[me].parent);
+                    enqueue_if_obsolete(
+                        inner,
+                        &mut queue,
+                        inner.arena[me].parent,
+                    );
                 }
             }
 
@@ -2942,23 +2945,34 @@ impl ConsensusGraph {
                 let mut queue = Vec::new();
                 {
                     let copy_of_fork_at = pivot_index;
-                    let enqueue_if_new = |queue: &mut Vec<usize>, index| {
-                        let mut epoch_number =
-                            inner.arena[index].data.epoch_number.borrow_mut();
-                        if *epoch_number == NULL {
-                            *epoch_number = copy_of_fork_at;
-                            queue.push(index);
-                        }
-                    };
+                    let enqueue_if_new =
+                        |inner: &mut ConsensusGraphInner,
+                         queue: &mut Vec<usize>,
+                         index| {
+                            if inner.arena[index].data.epoch_number == NULL {
+                                inner.arena[index].data.epoch_number =
+                                    copy_of_fork_at;
+                                queue.push(index);
+                            }
+                        };
 
                     let mut at = 0;
-                    enqueue_if_new(&mut queue, inner.pivot_chain[pivot_index]);
+                    enqueue_if_new(
+                        inner,
+                        &mut queue,
+                        inner.pivot_chain[pivot_index],
+                    );
                     while at < queue.len() {
                         let me = queue[at];
-                        for referee in &inner.arena[me].referees {
-                            enqueue_if_new(&mut queue, *referee);
+                        let tmp = inner.arena[me].referees.clone();
+                        for referee in tmp {
+                            enqueue_if_new(inner, &mut queue, referee);
                         }
-                        enqueue_if_new(&mut queue, inner.arena[me].parent);
+                        enqueue_if_new(
+                            inner,
+                            &mut queue,
+                            inner.arena[me].parent,
+                        );
                         at += 1;
                     }
                 }
