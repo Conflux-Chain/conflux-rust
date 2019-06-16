@@ -138,6 +138,7 @@ impl SynchronizationProtocolHandler {
         let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
 
         let syn = Arc::new(SynchronizationState::new(start_as_catch_up_mode));
+
         let request_manager =
             Arc::new(RequestManager::new(&protocol_config, syn.clone()));
 
@@ -1725,7 +1726,6 @@ impl SynchronizationProtocolHandler {
 
         let sent_transactions = {
             let mut transactions = self.get_to_propagate_trans();
-
             if transactions.is_empty() {
                 return;
             }
