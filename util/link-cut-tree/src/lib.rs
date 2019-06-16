@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::SignedBigNum;
-use std::cmp::min;
 
 const NULL: usize = !0;
 
@@ -16,6 +15,7 @@ struct MinNode {
     size: usize,
     value: SignedBigNum,
     min: SignedBigNum,
+    min_idx: usize,
     delta: SignedBigNum,
     catepillar_value: SignedBigNum,
     catepillar_delta: SignedBigNum,
@@ -31,6 +31,8 @@ impl Default for MinNode {
             size: 1,
             value: SignedBigNum::zero(),
             min: SignedBigNum::zero(),
+            // We need to set this value to its own index
+            min_idx: 0,
             delta: SignedBigNum::zero(),
             catepillar_value: SignedBigNum::zero(),
             catepillar_delta: SignedBigNum::zero(),
@@ -49,23 +51,34 @@ impl MinLinkCutTree {
 
     pub fn make_tree(&mut self, v: usize) {
         if self.tree.len() <= v {
+            let old_len = self.tree.len();
             self.tree.resize(v + 1, MinNode::default());
+            for i in old_len..self.tree.len() {
+                self.tree[i].min_idx = i;
+            }
         }
     }
 
     fn update(&mut self, v: usize) {
         self.tree[v].size = 1;
         self.tree[v].min = self.tree[v].value;
+        self.tree[v].min_idx = v;
 
         let u = self.tree[v].left_child;
         if u != NULL {
             self.tree[v].size += self.tree[u].size;
-            self.tree[v].min = min(self.tree[v].min, self.tree[u].min);
+            if self.tree[v].min > self.tree[u].min {
+                self.tree[v].min = self.tree[u].min;
+                self.tree[v].min_idx = self.tree[u].min_idx;
+            }
         }
         let w = self.tree[v].right_child;
         if w != NULL {
             self.tree[v].size += self.tree[w].size;
-            self.tree[v].min = min(self.tree[v].min, self.tree[w].min);
+            if self.tree[v].min > self.tree[w].min {
+                self.tree[v].min = self.tree[w].min;
+                self.tree[v].min_idx = self.tree[w].min_idx;
+            }
         }
         self.tree[v].min = self.tree[v].min + self.tree[v].delta;
     }
@@ -367,6 +380,12 @@ impl MinLinkCutTree {
         self.tree[v].min.clone()
     }
 
+    pub fn path_aggregate_idx(&mut self, v: usize) -> usize {
+        self.access(v);
+
+        self.tree[v].min_idx
+    }
+
     pub fn get(&mut self, v: usize) -> SignedBigNum {
         self.access(v);
 
@@ -525,8 +544,11 @@ mod tests {
         assert_eq!(tree.get(4), SignedBigNum::pos(U256::from(3)));
         assert_eq!(tree.get(5), SignedBigNum::pos(U256::from(1)));
 
+        tree.path_apply(1, &SignedBigNum::pos(U256::from(1)));
         assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(3)));
-        tree.path_apply(0, &SignedBigNum::neg(U256::from(1)));
+        assert_eq!(tree.path_aggregate_idx(2), 2);
+        tree.path_apply(0, &SignedBigNum::neg(U256::from(2)));
         assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(2)));
+        assert_eq!(tree.path_aggregate_idx(2), 0);
     }
 }
