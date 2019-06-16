@@ -1,18 +1,27 @@
+use cfx_types::H256;
 use message::TransIndex;
 use primitives::{SignedTransaction, TxPropagateId};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
+    mem,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
+struct ReceivedTransactionTimeWindowedEntry {
+    pub secs: u64,
+    pub tx_ids: Vec<TxPropagateId>,
+    pub tx_hashes: Vec<H256>,
+}
+
 struct ReceivedTransactionContainerInner {
     window_size: usize,
-    container: HashSet<TxPropagateId>,
     slot_duration_as_secs: u64,
-    time_windowed_indices: Vec<Option<(u64, Vec<TxPropagateId>)>>,
+    txid_container: HashSet<TxPropagateId>,
+    tx_container: HashMap<H256, Arc<SignedTransaction>>,
+    time_windowed_indices: Vec<Option<ReceivedTransactionTimeWindowedEntry>>,
 }
 
 impl ReceivedTransactionContainerInner {
@@ -23,8 +32,9 @@ impl ReceivedTransactionContainerInner {
         }
         ReceivedTransactionContainerInner {
             window_size,
-            container: HashSet::new(),
             slot_duration_as_secs,
+            txid_container: HashSet::new(),
+            tx_container: HashMap::new(),
             time_windowed_indices,
         }
     }
@@ -46,12 +56,40 @@ impl ReceivedTransactionContainer {
         }
     }
 
-    pub fn contains(&self, key: &TxPropagateId) -> bool {
+    pub fn contains_txid(&self, key: &TxPropagateId) -> bool {
         let inner = &self.inner;
-        inner.container.contains(key)
+        inner.txid_container.contains(key)
     }
 
-    pub fn append_transaction_ids(&mut self, tx_ids: Vec<TxPropagateId>) {
+    pub fn remove_transaction(&mut self, hash: &H256) {
+        let inner = &mut self.inner;
+        inner.tx_container.remove(hash);
+    }
+
+    pub fn get_transactions(
+        &mut self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
+        let inner = &mut self.inner;
+        let mut res = HashMap::new();
+        mem::swap(&mut inner.tx_container, &mut res);
+        res
+    }
+
+    pub fn set_transactions(
+        &mut self, transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        let inner = &mut self.inner;
+        inner.tx_container = transactions;
+    }
+
+    pub fn append_transactions(
+        &mut self, transactions: Vec<Arc<SignedTransaction>>,
+    ) {
+        let tx_ids = transactions
+            .iter()
+            .map(|tx| TxPropagateId::from(tx.hash()))
+            .collect::<Vec<_>>();
+
         let inner = &mut self.inner;
 
         let now = SystemTime::now();
@@ -60,31 +98,42 @@ impl ReceivedTransactionContainer {
         let window_index =
             (secs / inner.slot_duration_as_secs) as usize % inner.window_size;
 
-        let indices = if inner.time_windowed_indices[window_index].is_none() {
-            let indices = Vec::new();
-            inner.time_windowed_indices[window_index] = Some((secs, indices));
-            &mut inner.time_windowed_indices[window_index]
-                .as_mut()
-                .unwrap()
-                .1
+        let entry = if inner.time_windowed_indices[window_index].is_none() {
+            inner.time_windowed_indices[window_index] =
+                Some(ReceivedTransactionTimeWindowedEntry {
+                    secs,
+                    tx_ids: Vec::new(),
+                    tx_hashes: Vec::new(),
+                });
+            inner.time_windowed_indices[window_index].as_mut().unwrap()
         } else {
-            let mut indices_with_time =
+            let indices_with_time =
                 inner.time_windowed_indices[window_index].as_mut().unwrap();
-            if indices_with_time.0 + inner.slot_duration_as_secs <= secs {
-                for key_to_remove in &indices_with_time.1 {
-                    inner.container.remove(key_to_remove);
+            if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
+                for tx_id in &indices_with_time.tx_ids {
+                    inner.txid_container.remove(tx_id);
                 }
-                let indices = Vec::new();
-                indices_with_time.0 = secs;
-                indices_with_time.1 = indices;
+                for tx_hash in &indices_with_time.tx_hashes {
+                    inner.tx_container.remove(tx_hash);
+                }
+                indices_with_time.secs = secs;
+                indices_with_time.tx_ids = Vec::new();
+                indices_with_time.tx_hashes = Vec::new();
             }
-            &mut indices_with_time.1
+            indices_with_time
         };
 
         for tx_id in tx_ids {
-            if !inner.container.contains(&tx_id) {
-                inner.container.insert(tx_id.clone());
-                indices.push(tx_id);
+            if !inner.txid_container.contains(&tx_id) {
+                inner.txid_container.insert(tx_id.clone());
+                entry.tx_ids.push(tx_id);
+            }
+        }
+
+        for tx in transactions {
+            if !inner.tx_container.contains_key(&tx.hash) {
+                entry.tx_hashes.push(tx.hash());
+                inner.tx_container.insert(tx.hash(), tx);
             }
         }
     }

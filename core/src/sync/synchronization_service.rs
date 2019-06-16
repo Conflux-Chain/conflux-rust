@@ -7,8 +7,12 @@ use super::{
     SYNCHRONIZATION_PROTOCOL_VERSION,
 };
 use crate::{
-    consensus::SharedConsensusGraph, pow::ProofOfWorkConfig,
-    sync::synchronization_protocol_handler::ProtocolConfiguration,
+    consensus::SharedConsensusGraph,
+    pow::ProofOfWorkConfig,
+    sync::{
+        request_manager::tx_handler::ReceivedTransactionContainer,
+        synchronization_protocol_handler::ProtocolConfiguration,
+    },
     verification::VerificationConfig,
 };
 use cfx_types::H256;
@@ -17,7 +21,8 @@ use network::{
     node_table::{NodeEntry, NodeId},
     Error as NetworkError, NetworkService, PeerInfo, ProtocolId,
 };
-use primitives::Block;
+use parking_lot::RwLock;
+use primitives::{transaction::SignedTransaction, Block};
 use std::sync::Arc;
 
 pub struct SynchronizationService {
@@ -29,6 +34,7 @@ pub struct SynchronizationService {
 impl SynchronizationService {
     pub fn new(
         network: NetworkService, consensus_graph: SharedConsensusGraph,
+        received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
         protocol_config: ProtocolConfiguration,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         fast_recover: bool,
@@ -37,6 +43,7 @@ impl SynchronizationService {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
             protocol_config,
             consensus_graph,
+            received_transactions,
             verification_config,
             pow_config,
             fast_recover,
@@ -57,6 +64,13 @@ impl SynchronizationService {
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.protocol_handler.get_synchronization_graph()
+    }
+
+    pub fn append_received_transactions(
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+    ) {
+        self.protocol_handler
+            .append_received_transactions(transactions);
     }
 
     pub fn start(&mut self) -> Result<(), Error> {

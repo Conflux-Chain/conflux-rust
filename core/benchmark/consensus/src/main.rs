@@ -14,7 +14,10 @@ use cfxcore::{
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
-    sync::SynchronizationGraph,
+    sync::{
+        request_manager::tx_handler::ReceivedTransactionContainer,
+        SynchronizationGraph,
+    },
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool,
@@ -25,7 +28,7 @@ use log4rs::{
     config::{Appender, Config as LogConfig, Logger, Root},
     encode::pattern::PatternEncoder,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, BlockHeaderBuilder};
 use std::{
     collections::{HashMap, HashSet},
@@ -118,11 +121,15 @@ fn initialize_consensus_graph_for_test(
         3 * mb,
     )));
 
+    let received_transactions =
+        Arc::new(RwLock::new(ReceivedTransactionContainer::new(3600)));
+
     let txpool = Arc::new(TransactionPool::with_capacity(
         500_000,
         storage_manager.clone(),
         worker_thread_pool.clone(),
         cache_man.clone(),
+        received_transactions,
     ));
     let statistics = Arc::new(Statistics::new());
 
