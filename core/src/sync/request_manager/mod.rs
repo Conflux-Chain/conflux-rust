@@ -27,7 +27,7 @@ use std::{
 use tx_handler::{ReceivedTransactionContainer, SentTransactionContainer};
 
 mod request_handler;
-mod tx_handler;
+pub mod tx_handler;
 
 lazy_static! {
     static ref TX_REQUEST_GAUGE: Gauge = Gauge::register("tx_diff_set_size");
@@ -67,7 +67,7 @@ pub struct RequestManager {
     /// Holds a set of transactions recently sent to this peer to avoid
     /// spamming.
     sent_transactions: RwLock<SentTransactionContainer>,
-    received_transactions: RwLock<ReceivedTransactionContainer>,
+    pub received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
 
     /// This is used to handle request_id matching
     request_handler: Arc<RequestHandler>,
@@ -76,21 +76,17 @@ pub struct RequestManager {
 
 impl RequestManager {
     pub fn new(
-        protocol_config: &ProtocolConfiguration, syn: Arc<SynchronizationState>,
-    ) -> Self {
-        let received_tx_index_maintain_timeout =
-            protocol_config.received_tx_index_maintain_timeout;
-
+        protocol_config: &ProtocolConfiguration,
+        syn: Arc<SynchronizationState>,
+        received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
+    ) -> Self
+    {
         // FIXME: make sent_transaction_window_size to be 2^pow.
         let sent_transaction_window_size =
             protocol_config.tx_maintained_for_peer_timeout.as_millis()
                 / protocol_config.send_tx_period.as_millis();
         Self {
-            received_transactions: RwLock::new(
-                ReceivedTransactionContainer::new(
-                    received_tx_index_maintain_timeout.as_secs(),
-                ),
-            ),
+            received_transactions,
             inflight_requested_transactions: Default::default(),
             sent_transactions: RwLock::new(SentTransactionContainer::new(
                 sent_transaction_window_size as usize,
@@ -365,7 +361,7 @@ impl RequestManager {
                     continue;
                 }
 
-                if received_transactions.contains(tx_id) {
+                if received_transactions.contains_txid(tx_id) {
                     // Already received
                     continue;
                 }
@@ -699,10 +695,12 @@ impl RequestManager {
             .append_transactions(transactions)
     }
 
-    pub fn append_received_transaction_ids(&self, tx_ids: Vec<TxPropagateId>) {
+    pub fn append_received_transactions(
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+    ) {
         self.received_transactions
             .write()
-            .append_transaction_ids(tx_ids)
+            .append_transactions(transactions)
     }
 
     pub fn resend_timeout_requests(&self, io: &NetworkContext) {

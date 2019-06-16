@@ -19,6 +19,7 @@ use crate::{
     state::State,
     statedb::StateDb,
     storage::{Storage, StorageManager, StorageManagerTrait},
+    sync::request_manager::tx_handler::ReceivedTransactionContainer,
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
@@ -326,6 +327,7 @@ pub struct TransactionPool {
         Mutex<HashMap<H256, HashSet<TransactionAddress>>>,
     pub worker_pool: Arc<Mutex<ThreadPool>>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
     spec: vm::Spec,
 }
 
@@ -336,6 +338,7 @@ impl TransactionPool {
         capacity: usize, storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
     ) -> Self
     {
         TransactionPool {
@@ -349,6 +352,7 @@ impl TransactionPool {
             unexecuted_transaction_addresses: Mutex::new(HashMap::new()),
             worker_pool,
             cache_man,
+            received_transactions,
             spec: vm::Spec::new_spec(),
         }
     }
@@ -364,7 +368,7 @@ impl TransactionPool {
     pub fn insert_new_transactions(
         &self, latest_epoch: EpochId,
         transactions: &Vec<TransactionWithSignature>,
-    ) -> Vec<Result<H256, String>>
+    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>)
     {
         // FIXME: do not unwrap.
         let mut failures = HashMap::new();
@@ -510,9 +514,11 @@ impl TransactionPool {
                         continue;
                     }
                     let hash = tx.hash();
-                    match self.add_with_readiness(&mut account_cache, tx) {
+                    match self
+                        .add_with_readiness(&mut account_cache, tx.clone())
+                    {
                         Ok(_) => {
-                            passed_transaction.push(hash);
+                            passed_transaction.push(tx);
                         }
                         Err(e) => {
                             failures.insert(hash, e);
@@ -525,16 +531,10 @@ impl TransactionPool {
         TX_POOL_READY_GAUGE
             .update(self.inner.read().ready_transactions.len() as i64);
 
-        transactions
-            .iter()
-            .map(|tx| {
-                let tx_hash = tx.hash();
-                match failures.get(&tx_hash) {
-                    Some(e) => Err(e.clone()),
-                    None => Ok(tx_hash),
-                }
-            })
-            .collect()
+        info!("passed transactions: {:?}", passed_transaction);
+        info!("failed transactions: {:?}", failures);
+
+        (passed_transaction, failures)
     }
 
     // verify transactions based on the rules that
@@ -748,6 +748,12 @@ impl TransactionPool {
             transaction.sender
         );
         inner.pending_transactions.insert(transaction)
+    }
+
+    pub fn remove_received(&self, tx_hash: &H256) {
+        self.received_transactions
+            .write()
+            .remove_transaction(tx_hash);
     }
 
     pub fn remove_ready(&self, transaction: Arc<SignedTransaction>) -> bool {

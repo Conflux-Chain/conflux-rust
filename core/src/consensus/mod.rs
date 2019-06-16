@@ -2809,6 +2809,7 @@ impl ConsensusGraph {
         for tx in block.transactions.iter() {
             self.txpool.remove_pending(&*tx);
             self.txpool.remove_ready(tx.clone());
+            self.txpool.remove_received(&tx.hash);
         }
 
         inner.compute_anticone(me);

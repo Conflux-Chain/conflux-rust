@@ -23,13 +23,16 @@ use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use rand::Rng;
 use rlp::Rlp;
 //use slab::Slab;
 use super::{
     msg_sender::{send_message, send_message_with_throttling},
-    request_manager::{RequestManager, RequestMessage},
+    request_manager::{
+        tx_handler::ReceivedTransactionContainer, RequestManager,
+        RequestMessage,
+    },
 };
 use crate::{
     cache_manager::{CacheId, CacheManager},
@@ -131,6 +134,7 @@ impl SynchronizationProtocolHandler {
     pub fn new(
         protocol_config: ProtocolConfiguration,
         consensus_graph: SharedConsensusGraph,
+        received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         fast_recover: bool,
     ) -> Self
@@ -138,8 +142,11 @@ impl SynchronizationProtocolHandler {
         let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
 
         let syn = Arc::new(SynchronizationState::new(start_as_catch_up_mode));
-        let request_manager =
-            Arc::new(RequestManager::new(&protocol_config, syn.clone()));
+        let request_manager = Arc::new(RequestManager::new(
+            &protocol_config,
+            syn.clone(),
+            received_transactions,
+        ));
         SynchronizationProtocolHandler {
             protocol_config,
             graph: Arc::new(SynchronizationGraph::new(
@@ -161,6 +168,13 @@ impl SynchronizationProtocolHandler {
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.graph.clone()
+    }
+
+    pub fn append_received_transactions(
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+    ) {
+        self.request_manager
+            .append_received_transactions(transactions);
     }
 
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
@@ -451,17 +465,17 @@ impl SynchronizationProtocolHandler {
             peer
         );
 
-        let tx_ids = transactions
-            .iter()
-            .map(|tx| TxPropagateId::from(tx.hash()))
-            .collect::<Vec<_>>();
-        self.request_manager.append_received_transaction_ids(tx_ids);
         self.request_manager.transactions_received(&req_tx_ids);
 
-        self.get_transaction_pool().insert_new_transactions(
-            self.graph.consensus.best_state_block_hash(),
-            &transactions,
-        );
+        let (signed_trans, _) =
+            self.get_transaction_pool().insert_new_transactions(
+                self.graph.consensus.best_state_block_hash(),
+                &transactions,
+            );
+
+        self.request_manager
+            .append_received_transactions(signed_trans);
+
         debug!("Transactions successfully inserted to transaction pool");
 
         Ok(())
@@ -730,10 +744,15 @@ impl SynchronizationProtocolHandler {
             return Err(ErrorKind::TooManyTrans.into());
         }
 
-        self.get_transaction_pool().insert_new_transactions(
-            self.graph.consensus.best_state_block_hash(),
-            &transactions,
-        );
+        let (signed_trans, _) =
+            self.get_transaction_pool().insert_new_transactions(
+                self.graph.consensus.best_state_block_hash(),
+                &transactions,
+            );
+
+        self.request_manager
+            .append_received_transactions(signed_trans);
+
         debug!("Transactions successfully inserted to transaction pool");
 
         Ok(())
@@ -1674,12 +1693,7 @@ impl SynchronizationProtocolHandler {
 
     fn propagate_transactions_to_peers(
         &self, io: &NetworkContext, peers: Vec<PeerId>,
-        transactions: HashMap<H256, Arc<SignedTransaction>>,
-    )
-    {
-        if transactions.is_empty() {
-            return;
-        }
+    ) {
         let lucky_peers = {
             peers
                 .into_iter()
@@ -1704,47 +1718,43 @@ impl SynchronizationProtocolHandler {
             window_index: 0,
             trans_short_ids: Vec::new(),
         });
-        {
-            let mut last_sent_transaction_hashes =
-                self.syn.last_sent_transaction_hashes.write();
-            let mut total_tx_bytes = 0;
-            let mut new_last_sent_transaction_hashes =
-                HashSet::with_capacity(transactions.len());
-            let mut keep_adding = true;
-            let mut sent_transactions = Vec::new();
 
-            // After the iteration,
-            // sent_transactions =
-            // transactions.difference(last_sent_transaction_hashes)
-            // and `sent_transactions` is bounded by
-            // `MAX_TXS_BYTES_TO_PROPAGATE`
-            //
-            // new_last_sent_transaction_hashes =
-            // last_sent_transaction_hashes.intersect(transactions).
-            // union(sent_transactions)
-            for (h, tx) in transactions {
-                if last_sent_transaction_hashes.contains(&h) {
-                    // Intersection part
-                    new_last_sent_transaction_hashes.insert(h);
-                } else if keep_adding {
-                    // Difference part for sent_transactions
-                    total_tx_bytes += tx.rlp_size();
-                    if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPAGATE {
-                        keep_adding = false;
-                        continue;
-                    }
-                    sent_transactions.push(tx.clone());
-                    tx_msg.trans_short_ids.push(TxPropagateId::from(h));
-                    new_last_sent_transaction_hashes.insert(h);
-                }
+        let sent_transactions = {
+            let mut received_transactions =
+                self.request_manager.received_transactions.write();
+            let mut transactions = received_transactions.get_transactions();
+
+            if transactions.is_empty() {
+                return;
             }
 
-            *last_sent_transaction_hashes = new_last_sent_transaction_hashes;
-            tx_msg.window_index = self
-                .request_manager
-                .append_sent_transactions(sent_transactions);
-            TX_PROPAGATE_GAUGE.update(tx_msg.trans_short_ids.len() as i64);
-        }
+            let mut total_tx_bytes = 0;
+            let mut sent_transactions = Vec::new();
+
+            for (h, tx) in transactions.iter() {
+                total_tx_bytes += tx.rlp_size();
+                if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPAGATE {
+                    break;
+                }
+                sent_transactions.push(tx.clone());
+                tx_msg.trans_short_ids.push(TxPropagateId::from(*h));
+            }
+
+            if sent_transactions.len() != transactions.len() {
+                for tx in sent_transactions.iter() {
+                    transactions.remove(&tx.hash);
+                }
+                received_transactions.set_transactions(transactions);
+            }
+
+            sent_transactions
+        };
+
+        tx_msg.window_index = self
+            .request_manager
+            .append_sent_transactions(sent_transactions);
+        TX_PROPAGATE_GAUGE.update(tx_msg.trans_short_ids.len() as i64);
+
         if tx_msg.trans_short_ids.is_empty() {
             return;
         }
@@ -1779,21 +1789,12 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn propagate_new_transactions(&self, io: &NetworkContext) {
-        {
-            if self.syn.peers.read().is_empty() || self.catch_up_mode() {
-                return;
-            }
-        }
-
-        let transactions =
-            self.get_transaction_pool().transactions_to_propagate();
-        if transactions.is_empty() {
+        if self.syn.peers.read().is_empty() || self.catch_up_mode() {
             return;
         }
 
-        let peers = { self.select_peers_for_transactions(|_| true) };
-
-        self.propagate_transactions_to_peers(io, peers, transactions);
+        let peers = self.select_peers_for_transactions(|_| true);
+        self.propagate_transactions_to_peers(io, peers);
     }
 
     pub fn remove_expired_flying_request(&self, io: &NetworkContext) {

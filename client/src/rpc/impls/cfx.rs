@@ -287,17 +287,25 @@ impl RpcImpl {
                 RpcError::invalid_params(format!("Error: {:?}", err))
             })
             .and_then(|tx| {
-                let result = self.tx_pool.insert_new_transactions(
+                let (signed_trans, failed_trans) = self.tx_pool.insert_new_transactions(
                     self.consensus.best_state_block_hash(),
                     &vec![tx],
                 );
-                if result.is_empty() || result.len() > 1 {
-                    error!("insert_new_transactions failed, invalid length of returned result vector {}", result.len());
+                if signed_trans.len() + failed_trans.len() != 1 {
+                    error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
                     Ok(H256::new().into())
                 } else {
-                    match result[0] {
-                        Ok(hash) => Ok(hash.into()),
-                        Err(ref e) => Err(RpcError::invalid_params(e.clone())),
+                    if signed_trans.is_empty() {
+                        let mut tx_err = String::from("");
+                        for (_, e) in failed_trans.iter() {
+                            tx_err = e.clone();
+                            break;
+                        }
+                        Err(RpcError::invalid_params(tx_err))
+                    } else {
+                        let tx_hash = signed_trans[0].hash();
+                        self.sync.append_received_transactions(signed_trans);
+                        Ok(tx_hash.into())
                     }
                 }
             })
