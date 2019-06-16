@@ -19,7 +19,6 @@ use crate::{
     state::State,
     statedb::StateDb,
     storage::{Storage, StorageManager, StorageManagerTrait},
-    sync::request_manager::tx_handler::ReceivedTransactionContainer,
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
@@ -33,6 +32,7 @@ use rlp::*;
 use std::{
     cmp::{min, Ordering},
     collections::{hash_map::HashMap, HashSet},
+    mem,
     ops::DerefMut,
     sync::{mpsc::channel, Arc},
 };
@@ -327,7 +327,7 @@ pub struct TransactionPool {
         Mutex<HashMap<H256, HashSet<TransactionAddress>>>,
     pub worker_pool: Arc<Mutex<ThreadPool>>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-    received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
+    to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     spec: vm::Spec,
 }
 
@@ -338,7 +338,6 @@ impl TransactionPool {
         capacity: usize, storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-        received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
     ) -> Self
     {
         TransactionPool {
@@ -352,7 +351,7 @@ impl TransactionPool {
             unexecuted_transaction_addresses: Mutex::new(HashMap::new()),
             worker_pool,
             cache_man,
-            received_transactions,
+            to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             spec: vm::Spec::new_spec(),
         }
     }
@@ -499,7 +498,7 @@ impl TransactionPool {
         let mut account_cache = AccountCache::new(
             self.storage_manager.get_state_at(latest_epoch).unwrap(),
         );
-        let mut passed_transaction = Vec::new();
+        let mut passed_transactions = Vec::new();
         {
             let mut tx_cache = self.transaction_pubkey_cache.write();
             let mut cache_man = self.cache_man.lock();
@@ -518,7 +517,11 @@ impl TransactionPool {
                         .add_with_readiness(&mut account_cache, tx.clone())
                     {
                         Ok(_) => {
-                            passed_transaction.push(tx);
+                            let mut to_prop = self.to_propagate_trans.write();
+                            if !to_prop.contains_key(&tx.hash) {
+                                to_prop.insert(tx.hash, tx.clone());
+                            }
+                            passed_transactions.push(tx);
                         }
                         Err(e) => {
                             failures.insert(hash, e);
@@ -531,10 +534,7 @@ impl TransactionPool {
         TX_POOL_READY_GAUGE
             .update(self.inner.read().ready_transactions.len() as i64);
 
-        info!("passed transactions: {:?}", passed_transaction);
-        info!("failed transactions: {:?}", failures);
-
-        (passed_transaction, failures)
+        (passed_transactions, failures)
     }
 
     // verify transactions based on the rules that
@@ -703,6 +703,22 @@ impl TransactionPool {
         }
     }
 
+    pub fn get_to_propagate_trans(
+        &self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
+        let mut to_prop = self.to_propagate_trans.write();
+        let mut res = HashMap::new();
+        mem::swap(&mut *to_prop, &mut res);
+        res
+    }
+
+    pub fn set_to_propagate_trans(
+        &self, mut transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        let mut to_prop = self.to_propagate_trans.write();
+        mem::swap(&mut *to_prop, &mut transactions);
+    }
+
     pub fn add_ready(&self, transaction: Arc<SignedTransaction>) -> bool {
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
@@ -750,10 +766,8 @@ impl TransactionPool {
         inner.pending_transactions.insert(transaction)
     }
 
-    pub fn remove_received(&self, tx_hash: &H256) {
-        self.received_transactions
-            .write()
-            .remove_transaction(tx_hash);
+    pub fn remove_to_propagate(&self, tx_hash: &H256) {
+        self.to_propagate_trans.write().remove(tx_hash);
     }
 
     pub fn remove_ready(&self, transaction: Arc<SignedTransaction>) -> bool {

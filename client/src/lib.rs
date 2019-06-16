@@ -25,7 +25,6 @@ use blockgen::BlockGenerator;
 use cfxcore::{
     cache_manager::CacheManager, genesis, pow::WORKER_COMPUTATION_PARALLELISM,
     statistics::Statistics, storage::StorageManager,
-    sync::request_manager::tx_handler::ReceivedTransactionContainer,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
     ConsensusGraph, SynchronizationService, TransactionPool,
 };
@@ -38,7 +37,7 @@ use ctrlc::CtrlC;
 use db::SystemDB;
 use keylib::public_to_address;
 use network::NetworkService;
-use parking_lot::{Condvar, Mutex, RwLock};
+use parking_lot::{Condvar, Mutex};
 use primitives::Block;
 use secret_store::SecretStore;
 use std::{
@@ -182,21 +181,11 @@ impl Client {
             3 * mb,
         )));
 
-        let protocol_config = conf.protocol_config();
-        let received_tx_index_maintain_timeout =
-            protocol_config.received_tx_index_maintain_timeout;
-
-        let received_transactions =
-            Arc::new(RwLock::new(ReceivedTransactionContainer::new(
-                received_tx_index_maintain_timeout.as_secs(),
-            )));
-
         let txpool = Arc::new(TransactionPool::with_capacity(
             conf.raw_conf.tx_pool_size,
             storage_manager.clone(),
             worker_thread_pool.clone(),
             cache_man.clone(),
-            received_transactions.clone(),
         ));
 
         let statistics = Arc::new(Statistics::new());
@@ -215,12 +204,12 @@ impl Client {
             pow_config.clone(),
         ));
 
+        let protocol_config = conf.protocol_config();
         let verification_config = conf.verification_config();
 
         let mut sync = cfxcore::SynchronizationService::new(
             NetworkService::new(network_config),
             consensus.clone(),
-            received_transactions,
             protocol_config,
             verification_config,
             pow_config.clone(),

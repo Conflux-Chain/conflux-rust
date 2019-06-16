@@ -121,15 +121,11 @@ fn initialize_consensus_graph_for_test(
         3 * mb,
     )));
 
-    let received_transactions =
-        Arc::new(RwLock::new(ReceivedTransactionContainer::new(3600)));
-
     let txpool = Arc::new(TransactionPool::with_capacity(
         500_000,
         storage_manager.clone(),
         worker_thread_pool.clone(),
         cache_man.clone(),
-        received_transactions,
     ));
     let statistics = Arc::new(Statistics::new());
 

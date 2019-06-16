@@ -76,17 +76,21 @@ pub struct RequestManager {
 
 impl RequestManager {
     pub fn new(
-        protocol_config: &ProtocolConfiguration,
-        syn: Arc<SynchronizationState>,
-        received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
-    ) -> Self
-    {
+        protocol_config: &ProtocolConfiguration, syn: Arc<SynchronizationState>,
+    ) -> Self {
+        let received_tx_index_maintain_timeout =
+            protocol_config.received_tx_index_maintain_timeout;
+
         // FIXME: make sent_transaction_window_size to be 2^pow.
         let sent_transaction_window_size =
             protocol_config.tx_maintained_for_peer_timeout.as_millis()
                 / protocol_config.send_tx_period.as_millis();
         Self {
-            received_transactions,
+            received_transactions: Arc::new(RwLock::new(
+                ReceivedTransactionContainer::new(
+                    received_tx_index_maintain_timeout.as_secs(),
+                ),
+            )),
             inflight_requested_transactions: Default::default(),
             sent_transactions: RwLock::new(SentTransactionContainer::new(
                 sent_transaction_window_size as usize,

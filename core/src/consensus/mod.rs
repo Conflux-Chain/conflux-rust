@@ -1486,6 +1486,18 @@ impl ConsensusGraph {
         }
     }
 
+    pub fn get_to_propagate_trans(
+        &self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
+        self.txpool.get_to_propagate_trans()
+    }
+
+    pub fn set_to_propagate_trans(
+        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        self.txpool.set_to_propagate_trans(transactions);
+    }
+
     pub fn later_than(&self, a: &H256, b: &H256) -> bool {
         let inner = self.inner.read();
         let a_idx = inner.indices.get(a);
@@ -2809,7 +2821,7 @@ impl ConsensusGraph {
         for tx in block.transactions.iter() {
             self.txpool.remove_pending(&*tx);
             self.txpool.remove_ready(tx.clone());
-            self.txpool.remove_received(&tx.hash);
+            self.txpool.remove_to_propagate(&tx.hash);
         }
 
         inner.compute_anticone(me);
