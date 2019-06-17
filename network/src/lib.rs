@@ -216,6 +216,7 @@ pub trait NetworkProtocolHandler: Sync + Send {
 pub enum UpdateNodeOperation {
     Failure,
     Demotion,
+    Remove,
 }
 
 pub trait NetworkContext {
