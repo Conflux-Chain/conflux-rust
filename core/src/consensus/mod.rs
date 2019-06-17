@@ -1502,18 +1502,17 @@ impl ConsensusGraph {
 
     pub fn later_than(&self, a: &H256, b: &H256) -> bool {
         let inner = self.inner.read();
-        let a_idx = inner.indices.get(a);
+
         let b_idx = inner.indices.get(b);
         if b_idx.is_none() {
             return false;
         }
-
         let b_idx = b_idx.unwrap();
 
+        let a_idx = inner.indices.get(a);
         if a_idx.is_none() {
             return true;
         }
-
         let a_idx = a_idx.unwrap();
 
         if a_idx > b_idx {
@@ -3130,6 +3129,13 @@ impl ConsensusGraph {
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         self.inner.read().transaction_count(address, epoch_number)
+    }
+
+    pub fn get_ancestor(&self, hash: &H256, n: usize) -> H256 {
+        let mut inner = self.inner.write();
+        let me = *inner.indices.get(hash).unwrap();
+        let idx = inner.weight_tree.ancestor_at(me, n);
+        inner.arena[idx].hash.clone()
     }
 
     pub fn best_state_block_hash(&self) -> H256 {

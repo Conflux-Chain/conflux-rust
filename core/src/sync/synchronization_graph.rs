@@ -86,9 +86,10 @@ pub struct SynchronizationGraphNode {
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
     pub blockset_in_own_view_of_epoch: HashSet<usize>,
-    /// The minimum epoch number of the block in the view of other
+    /// The minimum/maximum epoch number of the block in the view of other
     /// blocks including itself.
     pub min_epoch_in_other_views: u64,
+    pub max_epoch_in_other_views: u64,
 }
 
 pub struct SynchronizationGraphInner {
@@ -137,6 +138,7 @@ impl SynchronizationGraphInner {
             referrers: Vec::new(),
             blockset_in_own_view_of_epoch: HashSet::new(),
             min_epoch_in_other_views: header.height(),
+            max_epoch_in_other_views: header.height(),
             block_header: header,
         });
         self.indices.insert(hash, me);
@@ -180,6 +182,7 @@ impl SynchronizationGraphInner {
             referrers: Vec::new(),
             blockset_in_own_view_of_epoch: HashSet::new(),
             min_epoch_in_other_views: header.height(),
+            max_epoch_in_other_views: header.height(),
             block_header: header.clone(),
         });
         self.indices.insert(hash, me);
@@ -286,6 +289,9 @@ impl SynchronizationGraphInner {
     ) {
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
+        // This is for optimization. We will not query consensus if we know a
+        // block is not in ConsensusGraph yet for certain.
+        let consensus_block_count = consensus.block_count();
         for referee in &self.arena[pivot].referees {
             visited.insert(*referee);
             queue.push_back(*referee);
@@ -294,15 +300,43 @@ impl SynchronizationGraphInner {
         while let Some(index) = queue.pop_front() {
             let mut in_old_epoch = false;
             let mut cur_pivot = pivot;
+            if self.arena[cur_pivot].block_header.height()
+                > self.arena[index].max_epoch_in_other_views + 1
+            {
+                // We want to start from the max_epoch_in_other_views + 1
+                // height. But cur_pivot may not be in the
+                // consensus graph, we have to first traverse a
+                // little bit to go to the zone where the consensus graph
+                // has the information. Then we use the consensus graph LCT to
+                // jump to the right ancestor.
+                while cur_pivot > consensus_block_count
+                    || consensus.get_block_epoch_number(
+                        &self.arena[cur_pivot].block_header.hash(),
+                    ) == None
+                {
+                    cur_pivot = self.arena[cur_pivot].parent;
+                }
+                if self.arena[cur_pivot].block_header.height()
+                    > self.arena[index].max_epoch_in_other_views + 1
+                {
+                    let pivot_hash = self.arena[cur_pivot].block_header.hash();
+                    let ancestor_hash = consensus.get_ancestor(
+                        &pivot_hash,
+                        self.arena[index].max_epoch_in_other_views as usize + 1,
+                    );
+                    cur_pivot = *self.indices.get(&ancestor_hash).unwrap();
+                }
+            }
             loop {
                 let parent = self.arena[cur_pivot].parent;
                 debug_assert!(parent != NULL);
                 if self.arena[parent].block_header.height()
                     < self.arena[index].min_epoch_in_other_views
-                    || consensus.later_than(
-                        &self.arena[index].block_header.hash(),
-                        &self.arena[parent].block_header.hash(),
-                    )
+                    || (parent < consensus_block_count
+                        && consensus.later_than(
+                            &self.arena[index].block_header.hash(),
+                            &self.arena[parent].block_header.hash(),
+                        ))
                 {
                     break;
                 }
@@ -331,6 +365,10 @@ impl SynchronizationGraphInner {
                 }
                 self.arena[index].min_epoch_in_other_views = min(
                     self.arena[index].min_epoch_in_other_views,
+                    self.arena[pivot].block_header.height(),
+                );
+                self.arena[index].max_epoch_in_other_views = max(
+                    self.arena[index].max_epoch_in_other_views,
                     self.arena[pivot].block_header.height(),
                 );
                 self.arena[pivot]
