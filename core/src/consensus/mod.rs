@@ -27,7 +27,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, SignedBigNum, H160, H256, U256, U512};
-use fenwick_tree::FenwickTree;
+// use fenwick_tree::FenwickTree;
 use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -218,7 +218,7 @@ pub struct ConsensusGraphInner {
     // The weight of all future blocks for each pivot block maintained in
     // a fenwick tree. See compute_future_weights() to see how it can be used
     // to compute future total weights.
-    pub pivot_future_weights: FenwickTree,
+    // pub pivot_future_weights: FenwickTree,
     // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
@@ -278,7 +278,7 @@ impl ConsensusGraphInner {
             indices: HashMap::new(),
             pivot_chain: Vec::new(),
             pivot_chain_metadata: Vec::new(),
-            pivot_future_weights: FenwickTree::new(),
+            // pivot_future_weights: FenwickTree::new(),
             optimistic_executed_height: None,
             terminal_hashes: Default::default(),
             genesis_block_index: NULL,
@@ -341,12 +341,12 @@ impl ConsensusGraphInner {
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
             last_pivot_in_past_blocks,
         });
-        inner.pivot_future_weights.add(
-            0,
-            &SignedBigNum::pos(
-                *data_man.genesis_block().block_header.difficulty(),
-            ),
-        );
+        //        inner.pivot_future_weights.add(
+        //            0,
+        //            &SignedBigNum::pos(
+        //                *data_man.genesis_block().block_header.difficulty(),
+        //            ),
+        //        );
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
         inner
             .indices_in_epochs
@@ -1323,45 +1323,47 @@ impl ConsensusGraphInner {
         total_weight
     }
 
-    /// Compute the total future weight of a pivot chain block
-    pub fn total_weight_in_future_for_pivot_block(
-        &mut self, pivot_index: usize,
-    ) -> U256 {
-        let total_weight = self.weight_tree.get(self.genesis_block_index);
-        let x = if pivot_index == 0 {
-            total_weight
-        } else {
-            self.pivot_future_weights.get_sum(pivot_index - 1).unwrap()
-        };
-        let future_weight = total_weight - x;
-        future_weight.into()
-    }
+    // Compute the total future weight of a pivot chain block
+    //    pub fn total_weight_in_future_for_pivot_block(
+    //        &mut self, pivot_index: usize,
+    //    ) -> U256 {
+    //        let total_weight = self.weight_tree.get(self.genesis_block_index);
+    //        let x = if pivot_index == 0 {
+    //            total_weight
+    //        } else {
+    //            self.pivot_future_weights.get_sum(pivot_index - 1).unwrap()
+    //        };
+    //        let future_weight = total_weight - x;
+    //        future_weight.into()
+    //    }
 
-    /// Estimate the anticone size lower bound respecting the past of a pivot
-    /// chain block. The idea is to identify the last pivot block in the
-    /// past and then all future of the next pivot block will be the
-    /// anticone of this block. To estimate this in the past view of the
-    /// pivot block at the pivot_index. We eliminate the number of all non
-    /// past blocks of the reference pivot block at pivot_index.
-    pub fn estimate_lower_bound(
-        &mut self, me: usize, pivot_index: usize,
-    ) -> U256 {
-        let total_weight = self.weight_tree.get(self.genesis_block_index);
-        let past_weight = self.arena[self.pivot_chain[pivot_index]].past_weight;
-        let last_pivot_in_past = self.arena[me].last_pivot_in_past;
-        if last_pivot_in_past + 1 >= self.pivot_chain.len() {
-            return U256::zero();
-        }
-        let future_weight =
-            self.total_weight_in_future_for_pivot_block(last_pivot_in_past + 1);
-        let adjustment = total_weight - SignedBigNum::pos(past_weight);
-        let future_adjusted = SignedBigNum::pos(future_weight) - adjustment;
-        if future_adjusted < SignedBigNum::zero() {
-            U256::zero()
-        } else {
-            future_adjusted.into()
-        }
-    }
+    // Estimate the anticone size lower bound respecting the past of a pivot
+    // chain block. The idea is to identify the last pivot block in the
+    // past and then all future of the next pivot block will be the
+    // anticone of this block. To estimate this in the past view of the
+    // pivot block at the pivot_index. We eliminate the number of all non
+    // past blocks of the reference pivot block at pivot_index.
+    //    pub fn estimate_lower_bound(
+    //        &mut self, me: usize, pivot_index: usize,
+    //    ) -> U256 {
+    //        let total_weight = self.weight_tree.get(self.genesis_block_index);
+    //        let past_weight =
+    // self.arena[self.pivot_chain[pivot_index]].past_weight;        let
+    // last_pivot_in_past = self.arena[me].last_pivot_in_past;
+    //        if last_pivot_in_past + 1 >= self.pivot_chain.len() {
+    //            return U256::zero();
+    //        }
+    //        let future_weight =
+    //            self.total_weight_in_future_for_pivot_block(last_pivot_in_past
+    // + 1);        let adjustment = total_weight -
+    // SignedBigNum::pos(past_weight);        let future_adjusted =
+    // SignedBigNum::pos(future_weight) - adjustment;
+    //        if future_adjusted < SignedBigNum::zero() {
+    //            U256::zero()
+    //        } else {
+    //            future_adjusted.into()
+    //        }
+    //    }
 }
 
 pub struct FinalityManager {
@@ -2316,12 +2318,12 @@ impl ConsensusGraph {
         mut to_update: HashSet<usize>,
     )
     {
-        for i in start_at..inner.pivot_chain_metadata.len() {
-            let old_val = inner.pivot_future_weights.get(i).unwrap();
-            inner
-                .pivot_future_weights
-                .add(i, &(SignedBigNum::zero() - old_val));
-        }
+        //        for i in start_at..inner.pivot_chain_metadata.len() {
+        //            let old_val = inner.pivot_future_weights.get(i).unwrap();
+        //            inner
+        //                .pivot_future_weights
+        //                .add(i, &(SignedBigNum::zero() - old_val));
+        //        }
         inner
             .pivot_chain_metadata
             .resize_with(inner.pivot_chain.len(), Default::default);
@@ -2334,9 +2336,10 @@ impl ConsensusGraph {
             inner.pivot_chain_metadata[i]
                 .last_pivot_in_past_blocks
                 .insert(me);
-            inner
-                .pivot_future_weights
-                .add(i, &SignedBigNum::pos(inner.block_weight(me)));
+            //            inner
+            //                .pivot_future_weights
+            //                .add(i,
+            // &SignedBigNum::pos(inner.block_weight(me)));
             to_update.remove(&me);
         }
         let mut stack = Vec::new();
@@ -2369,10 +2372,11 @@ impl ConsensusGraph {
                 inner.pivot_chain_metadata[last_pivot]
                     .last_pivot_in_past_blocks
                     .insert(me);
-                inner.pivot_future_weights.add(
-                    last_pivot,
-                    &SignedBigNum::pos(inner.block_weight(me)),
-                );
+                //                inner.pivot_future_weights.add(
+                //                    last_pivot,
+                //
+                // &SignedBigNum::pos(inner.block_weight(me)),
+                //                );
             }
         }
     }
@@ -3029,9 +3033,10 @@ impl ConsensusGraph {
             inner.pivot_chain_metadata[height]
                 .last_pivot_in_past_blocks
                 .insert(me);
-            inner
-                .pivot_future_weights
-                .add(height, &SignedBigNum::pos(inner.block_weight(me)));
+            //            inner
+            //                .pivot_future_weights
+            //                .add(height,
+            // &SignedBigNum::pos(inner.block_weight(me)));
         }
 
         // Now we can safely return
