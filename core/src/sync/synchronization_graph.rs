@@ -17,7 +17,10 @@ use crate::{
 use cfx_types::{H256, U256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{block::CompactBlock, Block, BlockHeader, EpochNumber};
+use primitives::{
+    block::CompactBlock, transaction::SignedTransaction, Block, BlockHeader,
+    EpochNumber,
+};
 use rlp::Rlp;
 use slab::Slab;
 use std::{
@@ -537,6 +540,18 @@ impl SynchronizationGraph {
         }
 
         sync_graph
+    }
+
+    pub fn get_to_propagate_trans(
+        &self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
+        self.consensus.get_to_propagate_trans()
+    }
+
+    pub fn set_to_propagate_trans(
+        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        self.consensus.set_to_propagate_trans(transactions);
     }
 
     fn recover_graph_from_db(&mut self) {

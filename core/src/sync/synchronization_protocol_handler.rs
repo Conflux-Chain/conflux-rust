@@ -23,16 +23,13 @@ use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use rand::Rng;
 use rlp::Rlp;
 //use slab::Slab;
 use super::{
     msg_sender::{send_message, send_message_with_throttling},
-    request_manager::{
-        tx_handler::ReceivedTransactionContainer, RequestManager,
-        RequestMessage,
-    },
+    request_manager::{RequestManager, RequestMessage},
 };
 use crate::{
     cache_manager::{CacheId, CacheManager},
@@ -134,7 +131,6 @@ impl SynchronizationProtocolHandler {
     pub fn new(
         protocol_config: ProtocolConfiguration,
         consensus_graph: SharedConsensusGraph,
-        received_transactions: Arc<RwLock<ReceivedTransactionContainer>>,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         fast_recover: bool,
     ) -> Self
@@ -142,12 +138,11 @@ impl SynchronizationProtocolHandler {
         let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
 
         let syn = Arc::new(SynchronizationState::new(start_as_catch_up_mode));
-        let request_manager = Arc::new(RequestManager::new(
-            &protocol_config,
-            syn.clone(),
-            received_transactions,
-        ));
-        SynchronizationProtocolHandler {
+
+        let request_manager =
+            Arc::new(RequestManager::new(&protocol_config, syn.clone()));
+
+        Self {
             protocol_config,
             graph: Arc::new(SynchronizationGraph::new(
                 consensus_graph.clone(),
@@ -160,6 +155,16 @@ impl SynchronizationProtocolHandler {
             latest_epoch_requested: Mutex::new(0),
             recover_public_queue: Mutex::new(VecDeque::new()),
         }
+    }
+
+    fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
+        self.graph.get_to_propagate_trans()
+    }
+
+    fn set_to_propagate_trans(
+        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        self.graph.set_to_propagate_trans(transactions);
     }
 
     pub fn catch_up_mode(&self) -> bool {
@@ -1720,10 +1725,7 @@ impl SynchronizationProtocolHandler {
         });
 
         let sent_transactions = {
-            let mut received_transactions =
-                self.request_manager.received_transactions.write();
-            let mut transactions = received_transactions.get_transactions();
-
+            let mut transactions = self.get_to_propagate_trans();
             if transactions.is_empty() {
                 return;
             }
@@ -1744,7 +1746,7 @@ impl SynchronizationProtocolHandler {
                 for tx in sent_transactions.iter() {
                     transactions.remove(&tx.hash);
                 }
-                received_transactions.set_transactions(transactions);
+                self.set_to_propagate_trans(transactions);
             }
 
             sent_transactions
