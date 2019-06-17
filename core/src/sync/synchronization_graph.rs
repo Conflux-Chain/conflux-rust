@@ -309,10 +309,12 @@ impl SynchronizationGraphInner {
                 // little bit to go to the zone where the consensus graph
                 // has the information. Then we use the consensus graph LCT to
                 // jump to the right ancestor.
-                while cur_pivot > consensus_block_count
-                    || consensus.get_block_epoch_number(
-                        &self.arena[cur_pivot].block_header.hash(),
-                    ) == None
+                while (self.arena[cur_pivot].block_header.height()
+                    > self.arena[index].max_epoch_in_other_views + 1)
+                    && (cur_pivot > consensus_block_count
+                        || consensus.get_block_epoch_number(
+                            &self.arena[cur_pivot].block_header.hash(),
+                        ) == None)
                 {
                     cur_pivot = self.arena[cur_pivot].parent;
                 }
