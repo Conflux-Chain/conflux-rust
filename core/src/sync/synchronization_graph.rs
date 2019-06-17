@@ -303,6 +303,12 @@ impl SynchronizationGraphInner {
             if self.arena[cur_pivot].block_header.height()
                 > self.arena[index].max_epoch_in_other_views + 1
             {
+                // We want to start from the max_epoch_in_other_views + 1
+                // height. But cur_pivot may not be in the
+                // consensus graph, we have to first traverse a
+                // little bit to go to the zone where the consensus graph
+                // has the information. Then we use the consensus graph LCT to
+                // jump to the right ancestor.
                 while cur_pivot > consensus_block_count
                     || consensus.get_block_epoch_number(
                         &self.arena[cur_pivot].block_header.hash(),
