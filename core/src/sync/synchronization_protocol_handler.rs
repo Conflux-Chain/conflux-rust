@@ -291,9 +291,8 @@ impl SynchronizationProtocolHandler {
         match e.0 {
             ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
-            ErrorKind::UnexpectedResponse => {
-                op = Some(UpdateNodeOperation::Remove)
-            }
+            // TODO handle the unexpected response case (timeout or real invalid message type)
+            ErrorKind::UnexpectedResponse => disconnect = false,
             ErrorKind::TooManyTrans => {}
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
             ErrorKind::Network(kind) => match kind {
