@@ -53,6 +53,7 @@ fn create_simple_block_impl(
         .with_nonce(nonce)
         .with_difficulty(diff)
         .build();
+    header.compute_hash();
     header.pow_quality = if block_weight > 1 {
         diff * block_weight
     } else {
