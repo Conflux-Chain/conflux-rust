@@ -275,8 +275,13 @@ impl SynchronizationProtocolHandler {
     }
 
     /// Error handling for dispatched messages.
-    fn handle_error(&self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
-        warn!("Error while handling message, peer={}, msgid={:?}, error={:?}", peer, msg_id, e);
+    fn handle_error(
+        &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error,
+    ) {
+        warn!(
+            "Error while handling message, peer={}, msgid={:?}, error={:?}",
+            peer, msg_id, e
+        );
 
         let mut disconnect = true;
         let mut op = None;
@@ -286,28 +291,42 @@ impl SynchronizationProtocolHandler {
         match e.0 {
             ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
-            ErrorKind::UnexpectedResponse => op = Some(UpdateNodeOperation::Remove),
+            ErrorKind::UnexpectedResponse => {
+                op = Some(UpdateNodeOperation::Remove)
+            }
             ErrorKind::TooManyTrans => {}
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
             ErrorKind::Network(kind) => match kind {
                 network::ErrorKind::AddressParse => disconnect = false,
                 network::ErrorKind::AddressResolve(_) => disconnect = false,
                 network::ErrorKind::Auth => disconnect = false,
-                network::ErrorKind::BadProtocol => op = Some(UpdateNodeOperation::Remove),
+                network::ErrorKind::BadProtocol => {
+                    op = Some(UpdateNodeOperation::Remove)
+                }
                 network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder => op = Some(UpdateNodeOperation::Remove),
+                network::ErrorKind::Decoder => {
+                    op = Some(UpdateNodeOperation::Remove)
+                }
                 network::ErrorKind::Expired => disconnect = false,
                 network::ErrorKind::Disconnect(_) => disconnect = false,
                 network::ErrorKind::InvalidNodeId => disconnect = false,
                 network::ErrorKind::OversizedPacket => disconnect = false,
                 network::ErrorKind::Io(_) => disconnect = false,
                 network::ErrorKind::Throttling(_) => disconnect = false,
-                network::ErrorKind::SocketIo(_) => op = Some(UpdateNodeOperation::Failure),
-                network::ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
-                network::ErrorKind::__Nonexhaustive{} => op = Some(UpdateNodeOperation::Failure),
+                network::ErrorKind::SocketIo(_) => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
+                network::ErrorKind::Msg(_) => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
+                network::ErrorKind::__Nonexhaustive {} => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
             },
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
-            ErrorKind::__Nonexhaustive{} => op = Some(UpdateNodeOperation::Failure),
+            ErrorKind::__Nonexhaustive {} => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
         }
 
         if disconnect {
@@ -749,9 +768,7 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn on_transactions(
-        &self, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
+    fn on_transactions(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
         let transactions = rlp.as_val::<Transactions>()?;
         let transactions = transactions.transactions;
         debug!(
