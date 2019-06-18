@@ -21,15 +21,15 @@ use std::{
 ///
 /// There are 4 scenarios to insert a node into database:
 /// 1. Receive the "hello" handshaking message from ingress TCP connection,
-/// and add the node with `StreamToken` as untrusted if not exists. Otherwise,
-/// overwrite the existing node in trusted or untrusted table, including
-/// endpoint, last contact and connection information.
+/// and add the node with `StreamToken` as untrusted if not exists in database.
+/// Otherwise, overwrite the existing node in trusted or untrusted table,
+/// including endpoint, last contact and connection information.
 /// 2. Receive a "ping" message from UDP discovery, and add the node as
-/// untrusted if not exists. Otherwise, overwrite the existing node in
-/// trusted or untrusted table.
+/// untrusted if not exists in database. Otherwise, overwrite the existing
+/// node in trusted or untrusted table.
 /// 3. Receive the "pong" message from UDP discovery, and add the node as
-/// untrusted if not exists. Otherwise, overwrite the existing node in
-/// trusted or untrusted table.
+/// untrusted if not exists in database. Otherwise, overwrite the existing
+/// node in trusted or untrusted table.
 /// 4. RPC explicitly add a trusted node. If the node is an existing
 /// untrusted one, promote it to trusted.
 ///
