@@ -5,8 +5,8 @@ pub struct BlockHashAuthorValue<ValueType>(
     pub ValueType,
 );
 
-#[derive(Debug)]
-pub struct BlockHashValue<ValueType>(pub H256, pub ValueType);
+//#[derive(Debug)]
+//pub struct BlockHashValue<ValueType>(pub H256, pub ValueType);
 
 #[derive(Debug)]
 pub struct AuthorValue<ValueType>(pub Address, pub ValueType);
@@ -29,7 +29,7 @@ pub struct ComputeEpochDebugRecord {
     pub anticone_overlimit_blocks: Vec<H256>,
     pub block_rewards: Vec<BlockHashAuthorValue<U256>>,
     pub anticone_penalties: Vec<BlockHashAuthorValue<U256>>,
-    pub anticone_set_size: Vec<BlockHashValue<usize>>,
+    //pub anticone_set_size: Vec<BlockHashValue<usize>>,
     pub tx_fees: Vec<BlockHashAuthorValue<U256>>,
     pub block_final_rewards: Vec<BlockHashAuthorValue<U256>>,
     pub merged_rewards_by_author: Vec<AuthorValue<U256>>,
@@ -82,13 +82,13 @@ impl<ValueType: Display> Encodable for BlockHashAuthorValue<ValueType> {
     }
 }
 
-impl<ValueType: Display> Encodable for BlockHashValue<ValueType> {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(2)
-            .append(&(String::from("block_hash: ") + &self.0.hex()))
-            .append(&self.1.to_string());
-    }
-}
+//impl<ValueType: Display> Encodable for BlockHashValue<ValueType> {
+//    fn rlp_append(&self, s: &mut RlpStream) {
+//        s.begin_list(2)
+//            .append(&(String::from("block_hash: ") + &self.0.hex()))
+//            .append(&self.1.to_string());
+//    }
+//}
 
 impl<ValueType: Display> Encodable for AuthorValue<ValueType> {
     fn rlp_append(&self, s: &mut RlpStream) {
@@ -122,8 +122,8 @@ impl Encodable for ComputeEpochDebugRecord {
         s.append(&"block_rewards").append_list(&self.block_rewards);
         s.append(&"anticone_penalties")
             .append_list(&self.anticone_penalties);
-        s.append(&"anticone_set_size")
-            .append_list(&self.anticone_set_size);
+        //        s.append(&"anticone_set_size")
+        //            .append_list(&self.anticone_set_size);
         s.append(&"transaction_fees").append_list(&self.tx_fees);
         s.append(&"block_final_rewards")
             .append_list(&self.block_final_rewards);
