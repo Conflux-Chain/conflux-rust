@@ -1236,12 +1236,6 @@ impl SynchronizationProtocolHandler {
             }
         };
 
-        // FIXME Should request again, and should check if hash matches
-        if block_headers.headers.is_empty() {
-            trace!("Received empty GetBlockHeadersResponse message");
-            return Ok(());
-        }
-
         let mut parent_hash = H256::default();
         let mut parent_height = 0;
         let mut hashes = Vec::default();
