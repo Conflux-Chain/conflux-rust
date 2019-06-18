@@ -256,6 +256,7 @@ pub struct ConsensusGraphNode {
     pub difficulty: U256,
     /// The total weight of its past set (exclude itself)
     pub past_weight: U256,
+    pub past_num_blocks: usize,
     pub pow_quality: U256,
     pub stable: bool,
     pub adaptive: bool,
@@ -315,6 +316,7 @@ impl ConsensusGraphInner {
         let (genesis_index, _) = inner.insert(
             data_man.genesis_block().as_ref(),
             U256::zero(),
+            0,
             false,
             0,
         );
@@ -556,7 +558,7 @@ impl ConsensusGraphInner {
     }
 
     pub fn insert(
-        &mut self, block: &Block, past_weight: U256, is_heavy: bool,
+        &mut self, block: &Block, past_weight: U256, past_num_blocks: usize, is_heavy: bool,
         num_blocks_in_own_epoch: usize,
     ) -> (usize, usize)
     {
@@ -585,6 +587,7 @@ impl ConsensusGraphInner {
             is_heavy,
             difficulty: *block.block_header.difficulty(),
             past_weight,
+            past_num_blocks,
             pow_quality: block.block_header.pow_quality,
             stable: true,
             // Block header contains an adaptive field, we will verify with our
@@ -610,8 +613,8 @@ impl ConsensusGraphInner {
             self.arena[referee].referrers.push(index);
         }
         debug!(
-            "Block {} inserted into Consensus with index={} past_weight={}",
-            hash, index, past_weight
+            "Block {} inserted into Consensus with index={} past_weight={} past_num_blocks={}",
+            hash, index, past_weight, past_num_blocks
         );
 
         (index, self.indices.len())
@@ -857,6 +860,46 @@ impl ConsensusGraphInner {
         epoch_blocks
     }
 
+    fn recompute_anticone_size(&self, me: usize, pivot_block_index: usize) -> usize {
+        // We need to compute the future size of me under the view of epoch height pivot_index
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(pivot_block_index);
+        visited.insert(pivot_block_index);
+        let last_pivot = self.arena[me].last_pivot_in_past;
+        while let Some(index) = queue.pop_front() {
+            let parent = self.arena[index].parent;
+            if self.arena[parent].data.epoch_number > last_pivot && !visited.contains(&parent) {
+                queue.push_back(parent);
+                visited.insert(parent);
+            }
+            for referee in &self.arena[index].referees {
+                if self.arena[*referee].data.epoch_number > last_pivot && !visited.contains(referee) {
+                    queue.push_back(*referee);
+                    visited.insert(*referee);
+                }
+            }
+        }
+        queue.push_back(me);
+        let mut visited2 = HashSet::new();
+        visited2.insert(me);
+        while let Some(index) = queue.pop_front() {
+            for child in &self.arena[index].children {
+                if visited.contains(child) && !visited2.contains(child) {
+                    queue.push_back(*child);
+                    visited2.insert(*child);
+                }
+            }
+            for referrer in &self.arena[index].referrers {
+                if visited.contains(referrer) && !visited2.contains(referrer) {
+                    queue.push_back(*referrer);
+                    visited2.insert(*referrer);
+                }
+            }
+        }
+        self.arena[pivot_block_index].past_num_blocks - self.arena[me].past_num_blocks + 1 - visited2.len()
+    }
+
     // TODO: consider moving the logic to background when consensus locks are
     // broken down.
     fn get_reward_execution_info_from_index(
@@ -901,6 +944,8 @@ impl ConsensusGraphInner {
                             .cloned()
                             .collect::<HashSet<_>>();
                         anticone_set_size = anticone_set.len();
+                        let set_size = self.recompute_anticone_size(*index, anticone_penalty_cutoff_epoch_index);
+                        assert_eq!(anticone_set_size, set_size);
 
                         for a_index in anticone_set {
                             // TODO: Use base difficulty.
@@ -2524,10 +2569,13 @@ impl ConsensusGraph {
         let past_weight = inner.arena[parent_idx].past_weight
             + inner.block_weight(parent_idx)
             + weight_in_my_epoch;
+        let past_num_blocks = inner.arena[parent_idx].past_num_blocks
+            + blockset_in_own_epoch.len() + 1;
 
         let (me, indices_len) = inner.insert(
             block.as_ref(),
             past_weight,
+            past_num_blocks,
             is_heavy,
             blockset_in_own_epoch.len(),
         );
@@ -2605,6 +2653,9 @@ impl ConsensusGraph {
         }
         let lca = inner.weight_tree.lca(last, me);
         let fork_at = inner.arena[lca].height as usize + 1;
+        if fork_at >= inner.pivot_chain.len() {
+            return true;
+        }
         let a = inner.weight_tree.ancestor_at(me, fork_at as usize);
         let s = inner.pivot_chain[fork_at];
 
