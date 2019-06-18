@@ -1,3 +1,4 @@
+use hibitset::{BitSet, BitSetLike};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
@@ -19,18 +20,29 @@ impl AnticoneCache {
         }
     }
 
-    pub fn update(&mut self, me: usize, anticone: &HashSet<usize>) {
+    pub fn update(&mut self, me: usize, anticone: &BitSet) {
         self.max_seen_index = max(self.max_seen_index, me);
-        if anticone.len() < MAX_ANTICONE_SIZE {
-            self.data.insert(me, anticone.clone());
+        // BitSet does not have len() method
+        let mut tmp = HashSet::new();
+        let mut cnt = 0;
+        for index in anticone.iter() {
+            cnt += 1;
+            if tmp.len() <= MAX_ANTICONE_SIZE {
+                tmp.insert(index as usize);
+            }
         }
-        if anticone.len() < self.data.len() {
-            for index in anticone {
-                if self.data.contains_key(index) {
-                    let s = self.data.get_mut(index).unwrap();
+        if tmp.len() <= MAX_ANTICONE_SIZE {
+            self.data.insert(me, tmp);
+        }
+
+        if cnt < self.data.len() {
+            for index in anticone.iter() {
+                let index_usize = index as usize;
+                if self.data.contains_key(&index_usize) {
+                    let s = self.data.get_mut(&index_usize).unwrap();
                     s.insert(me);
                     if s.len() > MAX_ANTICONE_SIZE {
-                        self.data.remove(index);
+                        self.data.remove(&index_usize);
                     }
                 }
             }
@@ -42,7 +54,7 @@ impl AnticoneCache {
         } else {
             let max_seen_index = self.max_seen_index;
             self.data.retain(|k, v| {
-                if anticone.contains(k) {
+                if anticone.contains(*k as u32) {
                     v.insert(me);
                 }
                 (v.len() <= MAX_ANTICONE_SIZE)

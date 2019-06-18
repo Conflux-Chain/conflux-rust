@@ -647,10 +647,10 @@ impl ConsensusExecutionHandler {
                                 U256::from(anticone_penalty),
                             ),
                         );
-                        //                        
+                        //
                         // debug_out.anticone_set_size.push(BlockHashValue(
                         //                            block.hash(),
-                        //                            
+                        //
                         // reward_info.epoch_block_anticone_set_sizes
                         //                                [enum_idx],
                         //                        ));
