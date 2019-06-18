@@ -1,4 +1,3 @@
-#![feature(test)]
 extern crate hibitset;
 extern crate rand;
 #[cfg(feature = "parallel")]

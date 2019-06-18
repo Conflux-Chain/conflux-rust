@@ -1,5 +1,3 @@
-#![feature(test)]
-
 extern crate hibitset;
 extern crate test;
 
