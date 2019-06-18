@@ -10,6 +10,15 @@ pub use ethereum_types::{
 };
 use std::{cmp::Ordering, convert, ops};
 
+pub fn into_i128(num: &U256) -> i128 {
+    (num.0[0] as i128) | ((num.0[1] as i128) << 64)
+}
+
+pub fn into_u256(num: i128) -> U256 {
+    assert!(num >= 0);
+    U256([(num & ((1i128 << 64) - 1)) as u64, (num >> 64) as u64, 0, 0])
+}
+
 #[derive(Copy, Clone, Eq, Debug)]
 pub struct SignedBigNum {
     sign: bool,
