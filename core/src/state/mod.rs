@@ -6,8 +6,9 @@ use crate::{
     bytes::Bytes,
     hash::KECCAK_EMPTY,
     statedb::{
-        ErrorKind as DbErrorKind, Result as DbResult, StateDb, StorageKey,
+        ErrorKind as DbErrorKind, Result as DbResult, StateDb,
     },
+    storage::MerkleHash,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
@@ -254,7 +255,7 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn commit(&mut self, epoch_id: EpochId) -> DbResult<()> {
+    pub fn commit(&mut self, epoch_id: EpochId) -> DbResult<MerkleHash> {
         debug!("Commit epoch {}", epoch_id);
         assert!(self.checkpoints.borrow().is_empty());
 
@@ -267,20 +268,19 @@ impl<'a> State<'a> {
             if let Some(ref mut account) = entry.account {
                 account.commit(&mut self.db)?;
                 self.db.set::<Account>(
-                    &StorageKey::new_account_key(address),
+                    &self.db.account_key(address),
                     &account.as_account(),
                 )?;
             } else {
-                self.db.delete(&StorageKey::new_account_key(address))?;
+                self.db.delete(&self.db.account_key(address))?;
             }
         }
-        self.db.commit(epoch_id)?;
-        Ok(())
+        Ok(self.db.commit(epoch_id)?)
     }
 
     pub fn commit_and_notify(
         &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
-    ) -> DbResult<()> {
+    ) -> DbResult<MerkleHash> {
         assert!(self.checkpoints.borrow().is_empty());
 
         let mut accounts = self.cache.borrow_mut();
@@ -294,15 +294,14 @@ impl<'a> State<'a> {
                 txpool.notify_ready(address, &account.as_account());
                 account.commit(&mut self.db)?;
                 self.db.set::<Account>(
-                    &StorageKey::new_account_key(address),
+                    &self.db.account_key(address),
                     &account.as_account(),
                 )?;
             } else {
-                self.db.delete(&StorageKey::new_account_key(address))?;
+                self.db.delete(&self.db.account_key(address))?;
             }
         }
-        self.db.commit(epoch_id)?;
-        Ok(())
+        Ok(self.db.commit(epoch_id)?)
     }
 
     pub fn init_code(
@@ -612,7 +611,7 @@ mod tests {
 
     fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
         State::new(
-            StateDb::new(storage_manager.get_state_at(epoch_id).unwrap()),
+            StateDb::new(storage_manager.get_state_for_next_epoch(epoch_id).unwrap()),
             0.into(),
             VmFactory::default(),
         )

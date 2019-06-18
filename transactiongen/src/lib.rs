@@ -100,7 +100,7 @@ impl TransactionGenerator {
         State::new(
             StateDb::new(
                 self.storage_manager
-                    .get_state_at(block_hash.clone())
+                    .get_state_for_next_epoch(block_hash.clone())
                     .unwrap(),
             ),
             0.into(),
@@ -192,7 +192,7 @@ impl TransactionGenerator {
                 StateDb::new(
                     txgen
                         .storage_manager
-                        .get_state_at(txgen.consensus.best_state_block_hash())
+                        .get_state_for_next_epoch(txgen.consensus.best_state_block_hash())
                         .unwrap(),
                 ),
                 0.into(),
@@ -267,7 +267,7 @@ impl TransactionGenerator {
                     StateDb::new(
                         txgen
                             .storage_manager
-                            .get_state_at(
+                            .get_state_for_next_epoch(
                                 txgen.consensus.best_state_block_hash(),
                             )
                             .unwrap(),

@@ -1351,7 +1351,7 @@ impl ConsensusGraphInner {
     ) -> Result<U256, String> {
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let state_db = StateDb::new(
-            self.data_man.storage_manager.get_state_at(hash).unwrap(),
+            self.data_man.storage_manager.get_state_for_next_epoch(hash).unwrap().unwrap(),
         );
         Ok(
             if let Ok(maybe_acc) = state_db.get_account(&address, false) {
@@ -1468,7 +1468,7 @@ impl ConsensusGraphInner {
 
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let state_db = StateDb::new(
-            self.data_man.storage_manager.get_state_at(hash).unwrap(),
+            self.data_man.storage_manager.get_state_for_next_epoch(hash).unwrap().unwrap(),
         );
         let state = State::new(state_db, 0.into(), Default::default());
         state
@@ -2007,12 +2007,13 @@ impl ConsensusGraph {
         // do it again FIXME: propagate the error up
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            let cached_state = self
+            let maybe_cached_state = self
                 .data_man
                 .storage_manager
-                .get_state_at(block_hash.clone())
+                .get_state_for_next_epoch(block_hash.clone())
                 .unwrap();
-            if cached_state.does_exist() {
+            match maybe_cached_state {
+                Some(cached_state) => {
                 if let Some(receipts_root) =
                     self.data_man.get_receipts_root(&block_hash)
                 {
@@ -2021,6 +2022,8 @@ impl ConsensusGraph {
                         receipts_root,
                     );
                 }
+                }
+                None => {}
             }
         }
         // FIXME: propagate the error up
@@ -2217,7 +2220,9 @@ impl ConsensusGraph {
         let parent_state_root = inner
             .data_man
             .storage_manager
-            .get_state_at(parent_block_hash)
+            .get_state_for_next_epoch(parent_block_hash)
+            .unwrap()
+            // Unwrapping is safe because the state exists.
             .unwrap()
             .get_state_root()
             .unwrap()
@@ -2417,7 +2422,9 @@ impl ConsensusGraph {
                 let correct_state_root = self
                     .data_man
                     .storage_manager
-                    .get_state_at(inner.arena[deferred].hash)
+                    .get_state_for_next_epoch(inner.arena[deferred].hash)
+                    .unwrap()
+                    // Unwrapping is safe because the state exists.
                     .unwrap()
                     .get_state_root()
                     .unwrap()
