@@ -37,6 +37,10 @@ impl<'a> Drop for State<'a> {
 impl<'a> StateTrait for State<'a> {
     fn does_exist(&self) -> bool { self.get_root_node().is_some() }
 
+    fn get_padding(&self) -> &KeyPadding {
+        &self.delta_trie.padding
+    }
+
     fn get_merkle_hash(&self, access_key: &[u8]) -> Result<Option<MerkleHash>> {
         // Get won't create any new nodes so it's fine to pass an empty
         // owned_node_set.
@@ -126,6 +130,7 @@ impl<'a> StateTrait for State<'a> {
         self.compute_merkle_root()
     }
 
+    // FIXME: why Option? Since we separated readonly & readwrite there shouldn't be option.
     fn get_state_root(&self) -> Result<Option<MerkleHash>> {
         self.delta_trie.get_merkle(self.root_node.clone())
     }
@@ -266,6 +271,8 @@ impl<'a> State<'a> {
                     self.root_node = cow_root.into_child().map(|r| r.into());
                     result?;
 
+                    // TODO: check the guarantee of underlying db on transaction failure.
+                    // TODO: may have to separately commit last_row_number in worst case.
                     commit_transaction.transaction.put(
                         COL_DELTA_TRIE,
                         "last_row_number".as_bytes(),
@@ -343,6 +350,7 @@ use super::{
         MultiVersionMerklePatriciaTrie,
     },
 };
+use crate::statedb::KeyPadding;
 use primitives::EpochId;
 use std::{
     collections::BTreeSet, hint::unreachable_unchecked, sync::atomic::Ordering,

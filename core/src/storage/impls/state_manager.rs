@@ -5,6 +5,7 @@
 pub use super::super::super::db::COL_DELTA_TRIE;
 use std::collections::HashMap;
 
+// FIXME: commit is per DeltaMPT.
 #[derive(Default)]
 pub struct AtomicCommit {
     pub row_number: RowNumber,
@@ -109,6 +110,8 @@ impl StateManager {
             delta_trie: MultiVersionMerklePatriciaTrie::new(
                 db.key_value().clone(),
                 conf,
+                // FIXME: replace with padding generated from (NULL_MERKLE_ROOT, NULL_MERKLE_ROOT)
+                H256::default().0,
             ),
             db: db,
             commit_lock: Mutex::new(AtomicCommit {
@@ -125,16 +128,13 @@ impl StateManager {
         genesis_gas_limit: U256, test_net_version: Address,
     ) -> Block
     {
-        let mut state = self.get_state_at(H256::default()).unwrap();
+        let mut state = StateDb::new(self.get_state_for_genesis_write());
 
         for (addr, balance) in genesis_accounts {
             let account =
                 Account::new_empty_with_balance(&addr, &balance, &0.into());
             state
-                .set(
-                    StorageKey::new_account_key(&addr).as_ref(),
-                    encode(&account).as_ref(),
-                )
+                .set(&state.account_key(&addr),&account)
                 .unwrap();
         }
 
@@ -160,15 +160,6 @@ impl StateManager {
             self.number_commited_nodes.load(Ordering::Relaxed),
         );
     }
-
-    pub fn state_exists(&self, epoch_id: EpochId) -> bool {
-        if let Ok(state) = self.get_state_at(epoch_id) {
-            state.does_exist()
-        } else {
-            warn!("Fail to load state");
-            false
-        }
-    }
 }
 
 impl StateManagerTrait for StateManager {
@@ -176,13 +167,29 @@ impl StateManagerTrait for StateManager {
 
     fn make_snapshot(&self, epoch_id: EpochId) -> Snapshot { unimplemented!() }
 
-    fn get_state_at(&self, epoch_id: EpochId) -> Result<State> {
-        // FIXME: only allow existing epoch id and H256::Default().
-        Ok(State::new(self, self.get_state_root_node_ref(epoch_id)?))
+    fn get_state_no_commit(&self, epoch_id: EpochId) -> Result<Option<State>> {
+        Ok(self.get_state_root_node_ref(epoch_id)?.map(
+            |root_node_ref| State::new(self, Some(root_node_ref))))
+    }
+
+    // FIXME: check implementation and find where it's used.
+    fn get_state_for_genesis_write(&self) -> State {
+        State::new(self, None)
+    }
+
+    fn get_state_for_next_epoch(&self, parent_epoch_id: EpochId) -> Result<Option<State>> {
+        // FIXME: deal with snapshot shift.
+        Ok(self.get_state_root_node_ref(parent_epoch_id)?.map(
+            |root_node_ref| State::new(self, Some(root_node_ref))))
     }
 
     fn contains_state(&self, epoch_id: EpochId) -> bool {
-        self.get_state_at(epoch_id).unwrap().does_exist()
+        if let Ok(root_node) = self.get_state_root_node_ref(epoch_id) {
+            root_node.is_some()
+        } else {
+            warn!("Fail to load state for epoch {}", epoch_id);
+            false
+        }
     }
 
     fn drop_state_outside(&self, epoch_id: EpochId) { unimplemented!() }
@@ -196,12 +203,11 @@ use super::{
     },
 };
 use crate::{
-    ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StorageKey,
+    ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb,
 };
 use cfx_types::{Address, H256, U256};
 use kvdb::{DBTransaction, DBValue};
 use primitives::{Account, Block, BlockHeaderBuilder, EpochId};
-use rlp::encode;
 use std::{
     io, str,
     sync::{

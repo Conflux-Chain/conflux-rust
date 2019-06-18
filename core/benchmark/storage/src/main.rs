@@ -1674,7 +1674,7 @@ impl TxReplayer {
                         .0;
                     latest_state
                         .set::<Account>(
-                            &StorageKey::new_account_key(&sender),
+                            &latest_state.account_key(&sender),
                             &account,
                         )
                         .unwrap();
@@ -1705,7 +1705,7 @@ impl TxReplayer {
             }
             latest_state
                 .set::<Account>(
-                    &StorageKey::new_account_key(&receiver),
+                    &latest_state.account_key(&receiver),
                     &account,
                 )
                 .unwrap();
@@ -2032,7 +2032,7 @@ fn main() -> errors::Result<()> {
 }
 
 use cfxcore::{
-    statedb::{StateDb, StorageKey},
+    statedb::{StateDb},
     storage::{
         state_manager::StorageConfiguration, StorageManager,
         StorageManagerTrait, StorageTrait,
