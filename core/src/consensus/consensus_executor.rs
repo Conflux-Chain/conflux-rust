@@ -38,7 +38,6 @@ use std::fmt::{Debug, Formatter};
 pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_anticone_overlimited: Vec<bool>,
-    pub epoch_block_anticone_set_sizes: Vec<usize>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
 }
 
@@ -47,10 +46,13 @@ impl Debug for RewardExecutionInfo {
         write!(
             f,
             "RewardExecutionInfo{{ epoch_blocks: {:?} \
-             epoch_block_anticone_overlimited: {:?} epoch_block_anticone_set_sizes: {:?} \
+             epoch_block_anticone_overlimited: {:?} \
              epoch_block_anticone_difficulties: {:?}}}",
-            self.epoch_blocks.iter().map(|b| b.hash()).collect::<Vec<H256>>(),
-            self.epoch_block_anticone_overlimited, self.epoch_block_anticone_set_sizes,
+            self.epoch_blocks
+                .iter()
+                .map(|b| b.hash())
+                .collect::<Vec<H256>>(),
+            self.epoch_block_anticone_overlimited,
             self.epoch_block_anticone_difficulties
         )
     }
@@ -645,11 +647,13 @@ impl ConsensusExecutionHandler {
                                 U256::from(anticone_penalty),
                             ),
                         );
-                        debug_out.anticone_set_size.push(BlockHashValue(
-                            block.hash(),
-                            reward_info.epoch_block_anticone_set_sizes
-                                [enum_idx],
-                        ));
+                        //                        
+                        // debug_out.anticone_set_size.push(BlockHashValue(
+                        //                            block.hash(),
+                        //                            
+                        // reward_info.epoch_block_anticone_set_sizes
+                        //                                [enum_idx],
+                        //                        ));
                     }
                 }
 
