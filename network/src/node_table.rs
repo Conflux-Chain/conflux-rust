@@ -454,7 +454,8 @@ impl NodeTable {
         node_ids
     }
 
-    // If node exists, update last contact, insert otherwise
+    // If node exists, update last contact, insert otherwise.
+    // Endpoint will be updated if node exists.
     pub fn update_last_contact(&mut self, node: Node) {
         let mut _index = NodeReputationIndex::default();
         let mut exist = false;
@@ -472,12 +473,14 @@ impl NodeTable {
 
         // check whether the node position will change
         if target_node_rep == _index.0 {
-            self.node_reputation_table[_index.0][_index.1].last_contact =
-                node.last_contact;
+            let old_node = &mut self.node_reputation_table[_index.0][_index.1];
+            old_node.last_contact = node.last_contact;
+            old_node.endpoint = node.endpoint;
         } else {
             let mut removed_node =
                 self.remove_from_reputation_level(&_index).unwrap();
             removed_node.last_contact = node.last_contact;
+            removed_node.endpoint = node.endpoint;
             self.add_to_reputation_level(target_node_rep, removed_node);
         }
     }
