@@ -21,11 +21,15 @@ use std::{
 ///
 /// There are 4 scenarios to insert a node into database:
 /// 1. Receive the "hello" handshaking message from ingress TCP connection,
-/// and add the node with `StreamToken` as untrusted.
+/// and add the node with `StreamToken` as untrusted if not exists. Otherwise,
+/// overwrite the existing node in trusted or untrusted table, including
+/// endpoint, last contact and connection information.
 /// 2. Receive a "ping" message from UDP discovery, and add the node as
-/// untrusted.
+/// untrusted if not exists. Otherwise, overwrite the existing node in
+/// trusted or untrusted table.
 /// 3. Receive the "pong" message from UDP discovery, and add the node as
-/// trusted. If the node is an existing untrusted one, promote it to trusted.
+/// untrusted if not exists. Otherwise, overwrite the existing node in
+/// trusted or untrusted table.
 /// 4. RPC explicitly add a trusted node. If the node is an existing
 /// untrusted one, promote it to trusted.
 ///
@@ -52,17 +56,30 @@ use std::{
 ///
 /// # IP limitation
 ///
-/// Allows user to specify limited number of nodes for one IP address. When IP
-/// limitation reached (e.g. 1 node per IP):
-/// - Add new node: remove the worst node, and add the new one.
-/// - Update node with IP changed: remove the worst node, and update the node
-///   with new IP address.
+/// Attacker could easily simulate a large amount of malicious nodes of
+/// different node IDs and same IP address. To avoid such kind of attack, user
+/// could limits the number of nodes for one IP address. By default, only 1 node
+/// allowed for a IP address, and has to replace an existing old node in
+/// following 2 scenarios.
 ///
-/// The worst node has the minimum priority among the nodes with same IP
-/// address. The priority is defined as below:
+/// ## Scenario 1: add new node with existing IP address
+/// For example, "node_1" with "IP_1" already in database, and to add a new node
+/// "node_2" with the same address "IP_1". Due to default IP limitation (1 node
+/// per IP), "node_1" will be removed, and then add "node_2" with "IP_1".
+///
+/// ## Scenario 2: update node with existing IP address
+/// For example, "node_1" with "IP_1" and "node_2" with "IP_2" already in
+/// database, and to update "node_2" with existing address "IP_1". Due to
+/// default IP limitation (1 node per IP), "node_1" will be removed, and then
+/// update "node_2" with "IP_1". Besides, "IP_2" never exists in database
+/// anymore.
+///
+/// ## Remove node with priority
+/// If multiple nodes allowed for 1 IP address, the node with minimum priority
+/// will be removed in above 2 scenarios. The priority is defined as below:
 /// 1. untrusted node < trusted node
 /// 2. Node last contact status: unknown < failure < success
-/// 3. Node last contact time comparison
+/// 3. Node last contact time: the earlier the smaller
 pub struct NodeDatabase {
     trusted_nodes: NodeTable,
     untrusted_nodes: NodeTable,
@@ -131,33 +148,6 @@ impl NodeDatabase {
         } else {
             self.force_new_ip_limit(&node.id, ip);
             self.untrusted_nodes.add_node(node, false);
-        }
-    }
-
-    /// Add a new trusted node if not exists. Otherwise, update the existing
-    /// node with the specified `entry`, and promote the node to trusted if it
-    /// is untrusted.
-    pub fn insert_with_promotion(&mut self, entry: NodeEntry) {
-        let mut node = Node::new(entry.id, entry.endpoint);
-        node.last_contact = Some(NodeContact::success());
-
-        let ip = node.endpoint.address.ip();
-
-        if let Some(old_node) = self.trusted_nodes.get(&node.id) {
-            let old_ip = old_node.endpoint.address.ip();
-            self.update_ip_limit(&node.id, old_ip, ip);
-            self.trusted_nodes.update_last_contact(node);
-        } else if let Some(old_node) =
-            self.untrusted_nodes.remove_with_id(&node.id)
-        {
-            node.last_connected = old_node.last_connected;
-            node.stream_token = old_node.stream_token;
-            let old_ip = old_node.endpoint.address.ip();
-            self.update_ip_limit(&node.id, old_ip, ip);
-            self.trusted_nodes.add_node(node, false);
-        } else {
-            self.force_new_ip_limit(&node.id, ip);
-            self.trusted_nodes.add_node(node, false);
         }
     }
 
@@ -540,21 +530,6 @@ mod tests {
         // check ip_limits
         assert_eq!(db.ip_limit.get_keys(&ip1).unwrap().len(), 1);
         assert_eq!(db.ip_limit.get_keys(&ip2), None);
-    }
-
-    #[test]
-    fn test_insert_with_promotion() {
-        let mut db = NodeDatabase::new(None, 1);
-
-        // add untrusted node
-        let entry = new_entry("127.0.0.1:999");
-        db.insert(entry.clone());
-        assert_eq!(db.get(&entry.id, true), None);
-        assert_eq!(db.get(&entry.id, false).is_some(), true);
-
-        // update node and promote
-        db.insert_with_promotion(entry.clone());
-        assert_eq!(db.get(&entry.id, true).is_some(), true);
     }
 
     #[test]
