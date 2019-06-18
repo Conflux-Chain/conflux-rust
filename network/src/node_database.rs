@@ -151,6 +151,33 @@ impl NodeDatabase {
         }
     }
 
+    /// Add a new trusted node if not exists. Otherwise, update the existing
+    /// node with the specified `entry`, and promote the node to trusted if it
+    /// is untrusted.
+    pub fn insert_with_promotion(&mut self, entry: NodeEntry) {
+        let mut node = Node::new(entry.id, entry.endpoint);
+        node.last_contact = Some(NodeContact::success());
+
+        let ip = node.endpoint.address.ip();
+
+        if let Some(old_node) = self.trusted_nodes.get(&node.id) {
+            let old_ip = old_node.endpoint.address.ip();
+            self.update_ip_limit(&node.id, old_ip, ip);
+            self.trusted_nodes.update_last_contact(node);
+        } else if let Some(old_node) =
+        self.untrusted_nodes.remove_with_id(&node.id)
+        {
+            node.last_connected = old_node.last_connected;
+            node.stream_token = old_node.stream_token;
+            let old_ip = old_node.endpoint.address.ip();
+            self.update_ip_limit(&node.id, old_ip, ip);
+            self.trusted_nodes.add_node(node, false);
+        } else {
+            self.force_new_ip_limit(&node.id, ip);
+            self.trusted_nodes.add_node(node, false);
+        }
+    }
+
     /// Add a new trusted node if not exists, or promote the existing untrusted
     /// node.
     pub fn insert_trusted(&mut self, entry: NodeEntry) {

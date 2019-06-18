@@ -293,7 +293,7 @@ impl Discovery {
         };
 
         if let Some(node) = expected_node {
-            uio.node_db.write().insert(node);
+            uio.node_db.write().insert_with_promotion(node);
             Ok(())
         } else {
             debug!("Got unexpected Pong from {:?} ; request not found", &from);
