@@ -42,7 +42,7 @@ fenwick-tree = { path = "../util/fenwick-tree" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 toml = "0.4"
 metrics = { path = "../util/metrics" }
-hibitset = "0.6"
+hibitset = { path = "../util/hibitset" }
 
 [dev-dependencies]
 rustc-hex = "1.0"
