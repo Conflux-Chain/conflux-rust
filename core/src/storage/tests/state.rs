@@ -303,7 +303,7 @@ fn test_set_order() {
     for key in &keys {
         let key_slice = &key[..];
         let actual_key = vec![key_slice; 3].concat();
-        let actual_value = vec![key_slice; (key[0] % 21) as usize].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
             .set(&actual_key, &actual_value)
             .expect("Failed to insert key.");
@@ -319,7 +319,7 @@ fn test_set_order() {
     for key in &keys {
         let key_slice = &key[..];
         let actual_key = vec![key_slice; 3].concat();
-        let actual_value = vec![key_slice; (key[0] % 32) as usize].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
             .set(&actual_key, &actual_value)
             .expect("Failed to insert key.");
@@ -333,7 +333,7 @@ fn test_set_order() {
     for key in keys.iter().rev() {
         let key_slice = &key[..];
         let actual_key = vec![key_slice; 3].concat();
-        let actual_value = vec![key_slice; (key[0] % 32) as usize].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_2
             .set(&actual_key, &actual_value)
             .expect("Failed to insert key.");
@@ -363,7 +363,7 @@ fn test_set_order_concurrent() {
     for key in keys.iter() {
         let key_slice = &key[..];
         let actual_key = vec![key_slice; 3].concat();
-        let actual_value = vec![key_slice; (key[0] % 21) as usize].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
             .set(&actual_key, &actual_value)
             .expect("Failed to insert key.");
@@ -379,7 +379,7 @@ fn test_set_order_concurrent() {
     for key in keys.iter() {
         let key_slice = &key[..];
         let actual_key = vec![key_slice; 3].concat();
-        let actual_value = vec![key_slice; (key[0] % 32) as usize].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
             .set(&actual_key, &actual_value)
             .expect("Failed to insert key.");
@@ -388,9 +388,15 @@ fn test_set_order_concurrent() {
     epoch_id[0] = 2;
     state_1.commit(epoch_id).unwrap();
 
-    const THREAD_COUNT: usize = 500;
-    let mut threads = Vec::with_capacity(THREAD_COUNT);
-    for thread_id in 0..THREAD_COUNT {
+    let thread_count = if cfg!(debug_assertions) {
+        // Debug build. Fewer threads.
+        10
+    } else {
+        // Release build.
+        500
+    };
+    let mut threads = Vec::with_capacity(thread_count);
+    for thread_id in 0..thread_count {
         thread::sleep_ms(30);
         let keys = keys.clone();
         let state_manager = state_manager.clone();
@@ -406,7 +412,7 @@ fn test_set_order_concurrent() {
                 let key_slice = &key[..];
                 let actual_key = vec![key_slice; 3].concat();
                 let actual_value =
-                    vec![key_slice; (key[0] % 32) as usize].concat();
+                    vec![key_slice; 1 + (key[0] % 32) as usize].concat();
                 state_2
                     .set(&actual_key, &actual_value)
                     .expect("Failed to insert key.");
