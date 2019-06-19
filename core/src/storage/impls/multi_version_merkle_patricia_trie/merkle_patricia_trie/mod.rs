@@ -21,8 +21,8 @@ pub use self::{
         CompressedPathRaw, CompressedPathRef, CompressedPathTrait,
     },
     cow_node_ref::CowNodeRef,
-    merkle::{MerkleHash, MERKLE_NULL_NODE},
     node_ref::{NodeRefDeltaMpt, NodeRefDeltaMptCompact},
     subtrie_visitor::SubTrieVisitor,
     trie_node::TrieNode,
 };
+pub use primitives::{MerkleHash, MERKLE_NULL_NODE};

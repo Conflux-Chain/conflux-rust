@@ -34,7 +34,9 @@ fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
 fn test_set_get() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
-    let mut state = state_manager.get_state_for_next_epoch(H256::default()).unwrap();
+    let mut state = state_manager
+        .get_state_for_next_epoch(H256::default())
+        .unwrap();
     let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
@@ -78,7 +80,9 @@ fn test_get_set_at_second_commit() {
     );
 
     let parent_epoch_0 = H256::default();
-    let mut state_0 = state_manager.get_state_for_next_epoch(parent_epoch_0).unwrap();
+    let mut state_0 = state_manager
+        .get_state_for_next_epoch(parent_epoch_0)
+        .unwrap();
     println!("Setting state_0 with {} keys.", keys_0.len());
 
     for key in keys_0 {
@@ -90,7 +94,8 @@ fn test_get_set_at_second_commit() {
     state_0.compute_state_root().unwrap();
     state_0.commit(epoch_id_0).unwrap();
 
-    let mut state_1 = state_manager.get_state_for_next_epoch(epoch_id_0).unwrap();
+    let mut state_1 =
+        state_manager.get_state_for_next_epoch(epoch_id_0).unwrap();
     println!("Set new {} keys for state_1.", keys_1_new.len(),);
     for key in keys_1_new {
         let value = vec![&key[..], &key[..]].concat();
@@ -154,7 +159,9 @@ fn test_set_delete() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
 
-    let mut state = state_manager.get_state_for_next_epoch(H256::default()).unwrap();
+    let mut state = state_manager
+        .get_state_for_next_epoch(H256::default())
+        .unwrap();
     let empty_state_root = state.compute_state_root().unwrap();
 
     let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
@@ -207,7 +214,9 @@ fn test_set_delete_all() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
 
-    let mut state = state_manager.get_state_for_next_epoch(H256::default()).unwrap();
+    let mut state = state_manager
+        .get_state_for_next_epoch(H256::default())
+        .unwrap();
     let empty_state_root = state.compute_state_root().unwrap();
 
     let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
@@ -298,7 +307,9 @@ fn test_set_order() {
         .collect();
 
     let mut epoch_id = H256::default();
-    let mut state_0 = state_manager.get_state_for_next_epoch(H256::default()).unwrap();
+    let mut state_0 = state_manager
+        .get_state_for_next_epoch(H256::default())
+        .unwrap();
     println!("Setting state_0 with {} keys.", keys.len());
     for key in &keys {
         let key_slice = &key[..];
@@ -314,7 +325,9 @@ fn test_set_order() {
 
     let parent_epoch_0 = epoch_id;
 
-    let mut state_1 = state_manager.get_state_for_next_epoch(parent_epoch_0).unwrap();
+    let mut state_1 = state_manager
+        .get_state_for_next_epoch(parent_epoch_0)
+        .unwrap();
     println!("Setting state_1 with {} keys.", keys.len());
     for key in &keys {
         let key_slice = &key[..];
@@ -328,7 +341,9 @@ fn test_set_order() {
     epoch_id[0] = 2;
     state_1.commit(epoch_id).unwrap();
 
-    let mut state_2 = state_manager.get_state_for_next_epoch(parent_epoch_0).unwrap();
+    let mut state_2 = state_manager
+        .get_state_for_next_epoch(parent_epoch_0)
+        .unwrap();
     println!("Setting state_2 with {} keys.", keys.len());
     for key in keys.iter().rev() {
         let key_slice = &key[..];
@@ -358,7 +373,9 @@ fn test_set_order_concurrent() {
     );
 
     let mut epoch_id = H256::default();
-    let mut state_0 = state_manager.get_state_for_next_epoch(H256::default()).unwrap();
+    let mut state_0 = state_manager
+        .get_state_for_next_epoch(H256::default())
+        .unwrap();
     println!("Setting state_0 with {} keys.", keys.len());
     for key in keys.iter() {
         let key_slice = &key[..];
@@ -374,7 +391,9 @@ fn test_set_order_concurrent() {
 
     let parent_epoch_0 = epoch_id;
 
-    let mut state_1 = state_manager.get_state_for_next_epoch(parent_epoch_0).unwrap();
+    let mut state_1 = state_manager
+        .get_state_for_next_epoch(parent_epoch_0)
+        .unwrap();
     println!("Setting state_1 with {} keys.", keys.len());
     for key in keys.iter() {
         let key_slice = &key[..];
@@ -401,8 +420,9 @@ fn test_set_order_concurrent() {
         let keys = keys.clone();
         let state_manager = state_manager.clone();
         threads.push(thread::spawn(move || {
-            let mut state_2 =
-                state_manager.get_state_for_next_epoch(parent_epoch_0).unwrap();
+            let mut state_2 = state_manager
+                .get_state_for_next_epoch(parent_epoch_0)
+                .unwrap();
             println!(
                 "Setting state_{} with {} keys.",
                 2 + thread_id,
