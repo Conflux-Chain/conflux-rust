@@ -5,19 +5,19 @@
 use crate::{
     hash::KECCAK_EMPTY,
     storage::{
-        Error as StorageError, ErrorKind as StorageErrorKind, MerkleHash,
-        Storage, StorageTrait,
+        Error as StorageError, ErrorKind as StorageErrorKind, Storage,
+        StorageTrait,
     },
 };
 use cfx_types::{Address, H256};
-use primitives::{Account, EpochId};
+use primitives::{Account, EpochId, StateRootWithAuxInfo};
 
 mod error;
 mod storage_key;
 
 pub use self::{
     error::{Error, ErrorKind, Result},
-    storage_key::{StorageKey, KeyPadding},
+    storage_key::{KeyPadding, StorageKey},
 };
 
 pub struct StateDb<'a> {
@@ -78,7 +78,10 @@ impl<'a> StateDb<'a> {
         //        println!("get key={:?} value={:?}", key, raw);
         let storage_root;
         if with_storage_root {
-            let storage_root_key = StorageKey::new_storage_root_key(address, self.storage.get_padding());
+            let storage_root_key = StorageKey::new_storage_root_key(
+                address,
+                self.storage.get_padding(),
+            );
             storage_root = self
                 .storage
                 .get_merkle_hash(storage_root_key.as_ref())?
@@ -132,11 +135,13 @@ impl<'a> StateDb<'a> {
     /// required to compute genesis epoch_id. For other blocks there are
     /// deferred execution so the state root computation is merged inside
     /// commit method.
-    pub fn compute_state_root(&mut self) -> Result<MerkleHash> {
+    pub fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
         Ok(self.storage.compute_state_root()?)
     }
 
-    pub fn commit(&mut self, epoch_id: EpochId) -> Result<MerkleHash> {
+    pub fn commit(
+        &mut self, epoch_id: EpochId,
+    ) -> Result<StateRootWithAuxInfo> {
         let result = self.compute_state_root();
         self.storage.commit(epoch_id)?;
 

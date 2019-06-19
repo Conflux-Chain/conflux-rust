@@ -17,7 +17,8 @@ pub use super::impls::state::State;
 // TODO(yz): check if this is the best way to organize code for this library.
 pub trait StateTrait {
     // Status.
-    // FIXME: now we don't allow getting non-existing state. Is this method still useful.
+    // FIXME: now we don't allow getting non-existing state. Is this method
+    // still useful.
     /// Check if the state exists. If not any state action operates on an empty
     /// state.
     fn does_exist(&self) -> bool;
@@ -39,8 +40,8 @@ pub trait StateTrait {
     // Finalize
     /// It's costly to compute state root however it's only necessary to compute
     /// state root once before committing.
-    fn compute_state_root(&mut self) -> Result<MerkleHash>;
-    fn get_state_root(&self) -> Result<Option<MerkleHash>>;
+    fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
+    fn get_state_root(&self) -> Result<Option<StateRootWithAuxInfo>>;
     fn commit(&mut self, epoch: EpochId) -> Result<()>;
     fn revert(&mut self);
 
@@ -52,4 +53,4 @@ use super::impls::{
     multi_version_merkle_patricia_trie::merkle_patricia_trie::MerkleHash,
 };
 use crate::statedb::KeyPadding;
-use primitives::EpochId;
+use primitives::{EpochId, StateRootWithAuxInfo};

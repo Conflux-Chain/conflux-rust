@@ -141,7 +141,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                                 children_table.iter_non_skip()
                             {
                                 merkles[i as usize] = match maybe_node_ref {
-                                    None => super::merkle::MERKLE_NULL_NODE,
+                                    None => MERKLE_NULL_NODE,
                                     Some(node_ref) => self
                                         .trie_ref
                                         .get_merkle(Some((*node_ref).into()))?

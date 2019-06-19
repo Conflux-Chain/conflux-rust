@@ -20,7 +20,7 @@ use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock, transaction::SignedTransaction, Block, BlockHeader,
-    EpochNumber,
+    EpochNumber, StateRootWithAuxInfo,
 };
 use rlp::Rlp;
 use slab::Slab;
@@ -62,7 +62,7 @@ pub struct BestInformation {
     pub best_epoch_number: usize,
     pub current_difficulty: U256,
     pub terminal_block_hashes: Vec<H256>,
-    pub deferred_state_root: H256,
+    pub deferred_state_root: StateRootWithAuxInfo,
     pub deferred_receipts_root: H256,
 }
 
@@ -1205,7 +1205,7 @@ impl SynchronizationGraph {
             best_epoch_number: consensus_inner.best_epoch_number(),
             current_difficulty: consensus_inner.current_difficulty,
             terminal_block_hashes: consensus_inner.terminal_hashes(),
-            deferred_state_root,
+            deferred_state_root: deferred_state_root,
             deferred_receipts_root,
         };
         GuardedValue::new(consensus_inner, value)

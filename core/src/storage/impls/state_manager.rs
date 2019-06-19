@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 pub use super::super::super::db::COL_DELTA_TRIE;
-use std::collections::HashMap;
 
 // FIXME: commit is per DeltaMPT.
 #[derive(Default)]
@@ -110,7 +109,8 @@ impl StateManager {
             delta_trie: MultiVersionMerklePatriciaTrie::new(
                 db.key_value().clone(),
                 conf,
-                // FIXME: replace with padding generated from (NULL_MERKLE_ROOT, NULL_MERKLE_ROOT)
+                // FIXME: replace with padding generated from
+                // (NULL_MERKLE_ROOT, NULL_MERKLE_ROOT)
                 H256::default().0,
             ),
             db: db,
@@ -133,15 +133,13 @@ impl StateManager {
         for (addr, balance) in genesis_accounts {
             let account =
                 Account::new_empty_with_balance(&addr, &balance, &0.into());
-            state
-                .set(&state.account_key(&addr),&account)
-                .unwrap();
+            state.set(&state.account_key(&addr), &account).unwrap();
         }
 
-        let root = state.compute_state_root().unwrap();
+        let state_root = state.compute_state_root().unwrap();
         let mut genesis = Block::new(
             BlockHeaderBuilder::new()
-                .with_deferred_state_root(root)
+                .with_deferred_state_root(state_root)
                 .with_gas_limit(genesis_gas_limit)
                 .with_author(test_net_version)
                 .build(),
@@ -168,19 +166,21 @@ impl StateManagerTrait for StateManager {
     fn make_snapshot(&self, epoch_id: EpochId) -> Snapshot { unimplemented!() }
 
     fn get_state_no_commit(&self, epoch_id: EpochId) -> Result<Option<State>> {
-        Ok(self.get_state_root_node_ref(epoch_id)?.map(
-            |root_node_ref| State::new(self, Some(root_node_ref))))
+        Ok(self
+            .get_state_root_node_ref(epoch_id)?
+            .map(|root_node_ref| State::new(self, Some(root_node_ref))))
     }
 
     // FIXME: check implementation and find where it's used.
-    fn get_state_for_genesis_write(&self) -> State {
-        State::new(self, None)
-    }
+    fn get_state_for_genesis_write(&self) -> State { State::new(self, None) }
 
-    fn get_state_for_next_epoch(&self, parent_epoch_id: EpochId) -> Result<Option<State>> {
+    fn get_state_for_next_epoch(
+        &self, parent_epoch_id: EpochId,
+    ) -> Result<Option<State>> {
         // FIXME: deal with snapshot shift.
-        Ok(self.get_state_root_node_ref(parent_epoch_id)?.map(
-            |root_node_ref| State::new(self, Some(root_node_ref))))
+        Ok(self
+            .get_state_root_node_ref(parent_epoch_id)?
+            .map(|root_node_ref| State::new(self, Some(root_node_ref))))
     }
 
     fn contains_state(&self, epoch_id: EpochId) -> bool {
@@ -202,13 +202,12 @@ use super::{
         merkle_patricia_trie::NodeRefDeltaMpt, row_number::*, *,
     },
 };
-use crate::{
-    ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb,
-};
+use crate::{ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb};
 use cfx_types::{Address, H256, U256};
 use kvdb::{DBTransaction, DBValue};
 use primitives::{Account, Block, BlockHeaderBuilder, EpochId};
 use std::{
+    collections::HashMap,
     io, str,
     sync::{
         atomic::{AtomicUsize, Ordering},

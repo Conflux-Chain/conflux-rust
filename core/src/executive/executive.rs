@@ -1243,7 +1243,12 @@ mod tests {
 
     fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
         State::new(
-            StateDb::new(storage_manager.get_state_for_next_epoch(epoch_id).unwrap().unwrap()),
+            StateDb::new(
+                storage_manager
+                    .get_state_for_next_epoch(epoch_id)
+                    .unwrap()
+                    .unwrap(),
+            ),
             U256::from(0),
             VmFactory::default(),
         )
@@ -1253,7 +1258,12 @@ mod tests {
         storage_manager: &StorageManager, epoch_id: EpochId, factory: Factory,
     ) -> State {
         State::new(
-            StateDb::new(storage_manager.get_state_for_next_epoch(epoch_id).unwrap().unwrap()),
+            StateDb::new(
+                storage_manager
+                    .get_state_for_next_epoch(epoch_id)
+                    .unwrap()
+                    .unwrap(),
+            ),
             U256::from(0),
             factory.into(),
         )

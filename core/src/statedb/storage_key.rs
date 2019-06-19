@@ -33,9 +33,10 @@ impl StorageKey {
     }
 
     fn compute_address_hash(
-        address: &Address, padding: &[u8]
+        address: &Address, padding: &[u8],
     ) -> [u8; Self::ACCOUNT_HASH_BYTES] {
-        // Manually asserting the size by using new_buffer instead of Vec#extend_from_slice.
+        // Manually asserting the size by using new_buffer instead of
+        // Vec#extend_from_slice.
         let mut padded =
             Self::new_buffer(Self::ACCOUNT_BYTES + Self::ACCOUNT_PADDING_BYTES);
         padded[0..Self::ACCOUNT_PADDING_BYTES].copy_from_slice(&padding);
@@ -53,9 +54,10 @@ impl StorageKey {
     }
 
     fn compute_storage_key_padding(
-        storage_key: &[u8],
-        padding: &KeyPadding) -> KeyPadding {
-        let mut padded = Vec::with_capacity(Self::KEY_PADDING_BYTES + storage_key.len());
+        storage_key: &[u8], padding: &KeyPadding,
+    ) -> KeyPadding {
+        let mut padded =
+            Vec::with_capacity(Self::KEY_PADDING_BYTES + storage_key.len());
         padded.extend_from_slice(padding);
         padded.extend_from_slice(storage_key);
 
@@ -63,32 +65,45 @@ impl StorageKey {
     }
 
     fn extend_address(
-        key: &mut Vec<u8>, address: &Address, padding: &KeyPadding) {
+        key: &mut Vec<u8>, address: &Address, padding: &KeyPadding,
+    ) {
         let hash = Self::compute_address_hash(
-            address, &padding[..Self::ACCOUNT_PADDING_BYTES]);
+            address,
+            &padding[..Self::ACCOUNT_PADDING_BYTES],
+        );
 
         key.extend_from_slice(hash.as_ref());
     }
 
-    pub fn new_account_key(address: &Address, padding: &KeyPadding) -> StorageKey {
+    pub fn new_account_key(
+        address: &Address, padding: &KeyPadding,
+    ) -> StorageKey {
         let mut key = Vec::with_capacity(Self::ACCOUNT_HASH_BYTES);
         Self::extend_address(&mut key, address, padding);
 
         StorageKey::AccountKey(key)
     }
 
-    fn extend_storage_root(key: &mut Vec<u8>, address: &Address, padding: &KeyPadding) {
+    fn extend_storage_root(
+        key: &mut Vec<u8>, address: &Address, padding: &KeyPadding,
+    ) {
         Self::extend_address(key, address, padding);
         key.extend_from_slice(Self::STORAGE_PREFIX);
     }
 
-    fn extend_storage_key(key: &mut Vec<u8>, storage_key: &[u8], padding: &KeyPadding) {
-        key.extend_from_slice(&Self::compute_storage_key_padding(storage_key, padding)[
-            Self::STORAGE_PREFIX.len()..]);
+    fn extend_storage_key(
+        key: &mut Vec<u8>, storage_key: &[u8], padding: &KeyPadding,
+    ) {
+        key.extend_from_slice(
+            &Self::compute_storage_key_padding(storage_key, padding)
+                [Self::STORAGE_PREFIX.len()..],
+        );
         key.extend_from_slice(storage_key);
     }
 
-    pub fn new_storage_root_key(address: &Address, padding: &KeyPadding) -> StorageKey {
+    pub fn new_storage_root_key(
+        address: &Address, padding: &KeyPadding,
+    ) -> StorageKey {
         let mut key = Vec::with_capacity(
             Self::ACCOUNT_HASH_BYTES + Self::STORAGE_PREFIX.len(),
         );
@@ -98,12 +113,13 @@ impl StorageKey {
     }
 
     pub fn new_storage_key(
-        address: &Address, storage_key: &[u8], padding: &KeyPadding
+        address: &Address, storage_key: &[u8], padding: &KeyPadding,
     ) -> StorageKey {
         let mut key = Vec::with_capacity(
             Self::ACCOUNT_HASH_BYTES
                 + Self::STORAGE_PREFIX.len()
-                + Self::KEY_PADDING_BYTES + storage_key.len(),
+                + Self::KEY_PADDING_BYTES
+                + storage_key.len(),
         );
         Self::extend_storage_root(&mut key, address, padding);
         Self::extend_storage_key(&mut key, storage_key, padding);
@@ -111,12 +127,16 @@ impl StorageKey {
         StorageKey::StorageKey(key)
     }
 
-    fn extend_code_root(key: &mut Vec<u8>, address: &Address, padding: &KeyPadding) {
+    fn extend_code_root(
+        key: &mut Vec<u8>, address: &Address, padding: &KeyPadding,
+    ) {
         Self::extend_address(key, address, padding);
         key.extend_from_slice(Self::CODE_PREFIX);
     }
 
-    pub fn new_code_root_key(address: &Address, padding: &KeyPadding) -> StorageKey {
+    pub fn new_code_root_key(
+        address: &Address, padding: &KeyPadding,
+    ) -> StorageKey {
         let mut key = Vec::with_capacity(
             Self::ACCOUNT_HASH_BYTES + Self::STORAGE_PREFIX.len(),
         );
@@ -125,7 +145,9 @@ impl StorageKey {
         StorageKey::CodeKey(key)
     }
 
-    pub fn new_code_key(address: &Address, code_hash: &H256, padding: &KeyPadding) -> StorageKey {
+    pub fn new_code_key(
+        address: &Address, code_hash: &H256, padding: &KeyPadding,
+    ) -> StorageKey {
         let mut key = Vec::with_capacity(
             Self::ACCOUNT_HASH_BYTES
                 + Self::CODE_PREFIX.len()
