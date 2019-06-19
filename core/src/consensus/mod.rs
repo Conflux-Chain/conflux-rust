@@ -81,8 +81,8 @@ pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 240;
 const NULL: usize = !0;
 const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
 
-// This is the cap of the size of the anticone barrier. If we have more than this
-// number we will use the brute_force O(n) algorithm instead.
+// This is the cap of the size of the anticone barrier. If we have more than
+// this number we will use the brute_force O(n) algorithm instead.
 const ANTICONE_BARRIER_CAP: usize = 1000;
 
 #[derive(Copy, Clone)]
@@ -319,12 +319,8 @@ impl ConsensusGraphInner {
         // so we cannot compute its past_weight from
         // sync_graph.total_weight_in_own_epoch().
         // For genesis block, its past_weight is simply zero.
-        let (genesis_index, _) = inner.insert(
-            data_man.genesis_block().as_ref(),
-            0,
-            false,
-            0,
-        );
+        let (genesis_index, _) =
+            inner.insert(data_man.genesis_block().as_ref(), 0, false, 0);
         inner.genesis_block_index = genesis_index;
         inner.weight_tree.make_tree(inner.genesis_block_index);
         inner.weight_tree.path_apply(
@@ -423,26 +419,30 @@ impl ConsensusGraphInner {
         adaptive
     }
 
-    fn compute_subtree_weights(&self, me: usize, anticone_barrier: &BitSet) -> (Vec<i128>, Vec<i128>) {
+    fn compute_subtree_weights(
+        &self, me: usize, anticone_barrier: &BitSet,
+    ) -> (Vec<i128>, Vec<i128>) {
         let mut subtree_weight = Vec::new();
         let mut subtree_stable_weight = Vec::new();
         let n = self.arena.len();
         subtree_weight.resize_with(n, Default::default);
         subtree_stable_weight.resize_with(n, Default::default);
         let mut queue = Vec::new();
-        queue.push((0, self.genesis_block_index) );
+        queue.push((0, self.genesis_block_index));
         while let Some((stage, index)) = queue.pop() {
             if stage == 0 {
                 queue.push((1, index));
                 for child in &self.arena[index].children {
-                    if !anticone_barrier.contains(*child as u32) && *child != me {
+                    if !anticone_barrier.contains(*child as u32) && *child != me
+                    {
                         queue.push((0, *child));
                     }
                 }
             } else {
                 for child in &self.arena[index].children {
                     subtree_weight[index] += subtree_weight[*child];
-                    subtree_stable_weight[index] += subtree_stable_weight[*child];
+                    subtree_stable_weight[index] +=
+                        subtree_stable_weight[*child];
                 }
                 let weight = self.block_weight(index);
                 subtree_weight[index] += weight;
@@ -454,7 +454,11 @@ impl ConsensusGraphInner {
         (subtree_weight, subtree_stable_weight)
     }
 
-    fn adaptive_weight_impl_brutal(&self, parent_0: usize, subtree_weight: &Vec<i128>, subtree_stable_weight: &Vec<i128>, difficulty: i128) -> (bool, bool) {
+    fn adaptive_weight_impl_brutal(
+        &self, parent_0: usize, subtree_weight: &Vec<i128>,
+        subtree_stable_weight: &Vec<i128>, difficulty: i128,
+    ) -> (bool, bool)
+    {
         let mut parent = parent_0;
         let mut stable = true;
         let total_weight = subtree_weight[self.genesis_block_index];
@@ -468,7 +472,10 @@ impl ConsensusGraphInner {
                 - self.block_weight(grandparent);
             if w > adjusted_beta {
                 let a = subtree_weight[parent];
-                if self.inner_conf.adaptive_weight_alpha_den as i128 * a - self.inner_conf.adaptive_weight_alpha_num as i128 * w < 0 {
+                if self.inner_conf.adaptive_weight_alpha_den as i128 * a
+                    - self.inner_conf.adaptive_weight_alpha_num as i128 * w
+                    < 0
+                {
                     stable = false;
                     break;
                 }
@@ -483,7 +490,10 @@ impl ConsensusGraphInner {
                 let w = subtree_weight[grandparent];
                 if w > adjusted_beta {
                     let a = subtree_stable_weight[parent];
-                    if self.inner_conf.adaptive_weight_alpha_den as i128 * a - self.inner_conf.adaptive_weight_alpha_num as i128 * w < 0 {
+                    if self.inner_conf.adaptive_weight_alpha_den as i128 * a
+                        - self.inner_conf.adaptive_weight_alpha_num as i128 * w
+                        < 0
+                    {
                         adaptive = true;
                         break;
                     }
@@ -495,10 +505,17 @@ impl ConsensusGraphInner {
     }
 
     fn adaptive_weight_impl(
-        &mut self, parent_0: usize, anticone_barrier: &BitSet, weight_pair: Option<&(Vec<i128>, Vec<i128>)>, difficulty: i128,
-    ) -> (bool, bool) {
+        &mut self, parent_0: usize, anticone_barrier: &BitSet,
+        weight_pair: Option<&(Vec<i128>, Vec<i128>)>, difficulty: i128,
+    ) -> (bool, bool)
+    {
         if let Some((subtree_weight, subtree_stable_weight)) = weight_pair {
-            return self.adaptive_weight_impl_brutal(parent_0, subtree_weight, subtree_stable_weight, difficulty);
+            return self.adaptive_weight_impl_brutal(
+                parent_0,
+                subtree_weight,
+                subtree_stable_weight,
+                difficulty,
+            );
         }
         let mut parent = parent_0;
 
@@ -615,14 +632,21 @@ impl ConsensusGraphInner {
     }
 
     pub fn adaptive_weight(
-        &mut self, me: usize, anticone_barrier: &BitSet, weight_pair: Option<&(Vec<i128>, Vec<i128>)>,
-    ) -> (bool, bool) {
+        &mut self, me: usize, anticone_barrier: &BitSet,
+        weight_pair: Option<&(Vec<i128>, Vec<i128>)>,
+    ) -> (bool, bool)
+    {
         let parent = self.arena[me].parent;
         assert!(parent != NULL);
 
         let difficulty = into_i128(&self.arena[me].difficulty);
 
-        self.adaptive_weight_impl(parent, anticone_barrier, weight_pair, difficulty)
+        self.adaptive_weight_impl(
+            parent,
+            anticone_barrier,
+            weight_pair,
+            difficulty,
+        )
     }
 
     pub fn insert(
@@ -687,8 +711,11 @@ impl ConsensusGraphInner {
         (index, self.indices.len())
     }
 
-    fn check_correct_parent_brutal(&mut self, me_in_consensus: usize,
-                                   blockset_in_own_epoch: HashSet<usize>, subtree_weight: &Vec<i128>) -> bool {
+    fn check_correct_parent_brutal(
+        &mut self, me_in_consensus: usize,
+        blockset_in_own_epoch: HashSet<usize>, subtree_weight: &Vec<i128>,
+    ) -> bool
+    {
         let mut valid = true;
         let parent = self.arena[me_in_consensus].parent;
 
@@ -730,11 +757,16 @@ impl ConsensusGraphInner {
 
     fn check_correct_parent(
         &mut self, me_in_consensus: usize,
-        blockset_in_own_epoch: HashSet<usize>, anticone_barrier: &BitSet, weight_pair: Option<&(Vec<i128>, Vec<i128>)>,
+        blockset_in_own_epoch: HashSet<usize>, anticone_barrier: &BitSet,
+        weight_pair: Option<&(Vec<i128>, Vec<i128>)>,
     ) -> bool
     {
         if let Some((subtree_weight, _)) = weight_pair {
-            return self.check_correct_parent_brutal(me_in_consensus, blockset_in_own_epoch, subtree_weight);
+            return self.check_correct_parent_brutal(
+                me_in_consensus,
+                blockset_in_own_epoch,
+                subtree_weight,
+            );
         }
         let mut valid = true;
         let parent = self.arena[me_in_consensus].parent;
@@ -1110,11 +1142,12 @@ impl ConsensusGraphInner {
                         if block_consensus_node_anticone_opt.is_none()
                             || anticone_cutoff_epoch_anticone_set_opt.is_none()
                         {
-                            anticone_difficulty =
-                                U512::from(into_u256(self.recompute_anticone_weight(
+                            anticone_difficulty = U512::from(into_u256(
+                                self.recompute_anticone_weight(
                                     *index,
                                     anticone_penalty_cutoff_epoch_index,
-                                )));
+                                ),
+                            ));
                         } else {
                             let anticone_set =
                                 block_consensus_node_anticone_opt
@@ -1128,8 +1161,9 @@ impl ConsensusGraphInner {
                             for a_index in anticone_set {
                                 // TODO: Maybe consider to use base difficulty
                                 // Check with the spec!
-                                anticone_difficulty +=
-                                    U512::from(into_u256(self.block_weight(a_index)));
+                                anticone_difficulty += U512::from(into_u256(
+                                    self.block_weight(a_index),
+                                ));
                             }
                         };
 
@@ -2283,7 +2317,8 @@ impl ConsensusGraph {
     fn check_block_full_validity(
         &self, new: usize, block: &Block, inner: &mut ConsensusGraphInner,
         blockset_in_own_epoch: HashSet<usize>, adaptive: bool,
-        anticone_barrier: &BitSet, weight_pair: Option<&(Vec<i128>, Vec<i128>)>,
+        anticone_barrier: &BitSet,
+        weight_pair: Option<&(Vec<i128>, Vec<i128>)>,
     ) -> bool
     {
         if inner.arena[inner.arena[new].parent].data.partial_invalid {
@@ -2299,7 +2334,7 @@ impl ConsensusGraph {
             new,
             blockset_in_own_epoch,
             anticone_barrier,
-            weight_pair
+            weight_pair,
         ) {
             warn!(
                 "Partially invalid due to picking incorrect parent. {:?}",
@@ -2838,7 +2873,8 @@ impl ConsensusGraph {
 
         self.update_lcts_initial(inner, me);
 
-        let (stable, adaptive) = inner.adaptive_weight(me, &anticone_barrier, weight_pair.as_ref());
+        let (stable, adaptive) =
+            inner.adaptive_weight(me, &anticone_barrier, weight_pair.as_ref());
         inner.arena[me].stable = stable;
         inner.arena[me].adaptive = adaptive;
 
@@ -2921,7 +2957,8 @@ impl ConsensusGraph {
 
         self.update_lcts_initial(inner, me);
 
-        let (stable, adaptive) = inner.adaptive_weight(me, &anticone_barrier, weight_pair.as_ref());
+        let (stable, adaptive) =
+            inner.adaptive_weight(me, &anticone_barrier, weight_pair.as_ref());
 
         let fully_valid = if self.preliminary_check_validity(inner, me) {
             self.check_block_full_validity(
@@ -2931,7 +2968,7 @@ impl ConsensusGraph {
                 blockset_in_own_epoch,
                 adaptive,
                 &anticone_barrier,
-                weight_pair.as_ref()
+                weight_pair.as_ref(),
             )
         } else {
             false
