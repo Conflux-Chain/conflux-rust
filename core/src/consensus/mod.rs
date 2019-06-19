@@ -83,7 +83,7 @@ const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
 
 // This is the cap of the size of the anticone barrier. If we have more than this
 // number we will use the brute_force O(n) algorithm instead.
-const ANTICONE_BARRIER_CAP: usize = 0;
+const ANTICONE_BARRIER_CAP: usize = 1000;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
