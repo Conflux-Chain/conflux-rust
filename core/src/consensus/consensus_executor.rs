@@ -19,7 +19,8 @@ use primitives::{
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
+    Block, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
+    TransactionAddress,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -30,7 +31,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use hash::{KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
+use hash::KECCAK_EMPTY_LIST_RLP;
 use std::fmt::{Debug, Formatter};
 
 // TODO: Parallelize anticone calculation by moving calculation into task.
@@ -101,7 +102,7 @@ impl EpochExecutionTask {
 #[derive(Debug)]
 struct GetExecutionResultTask {
     pub epoch_hash: H256,
-    pub sender: Sender<(H256, H256)>,
+    pub sender: Sender<(StateRootWithAuxInfo, H256)>,
 }
 
 pub struct ConsensusExecutor {
@@ -194,9 +195,11 @@ impl ConsensusExecutor {
     /// It is the caller's responsibility to ensure that `epoch_hash` is indeed
     /// computed when all the tasks before are finished.
     // TODO Release Consensus inner lock if possible when the function is called
-    pub fn wait_for_result(&self, epoch_hash: H256) -> (H256, H256) {
+    pub fn wait_for_result(
+        &self, epoch_hash: H256,
+    ) -> (StateRootWithAuxInfo, H256) {
         if self.bench_mode {
-            (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP)
+            (Default::default(), KECCAK_EMPTY_LIST_RLP)
         } else {
             let (sender, receiver) = channel();
             self.sender
@@ -364,7 +367,9 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_for_next_epoch(*pivot_block.block_header.parent_hash())
+                    .get_state_for_next_epoch(
+                        *pivot_block.block_header.parent_hash(),
+                    )
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap(),
@@ -811,7 +816,9 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_for_next_epoch(*pivot_block.block_header.parent_hash())
+                    .get_state_for_next_epoch(
+                        *pivot_block.block_header.parent_hash(),
+                    )
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap(),

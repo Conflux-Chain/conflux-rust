@@ -143,9 +143,7 @@ impl OverlayAccount {
             return Some(self.code_cache.clone());
         }
 
-        match db
-            .get_raw(&db.code_key(&self.address, &self.code_hash))
-        {
+        match db.get_raw(&db.code_key(&self.address, &self.code_hash)) {
             Ok(Some(code)) => {
                 self.code_size = Some(code.len());
                 self.code_cache = Arc::new(code.to_vec());
@@ -266,9 +264,7 @@ impl OverlayAccount {
             let address_key = db.storage_key(&self.address, k.as_ref());
 
             match v.is_zero() {
-                true => {
-                    db.delete(&db.account_key(&self.address))?
-                }
+                true => db.delete(&db.account_key(&self.address))?,
                 false => {
                     db.set::<H256>(&address_key, &H256::from(U256::from(v)))?
                 }
@@ -280,10 +276,7 @@ impl OverlayAccount {
             Some(code) => {
                 if !code.is_empty() {
                     db.set_raw(
-                        &db.code_key(
-                            &self.address,
-                            &self.code_hash,
-                        ),
+                        &db.code_key(&self.address, &self.code_hash),
                         &code.as_ref(),
                     )?;
                 }

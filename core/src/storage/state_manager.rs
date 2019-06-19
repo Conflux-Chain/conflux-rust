@@ -23,16 +23,18 @@ pub type SharedStateManager = Arc<StateManager>;
 pub trait StateManagerTrait {
     fn from_snapshot(snapshot: &Snapshot) -> Self;
     fn make_snapshot(&self, epoch_id: EpochId) -> Snapshot;
-    /// At the boundary of snapshot, getting a state for new epoch will switch to
-    /// new Delta MPT, but it's unnecessary getting a no-commit state.
+    /// At the boundary of snapshot, getting a state for new epoch will switch
+    /// to new Delta MPT, but it's unnecessary getting a no-commit state.
     fn get_state_no_commit(&self, epoch_id: EpochId) -> Result<Option<State>>;
     // FIXME: check if any use is actually no_commit.
-    fn get_state_for_next_epoch(&self, parent_epoch_id: EpochId) -> Result<Option<State>>;
+    fn get_state_for_next_epoch(
+        &self, parent_epoch_id: EpochId,
+    ) -> Result<Option<State>>;
     // FIXME: does it has Result<> or not?
     fn get_state_for_genesis_write(&self) -> State;
-    // FIXME: this method is reserved for checkpoint, but we have to change its parameters,
-    // FIXME: because storage knows nothing about consensus graph, therefore it can't know
-    // FIXME: which snapshot to drop.
+    // FIXME: this method is reserved for checkpoint, but we have to change its
+    // parameters, FIXME: because storage knows nothing about consensus
+    // graph, therefore it can't know FIXME: which snapshot to drop.
     fn drop_state_outside(&self, epoch_id: EpochId);
 
     /// False in case of db failure.

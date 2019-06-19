@@ -5,15 +5,12 @@
 use crate::{
     bytes::Bytes,
     hash::KECCAK_EMPTY,
-    statedb::{
-        ErrorKind as DbErrorKind, Result as DbResult, StateDb,
-    },
-    storage::MerkleHash,
+    statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId};
+use primitives::{Account, EpochId, StateRootWithAuxInfo};
 use std::{
     cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -255,7 +252,9 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn commit(&mut self, epoch_id: EpochId) -> DbResult<MerkleHash> {
+    pub fn commit(
+        &mut self, epoch_id: EpochId,
+    ) -> DbResult<StateRootWithAuxInfo> {
         debug!("Commit epoch {}", epoch_id);
         assert!(self.checkpoints.borrow().is_empty());
 
@@ -280,7 +279,7 @@ impl<'a> State<'a> {
 
     pub fn commit_and_notify(
         &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
-    ) -> DbResult<MerkleHash> {
+    ) -> DbResult<StateRootWithAuxInfo> {
         assert!(self.checkpoints.borrow().is_empty());
 
         let mut accounts = self.cache.borrow_mut();
@@ -611,7 +610,9 @@ mod tests {
 
     fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
         State::new(
-            StateDb::new(storage_manager.get_state_for_next_epoch(epoch_id).unwrap()),
+            StateDb::new(
+                storage_manager.get_state_for_next_epoch(epoch_id).unwrap(),
+            ),
             0.into(),
             VmFactory::default(),
         )

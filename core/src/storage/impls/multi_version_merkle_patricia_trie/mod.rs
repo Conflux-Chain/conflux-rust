@@ -40,7 +40,9 @@ pub struct MultiVersionMerklePatriciaTrie {
 }
 
 impl MultiVersionMerklePatriciaTrie {
-    pub fn new(kvdb: Arc<KeyValueDB>, conf: StorageConfiguration, padding: KeyPadding) -> Self {
+    pub fn new(
+        kvdb: Arc<KeyValueDB>, conf: StorageConfiguration, padding: KeyPadding,
+    ) -> Self {
         Self {
             root_by_version: Default::default(),
             node_memory_manager: NodeMemoryManagerDeltaMpt::new(
@@ -110,8 +112,9 @@ use self::{
     node_memory_manager::*, node_ref_map::DeltaMptDbKey,
 };
 use super::errors::*;
-use crate::statedb::KeyPadding;
-use crate::storage::state_manager::StorageConfiguration;
+use crate::{
+    statedb::KeyPadding, storage::state_manager::StorageConfiguration,
+};
 use kvdb::KeyValueDB;
 use parking_lot::RwLock;
 use primitives::EpochId;
