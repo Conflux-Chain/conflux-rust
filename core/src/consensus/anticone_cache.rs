@@ -23,19 +23,15 @@ impl AnticoneCache {
     pub fn update(&mut self, me: usize, anticone: &BitSet) {
         self.max_seen_index = max(self.max_seen_index, me);
         // BitSet does not have len() method
-        let mut tmp = HashSet::new();
-        let mut cnt = 0;
-        for index in anticone.iter() {
-            cnt += 1;
-            if tmp.len() <= MAX_ANTICONE_SIZE {
+        if anticone.len() < MAX_ANTICONE_SIZE {
+            let mut tmp = HashSet::new();
+            for index in anticone.iter() {
                 tmp.insert(index as usize);
             }
-        }
-        if tmp.len() <= MAX_ANTICONE_SIZE {
             self.data.insert(me, tmp);
         }
 
-        if cnt < self.data.len() {
+        if anticone.len() < self.data.len() {
             for index in anticone.iter() {
                 let index_usize = index as usize;
                 if self.data.contains_key(&index_usize) {
