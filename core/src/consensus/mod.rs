@@ -1500,28 +1500,6 @@ impl ConsensusGraph {
         self.txpool.set_to_propagate_trans(transactions);
     }
 
-    pub fn later_than(&self, a: &H256, b: &H256) -> bool {
-        let inner = self.inner.read();
-
-        let b_idx = inner.indices.get(b);
-        if b_idx.is_none() {
-            return false;
-        }
-        let b_idx = b_idx.unwrap();
-
-        let a_idx = inner.indices.get(a);
-        if a_idx.is_none() {
-            return true;
-        }
-        let a_idx = a_idx.unwrap();
-
-        if a_idx > b_idx {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     pub fn update_total_weight_in_past(&self) {
         let mut total_weight = self.total_weight_in_past_2d.write();
         total_weight.delta = total_weight.cur - total_weight.old;
