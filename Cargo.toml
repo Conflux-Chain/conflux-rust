@@ -44,6 +44,10 @@ threadpool = "1.7"
 name = "consensus_bench"
 path = "core/benchmark/consensus/src/main.rs"
 
+[[bin]]
+name = "cfx-gen-dot"
+path = "tools/cfx-gen-dot/main.rs"
+
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
 
