@@ -786,16 +786,18 @@ impl ConsensusGraphInner {
         self.anticone_cache.update(me, &anticone);
 
         let mut anticone_barrier = BitSet::new();
-        let mut cnt = 0;
         for index in anticone.clone().iter() {
-            cnt += 1;
             let parent = self.arena[index as usize].parent as u32;
             if !anticone.contains(parent) {
                 anticone_barrier.add(index);
             }
         }
 
-        debug!("Block {} anticone size {}", self.arena[me].hash, cnt);
+        debug!(
+            "Block {} anticone size {}",
+            self.arena[me].hash,
+            anticone.len()
+        );
 
         anticone_barrier
     }
@@ -898,50 +900,54 @@ impl ConsensusGraphInner {
     ) -> U256 {
         // We need to compute the future size of me under the view of epoch
         // height pivot_index
-        let mut visited = HashSet::new();
+        let mut visited = BitSet::new();
         let mut queue = VecDeque::new();
         queue.push_back(pivot_block_index);
-        visited.insert(pivot_block_index);
+        visited.add(pivot_block_index as u32);
         let last_pivot = self.arena[me].last_pivot_in_past;
         while let Some(index) = queue.pop_front() {
             let parent = self.arena[index].parent;
             if self.arena[parent].data.epoch_number > last_pivot
-                && !visited.contains(&parent)
+                && !visited.contains(parent as u32)
             {
                 queue.push_back(parent);
-                visited.insert(parent);
+                visited.add(parent as u32);
             }
             for referee in &self.arena[index].referees {
                 if self.arena[*referee].data.epoch_number > last_pivot
-                    && !visited.contains(referee)
+                    && !visited.contains(*referee as u32)
                 {
                     queue.push_back(*referee);
-                    visited.insert(*referee);
+                    visited.add(*referee as u32);
                 }
             }
         }
         queue.push_back(me);
-        let mut visited2 = HashSet::new();
-        visited2.insert(me);
+        let mut visited2 = BitSet::new();
+        visited2.add(me as u32);
         while let Some(index) = queue.pop_front() {
             for child in &self.arena[index].children {
-                if visited.contains(child) && !visited2.contains(child) {
+                if visited.contains(*child as u32)
+                    && !visited2.contains(*child as u32)
+                {
                     queue.push_back(*child);
-                    visited2.insert(*child);
+                    visited2.add(*child as u32);
                 }
             }
             for referrer in &self.arena[index].referrers {
-                if visited.contains(referrer) && !visited2.contains(referrer) {
+                if visited.contains(*referrer as u32)
+                    && !visited2.contains(*referrer as u32)
+                {
                     queue.push_back(*referrer);
-                    visited2.insert(*referrer);
+                    visited2.add(*referrer as u32);
                 }
             }
         }
         let mut total_weight = self.arena[pivot_block_index].past_weight
             - self.arena[me].past_weight
             + self.block_weight(pivot_block_index);
-        for index in visited2 {
-            total_weight -= self.block_weight(index);
+        for index in visited2.iter() {
+            total_weight -= self.block_weight(index as usize);
         }
         total_weight
     }
