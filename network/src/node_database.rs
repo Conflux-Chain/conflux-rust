@@ -165,7 +165,7 @@ impl NodeDatabase {
             self.update_ip_limit(&node.id, old_ip, ip);
             self.trusted_nodes.update_last_contact(node);
         } else if let Some(old_node) =
-        self.untrusted_nodes.remove_with_id(&node.id)
+            self.untrusted_nodes.remove_with_id(&node.id)
         {
             node.last_connected = old_node.last_connected;
             node.stream_token = old_node.stream_token;

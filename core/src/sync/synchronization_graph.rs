@@ -90,6 +90,7 @@ pub struct SynchronizationGraphNode {
     /// blocks including itself.
     pub min_epoch_in_other_views: u64,
     pub max_epoch_in_other_views: u64,
+    pub sequence_number: u64,
 }
 
 pub struct SynchronizationGraphInner {
@@ -100,6 +101,7 @@ pub struct SynchronizationGraphInner {
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
     pow_config: ProofOfWorkConfig,
+    pub sequence_number_of_header_entrance: u64,
 }
 
 impl SynchronizationGraphInner {
@@ -116,6 +118,7 @@ impl SynchronizationGraphInner {
             children_by_hash: HashMap::new(),
             referrers_by_hash: HashMap::new(),
             pow_config,
+            sequence_number_of_header_entrance: 0,
         };
         inner.genesis_block_index = inner.insert(genesis_header);
         debug!(
@@ -124,6 +127,12 @@ impl SynchronizationGraphInner {
         );
 
         inner
+    }
+
+    pub fn get_next_sequence_number(&mut self) -> u64 {
+        let sn = self.sequence_number_of_header_entrance;
+        self.sequence_number_of_header_entrance += 1;
+        sn
     }
 
     pub fn insert_invalid(&mut self, header: Arc<BlockHeader>) -> usize {
@@ -140,6 +149,7 @@ impl SynchronizationGraphInner {
             min_epoch_in_other_views: header.height(),
             max_epoch_in_other_views: header.height(),
             block_header: header,
+            sequence_number: NULL as u64,
         });
         self.indices.insert(hash, me);
 
@@ -168,8 +178,17 @@ impl SynchronizationGraphInner {
     /// Return the index of the inserted block.
     pub fn insert(&mut self, header: Arc<BlockHeader>) -> usize {
         let hash = header.hash();
+        let is_genesis = *header.parent_hash() == H256::default();
+        let sn = if is_genesis {
+            let sn = self.get_next_sequence_number();
+            assert!(sn == 0);
+            sn
+        } else {
+            NULL as u64
+        };
+
         let me = self.arena.insert(SynchronizationGraphNode {
-            graph_status: if *header.parent_hash() == H256::default() {
+            graph_status: if is_genesis {
                 BLOCK_GRAPH_READY
             } else {
                 BLOCK_HEADER_ONLY
@@ -184,6 +203,7 @@ impl SynchronizationGraphInner {
             min_epoch_in_other_views: header.height(),
             max_epoch_in_other_views: header.height(),
             block_header: header.clone(),
+            sequence_number: sn,
         });
         self.indices.insert(hash, me);
 
@@ -332,13 +352,11 @@ impl SynchronizationGraphInner {
             loop {
                 let parent = self.arena[cur_pivot].parent;
                 debug_assert!(parent != NULL);
+
                 if self.arena[parent].block_header.height()
                     < self.arena[index].min_epoch_in_other_views
-                    || (parent < consensus_block_count
-                        && consensus.later_than(
-                            &self.arena[index].block_header.hash(),
-                            &self.arena[parent].block_header.hash(),
-                        ))
+                    || (self.arena[index].sequence_number
+                        > self.arena[parent].sequence_number)
                 {
                     break;
                 }
@@ -951,6 +969,8 @@ impl SynchronizationGraph {
                 );
             } else {
                 if inner.new_to_be_header_graph_ready(index) {
+                    inner.arena[index].sequence_number =
+                        inner.get_next_sequence_number();
                     inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
                     debug_assert!(inner.arena[index].parent != NULL);
                     debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
