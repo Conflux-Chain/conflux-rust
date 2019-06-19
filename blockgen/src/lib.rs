@@ -241,7 +241,6 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
-            self.txgen.get_best_state(),
         );
 
         self.assemble_new_block_impl(
@@ -275,8 +274,6 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
-            self.txgen
-                .get_best_state_at(&guarded.best_state_block_hash()),
         );
         let transactions = [
             additional_transactions.as_slice(),

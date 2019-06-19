@@ -2295,43 +2295,6 @@ impl ConsensusGraph {
             block.size(),
         );
 
-        {
-            // FIXME: the comments below is now BS.
-            // When a tx is executed successfully, it will be removed from
-            // `unexecuted_transaction_addresses` If a tx is
-            // executed with failure(InvalidNonce), or the block packing it is
-            // never refered and executed, only the corresponding tx address
-            // will be removed. After a tx is removed from
-            // `unexecuted_transaction_addresses` because of
-            // successful execution, its new nonce will be available in state
-            // and it will not be inserted to tx pool again.
-            let mut unexecuted_transaction_addresses =
-                self.txpool.unexecuted_transaction_addresses.lock();
-            let mut cache_man = self.data_man.cache_man.lock();
-            for (idx, tx) in block.transactions.iter().enumerate() {
-                // If an executed tx
-                let tx_hash = tx.hash();
-                if let Some(addr_set) =
-                    unexecuted_transaction_addresses.get_mut(&tx_hash)
-                {
-                    addr_set.insert(TransactionAddress {
-                        block_hash: hash.clone(),
-                        index: idx,
-                    });
-                } else {
-                    let mut addr_set = HashSet::new();
-                    addr_set.insert(TransactionAddress {
-                        block_hash: hash.clone(),
-                        index: idx,
-                    });
-                    unexecuted_transaction_addresses.insert(tx_hash, addr_set);
-                    cache_man.note_used(CacheId::UnexecutedTransactionAddress(
-                        tx_hash,
-                    ));
-                }
-            }
-        }
-
         let mut inner = &mut *self.inner.write();
 
         let is_heavy;
@@ -2361,16 +2324,9 @@ impl ConsensusGraph {
 
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
-        for tx in block.transactions.iter() {
-            self.txpool.set_tx_stale_for_ready(tx.clone());
-        }
-
-        let (_ready, pending, total) = self.txpool.stats();
-        info!(
-            "Total transaction received {}, total txs packed by chain {}",
-            total,
-            total - pending
-        );
+        let best_epoch_id = inner.best_state_block_hash();
+        self.txpool
+            .set_tx_packed(block.transactions.clone(), best_epoch_id);
 
         inner.compute_anticone(me);
 

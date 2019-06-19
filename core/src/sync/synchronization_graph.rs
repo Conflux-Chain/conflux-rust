@@ -1170,12 +1170,6 @@ impl SynchronizationGraph {
             .transaction_addresses
             .read()
             .heap_size_of_children();
-        let transaction_addresses_unexecuted = self
-            .consensus
-            .txpool
-            .unexecuted_transaction_addresses
-            .lock()
-            .heap_size_of_children();
         let transaction_pubkey = self
             .consensus
             .txpool
@@ -1185,8 +1179,7 @@ impl SynchronizationGraph {
         CacheSize {
             blocks,
             block_receipts,
-            transaction_addresses: transaction_addresses_data
-                + transaction_addresses_unexecuted,
+            transaction_addresses: transaction_addresses_data,
             compact_blocks,
             transaction_pubkey,
         }
@@ -1201,22 +1194,16 @@ impl SynchronizationGraph {
         let mut compact_blocks = self.compact_blocks.write();
         let mut transaction_pubkey_cache =
             self.consensus.txpool.transaction_pubkey_cache.write();
-        let mut unexecuted_transaction_addresses = self
-            .consensus
-            .txpool
-            .unexecuted_transaction_addresses
-            .lock();
         let mut tx_address = self.data_man.transaction_addresses.write();
         let mut cache_man = self.cache_man.lock();
         info!(
-            "Before gc cache_size={} {} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {}",
             current_size,
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
             tx_address.len(),
             transaction_pubkey_cache.len(),
-            unexecuted_transaction_addresses.len()
         );
 
         cache_man.collect_garbage(current_size, |ids| {
@@ -1231,9 +1218,6 @@ impl SynchronizationGraph {
                     CacheId::TransactionAddress(ref h) => {
                         tx_address.remove(h);
                     }
-                    CacheId::UnexecutedTransactionAddress(ref h) => {
-                        unexecuted_transaction_addresses.remove(h);
-                    }
                     CacheId::CompactBlock(ref h) => {
                         compact_blocks.remove(h);
                     }
@@ -1247,14 +1231,12 @@ impl SynchronizationGraph {
             executed_results.shrink_to_fit();
             tx_address.shrink_to_fit();
             transaction_pubkey_cache.shrink_to_fit();
-            unexecuted_transaction_addresses.shrink_to_fit();
             compact_blocks.shrink_to_fit();
 
             blocks.heap_size_of_children()
                 + executed_results.heap_size_of_children()
                 + tx_address.heap_size_of_children()
                 + transaction_pubkey_cache.heap_size_of_children()
-                + unexecuted_transaction_addresses.heap_size_of_children()
                 + compact_blocks.heap_size_of_children()
         });
     }

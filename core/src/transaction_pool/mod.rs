@@ -16,7 +16,6 @@ use crate::{
     cache_manager::{CacheId, CacheManager},
     executive,
     pow::WORKER_COMPUTATION_PARALLELISM,
-    state::State,
     statedb::StateDb,
     storage::{Storage, StorageManager, StorageManagerTrait},
     vm,
@@ -25,13 +24,11 @@ use cfx_types::{Address, H256, H512, U256, U512};
 use metrics::Gauge;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    Account, Action, EpochId, SignedTransaction, TransactionAddress,
-    TransactionWithSignature,
+    Account, Action, EpochId, SignedTransaction, TransactionWithSignature,
 };
 use rlp::*;
 use std::{
-    cmp::min,
-    collections::{hash_map::HashMap, BTreeMap, HashSet, VecDeque},
+    collections::{hash_map::HashMap, BTreeMap, VecDeque},
     ops::{Deref, DerefMut},
     sync::{mpsc::channel, Arc},
 };
@@ -74,453 +71,245 @@ impl<'storage> AccountCache<'storage> {
                 .ok()
                 .and_then(|x| x);
             if let Some(account) = account {
-                self.accounts.insert(address.clone(), account);
+                self.accounts.insert((*address).clone(), account);
             }
         }
         self.accounts.get_mut(&address)
     }
-
-    //    fn _is_ready(&mut self, tx: &SignedTransaction) -> Readiness {
-    //        let sender = tx.sender();
-    //        let account = self.get_account_mut(&sender);
-    //        if let Some(account) = account {
-    //            match tx.nonce().cmp(&account.nonce) {
-    //                Ordering::Greater => {
-    //                    if (tx.nonce() - account.nonce)
-    //                        > FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET.into()
-    //                    {
-    //                        Readiness::TooDistantFuture
-    //                    } else {
-    //                        Readiness::Future
-    //                    }
-    //                }
-    //                Ordering::Less => Readiness::Stale,
-    //                Ordering::Equal => Readiness::Ready,
-    //            }
-    //        } else {
-    //            if tx.nonce() >
-    // FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET.into() {
-    // Readiness::TooDistantFuture            } else {
-    //                 TODO: when tx.nonce == 0, we should check if the
-    // transaction                 is receiver paid.
-    //                if tx.nonce == 0.into() {
-    //                    debug!("Transaction from empty account: {:?}.", tx);
-    //                }
-    //                Readiness::Future
-    //            }
-    //        }
-    //    }
-}
-
-trait TxTypeTrait : Clone /*+ Debug */+ Send + Sync + Deref<Target = SignedTransaction> {
-    fn replaces(&self, x: &Self) -> bool;
-}
-
-impl TxTypeTrait for Arc<SignedTransaction> {
-    fn replaces(&self, x: &Self) -> bool { self.gas_price > x.gas_price }
 }
 
 #[derive(Clone, Debug)]
-struct TxWithPackedMarkAndCachedBalance(Arc<SignedTransaction>, bool, U256);
+struct TxWithReadyInfo {
+    transaction: Arc<SignedTransaction>,
+    packed: bool,
+}
 
-impl TxWithPackedMarkAndCachedBalance {
-    pub fn is_already_packed(&self) -> bool { self.1 }
+impl TxWithReadyInfo {
+    pub fn is_already_packed(&self) -> bool { self.packed }
 
-    pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.0 }
+    pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.transaction }
 
-    pub fn get_cached_account_balance_before_tx(&self) -> &U256 { &self.2 }
-
-    pub fn get_cached_account_balance_before_tx_mut(&mut self) -> &mut U256 {
-        &mut self.2
+    pub fn replace(&self, x: &Self, force: bool) -> bool {
+        if force {
+            return true;
+        }
+        if x.is_already_packed() {
+            return false;
+        }
+        if self.is_already_packed() {
+            return true;
+        }
+        self.gas_price > x.gas_price
     }
 }
 
-impl Deref for TxWithPackedMarkAndCachedBalance {
+impl Deref for TxWithReadyInfo {
     type Target = SignedTransaction;
 
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target { &self.transaction }
 }
 
-impl TxTypeTrait for TxWithPackedMarkAndCachedBalance {
-    fn replaces(&self, x: &Self) -> bool {
-        !x.is_already_packed()
-            && (self.is_already_packed()
-                || self.get_arc_tx().replaces(x.get_arc_tx()))
-    }
-}
-
-#[derive(Debug, PartialEq)]
-enum InsertResult<TxType: TxTypeTrait> {
+#[derive(Debug)]
+enum InsertResult {
     /// new item added
     NewAdded,
     /// failed to update with lower gas price tx
-    Failed,
+    Failed(String),
     /// succeeded to update with higher gas price tx
-    Updated(TxType),
+    Updated(TxWithReadyInfo),
 }
 
-struct NoncePool<TxType: TxTypeTrait> {
-    buckets: HashMap<Address, BTreeMap<U256, TxType>>,
+struct NoncePool {
+    inner: BTreeMap<U256, TxWithReadyInfo>,
 }
 
-impl<TxType: TxTypeTrait> NoncePool<TxType> {
+impl NoncePool {
     fn new() -> Self {
         NoncePool {
-            buckets: Default::default(),
+            inner: Default::default(),
         }
     }
 
-    fn insert(&mut self, tx: TxType) -> InsertResult<TxType> {
-        let bucket =
-            self.buckets.entry(tx.sender).or_insert(Default::default());
-
-        let mut ret = if bucket.contains_key(&tx.nonce) {
-            InsertResult::Failed
+    // FIXME: later we should limit the number of txs from one sender.
+    //  the FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET roughly doing this job
+    fn insert(&mut self, tx: &TxWithReadyInfo, force: bool) -> InsertResult {
+        let mut ret = if self.inner.contains_key(&tx.nonce) {
+            InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
         } else {
             InsertResult::NewAdded
         };
 
-        let tx_in_pool = bucket.entry(tx.nonce).or_insert(tx.clone());
-        if tx.replaces(tx_in_pool) {
+        let tx_in_pool = self.inner.entry(tx.nonce).or_insert(tx.clone());
+        if tx.replace(tx_in_pool, force) {
             // replace with higher gas price transaction
             ret = InsertResult::Updated(tx_in_pool.clone());
             *tx_in_pool = tx.clone();
         }
-
         ret
     }
 
-    fn remove_below(
-        &mut self, addr: &Address, nonce: &U256,
-    ) -> (Vec<H256>, bool) {
-        let mut result = (vec![], false);
-
-        match self.buckets.get_mut(addr) {
-            None => {}
-            Some(bucket) => {
-                let nonces_to_delete = bucket
-                    .range(&0.into()..nonce)
-                    .map(|(key, _)| *key)
-                    .collect::<Vec<_>>();
-
-                for nonce in nonces_to_delete {
-                    match bucket.remove(&nonce) {
-                        Some(tx) => {
-                            result.0.push(tx.hash);
-                        }
-                        None => {}
-                    }
-                }
-
-                if bucket.is_empty() {
-                    self.buckets.remove(addr);
-                    result.1 = true;
-                }
-            }
-        }
-
-        result
+    #[allow(dead_code)]
+    fn get(&self, nonce: &U256) -> Option<TxWithReadyInfo> {
+        self.inner.get(nonce).map(|tx| tx.clone())
     }
 
-    fn remove(&mut self, addr: &Address, nonce: &U256) -> Option<TxType> {
+    #[allow(dead_code)]
+    fn get_mut(&mut self, nonce: &U256) -> Option<&mut TxWithReadyInfo> {
+        self.inner.get_mut(nonce)
+    }
+
+    fn get_lowest_nonce(&self) -> Option<&U256> {
+        self.inner.iter().next().map(|(k, _)| k)
+    }
+
+    fn remove(&mut self, nonce: &U256) -> Option<TxWithReadyInfo> {
+        self.inner.remove(nonce)
+    }
+
+    fn remove_lowest_nonce(&mut self) -> Option<TxWithReadyInfo> {
+        let lowest_nonce = self.get_lowest_nonce().map(|x| x.clone());
+        lowest_nonce.and_then(|nonce| self.remove(&nonce))
+    }
+
+    fn recalculate_readiness_with_local_info(
+        &self, nonce: U256, balance: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        let mut next_nonce = nonce;
+        let mut balance_left = balance;
+        while let Some(tx) = self.inner.get(&next_nonce) {
+            if !tx.packed {
+                return Some(tx.transaction.clone());
+            }
+            // FIXME
+            balance_left -= 0.into();
+            next_nonce += 1.into();
+        }
+        None
+    }
+
+    fn is_empty(&self) -> bool { self.inner.is_empty() }
+}
+
+struct DeferredPool {
+    buckets: HashMap<Address, NoncePool>,
+}
+
+impl DeferredPool {
+    fn new() -> Self {
+        DeferredPool {
+            buckets: Default::default(),
+        }
+    }
+
+    fn insert(&mut self, tx: TxWithReadyInfo, force: bool) -> InsertResult {
+        // It's safe to create a new bucket, cause inserting to a empty bucket
+        // will always be success
+        let bucket = self.buckets.entry(tx.sender).or_insert(NoncePool::new());
+        bucket.insert(&tx, force)
+    }
+
+    fn contain_address(&self, addr: &Address) -> bool {
+        self.buckets.contains_key(addr)
+    }
+
+    fn remove_lowest_nonce(
+        &mut self, addr: &Address,
+    ) -> Option<TxWithReadyInfo> {
         match self.buckets.get_mut(addr) {
             None => None,
             Some(bucket) => {
-                let ret = bucket.remove(nonce);
-
+                let ret = bucket.remove_lowest_nonce();
                 if bucket.is_empty() {
                     self.buckets.remove(addr);
                 }
-
                 ret
             }
         }
     }
 
-    fn get(&self, addr: &Address, nonce: &U256) -> Option<TxType> {
-        self.buckets
-            .get(addr)
-            .and_then(|bucket| bucket.get(nonce))
-            .map(|tx| tx.clone())
+    #[allow(dead_code)]
+    fn remove(
+        &mut self, addr: &Address, nonce: &U256,
+    ) -> Option<TxWithReadyInfo> {
+        match self.buckets.get_mut(addr) {
+            None => None,
+            Some(bucket) => {
+                let ret = bucket.remove(nonce);
+                if bucket.is_empty() {
+                    self.buckets.remove(addr);
+                }
+                ret
+            }
+        }
     }
 
-    fn get_mut(&mut self, addr: &Address, nonce: &U256) -> Option<&mut TxType> {
+    #[allow(dead_code)]
+    fn get(&self, addr: &Address, nonce: &U256) -> Option<TxWithReadyInfo> {
+        self.buckets.get(addr).and_then(|bucket| bucket.get(nonce))
+    }
+
+    #[allow(dead_code)]
+    fn get_mut(
+        &mut self, addr: &Address, nonce: &U256,
+    ) -> Option<&mut TxWithReadyInfo> {
         self.buckets
             .get_mut(addr)
             .and_then(|bucket| bucket.get_mut(nonce))
     }
 
-    fn get_lowest_nonce_transaction(
-        &self, addr: &Address,
-    ) -> Option<(&U256, &TxType)> {
+    fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
         self.buckets
             .get(addr)
-            .and_then(|bucket| bucket.iter().next())
+            .and_then(|bucket| bucket.get_lowest_nonce())
+    }
+
+    fn recalculate_readiness_with_local_info(
+        &mut self, addr: &Address, nonce: U256, balance: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        if let Some(bucket) = self.buckets.get(addr) {
+            bucket.recalculate_readiness_with_local_info(nonce, balance)
+        } else {
+            None
+        }
     }
 }
 
-struct UnexecutedTransactions {
-    nonce_pool: NoncePool<TxWithPackedMarkAndCachedBalance>,
-    ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
-    txs: HashMap<H256, Arc<SignedTransaction>>,
-    recent_states_accounts: VecDeque<HashMap<Address, U256>>,
-    recent_states_accounts_nonces: HashMap<Address, VecDeque<U256>>,
-    number_packed_txs: usize,
+struct ReadyAccountPool {
+    treap: TreapMap<Address, Arc<SignedTransaction>, U512>,
 }
 
-impl UnexecutedTransactions {
-    const KEEP_NONCE_AT_OLD_STATE: usize = 100;
-
+impl ReadyAccountPool {
     fn new() -> Self {
-        UnexecutedTransactions {
-            nonce_pool: NoncePool::new(),
-            ready_nonces_and_balances: Default::default(),
-            txs: HashMap::new(),
-            recent_states_accounts: Default::default(),
-            recent_states_accounts_nonces: Default::default(),
-            number_packed_txs: 0,
-        }
-    }
-
-    pub fn number_packed_txs(&self) -> usize { self.number_packed_txs }
-
-    fn pending_pool_size(&self) -> usize {
-        self.txs.len() - self.number_packed_txs
-    }
-
-    pub fn notify_state_start(&mut self) {
-        let mut removed_txs = 0;
-        // FIXME: Use a better way than this Self::KEEP_NONCE_AT_OLD_STATE.
-        //  Maybe maintain a difference of known transactions and
-        //  transactions that already packed in pivot-chain (with
-        //  deferred state). When deferred pivot changes maintain
-        //  transaction pool.
-        if self.recent_states_accounts.len() > Self::KEEP_NONCE_AT_OLD_STATE {
-            match self.recent_states_accounts.pop_front() {
-                None => {}
-                Some(old_state_accounts) => {
-                    for (address, _nonce) in old_state_accounts {
-                        // FIXME: Maintenance of
-                        //  self.recent_states_accounts_nonces is forgotten.
-                        //  this is why the code below doesn't run.
-                        //  Note that we should fix the counting of total
-                        //  transactions packed by chain as well.
-                        match self
-                            .recent_states_accounts_nonces
-                            .get_mut(&address)
-                        {
-                            None => {}
-                            Some(nonces) => {
-                                // Unwrap is safe here because it's guaranteed
-                                // to exist.
-                                let oldest_nonce = nonces
-                                    .iter()
-                                    .min_by_key(|x| *x)
-                                    .unwrap()
-                                    .clone();
-                                let (removed_tx_hashes, address_cleared) = self
-                                    .nonce_pool
-                                    .remove_below(&address, &oldest_nonce);
-                                if address_cleared {
-                                    self.ready_nonces_and_balances
-                                        .remove(&address);
-                                }
-                                removed_txs += removed_tx_hashes.len();
-                                for hash in removed_tx_hashes {
-                                    self.txs.remove(&hash);
-                                }
-
-                                // Remove old account nonce data.
-                                nonces.pop_front();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        debug!("Removed {} old txs from transaction pool.", removed_txs);
-        self.recent_states_accounts.push_back(Default::default());
-    }
-
-    pub fn notify_state_account(&mut self, address: Address, nonce: U256) {
-        match self.recent_states_accounts.back_mut() {
-            None => {
-                unreachable!();
-            }
-            Some(ref mut last_state) => match last_state.get(&address) {
-                Some(largest_nonce) => {
-                    if nonce.gt(largest_nonce) {
-                        last_state.insert(address, nonce);
-                    }
-                }
-                None => {
-                    last_state.insert(address, nonce);
-                }
-            },
-        }
-    }
-
-    fn insert(&mut self, tx: Arc<SignedTransaction>, packed: bool) -> bool {
-        let balance = match self.nonce_pool.get_mut(&tx.sender, &tx.nonce) {
-            Some(tx) => tx.get_cached_account_balance_before_tx().clone(),
-            None => 0.into(),
-        };
-
-        let result = match self.nonce_pool.insert(
-            TxWithPackedMarkAndCachedBalance(tx.clone(), packed, balance),
-        ) {
-            InsertResult::NewAdded => {
-                self.txs.entry(tx.hash()).or_insert(tx.clone());
-                true
-            }
-            InsertResult::Failed => false,
-            InsertResult::Updated(old_tx) => {
-                self.txs.remove(&old_tx.hash());
-                self.txs.insert(tx.hash(), tx.clone());
-                true
-            }
-        };
-
-        if packed && result {
-            self.number_packed_txs += 1;
-        }
-
-        result
-    }
-
-    pub fn get_mut(
-        &mut self, address: &Address, nonce: &U256,
-    ) -> Option<&mut TxWithPackedMarkAndCachedBalance> {
-        self.nonce_pool.get_mut(address, nonce)
-    }
-
-    fn get_by_hash(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
-        self.txs.get(tx_hash).map(|tx| tx.clone())
-    }
-
-    fn get_balance_and_nonce_info(
-        &self, address: &Address,
-    ) -> Option<&(U256, U256)> {
-        self.ready_nonces_and_balances.get(address)
-    }
-
-    fn get_cached_balance_and_nonce_info(
-        &self, address: &Address, account_cache: &mut AccountCache,
-    ) -> (U256, U256) {
-        match self.get_balance_and_nonce_info(address) {
-            Some(info) => info.clone(),
-            None => match account_cache.get_account_mut(address) {
-                Some(account) => {
-                    (account.nonce.clone(), account.balance.clone())
-                }
-                None => (0.into(), 0.into()),
-            },
-        }
-    }
-}
-
-struct ReadyTransactionPool {
-    nonce_pool: NoncePool<Arc<SignedTransaction>>,
-    treap: TreapMap<H256, Arc<SignedTransaction>, U512>,
-}
-
-impl ReadyTransactionPool {
-    fn new() -> Self {
-        ReadyTransactionPool {
-            nonce_pool: NoncePool::new(),
+        ReadyAccountPool {
             treap: TreapMap::new(),
         }
     }
 
     fn len(&self) -> usize { self.treap.len() }
 
-    fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
-        self.treap.get(tx_hash).map(|tx| tx.clone())
+    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
+        self.treap.get(address).map(|tx| tx.clone())
     }
 
-    pub fn get_by_nonce(
-        &self, address: &Address, nonce: &U256,
+    fn remove(&mut self, address: &Address) -> Option<Arc<SignedTransaction>> {
+        self.treap.remove(address)
+    }
+
+    fn update(
+        &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
     ) -> Option<Arc<SignedTransaction>> {
-        self.nonce_pool.get(address, nonce)
-    }
-
-    fn remove(
-        &mut self, address: &Address, nonce: &U256,
-    ) -> Option<Arc<SignedTransaction>> {
-        let result = self.nonce_pool.remove(address, nonce);
-        match result {
-            Some(ref tx) => {
-                self.treap.remove(&tx.hash);
-            }
-            None => {}
-        }
-
-        result
-    }
-
-    fn remove_below(&mut self, address: &Address, nonce: &U256) {
-        let (tx_hashes, _empty_after_removal) =
-            self.nonce_pool.remove_below(address, nonce);
-        for hash in tx_hashes {
-            self.treap.remove(&hash);
+        if let Some(tx) = tx {
+            self.insert(tx)
+        } else {
+            self.remove(address)
         }
     }
 
-    fn remove_by_hash(
-        &mut self, tx_hash: &H256,
+    fn insert(
+        &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
         self.treap
-            .remove(tx_hash)
-            .and_then(|tx| self.nonce_pool.remove(&tx.sender, &tx.nonce))
-    }
-
-    fn insert(&mut self, tx: Arc<SignedTransaction>) -> bool {
-        match self.nonce_pool.insert(tx.clone()) {
-            InsertResult::NewAdded => {
-                self.treap.insert(
-                    tx.hash(),
-                    tx.clone(),
-                    U512::from(tx.gas_price),
-                );
-                true
-            }
-            InsertResult::Failed => false,
-            InsertResult::Updated(old_tx) => {
-                self.treap.remove(&old_tx.hash());
-                self.treap.insert(
-                    tx.hash(),
-                    tx.clone(),
-                    U512::from(tx.gas_price),
-                );
-                true
-            }
-        }
-    }
-
-    // FIXME: remove debug method.
-    fn _assert_nonce_consecutive(&self, address: &Address) {
-        match self.nonce_pool.buckets.get(address) {
-            Some(bucket) => {
-                let mut iter = bucket.iter();
-                match iter.next() {
-                    Some((start_nonce, _)) => {
-                        let mut prev_nonce = start_nonce;
-                        while let Some((nonce, _)) = iter.next() {
-                            let expected = *prev_nonce + U256::from(1);
-                            assert_eq!(
-                                *nonce, expected,
-                                "assert nonce failed for {:?}, start_nonce = {}, missing = {}, next = {}",
-                                address, start_nonce, expected, nonce
-                            );
-                            prev_nonce = nonce;
-                        }
-                    }
-                    None => {}
-                }
-            }
-            None => {}
-        }
+            .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
@@ -539,40 +328,186 @@ impl ReadyTransactionPool {
             .clone();
         trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
 
-        self.remove_by_hash(&tx.hash())
+        self.remove(&tx.sender())
     }
 }
 
 pub struct TransactionPoolInner {
-    unexecuted_txs: UnexecutedTransactions,
-    ready_transactions: ReadyTransactionPool,
+    capacity: usize,
+    deferred_pool: DeferredPool,
+    ready_account_pool: ReadyAccountPool,
+    ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
+    garbage_collection_queue: VecDeque<Address>,
+    txs: HashMap<H256, Arc<SignedTransaction>>,
 }
 
 impl TransactionPoolInner {
-    pub fn new() -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         TransactionPoolInner {
-            unexecuted_txs: UnexecutedTransactions::new(),
-            ready_transactions: ReadyTransactionPool::new(),
+            capacity,
+            deferred_pool: DeferredPool::new(),
+            ready_account_pool: ReadyAccountPool::new(),
+            ready_nonces_and_balances: HashMap::new(),
+            garbage_collection_queue: VecDeque::new(),
+            txs: HashMap::new(),
         }
     }
 
-    // The size of unconfirmed txs. Not exact same as pending pool size.
-    pub fn len(&self) -> usize { self.unexecuted_txs.txs.len() }
+    pub fn len(&self) -> usize { self.txs.len() }
 
     fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
-        self.ready_transactions
-            .get(tx_hash)
-            .or_else(|| self.unexecuted_txs.get_by_hash(tx_hash))
+        self.txs.get(tx_hash).map(|x| x.clone())
+    }
+
+    fn collect_garbage(&mut self) {
+        while self.garbage_collection_queue.len() > self.capacity {
+            let addr = self.garbage_collection_queue.pop_front().unwrap();
+            let removed_tx = self
+                .deferred_pool
+                .remove_lowest_nonce(&addr)
+                .unwrap()
+                .get_arc_tx()
+                .clone();
+
+            // maintain ready account pool
+            if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
+                if ready_tx.hash() == removed_tx.hash() {
+                    warn!("a ready tx is garbage-collected");
+                    self.ready_account_pool.remove(&addr);
+                }
+            }
+
+            // alert if a tx after ready nonce is collected
+            let (nonce, _) = self
+                .get_local_nonce_and_balance(&addr)
+                .unwrap_or((0.into(), 0.into()));
+            if removed_tx.nonce() >= nonce {
+                warn!("a tx after execution is garbage-collected");
+            }
+
+            // maintain ready info
+            if !self.deferred_pool.contain_address(&addr) {
+                self.ready_nonces_and_balances.remove(&addr);
+            }
+
+            // maintain txs
+            self.txs.remove(&removed_tx.hash());
+        }
+    }
+
+    fn insert(
+        &mut self, transaction: Arc<SignedTransaction>, packed: bool,
+        force: bool,
+    ) -> InsertResult
+    {
+        let result = self.deferred_pool.insert(
+            TxWithReadyInfo {
+                transaction: transaction.clone(),
+                packed,
+            },
+            force,
+        );
+
+        match &result {
+            InsertResult::NewAdded => {
+                self.garbage_collection_queue
+                    .push_back(transaction.sender());
+                self.txs.insert(transaction.hash(), transaction);
+                self.collect_garbage();
+            }
+            InsertResult::Failed(_) => {}
+            InsertResult::Updated(replaced_tx) => {
+                self.txs.remove(&replaced_tx.hash());
+                self.txs.insert(transaction.hash(), transaction);
+            }
+        }
+
+        result
+    }
+
+    fn get_local_nonce_and_balance(
+        &self, address: &Address,
+    ) -> Option<(U256, U256)> {
+        self.ready_nonces_and_balances.get(address).map(|x| *x)
+    }
+
+    fn update_nonce_and_balance(
+        &mut self, address: &Address, nonce: U256, balance: U256,
+    ) {
+        self.ready_nonces_and_balances
+            .insert((*address).clone(), (nonce, balance));
+    }
+
+    fn get_nonce_from_storage(
+        &self, address: &Address, account_cache: &mut AccountCache,
+    ) -> U256 {
+        match account_cache.get_account_mut(address) {
+            Some(account) => account.nonce.clone(),
+            None => 0.into(),
+        }
+    }
+
+    fn get_and_update_nonce_and_balance_from_storage(
+        &mut self, address: &Address, account_cache: &mut AccountCache,
+    ) -> (U256, U256) {
+        let ret = match account_cache.get_account_mut(address) {
+            Some(account) => (account.nonce.clone(), account.balance.clone()),
+            None => (0.into(), 0.into()),
+        };
+        self.ready_nonces_and_balances
+            .insert((*address).clone(), ret);
+        ret
+    }
+
+    fn get_lowest_nonce(&self, addr: &Address) -> U256 {
+        let mut ret = 0.into();
+        if let Some((nonce, _)) = self.get_local_nonce_and_balance(addr) {
+            ret = nonce;
+        }
+        if let Some(nonce) = self.deferred_pool.get_lowest_nonce(addr) {
+            if *nonce < ret {
+                ret = *nonce;
+            }
+        }
+        ret
+    }
+
+    fn recalculate_readiness_with_local_info(&mut self, addr: &Address) {
+        let (nonce, balance) = self
+            .get_local_nonce_and_balance(addr)
+            .unwrap_or((0.into(), 0.into()));
+        let ret = self
+            .deferred_pool
+            .recalculate_readiness_with_local_info(addr, nonce, balance);
+        self.ready_account_pool.update(addr, ret);
+    }
+
+    fn recalculate_readiness_with_fixed_info(
+        &mut self, addr: &Address, nonce: U256, balance: U256,
+    ) {
+        self.update_nonce_and_balance(addr, nonce, balance);
+        let ret = self
+            .deferred_pool
+            .recalculate_readiness_with_local_info(addr, nonce, balance);
+        self.ready_account_pool.update(addr, ret);
+    }
+
+    fn recalculate_readiness_with_state(
+        &mut self, addr: &Address, account_cache: &mut AccountCache,
+    ) {
+        let (nonce, balance) = self
+            .get_and_update_nonce_and_balance_from_storage(addr, account_cache);
+        let ret = self
+            .deferred_pool
+            .recalculate_readiness_with_local_info(addr, nonce, balance);
+        self.ready_account_pool.update(addr, ret);
     }
 }
 
 pub struct TransactionPool {
-    _capacity: usize,
     inner: RwLock<TransactionPoolInner>,
     storage_manager: Arc<StorageManager>,
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
-    pub unexecuted_transaction_addresses:
-        Mutex<HashMap<H256, HashSet<TransactionAddress>>>,
     pub worker_pool: Arc<Mutex<ThreadPool>>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     spec: vm::Spec,
@@ -588,14 +523,11 @@ impl TransactionPool {
     ) -> Self
     {
         TransactionPool {
-            _capacity: capacity,
-            inner: RwLock::new(TransactionPoolInner::new()),
+            inner: RwLock::new(TransactionPoolInner::with_capacity(capacity)),
             storage_manager,
-            // TODO Cache capacity should be set seperately
             transaction_pubkey_cache: RwLock::new(HashMap::with_capacity(
                 capacity,
             )),
-            unexecuted_transaction_addresses: Mutex::new(HashMap::new()),
             worker_pool,
             cache_man,
             spec: vm::Spec::new_spec(),
@@ -615,26 +547,17 @@ impl TransactionPool {
         transactions: &Vec<TransactionWithSignature>,
     ) -> Vec<Result<H256, String>>
     {
-        // FIXME: do not unwrap.
         let mut failures = HashMap::new();
 
         let uncached_trans: Vec<TransactionWithSignature>;
         {
             let tx_cache = self.transaction_pubkey_cache.read();
-            let unexecuted_transaction_addresses =
-                self.unexecuted_transaction_addresses.lock();
             uncached_trans = transactions
                 .iter()
                 .map(|tx| tx.clone())
                 .filter(|tx| {
                     let tx_hash = tx.hash();
-                    // Sample 1/128 transactions
-                    if tx_hash[0] & 254 == 0 {
-                        debug!("Sampled transaction {:?}", tx_hash);
-                    }
-                    let inserted = tx_cache.contains_key(&tx_hash)
-                        || unexecuted_transaction_addresses
-                            .contains_key(&tx_hash);
+                    let inserted = tx_cache.contains_key(&tx_hash);
 
                     if inserted {
                         failures.insert(
@@ -765,6 +688,8 @@ impl TransactionPool {
                         inner,
                         &mut account_cache,
                         tx,
+                        false,
+                        false,
                     ) {
                         Ok(_) => {}
                         Err(e) => {
@@ -841,58 +766,27 @@ impl TransactionPool {
         Ok(())
     }
 
-    // Only call this method when nonce matches.
-    // The second step verification for ready transactions
-    fn verify_ready_transaction(
-        &self, next_nonce: &mut U256, account_balance: &mut U256,
-        transaction: &SignedTransaction,
-    ) -> bool
-    {
-        // check balance
-        let cost = transaction.value + transaction.gas_price * transaction.gas;
-        if account_balance.deref().lt(&cost) {
-            // FIXME: change back to trace,
-            trace!(
-                "Transaction {:?} not ready due to not enough balance: {} < {}",
-                transaction,
-                //transaction.hash(),
-                account_balance,
-                cost
-            );
-            return false;
-        }
-        *account_balance -= cost;
-        *next_nonce += 1.into();
-        true
-    }
-
+    // Add transaction into deferred pool and maintain its readiness
+    // the packed tag provided
+    // if force tag is true, the replacement in nonce pool must be happened
     pub fn add_transaction_and_check_readiness_without_lock(
         &self, inner: &mut TransactionPoolInner,
         account_cache: &mut AccountCache, transaction: Arc<SignedTransaction>,
+        packed: bool, force: bool,
     ) -> Result<(), String>
     {
-        // FIXME: remove the cap check in experiment.
         /*
         if self.capacity <= inner.len() {
             warn!("Transaction discarded due to insufficient txpool capacity: {:?}", transaction.hash());
             return Err(format!("Transaction discarded due to insufficient txpool capacity: {:?}", transaction.hash()));
         }
         */
-
-        // Now the balance is updated. For the new transaction we check if: it's
-        // new; its nonce is ready to be packed, the balance at the
-        // transaction; when the pending pool can not tell if the nonce
-        // is ready to be packed, e.g. the pending pool doesn't contain
-        // any packed transaction, account_cached's nonce and balance is
-        // used.
-        let (mut next_nonce, mut balance) =
-            inner.unexecuted_txs.get_cached_balance_and_nonce_info(
-                &transaction.sender,
-                account_cache,
-            );
+        let state_nonce =
+            inner.get_nonce_from_storage(&transaction.sender, account_cache);
 
         if transaction.nonce
-            >= next_nonce + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
+            >= state_nonce
+                + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
         {
             debug!(
                 "Transaction {:?} is discarded due to in too distant future",
@@ -902,125 +796,41 @@ impl TransactionPool {
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
             ));
-        }
-
-        /*
-            else if transaction.nonce <= inner.unconfirmed_txs.nonce_pool.get_lowest_nonce_transaction(&transaction.sender) {
-            // FIXME: this log is unnecessary.
+        } else if transaction.nonce
+            < inner.get_lowest_nonce(&transaction.sender)
+        {
             debug!(
-                "Transaction {:?} is discarded due to stale nonce",
+                "Transaction {:?} is discarded due to a too stale nonce",
                 transaction.hash()
             );
             return Err(format!(
-                "Transaction {:?} is discarded due to stale nonce",
+                "Transaction {:?} is discarded due to a too stale nonce",
                 transaction.hash()
-            ))
-        }
-        */
-
-        if !self.add_pending_without_lock(inner, transaction.clone(), false) {
-            return Err(format!("Failed imported to pending queue"));
+            ));
         }
 
-        if transaction.nonce == next_nonce {
-            self.recalculate_ready_without_lock(
+        if let InsertResult::Failed(info) = self
+            .add_to_deferred_pool_without_lock(
                 inner,
-                &transaction.sender,
-                &mut next_nonce,
-                &mut balance,
-                false,
-            );
-
-            if next_nonce == transaction.nonce {
-                debug!(
-                    "new transaction is not ready because of insufficient \
-                     balance. See previous log. {:?}",
-                    transaction.hash()
-                );
-                warn!(
-                    "Transaction is not ready because of insufficient balance."
-                );
-            }
-        } else if next_nonce < transaction.nonce {
-            trace!("new transaction is not ready because nonce {} > ready nonce {}, sender {:?}. tx_hash {:?}",
-                   transaction.nonce, next_nonce, transaction.sender, transaction.hash());
-            warn!("Transaction is not ready because of nonce.");
-        } else {
-            next_nonce = transaction.nonce.clone();
-            balance = inner
-                .unexecuted_txs
-                .get_mut(&transaction.sender, &transaction.nonce)
-                .unwrap()
-                .get_cached_account_balance_before_tx()
-                .clone();
-
-            // Replace the old transaction from ready pool first,
-            inner.ready_transactions.insert(transaction.clone());
-
-            // Replacing a pending transaction with higher gas price.
-            // May need to take out some transactions from ready pool!
-            self.recalculate_ready_without_lock(
-                inner,
-                &transaction.sender,
-                &mut next_nonce,
-                &mut balance,
-                false,
+                transaction.clone(),
+                packed,
+                force,
             )
+        {
+            return Err(format!("Failed imported to deferred pool: {}", info));
         }
+
+        inner.recalculate_readiness_with_state(
+            &transaction.sender,
+            account_cache,
+        );
 
         Ok(())
     }
 
-    // FIXME: remove unused methods.
-    pub fn _add_ready(&self, transaction: Arc<SignedTransaction>) -> bool {
-        let mut inner = self.inner.write();
-        let inner = inner.deref_mut();
-        self._add_ready_without_lock(inner, transaction)
-    }
-
-    pub fn _add_ready_without_lock(
-        &self, inner: &mut TransactionPoolInner,
-        transaction: Arc<SignedTransaction>,
-    ) -> bool
-    {
-        trace!(
-            "Insert tx into ready hash={:?} sender={:?}",
-            transaction.hash(),
-            transaction.sender
-        );
-        let result = inner.ready_transactions.insert(transaction.clone());
-        if !result {
-            match inner
-                .ready_transactions
-                .get_by_nonce(&transaction.sender, &transaction.nonce)
-            {
-                Some(existing_transaction) => {
-                    if existing_transaction.hash() != transaction.hash() {
-                        debug!(
-                            "can not insert transaction {:?} because of existing transaction {:?}",
-                            existing_transaction.deref(), transaction.deref()
-                        );
-                    }
-                }
-                None => {
-                    debug!("can not happen.");
-                }
-            }
-        }
-
-        result
-    }
-
-    // TODO: unused.
-    pub fn _add_pending(&self, transaction: Arc<SignedTransaction>) -> bool {
-        let mut inner = self.inner.write();
-        let inner = inner.deref_mut();
-        self.add_pending_without_lock(inner, transaction, false)
-    }
-
-    // TODO: maybe use a better name? The transactions here are transactions
-    // TODO: with invalid nonce found by block execution.
-    pub fn recycle_future_transactions(
+    // If a tx is failed executed due to invalid nonce
+    // This function should be invoked to recycle it
+    pub fn recycle_failed_executed_transactions(
         &self, transactions: Vec<Arc<SignedTransaction>>, state: Storage,
     ) {
         let mut account_cache = AccountCache::new(state);
@@ -1036,215 +846,89 @@ impl TransactionPool {
                 inner,
                 &mut account_cache,
                 tx,
+                false,
+                true,
             )
             .ok();
         }
     }
 
-    pub fn add_pending_without_lock(
+    fn add_to_deferred_pool_without_lock(
         &self, inner: &mut TransactionPoolInner,
-        transaction: Arc<SignedTransaction>, packed: bool,
-    ) -> bool
+        transaction: Arc<SignedTransaction>, packed: bool, force: bool,
+    ) -> InsertResult
     {
         trace!(
-            "Insert tx into pending hash={:?} sender={:?}",
+            "Insert tx into deferred pool, hash={:?} sender={:?}",
             transaction.hash(),
             transaction.sender
         );
-        inner.unexecuted_txs.insert(transaction, packed)
+        inner.insert(transaction, packed, force)
     }
 
-    // FIXME: I noticed that the order of ready transaction removal may be
-    //  behind the state execution, which is weird. Moving the caller
-    //  to the end of on_new_block may crash _assert_nonce_consecutive
-    // easier.
-    pub fn set_tx_stale_for_ready(&self, transaction: Arc<SignedTransaction>) {
+    pub fn set_tx_packed(
+        &self, transactions: Vec<Arc<SignedTransaction>>, epoch_id: EpochId,
+    ) {
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
-        self.add_pending_without_lock(inner, transaction.clone(), true);
-        // FIXME: this is a temporary workaround for the issue explained above.
-        //  similar workaround can be found in notify_ready.
-        self.remove_lower_nonces_from_ready_pool_without_lock(
-            inner,
-            &transaction.sender,
-            &(transaction.nonce + U256::from(1)),
+        let mut account_cache = AccountCache::new(
+            self.storage_manager.get_state_at(epoch_id).unwrap(),
         );
-
-        match inner
-            .unexecuted_txs
-            .get_balance_and_nonce_info(&transaction.sender)
-            .cloned()
-        {
-            Some(mut nonce_info) => {
-                if transaction.nonce.eq(&nonce_info.0) {
-                    self.recalculate_ready_without_lock(
-                        inner,
-                        &transaction.sender,
-                        &mut nonce_info.0,
-                        &mut nonce_info.1,
-                        false,
-                    );
-                }
-            }
-            None => {}
+        for tx in transactions {
+            self.add_transaction_and_check_readiness_without_lock(
+                inner,
+                &mut account_cache,
+                tx,
+                true,
+                false,
+            )
+            .ok();
         }
-    }
-
-    pub fn remove_lower_nonces_from_ready_pool_without_lock(
-        &self, inner: &mut TransactionPoolInner, address: &Address,
-        nonce: &U256,
-    )
-    {
-        inner.ready_transactions.remove_below(address, nonce);
-    }
-
-    // TODO: Unused. think about when/how to use this method.
-    pub fn _remove_confirmed_tx(
-        &self, transaction: &SignedTransaction,
-    ) -> bool {
-        let mut inner = self.inner.write();
-        let inner = inner.deref_mut();
-        if self
-            .remove_pending_without_lock(inner, transaction)
-            .is_some()
-        {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn remove_pending_without_lock(
-        &self, _inner: &mut TransactionPoolInner,
-        _transaction: &SignedTransaction,
-    ) -> Option<Arc<SignedTransaction>>
-    {
-        None
     }
 
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        _state: State<'a>,
-    ) -> Vec<Arc<SignedTransaction>>
-    {
+    ) -> Vec<Arc<SignedTransaction>> {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return packed_transactions;
         }
         let mut inner = self.inner.write();
-        let num_txs = min(num_txs, inner.ready_transactions.len());
-        let mut nonce_map = HashMap::new();
-        let mut future_txs = HashMap::new();
-        debug!(
-            "Before packing ready pool size:{}, pending pool size:{}",
-            inner.ready_transactions.len(),
-            inner.unexecuted_txs.pending_pool_size()
-        );
 
         let mut total_tx_gas_limit: U256 = 0.into();
         let mut total_tx_size: usize = 0;
 
         let mut big_tx_resample_times_limit = 10;
+        let mut too_big_txs = Vec::new();
 
-        // FIXME: the sampling should be per account.
-        'out: while let Some(tx) = inner.ready_transactions.pop() {
-            let sender = tx.sender;
-            // Get the nonce to pack from ready pool.
-            // FIXME: should use state balance to determine the end nonce range.
-            let rest_lowest_nonce_tx_from_same_sender = inner
-                .ready_transactions
-                .nonce_pool
-                .get_lowest_nonce_transaction(&sender);
-            let lowest_nonce_in_ready_pool =
-                match rest_lowest_nonce_tx_from_same_sender {
-                    Some((nonce, _tx)) => {
-                        if nonce.lt(&tx.nonce) {
-                            nonce.clone()
-                        } else {
-                            tx.nonce.clone()
-                        }
-                    }
-                    None => tx.nonce.clone(),
-                };
-            let nonce_entry = nonce_map.entry(tx.sender);
-            let nonce = nonce_entry.or_insert(lowest_nonce_in_ready_pool);
-            if tx.nonce > *nonce {
-                future_txs
-                    .entry(sender)
-                    .or_insert(HashMap::new())
-                    .insert(tx.nonce, tx);
-            } else if tx.nonce == *nonce {
-                let tx_size = tx.rlp_size();
-                if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
-                    || block_size_limit - total_tx_size < tx_size
-                {
-                    future_txs
-                        .entry(sender)
-                        .or_insert(HashMap::new())
-                        .insert(tx.nonce, tx);
-                    if big_tx_resample_times_limit > 0 {
-                        big_tx_resample_times_limit -= 1;
-                        continue 'out;
-                    } else {
-                        break 'out;
-                    }
-                }
-
-                total_tx_gas_limit += *tx.gas_limit();
-                total_tx_size += tx_size;
-
-                *nonce += 1.into();
-                packed_transactions.push(tx);
-
-                if packed_transactions.len() >= num_txs {
+        'out: while let Some(tx) = inner.ready_account_pool.pop() {
+            let tx_size = tx.rlp_size();
+            if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
+                || block_size_limit - total_tx_size < tx_size
+            {
+                too_big_txs.push(tx.clone());
+                if big_tx_resample_times_limit > 0 {
+                    big_tx_resample_times_limit -= 1;
+                    continue 'out;
+                } else {
                     break 'out;
                 }
+            }
 
-                if let Some(tx_map) = future_txs.get_mut(&sender) {
-                    while let Some(tx) = tx_map.remove(nonce) {
-                        let tx_size = tx.rlp_size();
-                        if block_gas_limit - total_tx_gas_limit
-                            < *tx.gas_limit()
-                            || block_size_limit - total_tx_size < tx_size
-                        {
-                            tx_map.insert(tx.nonce, tx);
-                            if big_tx_resample_times_limit > 0 {
-                                big_tx_resample_times_limit -= 1;
-                                continue 'out;
-                            } else {
-                                break 'out;
-                            }
-                        }
+            total_tx_gas_limit += *tx.gas_limit();
+            total_tx_size += tx_size;
 
-                        total_tx_gas_limit += *tx.gas_limit();
-                        total_tx_size += tx_size;
+            packed_transactions.push(tx.clone());
+            inner.recalculate_readiness_with_local_info(&tx.sender());
 
-                        packed_transactions.push(tx);
-                        *nonce += 1.into();
-
-                        if packed_transactions.len() >= num_txs {
-                            break 'out;
-                        }
-                    }
-                }
-            } else {
-                debug!(
-                    "Ready tx nonce below state nonce, drop transaction {:?} \
-                     from ready_transactions",
-                    tx.clone(),
-                )
+            if packed_transactions.len() >= num_txs {
+                break 'out;
             }
         }
 
-        for tx in packed_transactions.iter() {
-            inner.ready_transactions.insert(tx.clone());
-        }
-
-        for (_, txs) in future_txs.into_iter() {
-            for (_, tx) in txs.into_iter() {
-                inner.ready_transactions.insert(tx.clone());
-            }
+        for tx in too_big_txs {
+            inner.ready_account_pool.insert(tx);
         }
 
         if log::max_level() >= log::Level::Debug {
@@ -1253,15 +937,9 @@ impl TransactionPool {
                 rlp_s.append::<TransactionWithSignature>(&**tx);
             }
             debug!(
-                "After packing ready pool size:{}, pending pool size:{}, packed_transactions: {}, \
-                rlp size: {}, total txs received {}, total txs packed by chain {}",
-                inner.ready_transactions.len(),
-                inner.unexecuted_txs.pending_pool_size(),
+                "After packing packed_transactions: {}, rlp size: {}",
                 packed_transactions.len(),
                 rlp_s.out().len(),
-                // FIXME: use correct counter to get total number of txs received.
-                inner.len(),
-                inner.unexecuted_txs.number_packed_txs(),
             );
         }
 
@@ -1269,237 +947,51 @@ impl TransactionPool {
     }
 
     pub fn transactions_to_propagate(&self) -> Vec<Arc<SignedTransaction>> {
-        let inner = self.inner.read();
-
-        inner
-            .unexecuted_txs
-            .nonce_pool
-            .buckets
-            .values()
-            .flat_map(|nonce_map| nonce_map.values())
-            .filter_map(|x| {
-                if x.is_already_packed() {
-                    None
-                } else {
-                    Some(x.get_arc_tx().clone())
-                }
-            })
-            .collect()
+        let _inner = self.inner.read();
+        unimplemented!()
     }
 
     pub fn notify_state_start(&self, accounts_from_execution: Vec<Account>) {
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
-        inner.unexecuted_txs.notify_state_start();
 
         for account in &accounts_from_execution {
-            self.notify_ready(inner, &account.address, account);
+            inner.recalculate_readiness_with_fixed_info(
+                &account.address,
+                account.nonce,
+                account.balance,
+            );
         }
     }
 
-    // TODO: In the final version we must check for all block if their nonce
-    //  sequence is correct before issuing any notify_ready call.
-    pub fn notify_ready(
-        &self, inner: &mut TransactionPoolInner, address: &Address,
-        account: &Account,
-    )
-    {
-        // FIXME: this is wrong. we can only remove what being packed.
-        //  to overcome the deliver order issue,
-        //  we remove all lower nonces in ready_pool, to prevent gap from
-        //  being introduced into ready pool.
-        match inner
-            .ready_transactions
-            .nonce_pool
-            .get_lowest_nonce_transaction(address)
-        {
-            Some((nonce, _)) => {
-                if nonce.lt(&account.nonce) {
-                    debug!(
-                        "remove lower nonce for address {:?} nonce {:?} from ready pool by\
-                        block execution result, which should not happen.",
-                        address, account.nonce,
-                    );
-                    self.remove_lower_nonces_from_ready_pool_without_lock(
-                        inner,
-                        address,
-                        &account.nonce,
-                    );
-                }
-            }
-            None => {}
-        }
-        // In this case we check if there are unpacked transaction that are
-        // waiting to be packed, and if the balance really need
-        // to be updated.
-        //
-        // We check for the highest consecutive nonce for the account and
-        // see if there is any unpacked transaction. But for
-        // balance update we should still process from the nonce
-        // of the state.
-        //
-        // Conclusion: Do checking the balance at the nonce first, if
-        // performance isn't good, check for unpacked
-        // transaction to avoid useless account balance update?
-        match inner.unexecuted_txs.get_mut(address, &account.nonce) {
-            Some(tx) => {
-                if tx
-                    .get_cached_account_balance_before_tx()
-                    .gt(&account.balance)
-                {
-                    // No need to update the ready pool when the pool is still
-                    // recent.
-                    return;
-                }
-            }
-            None => {
-                // No transaction to pack immediately, nothing to do.
-                return;
-            }
-        }
-
-        self.recalculate_ready_without_lock(
-            inner,
-            address,
-            &mut account.nonce.clone(),
-            &mut account.balance.clone(),
-            true,
-        );
-    }
-
-    fn recalculate_ready_without_lock(
-        &self, inner: &mut TransactionPoolInner, address: &Address,
-        next_nonce: &mut U256, account_balance: &mut U256,
-        from_block_execution: bool,
-    )
-    {
-        let mut start_nonce = next_nonce.clone();
-
-        if from_block_execution {
-            inner
-                .unexecuted_txs
-                .notify_state_account(address.clone(), next_nonce.clone());
-        }
-
-        trace!("Notify ready {:?} with nonce {:?}", address, next_nonce);
-
-        loop {
-            if let Some(tx) = inner.unexecuted_txs.get_mut(address, next_nonce)
-            {
-                trace!(
-                    "We got the tx from pending_pool with hash {:?}",
-                    tx.hash()
-                );
-                // Set the correct account balance before this transaction.
-                *tx.get_cached_account_balance_before_tx_mut() =
-                    *account_balance;
-
-                // The unpacked transaction should be ready but we need to
-                // process it to calculate the balance.
-                if self.verify_ready_transaction(
-                    next_nonce,
-                    account_balance,
-                    tx.deref(),
-                ) {
-                    // FIXME: change back to trace
-                    trace!(
-                        "Successfully verified tx with hash {:?}",
-                        tx.hash()
-                    );
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-
-        // Update the next ready nonce.
-        match inner
-            .unexecuted_txs
-            .ready_nonces_and_balances
-            .get_mut(address)
-        {
-            Some(ready_nonce_info) => {
-                let old_ready_nonce = ready_nonce_info.0;
-                *ready_nonce_info =
-                    (next_nonce.clone(), account_balance.clone());
-                if next_nonce.deref().lt(&old_ready_nonce) {
-                    // Remove transactions from ready.
-                    let mut nonce = next_nonce.clone();
-                    while nonce < old_ready_nonce {
-                        inner.ready_transactions.remove(address, &nonce);
-                        nonce += 1.into();
-                    }
-                }
-
-                if old_ready_nonce > start_nonce {
-                    start_nonce = old_ready_nonce;
-                }
-            }
-            None => {
-                // There is a new transaction added before calling.
-                if !from_block_execution {
-                    inner.unexecuted_txs.ready_nonces_and_balances.insert(
-                        address.clone(),
-                        (next_nonce.clone(), account_balance.clone()),
-                    );
-                }
-            }
-        }
-
-        while start_nonce.lt(next_nonce) {
-            match inner.unexecuted_txs.get_mut(address, &start_nonce).cloned() {
-                Some(tx) => {
-                    //                    if !tx.is_already_packed() {
-                    inner.ready_transactions.insert(tx.get_arc_tx().clone());
-                    //                    }
-                }
-                None => {
-                    debug!(
-                        "unreachable: start_nonce = {}, next_nonce = {}",
-                        start_nonce, next_nonce
-                    );
-                    unreachable!()
-                }
-            }
-
-            start_nonce += 1.into();
-        }
-    }
-
-    /// stats retrieves the length of ready and pending queue.
-    pub fn stats(&self) -> (usize, usize, usize) {
+    /// stats retrieves the length of ready and deferred pool.
+    pub fn stats(&self) -> (usize, usize) {
         let inner = self.inner.read();
-        (
-            inner.ready_transactions.len(),
-            inner.unexecuted_txs.pending_pool_size(),
-            // FIXME: change it to the number of total tx received, and check why there is no tx removal (or why the len() == total received).
-            inner.len(),
-        )
+        (inner.ready_account_pool.len(), inner.len())
     }
 
-    /// content retrieves the ready and pending transactions.
+    /// content retrieves the ready and deferred transactions.
     pub fn content(
         &self,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
-        let inner = self.inner.read();
+        let _inner = self.inner.read();
 
-        let ready_txs = inner
-            .ready_transactions
-            .treap
-            .iter()
-            .map(|(_, tx)| tx.clone())
-            .collect();
-
-        let pending_txs = inner
-            .unexecuted_txs
-            .txs
-            .values()
-            .map(|v| v.clone())
-            .collect();
-
-        (ready_txs, pending_txs)
+        //        let ready_txs = inner
+        //            .ready_transactions
+        //            .treap
+        //            .iter()
+        //            .map(|(_, tx)| tx.clone())
+        //            .collect();
+        //
+        //        let pending_txs = inner
+        //            .unexecuted_txs
+        //            .txs
+        //            .values()
+        //            .map(|v| v.clone())
+        //            .collect();
+        //
+        //        (ready_txs, pending_txs)
+        (Vec::new(), Vec::new())
     }
 }
 
