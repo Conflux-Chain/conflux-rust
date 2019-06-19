@@ -177,11 +177,15 @@ impl NoncePool {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
         while let Some(tx) = self.inner.get(&next_nonce) {
+            let cost = tx.value + tx.gas_price * tx.gas;
+            if balance_left < cost {
+                return None;
+            }
+
             if !tx.packed {
                 return Some(tx.transaction.clone());
             }
-            // FIXME
-            balance_left -= 0.into();
+            balance_left -= cost;
             next_nonce += 1.into();
         }
         None
@@ -974,24 +978,18 @@ impl TransactionPool {
     pub fn content(
         &self,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
-        let _inner = self.inner.read();
+        let inner = self.inner.read();
 
-        //        let ready_txs = inner
-        //            .ready_transactions
-        //            .treap
-        //            .iter()
-        //            .map(|(_, tx)| tx.clone())
-        //            .collect();
-        //
-        //        let pending_txs = inner
-        //            .unexecuted_txs
-        //            .txs
-        //            .values()
-        //            .map(|v| v.clone())
-        //            .collect();
-        //
-        //        (ready_txs, pending_txs)
-        (Vec::new(), Vec::new())
+        let ready_txs = inner
+            .ready_account_pool
+            .treap
+            .iter()
+            .map(|(_, tx)| tx.clone())
+            .collect();
+
+        let deferred_txs = inner.txs.values().map(|v| v.clone()).collect();
+
+        (ready_txs, deferred_txs)
     }
 }
 

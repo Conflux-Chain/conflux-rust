@@ -600,7 +600,7 @@ impl RpcImpl {
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let (ready_txs, pending_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -618,7 +618,7 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<String>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("pending".into(), grouped_txs(pending_txs, converter));
+        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
 
         Ok(ret)
     }
@@ -631,7 +631,7 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let (ready_txs, pending_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
@@ -641,7 +641,7 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("pending".into(), grouped_txs(pending_txs, converter));
+        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
 
         Ok(ret)
     }
