@@ -2,11 +2,11 @@
 
 fw = open("genesis-mine3.in", "w")
 print("2 3 1000 1000", file = fw)
-N = 195000
+N = 480000
 for i in range(0, N):
     print(-1, -1, -1, 1, i, file = fw)
 cnt = N
-M = 10000
+M = 40000
 last_cnt = cnt
 for j in range(0, M):
     cnt += 1
