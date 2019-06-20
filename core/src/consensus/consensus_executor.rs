@@ -563,7 +563,7 @@ impl ConsensusExecutionHandler {
                 let state = self
                     .data_man
                     .storage_manager
-                    .get_state_for_next_epoch(*parent)
+                    .get_state_no_commit(*parent)
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap();
