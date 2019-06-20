@@ -78,6 +78,7 @@ fn txexe_benchmark(c: &mut Criterion) {
                     .get_state_for_next_epoch(
                         handler.consensus.best_block_hash(),
                     )
+                    .unwrap()
                     .unwrap(),
             ),
             0.into(),
