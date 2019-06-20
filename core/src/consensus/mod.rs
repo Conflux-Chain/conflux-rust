@@ -427,15 +427,15 @@ impl ConsensusGraphInner {
         let n = self.arena.len();
         subtree_weight.resize_with(n, Default::default);
         subtree_stable_weight.resize_with(n, Default::default);
-        let mut queue = Vec::new();
-        queue.push((0, self.genesis_block_index));
-        while let Some((stage, index)) = queue.pop() {
+        let mut stack = Vec::new();
+        stack.push((0, self.genesis_block_index));
+        while let Some((stage, index)) = stack.pop() {
             if stage == 0 {
-                queue.push((1, index));
+                stack.push((1, index));
                 for child in &self.arena[index].children {
                     if !anticone_barrier.contains(*child as u32) && *child != me
                     {
-                        queue.push((0, *child));
+                        stack.push((0, *child));
                     }
                 }
             } else {
