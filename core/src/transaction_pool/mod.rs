@@ -148,16 +148,6 @@ impl NoncePool {
         ret
     }
 
-    #[allow(dead_code)]
-    fn get(&self, nonce: &U256) -> Option<TxWithReadyInfo> {
-        self.inner.get(nonce).map(|tx| tx.clone())
-    }
-
-    #[allow(dead_code)]
-    fn get_mut(&mut self, nonce: &U256) -> Option<&mut TxWithReadyInfo> {
-        self.inner.get_mut(nonce)
-    }
-
     fn get_lowest_nonce(&self) -> Option<&U256> {
         self.inner.iter().next().map(|(k, _)| k)
     }
@@ -229,36 +219,6 @@ impl DeferredPool {
                 ret
             }
         }
-    }
-
-    #[allow(dead_code)]
-    fn remove(
-        &mut self, addr: &Address, nonce: &U256,
-    ) -> Option<TxWithReadyInfo> {
-        match self.buckets.get_mut(addr) {
-            None => None,
-            Some(bucket) => {
-                let ret = bucket.remove(nonce);
-                if bucket.is_empty() {
-                    self.buckets.remove(addr);
-                }
-                ret
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    fn get(&self, addr: &Address, nonce: &U256) -> Option<TxWithReadyInfo> {
-        self.buckets.get(addr).and_then(|bucket| bucket.get(nonce))
-    }
-
-    #[allow(dead_code)]
-    fn get_mut(
-        &mut self, addr: &Address, nonce: &U256,
-    ) -> Option<&mut TxWithReadyInfo> {
-        self.buckets
-            .get_mut(addr)
-            .and_then(|bucket| bucket.get_mut(nonce))
     }
 
     fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
@@ -1030,12 +990,13 @@ mod test_transaction_pool {
     }
 
     #[test]
-    fn test_deferred_pool_insert() {
+    fn test_deferred_pool_insert_and_remove() {
         let mut deferred_pool = super::DeferredPool::new();
 
         // insert txs of same sender
         let alice = Random.generate().unwrap();
         let bob = Random.generate().unwrap();
+        let eva = Random.generate().unwrap();
 
         let alice_tx1 = new_test_tx_with_read_info(&alice, 5, 10, 100, false);
         let alice_tx2 = new_test_tx_with_read_info(&alice, 6, 10, 100, false);
@@ -1048,15 +1009,27 @@ mod test_transaction_pool {
             InsertResult::NewAdded
         );
 
+        assert_eq!(deferred_pool.contain_address(&alice.address()), true);
+
+        assert_eq!(deferred_pool.contain_address(&eva.address()), false);
+
+        assert_eq!(deferred_pool.remove_lowest_nonce(&eva.address()), None);
+
+        assert_eq!(deferred_pool.contain_address(&bob.address()), false);
+
         assert_eq!(
             deferred_pool.insert(alice_tx2.clone(), false),
             InsertResult::NewAdded
         );
 
+        assert_eq!(deferred_pool.remove_lowest_nonce(&bob.address()), None);
+
         assert_eq!(
             deferred_pool.insert(bob_tx1.clone(), false),
             InsertResult::NewAdded
         );
+
+        assert_eq!(deferred_pool.contain_address(&bob.address()), true);
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false),
@@ -1071,6 +1044,144 @@ mod test_transaction_pool {
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false),
             InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
+        );
+
+        assert_eq!(
+            deferred_pool.get_lowest_nonce(&bob.address()),
+            Some(&(1.into()))
+        );
+
+        assert_eq!(
+            deferred_pool.remove_lowest_nonce(&bob.address()),
+            Some(bob_tx1.clone())
+        );
+
+        assert_eq!(
+            deferred_pool.get_lowest_nonce(&bob.address()),
+            Some(&(2.into()))
+        );
+
+        assert_eq!(deferred_pool.contain_address(&bob.address()), true);
+
+        assert_eq!(
+            deferred_pool.remove_lowest_nonce(&bob.address()),
+            Some(bob_tx2_new.clone())
+        );
+
+        assert_eq!(deferred_pool.get_lowest_nonce(&bob.address()), None);
+
+        assert_eq!(deferred_pool.contain_address(&bob.address()), false);
+    }
+
+    #[test]
+    fn test_deferred_pool_recalculate_readiness() {
+        let mut deferred_pool = super::DeferredPool::new();
+
+        // insert txs of same sender
+        let alice = Random.generate().unwrap();
+
+        let gas = 50000;
+        let tx1 = new_test_tx_with_read_info(&alice, 5, 10, 10000, true);
+        let tx2 = new_test_tx_with_read_info(&alice, 6, 10, 10000, true);
+        let tx3 = new_test_tx_with_read_info(&alice, 7, 10, 10000, true);
+        let tx4 = new_test_tx_with_read_info(&alice, 8, 10, 10000, false);
+        let tx5 = new_test_tx_with_read_info(&alice, 9, 10, 10000, false);
+        let exact_cost = 4 * (gas * 10 + 10000);
+
+        deferred_pool.insert(tx1.clone(), false);
+        deferred_pool.insert(tx2.clone(), false);
+        deferred_pool.insert(tx4.clone(), false);
+        deferred_pool.insert(tx5.clone(), false);
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                5.into(),
+                exact_cost.into()
+            ),
+            None
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                7.into(),
+                exact_cost.into()
+            ),
+            None
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                8.into(),
+                exact_cost.into()
+            ),
+            Some(tx4.transaction.clone())
+        );
+
+        deferred_pool.insert(tx3.clone(), false);
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                4.into(),
+                exact_cost.into()
+            ),
+            None
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                5.into(),
+                exact_cost.into()
+            ),
+            Some(tx4.transaction.clone())
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                7.into(),
+                exact_cost.into()
+            ),
+            Some(tx4.transaction.clone())
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                8.into(),
+                exact_cost.into()
+            ),
+            Some(tx4.transaction.clone())
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                9.into(),
+                exact_cost.into()
+            ),
+            Some(tx5.transaction.clone())
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                10.into(),
+                exact_cost.into()
+            ),
+            None
+        );
+
+        assert_eq!(
+            deferred_pool.recalculate_readiness_with_local_info(
+                &alice.address(),
+                5.into(),
+                (exact_cost - 1).into()
+            ),
+            None
         );
     }
 }
