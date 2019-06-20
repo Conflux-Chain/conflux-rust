@@ -78,6 +78,8 @@ impl StateManager {
         match root_node {
             None => {}
             Some(node) => {
+                // Debugging log.
+                info!("State root committed for epoch {:?}", epoch_id);
                 self.delta_trie.set_epoch_root(epoch_id, node.clone())
             }
         }
@@ -159,6 +161,25 @@ impl StateManager {
             self.number_commited_nodes.load(Ordering::Relaxed),
         );
     }
+
+    // FIXME: remove debug code.
+    pub unsafe fn get_state_readonly_assumed_existence(
+        &self, epoch_id: EpochId,
+    ) -> Result<State> {
+        let maybe_state = self.get_state_no_commit(epoch_id)?;
+        Ok(match maybe_state {
+            Some(state) => state,
+            None => {
+                warn!("state doesn't exist at epoch {:?}.", epoch_id);
+                // FIXME: Error were found in
+                // FIXME: transaction_pool/mod.rs#insert_new_transactions
+                // FIXME: and consensus/mod.rs#get_balance, where the obtained
+                // FIXME: state doesn't exist. The bug should be
+                // FIXME: fixed and the debugging code here should be removed.
+                self.get_state_for_genesis_write()
+            }
+        })
+    }
 }
 
 impl StateManagerTrait for StateManager {
@@ -205,7 +226,9 @@ use super::{
 use crate::{ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb};
 use cfx_types::{Address, U256};
 use kvdb::{DBTransaction, DBValue};
-use primitives::{Account, Block, BlockHeaderBuilder, EpochId, MERKLE_NULL_NODE};
+use primitives::{
+    Account, Block, BlockHeaderBuilder, EpochId, MERKLE_NULL_NODE,
+};
 use std::{
     collections::HashMap,
     io, str,

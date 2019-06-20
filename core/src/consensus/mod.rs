@@ -1350,13 +1350,12 @@ impl ConsensusGraphInner {
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db = StateDb::new(
+        let state_db = StateDb::new(unsafe {
             self.data_man
                 .storage_manager
-                .get_state_no_commit(hash)
+                .get_state_readonly_assumed_existence(hash)
                 .unwrap()
-                .unwrap(),
-        );
+        });
         Ok(
             if let Ok(maybe_acc) = state_db.get_account(&address, false) {
                 maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
