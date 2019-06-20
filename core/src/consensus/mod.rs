@@ -1355,6 +1355,7 @@ impl ConsensusGraphInner {
                 .storage_manager
                 .get_state_no_commit(hash)
                 .unwrap()
+                // Unwrapping is safe because the state is assumed to exist.
                 .unwrap(),
         );
         Ok(

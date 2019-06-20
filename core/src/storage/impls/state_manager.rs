@@ -78,6 +78,8 @@ impl StateManager {
         match root_node {
             None => {}
             Some(node) => {
+                // Debugging log.
+                info!("State root committed for epoch {:?}", epoch_id);
                 self.delta_trie.set_epoch_root(epoch_id, node.clone())
             }
         }
@@ -167,9 +169,18 @@ impl StateManagerTrait for StateManager {
     fn make_snapshot(&self, epoch_id: EpochId) -> Snapshot { unimplemented!() }
 
     fn get_state_no_commit(&self, epoch_id: EpochId) -> Result<Option<State>> {
-        Ok(self
-            .get_state_root_node_ref(epoch_id)?
-            .map(|root_node_ref| State::new(self, Some(root_node_ref))))
+        Ok(self.get_state_root_node_ref(epoch_id)?.map_or_else(
+            || {
+                warn!("state doesn't exist at epoch {:?}.", epoch_id);
+                // FIXME: Error were found in
+                // FIXME: transaction_pool/mod.rs#insert_new_transactions
+                // FIXME: and consensus/mod.rs#get_balance, where the obtained
+                // FIXME: state doesn't exist. The bug should be
+                // FIXME: fixed and the debugging code here should be removed.
+                Some(self.get_state_for_genesis_write())
+            },
+            |root_node_ref| Some(State::new(self, Some(root_node_ref))),
+        ))
     }
 
     fn get_state_for_genesis_write(&self) -> State { State::new(self, None) }
@@ -205,7 +216,9 @@ use super::{
 use crate::{ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb};
 use cfx_types::{Address, U256};
 use kvdb::{DBTransaction, DBValue};
-use primitives::{Account, Block, BlockHeaderBuilder, EpochId, MERKLE_NULL_NODE};
+use primitives::{
+    Account, Block, BlockHeaderBuilder, EpochId, MERKLE_NULL_NODE,
+};
 use std::{
     collections::HashMap,
     io, str,
