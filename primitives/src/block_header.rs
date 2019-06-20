@@ -402,7 +402,7 @@ impl Encodable for BlockHeader {
 impl Decodable for BlockHeader {
     fn decode(r: &Rlp) -> Result<Self, DecoderError> {
         let rlp_size = r.as_raw().len();
-        Ok(BlockHeader {
+        let mut header = BlockHeader {
             rlp_part: BlockHeaderRlpPart {
                 parent_hash: r.val_at(0)?,
                 height: r.val_at(1)?,
@@ -417,10 +417,13 @@ impl Decodable for BlockHeader {
                 referee_hashes: r.list_at(10)?,
                 nonce: r.val_at(11)?,
             },
-            hash: keccak(r.as_raw()).into(),
+            hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: rlp_size,
             state_root_aux_info: r.val_at(12)?,
-        })
+        };
+        header.compute_hash();
+
+        Ok(header)
     }
 }
