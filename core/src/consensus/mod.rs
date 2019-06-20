@@ -830,23 +830,23 @@ impl ConsensusGraphInner {
             last_in_pivot =
                 max(last_in_pivot, self.arena[*referee].last_pivot_in_past);
         }
-        let mut visited = HashSet::new();
+        let mut visited = BitSet::new();
         let mut queue = VecDeque::new();
         queue.push_back(me);
-        visited.insert(me);
+        visited.add(me as u32);
         while let Some(index) = queue.pop_front() {
             let parent = self.arena[index].parent;
             if self.arena[parent].data.epoch_number > last_in_pivot
-                && !visited.contains(&parent)
+                && !visited.contains(parent as u32)
             {
-                visited.insert(parent);
+                visited.add(parent as u32);
                 queue.push_back(parent);
             }
             for referee in &self.arena[index].referees {
                 if self.arena[*referee].data.epoch_number > last_in_pivot
-                    && !visited.contains(referee)
+                    && !visited.contains(*referee as u32)
                 {
-                    visited.insert(*referee);
+                    visited.add(*referee as u32);
                     queue.push_back(*referee);
                 }
             }
@@ -854,7 +854,7 @@ impl ConsensusGraphInner {
         let mut anticone = BitSet::new();
         for i in 0..self.arena.len() {
             if self.arena[i].data.epoch_number > last_in_pivot
-                && !visited.contains(&i)
+                && !visited.contains(i as u32)
             {
                 anticone.add(i as u32);
             }
