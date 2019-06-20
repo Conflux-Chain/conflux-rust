@@ -217,7 +217,7 @@ class BlockHeader(rlp.Serializable):
                  referee_hashes=[],
                  adaptive=0,
                  nonce=0,
-                 state_root_aux_info=[]):
+                 state_root_aux_info=[trie.NULL_ROOT, trie.NULL_ROOT]):
         # at the beginning of a method, locals() is a dict of all arguments
         fields = {k: v for k, v in locals().items() if
                   k not in ['self', '__class__']}
