@@ -16,6 +16,7 @@ use crate::{
 };
 use cfx_types::{H256, U256};
 use heapsize::HeapSizeOf;
+use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock, transaction::SignedTransaction, Block, BlockHeader,
@@ -100,6 +101,7 @@ pub struct SynchronizationGraphInner {
     pub genesis_block_index: usize,
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
+    ancestor_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
     pub sequence_number_of_header_entrance: u64,
 }
@@ -117,6 +119,7 @@ impl SynchronizationGraphInner {
             genesis_block_index: NULL,
             children_by_hash: HashMap::new(),
             referrers_by_hash: HashMap::new(),
+            ancestor_tree: MinLinkCutTree::new(),
             pow_config,
             sequence_number_of_header_entrance: 0,
         };
@@ -304,14 +307,9 @@ impl SynchronizationGraphInner {
             })
     }
 
-    fn collect_blockset_in_own_view_of_epoch(
-        &mut self, consensus: SharedConsensusGraph, pivot: usize,
-    ) {
+    fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
-        // This is for optimization. We will not query consensus if we know a
-        // block is not in ConsensusGraph yet for certain.
-        let consensus_block_count = consensus.block_count();
         for referee in &self.arena[pivot].referees {
             visited.insert(*referee);
             queue.push_back(*referee);
@@ -323,31 +321,10 @@ impl SynchronizationGraphInner {
             if self.arena[cur_pivot].block_header.height()
                 > self.arena[index].max_epoch_in_other_views + 1
             {
-                // We want to start from the max_epoch_in_other_views + 1
-                // height. But cur_pivot may not be in the
-                // consensus graph, we have to first traverse a
-                // little bit to go to the zone where the consensus graph
-                // has the information. Then we use the consensus graph LCT to
-                // jump to the right ancestor.
-                while (self.arena[cur_pivot].block_header.height()
-                    > self.arena[index].max_epoch_in_other_views + 1)
-                    && (cur_pivot > consensus_block_count
-                        || consensus.get_block_epoch_number(
-                            &self.arena[cur_pivot].block_header.hash(),
-                        ) == None)
-                {
-                    cur_pivot = self.arena[cur_pivot].parent;
-                }
-                if self.arena[cur_pivot].block_header.height()
-                    > self.arena[index].max_epoch_in_other_views + 1
-                {
-                    let pivot_hash = self.arena[cur_pivot].block_header.hash();
-                    let ancestor_hash = consensus.get_ancestor(
-                        &pivot_hash,
-                        self.arena[index].max_epoch_in_other_views as usize + 1,
-                    );
-                    cur_pivot = *self.indices.get(&ancestor_hash).unwrap();
-                }
+                cur_pivot = self.ancestor_tree.ancestor_at(
+                    cur_pivot,
+                    self.arena[index].max_epoch_in_other_views as usize + 1,
+                );
             }
             loop {
                 let parent = self.arena[cur_pivot].parent;
@@ -1002,10 +979,10 @@ impl SynchronizationGraph {
                             .push(inner.arena[index].block_header.hash());
                     }
 
-                    inner.collect_blockset_in_own_view_of_epoch(
-                        self.consensus.clone(),
-                        index,
-                    );
+                    let parent = inner.arena[index].parent;
+                    inner.ancestor_tree.make_tree(index);
+                    inner.ancestor_tree.link(parent, index);
+                    inner.collect_blockset_in_own_view_of_epoch(index);
 
                     for child in &inner.arena[index].children {
                         debug_assert!(
