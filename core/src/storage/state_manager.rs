@@ -33,8 +33,8 @@ pub trait StateManagerTrait {
     // FIXME: does it has Result<> or not?
     fn get_state_for_genesis_write(&self) -> State;
     // FIXME: this method is reserved for checkpoint, but we have to change its
-    // parameters, FIXME: because storage knows nothing about consensus
-    // graph, therefore it can't know FIXME: which snapshot to drop.
+    // FIXME: parameters, because storage knows nothing about consensus
+    // FIXME: graph, therefore it can't know which snapshot to drop.
     fn drop_state_outside(&self, epoch_id: EpochId);
 
     /// False in case of db failure.

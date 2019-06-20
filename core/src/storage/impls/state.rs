@@ -292,8 +292,8 @@ impl<'a> State<'a> {
                     result?;
 
                     // TODO: check the guarantee of underlying db on transaction
-                    // failure. TODO: may have to separately
-                    // commit last_row_number in worst case.
+                    // TODO: failure. may have to commit last_row_number
+                    // TODO: separately in worst case.
                     commit_transaction.transaction.put(
                         COL_DELTA_TRIE,
                         "last_row_number".as_bytes(),
