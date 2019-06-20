@@ -40,6 +40,15 @@ pub struct MultiVersionMerklePatriciaTrie {
 }
 
 impl MultiVersionMerklePatriciaTrie {
+    pub fn padding(
+        snapshot_root: MerkleHash, intermediate_delta_root: MerkleHash,
+    ) -> KeyPadding {
+        let buffer = Vec::with_capacity(
+            snapshot_root.0.len() + intermediate_delta_root.0.len(),
+        );
+        keccak(&buffer).0
+    }
+
     pub fn new(
         kvdb: Arc<KeyValueDB>, conf: StorageConfiguration, padding: KeyPadding,
     ) -> Self {
@@ -115,6 +124,7 @@ use super::errors::*;
 use crate::{
     statedb::KeyPadding, storage::state_manager::StorageConfiguration,
 };
+use keccak_hash::keccak;
 use kvdb::KeyValueDB;
 use parking_lot::RwLock;
 use primitives::EpochId;
