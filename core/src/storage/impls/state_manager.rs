@@ -109,9 +109,10 @@ impl StateManager {
             delta_trie: MultiVersionMerklePatriciaTrie::new(
                 db.key_value().clone(),
                 conf,
-                // FIXME: replace with padding generated from
-                // (NULL_MERKLE_ROOT, NULL_MERKLE_ROOT)
-                H256::default().0,
+                MultiVersionMerklePatriciaTrie::padding(
+                    MERKLE_NULL_NODE,
+                    MERKLE_NULL_NODE,
+                ),
             ),
             db: db,
             commit_lock: Mutex::new(AtomicCommit {
@@ -171,7 +172,6 @@ impl StateManagerTrait for StateManager {
             .map(|root_node_ref| State::new(self, Some(root_node_ref))))
     }
 
-    // FIXME: check implementation and find where it's used.
     fn get_state_for_genesis_write(&self) -> State { State::new(self, None) }
 
     fn get_state_for_next_epoch(
@@ -203,9 +203,9 @@ use super::{
     },
 };
 use crate::{ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb};
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, U256};
 use kvdb::{DBTransaction, DBValue};
-use primitives::{Account, Block, BlockHeaderBuilder, EpochId};
+use primitives::{Account, Block, BlockHeaderBuilder, EpochId, MERKLE_NULL_NODE};
 use std::{
     collections::HashMap,
     io, str,
