@@ -497,7 +497,7 @@ impl TransactionPool {
 
         let mut account_cache = AccountCache::new(
             self.storage_manager
-                .get_state_for_next_epoch(latest_epoch)
+                .get_state_no_commit(latest_epoch)
                 .unwrap()
                 .unwrap(),
         );

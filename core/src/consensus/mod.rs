@@ -1353,7 +1353,7 @@ impl ConsensusGraphInner {
         let state_db = StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_for_next_epoch(hash)
+                .get_state_no_commit(hash)
                 .unwrap()
                 .unwrap(),
         );
@@ -1474,7 +1474,7 @@ impl ConsensusGraphInner {
         let state_db = StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_for_next_epoch(hash)
+                .get_state_no_commit(hash)
                 .unwrap()
                 .unwrap(),
         );
@@ -2228,7 +2228,7 @@ impl ConsensusGraph {
         let parent_state_root = inner
             .data_man
             .storage_manager
-            .get_state_for_next_epoch(parent_block_hash)
+            .get_state_no_commit(parent_block_hash)
             .unwrap()
             // Unwrapping is safe because the state exists.
             .unwrap()
@@ -2431,7 +2431,7 @@ impl ConsensusGraph {
                 let correct_state_root = self
                     .data_man
                     .storage_manager
-                    .get_state_for_next_epoch(inner.arena[deferred].hash)
+                    .get_state_no_commit(inner.arena[deferred].hash)
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap()

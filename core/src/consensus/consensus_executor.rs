@@ -309,7 +309,7 @@ impl ConsensusExecutionHandler {
             .storage_manager
             .get_state_no_commit(task.epoch_hash)
             .unwrap()
-            // Unwrapping is safe because the state exists.
+            // Unwrapping is safe because the state is assumed to exist.
             .unwrap()
             .get_state_root()
             .unwrap()
