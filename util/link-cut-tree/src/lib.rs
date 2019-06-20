@@ -29,8 +29,6 @@ impl Default for MinNode {
             size: 1,
             value: 0,
             min: 0,
-            // We need to set this value to its own index
-            //            min_idx: 0,
             delta: 0,
             catepillar_value: 0,
             catepillar_delta: 0,
@@ -49,25 +47,19 @@ impl MinLinkCutTree {
 
     pub fn make_tree(&mut self, v: usize) {
         if self.tree.len() <= v {
-            //            let old_len = self.tree.len();
             self.tree.resize(v + 1, MinNode::default());
-            //            for i in old_len..self.tree.len() {
-            //                self.tree[i].min_idx = i;
-            //            }
         }
     }
 
     fn update(&mut self, v: usize) {
         self.tree[v].size = 1;
         self.tree[v].min = self.tree[v].value;
-        //        self.tree[v].min_idx = v;
 
         let u = self.tree[v].left_child;
         if u != NULL {
             self.tree[v].size += self.tree[u].size;
             if self.tree[v].min > self.tree[u].min {
                 self.tree[v].min = self.tree[u].min;
-                //                self.tree[v].min_idx = self.tree[u].min_idx;
             }
         }
         let w = self.tree[v].right_child;
@@ -75,7 +67,6 @@ impl MinLinkCutTree {
             self.tree[v].size += self.tree[w].size;
             if self.tree[v].min > self.tree[w].min {
                 self.tree[v].min = self.tree[w].min;
-                //                self.tree[v].min_idx = self.tree[w].min_idx;
             }
         }
         self.tree[v].min = self.tree[v].min + self.tree[v].delta;
@@ -324,6 +315,7 @@ impl MinLinkCutTree {
                 if at < size {
                     u = w;
                 } else if at == size {
+                    self.splay(u);
                     return u;
                 } else {
                     at -= size + 1;
@@ -375,12 +367,6 @@ impl MinLinkCutTree {
 
         self.tree[v].min
     }
-
-    //    pub fn path_aggregate_idx(&mut self, v: usize) -> usize {
-    //        self.access(v);
-    //
-    //        self.tree[v].min_idx
-    //    }
 
     pub fn get(&mut self, v: usize) -> i128 {
         self.access(v);

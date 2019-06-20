@@ -556,16 +556,26 @@ impl ConsensusGraphInner {
         let adjusted_beta =
             (self.inner_conf.adaptive_weight_beta as i128) * difficulty;
 
-        while parent != self.genesis_block_index {
-            let grandparent = self.arena[parent].parent;
+        let mut low = 1;
+        let mut high = self.arena[parent].height as usize;
+        // [low, high]
+        let mut best = 0;
+
+        while low <= high {
+            let mid = (low + high) / 2;
+            let p = self.weight_tree.ancestor_at(parent, mid);
+            let gp = self.arena[p].parent;
             let w = total_weight
-                - self.arena[grandparent].past_weight
-                - self.block_weight(grandparent);
+                - self.arena[gp].past_weight
+                - self.block_weight(gp);
             if w > adjusted_beta {
-                break;
+                best = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
             }
-            parent = grandparent;
         }
+        parent = self.weight_tree.ancestor_at(parent, best);
 
         let a = self.stable_tree.path_aggregate(parent);
         let b =
@@ -582,14 +592,32 @@ impl ConsensusGraphInner {
             debug!("block is unstable: {:?} < {:?}!", a, b);
             parent = parent_0;
 
-            while parent != self.genesis_block_index {
-                let grandparent = self.arena[parent].parent;
-                let w = self.weight_tree.get(grandparent);
+            let mut low = 1;
+            let mut high = self.arena[parent].height as usize;
+            let mut best = 0;
+
+            while low <= high {
+                let mid = (low + high) / 2;
+                let p = self.weight_tree.ancestor_at(parent, mid);
+                let gp = self.arena[p].parent;
+                let w = self.weight_tree.get(gp);
                 if w > adjusted_beta {
-                    break;
+                    best = mid;
+                    low = mid + 1;
+                } else {
+                    high = mid - 1;
                 }
-                parent = grandparent;
             }
+            parent = self.weight_tree.ancestor_at(parent, best);
+
+            //            while parent != self.genesis_block_index {
+            //                let grandparent = self.arena[parent].parent;
+            //                let w = self.weight_tree.get(grandparent);
+            //                if w > adjusted_beta {
+            //                    break;
+            //                }
+            //                parent = grandparent;
+            //            }
 
             if parent != self.genesis_block_index {
                 let min_agg = self.adaptive_tree.path_aggregate(parent);
