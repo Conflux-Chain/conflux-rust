@@ -611,8 +611,19 @@ mod tests {
     fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
         State::new(
             StateDb::new(
-                storage_manager.get_state_for_next_epoch(epoch_id).unwrap(),
+                storage_manager
+                    .get_state_for_next_epoch(epoch_id)
+                    .unwrap()
+                    .unwrap(),
             ),
+            0.into(),
+            VmFactory::default(),
+        )
+    }
+
+    fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
+        State::new(
+            StateDb::new(storage_manager.get_state_for_genesis_write()),
             0.into(),
             VmFactory::default(),
         )
@@ -621,8 +632,7 @@ mod tests {
     #[test]
     fn checkpoint_basic() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state(&storage_manager, H256::from(U256::from(0u64)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let address = Address::zero();
         state.checkpoint();
         state
@@ -643,8 +653,7 @@ mod tests {
     #[test]
     fn checkpoint_nested() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state(&storage_manager, H256::from(U256::from(0u64)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let address = Address::zero();
         state.checkpoint();
         state.checkpoint();
@@ -661,8 +670,7 @@ mod tests {
     #[test]
     fn checkpoint_revert_to_get_storage_at() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state(&storage_manager, H256::from(U256::from(0u64)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let address = Address::zero();
         let key = H256::from(U256::from(0));
         let c0 = state.checkpoint();
@@ -698,8 +706,7 @@ mod tests {
     #[test]
     fn checkpoint_from_empty_get_storage_at() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state(&storage_manager, H256::from(U256::from(0u64)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::zero();
         let k = H256::from(U256::from(0));
         let k2 = H256::from(U256::from(1));
@@ -823,8 +830,7 @@ mod tests {
     #[test]
     fn checkpoint_get_storage_at() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state =
-            get_state(&storage_manager, H256::from(U256::from(0u64)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::zero();
         let k = H256::from(U256::from(0));
         let k2 = H256::from(U256::from(1));
@@ -980,7 +986,7 @@ mod tests {
     #[test]
     fn kill_account_with_checkpoints() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state(&storage_manager, H256::from(U256::from(0)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::zero();
         let k = H256::from(U256::from(0));
         state.checkpoint();
@@ -1002,7 +1008,7 @@ mod tests {
     #[test]
     fn create_contract_fail() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state(&storage_manager, H256::from(U256::from(0)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let a: Address = 1000.into();
 
         state.checkpoint(); // c1
@@ -1024,7 +1030,7 @@ mod tests {
     #[test]
     fn create_contract_fail_previous_storage() {
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state(&storage_manager, H256::from(U256::from(0)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         let a: Address = 1000.into();
         let k = H256::from(U256::from(0));
 
