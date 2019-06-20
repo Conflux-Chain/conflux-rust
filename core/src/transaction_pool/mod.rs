@@ -6,7 +6,7 @@ mod impls;
 //mod ready;
 
 #[cfg(test)]
-mod tests;
+mod test_treap;
 
 extern crate rand;
 
@@ -78,7 +78,7 @@ impl<'storage> AccountCache<'storage> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct TxWithReadyInfo {
     transaction: Arc<SignedTransaction>,
     packed: bool,
@@ -109,7 +109,7 @@ impl Deref for TxWithReadyInfo {
     fn deref(&self) -> &Self::Target { &self.transaction }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum InsertResult {
     /// new item added
     NewAdded,
@@ -994,7 +994,8 @@ impl TransactionPool {
 }
 
 #[cfg(test)]
-mod tests2 {
+mod test_transaction_pool {
+    use super::{InsertResult, TxWithReadyInfo};
     use cfx_types::{Address, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
@@ -1016,147 +1017,60 @@ mod tests2 {
         )
     }
 
+    fn new_test_tx_with_read_info(
+        sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
+        packed: bool,
+    ) -> TxWithReadyInfo
+    {
+        let transaction = new_test_tx(sender, nonce, gas_price, value);
+        TxWithReadyInfo {
+            transaction,
+            packed,
+        }
+    }
+
     #[test]
-    fn test_nonce_pool_new_added() {
-        let mut nonce_pool = super::NoncePool::new();
+    fn test_deferred_pool_insert() {
+        let mut deferred_pool = super::DeferredPool::new();
 
         // insert txs of same sender
-        let sender1 = Random.generate().unwrap();
-        let tx11 = new_test_tx(&sender1, 5, 10, 100);
-        assert_eq!(
-            nonce_pool.insert(tx11.clone()),
-            super::InsertResult::NewAdded
-        );
-        let tx12 = new_test_tx(&sender1, 6, 10, 100);
-        assert_eq!(
-            nonce_pool.insert(tx12.clone()),
-            super::InsertResult::NewAdded
-        );
+        let alice = Random.generate().unwrap();
+        let bob = Random.generate().unwrap();
 
-        // insert txs of different sender
-        let sender2 = Random.generate().unwrap();
-        let tx21 = new_test_tx(&sender2, 5, 10, 100);
+        let alice_tx1 = new_test_tx_with_read_info(&alice, 5, 10, 100, false);
+        let alice_tx2 = new_test_tx_with_read_info(&alice, 6, 10, 100, false);
+        let bob_tx1 = new_test_tx_with_read_info(&bob, 1, 10, 100, false);
+        let bob_tx2 = new_test_tx_with_read_info(&bob, 2, 10, 100, false);
+        let bob_tx2_new = new_test_tx_with_read_info(&bob, 2, 11, 100, false);
+
         assert_eq!(
-            nonce_pool.insert(tx21.clone()),
-            super::InsertResult::NewAdded
+            deferred_pool.insert(alice_tx1.clone(), false),
+            InsertResult::NewAdded
         );
 
-        // could get all txs with valid sender address and nonce
         assert_eq!(
-            nonce_pool.get(&tx11.sender, &tx11.nonce),
-            Some(tx11.clone())
-        );
-        assert_eq!(
-            nonce_pool.get(&tx12.sender, &tx12.nonce),
-            Some(tx12.clone())
-        );
-        assert_eq!(
-            nonce_pool.get(&tx21.sender, &tx21.nonce),
-            Some(tx21.clone())
+            deferred_pool.insert(alice_tx2.clone(), false),
+            InsertResult::NewAdded
         );
 
-        // could remove txs with valid sender address and nonce
         assert_eq!(
-            nonce_pool.remove(&tx21.sender, &tx21.nonce),
-            Some(tx21.clone())
-        );
-        assert_eq!(
-            nonce_pool.remove(&tx12.sender, &tx12.nonce),
-            Some(tx12.clone())
+            deferred_pool.insert(bob_tx1.clone(), false),
+            InsertResult::NewAdded
         );
 
-        // could not remove or get txs with invalid sender address and nonce
-        assert_eq!(nonce_pool.remove(&tx21.sender, &tx21.nonce), None);
-        assert_eq!(nonce_pool.remove(&tx12.sender, &tx12.nonce), None);
-        assert_eq!(nonce_pool.get(&tx12.sender, &tx12.nonce), None);
-        assert_eq!(nonce_pool.get(&tx21.sender, &tx21.nonce), None);
-    }
-
-    #[test]
-    fn test_nonce_pool_update() {
-        let mut pool = super::NoncePool::new();
-
-        let sender = Random.generate().unwrap();
-        let tx = new_test_tx(&sender, 5, 10, 100);
-        assert_eq!(pool.insert(tx.clone()), super::InsertResult::NewAdded);
-        assert_eq!(pool.get(&tx.sender, &tx.nonce), Some(tx.clone()));
-
-        // insert duplicated tx
-        assert_eq!(pool.insert(tx.clone()), super::InsertResult::Failed);
-
-        // update with lower gas price tx
-        let tx2 = new_test_tx(&sender, 5, 9, 100);
-        assert_eq!(pool.insert(tx2.clone()), super::InsertResult::Failed);
-        assert_eq!(pool.get(&tx2.sender, &tx2.nonce), Some(tx.clone()));
-
-        // update with higher gas price tx
-        let tx3 = new_test_tx(&sender, 5, 11, 100);
         assert_eq!(
-            pool.insert(tx3.clone()),
-            super::InsertResult::Updated(tx.clone())
+            deferred_pool.insert(bob_tx2.clone(), false),
+            InsertResult::NewAdded
         );
-        assert_eq!(pool.get(&tx3.sender, &tx3.nonce), Some(tx3.clone()));
-        assert_eq!(pool.get(&tx.sender, &tx.nonce), Some(tx3.clone()));
-    }
-    /*
-        #[test]
-        fn test_pending_pool() {
-            let mut pool = super::UnconfirmedTransactions::new();
-            assert_eq!(pool.pending_pool_size(), 0);
 
-            // new added tx
-            let sender = Random.generate().unwrap();
-            let tx = new_test_tx(&sender, 5, 10, 100);
-            assert!(pool.insert(tx.clone()));
-            assert_eq!(pool.pending_pool_size(), 1);
-            assert_eq!(pool.get_mut(&tx.sender, &tx.nonce), Some(tx.clone()));
-            assert_eq!(pool.get_by_hash(&tx.hash()), Some(tx.clone()));
+        assert_eq!(
+            deferred_pool.insert(bob_tx2_new.clone(), false),
+            InsertResult::Updated(bob_tx2.clone())
+        );
 
-            // new added tx of different nonce
-            let tx2 = new_test_tx(&sender, 6, 10, 100);
-            assert!(pool.insert(tx2.clone()));
-            assert_eq!(pool.pending_pool_size(), 2);
-            assert_eq!(pool.remove(&tx2.sender, &tx2.nonce), Some(tx2.clone()));
-            assert_eq!(pool.pending_pool_size(), 1);
-
-            // update tx with lower gas price
-            let tx3 = new_test_tx(&sender, 5, 9, 100);
-            assert!(!pool.insert(tx3.clone()));
-            assert_eq!(pool.pending_pool_size(), 1);
-
-            // update tx with higher gas price
-            let tx4 = new_test_tx(&sender, 5, 11, 100);
-            assert!(pool.insert(tx4.clone()));
-            assert_eq!(pool.pending_pool_size(), 1);
-            assert_eq!(pool.get_mut(&tx.sender, &tx.nonce), Some(tx4.clone()));
-            assert_eq!(pool.get_by_hash(&tx.hash()), None);
-            assert_eq!(pool.get_by_hash(&tx4.hash()), Some(tx4.clone()));
-        }
-    */
-    #[test]
-    fn test_ready_pool() {
-        let mut pool = super::ReadyTransactionPool::new();
-        assert_eq!(pool.len(), 0);
-
-        // new added tx
-        let sender = Random.generate().unwrap();
-        let tx = new_test_tx(&sender, 5, 10, 100);
-        assert!(pool.insert(tx.clone()));
-        assert_eq!(pool.len(), 1);
-        assert_eq!(pool.get(&tx.hash()), Some(tx.clone()));
-        assert_eq!(pool.get_by_nonce(&tx.sender, &tx.nonce), Some(tx.clone()));
-
-        // update tx with lower gas price
-        let tx2 = new_test_tx(&sender, 5, 9, 100);
-        assert!(!pool.insert(tx2.clone()));
-        assert_eq!(pool.len(), 1);
-
-        // update tx with higher gas price
-        let tx3 = new_test_tx(&sender, 5, 11, 100);
-        assert!(pool.insert(tx3.clone()));
-        assert_eq!(pool.len(), 1);
-        assert_eq!(pool.get_by_nonce(&tx.sender, &tx.nonce), Some(tx3.clone()));
-        assert_eq!(pool.get(&tx.hash()), None);
-        assert_eq!(pool.get(&tx3.hash()), Some(tx3.clone()));
+        assert_eq!(
+            deferred_pool.insert(bob_tx2.clone(), false),
+            InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
+        );
     }
 }
