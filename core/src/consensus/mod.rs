@@ -2012,13 +2012,14 @@ impl ConsensusGraph {
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
     ) -> (StateRootWithAuxInfo, H256) {
         // If we already computed the state of the block before, we should not
-        // do it again FIXME: propagate the error up
+        // do it again
+        // FIXME: propagate the error up
         debug!("compute_state_for_block {:?}", block_hash);
         {
             let maybe_cached_state = self
                 .data_man
                 .storage_manager
-                .get_state_for_next_epoch(block_hash.clone())
+                .get_state_no_commit(block_hash.clone())
                 .unwrap();
             match maybe_cached_state {
                 Some(cached_state) => {
