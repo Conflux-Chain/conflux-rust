@@ -5,19 +5,19 @@
 use crate::{
     hash::KECCAK_EMPTY,
     storage::{
-        Error as StorageError, ErrorKind as StorageErrorKind, MerkleHash,
-        Storage, StorageTrait,
+        Error as StorageError, ErrorKind as StorageErrorKind, Storage,
+        StorageTrait,
     },
 };
-use cfx_types::Address;
-use primitives::{Account, EpochId};
+use cfx_types::{Address, H256};
+use primitives::{Account, EpochId, StateRootWithAuxInfo};
 
 mod error;
 mod storage_key;
 
 pub use self::{
     error::{Error, ErrorKind, Result},
-    storage_key::StorageKey,
+    storage_key::{KeyPadding, StorageKey},
 };
 
 pub struct StateDb<'a> {
@@ -26,6 +26,26 @@ pub struct StateDb<'a> {
 
 impl<'a> StateDb<'a> {
     pub fn new(storage: Storage<'a>) -> Self { StateDb { storage } }
+
+    pub fn account_key(&self, address: &Address) -> StorageKey {
+        StorageKey::new_account_key(address, self.storage.get_padding())
+    }
+
+    pub fn code_root_key(&self, address: &Address) -> StorageKey {
+        StorageKey::new_code_root_key(address, self.storage.get_padding())
+    }
+
+    pub fn code_key(&self, address: &Address, code_hash: &H256) -> StorageKey {
+        StorageKey::new_code_key(address, code_hash, self.storage.get_padding())
+    }
+
+    pub fn storage_root_key(&self, address: &Address) -> StorageKey {
+        StorageKey::new_storage_root_key(address, self.storage.get_padding())
+    }
+
+    pub fn storage_key(&self, address: &Address, key: &[u8]) -> StorageKey {
+        StorageKey::new_storage_key(address, key, self.storage.get_padding())
+    }
 
     pub fn get<T>(&self, key: &StorageKey) -> Result<Option<T>>
     where T: ::rlp::Decodable {
@@ -45,7 +65,7 @@ impl<'a> StateDb<'a> {
     pub fn get_account(
         &self, address: &Address, with_storage_root: bool,
     ) -> Result<Option<Account>> {
-        let key = StorageKey::new_account_key(address);
+        let key = self.account_key(address);
         let raw = match self.storage.get(key.as_ref()) {
             Ok(maybe_value) => match maybe_value {
                 None => return Ok(None),
@@ -58,7 +78,10 @@ impl<'a> StateDb<'a> {
         //        println!("get key={:?} value={:?}", key, raw);
         let storage_root;
         if with_storage_root {
-            let storage_root_key = StorageKey::new_storage_root_key(address);
+            let storage_root_key = StorageKey::new_storage_root_key(
+                address,
+                self.storage.get_padding(),
+            );
             storage_root = self
                 .storage
                 .get_merkle_hash(storage_root_key.as_ref())?
@@ -108,10 +131,20 @@ impl<'a> StateDb<'a> {
         Ok(self.storage.delete_all(key_prefix.as_ref())?)
     }
 
-    pub fn commit(&mut self, epoch_id: EpochId) -> Result<MerkleHash> {
-        let merkle_hash = self.storage.compute_state_root()?;
+    /// This method is only used for genesis block because state root is
+    /// required to compute genesis epoch_id. For other blocks there are
+    /// deferred execution so the state root computation is merged inside
+    /// commit method.
+    pub fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
+        Ok(self.storage.compute_state_root()?)
+    }
+
+    pub fn commit(
+        &mut self, epoch_id: EpochId,
+    ) -> Result<StateRootWithAuxInfo> {
+        let result = self.compute_state_root();
         self.storage.commit(epoch_id)?;
 
-        Ok(merkle_hash)
+        result
     }
 }

@@ -496,7 +496,11 @@ impl TransactionPool {
         }
 
         let mut account_cache = AccountCache::new(
-            self.storage_manager.get_state_at(latest_epoch).unwrap(),
+            self.storage_manager
+                .get_state_no_commit(latest_epoch)
+                .unwrap()
+                // Unwrapping is safe because the state exists.
+                .unwrap(),
         );
         let mut passed_transactions = Vec::new();
         {
