@@ -954,11 +954,6 @@ impl TransactionPool {
         packed_transactions
     }
 
-    pub fn transactions_to_propagate(&self) -> Vec<Arc<SignedTransaction>> {
-        let inner = self.inner.read();
-        inner.txs.iter().map(|(_, tx)| tx.clone()).collect()
-    }
-
     pub fn notify_state_start(&self, accounts_from_execution: Vec<Account>) {
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
