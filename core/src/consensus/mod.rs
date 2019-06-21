@@ -3351,8 +3351,10 @@ impl ConsensusGraph {
 
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
-        self.wait_for_block_state(&self.best_state_block_hash());
-        self.try_get_best_state()
+        let inner = self.inner.read();
+        self.wait_for_block_state(&inner.best_state_block_hash());
+        inner
+            .try_get_best_state(&self.data_man)
             .expect("Best state has been executed")
     }
 
