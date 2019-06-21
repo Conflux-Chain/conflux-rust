@@ -21,7 +21,6 @@ pub mod epoch;
 pub mod filter;
 pub mod log_entry;
 pub mod receipt;
-pub mod state_root;
 pub mod transaction;
 pub mod transaction_address;
 
@@ -31,7 +30,6 @@ pub use crate::{
     block_header::{BlockHeader, BlockHeaderBuilder},
     epoch::{EpochId, EpochNumber},
     log_entry::LogEntry,
-    state_root::*,
     transaction::{
         Action, SignedTransaction, Transaction, TransactionWithSignature,
         TxPropagateId,

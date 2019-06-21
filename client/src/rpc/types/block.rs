@@ -7,8 +7,7 @@ use cfxcore::consensus::ConsensusGraphInner;
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     receipt::{TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS},
-    Block as PrimitiveBlock, BlockHeaderBuilder, StateRootWithAuxInfo,
-    TransactionAddress,
+    Block as PrimitiveBlock, BlockHeaderBuilder, TransactionAddress,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -110,7 +109,7 @@ pub struct Block {
     /// Author's address
     pub miner: H160,
     /// State root hash
-    pub deferred_state_root: StateRootWithAuxInfo,
+    pub deferred_state_root: H256,
     /// Receipts root hash
     pub deferred_receipts_root: H256,
     /// Transactions root hash
@@ -197,10 +196,9 @@ impl Block {
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
             height: b.block_header.height().into(),
             miner: H160::from(b.block_header.author().clone()),
-            deferred_state_root: b
-                .block_header
-                .deferred_state_root_with_aux_info()
-                .into(),
+            deferred_state_root: H256::from(
+                b.block_header.deferred_state_root().clone(),
+            ),
             deferred_receipts_root: H256::from(
                 b.block_header.deferred_receipts_root().clone(),
             ),
@@ -245,7 +243,7 @@ impl Block {
                     .with_timestamp(self.timestamp.as_usize() as u64)
                     .with_author(self.miner.into())
                     .with_transactions_root(self.transactions_root.into())
-                    .with_deferred_state_root(self.deferred_state_root.clone())
+                    .with_deferred_state_root(self.deferred_state_root.into())
                     .with_deferred_receipts_root(
                         self.deferred_receipts_root.into(),
                     )
@@ -319,7 +317,7 @@ mod tests {
             parent_hash: H256::default(),
             height: 0.into(),
             miner: H160::default(),
-            deferred_state_root: Default::default(),
+            deferred_state_root: KECCAK_NULL_RLP.into(),
             deferred_receipts_root: KECCAK_NULL_RLP.into(),
             transactions_root: KECCAK_NULL_RLP.into(),
             epoch_number: None,
@@ -335,18 +333,18 @@ mod tests {
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
 
-        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":{"state_root":{"snapshot_root":"0x0000000000000000000000000000000000000000000000000000000000000000","intermediate_delta_root":"0x0000000000000000000000000000000000000000000000000000000000000000","delta_root":"0x0000000000000000000000000000000000000000000000000000000000000000"},"aux_info":{"previous_snapshot_root":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470","intermediate_delta_epoch_id":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"}},"deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
+        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
     }
 
     #[test]
     fn test_deserialize_block() {
-        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":{"state_root":{"snapshot_root":"0x0000000000000000000000000000000000000000000000000000000000000000","intermediate_delta_root":"0x0000000000000000000000000000000000000000000000000000000000000000","delta_root":"0x0000000000000000000000000000000000000000000000000000000000000000"},"aux_info":{"previous_snapshot_root":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470","intermediate_delta_epoch_id":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"}},"deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#;
+        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","deferredReceiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#;
         let result_block = Block {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
             miner: H160::default(),
-            deferred_state_root: Default::default(),
+            deferred_state_root: KECCAK_NULL_RLP.into(),
             deferred_receipts_root: KECCAK_NULL_RLP.into(),
             transactions_root: KECCAK_NULL_RLP.into(),
             epoch_number: Some(0.into()),

@@ -19,8 +19,7 @@ use primitives::{
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
-    TransactionAddress,
+    Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -31,7 +30,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use hash::KECCAK_EMPTY_LIST_RLP;
+use hash::{KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP};
 use std::fmt::{Debug, Formatter};
 
 // TODO: Parallelize anticone calculation by moving calculation into task.
@@ -102,7 +101,7 @@ impl EpochExecutionTask {
 #[derive(Debug)]
 struct GetExecutionResultTask {
     pub epoch_hash: H256,
-    pub sender: Sender<(StateRootWithAuxInfo, H256)>,
+    pub sender: Sender<(H256, H256)>,
 }
 
 pub struct ConsensusExecutor {
@@ -195,11 +194,9 @@ impl ConsensusExecutor {
     /// It is the caller's responsibility to ensure that `epoch_hash` is indeed
     /// computed when all the tasks before are finished.
     // TODO Release Consensus inner lock if possible when the function is called
-    pub fn wait_for_result(
-        &self, epoch_hash: H256,
-    ) -> (StateRootWithAuxInfo, H256) {
+    pub fn wait_for_result(&self, epoch_hash: H256) -> (H256, H256) {
         if self.bench_mode {
-            (Default::default(), KECCAK_EMPTY_LIST_RLP)
+            (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP)
         } else {
             let (sender, receiver) = channel();
             self.sender
@@ -307,9 +304,7 @@ impl ConsensusExecutionHandler {
         let state_root = self
             .data_man
             .storage_manager
-            .get_state_no_commit(task.epoch_hash)
-            .unwrap()
-            // Unwrapping is safe because the state is assumed to exist.
+            .get_state_at(task.epoch_hash)
             .unwrap()
             .get_state_root()
             .unwrap()
@@ -339,7 +334,7 @@ impl ConsensusExecutionHandler {
     {
         // Check if the state has been computed
         if debug_record.is_none()
-            && self.data_man.storage_manager.contains_state(*epoch_hash)
+            && self.data_man.storage_manager.state_exists(*epoch_hash)
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
@@ -367,11 +362,7 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_for_next_epoch(
-                        *pivot_block.block_header.parent_hash(),
-                    )
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
+                    .get_state_at(*pivot_block.block_header.parent_hash())
                     .unwrap(),
             ),
             0.into(),
@@ -396,18 +387,23 @@ impl ConsensusExecutionHandler {
         }
 
         // FIXME: We may want to propagate the error up
-        let state_root = if on_local_pivot {
+        if on_local_pivot {
             state
                 .commit_and_notify(*epoch_hash, &self.data_man.txpool)
                 .unwrap();
         } else {
             state.commit(*epoch_hash).unwrap();
-        };
+        }
         debug!(
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}",
             on_local_pivot,
             epoch_hash,
-            state_root,
+            self.data_man
+                .storage_manager
+                .get_state_at(*epoch_hash)
+                .unwrap()
+                .get_state_root()
+                .unwrap(),
             self
                 .data_man
                 .get_receipts_root(&epoch_hash)
@@ -563,9 +559,7 @@ impl ConsensusExecutionHandler {
                 let state = self
                     .data_man
                     .storage_manager
-                    .get_state_no_commit(*parent)
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
+                    .get_state_at(*parent)
                     .unwrap();
                 self.data_man
                     .txpool
@@ -816,11 +810,7 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_for_next_epoch(
-                        *pivot_block.block_header.parent_hash(),
-                    )
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
+                    .get_state_at(*pivot_block.block_header.parent_hash())
                     .unwrap(),
             ),
             0.into(),
@@ -843,9 +833,7 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_no_commit(*epoch_id)
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
+                    .get_state_at(*epoch_id)
                     .unwrap(),
             ),
             0.into(),

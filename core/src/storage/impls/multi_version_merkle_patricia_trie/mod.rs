@@ -11,47 +11,24 @@ pub(super) mod row_number;
 pub use self::node_ref_map::DEFAULT_NODE_MAP_SIZE;
 
 pub struct MultiVersionMerklePatriciaTrie {
-    // TODO(yz): revisit the comment below. With snapshot we may have special
-    // TODO(yz): api to create empty epoch.
     /// We don't distinguish an epoch which doesn't exists from an epoch which
     /// contains nothing.
-    /// This version map is incomplete as some of other roots live in disk db.
+    /// This version map is incomplete as the rest map lives in disk db.
     root_by_version: RwLock<HashMap<EpochId, NodeRefDeltaMpt>>,
+    /// The nodes in memory should be considered a cache for MPT.
+    /// However for delta_trie the disk_db contains MPT nodes which are swapped
+    /// out from memory because persistence isn't necessary.
+    ///
     /// Note that we don't manage ChildrenTable in allocator because it's
     /// variable-length.
     ///
     /// The node memory manager holds reference to db on disk which stores MPT
     /// nodes.
-    ///
-    /// The nodes in memory should be considered a cache for MPT.
-    /// However for delta_trie the disk_db contains MPT nodes which are swapped
-    /// out from memory because persistence isn't necessary.
-    /// (So far we don't have write-back implementation. For write-back we
-    /// should think more about roots in disk db.)
-    // TODO(yz): we should separate disk db from node_memory_manager because
-    // TODO(yz): in different delta we don't share cache & db but we share
-    // TODO(yz): memory.
     node_memory_manager: NodeMemoryManagerDeltaMpt,
-    /// The padding is uniquely generated for each DeltaMPT, and it's used to
-    /// compute padding bytes for address and storage_key. The padding setup
-    /// is against an attack where adversary artificially build deep paths in
-    /// MPT.
-    pub padding: KeyPadding,
 }
 
 impl MultiVersionMerklePatriciaTrie {
-    pub fn padding(
-        snapshot_root: MerkleHash, intermediate_delta_root: MerkleHash,
-    ) -> KeyPadding {
-        let buffer = Vec::with_capacity(
-            snapshot_root.0.len() + intermediate_delta_root.0.len(),
-        );
-        keccak(&buffer).0
-    }
-
-    pub fn new(
-        kvdb: Arc<KeyValueDB>, conf: StorageConfiguration, padding: KeyPadding,
-    ) -> Self {
+    pub fn new(kvdb: Arc<KeyValueDB>, conf: StorageConfiguration) -> Self {
         Self {
             root_by_version: Default::default(),
             node_memory_manager: NodeMemoryManagerDeltaMpt::new(
@@ -62,7 +39,6 @@ impl MultiVersionMerklePatriciaTrie {
                 LRU::<RLFUPosT, DeltaMptDbKey>::new(conf.cache_size),
                 kvdb,
             ),
-            padding: padding,
         }
     }
 
@@ -121,10 +97,7 @@ use self::{
     node_memory_manager::*, node_ref_map::DeltaMptDbKey,
 };
 use super::errors::*;
-use crate::{
-    statedb::KeyPadding, storage::state_manager::StorageConfiguration,
-};
-use keccak_hash::keccak;
+use crate::storage::state_manager::StorageConfiguration;
 use kvdb::KeyValueDB;
 use parking_lot::RwLock;
 use primitives::EpochId;

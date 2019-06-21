@@ -8,7 +8,7 @@
 /// a State after the epoch defined by the block.
 ///
 /// A writable state is copy-on-write reference to the base state in the
-/// state manager. State is supposed to be owned by single user.
+/// state union. State is supposed to be owned by single user.
 pub use super::impls::state::State;
 
 // The trait is created to separate the implementation to another file, and the
@@ -17,13 +17,9 @@ pub use super::impls::state::State;
 // TODO(yz): check if this is the best way to organize code for this library.
 pub trait StateTrait {
     // Status.
-    // FIXME: now we don't allow getting non-existing state. Is this method
-    // still useful.
     /// Check if the state exists. If not any state action operates on an empty
     /// state.
     fn does_exist(&self) -> bool;
-    /// Get padding for storage keys.
-    fn get_padding(&self) -> &KeyPadding;
     /// Merkle hash
     fn get_merkle_hash(&self, access_key: &[u8]) -> Result<Option<MerkleHash>>;
 
@@ -40,8 +36,8 @@ pub trait StateTrait {
     // Finalize
     /// It's costly to compute state root however it's only necessary to compute
     /// state root once before committing.
-    fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
-    fn get_state_root(&self) -> Result<Option<StateRootWithAuxInfo>>;
+    fn compute_state_root(&mut self) -> Result<MerkleHash>;
+    fn get_state_root(&self) -> Result<Option<MerkleHash>>;
     fn commit(&mut self, epoch: EpochId) -> Result<()>;
     fn revert(&mut self);
 
@@ -52,5 +48,4 @@ use super::impls::{
     errors::*,
     multi_version_merkle_patricia_trie::merkle_patricia_trie::MerkleHash,
 };
-use crate::statedb::KeyPadding;
-use primitives::{EpochId, StateRootWithAuxInfo};
+use primitives::EpochId;
