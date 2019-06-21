@@ -1252,14 +1252,30 @@ impl SynchronizationProtocolHandler {
             parent_hash = header.parent_hash().clone();
             parent_height = header.height();
 
-            let res = self.graph.insert_block_header(header, true, false);
+            let (success, mut to_relay, is_old) =
+                self.graph.insert_block_header(header, true, false);
 
-            if res.0 {
+            if success {
                 // Valid block based on header
                 if !self.graph.contains_block(&hash) {
-                    hashes.push(hash);
+                    if is_old {
+                        // Create empty block and insert.
+                        let empty_block =
+                            Block::new(header.clone(), Vec::new());
+                        let (_, me_to_relay) = self.graph.insert_block(
+                            empty_block,
+                            false,
+                            true,
+                            false,
+                        );
+                        if me_to_relay {
+                            to_relay.push(header.hash());
+                        }
+                    } else {
+                        hashes.push(hash);
+                    }
                 }
-                need_to_relay.extend(res.1);
+                need_to_relay.extend(to_relay);
                 for referee in header.referee_hashes() {
                     dependent_hashes.push(*referee);
                 }
@@ -1500,18 +1516,18 @@ impl SynchronizationProtocolHandler {
 
         assert!(self.graph.contains_block_header(&parent_hash));
         assert!(!self.graph.contains_block_header(&hash));
-        let res = self.graph.insert_block_header(
+        let (success, to_relay, is_old) = self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
         );
-        assert!(res.0);
-
+        assert!(success);
+        assert!(!is_old);
         assert!(!self.graph.contains_block(&hash));
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
         self.graph.insert_block(block, false, true, false);
-        res.1
+        to_relay
     }
 
     pub fn on_new_decoded_block(
