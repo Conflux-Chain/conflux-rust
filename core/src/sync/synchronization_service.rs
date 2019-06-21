@@ -17,7 +17,7 @@ use network::{
     node_table::{NodeEntry, NodeId},
     Error as NetworkError, NetworkService, PeerInfo, ProtocolId,
 };
-use primitives::Block;
+use primitives::{transaction::SignedTransaction, Block};
 use std::sync::Arc;
 
 pub struct SynchronizationService {
@@ -57,6 +57,13 @@ impl SynchronizationService {
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.protocol_handler.get_synchronization_graph()
+    }
+
+    pub fn append_received_transactions(
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+    ) {
+        self.protocol_handler
+            .append_received_transactions(transactions);
     }
 
     pub fn start(&mut self) -> Result<(), Error> {

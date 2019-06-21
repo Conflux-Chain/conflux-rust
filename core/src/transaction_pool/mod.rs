@@ -29,6 +29,7 @@ use primitives::{
 use rlp::*;
 use std::{
     collections::{hash_map::HashMap, BTreeMap, VecDeque},
+    mem,
     ops::{Deref, DerefMut},
     sync::{mpsc::channel, Arc},
 };
@@ -36,6 +37,8 @@ use threadpool::ThreadPool;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Gauge = Gauge::register("tx_pool_size");
+    static ref TX_POOL_READY_GAUGE: Gauge =
+        Gauge::register("tx_pool_ready_size");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
@@ -500,6 +503,7 @@ pub struct TransactionPool {
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     pub worker_pool: Arc<Mutex<ThreadPool>>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     spec: vm::Spec,
 }
 
@@ -520,6 +524,7 @@ impl TransactionPool {
             )),
             worker_pool,
             cache_man,
+            to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             spec: vm::Spec::new_spec(),
         }
     }
@@ -535,7 +540,7 @@ impl TransactionPool {
     pub fn insert_new_transactions(
         &self, latest_epoch: EpochId,
         transactions: &Vec<TransactionWithSignature>,
-    ) -> Vec<Result<H256, String>>
+    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>)
     {
         let mut failures = HashMap::new();
 
@@ -548,6 +553,10 @@ impl TransactionPool {
                 .filter(|tx| {
                     let tx_hash = tx.hash();
                     let inserted = tx_cache.contains_key(&tx_hash);
+                    // Sample 1/128 transactions
+                    if tx_hash[0] & 254 == 0 {
+                        debug!("Sampled transaction {:?} in tx pool", tx_hash);
+                    }
 
                     if inserted {
                         failures.insert(
@@ -657,6 +666,7 @@ impl TransactionPool {
         let mut account_cache = AccountCache::new(
             self.storage_manager.get_state_at(latest_epoch).unwrap(),
         );
+        let mut passed_transactions = Vec::new();
         {
             let mut tx_cache = self.transaction_pubkey_cache.write();
             let mut cache_man = self.cache_man.lock();
@@ -677,11 +687,17 @@ impl TransactionPool {
                     match self.add_transaction_and_check_readiness_without_lock(
                         inner,
                         &mut account_cache,
-                        tx,
+                        tx.clone(),
                         false,
                         false,
                     ) {
-                        Ok(_) => {}
+                        Ok(_) => {
+                            let mut to_prop = self.to_propagate_trans.write();
+                            if !to_prop.contains_key(&tx.hash) {
+                                to_prop.insert(tx.hash, tx.clone());
+                            }
+                            passed_transactions.push(tx);
+                        }
                         Err(e) => {
                             failures.insert(hash, e);
                         }
@@ -690,17 +706,10 @@ impl TransactionPool {
             }
         }
         TX_POOL_GAUGE.update(self.len() as i64);
+        TX_POOL_READY_GAUGE
+            .update(self.inner.read().ready_account_pool.len() as i64);
 
-        transactions
-            .iter()
-            .map(|tx| {
-                let tx_hash = tx.hash();
-                match failures.get(&tx_hash) {
-                    Some(e) => Err(e.clone()),
-                    None => Ok(tx_hash),
-                }
-            })
-            .collect()
+        (passed_transactions, failures)
     }
 
     // verify transactions based on the rules that
@@ -810,7 +819,6 @@ impl TransactionPool {
         }
 
         //         info!("Insert result to deferred pool: {:?}", result);
-
         inner.recalculate_readiness_with_state(
             &transaction.sender,
             account_cache,
@@ -818,6 +826,28 @@ impl TransactionPool {
 
         Ok(())
     }
+
+    pub fn get_to_propagate_trans(
+        &self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
+        let mut to_prop = self.to_propagate_trans.write();
+        let mut res = HashMap::new();
+        mem::swap(&mut *to_prop, &mut res);
+        res
+    }
+
+    pub fn set_to_propagate_trans(
+        &self, mut transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        let mut to_prop = self.to_propagate_trans.write();
+        mem::swap(&mut *to_prop, &mut transactions);
+    }
+
+    //    pub fn add_ready(&self, transaction: Arc<SignedTransaction>) -> bool {
+    //        let mut inner = self.inner.write();
+    //        let inner = inner.deref_mut();
+    //        self.add_ready_without_lock(inner, transaction)
+    //    }
 
     // If a tx is failed executed due to invalid nonce
     // This function should be invoked to recycle it
@@ -856,6 +886,29 @@ impl TransactionPool {
         );
         inner.insert(transaction, packed, force)
     }
+
+    pub fn remove_to_propagate(&self, tx_hash: &H256) {
+        self.to_propagate_trans.write().remove(tx_hash);
+    }
+
+    //    pub fn remove_ready(&self, transaction: Arc<SignedTransaction>) ->
+    // bool {        let mut inner = self.inner.write();
+    //        let inner = inner.deref_mut();
+    //        if self.remove_ready_without_lock(inner, transaction).is_some() {
+    //            true
+    //        } else {
+    //            false
+    //        }
+    //    }
+
+    //    pub fn remove_ready_without_lock(
+    //        &self, inner: &mut TransactionPoolInner,
+    //        transaction: Arc<SignedTransaction>,
+    //    ) -> Option<Arc<SignedTransaction>>
+    //    {
+    //        let hash = transaction.hash();
+    //        inner.ready_transactions.remove(&hash)
+    //    }
 
     pub fn set_tx_packed(
         &self, transactions: Vec<Arc<SignedTransaction>>, epoch_id: EpochId,

@@ -75,7 +75,7 @@ build_config! {
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
         (max_inflight_request_count, (u64), 32)
-        (start_as_catch_up_mode, (bool), false)
+        (start_as_catch_up_mode, (bool), true)
         (received_tx_index_maintain_timeout_ms, (u64), 600_000)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (request_block_with_public, (bool), false)
@@ -104,6 +104,7 @@ build_config! {
         (metrics_output_file, (String), "metrics.log".to_string())
         (min_peers_propagation, (usize), 8)
         (max_peers_propagation, (usize), 128)
+        (txgen_account_count, (usize), 10)
     }
     {
         (
@@ -267,6 +268,7 @@ impl Configuration {
         TransactionGeneratorConfig::new(
             self.raw_conf.generate_tx,
             self.raw_conf.generate_tx_period_us.expect("has default"),
+            self.raw_conf.txgen_account_count,
         )
     }
 

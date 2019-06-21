@@ -16,8 +16,12 @@ use crate::{
 };
 use cfx_types::{H256, U256};
 use heapsize::HeapSizeOf;
+use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{block::CompactBlock, Block, BlockHeader, EpochNumber};
+use primitives::{
+    block::CompactBlock, transaction::SignedTransaction, Block, BlockHeader,
+    EpochNumber,
+};
 use rlp::Rlp;
 use slab::Slab;
 use std::{
@@ -83,9 +87,11 @@ pub struct SynchronizationGraphNode {
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
     pub blockset_in_own_view_of_epoch: HashSet<usize>,
-    /// The minimum epoch number of the block in the view of other
+    /// The minimum/maximum epoch number of the block in the view of other
     /// blocks including itself.
     pub min_epoch_in_other_views: u64,
+    pub max_epoch_in_other_views: u64,
+    pub sequence_number: u64,
 }
 
 pub struct SynchronizationGraphInner {
@@ -95,7 +101,9 @@ pub struct SynchronizationGraphInner {
     pub genesis_block_index: usize,
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
+    ancestor_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
+    pub sequence_number_of_header_entrance: u64,
 }
 
 impl SynchronizationGraphInner {
@@ -111,7 +119,9 @@ impl SynchronizationGraphInner {
             genesis_block_index: NULL,
             children_by_hash: HashMap::new(),
             referrers_by_hash: HashMap::new(),
+            ancestor_tree: MinLinkCutTree::new(),
             pow_config,
+            sequence_number_of_header_entrance: 0,
         };
         inner.genesis_block_index = inner.insert(genesis_header);
         debug!(
@@ -120,6 +130,12 @@ impl SynchronizationGraphInner {
         );
 
         inner
+    }
+
+    pub fn get_next_sequence_number(&mut self) -> u64 {
+        let sn = self.sequence_number_of_header_entrance;
+        self.sequence_number_of_header_entrance += 1;
+        sn
     }
 
     pub fn insert_invalid(&mut self, header: Arc<BlockHeader>) -> usize {
@@ -134,7 +150,9 @@ impl SynchronizationGraphInner {
             referrers: Vec::new(),
             blockset_in_own_view_of_epoch: HashSet::new(),
             min_epoch_in_other_views: header.height(),
+            max_epoch_in_other_views: header.height(),
             block_header: header,
+            sequence_number: NULL as u64,
         });
         self.indices.insert(hash, me);
 
@@ -163,8 +181,17 @@ impl SynchronizationGraphInner {
     /// Return the index of the inserted block.
     pub fn insert(&mut self, header: Arc<BlockHeader>) -> usize {
         let hash = header.hash();
+        let is_genesis = *header.parent_hash() == H256::default();
+        let sn = if is_genesis {
+            let sn = self.get_next_sequence_number();
+            assert!(sn == 0);
+            sn
+        } else {
+            NULL as u64
+        };
+
         let me = self.arena.insert(SynchronizationGraphNode {
-            graph_status: if *header.parent_hash() == H256::default() {
+            graph_status: if is_genesis {
                 BLOCK_GRAPH_READY
             } else {
                 BLOCK_HEADER_ONLY
@@ -177,7 +204,9 @@ impl SynchronizationGraphInner {
             referrers: Vec::new(),
             blockset_in_own_view_of_epoch: HashSet::new(),
             min_epoch_in_other_views: header.height(),
+            max_epoch_in_other_views: header.height(),
             block_header: header.clone(),
+            sequence_number: sn,
         });
         self.indices.insert(hash, me);
 
@@ -280,20 +309,31 @@ impl SynchronizationGraphInner {
 
     fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
         let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
         for referee in &self.arena[pivot].referees {
+            visited.insert(*referee);
             queue.push_back(*referee);
         }
 
-        let mut visited = HashSet::new();
         while let Some(index) = queue.pop_front() {
-            visited.insert(index);
             let mut in_old_epoch = false;
             let mut cur_pivot = pivot;
+            if self.arena[cur_pivot].block_header.height()
+                > self.arena[index].max_epoch_in_other_views + 1
+            {
+                cur_pivot = self.ancestor_tree.ancestor_at(
+                    cur_pivot,
+                    self.arena[index].max_epoch_in_other_views as usize + 1,
+                );
+            }
             loop {
                 let parent = self.arena[cur_pivot].parent;
                 debug_assert!(parent != NULL);
+
                 if self.arena[parent].block_header.height()
                     < self.arena[index].min_epoch_in_other_views
+                    || (self.arena[index].sequence_number
+                        > self.arena[parent].sequence_number)
                 {
                     break;
                 }
@@ -311,15 +351,21 @@ impl SynchronizationGraphInner {
             if !in_old_epoch {
                 let parent = self.arena[index].parent;
                 if !visited.contains(&parent) {
+                    visited.insert(parent);
                     queue.push_back(parent);
                 }
                 for referee in &self.arena[index].referees {
                     if !visited.contains(referee) {
+                        visited.insert(*referee);
                         queue.push_back(*referee);
                     }
                 }
                 self.arena[index].min_epoch_in_other_views = min(
                     self.arena[index].min_epoch_in_other_views,
+                    self.arena[pivot].block_header.height(),
+                );
+                self.arena[index].max_epoch_in_other_views = max(
+                    self.arena[index].max_epoch_in_other_views,
                     self.arena[pivot].block_header.height(),
                 );
                 self.arena[pivot]
@@ -529,6 +575,18 @@ impl SynchronizationGraph {
         }
 
         sync_graph
+    }
+
+    pub fn get_to_propagate_trans(
+        &self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
+        self.consensus.get_to_propagate_trans()
+    }
+
+    pub fn set_to_propagate_trans(
+        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        self.consensus.set_to_propagate_trans(transactions);
     }
 
     fn recover_graph_from_db(&mut self) {
@@ -888,6 +946,8 @@ impl SynchronizationGraph {
                 );
             } else {
                 if inner.new_to_be_header_graph_ready(index) {
+                    inner.arena[index].sequence_number =
+                        inner.get_next_sequence_number();
                     inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
                     debug_assert!(inner.arena[index].parent != NULL);
                     debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
@@ -919,6 +979,9 @@ impl SynchronizationGraph {
                             .push(inner.arena[index].block_header.hash());
                     }
 
+                    let parent = inner.arena[index].parent;
+                    inner.ancestor_tree.make_tree(index);
+                    inner.ancestor_tree.link(parent, index);
                     inner.collect_blockset_in_own_view_of_epoch(index);
 
                     for child in &inner.arena[index].children {
@@ -1083,7 +1146,7 @@ impl SynchronizationGraph {
                 } else {
                     let translated_blockset = inner
                         .translate_blockset_in_own_epoch(
-                            &hash,
+                            &h,
                             self.consensus.clone(),
                         );
                     self.consensus.on_new_block_construction_only(
@@ -1186,6 +1249,10 @@ impl SynchronizationGraph {
     }
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
+
+    pub fn update_total_weight_in_past(&self) {
+        self.consensus.update_total_weight_in_past();
+    }
 
     pub fn block_cache_gc(&self) {
         let current_size = self.cache_size().total();

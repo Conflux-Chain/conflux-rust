@@ -59,7 +59,7 @@ use txgen::{
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
 const TESTNET_VERSION: &'static str =
-    "0000000000000000000000000000000000000004";
+    "0000000000000000000000000000000000000006";
 
 pub struct ClientHandle {
     pub debug_rpc_http_server: Option<HttpServer>,
@@ -204,8 +204,9 @@ impl Client {
             pow_config.clone(),
         ));
 
-        let verification_config = conf.verification_config();
         let protocol_config = conf.protocol_config();
+        let verification_config = conf.verification_config();
+
         let mut sync = cfxcore::SynchronizationService::new(
             NetworkService::new(network_config),
             consensus.clone(),

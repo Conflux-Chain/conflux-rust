@@ -2,151 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::U256;
-use std::{
-    cmp::{min, Ordering},
-    convert, ops,
-};
-
 const NULL: usize = !0;
-
-#[derive(Copy, Clone, Eq, Debug)]
-pub struct SignedBigNum {
-    sign: bool,
-    num: U256,
-}
-
-impl SignedBigNum {
-    pub fn zero() -> Self {
-        Self {
-            sign: false,
-            num: U256::zero(),
-        }
-    }
-
-    pub fn neg(num: U256) -> Self { Self { sign: true, num } }
-
-    pub fn pos(num: U256) -> Self { Self { sign: false, num } }
-
-    pub fn negate(signed_num: &SignedBigNum) -> SignedBigNum {
-        if signed_num.num == U256::zero() {
-            signed_num.clone()
-        } else {
-            SignedBigNum {
-                sign: !signed_num.sign,
-                num: signed_num.num.clone(),
-            }
-        }
-    }
-}
-
-impl convert::From<U256> for SignedBigNum {
-    fn from(num: U256) -> Self { Self { sign: false, num } }
-}
-
-impl convert::From<SignedBigNum> for U256 {
-    fn from(signed_num: SignedBigNum) -> Self {
-        assert!(!signed_num.sign);
-        signed_num.num
-    }
-}
-
-impl ops::Add<SignedBigNum> for SignedBigNum {
-    type Output = SignedBigNum;
-
-    fn add(self, other: SignedBigNum) -> SignedBigNum {
-        if self.sign == other.sign {
-            SignedBigNum {
-                sign: self.sign,
-                num: self.num + other.num,
-            }
-        } else if self.num == other.num {
-            SignedBigNum::zero()
-        } else if self.num < other.num {
-            SignedBigNum {
-                sign: other.sign,
-                num: other.num - self.num,
-            }
-        } else {
-            SignedBigNum {
-                sign: self.sign,
-                num: self.num - other.num,
-            }
-        }
-    }
-}
-
-impl ops::AddAssign<SignedBigNum> for SignedBigNum {
-    fn add_assign(&mut self, other: SignedBigNum) {
-        if self.sign == other.sign {
-            self.num += other.num;
-        } else if self.num == other.num {
-            self.sign = false;
-            self.num = U256::zero();
-        } else if self.num < other.num {
-            self.sign = other.sign;
-            self.num = other.num - self.num;
-        } else {
-            self.num -= other.num;
-        }
-    }
-}
-
-impl ops::Sub<SignedBigNum> for SignedBigNum {
-    type Output = SignedBigNum;
-
-    fn sub(self, other: SignedBigNum) -> SignedBigNum {
-        self + SignedBigNum::negate(&other)
-    }
-}
-
-impl ops::SubAssign<SignedBigNum> for SignedBigNum {
-    fn sub_assign(&mut self, other: SignedBigNum) {
-        *self += SignedBigNum::negate(&other);
-    }
-}
-
-impl Ord for SignedBigNum {
-    fn cmp(&self, other: &SignedBigNum) -> Ordering {
-        if self.sign != other.sign {
-            return if self.sign {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            };
-        }
-
-        if self.num == other.num {
-            return Ordering::Equal;
-        }
-
-        if self.sign {
-            if self.num < other.num {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        } else {
-            if self.num < other.num {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            }
-        }
-    }
-}
-
-impl PartialOrd for SignedBigNum {
-    fn partial_cmp(&self, other: &SignedBigNum) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for SignedBigNum {
-    fn eq(&self, other: &SignedBigNum) -> bool {
-        self.sign == other.sign && self.num == other.num
-    }
-}
 
 #[derive(Clone)]
 struct MinNode {
@@ -155,11 +11,12 @@ struct MinNode {
     parent: usize,
     path_parent: usize,
     size: usize,
-    value: SignedBigNum,
-    min: SignedBigNum,
-    delta: SignedBigNum,
-    catepillar_value: SignedBigNum,
-    catepillar_delta: SignedBigNum,
+    value: i128,
+    min: i128,
+    //    min_idx: usize,
+    delta: i128,
+    catepillar_value: i128,
+    catepillar_delta: i128,
 }
 
 impl Default for MinNode {
@@ -170,11 +27,11 @@ impl Default for MinNode {
             parent: NULL,
             path_parent: NULL,
             size: 1,
-            value: SignedBigNum::zero(),
-            min: SignedBigNum::zero(),
-            delta: SignedBigNum::zero(),
-            catepillar_value: SignedBigNum::zero(),
-            catepillar_delta: SignedBigNum::zero(),
+            value: 0,
+            min: 0,
+            delta: 0,
+            catepillar_value: 0,
+            catepillar_delta: 0,
         }
     }
 }
@@ -201,12 +58,16 @@ impl MinLinkCutTree {
         let u = self.tree[v].left_child;
         if u != NULL {
             self.tree[v].size += self.tree[u].size;
-            self.tree[v].min = min(self.tree[v].min, self.tree[u].min);
+            if self.tree[v].min > self.tree[u].min {
+                self.tree[v].min = self.tree[u].min;
+            }
         }
         let w = self.tree[v].right_child;
         if w != NULL {
             self.tree[v].size += self.tree[w].size;
-            self.tree[v].min = min(self.tree[v].min, self.tree[w].min);
+            if self.tree[v].min > self.tree[w].min {
+                self.tree[v].min = self.tree[w].min;
+            }
         }
         self.tree[v].min = self.tree[v].min + self.tree[v].delta;
     }
@@ -251,8 +112,8 @@ impl MinLinkCutTree {
                     + self.tree[parent].catepillar_delta;
                 self.update(w);
             }
-            self.tree[v].delta = SignedBigNum::zero();
-            self.tree[v].catepillar_delta = SignedBigNum::zero();
+            self.tree[v].delta = 0;
+            self.tree[v].catepillar_delta = 0;
             self.tree[v].right_child = parent;
             self.tree[parent].parent = v;
             self.update(parent);
@@ -277,8 +138,8 @@ impl MinLinkCutTree {
                     + self.tree[parent].catepillar_delta;
                 self.update(w);
             }
-            self.tree[v].delta = SignedBigNum::zero();
-            self.tree[v].catepillar_delta = SignedBigNum::zero();
+            self.tree[v].delta = 0;
+            self.tree[v].catepillar_delta = 0;
             self.tree[v].left_child = parent;
             self.tree[parent].parent = v;
             self.update(parent);
@@ -338,7 +199,7 @@ impl MinLinkCutTree {
             self.tree[u].parent = NULL;
             self.splay(leftmost);
 
-            assert_eq!(self.tree[v].catepillar_delta, SignedBigNum::zero());
+            assert_eq!(self.tree[v].catepillar_delta, 0);
             self.tree[leftmost].value =
                 self.tree[leftmost].value - self.tree[v].catepillar_value;
             self.tree[leftmost].delta =
@@ -380,7 +241,7 @@ impl MinLinkCutTree {
                 self.tree[u].parent = NULL;
                 self.splay(leftmost);
 
-                assert_eq!(self.tree[w].catepillar_delta, SignedBigNum::zero());
+                assert_eq!(self.tree[w].catepillar_delta, 0);
                 self.tree[leftmost].value =
                     self.tree[leftmost].value - self.tree[w].catepillar_value;
                 self.update(leftmost);
@@ -454,6 +315,7 @@ impl MinLinkCutTree {
                 if at < size {
                     u = w;
                 } else if at == size {
+                    self.splay(u);
                     return u;
                 } else {
                     at -= size + 1;
@@ -467,48 +329,46 @@ impl MinLinkCutTree {
         NULL
     }
 
-    pub fn set(&mut self, v: usize, value: &SignedBigNum) {
+    pub fn set(&mut self, v: usize, value: i128) {
         self.access(v);
 
-        self.tree[v].value = *value;
+        self.tree[v].value = value;
         self.update(v);
     }
 
-    pub fn path_apply(&mut self, v: usize, delta: &SignedBigNum) {
+    pub fn path_apply(&mut self, v: usize, delta: i128) {
         self.access(v);
 
-        self.tree[v].value += *delta;
+        self.tree[v].value += delta;
         let u = self.tree[v].left_child;
         if u != NULL {
-            self.tree[u].delta += *delta;
+            self.tree[u].delta += delta;
             self.update(u);
         }
         self.update(v);
     }
 
-    pub fn catepillar_apply(
-        &mut self, v: usize, catepillar_delta: &SignedBigNum,
-    ) {
+    pub fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
         self.access(v);
 
-        self.tree[v].catepillar_value += *catepillar_delta;
-        self.tree[v].value += *catepillar_delta;
+        self.tree[v].catepillar_value += catepillar_delta;
+        self.tree[v].value += catepillar_delta;
         let u = self.tree[v].left_child;
         if u != NULL {
-            self.tree[u].catepillar_delta += *catepillar_delta;
-            self.tree[u].delta += *catepillar_delta;
+            self.tree[u].catepillar_delta += catepillar_delta;
+            self.tree[u].delta += catepillar_delta;
             self.update(u);
         }
         self.update(v);
     }
 
-    pub fn path_aggregate(&mut self, v: usize) -> SignedBigNum {
+    pub fn path_aggregate(&mut self, v: usize) -> i128 {
         self.access(v);
 
-        self.tree[v].min.clone()
+        self.tree[v].min
     }
 
-    pub fn get(&mut self, v: usize) -> SignedBigNum {
+    pub fn get(&mut self, v: usize) -> i128 {
         self.access(v);
 
         self.tree[v].value
@@ -517,8 +377,7 @@ impl MinLinkCutTree {
 
 #[cfg(test)]
 mod tests {
-    use super::{MinLinkCutTree, U256};
-    use crate::SignedBigNum;
+    use super::MinLinkCutTree;
 
     #[test]
     fn test_min() {
@@ -539,25 +398,25 @@ mod tests {
         tree.link(1, 3);
         tree.link(0, 4);
 
-        tree.set(0, &SignedBigNum::from(U256::from(10)));
-        tree.set(1, &SignedBigNum::from(U256::from(9)));
-        tree.set(2, &SignedBigNum::from(U256::from(8)));
-        tree.set(3, &SignedBigNum::from(U256::from(7)));
-        tree.set(4, &SignedBigNum::from(U256::from(6)));
+        tree.set(0, 10);
+        tree.set(1, 9);
+        tree.set(2, 8);
+        tree.set(3, 7);
+        tree.set(4, 6);
 
-        assert_eq!(tree.path_aggregate(0), SignedBigNum::pos(U256::from(10)));
-        assert_eq!(tree.path_aggregate(1), SignedBigNum::pos(U256::from(9)));
-        assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(8)));
-        assert_eq!(tree.path_aggregate(3), SignedBigNum::pos(U256::from(7)));
-        assert_eq!(tree.path_aggregate(4), SignedBigNum::pos(U256::from(6)));
+        assert_eq!(tree.path_aggregate(0), 10);
+        assert_eq!(tree.path_aggregate(1), 9);
+        assert_eq!(tree.path_aggregate(2), 8);
+        assert_eq!(tree.path_aggregate(3), 7);
+        assert_eq!(tree.path_aggregate(4), 6);
 
-        tree.path_apply(1, &SignedBigNum::neg(U256::from(5)));
+        tree.path_apply(1, -5);
 
-        assert_eq!(tree.path_aggregate(0), SignedBigNum::pos(U256::from(5)));
-        assert_eq!(tree.path_aggregate(1), SignedBigNum::pos(U256::from(4)));
-        assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(4)));
-        assert_eq!(tree.path_aggregate(3), SignedBigNum::pos(U256::from(4)));
-        assert_eq!(tree.path_aggregate(4), SignedBigNum::pos(U256::from(5)));
+        assert_eq!(tree.path_aggregate(0), 5);
+        assert_eq!(tree.path_aggregate(1), 4);
+        assert_eq!(tree.path_aggregate(2), 4);
+        assert_eq!(tree.path_aggregate(3), 4);
+        assert_eq!(tree.path_aggregate(4), 5);
     }
 
     #[test]
@@ -597,24 +456,24 @@ mod tests {
         tree.link(1, 2);
         tree.link(1, 3);
         tree.link(0, 4);
-        tree.path_apply(0, &SignedBigNum::pos(U256::from(1u64)));
-        tree.path_apply(1, &SignedBigNum::pos(U256::from(2u64)));
-        tree.path_apply(2, &SignedBigNum::pos(U256::from(3u64)));
-        tree.path_apply(3, &SignedBigNum::pos(U256::from(4u64)));
-        tree.path_apply(4, &SignedBigNum::pos(U256::from(5u64)));
+        tree.path_apply(0, 1);
+        tree.path_apply(1, 2);
+        tree.path_apply(2, 3);
+        tree.path_apply(3, 4);
+        tree.path_apply(4, 5);
 
-        assert_eq!(tree.get(0), SignedBigNum::pos(U256::from(15u64)));
-        assert_eq!(tree.get(1), SignedBigNum::pos(U256::from(9u64)));
-        assert_eq!(tree.get(2), SignedBigNum::pos(U256::from(3u64)));
-        assert_eq!(tree.get(3), SignedBigNum::pos(U256::from(4u64)));
-        assert_eq!(tree.get(4), SignedBigNum::pos(U256::from(5u64)));
+        assert_eq!(tree.get(0), 15);
+        assert_eq!(tree.get(1), 9);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 4);
+        assert_eq!(tree.get(4), 5);
 
-        tree.path_apply(4, &SignedBigNum::neg(U256::from(5u64)));
-        assert_eq!(tree.get(0), SignedBigNum::pos(U256::from(10u64)));
-        assert_eq!(tree.get(1), SignedBigNum::pos(U256::from(9u64)));
-        assert_eq!(tree.get(2), SignedBigNum::pos(U256::from(3u64)));
-        assert_eq!(tree.get(3), SignedBigNum::pos(U256::from(4u64)));
-        assert_eq!(tree.get(4), SignedBigNum::pos(U256::from(0u64)));
+        tree.path_apply(4, -5);
+        assert_eq!(tree.get(0), 10);
+        assert_eq!(tree.get(1), 9);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 4);
+        assert_eq!(tree.get(4), 0);
     }
 
     #[test]
@@ -649,24 +508,27 @@ mod tests {
         tree.link(0, 4);
         tree.link(3, 5);
 
-        tree.catepillar_apply(3, &SignedBigNum::pos(U256::from(1)));
-        assert_eq!(tree.get(0), SignedBigNum::pos(U256::from(1)));
-        assert_eq!(tree.get(1), SignedBigNum::pos(U256::from(1)));
-        assert_eq!(tree.get(2), SignedBigNum::pos(U256::from(1)));
-        assert_eq!(tree.get(3), SignedBigNum::pos(U256::from(1)));
-        assert_eq!(tree.get(4), SignedBigNum::pos(U256::from(1)));
-        assert_eq!(tree.get(5), SignedBigNum::pos(U256::from(1)));
+        tree.catepillar_apply(3, 1);
+        assert_eq!(tree.get(0), 1);
+        assert_eq!(tree.get(1), 1);
+        assert_eq!(tree.get(2), 1);
+        assert_eq!(tree.get(3), 1);
+        assert_eq!(tree.get(4), 1);
+        assert_eq!(tree.get(5), 1);
 
-        tree.catepillar_apply(2, &SignedBigNum::pos(U256::from(2)));
-        assert_eq!(tree.get(0), SignedBigNum::pos(U256::from(3)));
-        assert_eq!(tree.get(1), SignedBigNum::pos(U256::from(3)));
-        assert_eq!(tree.get(2), SignedBigNum::pos(U256::from(3)));
-        assert_eq!(tree.get(3), SignedBigNum::pos(U256::from(3)));
-        assert_eq!(tree.get(4), SignedBigNum::pos(U256::from(3)));
-        assert_eq!(tree.get(5), SignedBigNum::pos(U256::from(1)));
+        tree.catepillar_apply(2, 2);
+        assert_eq!(tree.get(0), 3);
+        assert_eq!(tree.get(1), 3);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 3);
+        assert_eq!(tree.get(4), 3);
+        assert_eq!(tree.get(5), 1);
 
-        assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(3)));
-        tree.path_apply(0, &SignedBigNum::neg(U256::from(1)));
-        assert_eq!(tree.path_aggregate(2), SignedBigNum::pos(U256::from(2)));
+        tree.path_apply(1, 1);
+        assert_eq!(tree.path_aggregate(2), 3);
+        //        assert_eq!(tree.path_aggregate_idx(2), 2);
+        tree.path_apply(0, -2);
+        assert_eq!(tree.path_aggregate(2), 2);
+        //        assert_eq!(tree.path_aggregate_idx(2), 0);
     }
 }

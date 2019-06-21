@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod error;
-mod request_manager;
+pub mod request_manager;
 mod synchronization_graph;
 mod synchronization_protocol_handler;
 mod synchronization_service;

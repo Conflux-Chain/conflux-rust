@@ -58,6 +58,11 @@ fn test_mining_10_epochs() {
     let mut conf = Configuration::default();
     conf.raw_conf.test_mode = true;
     conf.raw_conf.initial_difficulty = Some(10_000);
+
+    // NOTE: we do not propagate blocks in catch-up
+    // mode so it would break the test
+    conf.raw_conf.start_as_catch_up_mode = false;
+
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.db_dir = Some(
         tmp_dir

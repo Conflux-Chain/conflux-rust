@@ -21,6 +21,47 @@ class BlockLatencyType(enum.Enum):
     Sync = 0
     Cons = 1
 
+
+class Transaction:
+    def __init__(self, hash:str, timestamp:float, by_block=False):
+        self.hash = hash
+        self.timestamps = [timestamp]
+        self.by_block = by_block
+
+    @staticmethod
+    def receive(log_line:str):
+        log_timestamp = parse_log_timestamp(log_line)
+        tx_hash = parse_value(log_line, "Sampled transaction ", " ")
+        if "in block" in log_line:
+            by_block = True
+        else:
+            by_block = False
+        return Transaction(tx_hash, log_timestamp, by_block)
+
+    @staticmethod
+    def add_or_merge(txs:dict, tx):
+        if txs.get(tx.hash) is None:
+            txs[tx.hash] = tx
+        else:
+            txs[tx.hash].merge(tx)
+
+    @staticmethod
+    def add_or_replace(txs:dict, tx):
+        if txs.get(tx.hash) is None:
+            txs[tx.hash] = tx
+        elif tx.timestamps[0] < txs[tx.hash].timestamps[0]:
+            txs[tx.hash] = tx
+
+    def merge(self, tx):
+        self.timestamps.extend(tx.timestamps)
+
+    def get_latencies(self):
+        min_ts = min(self.timestamps)
+        return [ts - min_ts for ts in self.timestamps]
+
+    def latency_count(self):
+        return len(self.timestamps)
+
 class Block:
     def __init__(self, hash:str, parent_hash:str, timestamp:float, height:int, referees:list):
         self.hash = hash
@@ -129,6 +170,7 @@ class NodeLogMapper:
         self.log_file = log_file
 
         self.blocks = {}
+        self.txs = {}
         self.sync_cons_gaps = []
 
     @staticmethod
@@ -139,8 +181,12 @@ class NodeLogMapper:
 
     def map(self):
         with open(self.log_file, "r", encoding='UTF-8') as file:
+            start = False
             for line in file.readlines():
-                self.parse_log_line(line)
+                if not start and "Start Generating Workload" in line:
+                    start = True
+                elif start:
+                    self.parse_log_line(line)
 
     def parse_log_line(self, line:str):
         if "new block inserted into graph" in line:
@@ -157,11 +203,17 @@ class NodeLogMapper:
             assert sync_len >= cons_len, "invalid statistics for sync/cons gap, log line = {}".format(line)
             self.sync_cons_gaps.append(sync_len - cons_len)
 
+        if "Sampled transaction" in line:
+            tx = Transaction.receive(line)
+            Transaction.add_or_replace(self.txs, tx)
+
+
 class HostLogReducer:
     def __init__(self, node_mappers:list):
         self.node_mappers = node_mappers
 
         self.blocks = {}
+        self.txs = {}
         self.sync_cons_gap_stats = []
 
     def reduce(self):
@@ -171,10 +223,14 @@ class HostLogReducer:
             for b in mapper.blocks.values():
                 Block.add_or_merge(self.blocks, b)
 
+            for tx in mapper.txs.values():
+                Transaction.add_or_merge(self.txs, tx)
+
     def dump(self, output_file:str):
         data = {
             "blocks": self.blocks,
             "sync_cons_gap_stats": self.sync_cons_gap_stats,
+            "txs": self.txs,
         }
 
         with open(output_file, "w") as fp:
@@ -184,6 +240,7 @@ class HostLogReducer:
         data = {
             "blocks": self.blocks,
             "sync_cons_gap_stats": self.sync_cons_gap_stats,
+            "txs": self.txs,
         }
 
         return json.dumps(data, default=lambda o: o.__dict__)
@@ -201,6 +258,11 @@ class HostLogReducer:
             block = Block("", "", 0, 0, [])
             block.__dict__ = block_dict
             reducer.blocks[block.hash] = block
+
+        for tx_dict in data["txs"].values():
+            tx = Transaction("", 0)
+            tx.__dict__ = tx_dict
+            reducer.txs[tx.hash] = tx
 
         return reducer
 
@@ -232,26 +294,44 @@ class HostLogReducer:
 class LogAggregator:
     def __init__(self):
         self.blocks = {}
+        self.txs = {}
         self.sync_cons_gap_stats = []
 
         # [latency_type, [block_hash, latency_stat]]
         self.block_latency_stats = {}
         for t in BlockLatencyType:
             self.block_latency_stats[t.name] = {}
+        self.tx_latency_stats = {}
+        self.host_by_block_ratio = []
 
     def add_host(self, host_log:HostLogReducer):
         self.sync_cons_gap_stats.extend(host_log.sync_cons_gap_stats)
 
         for b in host_log.blocks.values():
             Block.add_or_merge(self.blocks, b)
+        by_block_cnt = 0
+        for tx in host_log.txs.values():
+            Transaction.add_or_merge(self.txs, tx)
+            if tx.by_block:
+                by_block_cnt += 1
+        # This data only work for one node per host
+        self.host_by_block_ratio.append(by_block_cnt / len(host_log.txs))
 
     def validate(self):
         num_nodes = len(self.sync_cons_gap_stats)
 
-        for b in self.blocks.values():
-            count_sync = b.latency_count(BlockLatencyType.Sync)
+        for block_hash in list(self.blocks.keys()):
+            count_sync = self.blocks[block_hash].latency_count(BlockLatencyType.Sync)
             if count_sync != num_nodes:
-                print("sync graph missed block {}: received = {}, total = {}".format(b.hash, count_sync, num_nodes))
+                print("sync graph missed block {}: received = {}, total = {}".format(block_hash, count_sync, num_nodes))
+                del self.blocks[block_hash]
+        missing_tx = 0
+        for tx_hash in list(self.txs.keys()):
+            if self.txs[tx_hash].latency_count() != num_nodes:
+                del self.txs[tx_hash]
+                missing_tx += 1
+        print("Removed tx count", missing_tx)
+        print("Remaining tx count", len(self.txs))
 
     def stat_sync_cons_gap(self, p:Percentile):
         data = []
@@ -265,14 +345,28 @@ class LogAggregator:
         for b in self.blocks.values():
             for t in BlockLatencyType:
                 self.block_latency_stats[t.name][b.hash] = Statistics(b.get_latencies(t))
+        for tx in self.txs.values():
+            self.tx_latency_stats[tx.hash] = Statistics(tx.get_latencies())
 
-    def stat_latency(self, t:BlockLatencyType, p:Percentile):
+    def stat_block_latency(self, t:BlockLatencyType, p:Percentile):
         data = []
 
         for block_stat in self.block_latency_stats[t.name].values():
             data.append(block_stat.get(p))
 
         return Statistics(data)
+
+    def stat_tx_latency(self, p:Percentile):
+        data = []
+
+        for tx_stat in self.tx_latency_stats.values():
+            data.append(tx_stat.get(p))
+
+        return Statistics(data)
+
+    def stat_tx_ratio(self):
+        return Statistics(self.host_by_block_ratio)
+
 
     @staticmethod
     def load(logs_dir):
