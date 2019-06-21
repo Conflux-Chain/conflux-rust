@@ -173,6 +173,7 @@ impl StateManager {
                 warn!("state doesn't exist at epoch {:?}.", epoch_id);
                 // FIXME: Error were found in
                 // FIXME: transaction_pool/mod.rs#insert_new_transactions
+                // FIXME: transactiongen/src/lib.rs#generate_transactions
                 // FIXME: and consensus/mod.rs#get_balance, where the obtained
                 // FIXME: state doesn't exist. The bug should be
                 // FIXME: fixed and the debugging code here should be removed.

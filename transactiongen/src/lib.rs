@@ -191,16 +191,14 @@ impl TransactionGenerator {
         // Wait for initial tx
         loop {
             let state = State::new(
-                StateDb::new(
+                StateDb::new(unsafe {
                     txgen
                         .storage_manager
-                        .get_state_no_commit(
+                        .get_state_readonly_assumed_existence(
                             txgen.consensus.best_state_block_hash(),
                         )
                         .unwrap()
-                        // Unwrapping is safe because the state exists.
-                        .unwrap(),
-                ),
+                }),
                 0.into(),
                 Default::default(),
             );
@@ -270,16 +268,14 @@ impl TransactionGenerator {
             } else {
                 // Wait for preparation
                 let state = State::new(
-                    StateDb::new(
+                    StateDb::new(unsafe {
                         txgen
                             .storage_manager
-                            .get_state_no_commit(
+                            .get_state_readonly_assumed_existence(
                                 txgen.consensus.best_state_block_hash(),
                             )
                             .unwrap()
-                            // Unwrapping is safe because the state exists.
-                            .unwrap(),
-                    ),
+                    }),
                     0.into(),
                     Default::default(),
                 );
