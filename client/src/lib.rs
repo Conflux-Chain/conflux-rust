@@ -164,8 +164,6 @@ impl Client {
             genesis::default(secret_store.as_ref())
         };
 
-        // FIXME: move genesis block to a dedicated directory near all conflux
-        // FIXME: parameters.
         let genesis_block = storage_manager.initialize(
             genesis_accounts,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),

@@ -159,10 +159,9 @@ impl BlockGenerator {
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
         &self, parent_hash: H256, referee: Vec<H256>,
-        deferred_state_root_with_aux_info: StateRootWithAuxInfo,
-        deferred_receipts_root: H256, block_gas_limit: U256,
-        transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
-        adaptive_opt: Option<bool>,
+        deferred_state_root: H256, deferred_receipts_root: H256,
+        block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
+        difficulty: u64, adaptive_opt: Option<bool>,
     ) -> Block
     {
         let parent_height =
@@ -199,7 +198,7 @@ impl BlockGenerator {
             )
             //            .with_timestamp(0)
             .with_author(self.mining_author)
-            .with_deferred_state_root(deferred_state_root_with_aux_info)
+            .with_deferred_state_root(deferred_state_root)
             .with_deferred_receipts_root(deferred_receipts_root)
             .with_difficulty(expected_difficulty)
             .with_adaptive(adaptive)

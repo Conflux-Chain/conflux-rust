@@ -37,8 +37,6 @@ impl<'a> Drop for State<'a> {
 impl<'a> StateTrait for State<'a> {
     fn does_exist(&self) -> bool { self.get_root_node().is_some() }
 
-    fn get_padding(&self) -> &KeyPadding { &self.delta_trie.padding }
-
     fn get_merkle_hash(&self, access_key: &[u8]) -> Result<Option<MerkleHash>> {
         // Get won't create any new nodes so it's fine to pass an empty
         // owned_node_set.
@@ -124,31 +122,12 @@ impl<'a> StateTrait for State<'a> {
         }
     }
 
-    fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
-        let merkle_root = self.compute_merkle_root()?;
-
-        Ok(StateRootWithAuxInfo {
-            // TODO: fill in real snapshot, intermediate delta, ...
-            state_root: StateRoot {
-                snapshot_root: MERKLE_NULL_NODE,
-                intermediate_delta_root: MERKLE_NULL_NODE,
-                delta_root: merkle_root,
-            },
-            aux_info: Default::default(),
-        })
+    fn compute_state_root(&mut self) -> Result<MerkleHash> {
+        self.compute_merkle_root()
     }
 
-    fn get_state_root(&self) -> Result<Option<StateRootWithAuxInfo>> {
-        let merkle_root = self.get_merkle_root()?;
-        Ok(merkle_root.map(|merkle_hash| StateRootWithAuxInfo {
-            // TODO: fill in real snapshot, intermediate delta, ...
-            state_root: StateRoot {
-                snapshot_root: MERKLE_NULL_NODE,
-                intermediate_delta_root: MERKLE_NULL_NODE,
-                delta_root: merkle_hash,
-            },
-            aux_info: Default::default(),
-        }))
+    fn get_state_root(&self) -> Result<Option<MerkleHash>> {
+        self.delta_trie.get_merkle(self.root_node.clone())
     }
 
     // TODO(yz): replace coarse lock with a queue.
@@ -235,10 +214,6 @@ impl<'a> State<'a> {
         }
     }
 
-    fn get_merkle_root(&self) -> Result<Option<MerkleHash>> {
-        self.delta_trie.get_merkle(self.root_node.clone())
-    }
-
     fn do_db_commit(&mut self, epoch_id: EpochId) -> Result<()> {
         // TODO(yz): accumulate to db write counter.
         self.dirty = false;
@@ -291,9 +266,6 @@ impl<'a> State<'a> {
                     self.root_node = cow_root.into_child().map(|r| r.into());
                     result?;
 
-                    // TODO: check the guarantee of underlying db on transaction
-                    // TODO: failure. may have to commit last_row_number
-                    // TODO: separately in worst case.
                     commit_transaction.transaction.put(
                         COL_DELTA_TRIE,
                         "last_row_number".as_bytes(),
@@ -347,8 +319,8 @@ impl<'a> State<'a> {
     }
 
     fn state_root_check(&self) -> Result<()> {
-        let maybe_merkle_root = self.get_merkle_root()?;
-        match maybe_merkle_root {
+        let maybe_merkle_hash = self.get_merkle_hash(&[])?;
+        match maybe_merkle_hash {
             // Empty state.
             None => (Ok(())),
             Some(merkle_hash) => {
@@ -367,11 +339,11 @@ use super::{
     super::{super::db::COL_DELTA_TRIE, state::*, state_manager::*},
     errors::*,
     multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::*, MultiVersionMerklePatriciaTrie,
+        merkle_patricia_trie::{merkle::MERKLE_NULL_NODE, *},
+        MultiVersionMerklePatriciaTrie,
     },
 };
-use crate::statedb::KeyPadding;
-use primitives::{EpochId, StateRoot, StateRootWithAuxInfo};
+use primitives::EpochId;
 use std::{
     collections::BTreeSet, hint::unreachable_unchecked, sync::atomic::Ordering,
 };

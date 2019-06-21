@@ -194,14 +194,13 @@ class BlockHeader(rlp.Serializable):
         ("timestamp", big_endian_int),
         ("author", binary),
         ("transactions_root", binary),
-        ("deferred_state_root", CountableList(binary)),
+        ("deferred_state_root", binary),
         ("deferred_receipts_root", binary),
         ("difficulty", big_endian_int),
         ("adaptive", big_endian_int),
         ("gas_limit", big_endian_int),
         ("referee_hashes", CountableList(binary)),
         ("nonce", big_endian_int),
-        ("state_root_aux_info", CountableList(binary)),
     ]
 
     def __init__(self,
@@ -210,14 +209,13 @@ class BlockHeader(rlp.Serializable):
                  timestamp=0,
                  author=default_config['GENESIS_COINBASE'],
                  transactions_root=trie.BLANK_ROOT,
-                 deferred_state_root=trie.state_root(),
+                 deferred_state_root=trie.BLANK_ROOT,
                  deferred_receipts_root=trie.BLANK_ROOT,
                  difficulty=default_config['GENESIS_DIFFICULTY'],
                  gas_limit=0,
                  referee_hashes=[],
                  adaptive=0,
-                 nonce=0,
-                 state_root_aux_info=[trie.NULL_ROOT, trie.NULL_ROOT]):
+                 nonce=0):
         # at the beginning of a method, locals() is a dict of all arguments
         fields = {k: v for k, v in locals().items() if
                   k not in ['self', '__class__']}
@@ -226,7 +224,7 @@ class BlockHeader(rlp.Serializable):
 
     @property
     def hash(self):
-        return sha3(rlp.encode(self.rlp_part()))
+        return sha3(rlp.encode(self))
 
     def get_hex_hash(self):
         return eth_utils.encode_hex(self.hash)
@@ -241,22 +239,11 @@ class BlockHeader(rlp.Serializable):
         fields = {field: getattr(self, field) for field in BlockHeaderWithoutNonce._meta.field_names}
         return BlockHeaderWithoutNonce(**fields)
 
-    def rlp_part(self):
-        fields = {field: getattr(self, field) for field in BlockHeaderRlpPart._meta.field_names}
-        return BlockHeaderRlpPart(**fields)
-
-
-class BlockHeaderRlpPart(rlp.Serializable):
-    fields = [
-        (field, sedes) for field, sedes in BlockHeader._meta.fields if
-        field not in ["state_root_aux_info"]
-    ]
-
 
 class BlockHeaderWithoutNonce(rlp.Serializable):
     fields = [
         (field, sedes) for field, sedes in BlockHeader._meta.fields if
-        field not in ["state_root_aux_info", "nonce"]
+        field not in ["nonce"]
     ]
 
 

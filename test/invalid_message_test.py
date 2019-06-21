@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from rlp.sedes import Binary, BigEndianInt
 
-from conflux import utils, trie
+from conflux import utils
 from conflux.utils import encode_hex, bytes_to_int, int_to_hex, str_to_bytes
 from test_framework.blocktools import create_block, create_transaction
 from test_framework.test_framework import ConfluxTestFramework
@@ -106,7 +106,7 @@ class MessageTest(ConfluxTestFramework):
         assert_equal(self.nodes[0].getblockcount(), 2)
 
         # Invalid state root
-        partial_invalid_block = create_block(new_block.hash, 2, deferred_state_root=trie.UNINITIALIZED_STATE_ROOT)
+        partial_invalid_block = create_block(new_block.hash, 2, deferred_state_root=b'\x00' * 32)
         self.send_msg(NewBlock(block=partial_invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].getbestblockhash(), new_block.hash_hex())
@@ -119,7 +119,7 @@ class MessageTest(ConfluxTestFramework):
             if r < self.num_nodes:
                 self.nodes[r].generate(1, 0)
             else:
-                partial_invalid_block = create_block(new_block.hash, 2, deferred_state_root=trie.UNINITIALIZED_STATE_ROOT, timestamp=i)
+                partial_invalid_block = create_block(new_block.hash, 2, deferred_state_root=b'\x00' * 32, timestamp=i)
                 self.send_msg(NewBlock(block=partial_invalid_block))
         wait_until(lambda: self.nodes[0].getblockcount() == 1003)
         sync_blocks(self.nodes)

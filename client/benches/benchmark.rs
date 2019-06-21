@@ -75,10 +75,7 @@ fn txexe_benchmark(c: &mut Criterion) {
                 handler
                     .txgen
                     .storage_manager
-                    .get_state_for_next_epoch(
-                        handler.consensus.best_block_hash(),
-                    )
-                    .unwrap()
+                    .get_state_at(handler.consensus.best_block_hash())
                     .unwrap(),
             ),
             0.into(),
