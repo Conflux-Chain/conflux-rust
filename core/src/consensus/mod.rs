@@ -1368,20 +1368,28 @@ impl ConsensusGraphInner {
     pub fn get_balance(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db = StateDb::new(unsafe {
-            self.data_man
-                .storage_manager
-                .get_state_readonly_assumed_existence(hash)
-                .unwrap()
-        });
-        Ok(
-            if let Ok(maybe_acc) = state_db.get_account(&address, false) {
-                maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
-            } else {
-                0.into()
-            },
-        )
+        let hash = self.get_hash_from_epoch_number(epoch_number.clone())?;
+        let maybe_state = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(hash)
+            .map_err(|e| format!("Error to get state, err={:?}", e))?;
+        if let Some(state) = maybe_state {
+            let state_db = StateDb::new(state);
+            Ok(
+                if let Ok(maybe_acc) = state_db.get_account(&address, false) {
+                    maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
+                } else {
+                    0.into()
+                },
+            )
+        } else {
+            Err(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist",
+                epoch_number, hash
+            )
+            .into())
+        }
     }
 
     pub fn terminal_hashes(&self) -> Vec<H256> {
