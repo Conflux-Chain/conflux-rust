@@ -38,8 +38,8 @@ use primitives::{
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
     transaction::Action,
-    Block, BlockHeaderBuilder, EpochNumber, SignedTransaction,
-    TransactionAddress,
+    Block, BlockHeaderBuilder, EpochNumber, SignedTransaction, StateRoot,
+    StateRootAuxInfo, StateRootWithAuxInfo, TransactionAddress,
 };
 use rayon::prelude::*;
 use rlp::*;
@@ -227,7 +227,7 @@ pub struct ConsensusGraphInner {
     // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
-    genesis_block_state_root: H256,
+    genesis_block_state_root: StateRoot,
     genesis_block_receipts_root: H256,
     // It maps internal index of a block to the set of internal indexes of
     // blocks, when treat the block as the pivot chain block.
@@ -1350,9 +1350,12 @@ impl ConsensusGraphInner {
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db = StateDb::new(
-            self.data_man.storage_manager.get_state_at(hash).unwrap(),
-        );
+        let state_db = StateDb::new(unsafe {
+            self.data_man
+                .storage_manager
+                .get_state_readonly_assumed_existence(hash)
+                .unwrap()
+        });
         Ok(
             if let Ok(maybe_acc) = state_db.get_account(&address, false) {
                 maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
@@ -1468,7 +1471,11 @@ impl ConsensusGraphInner {
 
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let state_db = StateDb::new(
-            self.data_man.storage_manager.get_state_at(hash).unwrap(),
+            self.data_man
+                .storage_manager
+                .get_state_no_commit(hash)
+                .unwrap()
+                .unwrap(),
         );
         let state = State::new(state_db, 0.into(), Default::default());
         state
@@ -2002,25 +2009,29 @@ impl ConsensusGraph {
     /// root of a given block
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
-    ) -> (H256, H256) {
+    ) -> (StateRootWithAuxInfo, H256) {
         // If we already computed the state of the block before, we should not
-        // do it again FIXME: propagate the error up
+        // do it again
+        // FIXME: propagate the error up
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            let cached_state = self
+            let maybe_cached_state = self
                 .data_man
                 .storage_manager
-                .get_state_at(block_hash.clone())
+                .get_state_no_commit(block_hash.clone())
                 .unwrap();
-            if cached_state.does_exist() {
-                if let Some(receipts_root) =
-                    self.data_man.get_receipts_root(&block_hash)
-                {
-                    return (
-                        cached_state.get_state_root().unwrap().unwrap(),
-                        receipts_root,
-                    );
+            match maybe_cached_state {
+                Some(cached_state) => {
+                    if let Some(receipts_root) =
+                        self.data_man.get_receipts_root(&block_hash)
+                    {
+                        return (
+                            cached_state.get_state_root().unwrap().unwrap(),
+                            receipts_root,
+                        );
+                    }
                 }
+                None => {}
             }
         }
         // FIXME: propagate the error up
@@ -2181,7 +2192,7 @@ impl ConsensusGraph {
     /// block given a delay.
     pub fn compute_deferred_state_for_block(
         &self, block_hash: &H256, delay: usize,
-    ) -> (H256, H256) {
+    ) -> (StateRootWithAuxInfo, H256) {
         let inner = &mut *self.inner.write();
 
         // FIXME: Propagate errors upward
@@ -2217,7 +2228,9 @@ impl ConsensusGraph {
         let parent_state_root = inner
             .data_man
             .storage_manager
-            .get_state_at(parent_block_hash)
+            .get_state_no_commit(parent_block_hash)
+            .unwrap()
+            // Unwrapping is safe because the state exists.
             .unwrap()
             .get_state_root()
             .unwrap()
@@ -2305,8 +2318,9 @@ impl ConsensusGraph {
     }
 
     fn log_invalid_state_root(
-        &self, expected_state_root: &H256, got_state_root: &H256,
-        deferred: usize, inner: &ConsensusGraphInner,
+        &self, expected_state_root: &StateRootWithAuxInfo,
+        got_state_root: (&StateRoot, &StateRootAuxInfo), deferred: usize,
+        inner: &ConsensusGraphInner,
     ) -> std::io::Result<()>
     {
         let debug_record = self.log_debug_epoch_computation(deferred, inner);
@@ -2417,17 +2431,19 @@ impl ConsensusGraph {
                 let correct_state_root = self
                     .data_man
                     .storage_manager
-                    .get_state_at(inner.arena[deferred].hash)
+                    .get_state_no_commit(inner.arena[deferred].hash)
+                    .unwrap()
+                    // Unwrapping is safe because the state exists.
                     .unwrap()
                     .get_state_root()
                     .unwrap()
                     .unwrap();
                 if *block.block_header.deferred_state_root()
-                    != correct_state_root
+                    != correct_state_root.state_root
                 {
                     self.log_invalid_state_root(
                         &correct_state_root,
-                        &block.block_header.deferred_state_root(),
+                        block.block_header.deferred_state_root_with_aux_info(),
                         deferred,
                         inner,
                     )
@@ -2450,17 +2466,20 @@ impl ConsensusGraph {
                 let (state_root, receipts_root) =
                     self.compute_state_for_block(&deferred_hash, inner);
 
-                if state_root != *block.block_header.deferred_state_root() {
+                if state_root.state_root
+                    != *block.block_header.deferred_state_root()
+                {
                     self.log_invalid_state_root(
                         &state_root,
-                        block.block_header.deferred_state_root(),
+                        block.block_header.deferred_state_root_with_aux_info(),
                         deferred,
                         inner,
                     )
                     .ok();
                 }
 
-                *block.block_header.deferred_state_root() == state_root
+                *block.block_header.deferred_state_root()
+                    == state_root.state_root
                     && *block.block_header.deferred_receipts_root()
                         == receipts_root
             }
@@ -3448,7 +3467,9 @@ impl ConsensusGraph {
 
     /// Wait for a block's epoch is computed.
     /// Return the state_root and receipts_root
-    pub fn wait_for_block_state(&self, block_hash: &H256) -> (H256, H256) {
+    pub fn wait_for_block_state(
+        &self, block_hash: &H256,
+    ) -> (StateRootWithAuxInfo, H256) {
         self.executor.wait_for_result(*block_hash)
     }
 }

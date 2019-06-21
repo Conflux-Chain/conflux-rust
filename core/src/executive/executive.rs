@@ -1229,7 +1229,7 @@ mod tests {
     };
     use cfx_types::{Address, H256, U256, U512};
     use keylib::{Generator, Random};
-    use primitives::{EpochId, Transaction};
+    use primitives::Transaction;
     use rustc_hex::FromHex;
     use std::str::FromStr;
 
@@ -1241,19 +1241,19 @@ mod tests {
         machine
     }
 
-    fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
+    fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
         State::new(
-            StateDb::new(storage_manager.get_state_at(epoch_id).unwrap()),
+            StateDb::new(storage_manager.get_state_for_genesis_write()),
             U256::from(0),
             VmFactory::default(),
         )
     }
 
-    fn get_state_with_factory(
-        storage_manager: &StorageManager, epoch_id: EpochId, factory: Factory,
+    fn get_state_for_genesis_write_with_factory(
+        storage_manager: &StorageManager, factory: Factory,
     ) -> State {
         State::new(
-            StateDb::new(storage_manager.get_state_at(epoch_id).unwrap()),
+            StateDb::new(storage_manager.get_state_for_genesis_write()),
             U256::from(0),
             factory.into(),
         )
@@ -1299,11 +1299,8 @@ mod tests {
         params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
         params.value = ActionValue::Transfer(U256::from(0x7));
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state_with_factory(
-            &storage_manager,
-            H256::from(U256::from(0)),
-            factory,
-        );
+        let mut state =
+            get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
             .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
             .unwrap();
@@ -1375,11 +1372,8 @@ mod tests {
         params.value = ActionValue::Transfer(U256::from(100));
 
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state_with_factory(
-            &storage_manager,
-            H256::from(U256::from(0)),
-            factory,
-        );
+        let mut state =
+            get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
@@ -1447,7 +1441,7 @@ mod tests {
         params.call_type = CallType::Call;
 
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state(&storage_manager, H256::from(U256::from(0)));
+        let mut state = get_state_for_genesis_write(&storage_manager);
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
@@ -1479,9 +1473,8 @@ mod tests {
         let returns = "726576657274206d657373616765".from_hex().unwrap();
 
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state_with_factory(
+        let mut state = get_state_for_genesis_write_with_factory(
             &storage_manager,
-            H256::from(U256::from(0)),
             factory.clone(),
         );
         state
@@ -1555,11 +1548,8 @@ mod tests {
             ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
 
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state_with_factory(
-            &storage_manager,
-            H256::from(U256::from(0)),
-            factory,
-        );
+        let mut state =
+            get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
             .add_balance(
                 &sender,
@@ -1600,11 +1590,8 @@ mod tests {
         let sender = t.sender();
 
         let storage_manager = new_state_manager_for_testing();
-        let mut state = get_state_with_factory(
-            &storage_manager,
-            H256::from(U256::from(0)),
-            factory,
-        );
+        let mut state =
+            get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
             .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
             .unwrap();

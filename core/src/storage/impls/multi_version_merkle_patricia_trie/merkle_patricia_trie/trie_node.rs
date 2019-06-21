@@ -770,14 +770,14 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug for TrieNode<CacheAlgoDataT> {
 use self::access_mode::*;
 use super::{
     super::{
-        super::errors::*, cache::algorithm::CacheAlgoDataTrait, merkle::*,
-        node_ref::*,
+        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
     },
     children_table::*,
     compressed_path::*,
     maybe_in_place_byte_array::MaybeInPlaceByteArray,
     mpt_value::MptValue,
 };
+use primitives::MerkleHash;
 use rlp::*;
 use std::{
     cmp::min,
