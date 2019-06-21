@@ -15,7 +15,7 @@ use crate::{
     executive,
     pow::WORKER_COMPUTATION_PARALLELISM,
     statedb::StateDb,
-    storage::{Storage, StorageManager, StorageManagerTrait},
+    storage::{state_manager::StateManagerTrait, Storage, StorageManager},
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
@@ -652,9 +652,11 @@ impl TransactionPool {
             }
         }
 
-        let mut account_cache = AccountCache::new(
-            self.storage_manager.get_state_at(latest_epoch).unwrap(),
-        );
+        let mut account_cache = AccountCache::new(unsafe {
+            self.storage_manager
+                .get_state_readonly_assumed_existence(latest_epoch)
+                .unwrap()
+        });
         let mut passed_transactions = Vec::new();
         {
             let mut tx_cache = self.transaction_pubkey_cache.write();

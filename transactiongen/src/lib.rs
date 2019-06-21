@@ -100,7 +100,9 @@ impl TransactionGenerator {
         State::new(
             StateDb::new(
                 self.storage_manager
-                    .get_state_at(block_hash.clone())
+                    .get_state_no_commit(block_hash.clone())
+                    .unwrap()
+                    // Unwrapping is safe because the state exists.
                     .unwrap(),
             ),
             0.into(),
@@ -192,7 +194,11 @@ impl TransactionGenerator {
                 StateDb::new(
                     txgen
                         .storage_manager
-                        .get_state_at(txgen.consensus.best_state_block_hash())
+                        .get_state_no_commit(
+                            txgen.consensus.best_state_block_hash(),
+                        )
+                        .unwrap()
+                        // Unwrapping is safe because the state exists.
                         .unwrap(),
                 ),
                 0.into(),
@@ -267,9 +273,11 @@ impl TransactionGenerator {
                     StateDb::new(
                         txgen
                             .storage_manager
-                            .get_state_at(
+                            .get_state_no_commit(
                                 txgen.consensus.best_state_block_hash(),
                             )
+                            .unwrap()
+                            // Unwrapping is safe because the state exists.
                             .unwrap(),
                     ),
                     0.into(),
