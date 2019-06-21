@@ -3346,8 +3346,7 @@ impl ConsensusGraph {
     }
 
     pub fn try_get_best_state(&self) -> Option<State> {
-        let inner = self.inner.read();
-        inner.try_get_best_state(&self.data_man)
+        self.inner.read().try_get_best_state(&self.data_man)
     }
 
     /// Wait until the best state has been executed, and return the state
