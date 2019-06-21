@@ -58,113 +58,27 @@ impl<
 
     pub fn insert(&mut self, key: K, value: V, weight: W) -> Option<V> {
         assert!(weight != 0.into());
-        //        info!(
-        //            "insert a tx into treap!!!!!!!!!! key={:?} value{:?}
-        // weight{:?}",            key, value, weight
-        //        );
-        //        if self.real_len() != self.mock.len() || self.mock.len() !=
-        // self.len() {            info!(
-        //                "before what!!!!!!!!!! real_len={:?} len={:?}
-        // correct={:?}",                self.real_len(),
-        //                self.len(),
-        //                self.mock.len()
-        //            );
-        //        }
-        //        info!("================tx list==============: ");
-        //        for (_, tx) in self.iter() {
-        //            info!("tx: {:?}", tx);
-        //        }
-        //        info!("================tx list over==============: ");
-        //
-        //        info!(
-        //            "before insert: real_len={:?} len={:?} correct={:?}",
-        //            self.real_len(),
-        //            self.len(),
-        //            self.mock.len()
-        //        );
-
         let result = Node::insert(
             &mut self.root,
             Node::new(key.clone(), value, weight, self.rng.next_u64()),
         );
-
-        //        info!(
-        //            "after insert: real_len={:?} len={:?} correct={:?}",
-        //            self.real_len(),
-        //            self.len(),
-        //            self.mock.len()
-        //        );
 
         self.mock.insert(key);
         if result.is_none() {
             self.size += 1;
         }
 
-        //        if self.real_len() != self.mock.len() || self.mock.len() !=
-        // self.len() {            info!(
-        //                "after what!!!!!!!!!! real_len={:?} len={:?}
-        // correct={:?}",                self.real_len(),
-        //                self.len(),
-        //                self.mock.len()
-        //            );
-        //            info!("================tx list==============: ");
-        //            for (_, tx) in self.iter() {
-        //                info!("tx: {:?}", tx);
-        //            }
-        //            info!("================tx list over==============: ");
-        //        }
         result
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        //        info!("delete a tx from treap!!!!!!!!!! key={:?} ", key);
-        //        if self.real_len() != self.mock.len() || self.mock.len() !=
-        // self.len() {            info!(
-        //                "before what!!!!!!!!!! real_len={:?} len={:?}
-        // correct={:?}",                self.real_len(),
-        //                self.len(),
-        //                self.mock.len()
-        //            );
-        //        }
-        //
-        //        info!("================tx list==============: ");
-        //        for (_, tx) in self.iter() {
-        //            info!("tx: {:?}", tx);
-        //        }
-        //        info!("================tx list over==============: ");
-        //
-        //        info!(
-        //            "before remove: real_len={:?} len={:?} correct={:?}",
-        //            self.real_len(),
-        //            self.len(),
-        //            self.mock.len()
-        //        );
         let result = Node::remove(&mut self.root, key);
-        //        info!(
-        //            "after remove: real_len={:?} len={:?} correct={:?}",
-        //            self.real_len(),
-        //            self.len(),
-        //            self.mock.len()
-        //        );
 
         self.mock.remove(&key);
         if result.is_some() {
             self.size -= 1;
         }
 
-        //        if self.real_len() != self.mock.len() || self.mock.len() !=
-        // self.len() {            info!(
-        //                "after what!!!!!!!!!! real_len={:?} len={:?}
-        // correct={:?}",                self.real_len(),
-        //                self.len(),
-        //                self.mock.len()
-        //            );
-        //            info!("================tx list==============: ");
-        //            for (_, tx) in self.iter() {
-        //                info!("tx: {:?}", tx);
-        //            }
-        //            info!("================tx list over==============: ");
-        //        }
         result
     }
 

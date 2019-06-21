@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 mod impls;
-//mod ready;
 
 #[cfg(test)]
 mod test_treap;
@@ -11,7 +10,6 @@ mod test_treap;
 extern crate rand;
 
 pub use self::impls::TreapMap;
-//use self::ready::Readiness;
 use crate::{
     cache_manager::{CacheId, CacheManager},
     executive,
@@ -273,13 +271,11 @@ impl ReadyAccountPool {
     fn update(
         &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
     ) -> Option<Arc<SignedTransaction>> {
-        //        info!("Recalculate result: {:?}", tx);
         let replaced = if let Some(tx) = tx {
             self.insert(tx)
         } else {
             self.remove(address)
         };
-        //        info!("Replace result: {:?}", replaced);
         replaced
     }
 
@@ -296,13 +292,6 @@ impl ReadyAccountPool {
         }
 
         let sum_gas_price = self.treap.sum_weight();
-        //        if sum_gas_price == 0.into() {
-        //            info!("tx list!!!!!!!!!!!!!!: ");
-        //            for (_, tx) in self.treap.iter() {
-        //                info!("tx: {:?}", tx);
-        //            }
-        //        }
-
         let mut rand_value = U512::from(H512::random());
         rand_value = rand_value % sum_gas_price;
 
@@ -818,7 +807,6 @@ impl TransactionPool {
             return Err(format!("Failed imported to deferred pool: {}", info));
         }
 
-        //         info!("Insert result to deferred pool: {:?}", result);
         inner.recalculate_readiness_with_state(
             &transaction.sender,
             account_cache,
@@ -842,12 +830,6 @@ impl TransactionPool {
         let mut to_prop = self.to_propagate_trans.write();
         mem::swap(&mut *to_prop, &mut transactions);
     }
-
-    //    pub fn add_ready(&self, transaction: Arc<SignedTransaction>) -> bool {
-    //        let mut inner = self.inner.write();
-    //        let inner = inner.deref_mut();
-    //        self.add_ready_without_lock(inner, transaction)
-    //    }
 
     // If a tx is failed executed due to invalid nonce
     // This function should be invoked to recycle it
@@ -890,25 +872,6 @@ impl TransactionPool {
     pub fn remove_to_propagate(&self, tx_hash: &H256) {
         self.to_propagate_trans.write().remove(tx_hash);
     }
-
-    //    pub fn remove_ready(&self, transaction: Arc<SignedTransaction>) ->
-    // bool {        let mut inner = self.inner.write();
-    //        let inner = inner.deref_mut();
-    //        if self.remove_ready_without_lock(inner, transaction).is_some() {
-    //            true
-    //        } else {
-    //            false
-    //        }
-    //    }
-
-    //    pub fn remove_ready_without_lock(
-    //        &self, inner: &mut TransactionPoolInner,
-    //        transaction: Arc<SignedTransaction>,
-    //    ) -> Option<Arc<SignedTransaction>>
-    //    {
-    //        let hash = transaction.hash();
-    //        inner.ready_transactions.remove(&hash)
-    //    }
 
     pub fn set_tx_packed(
         &self, transactions: Vec<Arc<SignedTransaction>>, epoch_id: EpochId,
@@ -1163,7 +1126,6 @@ mod test_transaction_pool {
     fn test_deferred_pool_recalculate_readiness() {
         let mut deferred_pool = super::DeferredPool::new();
 
-        // insert txs of same sender
         let alice = Random.generate().unwrap();
 
         let gas = 50000;
