@@ -645,6 +645,11 @@ impl RpcImpl {
 
         Ok(ret)
     }
+
+    fn clear_tx_pool(&self) -> RpcResult<()> {
+        self.tx_pool.clear_tx_pool();
+        Ok(())
+    }
 }
 
 fn grouped_txs<T, F>(
@@ -903,4 +908,6 @@ impl DebugRpc for DebugRpcImpl {
     > {
         self.rpc_impl.txpool_content()
     }
+
+    fn clear_tx_pool(&self) -> RpcResult<()> { self.rpc_impl.clear_tx_pool() }
 }

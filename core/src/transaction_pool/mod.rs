@@ -195,6 +195,8 @@ impl DeferredPool {
         }
     }
 
+    fn clear(&mut self) { self.buckets.clear() }
+
     fn insert(&mut self, tx: TxWithReadyInfo, force: bool) -> InsertResult {
         // It's safe to create a new bucket, cause inserting to a empty bucket
         // will always be success
@@ -249,6 +251,12 @@ impl ReadyAccountPool {
         }
     }
 
+    fn clear(&mut self) {
+        while self.len() != 0 {
+            self.pop();
+        }
+    }
+
     fn len(&self) -> usize { self.treap.len() }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
@@ -262,11 +270,14 @@ impl ReadyAccountPool {
     fn update(
         &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
     ) -> Option<Arc<SignedTransaction>> {
-        if let Some(tx) = tx {
+        //        info!("Recalculate result: {:?}", tx);
+        let replaced = if let Some(tx) = tx {
             self.insert(tx)
         } else {
             self.remove(address)
-        }
+        };
+        //        info!("Replace result: {:?}", replaced);
+        replaced
     }
 
     fn insert(
@@ -282,6 +293,13 @@ impl ReadyAccountPool {
         }
 
         let sum_gas_price = self.treap.sum_weight();
+        //        if sum_gas_price == 0.into() {
+        //            info!("tx list!!!!!!!!!!!!!!: ");
+        //            for (_, tx) in self.treap.iter() {
+        //                info!("tx: {:?}", tx);
+        //            }
+        //        }
+
         let mut rand_value = U512::from(H512::random());
         rand_value = rand_value % sum_gas_price;
 
@@ -315,6 +333,14 @@ impl TransactionPoolInner {
             garbage_collection_queue: VecDeque::new(),
             txs: HashMap::new(),
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.deferred_pool.clear();
+        self.ready_account_pool.clear();
+        self.ready_nonces_and_balances.clear();
+        self.garbage_collection_queue.clear();
+        self.txs.clear();
     }
 
     pub fn len(&self) -> usize { self.txs.len() }
@@ -773,16 +799,17 @@ impl TransactionPool {
             ));
         }
 
-        if let InsertResult::Failed(info) = self
-            .add_to_deferred_pool_without_lock(
-                inner,
-                transaction.clone(),
-                packed,
-                force,
-            )
-        {
+        let result = self.add_to_deferred_pool_without_lock(
+            inner,
+            transaction.clone(),
+            packed,
+            force,
+        );
+        if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));
         }
+
+        //         info!("Insert result to deferred pool: {:?}", result);
 
         inner.recalculate_readiness_with_state(
             &transaction.sender,
@@ -884,6 +911,7 @@ impl TransactionPool {
             total_tx_size += tx_size;
 
             packed_transactions.push(tx.clone());
+            inner.insert(tx.clone(), true, true);
             inner.recalculate_readiness_with_local_info(&tx.sender());
 
             if packed_transactions.len() >= num_txs {
@@ -911,8 +939,8 @@ impl TransactionPool {
     }
 
     pub fn transactions_to_propagate(&self) -> Vec<Arc<SignedTransaction>> {
-        let _inner = self.inner.read();
-        unimplemented!()
+        let inner = self.inner.read();
+        inner.txs.iter().map(|(_, tx)| tx.clone()).collect()
     }
 
     pub fn notify_state_start(&self, accounts_from_execution: Vec<Account>) {
@@ -926,6 +954,11 @@ impl TransactionPool {
                 account.balance,
             );
         }
+    }
+
+    pub fn clear_tx_pool(&self) {
+        let mut inner = self.inner.write();
+        inner.clear()
     }
 
     /// stats retrieves the length of ready and deferred pool.

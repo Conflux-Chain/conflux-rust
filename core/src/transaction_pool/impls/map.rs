@@ -5,6 +5,7 @@
 use super::node::Node;
 use rand::{prng::XorShiftRng, FromEntropy, RngCore};
 use std::{
+    collections::HashSet,
     convert::From,
     fmt::Debug,
     ops::{Add, Sub},
@@ -13,12 +14,13 @@ use std::{
 pub struct TreapMap<K, V, W> {
     root: Option<Box<Node<K, V, W>>>,
     size: usize,
+    mock: HashSet<K>,
     rng: XorShiftRng,
 }
 
 impl<
-        K: Ord + Debug,
-        V: Clone,
+        K: Ord + Debug + std::hash::Hash + Clone,
+        V: Clone + Debug,
         W: Add<Output = W> + Sub<Output = W> + Ord + Clone + From<u32> + Debug,
     > TreapMap<K, V, W>
 {
@@ -27,6 +29,7 @@ impl<
             root: None,
             size: 0,
             rng: XorShiftRng::from_entropy(),
+            mock: HashSet::new(),
         }
     }
 
@@ -35,10 +38,19 @@ impl<
             root: None,
             size: 0,
             rng,
+            mock: HashSet::new(),
         }
     }
 
     pub fn len(&self) -> usize { self.size }
+
+    pub fn real_len(&self) -> usize {
+        let mut counter = 0;
+        for tx in self.iter() {
+            counter += 1;
+        }
+        counter
+    }
 
     pub fn is_empty(&self) -> bool { self.size == 0 }
 
@@ -46,21 +58,113 @@ impl<
 
     pub fn insert(&mut self, key: K, value: V, weight: W) -> Option<V> {
         assert!(weight != 0.into());
+        //        info!(
+        //            "insert a tx into treap!!!!!!!!!! key={:?} value{:?}
+        // weight{:?}",            key, value, weight
+        //        );
+        //        if self.real_len() != self.mock.len() || self.mock.len() !=
+        // self.len() {            info!(
+        //                "before what!!!!!!!!!! real_len={:?} len={:?}
+        // correct={:?}",                self.real_len(),
+        //                self.len(),
+        //                self.mock.len()
+        //            );
+        //        }
+        //        info!("================tx list==============: ");
+        //        for (_, tx) in self.iter() {
+        //            info!("tx: {:?}", tx);
+        //        }
+        //        info!("================tx list over==============: ");
+        //
+        //        info!(
+        //            "before insert: real_len={:?} len={:?} correct={:?}",
+        //            self.real_len(),
+        //            self.len(),
+        //            self.mock.len()
+        //        );
+
         let result = Node::insert(
             &mut self.root,
-            Node::new(key, value, weight, self.rng.next_u64()),
+            Node::new(key.clone(), value, weight, self.rng.next_u64()),
         );
+
+        //        info!(
+        //            "after insert: real_len={:?} len={:?} correct={:?}",
+        //            self.real_len(),
+        //            self.len(),
+        //            self.mock.len()
+        //        );
+
+        self.mock.insert(key);
         if result.is_none() {
             self.size += 1;
         }
+
+        //        if self.real_len() != self.mock.len() || self.mock.len() !=
+        // self.len() {            info!(
+        //                "after what!!!!!!!!!! real_len={:?} len={:?}
+        // correct={:?}",                self.real_len(),
+        //                self.len(),
+        //                self.mock.len()
+        //            );
+        //            info!("================tx list==============: ");
+        //            for (_, tx) in self.iter() {
+        //                info!("tx: {:?}", tx);
+        //            }
+        //            info!("================tx list over==============: ");
+        //        }
         result
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
+        //        info!("delete a tx from treap!!!!!!!!!! key={:?} ", key);
+        //        if self.real_len() != self.mock.len() || self.mock.len() !=
+        // self.len() {            info!(
+        //                "before what!!!!!!!!!! real_len={:?} len={:?}
+        // correct={:?}",                self.real_len(),
+        //                self.len(),
+        //                self.mock.len()
+        //            );
+        //        }
+        //
+        //        info!("================tx list==============: ");
+        //        for (_, tx) in self.iter() {
+        //            info!("tx: {:?}", tx);
+        //        }
+        //        info!("================tx list over==============: ");
+        //
+        //        info!(
+        //            "before remove: real_len={:?} len={:?} correct={:?}",
+        //            self.real_len(),
+        //            self.len(),
+        //            self.mock.len()
+        //        );
         let result = Node::remove(&mut self.root, key);
+        //        info!(
+        //            "after remove: real_len={:?} len={:?} correct={:?}",
+        //            self.real_len(),
+        //            self.len(),
+        //            self.mock.len()
+        //        );
+
+        self.mock.remove(&key);
         if result.is_some() {
             self.size -= 1;
         }
+
+        //        if self.real_len() != self.mock.len() || self.mock.len() !=
+        // self.len() {            info!(
+        //                "after what!!!!!!!!!! real_len={:?} len={:?}
+        // correct={:?}",                self.real_len(),
+        //                self.len(),
+        //                self.mock.len()
+        //            );
+        //            info!("================tx list==============: ");
+        //            for (_, tx) in self.iter() {
+        //                info!("tx: {:?}", tx);
+        //            }
+        //            info!("================tx list over==============: ");
+        //        }
         result
     }
 

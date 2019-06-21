@@ -77,6 +77,7 @@ class TestSendTx(RpcClient):
         self.wait_for_receipt(tx.hash_hex())
 
     def test_replace_ready_price_too_low(self):
+        self.clear_tx_pool()
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
         tx = self.new_tx(nonce=cur_nonce, gas_price=10)
         assert_equal(self.send_tx(tx), tx.hash_hex())
@@ -95,6 +96,7 @@ class TestSendTx(RpcClient):
         self.wait_for_receipt(tx.hash_hex())
 
     def test_replace_pending_price_too_low(self):
+        self.clear_tx_pool()
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
         tx = self.new_tx(nonce=cur_nonce+1, gas_price=10)
         assert_equal(self.send_tx(tx), tx.hash_hex())
@@ -116,6 +118,7 @@ class TestSendTx(RpcClient):
         self.wait_for_receipt(tx.hash_hex())
 
     def test_replace_ready_price_higher(self):
+        self.clear_tx_pool()
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
         tx = self.new_tx(nonce=cur_nonce, gas_price=10)
         assert_equal(self.send_tx(tx), tx.hash_hex())
@@ -132,6 +135,7 @@ class TestSendTx(RpcClient):
         self.wait_for_receipt(new_tx.hash_hex())
 
     def test_replace_pending_price_higher(self):
+        self.clear_tx_pool()
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
         tx = self.new_tx(nonce=cur_nonce+1, gas_price=10)
         assert_equal(self.send_tx(tx), tx.hash_hex())
@@ -177,6 +181,8 @@ class TestSendTx(RpcClient):
     def test_nonce_promote(self):
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
 
+        self.clear_tx_pool()
+
         # enter ready queue since tx.nonce = account.nonce
         tx0 = self.new_tx(nonce=cur_nonce)
         assert_equal(self.send_tx(tx0), tx0.hash_hex())
@@ -185,22 +191,22 @@ class TestSendTx(RpcClient):
         # enter ready queue since tx0 in ready queue
         tx1 = self.new_tx(nonce=cur_nonce+1)
         assert_equal(self.send_tx(tx1), tx1.hash_hex())
-        assert_equal(self.txpool_status(), (2, 2))
+        assert_equal(self.txpool_status(), (2, 1))
 
         # enter pending queue since tx2 not in ready queue
         tx3 = self.new_tx(nonce=cur_nonce+3)
         assert_equal(self.send_tx(tx3), tx3.hash_hex())
-        assert_equal(self.txpool_status(), (3, 2))
+        assert_equal(self.txpool_status(), (3, 1))
 
         # enter the ready queue since tx1 in ready queue,
         # and also promote the tx3 into ready queue.
         tx2 = self.new_tx(nonce=cur_nonce+2)
         assert_equal(self.send_tx(tx2), tx2.hash_hex())
-        assert_equal(self.txpool_status(), (4, 4))
+        assert_equal(self.txpool_status(), (4, 1))
 
         # generate a block to pack above 4 txs and the txpool is empty.
         self.generate_block(num_txs=4)
-        assert_equal(self.txpool_status(), (0, 0))
+        assert_equal(self.txpool_status(), (4, 0))
 
         self.generate_blocks_to_state()
         for tx in [tx0, tx1, tx2, tx3]:
