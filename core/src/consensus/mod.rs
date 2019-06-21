@@ -1280,6 +1280,25 @@ impl ConsensusGraphInner {
         self.arena[self.best_state_index()].hash
     }
 
+    /// Return None if the best state is not executed or the db returned error
+    // TODO check if we can ignore the db error
+    pub fn try_get_best_state<'a>(
+        &self, data_man: &'a BlockDataManager,
+    ) -> Option<State<'a>> {
+        let best_state_hash = self.best_state_block_hash();
+        if let Ok(state) = data_man
+            .storage_manager
+            .get_state_no_commit(best_state_hash)
+        {
+            state.map(|db| {
+                State::new(StateDb::new(db), 0.into(), Default::default())
+            })
+        } else {
+            warn!("try_get_best_state: Error for hash {}", best_state_hash);
+            None
+        }
+    }
+
     pub fn best_epoch_number(&self) -> usize { self.pivot_chain.len() - 1 }
 
     pub fn get_height_from_epoch_number(
@@ -1349,20 +1368,28 @@ impl ConsensusGraphInner {
     pub fn get_balance(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db = StateDb::new(unsafe {
-            self.data_man
-                .storage_manager
-                .get_state_readonly_assumed_existence(hash)
-                .unwrap()
-        });
-        Ok(
-            if let Ok(maybe_acc) = state_db.get_account(&address, false) {
-                maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
-            } else {
-                0.into()
-            },
-        )
+        let hash = self.get_hash_from_epoch_number(epoch_number.clone())?;
+        let maybe_state = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(hash)
+            .map_err(|e| format!("Error to get state, err={:?}", e))?;
+        if let Some(state) = maybe_state {
+            let state_db = StateDb::new(state);
+            Ok(
+                if let Ok(maybe_acc) = state_db.get_account(&address, false) {
+                    maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
+                } else {
+                    0.into()
+                },
+            )
+        } else {
+            Err(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist",
+                epoch_number, hash
+            )
+            .into())
+        }
     }
 
     pub fn terminal_hashes(&self) -> Vec<H256> {
@@ -3316,6 +3343,19 @@ impl ConsensusGraph {
 
     pub fn best_state_block_hash(&self) -> H256 {
         self.inner.read().best_state_block_hash()
+    }
+
+    pub fn try_get_best_state(&self) -> Option<State> {
+        self.inner.read().try_get_best_state(&self.data_man)
+    }
+
+    /// Wait until the best state has been executed, and return the state
+    pub fn get_best_state(&self) -> State {
+        let inner = self.inner.read();
+        self.wait_for_block_state(&inner.best_state_block_hash());
+        inner
+            .try_get_best_state(&self.data_man)
+            .expect("Best state has been executed")
     }
 
     /// Returns the total number of blocks in consensus graph
