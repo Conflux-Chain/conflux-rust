@@ -43,5 +43,5 @@ class TestBlockSync(RpcClient):
         self.generate_block(num_txs=2)
         self.generate_blocks_to_state()
         assert_equal(self.txpool_status(), (3, 0))
-        self.wait_for_receipt(tx3.hash_hex())
         self.wait_for_receipt(tx2.hash_hex())
+        self.wait_for_receipt(tx3.hash_hex())

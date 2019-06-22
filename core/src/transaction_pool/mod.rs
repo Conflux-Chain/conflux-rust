@@ -90,7 +90,7 @@ impl TxWithReadyInfo {
 
     pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.transaction }
 
-    pub fn replace(&self, x: &Self, force: bool) -> bool {
+    pub fn should_replace(&self, x: &Self, force: bool) -> bool {
         if force {
             return true;
         }
@@ -141,7 +141,7 @@ impl NoncePool {
         };
 
         let tx_in_pool = self.inner.entry(tx.nonce).or_insert(tx.clone());
-        if tx.replace(tx_in_pool, force) {
+        if tx.should_replace(tx_in_pool, force) {
             // replace with higher gas price transaction
             ret = InsertResult::Updated(tx_in_pool.clone());
             *tx_in_pool = tx.clone();

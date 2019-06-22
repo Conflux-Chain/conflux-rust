@@ -2952,9 +2952,9 @@ impl ConsensusGraph {
 
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
-        let best_epoch_id = inner.best_state_block_hash();
+        let best_state_epoch_id = inner.best_state_block_hash();
         self.txpool
-            .set_tx_packed(block.transactions.clone(), best_epoch_id);
+            .set_tx_packed(block.transactions.clone(), best_state_epoch_id);
 
         let anticone_barrier = inner.compute_anticone(me);
 
