@@ -33,6 +33,7 @@ use std::{
         Arc,
     },
     thread,
+    time::{Duration, UNIX_EPOCH},
 };
 use unexpected::{Mismatch, OutOfBounds};
 
@@ -438,6 +439,38 @@ impl SynchronizationGraphInner {
                 expected: self.arena[parent].block_header.height() + 1,
                 found: epoch,
             })));
+        }
+
+        // Verify the timestamp being correctly set
+        let my_timestamp = self.arena[index].block_header.timestamp();
+        let parent_timestamp = self.arena[parent].block_header.timestamp();
+        if parent_timestamp >= my_timestamp {
+            let my_timestamp = UNIX_EPOCH + Duration::from_secs(my_timestamp);
+            let parent_timestamp =
+                UNIX_EPOCH + Duration::from_secs(parent_timestamp);
+            return Err(From::from(BlockError::InvalidTimestamp(OutOfBounds {
+                max: Some(my_timestamp),
+                min: Some(parent_timestamp),
+                found: my_timestamp,
+            })));
+        }
+
+        for referee in &self.arena[index].referees {
+            let referee_timestamp =
+                self.arena[*referee].block_header.timestamp();
+            if referee_timestamp >= my_timestamp {
+                let my_timestamp =
+                    UNIX_EPOCH + Duration::from_secs(my_timestamp);
+                let referee_timestamp =
+                    UNIX_EPOCH + Duration::from_secs(referee_timestamp);
+                return Err(From::from(BlockError::InvalidTimestamp(
+                    OutOfBounds {
+                        max: Some(my_timestamp),
+                        min: Some(referee_timestamp),
+                        found: my_timestamp,
+                    },
+                )));
+            }
         }
 
         let machine = new_machine();
