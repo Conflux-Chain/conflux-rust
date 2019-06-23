@@ -316,11 +316,14 @@ impl SynchronizationGraphInner {
             return false;
         }
 
+        //FIXME: revisit this logic later.
         if node_me.parent_referees_too_old {
-            if !node_me.referrers.is_empty() || !node_me.children.is_empty() {
-                return true;
-            } else {
+            if node_me.referrers.is_empty() && node_me.children.is_empty() {
                 return false;
+            } else {
+                return !node_me.referees.iter().any(|&referee| {
+                    self.arena[referee].graph_status < BLOCK_HEADER_GRAPH_READY
+                });
             }
         }
 
