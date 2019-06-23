@@ -231,7 +231,6 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
-            self.graph.consensus.get_best_state(),
         );
 
         self.assemble_new_block_impl(
@@ -257,15 +256,12 @@ impl BlockGenerator {
         // ensure transaction pool consistency.
         let (best_info, transactions) = {
             // get the best block
-            let (guarded, best_info) = self.graph.get_best_info().into();
+            let (_guarded, best_info) = self.graph.get_best_info().into();
 
             let transactions_from_pool = self.txpool.pack_transactions(
                 num_txs,
                 block_gas_limit,
                 block_size_limit,
-                guarded
-                    .try_get_best_state(&self.graph.consensus.data_man)
-                    .expect("State execution ensured by get_best_info"),
             );
             let transactions = [
                 additional_transactions.as_slice(),

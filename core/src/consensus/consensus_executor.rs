@@ -23,7 +23,7 @@ use primitives::{
     TransactionAddress,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::{
         mpsc::{channel, RecvError, Sender, TryRecvError},
         Arc,
@@ -380,7 +380,6 @@ impl ConsensusExecutionHandler {
         self.process_epoch_transactions(
             &mut state,
             &epoch_blocks,
-            &self.data_man.txpool.unexecuted_transaction_addresses,
             on_local_pivot,
         );
 
@@ -417,9 +416,6 @@ impl ConsensusExecutionHandler {
 
     fn process_epoch_transactions(
         &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
-        unexecuted_transaction_addresses_lock: &Mutex<
-            HashMap<H256, HashSet<TransactionAddress>>,
-        >,
         on_local_pivot: bool,
     ) -> Vec<Arc<Vec<Receipt>>>
     {
@@ -450,8 +446,6 @@ impl ConsensusExecutionHandler {
             let mut n_other = 0;
             let mut last_cumulative_gas_used = U256::zero();
             {
-                let mut unexecuted_transaction_addresses =
-                    unexecuted_transaction_addresses_lock.lock();
                 for (idx, transaction) in block.transactions.iter().enumerate()
                 {
                     let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
@@ -518,23 +512,6 @@ impl ConsensusExecutionHandler {
                             self.data_man.insert_transaction_address_to_kv(
                                 &hash, &tx_addr,
                             );
-                            unexecuted_transaction_addresses.remove(&hash);
-                        } else {
-                            let mut remove = false;
-                            if let Some(addr_set) =
-                                unexecuted_transaction_addresses.get_mut(&hash)
-                            {
-                                addr_set.remove(&tx_addr);
-                                if addr_set.is_empty() {
-                                    remove = true;
-                                }
-                            }
-                            if remove {
-                                // If a tx is not executed in all blocks, we
-                                // will pack it again
-                                // and it has already been in to_pending now.
-                                unexecuted_transaction_addresses.remove(&hash);
-                            }
                         }
                     }
                 }
@@ -569,7 +546,7 @@ impl ConsensusExecutionHandler {
                     .unwrap();
                 self.data_man
                     .txpool
-                    .recycle_future_transactions(to_pending, state);
+                    .recycle_failed_executed_transactions(to_pending, state);
             }
         }
         debug!("Finish processing tx for epoch");
@@ -826,12 +803,7 @@ impl ConsensusExecutionHandler {
             0.into(),
             self.vm.clone(),
         );
-        self.process_epoch_transactions(
-            &mut state,
-            &epoch_blocks,
-            &Mutex::new(Default::default()),
-            false,
-        )
+        self.process_epoch_transactions(&mut state, &epoch_blocks, false)
     }
 
     pub fn call_virtual(
