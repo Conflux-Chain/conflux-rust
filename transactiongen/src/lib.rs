@@ -16,12 +16,8 @@ extern crate log;
 use crate::bytes::Bytes;
 use cfx_types::{Address, H256, H512, U256, U512};
 use cfxcore::{
-    executive::contract_address,
-    state::State,
-    statedb::StateDb,
-    storage::{StorageManager, StorageManagerTrait},
-    vm::CreateContractAddress,
-    SharedConsensusGraph, SharedTransactionPool,
+    executive::contract_address, storage::StorageManager,
+    vm::CreateContractAddress, SharedConsensusGraph, SharedTransactionPool,
 };
 use hex::*;
 use keylib::{public_to_address, Generator, KeyPair, Random};
@@ -96,24 +92,6 @@ impl TransactionGenerator {
 
     pub fn stop(&self) { *self.state.write() = TransGenState::Stop; }
 
-    pub fn get_best_state_at(&self, block_hash: &H256) -> State {
-        State::new(
-            StateDb::new(
-                self.storage_manager
-                    .get_state_no_commit(block_hash.clone())
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
-                    .unwrap(),
-            ),
-            0.into(),
-            Default::default(),
-        )
-    }
-
-    pub fn get_best_state(&self) -> State {
-        self.get_best_state_at(&self.consensus.best_state_block_hash())
-    }
-
     pub fn generate_transaction(&self) -> SignedTransaction {
         // Generate new address with 10% probability
         let is_send_to_new_address = (rand::thread_rng().gen_range(0, 10) == 0)
@@ -137,13 +115,11 @@ impl TransactionGenerator {
         let sender_kp = self.secret_store.get_keypair(sender_index);
         let sender_address = public_to_address(sender_kp.public());
 
-        let state = self.get_best_state();
+        let state = self.consensus.get_best_state();
 
         debug!(
-            "account_count:{} sender_addr:{:?} epoch_id:{:?}",
-            account_count,
-            sender_address,
-            self.consensus.best_state_block_hash()
+            "account_count:{} sender_addr:{:?}",
+            account_count, sender_address,
         );
         let sender_balance = state.balance(&sender_address).unwrap_or(0.into());
 
@@ -190,18 +166,7 @@ impl TransactionGenerator {
         let mut tx_n = 0;
         // Wait for initial tx
         loop {
-            let state = State::new(
-                StateDb::new(unsafe {
-                    txgen
-                        .storage_manager
-                        .get_state_readonly_assumed_existence(
-                            txgen.consensus.best_state_block_hash(),
-                        )
-                        .unwrap()
-                }),
-                0.into(),
-                Default::default(),
-            );
+            let state = txgen.consensus.get_best_state();
             let sender_address = initial_key_pair.address();
             let sender_balance = state.balance(&sender_address).ok();
             if sender_balance.is_none()
@@ -267,18 +232,7 @@ impl TransactionGenerator {
                 last_account = Some(receiver_address);
             } else {
                 // Wait for preparation
-                let state = State::new(
-                    StateDb::new(unsafe {
-                        txgen
-                            .storage_manager
-                            .get_state_readonly_assumed_existence(
-                                txgen.consensus.best_state_block_hash(),
-                            )
-                            .unwrap()
-                    }),
-                    0.into(),
-                    Default::default(),
-                );
+                let state = txgen.consensus.get_best_state();
                 let sender_balance = state.balance(&last_account.unwrap()).ok();
                 // Wait for at most 200*0.1=20 seconds
                 if wait_count < 200
