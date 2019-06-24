@@ -296,11 +296,10 @@ impl Session {
             return Err(self.disconnect(io, DisconnectReason::UselessPeer));
         }
 
-        let hello_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
-        if self.address.ip() != hello_from.address.ip() {
-            trace!("IP in Hello does not match session IP, Session IP = {:?}, Hello IP = {:?}, session = {:?}", self.address.ip(), hello_from.address.ip(), self);
-            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
-        }
+        let mut hello_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
+        // Use the ip of the socket as endpoint ip directly.
+        // We do not allow peers to specify the ip to avoid being used to DDoS the target ip.
+        hello_from.address.set_ip(self.address.ip());
 
         let ping_to = NodeEndpoint {
             address: hello_from.address,
