@@ -18,11 +18,12 @@ def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
 
     with open(metrics_log_file, "r", encoding="utf-8") as fp:
         for line in fp.readlines():
-            line = line[:-1]
+            fields = line[:-1].split(", ")
+            assert len(fields) == 4, "invalid metric line: " + line[:-1]
 
-            timestamp = parse_value(line, None, ", ")
-            name = parse_value(line, "name: \"", "\"")
-            value = parse_value(line, "value: ", "}")
+            timestamp = fields[0]
+            name = fields[1]
+            value = fields[3]
 
             if metric_name is None or metric_name == name:
                 if metrics.get(name) is None:

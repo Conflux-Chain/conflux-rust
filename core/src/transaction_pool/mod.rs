@@ -19,7 +19,7 @@ use crate::{
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
-use metrics::Gauge;
+use metrics::{Gauge, GaugeUsize};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     Account, Action, EpochId, SignedTransaction, TransactionWithSignature,
@@ -34,9 +34,10 @@ use std::{
 use threadpool::ThreadPool;
 
 lazy_static! {
-    static ref TX_POOL_GAUGE: Gauge = Gauge::register("tx_pool_size");
-    static ref TX_POOL_READY_GAUGE: Gauge =
-        Gauge::register("tx_pool_ready_size");
+    static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
+        GaugeUsize::register("tx_pool_size");
+    static ref TX_POOL_READY_GAUGE: Arc<Gauge<usize>> =
+        GaugeUsize::register("tx_pool_ready_size");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
@@ -696,9 +697,8 @@ impl TransactionPool {
                 }
             }
         }
-        TX_POOL_GAUGE.update(self.len() as i64);
-        TX_POOL_READY_GAUGE
-            .update(self.inner.read().ready_account_pool.len() as i64);
+        TX_POOL_GAUGE.update(self.len());
+        TX_POOL_READY_GAUGE.update(self.inner.read().ready_account_pool.len());
 
         (passed_transactions, failures)
     }
