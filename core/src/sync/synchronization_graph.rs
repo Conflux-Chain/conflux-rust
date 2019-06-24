@@ -444,7 +444,7 @@ impl SynchronizationGraphInner {
         // Verify the timestamp being correctly set
         let my_timestamp = self.arena[index].block_header.timestamp();
         let parent_timestamp = self.arena[parent].block_header.timestamp();
-        if parent_timestamp >= my_timestamp {
+        if parent_timestamp > my_timestamp {
             let my_timestamp = UNIX_EPOCH + Duration::from_secs(my_timestamp);
             let parent_timestamp =
                 UNIX_EPOCH + Duration::from_secs(parent_timestamp);
@@ -458,7 +458,7 @@ impl SynchronizationGraphInner {
         for referee in &self.arena[index].referees {
             let referee_timestamp =
                 self.arena[*referee].block_header.timestamp();
-            if referee_timestamp >= my_timestamp {
+            if referee_timestamp > my_timestamp {
                 let my_timestamp =
                     UNIX_EPOCH + Duration::from_secs(my_timestamp);
                 let referee_timestamp =
