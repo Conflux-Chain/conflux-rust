@@ -444,10 +444,16 @@ impl SynchronizationGraphInner {
         // Verify the timestamp being correctly set
         let my_timestamp = self.arena[index].block_header.timestamp();
         let parent_timestamp = self.arena[parent].block_header.timestamp();
-        if parent_timestamp >= my_timestamp {
+        if parent_timestamp > my_timestamp {
             let my_timestamp = UNIX_EPOCH + Duration::from_secs(my_timestamp);
             let parent_timestamp =
                 UNIX_EPOCH + Duration::from_secs(parent_timestamp);
+
+            warn!("Invalid timestamp: parent {:?} timestamp {}, me {:?} timestamp {}",
+                  self.arena[parent].block_header.hash(),
+                  self.arena[parent].block_header.timestamp(),
+                  self.arena[index].block_header.hash(),
+                  self.arena[index].block_header.timestamp());
             return Err(From::from(BlockError::InvalidTimestamp(OutOfBounds {
                 max: Some(my_timestamp),
                 min: Some(parent_timestamp),
@@ -458,11 +464,17 @@ impl SynchronizationGraphInner {
         for referee in &self.arena[index].referees {
             let referee_timestamp =
                 self.arena[*referee].block_header.timestamp();
-            if referee_timestamp >= my_timestamp {
+            if referee_timestamp > my_timestamp {
                 let my_timestamp =
                     UNIX_EPOCH + Duration::from_secs(my_timestamp);
                 let referee_timestamp =
                     UNIX_EPOCH + Duration::from_secs(referee_timestamp);
+
+                warn!("Invalid timestamp: referee {:?} timestamp {}, me {:?} timestamp {}",
+                      self.arena[*referee].block_header.hash(),
+                      self.arena[*referee].block_header.timestamp(),
+                      self.arena[index].block_header.hash(),
+                      self.arena[index].block_header.timestamp());
                 return Err(From::from(BlockError::InvalidTimestamp(
                     OutOfBounds {
                         max: Some(my_timestamp),
@@ -473,6 +485,7 @@ impl SynchronizationGraphInner {
             }
         }
 
+        // Verify the gas limit is respected
         let machine = new_machine();
         let gas_limit_divisor = machine.params().gas_limit_bound_divisor;
         let min_gas_limit = machine.params().min_gas_limit;
@@ -483,7 +496,7 @@ impl SynchronizationGraphInner {
         );
         let gas_upper = parent_gas_limit + parent_gas_limit / gas_limit_divisor;
         let self_gas_limit = *self.arena[index].block_header.gas_limit();
-        // Verify the gas limit is respected
+
         if self_gas_limit <= gas_lower || self_gas_limit >= gas_upper {
             return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
                 min: Some(gas_lower),
@@ -492,6 +505,7 @@ impl SynchronizationGraphInner {
             })));
         }
 
+        // Verify difficulty being correctly set
         let expected_difficulty: U256 = self
             .expected_difficulty(self.arena[index].block_header.parent_hash());
         let my_difficulty = *self.arena[index].block_header.difficulty();
