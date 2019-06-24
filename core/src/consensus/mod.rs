@@ -3025,6 +3025,7 @@ impl ConsensusGraph {
         }
 
         inner.arena[me].stable = stable;
+        // FIXME: Is this necessary?
         inner.arena[me].adaptive = adaptive;
 
         let mut extend_pivot = false;
