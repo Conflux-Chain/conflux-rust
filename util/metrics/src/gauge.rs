@@ -1,51 +1,50 @@
-use crate::is_enabled;
-use prometheus;
+use crate::{
+    metrics::{is_enabled, Metric, ORDER},
+    registry::DEFAULT_REGISTRY,
+};
+use std::sync::{atomic::AtomicUsize, Arc};
 
-pub struct Gauge {
-    inner: Option<prometheus::IntGauge>,
+pub trait Gauge<T: Default>: Send + Sync {
+    fn value(&self) -> T { T::default() }
+    fn update(&self, _value: T) {}
 }
 
-impl Gauge {
-    pub fn register(key: &'static str) -> Self {
-        if !is_enabled() {
-            return Gauge { inner: None };
+struct NoopGauge;
+impl<T: Default> Gauge<T> for NoopGauge {}
+
+#[macro_export]
+macro_rules! construct_gauge {
+    ($name:ident, $value_type:ty, $data_type:ty) => {
+        #[derive(Default)]
+        pub struct $name {
+            value: $value_type,
         }
 
-        let gauge = prometheus::IntGauge::new(key, " ").unwrap();
-        prometheus::default_registry()
-            .register(Box::new(gauge.clone()))
-            .unwrap();
+        impl $name {
+            pub fn register(name: &'static str) -> Arc<Gauge<$data_type>> {
+                if !is_enabled() {
+                    return Arc::new(NoopGauge);
+                }
 
-        Gauge { inner: Some(gauge) }
-    }
+                let gauge = Arc::new($name::default());
+                DEFAULT_REGISTRY
+                    .write()
+                    .register(name.into(), gauge.clone());
 
-    pub fn inc(&self) {
-        if let Some(ref gauge) = self.inner {
-            gauge.inc();
+                gauge
+            }
         }
-    }
 
-    pub fn dec(&self) {
-        if let Some(ref gauge) = self.inner {
-            gauge.dec();
-        }
-    }
+        impl Gauge<$data_type> for $name {
+            fn value(&self) -> usize { self.value.load(ORDER) }
 
-    pub fn add(&self, delta: i64) {
-        if let Some(ref gauge) = self.inner {
-            gauge.add(delta);
+            fn update(&self, value: usize) { self.value.store(value, ORDER); }
         }
-    }
 
-    pub fn sub(&self, delta: i64) {
-        if let Some(ref gauge) = self.inner {
-            gauge.sub(delta);
+        impl Metric for $name {
+            fn get_type(&self) -> &'static str { stringify!($name) }
         }
-    }
-
-    pub fn update(&self, value: i64) {
-        if let Some(ref gauge) = self.inner {
-            gauge.set(value);
-        }
-    }
+    };
 }
+
+construct_gauge!(GaugeUsize, AtomicUsize, usize);

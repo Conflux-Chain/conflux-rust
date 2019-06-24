@@ -5,14 +5,15 @@
 use crate::{Error, ErrorKind, ThrottlingReason};
 use byte_unit::n_mb_bytes;
 use lazy_static::lazy_static;
-use metrics::Gauge;
+use metrics::{Gauge, GaugeUsize};
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 lazy_static! {
     pub static ref THROTTLING_SERVICE: RwLock<Service> =
         RwLock::new(Service::new());
-    static ref QUEUE_SIZE_GAUGE: Gauge =
-        Gauge::register("network_throttling_queue_size");
+    static ref QUEUE_SIZE_GAUGE: Arc<Gauge<usize>> =
+        GaugeUsize::register("network_throttling_queue_size");
 }
 
 #[derive(Debug)]
@@ -80,7 +81,7 @@ impl Service {
             self.cur_queue_size
         );
 
-        QUEUE_SIZE_GAUGE.update(self.cur_queue_size as i64);
+        QUEUE_SIZE_GAUGE.update(self.cur_queue_size);
 
         Ok(self.cur_queue_size)
     }
@@ -98,7 +99,7 @@ impl Service {
             self.cur_queue_size
         );
 
-        QUEUE_SIZE_GAUGE.update(self.cur_queue_size as i64);
+        QUEUE_SIZE_GAUGE.update(self.cur_queue_size);
 
         self.cur_queue_size
     }

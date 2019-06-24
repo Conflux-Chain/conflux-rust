@@ -1,47 +1,81 @@
-use crate::is_enabled;
-use prometheus;
+use crate::{
+    counter::{Counter, CounterUsize},
+    gauge::{Gauge, GaugeUsize},
+    metrics::is_enabled,
+    registry::DEFAULT_REGISTRY,
+};
 use std::{
     fs::OpenOptions,
     io::Write,
-    path::Path,
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-pub fn report_file(interval: Duration, path: String) {
+pub trait Reporter: Send {
+    fn report(&self) -> Result<(), String>;
+}
+
+pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
     if !is_enabled() {
         return;
     }
 
-    thread::spawn(move || {
-        let path = path.as_str();
+    thread::spawn(move || loop {
+        thread::sleep(interval);
 
-        loop {
-            thread::sleep(interval);
-
-            if let Err(e) = report_file_once(path) {
-                eprintln!("Exit metrics reporting due to error: {:?}", e);
-                break;
-            }
+        if let Err(e) = reporter.report() {
+            eprintln!("Exit metrics reporting due to error: {}", e);
+            break;
         }
     });
 }
 
-fn report_file_once<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("invalid system time {:?}", e))?;
+pub struct FileReporter {
+    file_path: String,
+}
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|e| format!("failed to open file, {:?}", e))?;
+impl FileReporter {
+    pub fn new(file_path: String) -> Self { FileReporter { file_path } }
+}
 
-    for m in prometheus::default_registry().gather() {
-        file.write(format!("{}, {:?}\n", now.as_millis(), m).as_bytes())
+impl Reporter for FileReporter {
+    fn report(&self) -> Result<(), String> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| format!("invalid system time {:?}", e))?;
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.file_path.as_str())
+            .map_err(|e| format!("failed to open file, {:?}", e))?;
+
+        for (name, metric) in DEFAULT_REGISTRY.read().get_all() {
+            file.write(
+                format!(
+                    "{}, {}, {}, {}\n",
+                    now.as_millis(),
+                    name,
+                    metric.get_type(),
+                    metric.get_value()
+                )
+                .as_bytes(),
+            )
             .map_err(|e| format!("failed to write file, {:?}", e))?;
-    }
+        }
 
-    Ok(())
+        Ok(())
+    }
+}
+
+pub trait Reportable {
+    fn get_value(&self) -> String;
+}
+
+impl Reportable for CounterUsize {
+    fn get_value(&self) -> String { format!("{}", self.count()) }
+}
+
+impl Reportable for GaugeUsize {
+    fn get_value(&self) -> String { format!("{}", self.value()) }
 }

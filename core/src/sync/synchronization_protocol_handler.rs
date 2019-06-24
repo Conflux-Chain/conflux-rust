@@ -36,7 +36,7 @@ use crate::{
     pow::WORKER_COMPUTATION_PARALLELISM,
     verification::VerificationConfig,
 };
-use metrics::Gauge;
+use metrics::{Gauge, GaugeUsize};
 use primitives::{
     Block, SignedTransaction, TransactionWithSignature, TxPropagateId,
 };
@@ -51,8 +51,8 @@ use std::{
 };
 use threadpool::ThreadPool;
 lazy_static! {
-    static ref TX_PROPAGATE_GAUGE: Gauge =
-        Gauge::register("tx_propagate_set_size");
+    static ref TX_PROPAGATE_GAUGE: Arc<Gauge<usize>> =
+        GaugeUsize::register("tx_propagate_set_size");
 }
 
 const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
@@ -1817,7 +1817,7 @@ impl SynchronizationProtocolHandler {
         tx_msg.window_index = self
             .request_manager
             .append_sent_transactions(sent_transactions);
-        TX_PROPAGATE_GAUGE.update(tx_msg.trans_short_ids.len() as i64);
+        TX_PROPAGATE_GAUGE.update(tx_msg.trans_short_ids.len());
 
         if tx_msg.trans_short_ids.is_empty() {
             return;
