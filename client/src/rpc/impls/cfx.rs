@@ -185,10 +185,6 @@ impl RpcImpl {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
-        if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
-            return Ok(Some(RpcTransaction::from_signed(&transaction, None)));
-        }
-
         if let Some((transaction, receipt, tx_address)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
@@ -197,6 +193,13 @@ impl RpcImpl {
                 Some(Receipt::new(transaction.clone(), receipt, tx_address)),
             )))
         } else {
+            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
+                return Ok(Some(RpcTransaction::from_signed(
+                    &transaction,
+                    None,
+                )));
+            }
+
             Ok(None)
         }
     }
@@ -591,11 +594,11 @@ impl RpcImpl {
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, pending_len) = self.tx_pool.stats();
+        let (ready_len, deferred_len) = self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
-        ret.insert("pending".into(), pending_len);
+        ret.insert("deferred".into(), deferred_len);
 
         Ok(ret)
     }
@@ -605,7 +608,7 @@ impl RpcImpl {
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let (ready_txs, pending_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -623,7 +626,7 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<String>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("pending".into(), grouped_txs(pending_txs, converter));
+        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
 
         Ok(ret)
     }
@@ -636,7 +639,7 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let (ready_txs, pending_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
@@ -646,9 +649,14 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("pending".into(), grouped_txs(pending_txs, converter));
+        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
 
         Ok(ret)
+    }
+
+    fn clear_tx_pool(&self) -> RpcResult<()> {
+        self.tx_pool.clear_tx_pool();
+        Ok(())
     }
 }
 
@@ -908,4 +916,6 @@ impl DebugRpc for DebugRpcImpl {
     > {
         self.rpc_impl.txpool_content()
     }
+
+    fn clear_tx_pool(&self) -> RpcResult<()> { self.rpc_impl.clear_tx_pool() }
 }

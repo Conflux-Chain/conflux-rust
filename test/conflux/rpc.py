@@ -124,6 +124,10 @@ class RpcClient:
         assert_is_hash_string(tx_hash)
         return tx_hash
 
+    def clear_tx_pool(self):
+        self.node.clear_tx_pool()
+
+
     def send_tx(self, tx: Transaction, wait_for_receipt=False) -> str:
         encoded = eth_utils.encode_hex(rlp.encode(tx))
         tx_hash = self.send_raw_tx(encoded)
@@ -207,7 +211,7 @@ class RpcClient:
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
-        return (status["pending"], status["ready"])
+        return (status["deferred"], status["ready"])
 
     def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None):
         if nonce is None:

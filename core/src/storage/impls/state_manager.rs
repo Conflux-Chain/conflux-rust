@@ -194,6 +194,11 @@ impl StateManagerTrait for StateManager {
             .map(|root_node_ref| State::new(self, Some(root_node_ref))))
     }
 
+    fn get_state_at(&self, epoch_id: EpochId) -> Result<State> {
+        // FIXME: only allow existing epoch id and H256::Default().
+        Ok(State::new(self, self.get_state_root_node_ref(epoch_id)?))
+    }
+
     fn get_state_for_genesis_write(&self) -> State { State::new(self, None) }
 
     fn get_state_for_next_epoch(

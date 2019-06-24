@@ -2969,42 +2969,6 @@ impl ConsensusGraph {
             block.size(),
         );
 
-        {
-            // When a tx is executed successfully, it will be removed from
-            // `unexecuted_transaction_addresses` If a tx is
-            // executed with failure(InvalidNonce), or the block packing it is
-            // never refered and executed, only the corresponding tx address
-            // will be removed. After a tx is removed from
-            // `unexecuted_transaction_addresses` because of
-            // successful execution, its new nonce will be available in state
-            // and it will not be inserted to tx pool again.
-            let mut unexecuted_transaction_addresses =
-                self.txpool.unexecuted_transaction_addresses.lock();
-            let mut cache_man = self.data_man.cache_man.lock();
-            for (idx, tx) in block.transactions.iter().enumerate() {
-                // If an executed tx
-                let tx_hash = tx.hash();
-                if let Some(addr_set) =
-                    unexecuted_transaction_addresses.get_mut(&tx_hash)
-                {
-                    addr_set.insert(TransactionAddress {
-                        block_hash: hash.clone(),
-                        index: idx,
-                    });
-                } else {
-                    let mut addr_set = HashSet::new();
-                    addr_set.insert(TransactionAddress {
-                        block_hash: hash.clone(),
-                        index: idx,
-                    });
-                    unexecuted_transaction_addresses.insert(tx_hash, addr_set);
-                    cache_man.note_used(CacheId::UnexecutedTransactionAddress(
-                        tx_hash,
-                    ));
-                }
-            }
-        }
-
         let mut inner = &mut *self.inner.write();
 
         let me = self.insert_block_initial(
@@ -3015,11 +2979,9 @@ impl ConsensusGraph {
 
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
-        for tx in block.transactions.iter() {
-            self.txpool.remove_pending(&*tx);
-            self.txpool.remove_ready(tx.clone());
-            self.txpool.remove_to_propagate(&tx.hash);
-        }
+        let best_state_epoch_id = inner.best_state_block_hash();
+        self.txpool
+            .set_tx_packed(block.transactions.clone(), best_state_epoch_id);
 
         let anticone_barrier = inner.compute_anticone(me);
 
@@ -3286,7 +3248,6 @@ impl ConsensusGraph {
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
 
         self.update_confirmation_risks(inner, self.get_total_weight_in_past());
-
         inner.optimistic_executed_height = if to_state_pos > 0 {
             Some(to_state_pos)
         } else {

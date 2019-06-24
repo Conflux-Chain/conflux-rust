@@ -27,6 +27,7 @@ pub trait StateManagerTrait {
     /// to new Delta MPT, but it's unnecessary getting a no-commit state.
     fn get_state_no_commit(&self, epoch_id: EpochId) -> Result<Option<State>>;
     // FIXME: check if any use is actually no_commit.
+    fn get_state_at(&self, epoch_id: EpochId) -> Result<State>;
     fn get_state_for_next_epoch(
         &self, parent_epoch_id: EpochId,
     ) -> Result<Option<State>>;
