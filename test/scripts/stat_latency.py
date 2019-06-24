@@ -78,7 +78,11 @@ class LogAnalyzer:
         for t in BlockLatencyType:
             for p in Percentile:
                 name = "block broadcast latency ({}/{})".format(t.name, p.name)
-                table.add_stat(name, "%.2f", self.agg.stat_latency(t, p))
+                table.add_stat(name, "%.2f", self.agg.stat_block_latency(t, p))
+        for p in Percentile:
+            name = "tx broadcast latency ({})".format(p.name)
+            table.add_stat(name, "%.2f", self.agg.stat_tx_latency(p))
+        table.add_stat("by_block_ratio", "%.2f", self.agg.stat_tx_ratio())
 
         block_txs_list = []
         block_size_list = []

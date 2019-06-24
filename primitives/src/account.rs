@@ -6,6 +6,7 @@ use crate::hash::KECCAK_EMPTY;
 use cfx_types::{Address, H256, U256};
 use rlp::*;
 
+#[derive(Clone)]
 pub struct Account {
     pub address: Address,
     pub balance: U256,

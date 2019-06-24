@@ -11,6 +11,11 @@ class FixedGenerateTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 2
 
+        # NOTE: nodes turn off catch-up mode after ~5s;
+        # we do not broadcast new blocks in catch-up mode,
+        # so this would break the tests
+        self.conf_parameters = {"start_as_catch_up_mode":"false"}
+
     def setup_network(self):
         self.setup_nodes()
 
@@ -35,23 +40,23 @@ class FixedGenerateTest(ConfluxTestFramework):
         assert (self.nodes[0].getbestblockhash() == besthash1)
         self.log.info("Connect together now have 8 blocks in total")
 
-        blocka = self.nodes[1].generatefixedblock(blocks[0], [], 0)
-        blockb = self.nodes[1].generatefixedblock(blocks[0], [], 0)
+        blocka = self.nodes[1].generatefixedblock(blocks[0], [], 0, False)
+        blockb = self.nodes[1].generatefixedblock(blocks[0], [], 0, False)
         sync_blocks(self.nodes[0:2])
         self.log.info("Generate two more blocks on the shorter chain")
         assert (self.nodes[0].getblockcount() == 10)
         assert (self.nodes[0].getbestblockhash() == besthash0)
         self.log.info("Pivot chain switched!")
 
-        blocka = self.nodes[1].generatefixedblock(blocks1[0], [besthash0], 0)
-        blockb = self.nodes[1].generatefixedblock(blocks1[0], [besthash0], 0)
+        blocka = self.nodes[1].generatefixedblock(blocks1[0], [besthash0], 0, False)
+        blockb = self.nodes[1].generatefixedblock(blocks1[0], [besthash0], 0, False)
         sync_blocks(self.nodes[0:2])
         assert (self.nodes[0].getbestblockhash() == besthash0)
         assert (self.nodes[1].getbestblockhash() == besthash0)
         self.log.info("Partially invalid blocks do not affect the pivot chain")
 
-        blocka = self.nodes[1].generatefixedblock(blocks1[0], [], 0)
-        blockb = self.nodes[1].generatefixedblock(blocks1[0], [], 0)
+        blocka = self.nodes[1].generatefixedblock(blocks1[0], [], 0, False)
+        blockb = self.nodes[1].generatefixedblock(blocks1[0], [], 0, False)
         sync_blocks(self.nodes[0:2])
         assert (self.nodes[0].getbestblockhash() == besthash1)
         assert (self.nodes[1].getbestblockhash() == besthash1)

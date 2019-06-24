@@ -14,7 +14,7 @@ from test_framework.util import *
 
 class P2PTest(DefaultConfluxTestFramework):
     def set_test_params(self):
-        self.delay_factor = 2
+        self.delay_factor = 1
         self.setup_clean_chain = True
         self.num_nodes = 20
 

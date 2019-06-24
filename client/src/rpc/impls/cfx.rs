@@ -185,10 +185,6 @@ impl RpcImpl {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
-        if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
-            return Ok(Some(RpcTransaction::from_signed(&transaction, None)));
-        }
-
         if let Some((transaction, receipt, tx_address)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
@@ -197,6 +193,13 @@ impl RpcImpl {
                 Some(Receipt::new(transaction.clone(), receipt, tx_address)),
             )))
         } else {
+            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
+                return Ok(Some(RpcTransaction::from_signed(
+                    &transaction,
+                    None,
+                )));
+            }
+
             Ok(None)
         }
     }
@@ -287,17 +290,25 @@ impl RpcImpl {
                 RpcError::invalid_params(format!("Error: {:?}", err))
             })
             .and_then(|tx| {
-                let result = self.tx_pool.insert_new_transactions(
+                let (signed_trans, failed_trans) = self.tx_pool.insert_new_transactions(
                     self.consensus.best_state_block_hash(),
                     &vec![tx],
                 );
-                if result.is_empty() || result.len() > 1 {
-                    error!("insert_new_transactions failed, invalid length of returned result vector {}", result.len());
+                if signed_trans.len() + failed_trans.len() != 1 {
+                    error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
                     Ok(H256::new().into())
                 } else {
-                    match result[0] {
-                        Ok(hash) => Ok(hash.into()),
-                        Err(ref e) => Err(RpcError::invalid_params(e.clone())),
+                    if signed_trans.is_empty() {
+                        let mut tx_err = String::from("");
+                        for (_, e) in failed_trans.iter() {
+                            tx_err = e.clone();
+                            break;
+                        }
+                        Err(RpcError::invalid_params(tx_err))
+                    } else {
+                        let tx_hash = signed_trans[0].hash();
+                        self.sync.append_received_transactions(signed_trans);
+                        Ok(tx_hash.into())
                     }
                 }
             })
@@ -361,7 +372,7 @@ impl RpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: u64,
+        difficulty: u64, adaptive: bool,
     ) -> RpcResult<H256>
     {
         info!(
@@ -373,6 +384,7 @@ impl RpcImpl {
             referee,
             num_txs,
             difficulty,
+            adaptive,
         );
         Ok(hash)
     }
@@ -412,7 +424,9 @@ impl RpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-    ) -> RpcResult<H256> {
+        adaptive: bool,
+    ) -> RpcResult<H256>
+    {
         info!("RPC Request: generate_custom_block()");
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
@@ -421,6 +435,7 @@ impl RpcImpl {
             parent_hash,
             referee,
             transactions,
+            adaptive,
         );
 
         Ok(hash)
@@ -579,11 +594,11 @@ impl RpcImpl {
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, pending_len) = self.tx_pool.stats();
+        let (ready_len, deferred_len) = self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
-        ret.insert("pending".into(), pending_len);
+        ret.insert("deferred".into(), deferred_len);
 
         Ok(ret)
     }
@@ -593,7 +608,7 @@ impl RpcImpl {
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let (ready_txs, pending_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -611,7 +626,7 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<String>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("pending".into(), grouped_txs(pending_txs, converter));
+        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
 
         Ok(ret)
     }
@@ -624,7 +639,7 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let (ready_txs, pending_txs) = self.tx_pool.content();
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None)
         };
@@ -634,9 +649,14 @@ impl RpcImpl {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("pending".into(), grouped_txs(pending_txs, converter));
+        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
 
         Ok(ret)
+    }
+
+    fn clear_tx_pool(&self) -> RpcResult<()> {
+        self.tx_pool.clear_tx_pool();
+        Ok(())
     }
 }
 
@@ -788,7 +808,7 @@ impl TestRpc for TestRpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: Trailing<u64>,
+        adaptive: bool, difficulty: Trailing<u64>,
     ) -> RpcResult<H256>
     {
         self.rpc_impl.generate_fixed_block(
@@ -796,6 +816,7 @@ impl TestRpc for TestRpcImpl {
             referee,
             num_txs,
             difficulty.unwrap_or(0),
+            adaptive,
         )
     }
 
@@ -820,9 +841,15 @@ impl TestRpc for TestRpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-    ) -> RpcResult<H256> {
-        self.rpc_impl
-            .generate_custom_block(parent_hash, referee, raw_txs)
+        adaptive: Trailing<bool>,
+    ) -> RpcResult<H256>
+    {
+        self.rpc_impl.generate_custom_block(
+            parent_hash,
+            referee,
+            raw_txs,
+            adaptive.unwrap_or(false),
+        )
     }
 
     fn generate_block_with_fake_txs(
@@ -889,4 +916,6 @@ impl DebugRpc for DebugRpcImpl {
     > {
         self.rpc_impl.txpool_content()
     }
+
+    fn clear_tx_pool(&self) -> RpcResult<()> { self.rpc_impl.clear_tx_pool() }
 }

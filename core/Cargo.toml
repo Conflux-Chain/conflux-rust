@@ -3,7 +3,7 @@ description = "Conflux core library"
 homepage = "http://www.conflux-chain.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2018"
 
 [dependencies]
@@ -38,8 +38,11 @@ lru = "0.1.11"
 threadpool = "1.0"
 rayon = "1.0"
 link-cut-tree = { path = "../util/link-cut-tree" }
+fenwick-tree = { path = "../util/fenwick-tree" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 toml = "0.4"
+metrics = { path = "../util/metrics" }
+hibitset = { path = "../util/hibitset" }
 
 [dev-dependencies]
 rustc-hex = "1.0"

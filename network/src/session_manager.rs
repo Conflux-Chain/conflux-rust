@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    node_database::NodeIpLimit, node_table::NodeId,
-    service::NetworkServiceInner, session::Session, NetworkIoMessage,
+    ip_limit::SessionIpLimit, node_table::NodeId, service::NetworkServiceInner,
+    session::Session, NetworkIoMessage,
 };
 use io::IoContext;
 use mio::net::TcpStream;
@@ -18,7 +18,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 pub struct SessionManager {
     sessions: RwLock<Slab<Arc<RwLock<Session>>, usize>>,
     node_id_index: RwLock<HashMap<NodeId, usize>>,
-    ip_limit: RwLock<NodeIpLimit>,
+    ip_limit: RwLock<SessionIpLimit>,
 }
 
 impl SessionManager {
@@ -26,7 +26,7 @@ impl SessionManager {
         SessionManager {
             sessions: RwLock::new(Slab::new_starting_at(offset, capacity)),
             node_id_index: RwLock::new(HashMap::new()),
-            ip_limit: RwLock::new(NodeIpLimit::new(nodes_per_ip)),
+            ip_limit: RwLock::new(SessionIpLimit::new(nodes_per_ip)),
         }
     }
 
@@ -128,7 +128,7 @@ impl SessionManager {
             node_id_index.insert(node_id.clone(), index);
         }
 
-        ip_limit.on_add(ip);
+        assert!(ip_limit.on_add(ip, index));
 
         debug!("SessionManager.create: leave");
 
@@ -145,7 +145,10 @@ impl SessionManager {
                 self.node_id_index.write().remove(node_id);
             }
 
-            self.ip_limit.write().on_delete(session.address().ip());
+            assert!(self
+                .ip_limit
+                .write()
+                .on_delete(&session.address().ip(), &session.token()));
 
             debug!("SessionManager.remove: session removed");
         }

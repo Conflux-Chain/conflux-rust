@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::state_root::*;
 use crate::{
     bytes::Bytes,
-    hash::{keccak, KECCAK_EMPTY_LIST_RLP, KECCAK_NULL_RLP},
+    hash::{keccak, KECCAK_EMPTY_LIST_RLP},
     receipt::Receipt,
 };
 use cfx_types::{Address, H256, U256};
@@ -29,11 +30,13 @@ pub struct BlockHeaderRlpPart {
     /// Transactions root.
     transactions_root: H256,
     /// Deferred state root.
-    deferred_state_root: H256,
+    deferred_state_root: StateRoot,
     /// Deferred block receipts root.
     deferred_receipts_root: H256,
     /// Block difficulty.
     difficulty: U256,
+    /// Whether it is an adaptive block (from GHAST algorithm)
+    adaptive: bool,
     /// Gas limit.
     gas_limit: U256,
     /// Referee hashes
@@ -52,6 +55,7 @@ impl PartialEq for BlockHeaderRlpPart {
             && self.deferred_state_root == o.deferred_state_root
             && self.deferred_receipts_root == o.deferred_receipts_root
             && self.difficulty == o.difficulty
+            && self.adaptive == o.adaptive
             && self.gas_limit == o.gas_limit
             && self.referee_hashes == o.referee_hashes
     }
@@ -67,6 +71,11 @@ pub struct BlockHeader {
     pub pow_quality: U256,
     /// Approximated rlp size of the block header
     pub approximated_rlp_size: usize,
+    // TODO: the state root auxiliary information can be derived from
+    // TODO: consensus graph and should be moved out from p2p messages,
+    // TODO: however to reduce complexity of the code we keep it
+    // TODO: temporarily.
+    pub state_root_aux_info: StateRootAuxInfo,
 }
 
 impl Deref for BlockHeader {
@@ -89,36 +98,6 @@ impl PartialEq for BlockHeader {
     fn eq(&self, o: &BlockHeader) -> bool { self.rlp_part == o.rlp_part }
 }
 
-/*
-impl Default for BlockHeader {
-    fn default() -> Self {
-        let mut block_header = BlockHeader {
-            rlp_part: BlockHeaderRlpPart {
-                parent_hash: H256::default(),
-                height: 0,
-                timestamp: 0,
-                author: Address::default(),
-                transactions_root: KECCAK_EMPTY_LIST_RLP,
-                deferred_state_root: KECCAK_NULL_RLP,
-                deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
-                difficulty: U256::zero(),
-                gas_limit: U256::zero(),
-                referee_hashes: Vec::new(),
-                nonce: 0,
-            },
-            hash: None,
-            pow_quality: U256::zero(),
-            approximated_rlp_size: 0,
-        };
-
-        block_header.approximated_rlp_size = mem::size_of::<BlockHeaderRlpPart>()
-            + block_header.referee_hashes.heap_size_of_children();
-
-        block_header
-    }
-}
-*/
-
 impl BlockHeader {
     /// Approximated rlp size of the block header.
     pub fn approximated_rlp_size(&self) -> usize { self.approximated_rlp_size }
@@ -139,7 +118,15 @@ impl BlockHeader {
     pub fn transactions_root(&self) -> &H256 { &self.transactions_root }
 
     /// Get the deferred state root field of the header.
-    pub fn deferred_state_root(&self) -> &H256 { &self.deferred_state_root }
+    pub fn deferred_state_root(&self) -> &StateRoot {
+        &self.deferred_state_root
+    }
+
+    pub fn deferred_state_root_with_aux_info(
+        &self,
+    ) -> (&StateRoot, &StateRootAuxInfo) {
+        (&self.deferred_state_root, &self.state_root_aux_info)
+    }
 
     /// Get the deferred block receipts root field of the header.
     pub fn deferred_receipts_root(&self) -> &H256 {
@@ -148,6 +135,9 @@ impl BlockHeader {
 
     /// Get the difficulty field of the header.
     pub fn difficulty(&self) -> &U256 { &self.difficulty }
+
+    /// Get the adaptive field of the header
+    pub fn adaptive(&self) -> bool { self.adaptive }
 
     /// Get the gas limit field of the header.
     pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
@@ -192,22 +182,7 @@ impl BlockHeader {
 
     /// Place this header(except nonce) into an RLP stream `stream`.
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(10)
-            .append(&self.parent_hash)
-            .append(&self.height)
-            .append(&self.timestamp)
-            .append(&self.author)
-            .append(&self.transactions_root)
-            .append(&self.deferred_state_root)
-            .append(&self.deferred_receipts_root)
-            .append(&self.difficulty)
-            .append(&self.gas_limit)
-            .append_list(&self.referee_hashes);
-    }
-
-    /// Place this header into an RLP stream `stream`.
-    fn stream_rlp(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
             .begin_list(11)
             .append(&self.parent_hash)
@@ -218,9 +193,50 @@ impl BlockHeader {
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
             .append(&self.difficulty)
+            .append(&adaptive_n)
+            .append(&self.gas_limit)
+            .append_list(&self.referee_hashes);
+    }
+
+    /// Place this header into an RLP stream `stream`.
+    fn stream_rlp(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        stream
+            .begin_list(12)
+            .append(&self.parent_hash)
+            .append(&self.height)
+            .append(&self.timestamp)
+            .append(&self.author)
+            .append(&self.transactions_root)
+            .append(&self.deferred_state_root)
+            .append(&self.deferred_receipts_root)
+            .append(&self.difficulty)
+            .append(&adaptive_n)
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
             .append(&self.nonce);
+    }
+
+    // TODO: calculate previous_snapshot_root & intermediate_delta_epoch_id in
+    // TODO: consensus graph and remove this method.
+    /// Place this header into an RLP stream `stream` for p2p messages.
+    fn stream_wire_rlp(&self, stream: &mut RlpStream) {
+        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        stream
+            .begin_list(13)
+            .append(&self.parent_hash)
+            .append(&self.height)
+            .append(&self.timestamp)
+            .append(&self.author)
+            .append(&self.transactions_root)
+            .append(&self.deferred_state_root)
+            .append(&self.deferred_receipts_root)
+            .append(&self.difficulty)
+            .append(&adaptive_n)
+            .append(&self.gas_limit)
+            .append_list(&self.referee_hashes)
+            .append(&self.nonce)
+            .append(&self.state_root_aux_info);
     }
 
     pub fn size(&self) -> usize {
@@ -236,9 +252,11 @@ pub struct BlockHeaderBuilder {
     timestamp: u64,
     author: Address,
     transactions_root: H256,
-    deferred_state_root: H256,
+    deferred_state_root: StateRoot,
+    deferred_state_root_aux_info: StateRootAuxInfo,
     deferred_receipts_root: H256,
     difficulty: U256,
+    adaptive: bool,
     gas_limit: U256,
     referee_hashes: Vec<H256>,
     nonce: u64,
@@ -252,9 +270,11 @@ impl BlockHeaderBuilder {
             timestamp: 0,
             author: Address::default(),
             transactions_root: KECCAK_EMPTY_LIST_RLP,
-            deferred_state_root: KECCAK_NULL_RLP,
+            deferred_state_root: Default::default(),
+            deferred_state_root_aux_info: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
             difficulty: U256::default(),
+            adaptive: false,
             gas_limit: U256::zero(),
             referee_hashes: Vec::new(),
             nonce: 0,
@@ -289,9 +309,12 @@ impl BlockHeaderBuilder {
     }
 
     pub fn with_deferred_state_root(
-        &mut self, deferred_state_root: H256,
+        &mut self, deferred_state_root_with_aux_info: StateRootWithAuxInfo,
     ) -> &mut Self {
-        self.deferred_state_root = deferred_state_root;
+        self.deferred_state_root = deferred_state_root_with_aux_info.state_root;
+        self.deferred_state_root_aux_info =
+            deferred_state_root_with_aux_info.aux_info;
+
         self
     }
 
@@ -304,6 +327,11 @@ impl BlockHeaderBuilder {
 
     pub fn with_difficulty(&mut self, difficulty: U256) -> &mut Self {
         self.difficulty = difficulty;
+        self
+    }
+
+    pub fn with_adaptive(&mut self, adaptive: bool) -> &mut Self {
+        self.adaptive = adaptive;
         self
     }
 
@@ -332,9 +360,10 @@ impl BlockHeaderBuilder {
                 timestamp: self.timestamp,
                 author: self.author,
                 transactions_root: self.transactions_root,
-                deferred_state_root: self.deferred_state_root,
+                deferred_state_root: self.deferred_state_root.clone(),
                 deferred_receipts_root: self.deferred_receipts_root,
                 difficulty: self.difficulty,
+                adaptive: self.adaptive,
                 gas_limit: self.gas_limit,
                 referee_hashes: self.referee_hashes.clone(),
                 nonce: self.nonce,
@@ -342,6 +371,7 @@ impl BlockHeaderBuilder {
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: 0,
+            state_root_aux_info: self.deferred_state_root_aux_info.clone(),
         };
 
         block_header.approximated_rlp_size =
@@ -364,13 +394,15 @@ impl BlockHeaderBuilder {
 }
 
 impl Encodable for BlockHeader {
-    fn rlp_append(&self, stream: &mut RlpStream) { self.stream_rlp(stream); }
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        self.stream_wire_rlp(stream);
+    }
 }
 
 impl Decodable for BlockHeader {
     fn decode(r: &Rlp) -> Result<Self, DecoderError> {
         let rlp_size = r.as_raw().len();
-        Ok(BlockHeader {
+        let mut header = BlockHeader {
             rlp_part: BlockHeaderRlpPart {
                 parent_hash: r.val_at(0)?,
                 height: r.val_at(1)?,
@@ -380,13 +412,18 @@ impl Decodable for BlockHeader {
                 deferred_state_root: r.val_at(5)?,
                 deferred_receipts_root: r.val_at(6)?,
                 difficulty: r.val_at(7)?,
-                gas_limit: r.val_at(8)?,
-                referee_hashes: r.list_at(9)?,
-                nonce: r.val_at(10)?,
+                adaptive: r.val_at::<u8>(8)? == 1,
+                gas_limit: r.val_at(9)?,
+                referee_hashes: r.list_at(10)?,
+                nonce: r.val_at(11)?,
             },
-            hash: keccak(r.as_raw()).into(),
+            hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: rlp_size,
-        })
+            state_root_aux_info: r.val_at(12)?,
+        };
+        header.compute_hash();
+
+        Ok(header)
     }
 }

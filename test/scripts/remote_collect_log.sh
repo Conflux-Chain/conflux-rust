@@ -7,6 +7,7 @@ find /tmp/conflux_test_* -name conflux.log | xargs grep -i "error" > error.log
 find /tmp/conflux_test_* -name conflux.log | xargs grep -i "txgen" > txgen.log
 find /tmp/conflux_test_* -name conflux.log | xargs grep -i "packing" > tx_pack.log
 find /tmp/conflux_test_* -name conflux.log | xargs grep -i "Partially invalid" > partially_invalid.log
+find /tmp/conflux_test_* -name conflux.log | xargs grep -i "Sampled transaction" > tx_sample.log
 
 tar cvfz log.tgz *.log
 

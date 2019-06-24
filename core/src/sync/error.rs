@@ -30,19 +30,9 @@ error_chain! {
             display("Unexpected response"),
         }
 
-        Useless {
-            description("Useless block"),
-            display("Useless block"),
-        }
-
         TooManyTrans {
             description("Send too many transactions to node in catch-up mode"),
             display("Sent too many transactions"),
-        }
-
-        Unknown {
-            description("Unknown error"),
-            display("Unknown error"),
         }
     }
 }

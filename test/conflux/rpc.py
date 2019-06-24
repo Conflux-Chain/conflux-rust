@@ -74,7 +74,7 @@ class RpcClient:
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:
         return self.generate_blocks(num_blocks, num_txs)
     
-    def generate_block_with_parent(self, parent_hash: str, referee: list, num_txs: int = 0) -> str:
+    def generate_block_with_parent(self, parent_hash: str, referee: list, num_txs: int = 0, adaptive: bool = False) -> str:
         assert_is_hash_string(parent_hash)
 
         for r in referee:
@@ -82,7 +82,7 @@ class RpcClient:
 
         assert_greater_than_or_equal(num_txs, 0)
 
-        block_hash = self.node.generatefixedblock(parent_hash, referee, num_txs)
+        block_hash = self.node.generatefixedblock(parent_hash, referee, num_txs, adaptive)
         assert_is_hash_string(block_hash)
         return block_hash
 
@@ -123,6 +123,10 @@ class RpcClient:
         tx_hash = self.node.cfx_sendRawTransaction(raw_tx)
         assert_is_hash_string(tx_hash)
         return tx_hash
+
+    def clear_tx_pool(self):
+        self.node.clear_tx_pool()
+
 
     def send_tx(self, tx: Transaction, wait_for_receipt=False) -> str:
         encoded = eth_utils.encode_hex(rlp.encode(tx))
@@ -207,7 +211,7 @@ class RpcClient:
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
-        return (status["pending"], status["ready"])
+        return (status["deferred"], status["ready"])
 
     def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None):
         if nonce is None:

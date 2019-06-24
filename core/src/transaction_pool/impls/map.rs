@@ -18,7 +18,7 @@ pub struct TreapMap<K, V, W> {
 
 impl<
         K: Ord + Debug,
-        V: Clone,
+        V: Clone + Debug,
         W: Add<Output = W> + Sub<Output = W> + Ord + Clone + From<u32> + Debug,
     > TreapMap<K, V, W>
 {
@@ -50,17 +50,21 @@ impl<
             &mut self.root,
             Node::new(key, value, weight, self.rng.next_u64()),
         );
+
         if result.is_none() {
             self.size += 1;
         }
+
         result
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
         let result = Node::remove(&mut self.root, key);
+
         if result.is_some() {
             self.size -= 1;
         }
+
         result
     }
 

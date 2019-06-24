@@ -25,4 +25,4 @@ log = "0.4"
 heapsize = { git = "https://github.com/cheme/heapsize.git", branch = "ec-macfix" }
 
 [profile.release]
-debug = true
+debug = false

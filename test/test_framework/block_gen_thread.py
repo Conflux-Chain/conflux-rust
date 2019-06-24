@@ -28,6 +28,7 @@ class BlockGenThread(threading.Thread):
                     time.sleep(self.interval_fixed)
 
                 r = self.local_random.randint(0, len(self.nodes) - 1)
+                self.log.debug("choose %d to generate block", r)
                 h = self.clients[r].generate_block(self.num_txs)
 
                 self.log.debug("%s generate block %s", r, h)

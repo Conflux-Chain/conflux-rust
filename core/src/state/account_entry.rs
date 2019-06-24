@@ -5,7 +5,7 @@
 use crate::{
     bytes::{Bytes, ToPretty},
     hash::{keccak, KECCAK_EMPTY},
-    statedb::{Result as DbResult, StateDb, StorageKey},
+    statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, H256, U256};
 use primitives::Account;
@@ -143,9 +143,7 @@ impl OverlayAccount {
             return Some(self.code_cache.clone());
         }
 
-        match db
-            .get_raw(&StorageKey::new_code_key(&self.address, &self.code_hash))
-        {
+        match db.get_raw(&db.code_key(&self.address, &self.code_hash)) {
             Ok(Some(code)) => {
                 self.code_size = Some(code.len());
                 self.code_cache = Arc::new(code.to_vec());
@@ -231,7 +229,7 @@ impl OverlayAccount {
     ) -> DbResult<H256>
     {
         let value = db
-            .get::<H256>(&StorageKey::new_storage_key(address, key))
+            .get::<H256>(&db.storage_key(address, key.as_ref()))
             .expect("get_and_cache_storage failed")
             .unwrap_or_else(|| H256::zero());
         storage_cache.insert(key.clone(), value.clone());
@@ -258,19 +256,17 @@ impl OverlayAccount {
 
     pub fn commit<'a>(&mut self, db: &mut StateDb<'a>) -> DbResult<()> {
         if self.reset_storage {
-            db.delete_all(&StorageKey::new_storage_root_key(&self.address))?;
-            db.delete_all(&StorageKey::new_code_root_key(&self.address))?;
+            db.delete_all(&db.storage_root_key(&self.address))?;
+            db.delete_all(&db.code_root_key(&self.address))?;
         }
 
         for (k, v) in self.storage_changes.drain() {
-            let access_key = StorageKey::new_storage_key(&self.address, &k);
+            let address_key = db.storage_key(&self.address, k.as_ref());
 
             match v.is_zero() {
-                true => {
-                    db.delete(&StorageKey::new_account_key(&self.address))?
-                }
+                true => db.delete(&db.account_key(&self.address))?,
                 false => {
-                    db.set::<H256>(&access_key, &H256::from(U256::from(v)))?
+                    db.set::<H256>(&address_key, &H256::from(U256::from(v)))?
                 }
             }
             self.storage_cache.borrow_mut().insert(k, v);
@@ -280,10 +276,7 @@ impl OverlayAccount {
             Some(code) => {
                 if !code.is_empty() {
                     db.set_raw(
-                        &StorageKey::new_code_key(
-                            &self.address,
-                            &self.code_hash,
-                        ),
+                        &db.code_key(&self.address, &self.code_hash),
                         &code.as_ref(),
                     )?;
                 }

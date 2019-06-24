@@ -2,19 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, H256, U256, U512};
+use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    consensus::{
-        ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
-        HEAVY_BLOCK_DIFFICULTY_RATIO,
-    },
-    pow::*,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    SharedSynchronizationGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, SharedSynchronizationGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use log::{info, trace, warn};
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
     *,
@@ -164,9 +159,10 @@ impl BlockGenerator {
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
         &self, parent_hash: H256, referee: Vec<H256>,
-        deferred_state_root: H256, deferred_receipts_root: H256,
-        block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
-        difficulty: u64, consensus_inner: &mut ConsensusGraphInner,
+        deferred_state_root_with_aux_info: StateRootWithAuxInfo,
+        deferred_receipts_root: H256, block_gas_limit: U256,
+        transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
+        adaptive_opt: Option<bool>,
     ) -> Block
     {
         let parent_height =
@@ -176,19 +172,15 @@ impl BlockGenerator {
 
         let mut expected_difficulty =
             self.graph.inner.read().expected_difficulty(&parent_hash);
-        if self.graph.check_mining_heavy_block(
-            consensus_inner,
-            &parent_hash,
-            &expected_difficulty,
-        ) {
-            assert!(
-                U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-                    * U512::from(expected_difficulty)
-                    < U512::from(U256::max_value())
-            );
-            expected_difficulty =
-                U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO) * expected_difficulty;
-        }
+        let adaptive = if let Some(x) = adaptive_opt {
+            x
+        } else {
+            self.graph.check_mining_adaptive_block(
+                &mut *self.graph.consensus.inner.write(),
+                &parent_hash,
+                &expected_difficulty,
+            )
+        };
         if U256::from(difficulty) > expected_difficulty {
             expected_difficulty = U256::from(difficulty);
         }
@@ -207,9 +199,10 @@ impl BlockGenerator {
             )
             //            .with_timestamp(0)
             .with_author(self.mining_author)
-            .with_deferred_state_root(deferred_state_root)
+            .with_deferred_state_root(deferred_state_root_with_aux_info)
             .with_deferred_receipts_root(deferred_receipts_root)
             .with_difficulty(expected_difficulty)
+            .with_adaptive(adaptive)
             .with_referee_hashes(referee)
             .with_nonce(0)
             .with_gas_limit(block_gas_limit)
@@ -222,7 +215,7 @@ impl BlockGenerator {
     /// only
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: u64,
+        difficulty: u64, adaptive: bool,
     ) -> Block
     {
         let (state_root, receipts_root) =
@@ -238,7 +231,6 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
-            self.txgen.get_best_state(),
         );
 
         self.assemble_new_block_impl(
@@ -249,7 +241,7 @@ impl BlockGenerator {
             block_gas_limit,
             transactions,
             difficulty,
-            &mut *self.graph.consensus.inner.write(),
+            Some(adaptive),
         )
     }
 
@@ -259,26 +251,29 @@ impl BlockGenerator {
         additional_transactions: Vec<Arc<SignedTransaction>>,
     ) -> Block
     {
-        // get the best block
-        let (guarded, best_info) = self.graph.get_best_info().into();
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+        // NOTE: We need to lock consensus inner during `pack_transactions` to
+        // ensure transaction pool consistency.
+        let (best_info, transactions) = {
+            // get the best block
+            let (_guarded, best_info) = self.graph.get_best_info().into();
+
+            let transactions_from_pool = self.txpool.pack_transactions(
+                num_txs,
+                block_gas_limit,
+                block_size_limit,
+            );
+            let transactions = [
+                additional_transactions.as_slice(),
+                transactions_from_pool.as_slice(),
+            ]
+            .concat();
+            (best_info, transactions)
+        };
 
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
-
-        let transactions_from_pool = self.txpool.pack_transactions(
-            num_txs,
-            block_gas_limit,
-            block_size_limit,
-            self.txgen
-                .get_best_state_at(&guarded.best_state_block_hash()),
-        );
-        let transactions = [
-            additional_transactions.as_slice(),
-            transactions_from_pool.as_slice(),
-        ]
-        .concat();
 
         self.assemble_new_block_impl(
             best_block_hash,
@@ -288,7 +283,7 @@ impl BlockGenerator {
             block_gas_limit,
             transactions,
             0,
-            &mut *RwLockUpgradableReadGuard::upgrade(guarded),
+            None,
         )
     }
 
@@ -344,7 +339,7 @@ impl BlockGenerator {
 
     pub fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: u64,
+        difficulty: u64, adaptive: bool,
     ) -> H256
     {
         let block = self.assemble_new_fixed_block(
@@ -352,6 +347,7 @@ impl BlockGenerator {
             referee,
             num_txs,
             difficulty,
+            adaptive,
         );
         self.generate_block_impl(block)
     }
@@ -374,7 +370,7 @@ impl BlockGenerator {
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) -> H256 {
         // get the best block
-        let (consensus_guard, best_info) = self.graph.get_best_info().into();
+        let (_, best_info) = self.graph.get_best_info().into();
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);
@@ -388,7 +384,7 @@ impl BlockGenerator {
             block_gas_limit,
             transactions,
             0,
-            &mut *RwLockUpgradableReadGuard::upgrade(consensus_guard),
+            None,
         );
 
         self.generate_block_impl(block)
@@ -396,7 +392,7 @@ impl BlockGenerator {
 
     pub fn generate_custom_block_with_parent(
         &self, parent_hash: H256, referee: Vec<H256>,
-        transactions: Vec<Arc<SignedTransaction>>,
+        transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
     ) -> H256
     {
         let (state_root, receipts_root) =
@@ -413,7 +409,7 @@ impl BlockGenerator {
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             transactions,
             0,
-            &mut *self.graph.consensus.inner.write(),
+            Some(adaptive),
         );
 
         self.generate_block_impl(block)
