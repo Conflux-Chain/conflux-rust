@@ -129,8 +129,9 @@ impl SynchronizationState {
 
     /// Retrieves the heartbeat timeout peers, including handshaking timeout
     /// peers and inactive peers after handshake.
-    pub fn get_heartbeat_timeout_peers(&self) -> Vec<PeerId> {
-        let timeout = Duration::from_secs(180);
+    pub fn get_heartbeat_timeout_peers(
+        &self, timeout: Duration,
+    ) -> Vec<PeerId> {
         let mut timeout_peers = Vec::new();
 
         for (peer, handshake_time) in self.handshaking_peers.read().iter() {
