@@ -7,9 +7,7 @@ use super::{
     SharedSynchronizationGraph, SynchronizationGraph, SynchronizationPeerState,
     SynchronizationState,
 };
-use crate::{
-    consensus::SharedConsensusGraph, error::BlockError, pow::ProofOfWorkConfig,
-};
+use crate::{consensus::SharedConsensusGraph, pow::ProofOfWorkConfig};
 use cfx_types::H256;
 use io::TimerToken;
 use message::{
@@ -52,7 +50,6 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use threadpool::ThreadPool;
-use unexpected::OutOfBounds;
 lazy_static! {
     static ref TX_PROPAGATE_GAUGE: Arc<Gauge<usize>> =
         GaugeUsize::register("tx_propagate_set_size");
@@ -330,11 +327,11 @@ impl SynchronizationProtocolHandler {
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
             }
-            ErrorKind::Block(BlockError::InvalidTimestamp(_)) => {
+            ErrorKind::TemporarilyInvalid => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            _ => {
-                warn!("Unknown ErrorKind for message handler!");
+            ErrorKind::InvalidTimestamp => {
+                op = Some(UpdateNodeOperation::Demotion)
             }
         }
 
@@ -1291,25 +1288,13 @@ impl SynchronizationProtocolHandler {
 
                 if timestamp > invalid_threshold {
                     warn!("block {} has incorrect timestamp", header.hash());
-                    result = Err(From::from(BlockError::InvalidTimestamp(
-                        OutOfBounds {
-                            max: Some(max_time),
-                            min: None,
-                            found: timestamp,
-                        },
-                    )));
+                    result = Err(ErrorKind::InvalidTimestamp.into());
                     break;
                 }
 
                 if timestamp > max_time {
                     warn!("block {} has incorrect timestamp", header.hash());
-                    result = Err(From::from(BlockError::TemporarilyInvalid(
-                        OutOfBounds {
-                            max: Some(max_time),
-                            min: None,
-                            found: timestamp,
-                        },
-                    )));
+                    result = Err(ErrorKind::TemporarilyInvalid.into());
                     break;
                 }
             }

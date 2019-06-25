@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::error::BlockError;
 use network;
 use rlp::DecoderError;
 
@@ -12,7 +11,6 @@ error_chain! {
     }
 
     foreign_links {
-        Block(BlockError) #[doc = "Error concerning block processing."];
         Decoder(DecoderError);
     }
 
@@ -35,6 +33,16 @@ error_chain! {
         TooManyTrans {
             description("Send too many transactions to node in catch-up mode"),
             display("Sent too many transactions"),
+        }
+
+        TemporarilyInvalid {
+            description("Peer timestamp drifts"),
+            display("Peer timestamp drifts"),
+        }
+
+        InvalidTimestamp {
+            description("Peer timestamp drifts too much"),
+            display("Drift too much"),
         }
     }
 }
