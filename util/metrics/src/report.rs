@@ -1,6 +1,7 @@
 use crate::{
     counter::{Counter, CounterUsize},
     gauge::{Gauge, GaugeUsize},
+    meter::{Meter, StandardMeter},
     metrics::is_enabled,
     registry::DEFAULT_REGISTRY,
 };
@@ -78,4 +79,18 @@ impl Reportable for CounterUsize {
 
 impl Reportable for GaugeUsize {
     fn get_value(&self) -> String { format!("{}", self.value()) }
+}
+
+impl Reportable for StandardMeter {
+    fn get_value(&self) -> String {
+        let snapshot = self.snapshot();
+        format!(
+            "{{count: {}, m1: {:.2}, m5: {:.2}, m15: {:.2}, mean: {:.2}}}",
+            snapshot.count(),
+            snapshot.rate1(),
+            snapshot.rate5(),
+            snapshot.rate15(),
+            snapshot.rate_mean()
+        )
+    }
 }
