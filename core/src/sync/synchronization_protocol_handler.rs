@@ -1380,20 +1380,29 @@ impl SynchronizationProtocolHandler {
         let mut need_to_relay = HashSet::new();
         let mut returned_headers = HashSet::new();
 
-        let mut timestamp_validation_result = Ok(());
+        // keep first time drift validation error to return later
+        let timestamp_validation_result =
+            if self.graph.verification_config.verify_timestamp {
+                block_headers
+                    .headers
+                    .iter()
+                    .map(|h| self.validate_header_timestamp(h))
+                    .find(|result| result.is_err())
+                    .unwrap_or(Ok(()))
+            } else {
+                Ok(())
+            };
+
+        let now_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         for header in &mut block_headers.headers {
             let hash = header.hash();
             returned_headers.insert(hash);
 
             if self.graph.verification_config.verify_timestamp {
-                timestamp_validation_result =
-                    self.validate_header_timestamp(header);
-
-                let now_timestamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
                 if header.timestamp() > now_timestamp {
                     self.future_blocks.insert(header.clone());
                     continue;
@@ -2016,7 +2025,7 @@ impl SynchronizationProtocolHandler {
             .unwrap()
             .as_secs();
 
-        let mut hashes = HashSet::new();
+        let mut missed_body_block_hashes = HashSet::new();
         let mut need_to_relay = HashSet::new();
         let headers = self.future_blocks.get_before(now_timestamp);
 
@@ -2046,7 +2055,7 @@ impl SynchronizationProtocolHandler {
                             need_to_relay.insert(hash);
                         }
                     } else {
-                        hashes.insert(hash);
+                        missed_body_block_hashes.insert(hash);
                     }
                 }
             }
@@ -2059,12 +2068,16 @@ impl SynchronizationProtocolHandler {
         // make it more sophisticated.
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
-            self.request_blocks(io, chosen_peer, hashes.into_iter().collect());
+            self.request_blocks(
+                io,
+                chosen_peer,
+                missed_body_block_hashes.into_iter().collect(),
+            );
         } else {
             self.request_manager.request_compact_blocks(
                 io,
                 chosen_peer,
-                hashes.into_iter().collect(),
+                missed_body_block_hashes.into_iter().collect(),
             );
         }
 
