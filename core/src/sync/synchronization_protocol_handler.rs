@@ -76,6 +76,7 @@ const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
 const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
+const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -216,7 +217,10 @@ impl SynchronizationProtocolHandler {
                 warn!("Message from unknown peer {:?}", msg_id);
                 return;
             }
+        } else {
+            self.syn.update_heartbeat(&peer);
         }
+
         match msg_id {
             MsgId::STATUS => self.on_status(io, peer, &rlp),
             MsgId::GET_BLOCK_HEADERS_RESPONSE => {
@@ -1111,6 +1115,7 @@ impl SynchronizationProtocolHandler {
             received_transaction_count: 0,
             need_prop_trans: true,
             notified_mode: None,
+            heartbeat: Instant::now(),
         };
 
         debug!(
@@ -2191,6 +2196,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             .expect("Error registering log_statistics timer");
         io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(60))
             .expect("Error registering total_weight_in_past timer");
+        io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
+            .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2253,6 +2260,17 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             TOTAL_WEIGHT_IN_PAST_TIMER => {
                 self.update_total_weight_in_past();
+            }
+            CHECK_PEER_HEARTBEAT_TIMER => {
+                let timeout = Duration::from_secs(180);
+                let timeout_peers =
+                    self.syn.get_heartbeat_timeout_peers(timeout);
+                for peer in timeout_peers {
+                    io.disconnect_peer(
+                        peer,
+                        Some(UpdateNodeOperation::Demotion),
+                    );
+                }
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }

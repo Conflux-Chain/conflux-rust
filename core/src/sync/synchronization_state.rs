@@ -11,7 +11,7 @@ use rand::Rng;
 use std::{
     collections::{HashMap, HashSet},
     sync::{atomic::AtomicBool, Arc},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 pub struct SynchronizationPeerState {
@@ -26,6 +26,10 @@ pub struct SynchronizationPeerState {
     pub received_transaction_count: usize,
     pub need_prop_trans: bool,
     pub notified_mode: Option<bool>,
+
+    // heartbeat is used to disconnect inactive nodes periodically,
+    // and updated when new message received.
+    pub heartbeat: Instant,
 }
 
 pub type SynchronizationPeers =
@@ -113,5 +117,35 @@ impl SynchronizationState {
         rand.shuffle(&mut peer_vec);
         peer_vec.truncate(size);
         peer_vec
+    }
+
+    /// Updates the heartbeat for the specified peer. It takes no effect if the
+    /// peer is in handshaking status or not found.
+    pub fn update_heartbeat(&self, peer: &PeerId) {
+        if let Some(state) = self.peers.read().get(peer) {
+            state.write().heartbeat = Instant::now();
+        }
+    }
+
+    /// Retrieves the heartbeat timeout peers, including handshaking timeout
+    /// peers and inactive peers after handshake.
+    pub fn get_heartbeat_timeout_peers(
+        &self, timeout: Duration,
+    ) -> Vec<PeerId> {
+        let mut timeout_peers = Vec::new();
+
+        for (peer, handshake_time) in self.handshaking_peers.read().iter() {
+            if handshake_time.elapsed() > timeout {
+                timeout_peers.push(peer.clone());
+            }
+        }
+
+        for (peer, state) in self.peers.read().iter() {
+            if state.read().heartbeat.elapsed() > timeout {
+                timeout_peers.push(peer.clone());
+            }
+        }
+
+        timeout_peers
     }
 }
