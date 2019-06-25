@@ -556,6 +556,8 @@ impl RequestManager {
         self.send_request_again(io, req);
     }
 
+    // Match request with given response.
+    // No need to let caller handle request resending.
     pub fn match_request(
         &self, io: &NetworkContext, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {

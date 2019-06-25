@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::error::BlockError;
 use network;
 use rlp::DecoderError;
 
@@ -11,6 +12,7 @@ error_chain! {
     }
 
     foreign_links {
+        Block(BlockError) #[doc = "Error concerning block processing."];
         Decoder(DecoderError);
     }
 

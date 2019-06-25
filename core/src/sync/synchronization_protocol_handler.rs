@@ -7,7 +7,9 @@ use super::{
     SharedSynchronizationGraph, SynchronizationGraph, SynchronizationPeerState,
     SynchronizationState,
 };
-use crate::{consensus::SharedConsensusGraph, pow::ProofOfWorkConfig};
+use crate::{
+    consensus::SharedConsensusGraph, error::BlockError, pow::ProofOfWorkConfig,
+};
 use cfx_types::H256;
 use io::TimerToken;
 use message::{
@@ -47,9 +49,10 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     iter::FromIterator,
     sync::{atomic::Ordering as AtomicOrdering, mpsc::channel, Arc},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use threadpool::ThreadPool;
+use unexpected::OutOfBounds;
 lazy_static! {
     static ref TX_PROPAGATE_GAUGE: Arc<Gauge<usize>> =
         GaugeUsize::register("tx_propagate_set_size");
@@ -326,6 +329,12 @@ impl SynchronizationProtocolHandler {
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
+            }
+            ErrorKind::Block(BlockError::InvalidTimestamp(_)) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            _ => {
+                warn!("Unknown ErrorKind for message handler!");
             }
         }
 
@@ -1215,6 +1224,11 @@ impl SynchronizationProtocolHandler {
         );
     }
 
+    // Handling the response of block header request.
+    // It assumes that the response contains a sequence of block headers,
+    // which are listed in order with parent-child relationship.
+    // For example, bh[i-1] should be the parent of bh[i] which is in turn
+    // the parent of bh[i+1].
     fn on_block_headers_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -1227,14 +1241,35 @@ impl SynchronizationProtocolHandler {
         )?;
         let (req_hash, max_blocks) = match &req {
             RequestMessage::Headers(header_req) => {
+                // Validity check for the response.
+                let mut parent_hash = None;
+                for header in &block_headers.headers {
+                    let hash = header.hash();
+                    if parent_hash != None && parent_hash.unwrap() != hash {
+                        // Although the response matches the request id and
+                        // type, it does not match the
+                        // chain assumption of the content,
+                        // so resend the request again.
+                        self.request_manager.remove_mismatch_request(io, &req);
+                        return Err(ErrorKind::Invalid.into());
+                    }
+                    parent_hash = Some(header.parent_hash().clone());
+                }
                 (header_req.hash, header_req.max_blocks)
             }
             _ => {
                 warn!("Get response not matching the request! req={:?}, resp={:?}", req, block_headers);
+                // Although the response matches the request id,
+                // it does not match the content, so resend the request again.
                 self.request_manager.remove_mismatch_request(io, &req);
                 return Err(ErrorKind::UnexpectedResponse.into());
             }
         };
+
+        // In the above case, the request hasn't been processed and
+        // will be resent if error happens. Now, process the request.
+
+        let catch_up_mode = self.catch_up_mode();
 
         let mut parent_hash = H256::default();
         let mut parent_height = 0;
@@ -1242,12 +1277,44 @@ impl SynchronizationProtocolHandler {
         let mut dependent_hashes = Vec::new();
         let mut need_to_relay = Vec::new();
         let mut returned_headers = HashSet::new();
+        let mut result = Ok(());
 
         for header in &mut block_headers.headers {
-            let hash = header.hash();
-            if parent_hash != H256::default() && parent_hash != hash {
-                return Err(ErrorKind::Invalid.into());
+            // Check timestamp drift
+            if self.graph.verification_config.verify_timestamp && !catch_up_mode
+            {
+                const ACCEPTABLE_DRIFT: Duration = Duration::from_secs(15);
+                let max_time = SystemTime::now() + ACCEPTABLE_DRIFT;
+                let invalid_threshold = max_time + ACCEPTABLE_DRIFT * 9;
+                let timestamp =
+                    UNIX_EPOCH + Duration::from_secs(header.timestamp());
+
+                if timestamp > invalid_threshold {
+                    warn!("block {} has incorrect timestamp", header.hash());
+                    result = Err(From::from(BlockError::InvalidTimestamp(
+                        OutOfBounds {
+                            max: Some(max_time),
+                            min: None,
+                            found: timestamp,
+                        },
+                    )));
+                    break;
+                }
+
+                if timestamp > max_time {
+                    warn!("block {} has incorrect timestamp", header.hash());
+                    result = Err(From::from(BlockError::TemporarilyInvalid(
+                        OutOfBounds {
+                            max: Some(max_time),
+                            min: None,
+                            found: timestamp,
+                        },
+                    )));
+                    break;
+                }
             }
+
+            let hash = header.hash();
             returned_headers.insert(hash);
             parent_hash = header.parent_hash().clone();
             parent_height = header.height();
@@ -1294,6 +1361,12 @@ impl SynchronizationProtocolHandler {
             returned_headers,
         );
 
+        let request_peer = if result.is_err() {
+            self.syn.get_random_peer(&HashSet::new())
+        } else {
+            Some(peer)
+        };
+
         for past_hash in &dependent_hashes {
             if *past_hash != H256::default()
                 && !self.graph.contains_block_header(past_hash)
@@ -1316,7 +1389,7 @@ impl SynchronizationProtocolHandler {
                 };
                 self.request_manager.request_block_headers(
                     io,
-                    Some(peer),
+                    request_peer,
                     past_hash,
                     num,
                 );
@@ -1324,16 +1397,15 @@ impl SynchronizationProtocolHandler {
         }
 
         let catch_up_mode = self.catch_up_mode();
-
         if !hashes.is_empty() {
             // FIXME: This is a naive strategy. Need to
             // make it more sophisticated.
             if catch_up_mode {
-                self.request_blocks(io, Some(peer), hashes);
+                self.request_blocks(io, request_peer, hashes);
             } else {
                 self.request_manager.request_compact_blocks(
                     io,
-                    Some(peer),
+                    request_peer,
                     hashes,
                 );
             }
@@ -1352,7 +1424,7 @@ impl SynchronizationProtocolHandler {
             )?;
         }
 
-        Ok(())
+        result
     }
 
     fn on_blocks_response(
