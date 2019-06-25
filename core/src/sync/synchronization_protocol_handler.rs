@@ -23,7 +23,7 @@ use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use rand::Rng;
 use rlp::Rlp;
 //use slab::Slab;
@@ -38,13 +38,14 @@ use crate::{
 };
 use metrics::{Gauge, GaugeUsize};
 use primitives::{
-    Block, SignedTransaction, TransactionWithSignature, TxPropagateId,
+    Block, BlockHeader, SignedTransaction, TransactionWithSignature,
+    TxPropagateId,
 };
 use priority_send_queue::SendQueuePriority;
 use rlp::DecoderError;
 use std::{
     cmp,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BinaryHeap, HashMap, HashSet, VecDeque},
     iter::FromIterator,
     sync::{atomic::Ordering as AtomicOrdering, mpsc::channel, Arc},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -98,12 +99,39 @@ struct RecoverPublicTask {
     compact: bool,
 }
 
+struct FutureBlockContainerInner {
+    capacity: usize,
+    container: BTreeMap<u64, BlockHeader>,
+}
+
+impl FutureBlockContainerInner {
+    pub fn new(capacity: usize) -> Self {
+        FutureBlockContainerInner {
+            capacity,
+            container: BTreeMap::new(),
+        }
+    }
+}
+
+struct FutureBlockContainer {
+    inner: RwLock<FutureBlockContainerInner>,
+}
+
+impl FutureBlockContainer {
+    pub fn new(capacity: usize) -> Self {
+        FutureBlockContainer {
+            inner: RwLock::new(FutureBlockContainerInner::new(capacity)),
+        }
+    }
+}
+
 pub struct SynchronizationProtocolHandler {
     protocol_config: ProtocolConfiguration,
     graph: SharedSynchronizationGraph,
     syn: Arc<SynchronizationState>,
     request_manager: Arc<RequestManager>,
     latest_epoch_requested: Mutex<u64>,
+    future_blocks: FutureBlockContainer,
 
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
@@ -154,6 +182,7 @@ impl SynchronizationProtocolHandler {
             syn,
             request_manager,
             latest_epoch_requested: Mutex::new(0),
+            future_blocks: BTreeMap::new(),
             recover_public_queue: Mutex::new(VecDeque::new()),
         }
     }
