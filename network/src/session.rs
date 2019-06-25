@@ -298,7 +298,8 @@ impl Session {
 
         let mut hello_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
         // Use the ip of the socket as endpoint ip directly.
-        // We do not allow peers to specify the ip to avoid being used to DDoS the target ip.
+        // We do not allow peers to specify the ip to avoid being used to DDoS
+        // the target ip.
         hello_from.address.set_ip(self.address.ip());
 
         let ping_to = NodeEndpoint {
