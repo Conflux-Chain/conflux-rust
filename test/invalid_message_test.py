@@ -48,13 +48,13 @@ class MessageTest(ConfluxTestFramework):
         wait_until(lambda: not wait[0], timeout=60)
 
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hash=self.nodes[0].p2p.genesis.hash, max_blocks=1))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash]))
         h.wait()
 
         def assert_length(_node, msg):
             assert_equal(len(msg.headers), 1)
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE, assert_length)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hash=self.nodes[0].p2p.genesis.hash, max_blocks=1))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash]))
         h.wait()
 
     def _test_new_block(self):

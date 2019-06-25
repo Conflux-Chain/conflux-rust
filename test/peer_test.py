@@ -22,7 +22,7 @@ class AutoDiscovery(ConfluxTestFramework):
         extra_args = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
         self.start_node(0, extra_args = extra_args)
         self.bootnode_id = "cfxnode://{}@{}:{}".format(self.bootnode.key[2:], self.bootnode.ip, self.bootnode.port)
-        
+
         # init nodes: 1, 2, 3 (4 is used later)
         extra_args.extend(["--bootnodes", self.bootnode_id])
         self.start_time = datetime.datetime.now()

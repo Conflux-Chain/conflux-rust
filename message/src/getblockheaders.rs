@@ -10,8 +10,7 @@ use std::ops::{Deref, DerefMut};
 #[derive(Debug, PartialEq)]
 pub struct GetBlockHeaders {
     pub request_id: RequestId,
-    pub hash: H256,
-    pub max_blocks: u64,
+    pub hashes: Vec<H256>,
 }
 
 impl Message for GetBlockHeaders {
@@ -31,23 +30,21 @@ impl DerefMut for GetBlockHeaders {
 impl Encodable for GetBlockHeaders {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(3)
+            .begin_list(2)
             .append(&self.request_id)
-            .append(&self.hash)
-            .append(&self.max_blocks);
+            .append_list(&self.hashes);
     }
 }
 
 impl Decodable for GetBlockHeaders {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 3 {
+        if rlp.item_count()? != 2 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
         Ok(GetBlockHeaders {
             request_id: rlp.val_at(0)?,
-            hash: rlp.val_at(1)?,
-            max_blocks: rlp.val_at(2)?,
+            hashes: rlp.list_at(1)?,
         })
     }
 }
