@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 SCRIPT_DIR=`dirname "${BASH_SOURCE[0]}"`
 echo "Checking dependent python3 modules ..."
@@ -12,7 +12,7 @@ export CARGO_TARGET_DIR=$ROOT_DIR/build
 export RUSTFLAGS="-g -D warnings"
 
 function check_build {
-    local -n test_reuslt=$1
+    local -n test_result=$1
 
     #rm -rf $ROOT_DIR/build && mkdir -p $ROOT_DIR/build
     pushd $ROOT_DIR > /dev/null
@@ -32,7 +32,7 @@ function check_build {
 }
 
 function check_unit_tests {
-    local -n test_reuslt=$1
+    local -n test_result=$1
 
     pushd $ROOT_DIR > /dev/null
     local result
@@ -47,7 +47,7 @@ function check_unit_tests {
 }
 
 function check_integration_tests {
-    local -n test_reuslt=$1
+    local -n test_result=$1
 
     pushd $ROOT_DIR > /dev/null
     local result
@@ -66,7 +66,7 @@ function check_integration_tests {
 }
 
 function save_test_result {
-    local -n test_reuslt=$1
+    local -n test_result=$1
     local exit_code=${test_result[0]}
     local result=${test_result[1]}
 
