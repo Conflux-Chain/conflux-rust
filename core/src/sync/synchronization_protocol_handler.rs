@@ -1340,17 +1340,14 @@ impl SynchronizationProtocolHandler {
     }
 
     fn validate_header_timestamp(
-        &self, header: &BlockHeader,
+        &self, header: &BlockHeader, now: u64,
     ) -> Result<(), Error> {
-        const ACCEPTABLE_DRIFT: Duration = Duration::from_secs(60);
-        let invalid_threshold = SystemTime::now() + ACCEPTABLE_DRIFT;
-        let timestamp = UNIX_EPOCH + Duration::from_secs(header.timestamp());
-
-        if timestamp > invalid_threshold {
+        const ACCEPTABLE_DRIFT: u64 = 60;
+        let invalid_threshold = now + ACCEPTABLE_DRIFT;
+        if header.timestamp() > invalid_threshold {
             warn!("block {} has incorrect timestamp", header.hash());
             return Err(ErrorKind::InvalidTimestamp.into());
         }
-
         Ok(())
     }
 
@@ -1381,19 +1378,24 @@ impl SynchronizationProtocolHandler {
         let mut returned_headers = HashSet::new();
 
         // keep first time drift validation error to return later
+        let mut now_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
         let timestamp_validation_result =
             if self.graph.verification_config.verify_timestamp {
                 block_headers
                     .headers
                     .iter()
-                    .map(|h| self.validate_header_timestamp(h))
+                    .map(|h| self.validate_header_timestamp(h, now_timestamp))
                     .find(|result| result.is_err())
                     .unwrap_or(Ok(()))
             } else {
                 Ok(())
             };
 
-        let now_timestamp = SystemTime::now()
+        now_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
