@@ -49,7 +49,13 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
             return None;
         }
         match new.key.cmp(&node.as_ref().unwrap().key) {
-            Ordering::Equal => Some(node.as_ref().unwrap().value.clone()),
+            Ordering::Equal => {
+                let result = Some(node.as_ref().unwrap().value.clone());
+                node.as_mut().unwrap().value = new.value;
+                node.as_mut().unwrap().weight = new.weight;
+                node.as_mut().unwrap().update_weight();
+                result
+            }
             Ordering::Less => {
                 let result =
                     Node::insert(&mut node.as_mut().unwrap().left, new);

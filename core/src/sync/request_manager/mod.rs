@@ -1,7 +1,6 @@
 use super::{
     synchronization_protocol_handler::{
-        ProtocolConfiguration, EPOCH_RETRY_TIME_SECONDS,
-        REQUEST_START_WAITING_TIME,
+        ProtocolConfiguration, REQUEST_START_WAITING_TIME,
     },
     synchronization_state::SynchronizationState,
 };
@@ -11,7 +10,7 @@ use message::{
     GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
     GetCompactBlocks, GetTransactions, TransIndex,
 };
-use metrics::Gauge;
+use metrics::{Gauge, GaugeUsize};
 use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature, TxPropagateId};
@@ -30,7 +29,8 @@ mod request_handler;
 pub mod tx_handler;
 
 lazy_static! {
-    static ref TX_REQUEST_GAUGE: Gauge = Gauge::register("tx_diff_set_size");
+    static ref TX_REQUEST_GAUGE: Arc<Gauge<usize>> =
+        GaugeUsize::register("tx_diff_set_size");
 }
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
@@ -390,7 +390,7 @@ impl RequestManager {
 
             (indices, tx_ids)
         };
-        TX_REQUEST_GAUGE.update(tx_ids.len() as i64);
+        TX_REQUEST_GAUGE.update(tx_ids.len());
         debug!("Request {} tx from peer={}", tx_ids.len(), peer_id);
         if let Err(e) = self.request_handler.send_request(
             io,
@@ -571,6 +571,8 @@ impl RequestManager {
         self.send_request_again(io, req);
     }
 
+    // Match request with given response.
+    // No need to let caller handle request resending.
     pub fn match_request(
         &self, io: &NetworkContext, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
@@ -849,11 +851,7 @@ impl RequestManager {
                         ) {
                             warn!("Error requesting waiting epoch peer={:?} epoch_number={} err={:?}", chosen_peer, n, e);
                             waiting_requests.push((
-                                Instant::now()
-                                    + Duration::new(
-                                        EPOCH_RETRY_TIME_SECONDS,
-                                        0,
-                                    ),
+                                Instant::now() + *REQUEST_START_WAITING_TIME,
                                 WaitingRequest::Epoch(*n),
                                 None,
                             ));

@@ -38,8 +38,8 @@ use primitives::{
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
     transaction::Action,
-    Block, BlockHeaderBuilder, EpochNumber, SignedTransaction,
-    TransactionAddress,
+    Block, BlockHeaderBuilder, EpochNumber, SignedTransaction, StateRoot,
+    StateRootAuxInfo, StateRootWithAuxInfo, TransactionAddress,
 };
 use rayon::prelude::*;
 use rlp::*;
@@ -227,7 +227,7 @@ pub struct ConsensusGraphInner {
     // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
     genesis_block_index: usize,
-    genesis_block_state_root: H256,
+    genesis_block_state_root: StateRoot,
     genesis_block_receipts_root: H256,
     // It maps internal index of a block to the set of internal indexes of
     // blocks, when treat the block as the pivot chain block.
@@ -1280,6 +1280,25 @@ impl ConsensusGraphInner {
         self.arena[self.best_state_index()].hash
     }
 
+    /// Return None if the best state is not executed or the db returned error
+    // TODO check if we can ignore the db error
+    pub fn try_get_best_state<'a>(
+        &self, data_man: &'a BlockDataManager,
+    ) -> Option<State<'a>> {
+        let best_state_hash = self.best_state_block_hash();
+        if let Ok(state) = data_man
+            .storage_manager
+            .get_state_no_commit(best_state_hash)
+        {
+            state.map(|db| {
+                State::new(StateDb::new(db), 0.into(), Default::default())
+            })
+        } else {
+            warn!("try_get_best_state: Error for hash {}", best_state_hash);
+            None
+        }
+    }
+
     pub fn best_epoch_number(&self) -> usize { self.pivot_chain.len() - 1 }
 
     pub fn get_height_from_epoch_number(
@@ -1349,17 +1368,28 @@ impl ConsensusGraphInner {
     pub fn get_balance(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db = StateDb::new(
-            self.data_man.storage_manager.get_state_at(hash).unwrap(),
-        );
-        Ok(
-            if let Ok(maybe_acc) = state_db.get_account(&address, false) {
-                maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
-            } else {
-                0.into()
-            },
-        )
+        let hash = self.get_hash_from_epoch_number(epoch_number.clone())?;
+        let maybe_state = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(hash)
+            .map_err(|e| format!("Error to get state, err={:?}", e))?;
+        if let Some(state) = maybe_state {
+            let state_db = StateDb::new(state);
+            Ok(
+                if let Ok(maybe_acc) = state_db.get_account(&address, false) {
+                    maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
+                } else {
+                    0.into()
+                },
+            )
+        } else {
+            Err(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist",
+                epoch_number, hash
+            )
+            .into())
+        }
     }
 
     pub fn terminal_hashes(&self) -> Vec<H256> {
@@ -1468,7 +1498,11 @@ impl ConsensusGraphInner {
 
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let state_db = StateDb::new(
-            self.data_man.storage_manager.get_state_at(hash).unwrap(),
+            self.data_man
+                .storage_manager
+                .get_state_no_commit(hash)
+                .unwrap()
+                .unwrap(),
         );
         let state = State::new(state_db, 0.into(), Default::default());
         state
@@ -2002,25 +2036,29 @@ impl ConsensusGraph {
     /// root of a given block
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
-    ) -> (H256, H256) {
+    ) -> (StateRootWithAuxInfo, H256) {
         // If we already computed the state of the block before, we should not
-        // do it again FIXME: propagate the error up
+        // do it again
+        // FIXME: propagate the error up
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            let cached_state = self
+            let maybe_cached_state = self
                 .data_man
                 .storage_manager
-                .get_state_at(block_hash.clone())
+                .get_state_no_commit(block_hash.clone())
                 .unwrap();
-            if cached_state.does_exist() {
-                if let Some(receipts_root) =
-                    self.data_man.get_receipts_root(&block_hash)
-                {
-                    return (
-                        cached_state.get_state_root().unwrap().unwrap(),
-                        receipts_root,
-                    );
+            match maybe_cached_state {
+                Some(cached_state) => {
+                    if let Some(receipts_root) =
+                        self.data_man.get_receipts_root(&block_hash)
+                    {
+                        return (
+                            cached_state.get_state_root().unwrap().unwrap(),
+                            receipts_root,
+                        );
+                    }
                 }
+                None => {}
             }
         }
         // FIXME: propagate the error up
@@ -2181,7 +2219,7 @@ impl ConsensusGraph {
     /// block given a delay.
     pub fn compute_deferred_state_for_block(
         &self, block_hash: &H256, delay: usize,
-    ) -> (H256, H256) {
+    ) -> (StateRootWithAuxInfo, H256) {
         let inner = &mut *self.inner.write();
 
         // FIXME: Propagate errors upward
@@ -2217,7 +2255,9 @@ impl ConsensusGraph {
         let parent_state_root = inner
             .data_man
             .storage_manager
-            .get_state_at(parent_block_hash)
+            .get_state_no_commit(parent_block_hash)
+            .unwrap()
+            // Unwrapping is safe because the state exists.
             .unwrap()
             .get_state_root()
             .unwrap()
@@ -2305,8 +2345,9 @@ impl ConsensusGraph {
     }
 
     fn log_invalid_state_root(
-        &self, expected_state_root: &H256, got_state_root: &H256,
-        deferred: usize, inner: &ConsensusGraphInner,
+        &self, expected_state_root: &StateRootWithAuxInfo,
+        got_state_root: (&StateRoot, &StateRootAuxInfo), deferred: usize,
+        inner: &ConsensusGraphInner,
     ) -> std::io::Result<()>
     {
         let debug_record = self.log_debug_epoch_computation(deferred, inner);
@@ -2417,17 +2458,19 @@ impl ConsensusGraph {
                 let correct_state_root = self
                     .data_man
                     .storage_manager
-                    .get_state_at(inner.arena[deferred].hash)
+                    .get_state_no_commit(inner.arena[deferred].hash)
+                    .unwrap()
+                    // Unwrapping is safe because the state exists.
                     .unwrap()
                     .get_state_root()
                     .unwrap()
                     .unwrap();
                 if *block.block_header.deferred_state_root()
-                    != correct_state_root
+                    != correct_state_root.state_root
                 {
                     self.log_invalid_state_root(
                         &correct_state_root,
-                        &block.block_header.deferred_state_root(),
+                        block.block_header.deferred_state_root_with_aux_info(),
                         deferred,
                         inner,
                     )
@@ -2450,17 +2493,20 @@ impl ConsensusGraph {
                 let (state_root, receipts_root) =
                     self.compute_state_for_block(&deferred_hash, inner);
 
-                if state_root != *block.block_header.deferred_state_root() {
+                if state_root.state_root
+                    != *block.block_header.deferred_state_root()
+                {
                     self.log_invalid_state_root(
                         &state_root,
-                        block.block_header.deferred_state_root(),
+                        block.block_header.deferred_state_root_with_aux_info(),
                         deferred,
                         inner,
                     )
                     .ok();
                 }
 
-                *block.block_header.deferred_state_root() == state_root
+                *block.block_header.deferred_state_root()
+                    == state_root.state_root
                     && *block.block_header.deferred_receipts_root()
                         == receipts_root
             }
@@ -2923,42 +2969,6 @@ impl ConsensusGraph {
             block.size(),
         );
 
-        {
-            // When a tx is executed successfully, it will be removed from
-            // `unexecuted_transaction_addresses` If a tx is
-            // executed with failure(InvalidNonce), or the block packing it is
-            // never refered and executed, only the corresponding tx address
-            // will be removed. After a tx is removed from
-            // `unexecuted_transaction_addresses` because of
-            // successful execution, its new nonce will be available in state
-            // and it will not be inserted to tx pool again.
-            let mut unexecuted_transaction_addresses =
-                self.txpool.unexecuted_transaction_addresses.lock();
-            let mut cache_man = self.data_man.cache_man.lock();
-            for (idx, tx) in block.transactions.iter().enumerate() {
-                // If an executed tx
-                let tx_hash = tx.hash();
-                if let Some(addr_set) =
-                    unexecuted_transaction_addresses.get_mut(&tx_hash)
-                {
-                    addr_set.insert(TransactionAddress {
-                        block_hash: hash.clone(),
-                        index: idx,
-                    });
-                } else {
-                    let mut addr_set = HashSet::new();
-                    addr_set.insert(TransactionAddress {
-                        block_hash: hash.clone(),
-                        index: idx,
-                    });
-                    unexecuted_transaction_addresses.insert(tx_hash, addr_set);
-                    cache_man.note_used(CacheId::UnexecutedTransactionAddress(
-                        tx_hash,
-                    ));
-                }
-            }
-        }
-
         let mut inner = &mut *self.inner.write();
 
         let me = self.insert_block_initial(
@@ -2969,11 +2979,9 @@ impl ConsensusGraph {
 
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
-        for tx in block.transactions.iter() {
-            self.txpool.remove_pending(&*tx);
-            self.txpool.remove_ready(tx.clone());
-            self.txpool.remove_to_propagate(&tx.hash);
-        }
+        let best_state_epoch_id = inner.best_state_block_hash();
+        self.txpool
+            .set_tx_packed(block.transactions.clone(), best_state_epoch_id);
 
         let anticone_barrier = inner.compute_anticone(me);
 
@@ -3017,6 +3025,7 @@ impl ConsensusGraph {
         }
 
         inner.arena[me].stable = stable;
+        // FIXME: Is this necessary?
         inner.arena[me].adaptive = adaptive;
 
         let mut extend_pivot = false;
@@ -3240,7 +3249,6 @@ impl ConsensusGraph {
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
 
         self.update_confirmation_risks(inner, self.get_total_weight_in_past());
-
         inner.optimistic_executed_height = if to_state_pos > 0 {
             Some(to_state_pos)
         } else {
@@ -3297,6 +3305,19 @@ impl ConsensusGraph {
 
     pub fn best_state_block_hash(&self) -> H256 {
         self.inner.read().best_state_block_hash()
+    }
+
+    pub fn try_get_best_state(&self) -> Option<State> {
+        self.inner.read().try_get_best_state(&self.data_man)
+    }
+
+    /// Wait until the best state has been executed, and return the state
+    pub fn get_best_state(&self) -> State {
+        let inner = self.inner.read();
+        self.wait_for_block_state(&inner.best_state_block_hash());
+        inner
+            .try_get_best_state(&self.data_man)
+            .expect("Best state has been executed")
     }
 
     /// Returns the total number of blocks in consensus graph
@@ -3448,7 +3469,9 @@ impl ConsensusGraph {
 
     /// Wait for a block's epoch is computed.
     /// Return the state_root and receipts_root
-    pub fn wait_for_block_state(&self, block_hash: &H256) -> (H256, H256) {
+    pub fn wait_for_block_state(
+        &self, block_hash: &H256,
+    ) -> (StateRootWithAuxInfo, H256) {
         self.executor.wait_for_result(*block_hash)
     }
 }

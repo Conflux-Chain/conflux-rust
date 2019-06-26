@@ -15,7 +15,7 @@ pub struct AuthorValue<ValueType>(pub Address, pub ValueType);
 pub struct ComputeEpochDebugRecord {
     // Basic information.
     pub parent_block_hash: H256,
-    pub parent_state_root: H256,
+    pub parent_state_root: StateRootWithAuxInfo,
     pub reward_epoch_hash: Option<H256>,
     pub anticone_penalty_cutoff_epoch_hash: Option<H256>,
 
@@ -141,6 +141,6 @@ impl Encodable for ComputeEpochDebugRecord {
 }
 
 use cfx_types::{Address, H256, U256};
-use primitives::SignedTransaction;
+use primitives::{SignedTransaction, StateRootWithAuxInfo};
 use rlp::*;
 use std::{fmt::Display, sync::Arc, vec::Vec};

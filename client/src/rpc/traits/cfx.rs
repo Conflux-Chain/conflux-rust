@@ -210,5 +210,8 @@ build_rpc_trait! {
 
         #[rpc(name = "txpool_content")]
         fn txpool_content(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+
+        #[rpc(name = "clear_tx_pool")]
+        fn clear_tx_pool(&self) -> RpcResult<()>;
     }
 }

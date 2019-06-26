@@ -31,7 +31,6 @@ pub enum CacheId {
     Block(H256),
     BlockReceipts(H256),
     TransactionAddress(H256),
-    UnexecutedTransactionAddress(H256),
     TransactionPubkey(H256),
     CompactBlock(H256),
 }

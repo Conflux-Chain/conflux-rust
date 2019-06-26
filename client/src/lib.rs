@@ -108,9 +108,12 @@ impl Client {
 
         if conf.raw_conf.metrics_enabled {
             metrics::enable();
-            metrics::report_file(
-                Duration::from_millis(conf.raw_conf.metrics_report_interval_ms),
+            let reporter = metrics::FileReporter::new(
                 conf.raw_conf.metrics_output_file.clone(),
+            );
+            metrics::report_async(
+                reporter,
+                Duration::from_millis(conf.raw_conf.metrics_report_interval_ms),
             );
         }
 
@@ -164,6 +167,8 @@ impl Client {
             genesis::default(secret_store.as_ref())
         };
 
+        // FIXME: move genesis block to a dedicated directory near all conflux
+        // FIXME: parameters.
         let genesis_block = storage_manager.initialize(
             genesis_accounts,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
