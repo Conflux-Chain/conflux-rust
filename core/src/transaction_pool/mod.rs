@@ -309,6 +309,7 @@ impl ReadyAccountPool {
 
 pub struct TransactionPoolInner {
     capacity: usize,
+    total_received_count: usize,
     deferred_pool: DeferredPool,
     ready_account_pool: ReadyAccountPool,
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
@@ -320,6 +321,7 @@ impl TransactionPoolInner {
     pub fn with_capacity(capacity: usize) -> Self {
         TransactionPoolInner {
             capacity,
+            total_received_count: 0,
             deferred_pool: DeferredPool::new(),
             ready_account_pool: ReadyAccountPool::new(),
             ready_nonces_and_balances: HashMap::new(),
@@ -334,9 +336,12 @@ impl TransactionPoolInner {
         self.ready_nonces_and_balances.clear();
         self.garbage_collection_queue.clear();
         self.txs.clear();
+        self.total_received_count = 0;
     }
 
     pub fn len(&self) -> usize { self.txs.len() }
+
+    pub fn total_received(&self) -> usize { self.total_received_count }
 
     fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
         self.txs.get(tx_hash).map(|x| x.clone())
@@ -393,6 +398,7 @@ impl TransactionPoolInner {
 
         match &result {
             InsertResult::NewAdded => {
+                self.total_received_count += 1;
                 self.garbage_collection_queue
                     .push_back(transaction.sender());
                 self.txs.insert(transaction.hash(), transaction);
@@ -974,10 +980,16 @@ impl TransactionPool {
         inner.clear()
     }
 
-    /// stats retrieves the length of ready and deferred pool.
-    pub fn stats(&self) -> (usize, usize) {
+    /// stats retrieves the length of ready and deferred pool, and the total
+    /// number received tx two tx with the same sender and nonce only count
+    /// once
+    pub fn stats(&self) -> (usize, usize, usize) {
         let inner = self.inner.read();
-        (inner.ready_account_pool.len(), inner.len())
+        (
+            inner.ready_account_pool.len(),
+            inner.len(),
+            inner.total_received(),
+        )
     }
 
     /// content retrieves the ready and deferred transactions.

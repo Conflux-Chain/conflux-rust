@@ -594,11 +594,12 @@ impl RpcImpl {
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, deferred_len) = self.tx_pool.stats();
+        let (ready_len, deferred_len, total_received) = self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
         ret.insert("deferred".into(), deferred_len);
+        ret.insert("received".into(), total_received);
 
         Ok(ret)
     }
