@@ -419,7 +419,11 @@ mod tests {
         let mut connection = TestConnection::new();
         let status = connection.writable(&test_io());
         assert!(status.is_ok());
-        assert!(WriteStatus::Complete == status.unwrap());
+        let status = status.unwrap();
+        assert!(
+            WriteStatus::Complete == status
+                || WriteStatus::LowPriority == status
+        );
     }
 
     #[test]
