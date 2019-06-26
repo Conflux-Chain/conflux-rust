@@ -19,7 +19,7 @@ use std::{
 
 fn get_expected_best_hash() -> String {
     let mut file =
-        File::open(r#"../test/blockchain_tests/general_2.json"#).unwrap();
+        File::open(r#"../tests/blockchain_tests/general_2.json"#).unwrap();
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
 
@@ -66,7 +66,7 @@ fn test_load_chain() {
             .unwrap(),
     );
     conf.raw_conf.load_test_chain =
-        Some(r#"../test/blockchain_tests/general_2.json"#.to_owned());
+        Some(r#"../tests/blockchain_tests/general_2.json"#.to_owned());
     conf.raw_conf.port = Some(13000);
     conf.raw_conf.jsonrpc_http_port = Some(18000);
 

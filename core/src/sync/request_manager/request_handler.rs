@@ -55,6 +55,12 @@ impl RequestHandler {
         );
     }
 
+    // Match request for given response.
+    // Could return the following error:
+    // 1. Error return from peer.match_request():
+    //      No need to let caller handle request resending;
+    // 2. UnknownPeer:
+    //      No need to let caller handle request resending;
     pub fn match_request(
         &self, io: &NetworkContext, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
@@ -244,6 +250,14 @@ impl RequestContainer {
         }
     }
 
+    // Match request with given response.
+    // Could return the following error:
+    // 1. UnexpectedResponse:
+    //      In this case, no request is matched, so NO need to
+    //      handle the resending of the request for caller;
+    // 2. Error from send_message():
+    //      This also does NOT introduce needs to handle request
+    //      resending for caller;
     pub fn match_request(
         &mut self, io: &NetworkContext, request_id: u64,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,

@@ -8,10 +8,7 @@ use crate::{
 };
 use cfx_types::H256;
 use primitives::{Block, BlockHeader};
-use std::{
-    collections::HashSet,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Debug, Copy, Clone)]
@@ -89,37 +86,6 @@ impl VerificationConfig {
                 ));
             }
             direct_ancestor_hashes.insert(referee_hash.clone());
-        }
-
-        // verify timestamp drift
-        if self.verify_timestamp {
-            const ACCEPTABLE_DRIFT: Duration = Duration::from_secs(15);
-            let max_time = SystemTime::now() + ACCEPTABLE_DRIFT;
-            let invalid_threshold = max_time + ACCEPTABLE_DRIFT * 9;
-            let timestamp =
-                UNIX_EPOCH + Duration::from_secs(header.timestamp());
-
-            if timestamp > invalid_threshold {
-                warn!("block {} has incorrect timestamp", header.hash());
-                return Err(From::from(BlockError::InvalidTimestamp(
-                    OutOfBounds {
-                        max: Some(max_time),
-                        min: None,
-                        found: timestamp,
-                    },
-                )));
-            }
-
-            if timestamp > max_time {
-                warn!("block {} has incorrect timestamp", header.hash());
-                return Err(From::from(BlockError::TemporarilyInvalid(
-                    OutOfBounds {
-                        max: Some(max_time),
-                        min: None,
-                        found: timestamp,
-                    },
-                )));
-            }
         }
 
         Ok(())

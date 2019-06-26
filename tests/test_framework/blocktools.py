@@ -9,15 +9,18 @@ from conflux.messages import BlockHeader, Block, Transactions, Account
 from conflux.transactions import Transaction
 from conflux.utils import *
 from trie import HexaryTrie
+import time
 
 TEST_DIFFICULTY = 4
 HASH_MAX = 1 << 256
 
 
-def create_block(parent_hash=default_config["GENESIS_PREVHASH"], height=0, timestamp=0, difficulty=TEST_DIFFICULTY, transactions=[],
+def create_block(parent_hash=default_config["GENESIS_PREVHASH"], height=0, timestamp=None, difficulty=TEST_DIFFICULTY, transactions=[],
                  gas_limit=3000000000, referee_hashes=[], author=default_config["GENESIS_COINBASE"],
                  deferred_state_root=default_config["GENESIS_STATE_ROOT"],
                  deferred_receipts_root=default_config["GENESIS_RECEIPTS_ROOT"], adaptive=0):
+    if timestamp is None:
+        timestamp = int(time.time())
     tx_root = utils.sha3(rlp.encode(Transactions(transactions)))
     nonce = 0
     while True:
@@ -50,5 +53,5 @@ def make_genesis():
 #     addr = privtoaddr(sp)
 #     state_trie = HexaryTrie(db={})
 #     state_trie[addr] = rlp.encode(Account(balance=10**9, nonce=0, storage_root=b'\x00' * 32, code_hash=trie.BLANK_ROOT))
-    genesis = create_block(difficulty=0, author=default_config["GENESIS_AUTHOR"])
+    genesis = create_block(difficulty=0, author=default_config["GENESIS_AUTHOR"], timestamp=0)
     return genesis
