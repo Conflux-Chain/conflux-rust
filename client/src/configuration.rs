@@ -104,6 +104,7 @@ build_config! {
         (metrics_output_file, (String), "metrics.log".to_string())
         (min_peers_propagation, (usize), 8)
         (max_peers_propagation, (usize), 128)
+        (future_block_buffer_capacity, (usize), 32768)
         (txgen_account_count, (usize), 10)
     }
     {
@@ -321,6 +322,9 @@ impl Configuration {
                 .max_trans_count_received_in_catch_up,
             min_peers_propagation: self.raw_conf.min_peers_propagation,
             max_peers_propagation: self.raw_conf.max_peers_propagation,
+            future_block_buffer_capacity: self
+                .raw_conf
+                .future_block_buffer_capacity,
         }
     }
 

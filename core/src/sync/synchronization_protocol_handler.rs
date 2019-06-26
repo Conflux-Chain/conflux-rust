@@ -23,7 +23,7 @@ use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use rand::Rng;
 use rlp::Rlp;
 //use slab::Slab;
@@ -45,7 +45,7 @@ use priority_send_queue::SendQueuePriority;
 use rlp::DecoderError;
 use std::{
     cmp,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     iter::FromIterator,
     sync::{atomic::Ordering as AtomicOrdering, mpsc::channel, Arc},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -76,6 +76,7 @@ const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
 const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
+const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -94,12 +95,106 @@ struct RecoverPublicTask {
     compact: bool,
 }
 
+struct FutureBlockContainerInner {
+    capacity: usize,
+    size: usize,
+    container: BTreeMap<u64, HashMap<H256, BlockHeader>>,
+}
+
+impl FutureBlockContainerInner {
+    pub fn new(capacity: usize) -> Self {
+        FutureBlockContainerInner {
+            capacity,
+            size: 0,
+            container: BTreeMap::new(),
+        }
+    }
+}
+
+struct FutureBlockContainer {
+    inner: RwLock<FutureBlockContainerInner>,
+}
+
+impl FutureBlockContainer {
+    pub fn new(capacity: usize) -> Self {
+        FutureBlockContainer {
+            inner: RwLock::new(FutureBlockContainerInner::new(capacity)),
+        }
+    }
+
+    pub fn insert(&self, header: BlockHeader) {
+        let mut inner = self.inner.write();
+        let entry = inner
+            .container
+            .entry(header.timestamp())
+            .or_insert(HashMap::new());
+        if !entry.contains_key(&header.hash()) {
+            entry.insert(header.hash(), header);
+            inner.size += 1;
+        }
+
+        if inner.size > inner.capacity {
+            let mut removed = false;
+            let mut empty_slots = Vec::new();
+            for entry in inner.container.iter_mut().rev() {
+                if entry.1.is_empty() {
+                    empty_slots.push(*entry.0);
+                    continue;
+                }
+
+                let hash = *entry.1.iter().find(|_| true).unwrap().0;
+                entry.1.remove(&hash);
+                removed = true;
+
+                if entry.1.is_empty() {
+                    empty_slots.push(*entry.0);
+                }
+                break;
+            }
+
+            if removed {
+                inner.size -= 1;
+            }
+
+            for slot in empty_slots {
+                inner.container.remove(&slot);
+            }
+        }
+    }
+
+    pub fn get_before(&self, timestamp: u64) -> Vec<BlockHeader> {
+        let mut inner = self.inner.write();
+        let mut result = Vec::new();
+
+        loop {
+            let slot = if let Some(entry) = inner.container.iter().next() {
+                Some(*entry.0)
+            } else {
+                None
+            };
+
+            if slot.is_none() || slot.unwrap() > timestamp {
+                break;
+            }
+
+            let entry = inner.container.remove(&slot.unwrap()).unwrap();
+
+            for (_, header) in entry {
+                result.push(header);
+            }
+        }
+
+        result
+    }
+}
+
 pub struct SynchronizationProtocolHandler {
     protocol_config: ProtocolConfiguration,
     graph: SharedSynchronizationGraph,
     syn: Arc<SynchronizationState>,
     request_manager: Arc<RequestManager>,
     latest_epoch_requested: Mutex<u64>,
+    future_blocks: FutureBlockContainer,
 
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
@@ -122,6 +217,7 @@ pub struct ProtocolConfiguration {
     pub max_trans_count_received_in_catch_up: u64,
     pub min_peers_propagation: usize,
     pub max_peers_propagation: usize,
+    pub future_block_buffer_capacity: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -139,6 +235,9 @@ impl SynchronizationProtocolHandler {
         let request_manager =
             Arc::new(RequestManager::new(&protocol_config, syn.clone()));
 
+        let future_block_buffer_capacity =
+            protocol_config.future_block_buffer_capacity;
+
         Self {
             protocol_config,
             graph: Arc::new(SynchronizationGraph::new(
@@ -150,6 +249,9 @@ impl SynchronizationProtocolHandler {
             syn,
             request_manager,
             latest_epoch_requested: Mutex::new(0),
+            future_blocks: FutureBlockContainer::new(
+                future_block_buffer_capacity,
+            ),
             recover_public_queue: Mutex::new(VecDeque::new()),
         }
     }
@@ -327,9 +429,6 @@ impl SynchronizationProtocolHandler {
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
             }
-            ErrorKind::TemporarilyInvalid => {
-                op = Some(UpdateNodeOperation::Demotion)
-            }
             ErrorKind::InvalidTimestamp => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
@@ -501,7 +600,10 @@ impl SynchronizationProtocolHandler {
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
                 SendQueuePriority::High,
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                warn!("Error broadcasting blocks, err={:?}", e);
+            });
         }
 
         Ok(())
@@ -738,7 +840,13 @@ impl SynchronizationProtocolHandler {
                                     PeerId::max_value(),
                                     new_block_hash_msg.as_ref(),
                                     SendQueuePriority::High,
-                                )?;
+                                )
+                                .unwrap_or_else(|e| {
+                                    warn!(
+                                        "Error broadcasting blocks, err={:?}",
+                                        e
+                                    );
+                                });
                             }
                         }
                         None => {
@@ -1232,31 +1340,17 @@ impl SynchronizationProtocolHandler {
     }
 
     fn validate_header_timestamp(
-        &self, header: &BlockHeader,
+        &self, header: &BlockHeader, now: u64,
     ) -> Result<(), Error> {
-        const ACCEPTABLE_DRIFT: Duration = Duration::from_secs(15);
-        let max_time = SystemTime::now() + ACCEPTABLE_DRIFT;
-        let invalid_threshold = max_time + ACCEPTABLE_DRIFT * 9;
-        let timestamp = UNIX_EPOCH + Duration::from_secs(header.timestamp());
-
-        if timestamp > invalid_threshold {
+        const ACCEPTABLE_DRIFT: u64 = 60;
+        let invalid_threshold = now + ACCEPTABLE_DRIFT;
+        if header.timestamp() > invalid_threshold {
             warn!("block {} has incorrect timestamp", header.hash());
             return Err(ErrorKind::InvalidTimestamp.into());
         }
-
-        if timestamp > max_time {
-            warn!("block {} has incorrect timestamp", header.hash());
-            return Err(ErrorKind::TemporarilyInvalid.into());
-        }
-
         Ok(())
     }
 
-    // Handling the response of block header request.
-    // It assumes that the response contains a sequence of block headers,
-    // which are listed in order with parent-child relationship.
-    // For example, bh[i-1] should be the parent of bh[i] which is in turn
-    // the parent of bh[i+1].
     fn on_block_headers_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -1278,31 +1372,43 @@ impl SynchronizationProtocolHandler {
         };
 
         // process request
-        let catch_up_mode = self.catch_up_mode();
-
         let mut hashes = HashSet::new();
         let mut dependent_hashes = HashSet::new();
         let mut need_to_relay = HashSet::new();
         let mut returned_headers = HashSet::new();
 
         // keep first time drift validation error to return later
-        let timestamp_validation_result = block_headers
-            .headers
-            .iter()
-            .map(|h| self.validate_header_timestamp(h))
-            .find(|result| result.is_err())
-            .unwrap_or(Ok(()));
+        let mut now_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let timestamp_validation_result =
+            if self.graph.verification_config.verify_timestamp {
+                block_headers
+                    .headers
+                    .iter()
+                    .map(|h| self.validate_header_timestamp(h, now_timestamp))
+                    .find(|result| result.is_err())
+                    .unwrap_or(Ok(()))
+            } else {
+                Ok(())
+            };
+
+        now_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         for header in &mut block_headers.headers {
             let hash = header.hash();
             returned_headers.insert(hash);
 
-            // skip blocks with invalid timestamp drift
-            if !catch_up_mode
-                && self.graph.verification_config.verify_timestamp
-                && self.validate_header_timestamp(header).is_err()
-            {
-                continue;
+            if self.graph.verification_config.verify_timestamp {
+                if header.timestamp() > now_timestamp {
+                    self.future_blocks.insert(header.clone());
+                    continue;
+                }
             }
 
             let (valid, to_relay, is_old) =
@@ -1363,22 +1469,31 @@ impl SynchronizationProtocolHandler {
             returned_headers,
         );
 
+        let chosen_peer = if timestamp_validation_result.is_ok() {
+            Some(peer)
+        } else {
+            let mut exclude = HashSet::new();
+            exclude.insert(peer);
+            self.syn.get_random_peer(&exclude)
+        };
+
         // request missing headers
         self.request_manager.request_block_headers(
             io,
-            Some(peer),
+            chosen_peer,
             dependent_hashes.into_iter().cloned().collect(),
         );
 
         // request missing blocks
         // FIXME: This is a naive strategy. Need to
         // make it more sophisticated.
+        let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
-            self.request_blocks(io, Some(peer), hashes.into_iter().collect());
+            self.request_blocks(io, chosen_peer, hashes.into_iter().collect());
         } else {
             self.request_manager.request_compact_blocks(
                 io,
-                Some(peer),
+                chosen_peer,
                 hashes.into_iter().collect(),
             );
         }
@@ -1394,7 +1509,10 @@ impl SynchronizationProtocolHandler {
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
                 SendQueuePriority::High,
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                warn!("Error broadcasting blocks, err={:?}", e);
+            });
         }
 
         timestamp_validation_result
@@ -1544,7 +1662,10 @@ impl SynchronizationProtocolHandler {
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
                 SendQueuePriority::High,
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                warn!("Error broadcasting blocks, err={:?}", e);
+            });
         }
 
         Ok(())
@@ -1655,7 +1776,10 @@ impl SynchronizationProtocolHandler {
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
                 SendQueuePriority::High,
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                warn!("Error broadcasting blocks, err={:?}", e);
+            });
         }
         Ok(())
     }
@@ -1774,7 +1898,10 @@ impl SynchronizationProtocolHandler {
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
                 SendQueuePriority::High,
-            )?;
+            )
+            .unwrap_or_else(|e| {
+                warn!("Error broadcasting blocks, err={:?}", e);
+            });
         }
 
         Ok(())
@@ -1891,6 +2018,86 @@ impl SynchronizationProtocolHandler {
                     );
                 }
             }
+        }
+    }
+
+    pub fn check_future_blocks(&self, io: &NetworkContext) {
+        let now_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let mut missed_body_block_hashes = HashSet::new();
+        let mut need_to_relay = HashSet::new();
+        let headers = self.future_blocks.get_before(now_timestamp);
+
+        if headers.is_empty() {
+            return;
+        }
+
+        for mut header in headers {
+            let hash = header.hash();
+            let (valid, to_relay, is_old) =
+                self.graph.insert_block_header(&mut header, true, false);
+            if valid {
+                need_to_relay.extend(to_relay);
+
+                // check block body
+                if !self.graph.contains_block(&hash) {
+                    if is_old {
+                        // Create empty block and insert.
+                        let empty_block = Block::new(header, Vec::new());
+                        let (_, me_to_relay) = self.graph.insert_block(
+                            empty_block,
+                            false,
+                            true,
+                            false,
+                        );
+                        if me_to_relay {
+                            need_to_relay.insert(hash);
+                        }
+                    } else {
+                        missed_body_block_hashes.insert(hash);
+                    }
+                }
+            }
+        }
+
+        let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+
+        // request missing blocks
+        // FIXME: This is a naive strategy. Need to
+        // make it more sophisticated.
+        let catch_up_mode = self.catch_up_mode();
+        if catch_up_mode {
+            self.request_blocks(
+                io,
+                chosen_peer,
+                missed_body_block_hashes.into_iter().collect(),
+            );
+        } else {
+            self.request_manager.request_compact_blocks(
+                io,
+                chosen_peer,
+                missed_body_block_hashes.into_iter().collect(),
+            );
+        }
+
+        // relay if necessary
+        if !need_to_relay.is_empty() && !catch_up_mode {
+            let new_block_hash_msg: Box<dyn Message> =
+                Box::new(NewBlockHashes {
+                    block_hashes: need_to_relay.into_iter().collect(),
+                });
+            self.broadcast_message(
+                io,
+                PeerId::max_value(),
+                new_block_hash_msg.as_ref(),
+                SendQueuePriority::High,
+            )
+            .unwrap_or_else(|e| {
+                warn!("Error broadcasting blocks, err={:?}", e);
+            });
         }
     }
 
@@ -2235,6 +2442,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             .expect("Error registering total_weight_in_past timer");
         io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
             .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
+        io.register_timer(
+            CHECK_FUTURE_BLOCK_TIMER,
+            Duration::from_millis(1000),
+        )
+        .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2281,6 +2493,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         match timer {
             TX_TIMER => {
                 self.propagate_new_transactions(io);
+            }
+            CHECK_FUTURE_BLOCK_TIMER => {
+                self.check_future_blocks(io);
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);
