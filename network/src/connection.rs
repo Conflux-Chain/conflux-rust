@@ -5,21 +5,19 @@
 use crate::{
     io::{IoContext, StreamToken},
     throttling::THROTTLING_SERVICE,
+    Error,
 };
 use bytes::Bytes;
 use mio::{deprecated::*, tcp::*, *};
+use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
+use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
     marker::PhantomData,
-    sync::atomic::{AtomicBool, Ordering as AtomicOrdering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
 };
 
-use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
-
-use crate::Error;
-use std::sync::atomic::AtomicUsize;
-
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WriteStatus {
     Ongoing,
     LowPriority,
@@ -46,6 +44,10 @@ fn decr_high_priority_packets() {
 
 fn has_high_priority_packets() -> bool {
     HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst) > 0
+}
+
+pub fn get_high_priority_packets() -> usize {
+    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst)
 }
 
 pub trait GenericSocket: Read + Write {}
@@ -297,6 +299,32 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
     }
 
     pub fn token(&self) -> StreamToken { self.token }
+
+    pub fn details(&self) -> ConnectionDetails {
+        ConnectionDetails {
+            token: self.token,
+            recv_buf: self.recv_buf.len(),
+            priority_queue_normal: self
+                .send_queue
+                .len_by_priority(SendQueuePriority::Normal),
+            priority_queue_high: self
+                .send_queue
+                .len_by_priority(SendQueuePriority::High),
+            interest: format!("{:?}", self.interest),
+            registered: self.registered.load(AtomicOrdering::SeqCst),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionDetails {
+    pub token: StreamToken,
+    pub recv_buf: usize,
+    pub priority_queue_normal: usize,
+    pub priority_queue_high: usize,
+    pub interest: String,
+    pub registered: bool,
 }
 
 #[cfg(test)]

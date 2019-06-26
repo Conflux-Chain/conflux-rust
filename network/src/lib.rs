@@ -49,8 +49,11 @@ mod session_manager;
 pub mod throttling;
 
 pub use crate::{
+    connection::get_high_priority_packets,
     error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
+    node_table::Node,
     service::NetworkService,
+    session::SessionDetails,
 };
 pub use io::TimerToken;
 
