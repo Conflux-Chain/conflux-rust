@@ -1285,7 +1285,18 @@ impl SynchronizationProtocolHandler {
         let mut need_to_relay = HashSet::new();
         let mut returned_headers = HashSet::new();
 
+        // keep first time drift validation error to return later
+        let timestamp_validation_result = block_headers
+            .headers
+            .iter()
+            .map(|h| self.validate_header_timestamp(h))
+            .find(|result| result.is_err())
+            .unwrap_or(Ok(()));
+
         for header in &mut block_headers.headers {
+            let hash = header.hash();
+            returned_headers.insert(hash);
+
             // skip blocks with invalid timestamp drift
             if !catch_up_mode
                 && self.graph.verification_config.verify_timestamp
@@ -1300,8 +1311,6 @@ impl SynchronizationProtocolHandler {
                 continue;
             }
 
-            let hash = header.hash();
-            returned_headers.insert(hash);
             need_to_relay.extend(to_relay);
 
             // check missing dependencies
@@ -1388,7 +1397,7 @@ impl SynchronizationProtocolHandler {
             )?;
         }
 
-        Ok(())
+        timestamp_validation_result
     }
 
     fn on_blocks_response(
@@ -1623,7 +1632,7 @@ impl SynchronizationProtocolHandler {
             .chain(referee_hashes)
             .filter(|h| {
                 debug_assert!(!self.graph.verified_invalid(&h));
-                !self.graph.contains_block_header(&parent_hash)
+                !self.graph.contains_block_header(&h)
             })
             .collect();
 
