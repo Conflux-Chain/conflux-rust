@@ -9,7 +9,7 @@ use std::ops::{Deref, DerefMut};
 #[derive(Debug, PartialEq)]
 pub struct GetBlockHashesByEpoch {
     pub request_id: RequestId,
-    pub epoch_number: u64,
+    pub epochs: Vec<u64>,
 }
 
 impl Message for GetBlockHashesByEpoch {
@@ -31,7 +31,7 @@ impl Encodable for GetBlockHashesByEpoch {
         stream
             .begin_list(2)
             .append(&self.request_id)
-            .append(&self.epoch_number);
+            .append_list(&self.epochs);
     }
 }
 
@@ -43,7 +43,7 @@ impl Decodable for GetBlockHashesByEpoch {
 
         Ok(GetBlockHashesByEpoch {
             request_id: rlp.val_at(0)?,
-            epoch_number: rlp.val_at(1)?,
+            epochs: rlp.list_at(1)?,
         })
     }
 }
