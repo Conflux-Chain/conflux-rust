@@ -360,6 +360,9 @@ impl ConsensusExecutionHandler {
                 on_local_pivot,
             )
         {
+            if on_local_pivot {
+                *self.tx_pool.best_executed_epoch.lock() = *epoch_hash;
+            }
             debug!("Skip execution in prefix {:?}", epoch_hash);
             return;
         }
@@ -411,6 +414,7 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up
         let state_root = if on_local_pivot {
             state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
+            *self.tx_pool.best_executed_epoch.lock() = *epoch_hash;
         } else {
             state.commit(*epoch_hash).unwrap();
         };

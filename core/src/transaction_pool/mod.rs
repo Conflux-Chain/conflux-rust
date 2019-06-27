@@ -493,6 +493,7 @@ pub struct TransactionPool {
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
     spec: vm::Spec,
+    pub best_executed_epoch: Mutex<EpochId>,
 }
 
 pub type SharedTransactionPool = Arc<TransactionPool>;
@@ -509,6 +510,7 @@ impl TransactionPool {
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man,
             spec: vm::Spec::new_spec(),
+            best_executed_epoch: Default::default(),
         }
     }
 
@@ -521,7 +523,7 @@ impl TransactionPool {
     }
 
     pub fn insert_new_transactions(
-        &self, latest_epoch: EpochId,
+        &self,
         transactions: &Vec<TransactionWithSignature>,
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>)
     {
@@ -625,7 +627,9 @@ impl TransactionPool {
         let mut account_cache = AccountCache::new(unsafe {
             self.data_man
                 .storage_manager
-                .get_state_readonly_assumed_existence(latest_epoch)
+                .get_state_readonly_assumed_existence(
+                    *self.best_executed_epoch.lock(),
+                )
                 .unwrap()
         });
         let mut passed_transactions = Vec::new();

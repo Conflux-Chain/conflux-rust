@@ -293,7 +293,6 @@ impl RpcImpl {
             })
             .and_then(|tx| {
                 let (signed_trans, failed_trans) = self.tx_pool.insert_new_transactions(
-                    self.consensus.best_state_block_hash(),
                     &vec![tx],
                 );
                 if signed_trans.len() + failed_trans.len() > 1 {

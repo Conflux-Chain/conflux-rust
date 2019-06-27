@@ -223,7 +223,6 @@ impl TransactionGenerator {
                 let mut tx_to_insert = Vec::new();
                 tx_to_insert.push(signed_tx.transaction);
                 txgen.txpool.insert_new_transactions(
-                    txgen.consensus.best_state_block_hash(),
                     &tx_to_insert,
                 );
                 last_account = Some(receiver_address);
@@ -328,7 +327,6 @@ impl TransactionGenerator {
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
             txgen.txpool.insert_new_transactions(
-                txgen.consensus.best_state_block_hash(),
                 &tx_to_insert,
             );
             tx_n += 1;

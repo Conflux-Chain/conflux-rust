@@ -640,7 +640,6 @@ impl SynchronizationProtocolHandler {
 
         let (signed_trans, _) =
             self.get_transaction_pool().insert_new_transactions(
-                self.graph.consensus.best_state_block_hash(),
                 &transactions,
             );
 
@@ -921,7 +920,6 @@ impl SynchronizationProtocolHandler {
 
         let (signed_trans, _) =
             self.get_transaction_pool().insert_new_transactions(
-                self.graph.consensus.best_state_block_hash(),
                 &transactions,
             );
 
