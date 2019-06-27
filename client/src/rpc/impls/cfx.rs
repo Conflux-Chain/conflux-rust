@@ -18,7 +18,12 @@ use cfxcore::{
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use jsonrpc_macros::Trailing;
-use network::node_table::{NodeEndpoint, NodeEntry, NodeId};
+use network::{
+    get_high_priority_packets,
+    node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
+    throttling::{self, THROTTLING_SERVICE},
+    SessionDetails,
+};
 use parking_lot::{Condvar, Mutex};
 use primitives::{
     block::MAX_BLOCK_SIZE_IN_BYTES, Action,
@@ -658,6 +663,34 @@ impl RpcImpl {
         self.tx_pool.clear_tx_pool();
         Ok(())
     }
+
+    fn net_throttling(&self) -> RpcResult<throttling::Service> {
+        Ok(THROTTLING_SERVICE.read().clone())
+    }
+
+    fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {
+        match self.sync.get_network_service().get_node(&id) {
+            None => Ok(None),
+            Some((trusted, node)) => {
+                if trusted {
+                    Ok(Some(("trusted".into(), node)))
+                } else {
+                    Ok(Some(("untrusted".into(), node)))
+                }
+            }
+        }
+    }
+
+    fn net_sessions(&self) -> RpcResult<Vec<SessionDetails>> {
+        match self.sync.get_network_service().get_detailed_sessions() {
+            None => Ok(Vec::new()),
+            Some(sessions) => Ok(sessions),
+        }
+    }
+
+    fn net_high_priority_packets(&self) -> RpcResult<usize> {
+        Ok(get_high_priority_packets())
+    }
 }
 
 fn grouped_txs<T, F>(
@@ -918,4 +951,20 @@ impl DebugRpc for DebugRpcImpl {
     }
 
     fn clear_tx_pool(&self) -> RpcResult<()> { self.rpc_impl.clear_tx_pool() }
+
+    fn net_throttling(&self) -> RpcResult<throttling::Service> {
+        self.rpc_impl.net_throttling()
+    }
+
+    fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {
+        self.rpc_impl.net_node(id)
+    }
+
+    fn net_sessions(&self) -> RpcResult<Vec<SessionDetails>> {
+        self.rpc_impl.net_sessions()
+    }
+
+    fn net_high_priority_packets(&self) -> RpcResult<usize> {
+        self.rpc_impl.net_high_priority_packets()
+    }
 }

@@ -4,8 +4,9 @@
 
 use crate::{
     connection::{
-        Connection as TcpConnection, PacketSizer as PacketSizerTrait,
-        SendQueueStatus, MAX_PAYLOAD_SIZE,
+        Connection as TcpConnection, ConnectionDetails,
+        PacketSizer as PacketSizerTrait, SendQueueStatus, WriteStatus,
+        MAX_PAYLOAD_SIZE,
     },
     hash::keccak,
     node_table::{NodeEndpoint, NodeEntry, NodeId},
@@ -21,7 +22,8 @@ use keylib::{recover, sign};
 use mio::{deprecated::*, tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
-use std::{fmt, net::SocketAddr, str};
+use serde_derive::Serialize;
+use std::{fmt, net::SocketAddr, str, time::Instant};
 
 struct PacketSizer;
 
@@ -50,6 +52,10 @@ pub struct Session {
     sent_hello: bool,
     had_hello: bool,
     expired: bool,
+
+    // statistics for read/write
+    last_read: Instant,
+    last_write: (Instant, Option<WriteStatus>), // None for error
 }
 
 pub enum SessionData {
@@ -84,6 +90,8 @@ impl Session {
             sent_hello: false,
             had_hello: false,
             expired: false,
+            last_read: Instant::now(),
+            last_write: (Instant::now(), None),
         };
         if true {
             session.write_hello(io, host)?;
@@ -142,6 +150,8 @@ impl Session {
     pub fn readable<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<SessionData, Error> {
+        self.last_read = Instant::now();
+
         if self.expired() {
             debug!("cannot read data due to expired, session = {:?}", self);
             return Ok(SessionData::None);
@@ -313,7 +323,9 @@ impl Session {
         };
         if !entry.endpoint.is_valid() {
             debug!("Got invalid endpoint {:?}, session = {:?}", entry, self);
-            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
+            return Err(
+                self.disconnect(io, DisconnectReason::WrongEndpointInfo)
+            );
         } else if !(entry.endpoint.is_allowed(host.get_ip_filter())
             && entry.id != *host.metadata.id())
         {
@@ -435,8 +447,35 @@ impl Session {
     pub fn writable<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        self.connection.writable(io)?;
-        Ok(())
+        match self.connection.writable(io) {
+            Ok(status) => {
+                self.last_write = (Instant::now(), Some(status));
+                Ok(())
+            }
+            Err(e) => {
+                self.last_write = (Instant::now(), None);
+                Err(e)
+            }
+        }
+    }
+
+    pub fn details(&self) -> SessionDetails {
+        SessionDetails {
+            originated: self.metadata.originated,
+            node_id: self.metadata.id,
+            address: self.address,
+            connection: self.connection.details(),
+            status: if self.expired {
+                "expired".into()
+            } else if self.had_hello {
+                "communicating".into()
+            } else {
+                "handshaking".into()
+            },
+            last_read: format!("{:?}", self.last_read.elapsed()),
+            last_write: format!("{:?}", self.last_write.0.elapsed()),
+            last_write_status: format!("{:?}", self.last_write.1),
+        }
     }
 }
 
@@ -445,4 +484,17 @@ impl fmt::Debug for Session {
         write!(f, "Session {{ token: {}, id: {:?}, originated: {}, address: {:?}, sent_hello: {}, had_hello: {}, expired: {} }}",
                self.token(), self.id(), self.metadata.originated, self.address, self.sent_hello, self.had_hello, self.expired)
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDetails {
+    pub originated: bool,
+    pub node_id: Option<NodeId>,
+    pub address: SocketAddr,
+    pub connection: ConnectionDetails,
+    pub status: String,
+    pub last_read: String,
+    pub last_write: String,
+    pub last_write_status: String,
 }

@@ -11,7 +11,10 @@ use cfx_types::H256;
 use cfxcore::PeerInfo;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_macros::{build_rpc_trait, Trailing};
-use network::node_table::NodeId;
+use network::{
+    node_table::{Node, NodeId},
+    throttling, SessionDetails,
+};
 use std::{collections::BTreeMap, net::SocketAddr};
 
 build_rpc_trait! {
@@ -213,5 +216,17 @@ build_rpc_trait! {
 
         #[rpc(name = "clear_tx_pool")]
         fn clear_tx_pool(&self) -> RpcResult<()>;
+
+        #[rpc(name = "net_throttling")]
+        fn net_throttling(&self) -> RpcResult<throttling::Service>;
+
+        #[rpc(name = "net_node")]
+        fn net_node(&self, NodeId) -> RpcResult<Option<(String, Node)>>;
+
+        #[rpc(name = "net_sessions")]
+        fn net_sessions(&self) -> RpcResult<Vec<SessionDetails>>;
+
+        #[rpc(name = "net_high_priority_packets")]
+        fn net_high_priority_packets(&self) -> RpcResult<usize>;
     }
 }

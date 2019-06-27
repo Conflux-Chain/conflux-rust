@@ -235,6 +235,16 @@ impl NodeDatabase {
         })
     }
 
+    pub fn get_with_trusty(&self, id: &NodeId) -> Option<(bool, &Node)> {
+        if let Some(node) = self.trusted_nodes.get(id) {
+            Some((true, node))
+        } else if let Some(node) = self.untrusted_nodes.get(id) {
+            Some((false, node))
+        } else {
+            None
+        }
+    }
+
     pub fn sample_trusted_nodes(
         &self, count: u32, filter: &IpFilter,
     ) -> Vec<NodeEntry> {
