@@ -5,6 +5,7 @@
 #![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
+    block_data_manager::BlockDataManager,
     cache_manager::CacheManager,
     consensus::{
         ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
@@ -122,11 +123,18 @@ fn initialize_consensus_graph_for_test(
         3 * mb,
     )));
 
+    let data_man = Arc::new(BlockDataManager::new(
+        Arc::new(genesis_block),
+        ledger_db.clone(),
+        storage_manager,
+        cache_man,
+        false,
+    ));
+
     let txpool = Arc::new(TransactionPool::with_capacity(
         500_000,
-        storage_manager.clone(),
         worker_thread_pool.clone(),
-        cache_man.clone(),
+        data_man.clone(),
     ));
     let statistics = Arc::new(Statistics::new());
 
@@ -136,7 +144,6 @@ fn initialize_consensus_graph_for_test(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),
-            record_tx_address: true,
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_alpha_num: alpha_num,
                 adaptive_weight_alpha_den: alpha_den,
@@ -147,13 +154,10 @@ fn initialize_consensus_graph_for_test(
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */
         },
-        genesis_block,
-        storage_manager.clone(),
         vm.clone(),
         txpool.clone(),
         statistics.clone(),
-        ledger_db.clone(),
-        cache_man.clone(),
+        data_man.clone(),
         pow_config.clone(),
     ));
 

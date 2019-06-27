@@ -11,28 +11,27 @@ use self::debug::*;
 use super::consensus::consensus_executor::ConsensusExecutor;
 use crate::{
     block_data_manager::BlockDataManager,
-    cache_manager::{CacheId, CacheManager},
     consensus::{
         anticone_cache::AnticoneCache,
         confirmation::ConfirmationTrait,
         consensus_executor::{EpochExecutionTask, RewardExecutionInfo},
     },
     db::COL_MISC,
-    ext_db::SystemDB,
     hash::KECCAK_EMPTY_LIST_RLP,
     pow::ProofOfWorkConfig,
     state::State,
     statedb::StateDb,
     statistics::SharedStatistics,
-    storage::{state::StateTrait, StorageManager, StorageManagerTrait},
+    storage::{state::StateTrait, StorageManagerTrait},
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{into_i128, into_u256, Bloom, H160, H256, U256, U512};
 // use fenwick_tree::FenwickTree;
+use crate::pow::target_difficulty;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::MinLinkCutTree;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -106,7 +105,6 @@ pub struct ConsensusConfig {
     // If we hit invalid state root, we will dump the information into a
     // directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: String,
-    pub record_tx_address: bool,
     // When bench_mode is true, the PoW solution verification will be skipped.
     // The transaction execution will also be skipped and only return the
     // pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
@@ -1246,7 +1244,8 @@ impl ConsensusGraphInner {
             == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
                 * self.pow_config.difficulty_adjustment_epoch_period
         {
-            self.current_difficulty = self.data_man.target_difficulty(
+            self.current_difficulty = target_difficulty(
+                &self.data_man,
                 &self.pow_config,
                 &new_best_hash,
                 |h| {
@@ -1659,21 +1658,11 @@ impl ConsensusGraph {
     /// Build the ConsensusGraph with a genesis block and various other
     /// components The execution will be skipped if bench_mode sets to true.
     pub fn with_genesis_block(
-        conf: ConsensusConfig, genesis_block: Block,
-        storage_manager: Arc<StorageManager>, vm: VmFactory,
-        txpool: SharedTransactionPool, statistics: SharedStatistics,
-        db: Arc<SystemDB>, cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
+        statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig,
     ) -> Self
     {
-        let data_man = Arc::new(BlockDataManager::new(
-            Arc::new(genesis_block),
-            txpool.clone(),
-            db,
-            storage_manager,
-            cache_man,
-            conf.record_tx_address,
-        ));
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_genesis_block(
                 pow_config,
@@ -1681,6 +1670,7 @@ impl ConsensusGraph {
                 conf.inner_conf.clone(),
             )));
         let executor = Arc::new(ConsensusExecutor::start(
+            txpool.clone(),
             data_man.clone(),
             vm,
             inner.clone(),

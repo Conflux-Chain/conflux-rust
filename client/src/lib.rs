@@ -33,6 +33,7 @@ use crate::rpc::{
     impls::cfx::RpcImpl, setup_debug_rpc_apis, setup_public_rpc_apis, RpcBlock,
 };
 use cfx_types::{Address, U256};
+use cfxcore::block_data_manager::BlockDataManager;
 use ctrlc::CtrlC;
 use db::SystemDB;
 use keylib::public_to_address;
@@ -186,11 +187,18 @@ impl Client {
             3 * mb,
         )));
 
+        let data_man = Arc::new(BlockDataManager::new(
+            Arc::new(genesis_block),
+            ledger_db.clone(),
+            storage_manager,
+            cache_man,
+            conf.raw_conf.record_tx_address,
+        ));
+
         let txpool = Arc::new(TransactionPool::with_capacity(
             conf.raw_conf.tx_pool_size,
-            storage_manager.clone(),
             worker_thread_pool.clone(),
-            cache_man.clone(),
+            data_man.clone(),
         ));
 
         let statistics = Arc::new(Statistics::new());
@@ -199,13 +207,10 @@ impl Client {
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::with_genesis_block(
             conf.consensus_config(),
-            genesis_block,
-            storage_manager.clone(),
             vm.clone(),
             txpool.clone(),
             statistics.clone(),
-            ledger_db.clone(),
-            cache_man.clone(),
+            data_man.clone(),
             pow_config.clone(),
         ));
 
@@ -235,7 +240,6 @@ impl Client {
 
         let txgen = Arc::new(TransactionGenerator::new(
             consensus.clone(),
-            storage_manager.clone(),
             txpool.clone(),
             secret_store.clone(),
             sync.net_key_pair().ok(),
@@ -319,7 +323,6 @@ impl Client {
         let rpc_impl = Arc::new(RpcImpl::new(
             consensus.clone(),
             sync.clone(),
-            storage_manager.clone(),
             blockgen.clone(),
             txpool.clone(),
             exit,

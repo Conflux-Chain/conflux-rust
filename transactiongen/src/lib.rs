@@ -16,8 +16,8 @@ extern crate log;
 use crate::bytes::Bytes;
 use cfx_types::{Address, H256, H512, U256, U512};
 use cfxcore::{
-    executive::contract_address, storage::StorageManager,
-    vm::CreateContractAddress, SharedConsensusGraph, SharedTransactionPool,
+    executive::contract_address, vm::CreateContractAddress,
+    SharedConsensusGraph, SharedTransactionPool,
 };
 use hex::*;
 use keylib::{public_to_address, Generator, KeyPair, Random};
@@ -64,7 +64,6 @@ impl TransactionGeneratorConfig {
 
 pub struct TransactionGenerator {
     pub consensus: SharedConsensusGraph,
-    pub storage_manager: Arc<StorageManager>,
     txpool: SharedTransactionPool,
     secret_store: SharedSecretStore,
     state: RwLock<TransGenState>,
@@ -75,14 +74,12 @@ pub type SharedTransactionGenerator = Arc<TransactionGenerator>;
 
 impl TransactionGenerator {
     pub fn new(
-        consensus: SharedConsensusGraph, storage_manager: Arc<StorageManager>,
-        txpool: SharedTransactionPool, secret_store: SharedSecretStore,
-        key_pair: Option<KeyPair>,
+        consensus: SharedConsensusGraph, txpool: SharedTransactionPool,
+        secret_store: SharedSecretStore, key_pair: Option<KeyPair>,
     ) -> Self
     {
         TransactionGenerator {
             consensus,
-            storage_manager,
             txpool,
             secret_store,
             state: RwLock::new(TransGenState::Start),

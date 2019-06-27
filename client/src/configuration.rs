@@ -234,7 +234,6 @@ impl Configuration {
                 .raw_conf
                 .debug_dump_dir_invalid_state_root
                 .clone(),
-            record_tx_address: self.raw_conf.record_tx_address,
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_alpha_num: self
                     .raw_conf
