@@ -681,8 +681,14 @@ impl RpcImpl {
         }
     }
 
-    fn net_sessions(&self) -> RpcResult<Vec<SessionDetails>> {
-        match self.sync.get_network_service().get_detailed_sessions() {
+    fn net_sessions(
+        &self, node_id: Trailing<NodeId>,
+    ) -> RpcResult<Vec<SessionDetails>> {
+        match self
+            .sync
+            .get_network_service()
+            .get_detailed_sessions(node_id.into())
+        {
             None => Ok(Vec::new()),
             Some(sessions) => Ok(sessions),
         }
@@ -960,8 +966,10 @@ impl DebugRpc for DebugRpcImpl {
         self.rpc_impl.net_node(id)
     }
 
-    fn net_sessions(&self) -> RpcResult<Vec<SessionDetails>> {
-        self.rpc_impl.net_sessions()
+    fn net_sessions(
+        &self, node_id: Trailing<NodeId>,
+    ) -> RpcResult<Vec<SessionDetails>> {
+        self.rpc_impl.net_sessions(node_id)
     }
 
     fn net_high_priority_packets(&self) -> RpcResult<usize> {

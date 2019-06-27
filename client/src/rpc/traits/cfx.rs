@@ -224,7 +224,7 @@ build_rpc_trait! {
         fn net_node(&self, NodeId) -> RpcResult<Option<(String, Node)>>;
 
         #[rpc(name = "net_sessions")]
-        fn net_sessions(&self) -> RpcResult<Vec<SessionDetails>>;
+        fn net_sessions(&self, Trailing<NodeId>) -> RpcResult<Vec<SessionDetails>>;
 
         #[rpc(name = "net_high_priority_packets")]
         fn net_high_priority_packets(&self) -> RpcResult<usize>;

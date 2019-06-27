@@ -255,16 +255,25 @@ impl NetworkService {
         Some((trusted, node.clone()))
     }
 
-    pub fn get_detailed_sessions(&self) -> Option<Vec<SessionDetails>> {
+    pub fn get_detailed_sessions(
+        &self, node_id: Option<NodeId>,
+    ) -> Option<Vec<SessionDetails>> {
         let inner = self.inner.as_ref()?;
-        Some(
-            inner
-                .sessions
-                .all()
-                .iter()
-                .map(|s| s.read().details())
-                .collect(),
-        )
+        match node_id {
+            None => Some(
+                inner
+                    .sessions
+                    .all()
+                    .iter()
+                    .map(|s| s.read().details())
+                    .collect(),
+            ),
+            Some(id) => {
+                let session = inner.sessions.get_by_id(&id)?;
+                let details = session.read().details();
+                Some(vec![details])
+            }
+        }
     }
 }
 
