@@ -452,7 +452,8 @@ impl SynchronizationProtocolHandler {
         let mut blocks = Vec::new();
         debug!("on_get_compact_blocks, msg=:{:?}", req);
         for hash in &req.hashes {
-            if let Some(compact_block) = self.graph.data_man.compact_block_by_hash(hash)
+            if let Some(compact_block) =
+                self.graph.data_man.compact_block_by_hash(hash)
             {
                 if (compact_blocks.len() as u64) < MAX_HEADERS_TO_SEND {
                     compact_blocks.push(compact_block);
@@ -529,7 +530,10 @@ impl SynchronizationProtocolHandler {
                     } else {
                         debug!("Cmpct block Processing, hash={}", hash);
                         let missing = cmpct.build_partial(
-                            &*self.graph.data_man.transaction_pubkey_cache
+                            &*self
+                                .graph
+                                .data_man
+                                .transaction_pubkey_cache
                                 .read(),
                         );
                         if !missing.is_empty() {
@@ -788,11 +792,15 @@ impl SynchronizationProtocolHandler {
                     debug!("Process blocktxn hash={:?}", resp_hash);
                     let signed_txes = Self::batch_recover_with_cache(
                         &resp.block_txn,
-                        &mut *self.graph.data_man.transaction_pubkey_cache
+                        &mut *self
+                            .graph
+                            .data_man
+                            .transaction_pubkey_cache
                             .write(),
                         &mut *self.graph.data_man.cache_man.lock(),
                     )?;
-                    match self.graph.data_man.compact_block_by_hash(&resp_hash) {
+                    match self.graph.data_man.compact_block_by_hash(&resp_hash)
+                    {
                         Some(cmpct) => {
                             let mut trans = Vec::with_capacity(
                                 cmpct.reconstructed_txes.len(),
@@ -1605,8 +1613,7 @@ impl SynchronizationProtocolHandler {
             if Self::recover_public(
                 &mut block,
                 self.get_transaction_pool(),
-                &mut *self.graph.data_man.transaction_pubkey_cache
-                    .write(),
+                &mut *self.graph.data_man.transaction_pubkey_cache.write(),
                 &mut *self.graph.data_man.cache_man.lock(),
                 &*self.get_transaction_pool().worker_pool.lock(),
             )

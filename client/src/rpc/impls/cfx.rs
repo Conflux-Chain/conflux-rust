@@ -13,8 +13,8 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
-    storage::StorageManager, PeerInfo, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use jsonrpc_macros::Trailing;
@@ -44,8 +44,8 @@ pub struct RpcImpl {
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        block_gen: Arc<BlockGenerator>,
-        tx_pool: SharedTransactionPool, exit: Arc<(Mutex<bool>, Condvar)>,
+        block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
+        exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self
     {
         RpcImpl {
@@ -303,7 +303,7 @@ impl RpcImpl {
                 } else if signed_trans.len() + failed_trans.len() == 0 {
                     // For tx in transactions_pubkey_cache, we simply ignore them
                     debug!("insert_new_transactions ignores inserted transactions");
-                    Ok(H256::new().into())
+                    Err(RpcError::invalid_params(String::from("tx already exist")))
                 } else {
                     if signed_trans.is_empty() {
                         let mut tx_err = String::from("");

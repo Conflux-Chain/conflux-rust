@@ -8,18 +8,17 @@ use crate::{
     db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
-    pow::ProofOfWorkConfig,
+    pow::{target_difficulty, ProofOfWorkConfig},
     statistics::SharedStatistics,
     storage::GuardedValue,
     verification::*,
 };
 use cfx_types::{H256, U256};
-use heapsize::HeapSizeOf;
 use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    block::CompactBlock, transaction::SignedTransaction, Block, BlockHeader,
-    EpochNumber, StateRootWithAuxInfo,
+    transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
+    StateRootWithAuxInfo,
 };
 use rlp::Rlp;
 use slab::Slab;
@@ -544,7 +543,8 @@ impl SynchronizationGraphInner {
                 cur = self.arena[cur].parent;
             }
             // self.target_difficulty(&self.arena[cur].block_header.hash())
-            self.data_man.target_difficulty(
+            target_difficulty(
+                &self.data_man,
                 &self.pow_config,
                 &self.arena[cur].block_header.hash(),
                 |h| {
@@ -854,7 +854,6 @@ impl SynchronizationGraph {
     pub fn block_by_hash_from_db(&self, hash: &H256) -> Option<Block> {
         self.data_man.block_by_hash_from_db(hash)
     }
-
 
     pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }
 
@@ -1324,7 +1323,8 @@ impl SynchronizationGraph {
     }
 
     /// Get the current number of blocks in the synchronization graph
-    /// This only returns cached block count, and this is enough since this is only used in test.
+    /// This only returns cached block count, and this is enough since this is
+    /// only used in test.
     pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
 
     // Manage statistics

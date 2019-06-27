@@ -11,11 +11,11 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    cache_manager::{CacheId, CacheManager},
+    block_data_manager::BlockDataManager,
     executive,
     pow::WORKER_COMPUTATION_PARALLELISM,
     statedb::StateDb,
-    storage::{state_manager::StateManagerTrait, Storage, StorageManager},
+    storage::{state_manager::StateManagerTrait, Storage},
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
@@ -32,7 +32,6 @@ use std::{
     sync::{mpsc::channel, Arc},
 };
 use threadpool::ThreadPool;
-use crate::block_data_manager::BlockDataManager;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
@@ -492,7 +491,7 @@ pub struct TransactionPool {
     inner: RwLock<TransactionPoolInner>,
     pub worker_pool: Arc<Mutex<ThreadPool>>,
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
-    data_man: Arc<BlockDataManager>,
+    pub data_man: Arc<BlockDataManager>,
     spec: vm::Spec,
 }
 
@@ -500,8 +499,7 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 
 impl TransactionPool {
     pub fn with_capacity(
-        capacity: usize,
-        worker_pool: Arc<Mutex<ThreadPool>>,
+        capacity: usize, worker_pool: Arc<Mutex<ThreadPool>>,
         data_man: Arc<BlockDataManager>,
     ) -> Self
     {
@@ -528,7 +526,8 @@ impl TransactionPool {
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>)
     {
         let mut failures = HashMap::new();
-        let uncached_trans = self.data_man.get_uncached_transactions(transactions);
+        let uncached_trans =
+            self.data_man.get_uncached_transactions(transactions);
 
         let mut signed_trans = Vec::new();
         if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
@@ -624,7 +623,8 @@ impl TransactionPool {
         }
 
         let mut account_cache = AccountCache::new(unsafe {
-            self.data_man.storage_manager
+            self.data_man
+                .storage_manager
                 .get_state_readonly_assumed_existence(latest_epoch)
                 .unwrap()
         });
@@ -847,7 +847,10 @@ impl TransactionPool {
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
         let mut account_cache = AccountCache::new(
-            self.data_man.storage_manager.get_state_at(epoch_id).unwrap(),
+            self.data_man
+                .storage_manager
+                .get_state_at(epoch_id)
+                .unwrap(),
         );
         for tx in transactions {
             self.add_transaction_and_check_readiness_without_lock(

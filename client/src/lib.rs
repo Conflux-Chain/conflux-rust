@@ -33,6 +33,7 @@ use crate::rpc::{
     impls::cfx::RpcImpl, setup_debug_rpc_apis, setup_public_rpc_apis, RpcBlock,
 };
 use cfx_types::{Address, U256};
+use cfxcore::block_data_manager::BlockDataManager;
 use ctrlc::CtrlC;
 use db::SystemDB;
 use keylib::public_to_address;
@@ -55,7 +56,6 @@ use txgen::{
     propagate::DataPropagation, SpecialTransactionGenerator,
     TransactionGenerator,
 };
-use cfxcore::block_data_manager::BlockDataManager;
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset

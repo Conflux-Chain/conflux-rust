@@ -3,26 +3,23 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    cache_manager::{CacheId, CacheManager},
+    cache_manager::{CacheId, CacheManager, CacheSize},
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
     ext_db::SystemDB,
-    pow::ProofOfWorkConfig,
     storage::StorageManager,
     verification::VerificationConfig,
-    SharedTransactionPool,
 };
-use cfx_types::{Bloom, H256, U256};
+use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS}, Block, BlockHeader, SignedTransaction, TransactionAddress, TransactionWithSignature};
-use rlp::{Rlp, RlpStream};
-use std::{
-    cmp::{max, min},
-    collections::HashMap,
-    sync::Arc,
+use primitives::{
+    block::CompactBlock,
+    receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
+    Block, BlockHeader, SignedTransaction, TransactionAddress,
+    TransactionWithSignature,
 };
-use primitives::block::CompactBlock;
-use crate::cache_manager::CacheSize;
+use rlp::{Rlp, RlpStream};
+use std::{collections::HashMap, sync::Arc};
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
@@ -45,8 +42,8 @@ pub struct BlockDataManager {
 
 impl BlockDataManager {
     pub fn new(
-        genesis_block: Arc<Block>,
-        db: Arc<SystemDB>, storage_manager: Arc<StorageManager>,
+        genesis_block: Arc<Block>, db: Arc<SystemDB>,
+        storage_manager: Arc<StorageManager>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>, record_tx_address: bool,
     ) -> Self
     {
@@ -427,14 +424,18 @@ impl BlockDataManager {
             .map(Clone::clone)
     }
 
-    pub fn cache_transaction(&self, tx_hash: &H256, tx: Arc<SignedTransaction>) {
+    pub fn cache_transaction(
+        &self, tx_hash: &H256, tx: Arc<SignedTransaction>,
+    ) {
         let mut transactions = self.transaction_pubkey_cache.write();
         let mut cache_man = self.cache_man.lock();
         transactions.insert(*tx_hash, tx);
         cache_man.note_used(CacheId::TransactionPubkey(*tx_hash))
     }
 
-    pub fn get_uncached_transactions(&self, transactions: &Vec<TransactionWithSignature>) -> Vec<TransactionWithSignature> {
+    pub fn get_uncached_transactions(
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> Vec<TransactionWithSignature> {
         let tx_cache = self.transaction_pubkey_cache.read();
         transactions
             .iter()
@@ -502,63 +503,17 @@ impl BlockDataManager {
         true
     }
 
-    // The input `cur_hash` must have been inserted to BlockDataManager,
-    // otherwise it'll panic.
-    pub fn target_difficulty<F>(
-        &self, pow_config: &ProofOfWorkConfig, cur_hash: &H256,
-        num_blocks_in_epoch: F,
-    ) -> U256
-    where
-        F: Fn(&H256) -> usize,
-    {
-        let mut cur_header = self
-            .block_header_by_hash(cur_hash)
-            .expect("Must already in BlockDataManager block_header");
-        let epoch = cur_header.height();
-        assert_ne!(epoch, 0);
-        debug_assert!(
-            epoch
-                == (epoch / pow_config.difficulty_adjustment_epoch_period)
-                    * pow_config.difficulty_adjustment_epoch_period
-        );
-
-        let mut cur = cur_hash.clone();
-        let cur_difficulty = cur_header.difficulty().clone();
-        let mut block_count = 0 as u64;
-        let mut max_time = u64::min_value();
-        let mut min_time = u64::max_value();
-        for _ in 0..pow_config.difficulty_adjustment_epoch_period {
-            block_count += num_blocks_in_epoch(&cur) as u64 + 1;
-            max_time = max(max_time, cur_header.timestamp());
-            min_time = min(min_time, cur_header.timestamp());
-            cur = cur_header.parent_hash().clone();
-            cur_header = self.block_header_by_hash(&cur).unwrap();
-        }
-        pow_config.target_difficulty(
-            block_count,
-            max_time - min_time,
-            &cur_difficulty,
-        )
-    }
-
-    pub fn cached_block_count(&self) -> usize {
-        self.blocks.read().len()
-    }
+    pub fn cached_block_count(&self) -> usize { self.blocks.read().len() }
 
     /// Get current cache size.
     pub fn cache_size(&self) -> CacheSize {
         let blocks = self.blocks.read().heap_size_of_children();
         let compact_blocks = self.compact_blocks.read().heap_size_of_children();
-        let block_receipts =
-            self.block_receipts.read().heap_size_of_children();
-        let transaction_addresses= self
-            .transaction_addresses
-            .read()
-            .heap_size_of_children();
-        let transaction_pubkey = self
-            .transaction_pubkey_cache
-            .read()
-            .heap_size_of_children();
+        let block_receipts = self.block_receipts.read().heap_size_of_children();
+        let transaction_addresses =
+            self.transaction_addresses.read().heap_size_of_children();
+        let transaction_pubkey =
+            self.transaction_pubkey_cache.read().heap_size_of_children();
         CacheSize {
             blocks,
             block_receipts,
