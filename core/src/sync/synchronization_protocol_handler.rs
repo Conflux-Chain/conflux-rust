@@ -638,11 +638,9 @@ impl SynchronizationProtocolHandler {
 
         self.request_manager.transactions_received(&req_tx_ids);
 
-        let (signed_trans, _) =
-            self.get_transaction_pool().insert_new_transactions(
-                self.graph.consensus.best_state_block_hash(),
-                &transactions,
-            );
+        let (signed_trans, _) = self
+            .get_transaction_pool()
+            .insert_new_transactions(&transactions);
 
         self.request_manager
             .append_received_transactions(signed_trans);
@@ -919,11 +917,9 @@ impl SynchronizationProtocolHandler {
             bail!(ErrorKind::TooManyTrans);
         }
 
-        let (signed_trans, _) =
-            self.get_transaction_pool().insert_new_transactions(
-                self.graph.consensus.best_state_block_hash(),
-                &transactions,
-            );
+        let (signed_trans, _) = self
+            .get_transaction_pool()
+            .insert_new_transactions(&transactions);
 
         self.request_manager
             .append_received_transactions(signed_trans);

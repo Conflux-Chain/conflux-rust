@@ -360,6 +360,9 @@ impl ConsensusExecutionHandler {
                 on_local_pivot,
             )
         {
+            if on_local_pivot {
+                *self.tx_pool.best_executed_epoch.lock() = *epoch_hash;
+            }
             debug!("Skip execution in prefix {:?}", epoch_hash);
             return;
         }
@@ -411,6 +414,7 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up
         let state_root = if on_local_pivot {
             state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
+            *self.tx_pool.best_executed_epoch.lock() = *epoch_hash;
         } else {
             state.commit(*epoch_hash).unwrap();
         };
@@ -547,18 +551,8 @@ impl ConsensusExecutionHandler {
             BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
         );
         if on_local_pivot {
-            let parent = pivot_block.block_header.parent_hash();
-            if *parent != self.data_man.genesis_block().hash() {
-                let state = self
-                    .data_man
-                    .storage_manager
-                    .get_state_no_commit(*parent)
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
-                    .unwrap();
-                self.tx_pool
-                    .recycle_failed_executed_transactions(to_pending, state);
-            }
+            self.tx_pool
+                .recycle_failed_executed_transactions(to_pending);
         }
         debug!("Finish processing tx for epoch");
         epoch_receipts

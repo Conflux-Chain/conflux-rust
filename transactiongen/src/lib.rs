@@ -222,10 +222,7 @@ impl TransactionGenerator {
                 let signed_tx = tx.sign(initial_key_pair.secret());
                 let mut tx_to_insert = Vec::new();
                 tx_to_insert.push(signed_tx.transaction);
-                txgen.txpool.insert_new_transactions(
-                    txgen.consensus.best_state_block_hash(),
-                    &tx_to_insert,
-                );
+                txgen.txpool.insert_new_transactions(&tx_to_insert);
                 last_account = Some(receiver_address);
             } else {
                 // Wait for preparation
@@ -327,10 +324,7 @@ impl TransactionGenerator {
             let signed_tx = tx.sign(sender_kp.secret());
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
-            txgen.txpool.insert_new_transactions(
-                txgen.consensus.best_state_block_hash(),
-                &tx_to_insert,
-            );
+            txgen.txpool.insert_new_transactions(&tx_to_insert);
             tx_n += 1;
             if tx_n % 100 == 0 {
                 info!("Generated {} transactions", tx_n);
