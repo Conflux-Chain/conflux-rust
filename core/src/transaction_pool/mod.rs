@@ -501,13 +501,14 @@ impl TransactionPool {
         data_man: Arc<BlockDataManager>,
     ) -> Self
     {
+        let genesis_hash = data_man.genesis_block.hash();
         TransactionPool {
             inner: RwLock::new(TransactionPoolInner::with_capacity(capacity)),
             worker_pool,
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man,
             spec: vm::Spec::new_spec(),
-            best_executed_epoch: Default::default(),
+            best_executed_epoch: Mutex::new(genesis_hash),
         }
     }
 
@@ -796,6 +797,10 @@ impl TransactionPool {
     pub fn recycle_failed_executed_transactions(
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
+        if transactions.is_empty() {
+            // Fast return. Also used to for bench mode.
+            return;
+        }
         let mut account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
@@ -834,6 +839,10 @@ impl TransactionPool {
     }
 
     pub fn set_tx_packed(&self, transactions: Vec<Arc<SignedTransaction>>) {
+        if transactions.is_empty() {
+            // Fast return. Also used to for bench mode.
+            return;
+        }
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
         let mut account_cache = self.get_best_state_account_cache();
