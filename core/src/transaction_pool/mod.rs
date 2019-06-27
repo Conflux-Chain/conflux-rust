@@ -827,10 +827,10 @@ impl TransactionPool {
     }
 
     pub fn set_to_propagate_trans(
-        &self, mut transactions: HashMap<H256, Arc<SignedTransaction>>,
+        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
         let mut to_prop = self.to_propagate_trans.write();
-        mem::swap(&mut *to_prop, &mut transactions);
+        to_prop.extend(transactions);
     }
 
     // If a tx is failed executed due to invalid nonce

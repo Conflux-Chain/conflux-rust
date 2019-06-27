@@ -323,9 +323,7 @@ impl Session {
         };
         if !entry.endpoint.is_valid() {
             debug!("Got invalid endpoint {:?}, session = {:?}", entry, self);
-            return Err(
-                self.disconnect(io, DisconnectReason::WrongEndpointInfo)
-            );
+            return Err(self.disconnect(io, DisconnectReason::WrongEndpointInfo));
         } else if !(entry.endpoint.is_allowed(host.get_ip_filter())
             && entry.id != *host.metadata.id())
         {
