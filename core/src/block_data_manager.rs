@@ -21,16 +21,19 @@ use std::{
     collections::HashMap,
     sync::Arc,
 };
+use primitives::block::CompactBlock;
+use crate::cache_manager::CacheSize;
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
 pub struct BlockDataManager {
-    pub block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
-    pub blocks: RwLock<HashMap<H256, Arc<Block>>>,
-    pub block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
-    pub transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
-    block_receipts_root: RwLock<HashMap<H256, H256>>,
+    block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
+    blocks: RwLock<HashMap<H256, Arc<Block>>>,
+    compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
+    block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
+    transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
+    block_receipts_root: RwLock<HashMap<H256, H256>>,
 
     pub record_tx_address: bool,
 
@@ -50,6 +53,7 @@ impl BlockDataManager {
         let data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
+            compact_blocks: Default::default(),
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
             block_receipts_root: Default::default(),
@@ -226,6 +230,25 @@ impl BlockDataManager {
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         let result = self.block_by_hash(hash, false)?;
         Some(result.block_header.height())
+    }
+
+    pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {
+        self.compact_blocks.read().get(hash).map(|b| {
+            self.cache_man
+                .lock()
+                .note_used(CacheId::CompactBlock(b.hash()));
+            b.clone()
+        })
+    }
+
+    pub fn insert_compact_block(&self, cb: CompactBlock) {
+        let hash = cb.hash();
+        self.compact_blocks.write().insert(hash, cb);
+        self.cache_man.lock().note_used(CacheId::CompactBlock(hash));
+    }
+
+    pub fn contains_compact_block(&self, hash: &H256) -> bool {
+        self.compact_blocks.read().contains_key(hash)
     }
 
     pub fn block_results_by_hash_from_db(
@@ -516,6 +539,87 @@ impl BlockDataManager {
             max_time - min_time,
             &cur_difficulty,
         )
+    }
+
+    pub fn cached_block_count(&self) -> usize {
+        self.blocks.read().len()
+    }
+
+    /// Get current cache size.
+    pub fn cache_size(&self) -> CacheSize {
+        let blocks = self.blocks.read().heap_size_of_children();
+        let compact_blocks = self.compact_blocks.read().heap_size_of_children();
+        let block_receipts =
+            self.block_receipts.read().heap_size_of_children();
+        let transaction_addresses= self
+            .transaction_addresses
+            .read()
+            .heap_size_of_children();
+        let transaction_pubkey = self
+            .transaction_pubkey_cache
+            .read()
+            .heap_size_of_children();
+        CacheSize {
+            blocks,
+            block_receipts,
+            transaction_addresses,
+            compact_blocks,
+            transaction_pubkey,
+        }
+    }
+
+    pub fn block_cache_gc(&self) {
+        let current_size = self.cache_size().total();
+        let mut blocks = self.blocks.write();
+        let mut compact_blocks = self.compact_blocks.write();
+        let mut executed_results = self.block_receipts.write();
+        let mut transaction_pubkey_cache =
+            self.transaction_pubkey_cache.write();
+        let mut tx_address = self.transaction_addresses.write();
+        let mut cache_man = self.cache_man.lock();
+        info!(
+            "Before gc cache_size={} {} {} {} {} {}",
+            current_size,
+            blocks.len(),
+            compact_blocks.len(),
+            executed_results.len(),
+            tx_address.len(),
+            transaction_pubkey_cache.len(),
+        );
+
+        cache_man.collect_garbage(current_size, |ids| {
+            for id in &ids {
+                match *id {
+                    CacheId::Block(ref h) => {
+                        blocks.remove(h);
+                    }
+                    CacheId::BlockReceipts(ref h) => {
+                        executed_results.remove(h);
+                    }
+                    CacheId::TransactionAddress(ref h) => {
+                        tx_address.remove(h);
+                    }
+                    CacheId::CompactBlock(ref h) => {
+                        compact_blocks.remove(h);
+                    }
+                    CacheId::TransactionPubkey(ref h) => {
+                        transaction_pubkey_cache.remove(h);
+                    }
+                }
+            }
+
+            blocks.shrink_to_fit();
+            executed_results.shrink_to_fit();
+            tx_address.shrink_to_fit();
+            transaction_pubkey_cache.shrink_to_fit();
+            compact_blocks.shrink_to_fit();
+
+            blocks.heap_size_of_children()
+                + executed_results.heap_size_of_children()
+                + tx_address.heap_size_of_children()
+                + transaction_pubkey_cache.heap_size_of_children()
+                + compact_blocks.heap_size_of_children()
+        });
     }
 }
 

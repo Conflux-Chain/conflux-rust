@@ -452,7 +452,7 @@ impl SynchronizationProtocolHandler {
         let mut blocks = Vec::new();
         debug!("on_get_compact_blocks, msg=:{:?}", req);
         for hash in &req.hashes {
-            if let Some(compact_block) = self.graph.compact_block_by_hash(hash)
+            if let Some(compact_block) = self.graph.data_man.compact_block_by_hash(hash)
             {
                 if (compact_blocks.len() as u64) < MAX_HEADERS_TO_SEND {
                     compact_blocks.push(compact_block);
@@ -523,7 +523,7 @@ impl SynchronizationProtocolHandler {
                 continue;
             } else {
                 if let Some(header) = self.graph.block_header_by_hash(&hash) {
-                    if self.graph.contains_compact_block(&hash) {
+                    if self.graph.data_man.contains_compact_block(&hash) {
                         debug!("Cmpct block already received, hash={}", hash);
                         continue;
                     } else {
@@ -538,7 +538,7 @@ impl SynchronizationProtocolHandler {
                                 missing.len(),
                                 hash
                             );
-                            self.graph.insert_compact_block(cmpct);
+                            self.graph.data_man.insert_compact_block(cmpct);
                             self.request_manager
                                 .request_blocktxn(io, peer, hash, missing);
                         } else {
@@ -790,9 +790,9 @@ impl SynchronizationProtocolHandler {
                         &resp.block_txn,
                         &mut *self.graph.data_man.transaction_pubkey_cache
                             .write(),
-                        &mut *self.graph.cache_man.lock(),
+                        &mut *self.graph.data_man.cache_man.lock(),
                     )?;
-                    match self.graph.compact_block_by_hash(&resp_hash) {
+                    match self.graph.data_man.compact_block_by_hash(&resp_hash) {
                         Some(cmpct) => {
                             let mut trans = Vec::with_capacity(
                                 cmpct.reconstructed_txes.len(),
@@ -1607,7 +1607,7 @@ impl SynchronizationProtocolHandler {
                 self.get_transaction_pool(),
                 &mut *self.graph.data_man.transaction_pubkey_cache
                     .write(),
-                &mut *self.graph.cache_man.lock(),
+                &mut *self.graph.data_man.cache_man.lock(),
                 &*self.get_transaction_pool().worker_pool.lock(),
             )
             .is_err()
@@ -1732,7 +1732,7 @@ impl SynchronizationProtocolHandler {
             &mut block,
             self.get_transaction_pool(),
             &mut *self.graph.data_man.transaction_pubkey_cache.write(),
-            &mut *self.graph.cache_man.lock(),
+            &mut *self.graph.data_man.cache_man.lock(),
             &*self.get_transaction_pool().worker_pool.lock(),
         )?;
         debug!(
@@ -2295,7 +2295,7 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn block_cache_gc(&self) { self.graph.block_cache_gc(); }
+    fn block_cache_gc(&self) { self.graph.data_man.block_cache_gc(); }
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
