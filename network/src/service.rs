@@ -49,6 +49,7 @@ const FAST_DISCOVERY_REFRESH: TimerToken = SYS_TIMER + 5;
 const DISCOVERY_ROUND: TimerToken = SYS_TIMER + 6;
 const NODE_TABLE: TimerToken = SYS_TIMER + 7;
 const SEND_DELAYED_MESSAGES: TimerToken = SYS_TIMER + 8;
+const CHECK_SESSIONS: TimerToken = SYS_TIMER + 9;
 const HANDLER_TIMER: TimerToken = LAST_SESSION + 256;
 
 pub const DEFAULT_HOUSEKEEPING_TIMEOUT: Duration = Duration::from_secs(1);
@@ -68,6 +69,7 @@ pub const DEFAULT_NODE_TABLE_TIMEOUT: Duration = Duration::from_secs(300);
 // to trusted.
 pub const DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION: Duration =
     Duration::from_secs(3 * 24 * 3600);
+const DEFAULT_CHECK_SESSIONS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub const MAX_DATAGRAM_SIZE: usize = 1280;
 
@@ -595,6 +597,7 @@ impl NetworkServiceInner {
             )?;
         }
         io.register_timer(NODE_TABLE, self.config.node_table_timeout)?;
+        io.register_timer(CHECK_SESSIONS, DEFAULT_CHECK_SESSIONS_TIMEOUT)?;
 
         Ok(())
     }
@@ -1120,6 +1123,22 @@ impl NetworkServiceInner {
         };
         res
     }
+
+    fn on_check_sessions(&self, io: &IoContext<NetworkIoMessage>) {
+        let mut disconnect_peers = Vec::new();
+
+        for session in self.sessions.all() {
+            if let Some(sess) = session.try_read() {
+                if let (true, op) = sess.check_timeout() {
+                    disconnect_peers.push((sess.token(), op));
+                }
+            }
+        }
+
+        for (token, op) in disconnect_peers {
+            self.kill_connection(token, io, true, op);
+        }
+    }
 }
 
 impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
@@ -1200,6 +1219,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 self.try_promote_untrusted();
                 self.node_db.write().save();
             }
+            CHECK_SESSIONS => self.on_check_sessions(io),
             SEND_DELAYED_MESSAGES => {
                 if let Some(ref queue) = self.delayed_queue {
                     queue.send_delayed_messages(self);
