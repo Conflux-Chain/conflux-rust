@@ -523,10 +523,8 @@ impl TransactionPool {
     }
 
     pub fn insert_new_transactions(
-        &self,
-        transactions: &Vec<TransactionWithSignature>,
-    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>)
-    {
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
         let mut failures = HashMap::new();
         let uncached_trans =
             self.data_man.get_uncached_transactions(transactions);
