@@ -1,18 +1,8 @@
 use super::debug::*;
-use crate::{
-    block_data_manager::BlockDataManager,
-    consensus::{
-        ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
-        CONFLUX_TOKEN,
-    },
-    executive::{ExecutionError, Executive},
-    machine::new_machine,
-    state::{CleanupMode, State},
-    statedb::StateDb,
-    storage::{state::StateTrait, state_manager::StateManagerTrait},
-    vm::{EnvInfo, Spec},
-    vm_factory::VmFactory,
-};
+use crate::{block_data_manager::BlockDataManager, consensus::{
+    ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
+    CONFLUX_TOKEN,
+}, executive::{ExecutionError, Executive}, machine::new_machine, state::{CleanupMode, State}, statedb::StateDb, storage::{state::StateTrait, state_manager::StateManagerTrait}, vm::{EnvInfo, Spec}, vm_factory::VmFactory, SharedTransactionPool};
 use cfx_types::{H256, U256, U512};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -122,12 +112,12 @@ pub struct ConsensusExecutor {
 
 impl ConsensusExecutor {
     pub fn start(
-        data_man: Arc<BlockDataManager>, vm: VmFactory,
+        tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>, vm: VmFactory,
         consensus_inner: Arc<RwLock<ConsensusGraphInner>>, bench_mode: bool,
     ) -> Self
     {
         let handler =
-            Arc::new(ConsensusExecutionHandler::new(data_man.clone(), vm));
+            Arc::new(ConsensusExecutionHandler::new(tx_pool, data_man.clone(), vm));
         let (sender, receiver) = channel();
 
         let executor = ConsensusExecutor {
@@ -252,13 +242,14 @@ impl ConsensusExecutor {
 }
 
 pub struct ConsensusExecutionHandler {
+    tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
 }
 
 impl ConsensusExecutionHandler {
-    pub fn new(data_man: Arc<BlockDataManager>, vm: VmFactory) -> Self {
-        ConsensusExecutionHandler { data_man, vm }
+    pub fn new(tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>, vm: VmFactory) -> Self {
+        ConsensusExecutionHandler { tx_pool, data_man, vm }
     }
 
     /// Return `false` if someting goes wrong, and we will break the working
@@ -397,7 +388,7 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up
         let state_root = if on_local_pivot {
             state
-                .commit_and_notify(*epoch_hash, &self.data_man.txpool)
+                .commit_and_notify(*epoch_hash, &self.tx_pool)
                 .unwrap();
         } else {
             state.commit(*epoch_hash).unwrap();
@@ -544,8 +535,8 @@ impl ConsensusExecutionHandler {
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap();
-                self.data_man
-                    .txpool
+                self
+                    .tx_pool
                     .recycle_failed_executed_transactions(to_pending, state);
             }
         }

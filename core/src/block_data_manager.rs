@@ -14,10 +14,7 @@ use crate::{
 use cfx_types::{Bloom, H256, U256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{
-    receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
-    Block, BlockHeader, SignedTransaction, TransactionAddress,
-};
+use primitives::{receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS}, Block, BlockHeader, SignedTransaction, TransactionAddress, TransactionWithSignature};
 use rlp::{Rlp, RlpStream};
 use std::{
     cmp::{max, min},
@@ -33,10 +30,10 @@ pub struct BlockDataManager {
     pub block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     pub transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     block_receipts_root: RwLock<HashMap<H256, H256>>,
+    pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
 
     pub record_tx_address: bool,
 
-    pub txpool: SharedTransactionPool,
     pub genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
     pub storage_manager: Arc<StorageManager>,
@@ -45,7 +42,7 @@ pub struct BlockDataManager {
 
 impl BlockDataManager {
     pub fn new(
-        genesis_block: Arc<Block>, txpool: SharedTransactionPool,
+        genesis_block: Arc<Block>,
         db: Arc<SystemDB>, storage_manager: Arc<StorageManager>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>, record_tx_address: bool,
     ) -> Self
@@ -56,7 +53,7 @@ impl BlockDataManager {
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
             block_receipts_root: Default::default(),
-            txpool,
+            transaction_pubkey_cache: Default::default(),
             genesis_block,
             db,
             storage_manager,
@@ -405,6 +402,31 @@ impl BlockDataManager {
             .read()
             .get(block_hash)
             .map(Clone::clone)
+    }
+
+    pub fn cache_transaction(&self, tx_hash: &H256, tx: Arc<SignedTransaction>) {
+        let mut transactions = self.transaction_pubkey_cache.write();
+        let mut cache_man = self.cache_man.lock();
+        transactions.insert(*tx_hash, tx);
+        cache_man.note_used(CacheId::TransactionPubkey(*tx_hash))
+    }
+
+    pub fn get_uncached_transactions(&self, transactions: &Vec<TransactionWithSignature>) -> Vec<TransactionWithSignature> {
+        let tx_cache = self.transaction_pubkey_cache.read();
+        transactions
+            .iter()
+            .filter(|tx| {
+                let tx_hash = tx.hash();
+                let inserted = tx_cache.contains_key(&tx_hash);
+                // Sample 1/128 transactions
+                if tx_hash[0] & 254 == 0 {
+                    debug!("Sampled transaction {:?} in tx pool", tx_hash);
+                }
+
+                !inserted
+            })
+            .map(|tx| tx.clone())
+            .collect()
     }
 
     /// Check if all executed results of an epoch exist

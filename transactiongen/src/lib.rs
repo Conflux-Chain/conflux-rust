@@ -64,7 +64,6 @@ impl TransactionGeneratorConfig {
 
 pub struct TransactionGenerator {
     pub consensus: SharedConsensusGraph,
-    pub storage_manager: Arc<StorageManager>,
     txpool: SharedTransactionPool,
     secret_store: SharedSecretStore,
     state: RwLock<TransGenState>,
@@ -75,14 +74,13 @@ pub type SharedTransactionGenerator = Arc<TransactionGenerator>;
 
 impl TransactionGenerator {
     pub fn new(
-        consensus: SharedConsensusGraph, storage_manager: Arc<StorageManager>,
+        consensus: SharedConsensusGraph,
         txpool: SharedTransactionPool, secret_store: SharedSecretStore,
         key_pair: Option<KeyPair>,
     ) -> Self
     {
         TransactionGenerator {
             consensus,
-            storage_manager,
             txpool,
             secret_store,
             state: RwLock::new(TransGenState::Start),

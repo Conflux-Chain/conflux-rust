@@ -1352,8 +1352,7 @@ impl SynchronizationGraph {
             .read()
             .heap_size_of_children();
         let transaction_pubkey = self
-            .consensus
-            .txpool
+            .data_man
             .transaction_pubkey_cache
             .read()
             .heap_size_of_children();
@@ -1378,7 +1377,7 @@ impl SynchronizationGraph {
         let mut executed_results = self.data_man.block_receipts.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut transaction_pubkey_cache =
-            self.consensus.txpool.transaction_pubkey_cache.write();
+            self.data_man.transaction_pubkey_cache.write();
         let mut tx_address = self.data_man.transaction_addresses.write();
         let mut cache_man = self.cache_man.lock();
         info!(

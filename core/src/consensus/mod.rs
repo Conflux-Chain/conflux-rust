@@ -106,7 +106,6 @@ pub struct ConsensusConfig {
     // If we hit invalid state root, we will dump the information into a
     // directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: String,
-    pub record_tx_address: bool,
     // When bench_mode is true, the PoW solution verification will be skipped.
     // The transaction execution will also be skipped and only return the
     // pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
@@ -1659,21 +1658,13 @@ impl ConsensusGraph {
     /// Build the ConsensusGraph with a genesis block and various other
     /// components The execution will be skipped if bench_mode sets to true.
     pub fn with_genesis_block(
-        conf: ConsensusConfig, genesis_block: Block,
-        storage_manager: Arc<StorageManager>, vm: VmFactory,
+        conf: ConsensusConfig,
+        vm: VmFactory,
         txpool: SharedTransactionPool, statistics: SharedStatistics,
-        db: Arc<SystemDB>, cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig,
     ) -> Self
     {
-        let data_man = Arc::new(BlockDataManager::new(
-            Arc::new(genesis_block),
-            txpool.clone(),
-            db,
-            storage_manager,
-            cache_man,
-            conf.record_tx_address,
-        ));
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_genesis_block(
                 pow_config,
@@ -1681,6 +1672,7 @@ impl ConsensusGraph {
                 conf.inner_conf.clone(),
             )));
         let executor = Arc::new(ConsensusExecutor::start(
+            txpool.clone(),
             data_man.clone(),
             vm,
             inner.clone(),

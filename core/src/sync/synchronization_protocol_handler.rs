@@ -434,9 +434,7 @@ impl SynchronizationProtocolHandler {
                     } else {
                         debug!("Cmpct block Processing, hash={}", hash);
                         let missing = cmpct.build_partial(
-                            &*self
-                                .get_transaction_pool()
-                                .transaction_pubkey_cache
+                            &*self.graph.data_man.transaction_pubkey_cache
                                 .read(),
                         );
                         if !missing.is_empty() {
@@ -692,9 +690,7 @@ impl SynchronizationProtocolHandler {
                     debug!("Process blocktxn hash={:?}", resp_hash);
                     let signed_txes = Self::batch_recover_with_cache(
                         &resp.block_txn,
-                        &mut *self
-                            .get_transaction_pool()
-                            .transaction_pubkey_cache
+                        &mut *self.graph.data_man.transaction_pubkey_cache
                             .write(),
                         &mut *self.graph.cache_man.lock(),
                     )?;
@@ -1507,9 +1503,7 @@ impl SynchronizationProtocolHandler {
             if Self::recover_public(
                 &mut block,
                 self.get_transaction_pool(),
-                &mut *self
-                    .get_transaction_pool()
-                    .transaction_pubkey_cache
+                &mut *self.graph.data_man.transaction_pubkey_cache
                     .write(),
                 &mut *self.graph.cache_man.lock(),
                 &*self.get_transaction_pool().worker_pool.lock(),
@@ -1632,7 +1626,7 @@ impl SynchronizationProtocolHandler {
         Self::recover_public(
             &mut block,
             self.get_transaction_pool(),
-            &mut *self.get_transaction_pool().transaction_pubkey_cache.write(),
+            &mut *self.graph.data_man.transaction_pubkey_cache.write(),
             &mut *self.graph.cache_man.lock(),
             &*self.get_transaction_pool().worker_pool.lock(),
         )?;

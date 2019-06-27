@@ -31,8 +31,6 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
-    #[allow(dead_code)]
-    storage_manager: Arc<StorageManager>,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
     exit: Arc<(Mutex<bool>, Condvar)>,
@@ -41,14 +39,13 @@ pub struct RpcImpl {
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        storage_manager: Arc<StorageManager>, block_gen: Arc<BlockGenerator>,
+        block_gen: Arc<BlockGenerator>,
         tx_pool: SharedTransactionPool, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self
     {
         RpcImpl {
             consensus,
             sync,
-            storage_manager,
             block_gen,
             tx_pool,
             exit,
@@ -294,8 +291,13 @@ impl RpcImpl {
                     self.consensus.best_state_block_hash(),
                     &vec![tx],
                 );
-                if signed_trans.len() + failed_trans.len() != 1 {
+                if signed_trans.len() + failed_trans.len() > 1 {
+                    // This should never happen
                     error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
+                    Ok(H256::new().into())
+                } else if signed_trans.len() + failed_trans.len() == 0 {
+                    // For tx in transactions_pubkey_cache, we simply ignore them
+                    debug!("insert_new_transactions ignores inserted transactions");
                     Ok(H256::new().into())
                 } else {
                     if signed_trans.is_empty() {
