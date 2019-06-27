@@ -8,7 +8,7 @@ use crate::{
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
     node_table::*,
-    session::{self, Session, SessionData},
+    session::{self, Session, SessionData, SessionDetails},
     session_manager::SessionManager,
     Capability, Error, ErrorKind, HandlerWorkType, IpFilter,
     NetworkConfiguration, NetworkContext as NetworkContextTrait,
@@ -245,6 +245,34 @@ impl NetworkService {
             inner.add_latency(id, latency_ms)
         } else {
             Err("Network service not started yet!".into())
+        }
+    }
+
+    pub fn get_node(&self, id: &NodeId) -> Option<(bool, Node)> {
+        let inner = self.inner.as_ref()?;
+        let node_db = inner.node_db.read();
+        let (trusted, node) = node_db.get_with_trusty(id)?;
+        Some((trusted, node.clone()))
+    }
+
+    pub fn get_detailed_sessions(
+        &self, node_id: Option<NodeId>,
+    ) -> Option<Vec<SessionDetails>> {
+        let inner = self.inner.as_ref()?;
+        match node_id {
+            None => Some(
+                inner
+                    .sessions
+                    .all()
+                    .iter()
+                    .map(|s| s.read().details())
+                    .collect(),
+            ),
+            Some(id) => {
+                let session = inner.sessions.get_by_id(&id)?;
+                let details = session.read().details();
+                Some(vec![details])
+            }
         }
     }
 }

@@ -8,6 +8,7 @@ use enum_map::EnumMap;
 use io::*;
 use rand::{self, Rng};
 use rlp::{DecoderError, Rlp, RlpStream};
+use serde_derive::Serialize;
 use serde_json;
 use std::{
     collections::{HashMap, HashSet},
@@ -28,7 +29,8 @@ use strum::IntoEnumIterator;
 /// Node public key
 pub type NodeId = H512;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 /// Node address info
 pub struct NodeEndpoint {
     /// IP(V4 or V6) address
@@ -166,7 +168,8 @@ pub enum PeerType {
 
 /// A type for representing an interaction (contact) with a node at a given time
 /// that was either a success or a failure.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum NodeContact {
     Success(SystemTime),
     Failure(SystemTime),
@@ -214,7 +217,8 @@ impl NodeContact {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Node {
     pub id: NodeId,
     pub endpoint: NodeEndpoint,
