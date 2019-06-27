@@ -11,11 +11,8 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    block_data_manager::BlockDataManager,
-    executive,
-    pow::WORKER_COMPUTATION_PARALLELISM,
-    statedb::StateDb,
-    storage::{state_manager::StateManagerTrait, Storage},
+    block_data_manager::BlockDataManager, executive,
+    pow::WORKER_COMPUTATION_PARALLELISM, statedb::StateDb, storage::Storage,
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
@@ -622,14 +619,7 @@ impl TransactionPool {
             }
         }
 
-        let mut account_cache = AccountCache::new(unsafe {
-            self.data_man
-                .storage_manager
-                .get_state_readonly_assumed_existence(
-                    *self.best_executed_epoch.lock(),
-                )
-                .unwrap()
-        });
+        let mut account_cache = self.get_best_state_account_cache();
         let mut passed_transactions = Vec::new();
         {
             let mut inner = self.inner.write();
@@ -804,9 +794,9 @@ impl TransactionPool {
     // If a tx is failed executed due to invalid nonce
     // This function should be invoked to recycle it
     pub fn recycle_failed_executed_transactions(
-        &self, transactions: Vec<Arc<SignedTransaction>>, state: Storage,
+        &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
-        let mut account_cache = AccountCache::new(state);
+        let mut account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
         for tx in transactions {
@@ -843,17 +833,10 @@ impl TransactionPool {
         self.to_propagate_trans.write().remove(tx_hash);
     }
 
-    pub fn set_tx_packed(
-        &self, transactions: Vec<Arc<SignedTransaction>>, epoch_id: EpochId,
-    ) {
+    pub fn set_tx_packed(&self, transactions: Vec<Arc<SignedTransaction>>) {
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
-        let mut account_cache = AccountCache::new(
-            self.data_man
-                .storage_manager
-                .get_state_at(epoch_id)
-                .unwrap(),
-        );
+        let mut account_cache = self.get_best_state_account_cache();
         for tx in transactions {
             self.add_transaction_and_check_readiness_without_lock(
                 inner,
@@ -967,6 +950,17 @@ impl TransactionPool {
         let deferred_txs = inner.txs.values().map(|v| v.clone()).collect();
 
         (ready_txs, deferred_txs)
+    }
+
+    fn get_best_state_account_cache(&self) -> AccountCache {
+        AccountCache::new(unsafe {
+            self.data_man
+                .storage_manager
+                .get_state_readonly_assumed_existence(
+                    *self.best_executed_epoch.lock(),
+                )
+                .unwrap()
+        })
     }
 }
 

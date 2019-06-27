@@ -2969,9 +2969,7 @@ impl ConsensusGraph {
 
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
-        let best_state_epoch_id = inner.best_state_block_hash();
-        self.txpool
-            .set_tx_packed(block.transactions.clone(), best_state_epoch_id);
+        self.txpool.set_tx_packed(block.transactions.clone());
 
         let anticone_barrier = inner.compute_anticone(me);
 
@@ -3291,10 +3289,6 @@ impl ConsensusGraph {
         let me = *inner.indices.get(hash).unwrap();
         let idx = inner.weight_tree.ancestor_at(me, n);
         inner.arena[idx].hash.clone()
-    }
-
-    pub fn best_state_block_hash(&self) -> H256 {
-        self.inner.read().best_state_block_hash()
     }
 
     pub fn try_get_best_state(&self) -> Option<State> {
