@@ -3,40 +3,37 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    cache_manager::{CacheId, CacheManager},
+    cache_manager::{CacheId, CacheManager, CacheSize},
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
     ext_db::SystemDB,
-    pow::ProofOfWorkConfig,
     storage::StorageManager,
     verification::VerificationConfig,
-    SharedTransactionPool,
 };
-use cfx_types::{Bloom, H256, U256};
+use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
+    block::CompactBlock,
     receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
     Block, BlockHeader, SignedTransaction, TransactionAddress,
+    TransactionWithSignature,
 };
 use rlp::{Rlp, RlpStream};
-use std::{
-    cmp::{max, min},
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
 pub struct BlockDataManager {
-    pub block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
-    pub blocks: RwLock<HashMap<H256, Arc<Block>>>,
-    pub block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
-    pub transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+    block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
+    blocks: RwLock<HashMap<H256, Arc<Block>>>,
+    compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
+    block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
+    transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+    pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     block_receipts_root: RwLock<HashMap<H256, H256>>,
 
     pub record_tx_address: bool,
 
-    pub txpool: SharedTransactionPool,
     pub genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
     pub storage_manager: Arc<StorageManager>,
@@ -45,18 +42,19 @@ pub struct BlockDataManager {
 
 impl BlockDataManager {
     pub fn new(
-        genesis_block: Arc<Block>, txpool: SharedTransactionPool,
-        db: Arc<SystemDB>, storage_manager: Arc<StorageManager>,
+        genesis_block: Arc<Block>, db: Arc<SystemDB>,
+        storage_manager: Arc<StorageManager>,
         cache_man: Arc<Mutex<CacheManager<CacheId>>>, record_tx_address: bool,
     ) -> Self
     {
         let data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
+            compact_blocks: Default::default(),
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
             block_receipts_root: Default::default(),
-            txpool,
+            transaction_pubkey_cache: Default::default(),
             genesis_block,
             db,
             storage_manager,
@@ -229,6 +227,25 @@ impl BlockDataManager {
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         let result = self.block_by_hash(hash, false)?;
         Some(result.block_header.height())
+    }
+
+    pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {
+        self.compact_blocks.read().get(hash).map(|b| {
+            self.cache_man
+                .lock()
+                .note_used(CacheId::CompactBlock(b.hash()));
+            b.clone()
+        })
+    }
+
+    pub fn insert_compact_block(&self, cb: CompactBlock) {
+        let hash = cb.hash();
+        self.compact_blocks.write().insert(hash, cb);
+        self.cache_man.lock().note_used(CacheId::CompactBlock(hash));
+    }
+
+    pub fn contains_compact_block(&self, hash: &H256) -> bool {
+        self.compact_blocks.read().contains_key(hash)
     }
 
     pub fn block_results_by_hash_from_db(
@@ -407,6 +424,35 @@ impl BlockDataManager {
             .map(Clone::clone)
     }
 
+    pub fn cache_transaction(
+        &self, tx_hash: &H256, tx: Arc<SignedTransaction>,
+    ) {
+        let mut transactions = self.transaction_pubkey_cache.write();
+        let mut cache_man = self.cache_man.lock();
+        transactions.insert(*tx_hash, tx);
+        cache_man.note_used(CacheId::TransactionPubkey(*tx_hash))
+    }
+
+    pub fn get_uncached_transactions(
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> Vec<TransactionWithSignature> {
+        let tx_cache = self.transaction_pubkey_cache.read();
+        transactions
+            .iter()
+            .filter(|tx| {
+                let tx_hash = tx.hash();
+                let inserted = tx_cache.contains_key(&tx_hash);
+                // Sample 1/128 transactions
+                if tx_hash[0] & 254 == 0 {
+                    debug!("Sampled transaction {:?} in tx pool", tx_hash);
+                }
+
+                !inserted
+            })
+            .map(|tx| tx.clone())
+            .collect()
+    }
+
     /// Check if all executed results of an epoch exist
     pub fn epoch_executed_and_recovered(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
@@ -457,43 +503,78 @@ impl BlockDataManager {
         true
     }
 
-    // The input `cur_hash` must have been inserted to BlockDataManager,
-    // otherwise it'll panic.
-    pub fn target_difficulty<F>(
-        &self, pow_config: &ProofOfWorkConfig, cur_hash: &H256,
-        num_blocks_in_epoch: F,
-    ) -> U256
-    where
-        F: Fn(&H256) -> usize,
-    {
-        let mut cur_header = self
-            .block_header_by_hash(cur_hash)
-            .expect("Must already in BlockDataManager block_header");
-        let epoch = cur_header.height();
-        assert_ne!(epoch, 0);
-        debug_assert!(
-            epoch
-                == (epoch / pow_config.difficulty_adjustment_epoch_period)
-                    * pow_config.difficulty_adjustment_epoch_period
+    pub fn cached_block_count(&self) -> usize { self.blocks.read().len() }
+
+    /// Get current cache size.
+    pub fn cache_size(&self) -> CacheSize {
+        let blocks = self.blocks.read().heap_size_of_children();
+        let compact_blocks = self.compact_blocks.read().heap_size_of_children();
+        let block_receipts = self.block_receipts.read().heap_size_of_children();
+        let transaction_addresses =
+            self.transaction_addresses.read().heap_size_of_children();
+        let transaction_pubkey =
+            self.transaction_pubkey_cache.read().heap_size_of_children();
+        CacheSize {
+            blocks,
+            block_receipts,
+            transaction_addresses,
+            compact_blocks,
+            transaction_pubkey,
+        }
+    }
+
+    pub fn block_cache_gc(&self) {
+        let current_size = self.cache_size().total();
+        let mut blocks = self.blocks.write();
+        let mut compact_blocks = self.compact_blocks.write();
+        let mut executed_results = self.block_receipts.write();
+        let mut transaction_pubkey_cache =
+            self.transaction_pubkey_cache.write();
+        let mut tx_address = self.transaction_addresses.write();
+        let mut cache_man = self.cache_man.lock();
+        info!(
+            "Before gc cache_size={} {} {} {} {} {}",
+            current_size,
+            blocks.len(),
+            compact_blocks.len(),
+            executed_results.len(),
+            tx_address.len(),
+            transaction_pubkey_cache.len(),
         );
 
-        let mut cur = cur_hash.clone();
-        let cur_difficulty = cur_header.difficulty().clone();
-        let mut block_count = 0 as u64;
-        let mut max_time = u64::min_value();
-        let mut min_time = u64::max_value();
-        for _ in 0..pow_config.difficulty_adjustment_epoch_period {
-            block_count += num_blocks_in_epoch(&cur) as u64 + 1;
-            max_time = max(max_time, cur_header.timestamp());
-            min_time = min(min_time, cur_header.timestamp());
-            cur = cur_header.parent_hash().clone();
-            cur_header = self.block_header_by_hash(&cur).unwrap();
-        }
-        pow_config.target_difficulty(
-            block_count,
-            max_time - min_time,
-            &cur_difficulty,
-        )
+        cache_man.collect_garbage(current_size, |ids| {
+            for id in &ids {
+                match *id {
+                    CacheId::Block(ref h) => {
+                        blocks.remove(h);
+                    }
+                    CacheId::BlockReceipts(ref h) => {
+                        executed_results.remove(h);
+                    }
+                    CacheId::TransactionAddress(ref h) => {
+                        tx_address.remove(h);
+                    }
+                    CacheId::CompactBlock(ref h) => {
+                        compact_blocks.remove(h);
+                    }
+                    CacheId::TransactionPubkey(ref h) => {
+                        transaction_pubkey_cache.remove(h);
+                    }
+                }
+            }
+
+            blocks.shrink_to_fit();
+            executed_results.shrink_to_fit();
+            tx_address.shrink_to_fit();
+            transaction_pubkey_cache.shrink_to_fit();
+            compact_blocks.shrink_to_fit();
+
+            blocks.heap_size_of_children()
+                + executed_results.heap_size_of_children()
+                + tx_address.heap_size_of_children()
+                + transaction_pubkey_cache.heap_size_of_children()
+                + compact_blocks.heap_size_of_children()
+        });
     }
 }
 

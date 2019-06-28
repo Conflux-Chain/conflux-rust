@@ -1,7 +1,6 @@
 use super::{
     synchronization_protocol_handler::{
-        ProtocolConfiguration, EPOCH_RETRY_TIME_SECONDS,
-        REQUEST_START_WAITING_TIME,
+        ProtocolConfiguration, REQUEST_START_WAITING_TIME,
     },
     synchronization_state::SynchronizationState,
 };
@@ -111,82 +110,149 @@ impl RequestManager {
         self.epochs_in_flight.lock().len() as u64
     }
 
-    /// Request a header if it's not already in_flight. The request is delayed
-    /// if the header is requested before.
+    /// Remove in-flight headers, and headers requested before will be delayed.
+    /// If `peer_id` is `None`, all headers will be delayed and `hashes` will
+    /// always become empty.
+    fn preprocess_header_request(
+        &self, hashes: &mut Vec<H256>, peer_id: &Option<PeerId>,
+    ) {
+        let mut headers_in_flight = self.headers_in_flight.lock();
+        let mut header_request_waittime = self.header_request_waittime.lock();
+        hashes.retain(|hash| {
+            if headers_in_flight.insert(*hash) {
+                match header_request_waittime.entry(*hash) {
+                    Entry::Vacant(entry) => {
+                        entry.insert(*REQUEST_START_WAITING_TIME);
+                        if peer_id.is_none() {
+                            self.waiting_requests.lock().push((
+                                Instant::now() + *REQUEST_START_WAITING_TIME,
+                                WaitingRequest::Header(*hash),
+                                *peer_id,
+                            ));
+                            debug!(
+                                "Header {:?} request is delayed for later",
+                                hash
+                            );
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    Entry::Occupied(mut entry) => {
+                        // It is requested before. To prevent possible attacks,
+                        // we wait for more time to start
+                        // the next request.
+                        let t = entry.get_mut();
+                        debug!(
+                            "Header {:?} is requested again, delay for {:?}",
+                            hash, t
+                        );
+                        self.waiting_requests.lock().push((
+                            Instant::now() + *t,
+                            WaitingRequest::Header(*hash),
+                            *peer_id,
+                        ));
+                        *t += *REQUEST_START_WAITING_TIME;
+                        false
+                    }
+                }
+            } else {
+                debug!(
+                    "preprocess_header_request: {:?} already in flight",
+                    hash
+                );
+                false
+            }
+        });
+    }
+
     pub fn request_block_headers(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, hash: &H256,
-        max_blocks: u64,
+        &self, io: &NetworkContext, peer_id: Option<PeerId>,
+        mut hashes: Vec<H256>,
     )
     {
-        if !self.headers_in_flight.lock().insert(*hash) {
-            // Already inflight, return directly
+        self.preprocess_header_request(&mut hashes, &peer_id);
+        if hashes.is_empty() {
+            debug!("All headers in_flight, skip requesting");
             return;
         }
-        let mut header_request_waittime = self.header_request_waittime.lock();
-        match header_request_waittime.entry(*hash) {
-            Entry::Occupied(mut e) => {
-                // Requested before, so wait for the stored time and increase it
-                let t = e.get_mut();
-                self.waiting_requests.lock().push((
-                    Instant::now() + *t,
-                    WaitingRequest::Header(*hash),
-                    peer_id,
-                ));
-                *t += *REQUEST_START_WAITING_TIME;
-                debug!(
-                    "Block header request is delayed peer={:?} hash={:?}",
-                    peer_id, hash
-                );
-                return;
-            }
-            Entry::Vacant(e) => {
-                // Not requested before, so store the initial wait time
-                e.insert(*REQUEST_START_WAITING_TIME);
-                if peer_id.is_none() {
-                    // No available peer, so add to the waiting queue directly
-                    // to be sent later
-                    self.waiting_requests.lock().push((
-                        Instant::now() + *REQUEST_START_WAITING_TIME,
-                        WaitingRequest::Header(*hash),
-                        peer_id,
-                    ));
-                    debug!(
-                        "Block header request is delayed peer={:?} hash={:?}",
-                        peer_id, hash
-                    );
-                    return;
-                }
-            }
-        }
+        self.request_headers_unchecked(io, peer_id.unwrap(), hashes)
+    }
 
+    fn request_headers_unchecked(
+        &self, io: &NetworkContext, peer_id: PeerId, hashes: Vec<H256>,
+    ) {
         if let Err(e) = self.request_handler.send_request(
             io,
-            peer_id.unwrap(),
+            peer_id,
             Box::new(RequestMessage::Headers(GetBlockHeaders {
                 request_id: 0.into(),
-                hash: *hash,
-                max_blocks,
+                hashes: hashes.clone(),
             })),
             SendQueuePriority::High,
         ) {
-            warn!("Error requesting block header peer={:?} hash={} max_blocks={} err={:?}", peer_id, hash, max_blocks, e);
-
-            // TODO handle different errors
-            // Currently we just queue the request and send it later with the
-            // same logic as delayed requests, so we do not remove
-            // it from `headers_in_flight`. We can reach here only
-            // if the request is not waited before, so we just wait for
-            // the initial value.
-            self.waiting_requests.lock().push((
-                Instant::now() + *REQUEST_START_WAITING_TIME,
-                WaitingRequest::Header(*hash),
-                None,
-            ));
-        } else {
-            debug!(
-                "Requesting block header peer={:?} hash={} max_blocks={}",
-                peer_id, hash, max_blocks
+            warn!(
+                "Error requesting headers peer={:?} hashes={:?} err={:?}",
+                peer_id, hashes, e
             );
+            for hash in hashes {
+                self.waiting_requests.lock().push((
+                    Instant::now() + *REQUEST_START_WAITING_TIME,
+                    WaitingRequest::Header(hash),
+                    None,
+                ));
+            }
+        } else {
+            debug!("Requesting headers peer={:?} hashes={:?}", peer_id, hashes);
+        }
+    }
+
+    /// Remove in-flight epochs.
+    fn preprocess_epoch_request(
+        &self, epochs: &mut Vec<u64>, _peer_id: &Option<PeerId>,
+    ) {
+        let mut epochs_in_flight = self.epochs_in_flight.lock();
+        epochs.retain(|epoch_number| epochs_in_flight.insert(*epoch_number));
+    }
+
+    pub fn request_epoch_hashes(
+        &self, io: &NetworkContext, peer_id: Option<PeerId>,
+        mut epochs: Vec<u64>,
+    )
+    {
+        self.preprocess_epoch_request(&mut epochs, &peer_id);
+        if epochs.is_empty() {
+            debug!("All epochs in_flight, skip requesting");
+            return;
+        }
+        self.request_epochs_unchecked(io, peer_id.unwrap(), epochs)
+    }
+
+    fn request_epochs_unchecked(
+        &self, io: &NetworkContext, peer_id: PeerId, epochs: Vec<u64>,
+    ) {
+        if let Err(e) = self.request_handler.send_request(
+            io,
+            peer_id,
+            Box::new(RequestMessage::Epochs(GetBlockHashesByEpoch {
+                request_id: 0.into(),
+                epochs: epochs.clone(),
+            })),
+            SendQueuePriority::High,
+        ) {
+            warn!(
+                "Error requesting epochs peer={:?} epochs={:?} err={:?}",
+                peer_id, epochs, e
+            );
+            for epoch_number in epochs {
+                self.waiting_requests.lock().push((
+                    Instant::now() + *REQUEST_START_WAITING_TIME,
+                    WaitingRequest::Epoch(epoch_number),
+                    None,
+                ));
+            }
+        } else {
+            debug!("Requesting epochs peer={:?} epochs={:?}", peer_id, epochs);
         }
     }
 
@@ -259,7 +325,7 @@ impl RequestManager {
         self.request_blocks_unchecked(io, peer_id.unwrap(), hashes, with_public)
     }
 
-    pub fn request_blocks_unchecked(
+    fn request_blocks_unchecked(
         &self, io: &NetworkContext, peer_id: PeerId, hashes: Vec<H256>,
         with_public: bool,
     )
@@ -287,60 +353,6 @@ impl RequestManager {
             }
         } else {
             debug!("Requesting blocks peer={:?} hashes={:?}", peer_id, hashes);
-        }
-    }
-
-    pub fn request_epoch_hashes(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, epoch_number: u64,
-    ) {
-        if !self.epochs_in_flight.lock().insert(epoch_number) {
-            // Already inflight, return directly
-            return;
-        }
-
-        if peer_id.is_none() {
-            self.waiting_requests.lock().push((
-                Instant::now() + Duration::new(EPOCH_RETRY_TIME_SECONDS, 0),
-                WaitingRequest::Epoch(epoch_number),
-                peer_id,
-            ));
-            debug!(
-                "Epoch request is delayed peer={:?} epoch_number={:?}",
-                peer_id, epoch_number
-            );
-            return;
-        }
-
-        if let Err(e) = self.request_handler.send_request(
-            io,
-            peer_id.unwrap(),
-            Box::new(RequestMessage::Epochs(GetBlockHashesByEpoch {
-                request_id: 0.into(),
-                epoch_number,
-            })),
-            SendQueuePriority::High,
-        ) {
-            warn!(
-                "Error requesting epoch peer={:?} epoch_number={} err={:?}",
-                peer_id, epoch_number, e
-            );
-
-            // TODO handle different errors
-            // Currently we just queue the request and send it later with the
-            // same logic as delayed requests, so we do not remove
-            // it from `epochs_in_flight`. We can reach here only
-            // if the request is not waited before, so we just wait for
-            // the initial value.
-            self.waiting_requests.lock().push((
-                Instant::now() + Duration::new(EPOCH_RETRY_TIME_SECONDS, 0),
-                WaitingRequest::Epoch(epoch_number),
-                None,
-            ));
-        } else {
-            debug!(
-                "Requesting epoch peer={:?} epoch_number={}",
-                peer_id, epoch_number
-            );
         }
     }
 
@@ -482,8 +494,7 @@ impl RequestManager {
                 self.request_block_headers(
                     io,
                     chosen_peer,
-                    &get_headers.hash,
-                    get_headers.max_blocks,
+                    get_headers.hashes.clone(),
                 );
             }
             RequestMessage::Blocks(get_blocks) => {
@@ -511,7 +522,7 @@ impl RequestManager {
                 self.request_epoch_hashes(
                     io,
                     chosen_peer,
-                    get_epoch_hashes.epoch_number,
+                    get_epoch_hashes.epochs.clone(),
                 );
             }
             _ => {}
@@ -523,7 +534,10 @@ impl RequestManager {
     ) {
         match req {
             RequestMessage::Headers(ref get_headers) => {
-                self.headers_in_flight.lock().remove(&get_headers.hash);
+                let mut headers_in_flight = self.headers_in_flight.lock();
+                for hash in &get_headers.hashes {
+                    headers_in_flight.remove(hash);
+                }
             }
             RequestMessage::Blocks(ref get_blocks) => {
                 let mut blocks_in_flight = self.blocks_in_flight.lock();
@@ -548,9 +562,10 @@ impl RequestManager {
                 }
             }
             RequestMessage::Epochs(ref get_epoch_hashes) => {
-                self.epochs_in_flight
-                    .lock()
-                    .remove(&get_epoch_hashes.epoch_number);
+                let mut epochs_in_flight = self.epochs_in_flight.lock();
+                for epoch_number in &get_epoch_hashes.epochs {
+                    epochs_in_flight.remove(epoch_number);
+                }
             }
         }
         self.send_request_again(io, req);
@@ -565,48 +580,84 @@ impl RequestManager {
     }
 
     /// Remove from `headers_in_flight` when a header is received.
-    /// If a peer does not exist, the requests in its container is supposed to
-    /// be handled properly when it's disconnected, so we can just ignore
-    /// the response.
-    pub fn header_received(
-        &self, io: &NetworkContext, req_hash: &H256, max_blocks: u64,
+    ///
+    /// If a request is removed from `req_hashes`, it's the caller's
+    /// responsibility to ensure that the removed request either has already
+    /// received or will be requested by the caller again.
+    pub fn headers_received(
+        &self, io: &NetworkContext, req_hashes: HashSet<H256>,
         mut received_headers: HashSet<H256>,
     )
     {
-        let missing = {
-            let mut missing = false;
+        debug!(
+            "headers_received: req_hashes={:?} received_headers={:?}",
+            req_hashes, received_headers
+        );
+        let missing_headers = {
             let mut headers_in_flight = self.headers_in_flight.lock();
             let mut header_waittime = self.header_request_waittime.lock();
-            if !received_headers.remove(req_hash) {
-                // If `req_hash` is not in `headers_in_flight`, it may has been
-                // received or requested again by another
-                // thread, so we do not need to request it in that case
-                if headers_in_flight.remove(req_hash) {
-                    missing = true;
+            let mut missing_headers = Vec::new();
+            for req_hash in &req_hashes {
+                if !received_headers.remove(req_hash) {
+                    // If `req_hash` is not in `headers_in_flight`, it may has
+                    // been received or requested
+                    // again by another thread, so we do not need to request it
+                    // in that case
+                    if headers_in_flight.remove(&req_hash) {
+                        missing_headers.push(*req_hash);
+                    }
+                } else {
+                    headers_in_flight.remove(req_hash);
+                    header_waittime.remove(req_hash);
                 }
-            } else {
-                // `req_hash` is indeed returned, so we can remove all records
-                headers_in_flight.remove(req_hash);
-                header_waittime.remove(req_hash);
             }
             for h in &received_headers {
                 headers_in_flight.remove(h);
                 header_waittime.remove(h);
             }
-            missing
+            missing_headers
         };
-        // If `req_hash` is not returned, we need to request it again
-        // TODO decrease reputation if the returned headers do not contain the
-        // requested one
-        if missing {
+        if !missing_headers.is_empty() {
             let chosen_peer = self.syn.get_random_peer(&HashSet::new());
-            self.request_block_headers(io, chosen_peer, &req_hash, max_blocks);
+            self.request_block_headers(io, chosen_peer, missing_headers);
         }
     }
 
-    /// Remove from `epochs_in_flight` when an epoch is received.
-    pub fn epoch_received(&self, _io: &NetworkContext, epoch_number: u64) {
-        self.epochs_in_flight.lock().remove(&epoch_number);
+    /// Remove from `epochs_in_flight` when a epoch is received.
+    pub fn epochs_received(
+        &self, io: &NetworkContext, req_epochs: HashSet<u64>,
+        mut received_epochs: HashSet<u64>,
+    )
+    {
+        debug!(
+            "epochs_received: req_epochs={:?} received_epochs={:?}",
+            req_epochs, received_epochs
+        );
+        let missing_epochs = {
+            let mut epochs_in_flight = self.epochs_in_flight.lock();
+            let mut missing_epochs = Vec::new();
+            for epoch_number in &req_epochs {
+                if !received_epochs.remove(epoch_number) {
+                    // If `epoch_number` is not in `epochs_in_flight`, it may
+                    // has been received or requested
+                    // again by another thread, so we do not need to request it
+                    // in that case
+                    if epochs_in_flight.remove(&epoch_number) {
+                        missing_epochs.push(*epoch_number);
+                    }
+                } else {
+                    epochs_in_flight.remove(epoch_number);
+                }
+            }
+            for epoch_number in &received_epochs {
+                epochs_in_flight.remove(epoch_number);
+            }
+            missing_epochs
+        };
+        if !missing_epochs.is_empty() {
+            let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+            self.request_epoch_hashes(io, chosen_peer, missing_epochs);
+        }
     }
 
     /// Remove from `blocks_in_flight` when a block is received.
@@ -757,8 +808,10 @@ impl RequestManager {
                             Box::new(RequestMessage::Headers(
                                 GetBlockHeaders {
                                     request_id: 0.into(),
-                                    hash: *h,
-                                    max_blocks: 1,
+                                    hashes: vec![h.clone()], /* TODO: group
+                                                              * multiple hashes
+                                                              * into a single
+                                                              * request */
                                 },
                             )),
                             SendQueuePriority::High,
@@ -788,18 +841,17 @@ impl RequestManager {
                             Box::new(RequestMessage::Epochs(
                                 GetBlockHashesByEpoch {
                                     request_id: 0.into(),
-                                    epoch_number: *n,
+                                    epochs: vec![n.clone()], /* TODO: group
+                                                              * multiple epochs
+                                                              * into a single
+                                                              * request */
                                 },
                             )),
                             SendQueuePriority::High,
                         ) {
                             warn!("Error requesting waiting epoch peer={:?} epoch_number={} err={:?}", chosen_peer, n, e);
                             waiting_requests.push((
-                                Instant::now()
-                                    + Duration::new(
-                                        EPOCH_RETRY_TIME_SECONDS,
-                                        0,
-                                    ),
+                                Instant::now() + *REQUEST_START_WAITING_TIME,
                                 WaitingRequest::Epoch(*n),
                                 None,
                             ));
@@ -864,8 +916,10 @@ impl RequestManager {
                 for request in &unfinished_requests {
                     match &**request {
                         RequestMessage::Headers(get_headers) => {
-                            headers_in_flight.remove(&get_headers.hash);
-                            header_waittime.remove(&get_headers.hash);
+                            for hash in &get_headers.hashes {
+                                headers_in_flight.remove(hash);
+                                header_waittime.remove(hash);
+                            }
                         }
                         RequestMessage::Blocks(get_blocks) => {
                             for hash in &get_blocks.hashes {
@@ -889,8 +943,9 @@ impl RequestManager {
                             }
                         }
                         RequestMessage::Epochs(get_epoch_hashes) => {
-                            epochs_in_flight
-                                .remove(&get_epoch_hashes.epoch_number);
+                            for epoch_number in &get_epoch_hashes.epochs {
+                                epochs_in_flight.remove(epoch_number);
+                            }
                         }
                     }
                 }

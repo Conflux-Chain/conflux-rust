@@ -38,7 +38,7 @@ class MessageTest(ConfluxTestFramework):
 
         handler = WaitHandler(default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers)
         self.log.info("Send GetBlockHeaders message")
-        self.send_msg(GetBlockHeaders(hash=blocks[0], max_blocks=1))
+        self.send_msg(GetBlockHeaders(hashes=[blocks[0]]))
         handler.wait()
         # This message is not used in current Conflux sync protocol
         # self.log.info("Send GetBlockBoies message")

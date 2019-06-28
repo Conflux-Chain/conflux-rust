@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::hash::keccak;
+use crate::{block_data_manager::BlockDataManager, hash::keccak};
 use cfx_types::{H256, U256, U512};
 use rlp::RlpStream;
+use std::cmp::{max, min};
 
 pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 200;
 // Time unit is micro-second (usec)
@@ -110,4 +111,43 @@ pub fn validate(
     let nonce = solution.nonce;
     let hash = compute(nonce, &problem.block_hash);
     hash < problem.boundary
+}
+
+// The input `cur_hash` must have been inserted to BlockDataManager,
+// otherwise it'll panic.
+pub fn target_difficulty<F>(
+    data_man: &BlockDataManager, pow_config: &ProofOfWorkConfig,
+    cur_hash: &H256, num_blocks_in_epoch: F,
+) -> U256
+where
+    F: Fn(&H256) -> usize,
+{
+    let mut cur_header = data_man
+        .block_header_by_hash(cur_hash)
+        .expect("Must already in BlockDataManager block_header");
+    let epoch = cur_header.height();
+    assert_ne!(epoch, 0);
+    debug_assert!(
+        epoch
+            == (epoch / pow_config.difficulty_adjustment_epoch_period)
+                * pow_config.difficulty_adjustment_epoch_period
+    );
+
+    let mut cur = cur_hash.clone();
+    let cur_difficulty = cur_header.difficulty().clone();
+    let mut block_count = 0 as u64;
+    let mut max_time = u64::min_value();
+    let mut min_time = u64::max_value();
+    for _ in 0..pow_config.difficulty_adjustment_epoch_period {
+        block_count += num_blocks_in_epoch(&cur) as u64 + 1;
+        max_time = max(max_time, cur_header.timestamp());
+        min_time = min(min_time, cur_header.timestamp());
+        cur = cur_header.parent_hash().clone();
+        cur_header = data_man.block_header_by_hash(&cur).unwrap();
+    }
+    pow_config.target_difficulty(
+        block_count,
+        max_time - min_time,
+        &cur_difficulty,
+    )
 }

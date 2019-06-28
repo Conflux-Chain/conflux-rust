@@ -11,11 +11,8 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    cache_manager::{CacheId, CacheManager},
-    executive,
-    pow::WORKER_COMPUTATION_PARALLELISM,
-    statedb::StateDb,
-    storage::{state_manager::StateManagerTrait, Storage, StorageManager},
+    block_data_manager::BlockDataManager, executive,
+    pow::WORKER_COMPUTATION_PARALLELISM, statedb::StateDb, storage::Storage,
     vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
@@ -35,9 +32,9 @@ use threadpool::ThreadPool;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register("tx_pool_size");
+        GaugeUsize::register_with_group("txpool", "size");
     static ref TX_POOL_READY_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register("tx_pool_ready_size");
+        GaugeUsize::register_with_group("txpool", "ready_size");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
@@ -495,33 +492,29 @@ impl TransactionPoolInner {
 
 pub struct TransactionPool {
     inner: RwLock<TransactionPoolInner>,
-    storage_manager: Arc<StorageManager>,
-    pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     pub worker_pool: Arc<Mutex<ThreadPool>>,
-    cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
+    pub data_man: Arc<BlockDataManager>,
     spec: vm::Spec,
+    pub best_executed_epoch: Mutex<EpochId>,
 }
 
 pub type SharedTransactionPool = Arc<TransactionPool>;
 
 impl TransactionPool {
     pub fn with_capacity(
-        capacity: usize, storage_manager: Arc<StorageManager>,
-        worker_pool: Arc<Mutex<ThreadPool>>,
-        cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        capacity: usize, worker_pool: Arc<Mutex<ThreadPool>>,
+        data_man: Arc<BlockDataManager>,
     ) -> Self
     {
+        let genesis_hash = data_man.genesis_block.hash();
         TransactionPool {
             inner: RwLock::new(TransactionPoolInner::with_capacity(capacity)),
-            storage_manager,
-            transaction_pubkey_cache: RwLock::new(HashMap::with_capacity(
-                capacity,
-            )),
             worker_pool,
-            cache_man,
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
+            data_man,
             spec: vm::Spec::new_spec(),
+            best_executed_epoch: Mutex::new(genesis_hash),
         }
     }
 
@@ -534,37 +527,11 @@ impl TransactionPool {
     }
 
     pub fn insert_new_transactions(
-        &self, latest_epoch: EpochId,
-        transactions: &Vec<TransactionWithSignature>,
-    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>)
-    {
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
         let mut failures = HashMap::new();
-
-        let uncached_trans: Vec<TransactionWithSignature>;
-        {
-            let tx_cache = self.transaction_pubkey_cache.read();
-            uncached_trans = transactions
-                .iter()
-                .map(|tx| tx.clone())
-                .filter(|tx| {
-                    let tx_hash = tx.hash();
-                    let inserted = tx_cache.contains_key(&tx_hash);
-                    // Sample 1/128 transactions
-                    if tx_hash[0] & 254 == 0 {
-                        debug!("Sampled transaction {:?} in tx pool", tx_hash);
-                    }
-
-                    if inserted {
-                        failures.insert(
-                            tx_hash,
-                            "transaction already exists".into(),
-                        );
-                    }
-
-                    !inserted
-                })
-                .collect();
-        }
+        let uncached_trans =
+            self.data_man.get_uncached_transactions(transactions);
 
         let mut signed_trans = Vec::new();
         if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
@@ -659,23 +626,15 @@ impl TransactionPool {
             }
         }
 
-        let mut account_cache = AccountCache::new(unsafe {
-            self.storage_manager
-                .get_state_readonly_assumed_existence(latest_epoch)
-                .unwrap()
-        });
+        let mut account_cache = self.get_best_state_account_cache();
         let mut passed_transactions = Vec::new();
         {
-            let mut tx_cache = self.transaction_pubkey_cache.write();
-            let mut cache_man = self.cache_man.lock();
-
             let mut inner = self.inner.write();
             let inner = &mut *inner;
 
             for txes in signed_trans {
                 for tx in txes {
-                    tx_cache.insert(tx.hash(), tx.clone());
-                    cache_man.note_used(CacheId::TransactionPubkey(tx.hash()));
+                    self.data_man.cache_transaction(&tx.hash(), tx.clone());
                     if let Err(e) = self.verify_transaction(tx.as_ref()) {
                         warn!("Transaction discarded due to failure of passing verification {:?}: {}", tx.hash(), e);
                         failures.insert(tx.hash(), e);
@@ -833,18 +792,22 @@ impl TransactionPool {
     }
 
     pub fn set_to_propagate_trans(
-        &self, mut transactions: HashMap<H256, Arc<SignedTransaction>>,
+        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
         let mut to_prop = self.to_propagate_trans.write();
-        mem::swap(&mut *to_prop, &mut transactions);
+        to_prop.extend(transactions);
     }
 
     // If a tx is failed executed due to invalid nonce
     // This function should be invoked to recycle it
     pub fn recycle_failed_executed_transactions(
-        &self, transactions: Vec<Arc<SignedTransaction>>, state: Storage,
+        &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
-        let mut account_cache = AccountCache::new(state);
+        if transactions.is_empty() {
+            // Fast return. Also used to for bench mode.
+            return;
+        }
+        let mut account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
         for tx in transactions {
@@ -881,14 +844,14 @@ impl TransactionPool {
         self.to_propagate_trans.write().remove(tx_hash);
     }
 
-    pub fn set_tx_packed(
-        &self, transactions: Vec<Arc<SignedTransaction>>, epoch_id: EpochId,
-    ) {
+    pub fn set_tx_packed(&self, transactions: Vec<Arc<SignedTransaction>>) {
+        if transactions.is_empty() {
+            // Fast return. Also used to for bench mode.
+            return;
+        }
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
-        let mut account_cache = AccountCache::new(
-            self.storage_manager.get_state_at(epoch_id).unwrap(),
-        );
+        let mut account_cache = self.get_best_state_account_cache();
         for tx in transactions {
             self.add_transaction_and_check_readiness_without_lock(
                 inner,
@@ -1008,6 +971,17 @@ impl TransactionPool {
         let deferred_txs = inner.txs.values().map(|v| v.clone()).collect();
 
         (ready_txs, deferred_txs)
+    }
+
+    fn get_best_state_account_cache(&self) -> AccountCache {
+        AccountCache::new(unsafe {
+            self.data_man
+                .storage_manager
+                .get_state_readonly_assumed_existence(
+                    *self.best_executed_epoch.lock(),
+                )
+                .unwrap()
+        })
     }
 }
 

@@ -36,6 +36,12 @@ impl SessionManager {
         self.sessions.read().get(idx).cloned()
     }
 
+    pub fn get_by_id(&self, node_id: &NodeId) -> Option<Arc<RwLock<Session>>> {
+        let sessions = self.sessions.read();
+        let idx = *self.node_id_index.read().get(node_id)?;
+        sessions.get(idx).cloned()
+    }
+
     pub fn all(&self) -> Vec<Arc<RwLock<Session>>> {
         self.sessions.read().iter().map(|s| s.clone()).collect()
     }

@@ -4,23 +4,21 @@
 
 use crate::{
     block_data_manager::BlockDataManager,
-    cache_manager::{CacheId, CacheManager, CacheSize},
     consensus::{ConsensusGraphInner, SharedConsensusGraph},
     db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
-    pow::ProofOfWorkConfig,
+    pow::{target_difficulty, ProofOfWorkConfig},
     statistics::SharedStatistics,
     storage::GuardedValue,
     verification::*,
 };
 use cfx_types::{H256, U256};
-use heapsize::HeapSizeOf;
 use link_cut_tree::MinLinkCutTree;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    block::CompactBlock, transaction::SignedTransaction, Block, BlockHeader,
-    EpochNumber, StateRootWithAuxInfo,
+    transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
+    StateRootWithAuxInfo,
 };
 use rlp::Rlp;
 use slab::Slab;
@@ -545,7 +543,8 @@ impl SynchronizationGraphInner {
                 cur = self.arena[cur].parent;
             }
             // self.target_difficulty(&self.arena[cur].block_header.hash())
-            self.data_man.target_difficulty(
+            target_difficulty(
+                &self.data_man,
                 &self.pow_config,
                 &self.arena[cur].block_header.hash(),
                 |h| {
@@ -603,10 +602,8 @@ pub struct SynchronizationGraph {
     pub inner: Arc<RwLock<SynchronizationGraphInner>>,
     pub consensus: SharedConsensusGraph,
     pub data_man: Arc<BlockDataManager>,
-    pub compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
-    pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub statistics: SharedStatistics,
 
     /// Channel used to send work to `ConsensusGraph`
@@ -634,10 +631,8 @@ impl SynchronizationGraph {
         let mut sync_graph = SynchronizationGraph {
             inner: inner.clone(),
             data_man: data_man.clone(),
-            compact_blocks: RwLock::new(HashMap::new()),
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
-            cache_man: data_man.cache_man.clone(),
             consensus: consensus.clone(),
             statistics: consensus.statistics.clone(),
             consensus_sender: Mutex::new(consensus_sender),
@@ -860,29 +855,10 @@ impl SynchronizationGraph {
         self.data_man.block_by_hash_from_db(hash)
     }
 
-    pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {
-        self.compact_blocks.read().get(hash).map(|b| {
-            self.cache_man
-                .lock()
-                .note_used(CacheId::CompactBlock(b.hash()));
-            b.clone()
-        })
-    }
-
     pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }
 
     pub fn contains_block_header(&self, hash: &H256) -> bool {
         self.inner.read().indices.contains_key(hash)
-    }
-
-    pub fn contains_compact_block(&self, hash: &H256) -> bool {
-        self.compact_blocks.read().contains_key(hash)
-    }
-
-    pub fn insert_compact_block(&self, cb: CompactBlock) {
-        let hash = cb.hash();
-        self.compact_blocks.write().insert(hash, cb);
-        self.cache_man.lock().note_used(CacheId::CompactBlock(hash));
     }
 
     fn parent_or_referees_invalid(&self, header: &BlockHeader) -> bool {
@@ -1237,7 +1213,7 @@ impl SynchronizationGraph {
             if !sync_graph_only {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
-                self.insert_compact_block(block.to_compact());
+                self.data_man.insert_compact_block(block.to_compact());
                 self.insert_block_to_kv(block.clone(), persistent);
             }
         } else {
@@ -1340,94 +1316,16 @@ impl SynchronizationGraph {
         self.consensus.verified_invalid(hash)
     }
 
-    /// Get current cache size.
-    pub fn cache_size(&self) -> CacheSize {
-        let compact_blocks = self.compact_blocks.read().heap_size_of_children();
-        let blocks = self.data_man.blocks.read().heap_size_of_children();
-        let block_receipts =
-            self.data_man.block_receipts.read().heap_size_of_children();
-        let transaction_addresses_data = self
-            .data_man
-            .transaction_addresses
-            .read()
-            .heap_size_of_children();
-        let transaction_pubkey = self
-            .consensus
-            .txpool
-            .transaction_pubkey_cache
-            .read()
-            .heap_size_of_children();
-        CacheSize {
-            blocks,
-            block_receipts,
-            transaction_addresses: transaction_addresses_data,
-            compact_blocks,
-            transaction_pubkey,
-        }
-    }
-
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
     pub fn update_total_weight_in_past(&self) {
         self.consensus.update_total_weight_in_past();
     }
 
-    pub fn block_cache_gc(&self) {
-        let current_size = self.cache_size().total();
-        let mut blocks = self.data_man.blocks.write();
-        let mut executed_results = self.data_man.block_receipts.write();
-        let mut compact_blocks = self.compact_blocks.write();
-        let mut transaction_pubkey_cache =
-            self.consensus.txpool.transaction_pubkey_cache.write();
-        let mut tx_address = self.data_man.transaction_addresses.write();
-        let mut cache_man = self.cache_man.lock();
-        info!(
-            "Before gc cache_size={} {} {} {} {} {}",
-            current_size,
-            blocks.len(),
-            compact_blocks.len(),
-            executed_results.len(),
-            tx_address.len(),
-            transaction_pubkey_cache.len(),
-        );
-
-        cache_man.collect_garbage(current_size, |ids| {
-            for id in &ids {
-                match *id {
-                    CacheId::Block(ref h) => {
-                        blocks.remove(h);
-                    }
-                    CacheId::BlockReceipts(ref h) => {
-                        executed_results.remove(h);
-                    }
-                    CacheId::TransactionAddress(ref h) => {
-                        tx_address.remove(h);
-                    }
-                    CacheId::CompactBlock(ref h) => {
-                        compact_blocks.remove(h);
-                    }
-                    CacheId::TransactionPubkey(ref h) => {
-                        transaction_pubkey_cache.remove(h);
-                    }
-                }
-            }
-
-            blocks.shrink_to_fit();
-            executed_results.shrink_to_fit();
-            tx_address.shrink_to_fit();
-            transaction_pubkey_cache.shrink_to_fit();
-            compact_blocks.shrink_to_fit();
-
-            blocks.heap_size_of_children()
-                + executed_results.heap_size_of_children()
-                + tx_address.heap_size_of_children()
-                + transaction_pubkey_cache.heap_size_of_children()
-                + compact_blocks.heap_size_of_children()
-        });
-    }
-
     /// Get the current number of blocks in the synchronization graph
-    pub fn block_count(&self) -> usize { self.data_man.blocks.read().len() }
+    /// This only returns cached block count, and this is enough since this is
+    /// only used in test.
+    pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
 
     // Manage statistics
     pub fn stat_inc_inserted_count(&self) {

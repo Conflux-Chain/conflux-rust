@@ -7,6 +7,7 @@ use byte_unit::n_mb_bytes;
 use lazy_static::lazy_static;
 use metrics::{Gauge, GaugeUsize};
 use parking_lot::RwLock;
+use serde_derive::Serialize;
 use std::sync::Arc;
 
 lazy_static! {
@@ -16,7 +17,8 @@ lazy_static! {
         GaugeUsize::register("network_throttling_queue_size");
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Service {
     queue_capacity: usize,
     min_throttle_queue_size: usize,

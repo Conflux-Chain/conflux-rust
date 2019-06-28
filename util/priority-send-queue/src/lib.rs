@@ -76,4 +76,8 @@ impl<T> PrioritySendQueue<T> {
         self.queue(SendQueuePriority::High).len()
             + self.queue(SendQueuePriority::Normal).len()
     }
+
+    pub fn len_by_priority(&self, priority: SendQueuePriority) -> usize {
+        self.queue(priority).len()
+    }
 }

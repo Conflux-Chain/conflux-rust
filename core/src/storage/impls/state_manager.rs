@@ -162,24 +162,12 @@ impl StateManager {
         );
     }
 
-    // FIXME: remove debug code.
+    /// This is unsafe because if state for `epoch_id` does not exist, it'll
+    /// panic.
     pub unsafe fn get_state_readonly_assumed_existence(
         &self, epoch_id: EpochId,
     ) -> Result<State> {
-        let maybe_state = self.get_state_no_commit(epoch_id)?;
-        Ok(match maybe_state {
-            Some(state) => state,
-            None => {
-                warn!("state doesn't exist at epoch {:?}.", epoch_id);
-                // FIXME: Error were found in
-                // FIXME: transaction_pool/mod.rs#insert_new_transactions
-                // FIXME: transactiongen/src/lib.rs#generate_transactions
-                // FIXME: and consensus/mod.rs#get_balance, where the obtained
-                // FIXME: state doesn't exist. The bug should be
-                // FIXME: fixed and the debugging code here should be removed.
-                self.get_state_for_genesis_write()
-            }
-        })
+        Ok(self.get_state_no_commit(epoch_id)?.unwrap())
     }
 }
 
