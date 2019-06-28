@@ -3,7 +3,7 @@ use crate::{
     gauge::{Gauge, GaugeUsize},
     meter::{Meter, StandardMeter},
     metrics::is_enabled,
-    registry::DEFAULT_REGISTRY,
+    registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use std::{
     fs::OpenOptions,
@@ -65,20 +65,47 @@ impl Reporter for FileReporter {
             .map_err(|e| format!("failed to write file, {:?}", e))?;
         }
 
+        for (group_name, metrics) in DEFAULT_GROUPING_REGISTRY.read().get_all()
+        {
+            let agg_metric: Vec<String> = metrics
+                .iter()
+                .map(|(name, metric)| metric.get_value_with_group(name))
+                .collect();
+            file.write(
+                format!(
+                    "{}, {}, Group, {{{}}}\n",
+                    now.as_millis(),
+                    group_name,
+                    agg_metric.join(", ")
+                )
+                .as_bytes(),
+            )
+            .map_err(|e| format!("failed to write file, {:?}", e))?;
+        }
+
         Ok(())
     }
 }
 
 pub trait Reportable {
     fn get_value(&self) -> String;
+    fn get_value_with_group(&self, name: &String) -> String;
 }
 
 impl Reportable for CounterUsize {
     fn get_value(&self) -> String { format!("{}", self.count()) }
+
+    fn get_value_with_group(&self, name: &String) -> String {
+        format!("{}: {}", name, self.count())
+    }
 }
 
 impl Reportable for GaugeUsize {
     fn get_value(&self) -> String { format!("{}", self.value()) }
+
+    fn get_value_with_group(&self, name: &String) -> String {
+        format!("{}: {}", name, self.value())
+    }
 }
 
 impl Reportable for StandardMeter {
@@ -86,6 +113,19 @@ impl Reportable for StandardMeter {
         let snapshot = self.snapshot();
         format!(
             "{{count: {}, m1: {:.2}, m5: {:.2}, m15: {:.2}, mean: {:.2}}}",
+            snapshot.count(),
+            snapshot.rate1(),
+            snapshot.rate5(),
+            snapshot.rate15(),
+            snapshot.rate_mean()
+        )
+    }
+
+    fn get_value_with_group(&self, name: &String) -> String {
+        let snapshot = self.snapshot();
+        format!(
+            "{0}.count: {1}, {0}.m1: {2:.2}, {0}.m5: {3:.2}, {0}.m15: {4:.2}, {0}.mean: {5:.2}",
+            name,
             snapshot.count(),
             snapshot.rate1(),
             snapshot.rate5(),

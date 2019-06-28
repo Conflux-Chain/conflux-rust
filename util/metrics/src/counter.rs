@@ -1,6 +1,6 @@
 use crate::{
     metrics::{is_enabled, Metric, ORDER},
-    registry::DEFAULT_REGISTRY,
+    registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use std::sync::{atomic::AtomicUsize, Arc};
 
@@ -34,6 +34,23 @@ macro_rules! construct_counter {
 
                 counter
             }
+
+            pub fn register_with_group(
+                group: &'static str, name: &'static str,
+            ) -> Arc<Counter<$data_type>> {
+                if !is_enabled() {
+                    return Arc::new(NoopCounter);
+                }
+
+                let counter = Arc::new($name::default());
+                DEFAULT_GROUPING_REGISTRY.write().register(
+                    group.into(),
+                    name.into(),
+                    counter.clone(),
+                );
+
+                counter
+            }
         }
 
         impl Counter<$data_type> for $name {
@@ -49,7 +66,7 @@ macro_rules! construct_counter {
         }
 
         impl Metric for $name {
-            fn get_type(&self) -> &'static str { stringify!($name) }
+            fn get_type(&self) -> &'static str { "Counter" }
         }
     };
 }

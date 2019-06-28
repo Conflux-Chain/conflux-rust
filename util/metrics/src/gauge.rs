@@ -1,6 +1,6 @@
 use crate::{
     metrics::{is_enabled, Metric, ORDER},
-    registry::DEFAULT_REGISTRY,
+    registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use std::sync::{atomic::AtomicUsize, Arc};
 
@@ -33,6 +33,23 @@ macro_rules! construct_gauge {
 
                 gauge
             }
+
+            pub fn register_with_group(
+                group: &'static str, name: &'static str,
+            ) -> Arc<Gauge<$data_type>> {
+                if !is_enabled() {
+                    return Arc::new(NoopGauge);
+                }
+
+                let gauge = Arc::new($name::default());
+                DEFAULT_GROUPING_REGISTRY.write().register(
+                    group.into(),
+                    name.into(),
+                    gauge.clone(),
+                );
+
+                gauge
+            }
         }
 
         impl Gauge<$data_type> for $name {
@@ -42,7 +59,7 @@ macro_rules! construct_gauge {
         }
 
         impl Metric for $name {
-            fn get_type(&self) -> &'static str { stringify!($name) }
+            fn get_type(&self) -> &'static str { "Gauge" }
         }
     };
 }
