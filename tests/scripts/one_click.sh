@@ -22,10 +22,10 @@ run_latency_exp () {
     # Launch slave instances
     master_ip=`cat ips`
     slave_image=`cat slave_image`
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 
     # Run experiments
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/test/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation"
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation"
 
     # Terminate slave instances
     rm -rf tmp_data
@@ -38,7 +38,7 @@ run_latency_exp () {
     # Download results
     archive_file="exp_stat_latency.tgz"
     log="exp_stat_latency.log"
-    scp ubuntu@${master_ip}:~/conflux-rust/test/scripts/${archive_file} .
+    scp ubuntu@${master_ip}:~/conflux-rust/tests/scripts/${archive_file} .
     tar xfvz $archive_file
     cat $log
     mv $archive_file ${archive_file}.`date +%s`

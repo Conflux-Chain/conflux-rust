@@ -51,6 +51,6 @@ matrix:
             - export RUSTFLAGS="-g -D warnings"
             - cargo build --release
         script:
-            - ./test/test_all.py
+            - ./tests/test_all.py
         before_cache:
             - cp Cargo.lock target
