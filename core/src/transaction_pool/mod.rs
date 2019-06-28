@@ -32,9 +32,9 @@ use threadpool::ThreadPool;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register("tx_pool_size");
+        GaugeUsize::register_with_group("txpool", "size");
     static ref TX_POOL_READY_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register("tx_pool_ready_size");
+        GaugeUsize::register_with_group("txpool", "ready_size");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;

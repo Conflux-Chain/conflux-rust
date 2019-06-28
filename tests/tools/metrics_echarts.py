@@ -18,11 +18,15 @@ class Metric:
         self.timestamps = []
 
     @staticmethod
-    def create_metric(metric_type, name):
-        if metric_type == "Meter":
+    def create_metric(metric_type:str, name:str):
+        if metric_type == "Group":
+            return MetricGrouping(name)
+        elif metric_type == "Meter":
             return MetricMeter(name)
-        else:
+        elif metric_type in ["Gauge", "Counter"]:
             return MetricGauge(name)
+        else:
+            raise AssertionError("invalid metric type: {}".format(metric_type))
 
     def append(self, timestamp, metric):
         pass
@@ -62,6 +66,28 @@ class MetricMeter(Metric):
         chart.add_yaxis("m5", self.m5)
         chart.add_yaxis("m15", self.m15)
         chart.add_yaxis("mean", self.mean)
+
+class MetricGrouping(Metric):
+    def __init__(self, name:str):
+        Metric.__init__(self, name)
+        self.values = {}
+
+    def append(self, timestamp, metric):
+        self.timestamps.append(timestamp)
+        assert metric.startswith("{") and metric.endswith("}")
+        for kv in metric[1:-1].split(", "):
+            fields = kv.split(": ")
+            key = fields[0]
+            value = fields[1]
+
+            if self.values.get(key) is None:
+                self.values[key] = [value]
+            else:
+                self.values[key].append(value)
+
+    def add_yaxis(self, chart:Line):
+        for (name, values) in self.values.items():
+            chart.add_yaxis(name, values)
 
 def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
     assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(metrics_log_file)

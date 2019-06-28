@@ -1,7 +1,7 @@
 use crate::{
     ewma::EWMA,
     metrics::{is_enabled, Metric, ORDER},
-    registry::DEFAULT_REGISTRY,
+    registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use lazy_static::lazy_static;
 use parking_lot::{Mutex, RwLock};
@@ -38,6 +38,24 @@ pub fn register_meter(name: &'static str) -> Arc<Meter> {
     DEFAULT_REGISTRY
         .write()
         .register(name.into(), meter.clone());
+    ARBITER.meters.lock().insert(name, meter.clone());
+
+    meter
+}
+
+pub fn register_meter_with_group(
+    group: &'static str, name: &'static str,
+) -> Arc<Meter> {
+    if !is_enabled() {
+        return Arc::new(NoopMeter);
+    }
+
+    let meter = Arc::new(StandardMeter::new(name));
+    DEFAULT_GROUPING_REGISTRY.write().register(
+        group.into(),
+        name.into(),
+        meter.clone(),
+    );
     ARBITER.meters.lock().insert(name, meter.clone());
 
     meter
