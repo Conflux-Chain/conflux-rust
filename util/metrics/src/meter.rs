@@ -16,8 +16,8 @@ use timer::Timer;
 // Meters count events to produce exponentially-weighted moving average rates
 // at one-, five-, and fifteen-minutes and a mean rate.
 pub trait Meter: Send + Sync {
-    fn count(&self) -> u64 { 0 }
-    fn mark(&self, _n: u64) {}
+    fn count(&self) -> usize { 0 }
+    fn mark(&self, _n: usize) {}
     fn rate1(&self) -> f64 { 0.0 }
     fn rate5(&self) -> f64 { 0.0 }
     fn rate15(&self) -> f64 { 0.0 }
@@ -63,12 +63,12 @@ pub fn register_meter_with_group(
 
 #[derive(Default, Clone)]
 pub struct MeterSnapshot {
-    count: u64,
+    count: usize,
     rates: [u64; 4], // m1, m5, m15 and mean
 }
 
 impl Meter for MeterSnapshot {
-    fn count(&self) -> u64 { self.count }
+    fn count(&self) -> usize { self.count }
 
     fn rate1(&self) -> f64 { f64::from_bits(self.rates[0]) }
 
@@ -115,9 +115,9 @@ impl StandardMeter {
 }
 
 impl Meter for StandardMeter {
-    fn count(&self) -> u64 { self.snapshot.read().count }
+    fn count(&self) -> usize { self.snapshot.read().count }
 
-    fn mark(&self, n: u64) {
+    fn mark(&self, n: usize) {
         if self.stopped.load(ORDER) {
             return;
         }
