@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import subprocess
 import os
+import subprocess
 import sys
 
 try:
@@ -34,7 +34,7 @@ for file in os.listdir(test_dir):
 
 failed = set()
 for script in TEST_SCRIPTS:
-    print("Running " + script, end = "\r")
+    print("Running " + script, end="\r")
     color = BLUE
     glyph = TICK
     try:
@@ -43,7 +43,7 @@ for script in TEST_SCRIPTS:
         if hasattr(sys, "getwindowsversion"):
             py = "python"
 
-        subprocess.check_output(args = [py, script, "--randomseed=1"], stdin = None, cwd = test_dir)
+        subprocess.check_output(args=[py, script, "--randomseed=1"], stdin=None, cwd=test_dir)
     except subprocess.CalledProcessError as err:
         color = RED
         glyph = CROSS

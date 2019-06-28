@@ -1,7 +1,9 @@
-from conflux.rpc import RpcClient
 import random
-import time
 import threading
+import time
+
+from conflux.rpc import RpcClient
+
 
 class BlockGenThread(threading.Thread):
     def __init__(self, nodes, log, num_txs=1000, interval_fixed=None, interval_base=1):

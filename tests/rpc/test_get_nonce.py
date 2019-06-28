@@ -1,8 +1,10 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
+
 
 class TestGetNonce(RpcClient):
     def test_account_not_found(self):
@@ -29,7 +31,6 @@ class TestGetNonce(RpcClient):
         nonce1 = self.get_nonce(self.GENESIS_ADDR)
         nonce2 = self.get_nonce(self.GENESIS_ADDR, self.EPOCH_LATEST_STATE)
         assert_equal(nonce1, nonce2)
-        
 
     def test_epoch_latest_mined(self):
         assert_raises_rpc_error(None, None, self.get_nonce, self.GENESIS_ADDR, self.EPOCH_LATEST_MINED)

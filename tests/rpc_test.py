@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 import datetime
-import time
 import os
 import types
 
-from conflux.config import default_config
-from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE, Transactions
-from conflux.utils import int_to_hex, privtoaddr, encode_hex
-from test_framework.blocktools import make_genesis, create_transaction
+from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE
 from test_framework.mininode import start_p2p_connection
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler, checktx
+from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler
+
 
 class RpcTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -24,7 +21,7 @@ class RpcTest(ConfluxTestFramework):
         self._test_sayhello()
 
         blocks = self.nodes[0].generate(1, 0)
-        self.best_block_hash = blocks[-1] #make_genesis().block_header.hash
+        self.best_block_hash = blocks[-1]  # make_genesis().block_header.hash
 
         self._test_getblockcount()
         self._test_getbestblockhash()
@@ -57,7 +54,7 @@ class RpcTest(ConfluxTestFramework):
 
     def _test_class(self, class_name, class_type):
         obj = class_type(self.nodes[0])
-        
+
         for name in dir(obj):
             m = getattr(obj, name)
             if type(m) is types.MethodType and name.startswith("test_"):
@@ -99,7 +96,7 @@ class RpcTest(ConfluxTestFramework):
             # The EventLoop in rust may have a deviation of a maximum of
             # 100ms. This is because the ticker is 100ms by default.
             assert msec >= node.latency_ms - 100
-    
+
         self.log.info("Test addlatency")
         default_node = start_p2p_connection([self.nodes[0]])[0]
         latency_ms = 1000

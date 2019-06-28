@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from eth_utils import decode_hex, encode_hex
 
-from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import ConfluxTestFramework
+from test_framework.blocktools import create_block
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
 
@@ -17,13 +17,13 @@ class P2PTest(ConfluxTestFramework):
         for i in range(self.num_nodes):
             self.start_node(i)
         for i in range(1, self.num_nodes - 1):
-            connect_nodes(self.nodes, i, i+1)
+            connect_nodes(self.nodes, i, i + 1)
 
     def run_test(self):
         block_number = 100
 
         start_p2p_connection(self.nodes)
-        
+
         best_block = self.nodes[1].generate(1, 0)[0]
         block1 = create_block(parent_hash=decode_hex(best_block), height=2)
         block2 = create_block(parent_hash=decode_hex(best_block), height=2, author=b'\x01' * 20)

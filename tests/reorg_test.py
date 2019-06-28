@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-from http.client import CannotSendRequest
 from conflux.utils import encode_hex, privtoaddr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction
-from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -58,8 +58,10 @@ class P2PTest(ConfluxTestFramework):
                 shard_nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000
-                self.log.info("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                               value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
+                self.log.info("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d",
+                              encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
+                              value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key],
+                              balance_map[receiver_sk])
                 self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
                 time.sleep(random.random() / 10)
             for k in balance_map:

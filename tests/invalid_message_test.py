@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-from rlp.sedes import Binary, BigEndianInt
 
-from conflux import utils, trie
-from conflux.utils import encode_hex, bytes_to_int, int_to_hex, str_to_bytes
-from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import ConfluxTestFramework
+from test_framework.blocktools import create_block
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
 
@@ -18,8 +15,8 @@ class MessageTest(ConfluxTestFramework):
         self.setup_nodes()
         for i in range(self.num_nodes - 1):
             connect_nodes(self.nodes, i, i + 1)
-            self.nodes[i].addlatency(self.nodes[i+1].key, 1000)
-            self.nodes[i+1].addlatency(self.nodes[i].key, 1000)
+            self.nodes[i].addlatency(self.nodes[i + 1].key, 1000)
+            self.nodes[i + 1].addlatency(self.nodes[i].key, 1000)
 
     def run_test(self):
         start_p2p_connection([self.nodes[0]])
@@ -43,6 +40,7 @@ class MessageTest(ConfluxTestFramework):
 
         def on_pong():
             wait[0] = False
+
         self.nodes[0].p2p.on_pong = on_pong
         self.nodes[0].p2p.send_packet(PACKET_PING, b'')
         wait_until(lambda: not wait[0], timeout=60)
@@ -53,6 +51,7 @@ class MessageTest(ConfluxTestFramework):
 
         def assert_length(_node, msg):
             assert_equal(len(msg.headers), 1)
+
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE, assert_length)
         self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hash=self.nodes[0].p2p.genesis.hash, max_blocks=1))
         h.wait()
@@ -119,7 +118,8 @@ class MessageTest(ConfluxTestFramework):
             if r < self.num_nodes:
                 self.nodes[r].generate(1, 0)
             else:
-                partial_invalid_block = create_block(new_block.hash, 2, deferred_state_root=trie.UNINITIALIZED_STATE_ROOT, timestamp=i)
+                partial_invalid_block = create_block(new_block.hash, 2,
+                                                     deferred_state_root=trie.UNINITIALIZED_STATE_ROOT, timestamp=i)
                 self.send_msg(NewBlock(block=partial_invalid_block))
         wait_until(lambda: self.nodes[0].getblockcount() == 1003)
         sync_blocks(self.nodes)

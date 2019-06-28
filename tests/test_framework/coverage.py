@@ -10,7 +10,6 @@ testing.
 
 import os
 
-
 REFERENCE_FILENAME = 'rpc_interface.txt'
 
 
@@ -19,6 +18,7 @@ class AuthServiceProxyWrapper():
     An object that wraps AuthServiceProxy to record specific RPC calls.
 
     """
+
     def __init__(self, auth_service_proxy_instance, coverage_logfile=None):
         """
         Kwargs:
@@ -62,6 +62,7 @@ class AuthServiceProxyWrapper():
     def get_request(self, *args, **kwargs):
         self._log_call()
         return self.auth_service_proxy_instance.get_request(*args, **kwargs)
+
 
 def get_filename(dirname, n_node):
     """

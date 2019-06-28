@@ -1,8 +1,10 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_greater_than
+
 
 class TestGasPrice(RpcClient):
     # FIXME remove the "_" prefix to enable this test case
@@ -20,7 +22,7 @@ class TestGasPrice(RpcClient):
     def test_median_prices(self):
         sender = self.GENESIS_ADDR
 
-        prices = [7,5,1,9,3]
+        prices = [7, 5, 1, 9, 3]
         txs = []
         n = self.get_nonce(sender)
 
@@ -42,4 +44,3 @@ class TestGasPrice(RpcClient):
 
         # median of prices
         assert_equal(self.gas_price(), 5)
-

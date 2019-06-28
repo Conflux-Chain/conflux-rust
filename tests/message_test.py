@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-import struct
-import time
-from rlp.sedes import Binary, BigEndianInt
 
-from conflux import utils
-from conflux.utils import encode_hex, bytes_to_int, int_to_hex
+from conflux.utils import encode_hex
 from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+
 
 class MessageTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -28,7 +25,7 @@ class MessageTest(ConfluxTestFramework):
         # control the blocks and transactions.
         blocks = [default_node.genesis.block_header.hash]
         new_block = create_block(blocks[0], 1)
-        new_transaction = create_transaction(gas_price = 1000)
+        new_transaction = create_transaction(gas_price=1000)
 
         # This message is not used in current Conflux sync protocol
         # self.log.info("Send GetBlockHashes message")
@@ -38,6 +35,7 @@ class MessageTest(ConfluxTestFramework):
             self.log.info("Received %d headers", len(msg.headers))
             for header in msg.headers:
                 self.log.info("Block header: %s", encode_hex(header.hash))
+
         handler = WaitHandler(default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers)
         self.log.info("Send GetBlockHeaders message")
         self.send_msg(GetBlockHeaders(hash=blocks[0], max_blocks=1))
@@ -63,13 +61,13 @@ class MessageTest(ConfluxTestFramework):
         # FIXME: Currently, the transaction broadcast logic 
         # has not been finished. Enable it later.
 
-        #self.send_msg(Transactions(transactions=[new_transaction]))
-        #time.sleep(5)
-        #res = self.nodes[0].getstatus()
-        #assert_equal(1, res['pendingTxNumber'])
-        #res = self.nodes[1].getstatus()
-        #assert_equal(1, res['pendingTxNumber'])
-        #self.log.info("Pass")
+        # self.send_msg(Transactions(transactions=[new_transaction]))
+        # time.sleep(5)
+        # res = self.nodes[0].getstatus()
+        # assert_equal(1, res['pendingTxNumber'])
+        # res = self.nodes[1].getstatus()
+        # assert_equal(1, res['pendingTxNumber'])
+        # self.log.info("Pass")
 
         self.test_socket_msg(self.nodes[0])
 

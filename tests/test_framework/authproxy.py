@@ -33,7 +33,6 @@ ServiceProxy class:
 - uses standard Python json lib
 """
 
-import base64
 import decimal
 import http.client
 import json
@@ -47,6 +46,7 @@ HTTP_TIMEOUT = 30
 USER_AGENT = "AuthServiceProxy/0.1"
 
 log = logging.getLogger("ConfluxRPC")
+
 
 class JSONRPCException(Exception):
     def __init__(self, rpc_error):
@@ -63,11 +63,13 @@ def EncodeDecimal(o):
         return str(o)
     raise TypeError(repr(o) + " is not JSON serializable")
 
+
 class AuthServiceProxy():
     __id_count = 0
 
     # ensure_ascii: escape unicode as \uXXXX, passed to json.dumps
-    def __init__(self, service_url, service_name=None, lock=None, timeout=HTTP_TIMEOUT, connection=None, ensure_ascii=True):
+    def __init__(self, service_url, service_name=None, lock=None, timeout=HTTP_TIMEOUT, connection=None,
+                 ensure_ascii=True):
         if lock is None:
             self.lock = Lock()
         else:
@@ -170,16 +172,20 @@ class AuthServiceProxy():
         content_type = http_response.getheader('Content-Type')
         if content_type != 'application/json; charset=utf-8':
             raise JSONRPCException({
-                'code': -342, 'message': 'non-JSON HTTP response with \'%i %s\' from server' % (http_response.status, http_response.reason)})
+                'code': -342, 'message': 'non-JSON HTTP response with \'%i %s\' from server' % (
+                http_response.status, http_response.reason)})
 
         responsedata = http_response.read().decode('utf8')
         response = json.loads(responsedata, parse_float=decimal.Decimal)
         elapsed = time.time() - req_start_time
         if "error" in response and response["error"] is None:
-            log.debug("<-%s- [%.6f] %s" % (response["id"], elapsed, json.dumps(response["result"], default=EncodeDecimal, ensure_ascii=self.ensure_ascii)))
+            log.debug("<-%s- [%.6f] %s" % (response["id"], elapsed,
+                                           json.dumps(response["result"], default=EncodeDecimal,
+                                                      ensure_ascii=self.ensure_ascii)))
         else:
             log.debug("<-- [%.6f] %s" % (elapsed, responsedata))
         return response
 
     def __truediv__(self, relative_uri):
-        return AuthServiceProxy("{}/{}".format(self.__service_url, relative_uri), self._service_name, connection=self.__conn)
+        return AuthServiceProxy("{}/{}".format(self.__service_url, relative_uri), self._service_name,
+                                connection=self.__conn)

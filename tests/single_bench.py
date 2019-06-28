@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import datetime
-from http.client import CannotSendRequest
-from conflux.utils import convert_to_nodeid, privtoaddr, parse_as_int, encode_hex
-from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import  create_transaction
-from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import *
-from test_framework.util import *
 import pickle
+
+from conflux.utils import privtoaddr, parse_as_int, encode_hex
+from test_framework.block_gen_thread import BlockGenThread
+from test_framework.blocktools import create_transaction
+from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
+from test_framework.util import *
 
 
 class MessageTest(ConfluxTestFramework):
@@ -58,7 +58,9 @@ class MessageTest(ConfluxTestFramework):
                 assert balance_map[sender_key] >= value + gas_price * 21000
                 tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
                                         gas_price=gas_price)
-                self.log.debug("%s send %d to %s nonce=%d balance: sender=%s, receiver=%s", encode_hex(privtoaddr(sender_key)), value, encode_hex(privtoaddr(receiver_sk)), nonce, balance_map[sender_key], balance_map[receiver_sk])
+                self.log.debug("%s send %d to %s nonce=%d balance: sender=%s, receiver=%s",
+                               encode_hex(privtoaddr(sender_key)), value, encode_hex(privtoaddr(receiver_sk)), nonce,
+                               balance_map[sender_key], balance_map[receiver_sk])
                 all_txs.append(tx)
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000
@@ -68,7 +70,7 @@ class MessageTest(ConfluxTestFramework):
             for tx in all_txs:
                 batch_tx.append(tx)
                 i += 1
-                if i  % 1000 == 0:
+                if i % 1000 == 0:
                     encoded = rlp.encode(Transactions(transactions=batch_tx))
                     encoded_txs.append(encoded)
                     batch_tx = []
@@ -85,7 +87,7 @@ class MessageTest(ConfluxTestFramework):
             self.node.p2p.send_protocol_packet(int_to_bytes(
                 TRANSACTIONS) + encoded)
         for k in balance_map:
-                wait_until(lambda: self.check_account(k, balance_map))
+            wait_until(lambda: self.check_account(k, balance_map))
         end_time = datetime.datetime.now()
         time_used = (end_time - start_time).total_seconds()
         block_gen_thread.stop()

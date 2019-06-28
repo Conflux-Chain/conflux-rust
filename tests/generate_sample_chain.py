@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
 
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
-
-from conflux import utils
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, privtoaddr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import DefaultConfluxTestFramework
+from test_framework.blocktools import create_transaction
 from test_framework.mininode import *
+from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.util import *
+
 
 class P2PTest(DefaultConfluxTestFramework):
     def set_test_params(self):
@@ -22,7 +19,7 @@ class P2PTest(DefaultConfluxTestFramework):
         self.log.info("setup nodes ...")
         self.setup_nodes()
         self.log.info("connect peers ...")
-        connect_sample_nodes(self.nodes, self.log, latency_min=0, latency_max=3000*self.delay_factor)
+        connect_sample_nodes(self.nodes, self.log, latency_min=0, latency_max=3000 * self.delay_factor)
         self.log.info("sync up with blocks among nodes ...")
         sync_blocks(self.nodes)
         self.log.info("start P2P connection ...")
@@ -67,7 +64,8 @@ class P2PTest(DefaultConfluxTestFramework):
         '''Test Random Transactions'''
         all_txs = []
         tx_n = 1000
-        self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/10/2*self.delay_factor)
+        self.log.info("start to generate %d transactions with about %d seconds", tx_n,
+                      tx_n / 10 / 2 * self.delay_factor)
         for i in range(tx_n):
             sender_key = random.choice(list(balance_map))
             nonce = nonce_map[sender_key]
@@ -89,10 +87,12 @@ class P2PTest(DefaultConfluxTestFramework):
             all_txs.append(tx)
             nonce_map[sender_key] = nonce + 1
             balance_map[sender_key] -= value + gas_price * 21000
-            self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d nonce:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                           value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk], nonce)
+            self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d nonce:%d",
+                           encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
+                           value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key],
+                           balance_map[receiver_sk], nonce)
             self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
-            time.sleep(random.random()/10*self.delay_factor)
+            time.sleep(random.random() / 10 * self.delay_factor)
         for k in balance_map:
             self.log.info("Account %s with balance:%s", bytes_to_int(k), balance_map[k])
         for tx in all_txs:
@@ -102,7 +102,7 @@ class P2PTest(DefaultConfluxTestFramework):
                     retry = True
                     while retry:
                         try:
-                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=60*self.delay_factor)
+                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=60 * self.delay_factor)
                             retry = False
                         except CannotSendRequest:
                             time.sleep(0.01)
@@ -114,10 +114,10 @@ class P2PTest(DefaultConfluxTestFramework):
 
         for k in balance_map:
             self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
-            wait_until(lambda: self.check_account(k, balance_map), timeout=60*self.delay_factor)
+            wait_until(lambda: self.check_account(k, balance_map), timeout=60 * self.delay_factor)
         block_gen_thread.stop()
         block_gen_thread.join()
-        sync_blocks(self.nodes, timeout=60*self.delay_factor)
+        sync_blocks(self.nodes, timeout=60 * self.delay_factor)
         self.log.info("Pass")
         self.register_test("general_2.json")
 

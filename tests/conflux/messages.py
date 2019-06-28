@@ -5,28 +5,18 @@
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
 
-import asyncore
-from collections import defaultdict
-from io import BytesIO
+import logging
 
 import eth_utils
 import rlp
-from rlp.exceptions import ObjectSerializationError, ObjectDeserializationError
-from rlp.sedes import binary, big_endian_int, CountableList, boolean
-import logging
-import socket
-import struct
-import sys
-import threading
+from rlp.sedes import binary, big_endian_int, CountableList
 
 from conflux import trie
 from conflux.config import default_config
 from conflux.transactions import Transaction
-from conflux.utils import hash32, hash20, sha3, bytes_to_int
-from test_framework.util import wait_until
+from conflux.utils import hash32, sha3, bytes_to_int
 
 logger = logging.getLogger("TestFramework.mininode")
-
 
 PACKET_HELLO = 0x80
 PACKET_DISCONNECT = 0x01
@@ -56,6 +46,7 @@ GET_BLOCK_TXN = 0x11
 GET_BLOCK_TXN_RESPONSE = 0x12
 
 GET_BLOCK_HASHES_BY_EPOCH = 0x17
+
 
 class Capability(rlp.Serializable):
     fields = [
@@ -317,7 +308,7 @@ class NewBlock(rlp.Serializable):
 
     @classmethod
     def serializable(cls, obj):
-            return True
+        return True
 
     @classmethod
     def serialize(cls, obj):

@@ -1,8 +1,10 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal
+
 
 class TestBlockSync(RpcClient):
     # FIXME currently not validated yet

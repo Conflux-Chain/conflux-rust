@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 
 import csv
-import os
 import sys
-import dateutil.parser
-import time
-from concurrent.futures import ThreadPoolExecutor
+
 from prettytable import PrettyTable
-from stat_latency_map_reduce import BlockLatencyType, Percentile, Statistics, HostLogReducer, LogAggregator
+from stat_latency_map_reduce import BlockLatencyType, Percentile, Statistics, LogAggregator
+
 
 class Table:
-    def __init__(self, header:list):
+    def __init__(self, header: list):
         self.header = header
         self.rows = []
 
-    def add_row(self, row:list):
+    def add_row(self, row: list):
         assert len(row) == len(self.header), "row and header length mismatch"
         self.rows.append(row)
 
@@ -27,7 +25,7 @@ class Table:
 
         print(table)
 
-    def output_csv(self, output_file:str):
+    def output_csv(self, output_file: str):
         with open(output_file, "w", newline='') as fp:
             writer = csv.writer(fp)
             writer.writerow(self.header)
@@ -35,7 +33,7 @@ class Table:
                 writer.writerow(row)
 
     @staticmethod
-    def new_matrix(name:str):
+    def new_matrix(name: str):
         header = [name]
 
         for p in Percentile:
@@ -44,10 +42,10 @@ class Table:
 
         return Table(header)
 
-    def add_data(self, name:str, data_format:str, data:list):
+    def add_data(self, name: str, data_format: str, data: list):
         self.add_stat(name, data_format, Statistics(data))
 
-    def add_stat(self, name:str, data_format:str, stat:Statistics):
+    def add_stat(self, name: str, data_format: str, stat: Statistics):
         row = [name]
 
         for p in Percentile:
@@ -58,8 +56,9 @@ class Table:
 
         self.add_row(row)
 
+
 class LogAnalyzer:
-    def __init__(self, stat_name:str, log_dir:str, csv_output:str):
+    def __init__(self, stat_name: str, log_dir: str, csv_output: str):
         self.stat_name = stat_name
         self.log_dir = log_dir
         self.csv_output = csv_output
@@ -110,7 +109,7 @@ class LogAnalyzer:
         block_timestamp_list.sort()
         intervals = []
         for i in range(1, len(block_timestamp_list)):
-            intervals.append(block_timestamp_list[i] - block_timestamp_list[i-1])
+            intervals.append(block_timestamp_list[i] - block_timestamp_list[i - 1])
         table.add_data("block generation interval", "%.2f", intervals)
 
         for p in [Percentile.Avg, Percentile.P50, Percentile.P90, Percentile.P99, Percentile.Max]:
@@ -126,6 +125,7 @@ class LogAnalyzer:
         table.pretty_print()
         if self.csv_output is not None:
             table.output_csv(self.csv_output)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

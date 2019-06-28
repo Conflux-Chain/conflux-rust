@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
-import datetime
 
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
-
-from conflux import utils
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
 from conflux.rpc import RpcClient
-from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import ConfluxTestFramework
+from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from test_framework.blocktools import create_transaction
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
 
@@ -23,9 +18,10 @@ class P2PTest(ConfluxTestFramework):
         self.add_nodes(self.num_nodes)
         bootnode = self.nodes[0]
         extra_args0 = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
-        self.start_node(0, extra_args = extra_args0)
+        self.start_node(0, extra_args=extra_args0)
         bootnode_id = "cfxnode://{}@{}:{}".format(bootnode.key[2:], bootnode.ip, bootnode.port)
-        self.node_extra_args = ["--bootnodes", bootnode_id, "--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
+        self.node_extra_args = ["--bootnodes", bootnode_id, "--enable-discovery", "true", "--node-table-timeout", "1",
+                                "--node-table-promotion-timeout", "1"]
         for i in range(1, self.num_nodes):
             self.start_node(i, extra_args=self.node_extra_args)
         for i in range(self.num_nodes):
@@ -65,12 +61,15 @@ class P2PTest(ConfluxTestFramework):
         tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=0,
                                 gas_price=gas_price)
         self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
-        self.log.debug("New tx %s: %s send value %d to %s", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
+        self.log.debug("New tx %s: %s send value %d to %s", encode_hex(tx.hash),
+                       eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
                        value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:])
+
         def check_packed():
             client = RpcClient(self.nodes[0])
             client.generate_block(1)
             return checktx(self.nodes[0], tx.hash_hex())
+
         wait_until(lambda: check_packed())
         sender_addr = eth_utils.encode_hex(privtoaddr(sender_key))
         receiver_addr = eth_utils.encode_hex(privtoaddr(receiver_sk))

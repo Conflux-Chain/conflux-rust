@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import subprocess
 import os
+import subprocess
 import sys
 
 try:
@@ -48,7 +48,7 @@ for inp in TEST_INPUT:
     color = BLUE
     glyph = TICK
     try:
-        subprocess.check_output(args = [bench_cmd, test_input_dir + inp, "--randomseed=1"], stdin = None, cwd = test_dir)
+        subprocess.check_output(args=[bench_cmd, test_input_dir + inp, "--randomseed=1"], stdin=None, cwd=test_dir)
     except subprocess.CalledProcessError as err:
         color = RED
         glyph = CROSS

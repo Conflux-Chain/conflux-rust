@@ -1,13 +1,15 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
+
 class TestEpochNumber(RpcClient):
     def test_num_default(self):
         epoch = self.epoch_number()
-        
+
         # 1 new blocks
         self.generate_block()
         epoch2 = self.epoch_number()

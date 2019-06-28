@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-import sys
 import os
+import sys
 import tarfile
 
 from metrics_echarts import parse_value, generate_metric_chart
-from pyecharts.charts import Line
 from pyecharts import options as opts
+from pyecharts.charts import Line
 
 assert len(sys.argv) >= 2, "Parameter required: <exp_archive> [<output_dir>]"
 exp_archive_file = sys.argv[1]
@@ -35,17 +35,17 @@ with open(latency_stat_file, "r", encoding="utf-8") as fp:
             if fields[2] == "Avg":
                 tags.append(fields[1].replace("_", "\n"))
             elif "block broadcast latency" in fields[1] and (
-                "/P90)" in fields[1] or "/P95)" in fields[1] or "/P99)" in fields[1]
+                    "/P90)" in fields[1] or "/P95)" in fields[1] or "/P99)" in fields[1]
             ):
                 metric = parse_value(fields[1], "block broadcast latency (", ")")
                 if not latencies.get(metric):
                     latencies[metric] = []
-                latencies[metric].append(fields[2])     # fields[2] = Avg
+                latencies[metric].append(fields[2])  # fields[2] = Avg
 
 chart = (
     Line()
-    .add_xaxis(tags)
-    .set_global_opts(
+        .add_xaxis(tags)
+        .set_global_opts(
         title_opts=opts.TitleOpts(title="Block Broadcast Latency (Average)"),
         legend_opts=opts.LegendOpts(orient="vertical", pos_left="right", pos_top="middle"),
     )
