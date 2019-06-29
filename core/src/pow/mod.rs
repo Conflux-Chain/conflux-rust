@@ -4,8 +4,12 @@
 
 use crate::{block_data_manager::BlockDataManager, hash::keccak};
 use cfx_types::{H256, U256, U512};
+use parking_lot::RwLock;
 use rlp::RlpStream;
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    collections::HashMap,
+};
 
 pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 200;
 // Time unit is micro-second (usec)
@@ -122,6 +126,11 @@ pub fn target_difficulty<F>(
 where
     F: Fn(&H256) -> usize,
 {
+    if let Some(target_diff) = data_man.target_difficulty_manager.get(cur_hash)
+    {
+        return target_diff;
+    }
+
     let mut cur_header = data_man
         .block_header_by_hash(cur_hash)
         .expect("Must already in BlockDataManager block_header");
@@ -145,9 +154,70 @@ where
         cur = cur_header.parent_hash().clone();
         cur_header = data_man.block_header_by_hash(&cur).unwrap();
     }
-    pow_config.target_difficulty(
+
+    let target_diff = pow_config.target_difficulty(
         block_count,
         max_time - min_time,
         &cur_difficulty,
-    )
+    );
+
+    data_man
+        .target_difficulty_manager
+        .set(*cur_hash, target_diff);
+
+    target_diff
+}
+
+//FIXME: make entries replaceable
+struct TargetDifficultyCacheInner {
+    cache: HashMap<H256, U256>,
+}
+
+impl TargetDifficultyCacheInner {
+    pub fn new() -> Self {
+        TargetDifficultyCacheInner {
+            cache: Default::default(),
+        }
+    }
+}
+
+struct TargetDifficultyCache {
+    inner: RwLock<TargetDifficultyCacheInner>,
+}
+
+impl TargetDifficultyCache {
+    pub fn new() -> Self {
+        TargetDifficultyCache {
+            inner: RwLock::new(TargetDifficultyCacheInner::new()),
+        }
+    }
+
+    pub fn get(&self, hash: &H256) -> Option<U256> {
+        let inner = self.inner.read();
+        inner.cache.get(hash).map(|diff| *diff)
+    }
+
+    pub fn set(&self, hash: H256, difficulty: U256) {
+        let mut inner = self.inner.write();
+        inner.cache.insert(hash, difficulty);
+    }
+}
+
+//FIXME: Add logic for persisting entries
+pub struct TargetDifficultyManager {
+    cache: TargetDifficultyCache,
+}
+
+impl TargetDifficultyManager {
+    pub fn new() -> Self {
+        TargetDifficultyManager {
+            cache: TargetDifficultyCache::new(),
+        }
+    }
+
+    pub fn get(&self, hash: &H256) -> Option<U256> { self.cache.get(hash) }
+
+    pub fn set(&self, hash: H256, difficulty: U256) {
+        self.cache.set(hash, difficulty);
+    }
 }

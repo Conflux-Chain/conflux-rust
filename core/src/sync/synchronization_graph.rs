@@ -523,35 +523,36 @@ impl SynchronizationGraphInner {
         Ok(())
     }
 
-    /// Compute the expected difficulty (light_difficulty) for a block given its
+    /// Compute the expected difficulty for a block given its
     /// parent hash
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
-        let index = *self.indices.get(parent_hash).unwrap();
-        let epoch = self.arena[index].block_header.height();
-        if epoch < self.pow_config.difficulty_adjustment_epoch_period {
+        let parent_index = *self.indices.get(parent_hash).unwrap();
+        let parent_epoch = self.arena[parent_index].block_header.height();
+        if parent_epoch < self.pow_config.difficulty_adjustment_epoch_period {
             // Use initial difficulty for early epochs
             self.pow_config.initial_difficulty.into()
         } else {
-            // FIXME: I believe for most cases, we should be able to reuse the
-            // parent difficulty! Only those in the boundary need to
-            // be recomputed!
-            let last_period_upper = (epoch
+            let last_period_upper = (parent_epoch
                 / self.pow_config.difficulty_adjustment_epoch_period)
                 * self.pow_config.difficulty_adjustment_epoch_period;
-            let mut cur = index;
-            while self.arena[cur].block_header.height() > last_period_upper {
-                cur = self.arena[cur].parent;
+            if last_period_upper != parent_epoch {
+                *self.arena[parent_index].block_header.difficulty()
+            } else {
+                let mut cur = parent_index;
+                while self.arena[cur].block_header.height() > last_period_upper
+                {
+                    cur = self.arena[cur].parent;
+                }
+                target_difficulty(
+                    &self.data_man,
+                    &self.pow_config,
+                    &self.arena[cur].block_header.hash(),
+                    |h| {
+                        let index = self.indices.get(h).unwrap();
+                        self.arena[*index].blockset_in_own_view_of_epoch.len()
+                    },
+                )
             }
-            // self.target_difficulty(&self.arena[cur].block_header.hash())
-            target_difficulty(
-                &self.data_man,
-                &self.pow_config,
-                &self.arena[cur].block_header.hash(),
-                |h| {
-                    let index = self.indices.get(h).unwrap();
-                    self.arena[*index].blockset_in_own_view_of_epoch.len()
-                },
-            )
         }
     }
 
@@ -822,13 +823,13 @@ impl SynchronizationGraph {
 
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        light_difficulty: &U256,
+        difficulty: &U256,
     ) -> bool
     {
         self.consensus.check_mining_adaptive_block(
             inner,
             parent_hash,
-            light_difficulty,
+            difficulty,
         )
     }
 

@@ -6,6 +6,7 @@ use crate::{
     cache_manager::{CacheId, CacheManager, CacheSize},
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
     ext_db::SystemDB,
+    pow::TargetDifficultyManager,
     storage::StorageManager,
     verification::VerificationConfig,
 };
@@ -38,6 +39,7 @@ pub struct BlockDataManager {
     pub db: Arc<SystemDB>,
     pub storage_manager: Arc<StorageManager>,
     pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    pub target_difficulty_manager: TargetDifficultyManager,
 }
 
 impl BlockDataManager {
@@ -60,6 +62,7 @@ impl BlockDataManager {
             storage_manager,
             cache_man,
             record_tx_address,
+            target_difficulty_manager: TargetDifficultyManager::new(),
         };
 
         data_man.insert_receipts_root(
