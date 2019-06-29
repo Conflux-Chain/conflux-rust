@@ -67,10 +67,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     GENESIS_KEY = decode_hex("9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471")
 
     def __init__(self):
-        ConfluxTestFramework.__init__(self)
         self.ips = []
         self.remote = True
         self.local_ip = [172, 31, 17, 152]
+        ConfluxTestFramework.__init__(self)
 
     def set_test_params(self):
         self.setup_clean_chain = True

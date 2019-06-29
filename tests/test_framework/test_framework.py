@@ -67,10 +67,10 @@ class ConfluxTestFramework:
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
-        self.set_test_params()
         self.options = None
         self.num_nodes = 0
         self.log = None
+        self.set_test_params()
 
         assert hasattr(
             self,
