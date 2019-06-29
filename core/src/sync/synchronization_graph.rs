@@ -504,20 +504,52 @@ impl SynchronizationGraphInner {
         }
 
         // Verify difficulty being correctly set
-        let expected_difficulty: U256 = self
-            .expected_difficulty(self.arena[index].block_header.parent_hash());
-        let my_difficulty = *self.arena[index].block_header.difficulty();
+        let mut difficulty_invalid = false;
+        let my_diff = *self.arena[index].block_header.difficulty();
+        let mut min_diff = my_diff;
+        let mut max_diff = my_diff;
+        let parent_hash = self.arena[index].block_header.parent_hash();
+        let parent_index = *self.indices.get(parent_hash).unwrap();
+        let parent_epoch = self.arena[parent_index].block_header.height();
+        let initial_difficulty: U256 =
+            self.pow_config.initial_difficulty.into();
 
-        if my_difficulty != expected_difficulty {
-            warn!(
-                "expected_difficulty {}; difficulty {}",
-                expected_difficulty,
-                *self.arena[index].block_header.difficulty()
-            );
-            return Err(From::from(BlockError::InvalidDifficulty(Mismatch {
-                expected: expected_difficulty,
-                found: self.arena[index].block_header.difficulty().clone(),
-            })));
+        if parent_epoch < self.pow_config.difficulty_adjustment_epoch_period {
+            if my_diff != initial_difficulty {
+                difficulty_invalid = true;
+                min_diff = initial_difficulty;
+                max_diff = initial_difficulty;
+            }
+        } else {
+            let last_period_upper = (parent_epoch
+                / self.pow_config.difficulty_adjustment_epoch_period)
+                * self.pow_config.difficulty_adjustment_epoch_period;
+            let parent_diff =
+                *self.arena[parent_index].block_header.difficulty();
+            if last_period_upper != parent_epoch {
+                // parent_epoch should not trigger difficulty adjustment
+                if my_diff != parent_diff {
+                    difficulty_invalid = true;
+                    min_diff = parent_diff;
+                    max_diff = parent_diff;
+                }
+            } else {
+                (min_diff, max_diff) =
+                    self.pow_config.get_adjustment_bound(parent_diff);
+                if my_diff < min_diff || my_diff > max_diff {
+                    difficulty_invalid = true;
+                }
+            }
+        }
+
+        if difficulty_invalid {
+            return Err(From::from(BlockError::InvalidDifficulty(
+                OutOfBounds {
+                    min: Some(min_diff),
+                    max: Some(max_diff),
+                    found: my_diff,
+                },
+            )));
         }
 
         Ok(())
