@@ -534,8 +534,10 @@ impl SynchronizationGraphInner {
                     max_diff = parent_diff;
                 }
             } else {
-                (min_diff, max_diff) =
+                let (lower, upper) =
                     self.pow_config.get_adjustment_bound(parent_diff);
+                min_diff = lower;
+                max_diff = upper;
                 if my_diff < min_diff || my_diff > max_diff {
                     difficulty_invalid = true;
                 }

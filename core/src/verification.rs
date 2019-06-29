@@ -39,7 +39,8 @@ impl VerificationConfig {
         let pow_hash = Self::compute_header_pow_quality(header);
         if header.difficulty().is_zero() {
             return Err(BlockError::InvalidDifficulty(OutOfBounds {
-                expected: 0.into(),
+                min: Some(0.into()),
+                max: Some(0.into()),
                 found: 0.into(),
             })
             .into());
