@@ -6,10 +6,7 @@ use crate::{block_data_manager::BlockDataManager, hash::keccak};
 use cfx_types::{H256, U256, U512};
 use parking_lot::RwLock;
 use rlp::RlpStream;
-use std::{
-    cmp::{max, min},
-    collections::HashMap,
-};
+use std::collections::HashMap;
 
 // This factor N controls the bound of each difficulty adjustment.
 // The new difficulty should be in the range of [(1-1/N)*D, (1+1/N)*D],
@@ -166,21 +163,31 @@ where
     let mut cur = cur_hash.clone();
     let cur_difficulty = cur_header.difficulty().clone();
     let mut block_count = 0 as u64;
-    let mut max_time = u64::min_value();
-    let mut min_time = u64::max_value();
+    let max_time = cur_header.timestamp();
+    let mut min_time = 0;
     for _ in 0..pow_config.difficulty_adjustment_epoch_period {
         block_count += num_blocks_in_epoch(&cur) as u64 + 1;
-        max_time = max(max_time, cur_header.timestamp());
-        min_time = min(min_time, cur_header.timestamp());
         cur = cur_header.parent_hash().clone();
         cur_header = data_man.block_header_by_hash(&cur).unwrap();
+        if cur_header.timestamp() != 0 {
+            min_time = cur_header.timestamp();
+        }
+        assert!(max_time >= min_time);
     }
 
-    let target_diff = pow_config.target_difficulty(
+    let mut target_diff = pow_config.target_difficulty(
         block_count,
         max_time - min_time,
         &cur_difficulty,
     );
+
+    let (lower, upper) = pow_config.get_adjustment_bound(cur_difficulty);
+    if target_diff > upper {
+        target_diff = upper;
+    }
+    if target_diff < lower {
+        target_diff = lower;
+    }
 
     data_man
         .target_difficulty_manager
