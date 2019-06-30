@@ -171,7 +171,7 @@ impl BlockGenerator {
         trace!("{} txs packed", transactions.len());
 
         let mut expected_difficulty =
-            self.graph.inner.read().expected_difficulty(&parent_hash);
+            self.graph.expected_difficulty(&parent_hash);
         let adaptive = if let Some(x) = adaptive_opt {
             x
         } else {
