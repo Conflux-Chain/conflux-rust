@@ -62,6 +62,7 @@ pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 
 pub const MAX_HEADERS_TO_SEND: u64 = 512;
 pub const MAX_BLOCKS_TO_SEND: u64 = 256;
+pub const MAX_EPOCHS_TO_SEND: u64 = 128;
 const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
 lazy_static! {
     pub static ref REQUEST_START_WAITING_TIME: Duration =
@@ -935,9 +936,15 @@ impl SynchronizationProtocolHandler {
         let req = rlp.as_val::<GetBlockHeaders>()?;
         debug!("on_get_block_headers, msg=:{:?}", req);
 
+        if req.hashes.is_empty() {
+            debug!("Received empty GetBlockHeaders msg: peer={:?}", peer);
+            return Ok(());
+        }
+
         let headers = req
             .hashes
             .iter()
+            .take(MAX_HEADERS_TO_SEND as usize)
             .filter_map(|hash| self.graph.block_header_by_hash(&hash))
             .collect();
 
@@ -1119,9 +1126,15 @@ impl SynchronizationProtocolHandler {
         let req = rlp.as_val::<GetBlockHashesByEpoch>()?;
         debug!("on_get_block_hashes_by_epoch, msg=:{:?}", req);
 
+        if req.epochs.is_empty() {
+            debug!("Received empty GetBlockHashesByEpoch msg: peer={:?}", peer);
+            return Ok(());
+        }
+
         let hashes = req
             .epochs
             .iter()
+            .take(MAX_EPOCHS_TO_SEND as usize)
             .map(|&e| self.graph.get_block_hashes_by_epoch(e))
             .filter_map(Result::ok)
             .fold(vec![], |mut res, sub| {
