@@ -62,6 +62,7 @@ pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 
 pub const MAX_HEADERS_TO_SEND: u64 = 512;
 pub const MAX_BLOCKS_TO_SEND: u64 = 256;
+pub const MAX_EPOCHS_TO_SEND: u64 = 128;
 const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
 lazy_static! {
     pub static ref REQUEST_START_WAITING_TIME: Duration =
@@ -77,6 +78,7 @@ const LOG_STATISTIC_TIMER: TimerToken = 4;
 const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
+const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -935,9 +937,15 @@ impl SynchronizationProtocolHandler {
         let req = rlp.as_val::<GetBlockHeaders>()?;
         debug!("on_get_block_headers, msg=:{:?}", req);
 
+        if req.hashes.is_empty() {
+            debug!("Received empty GetBlockHeaders msg: peer={:?}", peer);
+            return Ok(());
+        }
+
         let headers = req
             .hashes
             .iter()
+            .take(MAX_HEADERS_TO_SEND as usize)
             .filter_map(|hash| self.graph.block_header_by_hash(&hash))
             .collect();
 
@@ -1119,9 +1127,15 @@ impl SynchronizationProtocolHandler {
         let req = rlp.as_val::<GetBlockHashesByEpoch>()?;
         debug!("on_get_block_hashes_by_epoch, msg=:{:?}", req);
 
+        if req.epochs.is_empty() {
+            debug!("Received empty GetBlockHashesByEpoch msg: peer={:?}", peer);
+            return Ok(());
+        }
+
         let hashes = req
             .epochs
             .iter()
+            .take(MAX_EPOCHS_TO_SEND as usize)
             .map(|&e| self.graph.get_block_hashes_by_epoch(e))
             .filter_map(Result::ok)
             .fold(vec![], |mut res, sub| {
@@ -2412,6 +2426,8 @@ impl SynchronizationProtocolHandler {
     fn request_block_need_public(&self) -> bool {
         self.catch_up_mode() && self.protocol_config.request_block_with_public
     }
+
+    fn expire_block_gc(&self) { self.graph.remove_expire_blocks(15 * 30); }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -2444,6 +2460,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             Duration::from_millis(1000),
         )
         .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
+        io.register_timer(EXPIRE_BLOCK_GC_TIMER, Duration::from_secs(60 * 15))
+            .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2520,6 +2538,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                         Some(UpdateNodeOperation::Demotion),
                     );
                 }
+            }
+            EXPIRE_BLOCK_GC_TIMER => {
+                self.expire_block_gc();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
