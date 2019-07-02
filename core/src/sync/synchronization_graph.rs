@@ -31,7 +31,7 @@ use std::{
         Arc,
     },
     thread,
-    time::{Duration, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use unexpected::{Mismatch, OutOfBounds};
 
@@ -93,6 +93,8 @@ pub struct SynchronizationGraphNode {
     pub min_epoch_in_other_views: u64,
     pub max_epoch_in_other_views: u64,
     pub sequence_number: u64,
+    /// the timestamp in seconds when graph_status updated
+    pub timestamp: u64,
 }
 
 pub struct SynchronizationGraphInner {
@@ -105,6 +107,8 @@ pub struct SynchronizationGraphInner {
     ancestor_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
     pub sequence_number_of_header_entrance: u64,
+    /// the indices of blocks whose graph_status is not GRAPH_READY
+    pub not_ready_block_indices: HashSet<usize>,
 }
 
 impl SynchronizationGraphInner {
@@ -123,6 +127,7 @@ impl SynchronizationGraphInner {
             ancestor_tree: MinLinkCutTree::new(),
             pow_config,
             sequence_number_of_header_entrance: 0,
+            not_ready_block_indices: HashSet::new(),
         };
         inner.genesis_block_index = inner.insert(genesis_header);
         debug!(
@@ -155,6 +160,7 @@ impl SynchronizationGraphInner {
             max_epoch_in_other_views: header.height(),
             block_header: header,
             sequence_number: NULL as u64,
+            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
         });
         self.indices.insert(hash, me);
 
@@ -210,6 +216,7 @@ impl SynchronizationGraphInner {
             max_epoch_in_other_views: header.height(),
             block_header: header.clone(),
             sequence_number: sn,
+            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
         });
         self.indices.insert(hash, me);
 
@@ -897,6 +904,7 @@ impl SynchronizationGraph {
     )
     {
         for index in invalid_set {
+            inner.not_ready_block_indices.remove(index);
             let hash = inner.arena[*index].block_header.hash();
             self.consensus.invalidate_block(&hash);
 
@@ -995,6 +1003,11 @@ impl SynchronizationGraph {
         } else {
             inner.insert_invalid(header_arc.clone())
         };
+
+        if inner.arena[me].graph_status != BLOCK_GRAPH_READY {
+            inner.not_ready_block_indices.insert(me);
+        }
+
         debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {}",
                header.hash(), me, need_to_verify, bench_mode);
 
@@ -1022,6 +1035,8 @@ impl SynchronizationGraph {
                     inner.arena[index].sequence_number =
                         inner.get_next_sequence_number();
                     inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
+                    inner.arena[index].timestamp =
+                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                     debug_assert!(inner.arena[index].parent != NULL);
                     debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
@@ -1075,6 +1090,8 @@ impl SynchronizationGraph {
                 } else if inner.new_to_be_header_parental_tree_ready(index) {
                     inner.arena[index].graph_status =
                         BLOCK_HEADER_PARENTAL_TREE_READY;
+                    inner.arena[index].timestamp =
+                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                     for child in &inner.arena[index].children {
                         debug_assert!(
                             inner.arena[*child].graph_status
@@ -1230,6 +1247,7 @@ impl SynchronizationGraph {
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
                 inner.arena[index].graph_status = BLOCK_GRAPH_READY;
+                inner.not_ready_block_indices.remove(&index);
 
                 let h = inner.arena[index].block_header.hash();
                 debug!("Block {:?} is graph ready", h);
@@ -1331,5 +1349,80 @@ impl SynchronizationGraph {
     pub fn stat_inc_inserted_count(&self) {
         let mut inner = self.statistics.inner.write();
         inner.sync_graph.inserted_block_count += 1;
+    }
+
+    pub fn remove_expire_blocks(&self, expire_time: u64) {
+        let mut inner = self.inner.write();
+
+        // only remove when there are more than 10% expired blocks
+        if inner.not_ready_block_indices.len() * 10 <= inner.arena.len() {
+            return;
+        }
+
+        // calculate in degree of each node
+        let mut indices_with_referees = HashSet::new();
+        for index in &inner.not_ready_block_indices {
+            debug_assert!(
+                inner.arena[*index].graph_status < BLOCK_GRAPH_READY
+            );
+            for child in &inner.arena[*index].children {
+                debug_assert!(
+                    inner.arena[*child].graph_status < BLOCK_GRAPH_READY
+                );
+                indices_with_referees.insert(*child);
+            }
+            for referrer in &inner.arena[*index].referrers {
+                debug_assert!(
+                    inner.arena[*referrer].graph_status < BLOCK_GRAPH_READY
+                );
+                indices_with_referees.insert(*referrer);
+            }
+        }
+
+        let mut queue = VecDeque::new();
+        let mut visited_indices = HashSet::new();
+        for index in &inner.not_ready_block_indices {
+            if !indices_with_referees.contains(index) {
+                queue.push_back(*index);
+                visited_indices.insert(*index);
+            }
+        }
+
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let mut expire_set = HashSet::new();
+        while let Some(index) = queue.pop_front() {
+            if inner.arena[index].graph_status == BLOCK_INVALID
+                || now - inner.arena[index].timestamp > expire_time
+            {
+                inner.arena[index].graph_status = BLOCK_INVALID;
+                expire_set.insert(index);
+                let children: Vec<usize> =
+                    inner.arena[index].children.iter().map(|x| *x).collect();
+                for child in children {
+                    inner.arena[child].graph_status = BLOCK_INVALID;
+                }
+                let referrers: Vec<usize> =
+                    inner.arena[index].referrers.iter().map(|x| *x).collect();
+                for referrer in referrers {
+                    inner.arena[referrer].graph_status = BLOCK_INVALID;
+                }
+            }
+            for child in &inner.arena[index].children {
+                if !visited_indices.contains(child) {
+                    visited_indices.insert(*child);
+                    queue.push_back(*child);
+                }
+            }
+            for referrer in &inner.arena[index].referrers {
+                if !visited_indices.contains(referrer) {
+                    visited_indices.insert(*referrer);
+                    queue.push_back(*referrer);
+                }
+            }
+        }
+
+        debug!("expire_set: {:?}", expire_set);
+
+        self.process_invalid_blocks(inner.deref_mut(), &expire_set);
     }
 }
