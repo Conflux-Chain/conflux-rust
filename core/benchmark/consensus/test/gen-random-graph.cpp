@@ -32,6 +32,7 @@ bool consider[MAXN + 1];
 
 bool should_consider(int v, int g) {
     if (v == 0) return true;
+    if (!is_valid[v]) return false;
     int sub_g = block_group[v];
     if (block_gidx[v] > current_clock[sub_g]) return false;
     return true;
@@ -41,9 +42,8 @@ int tot_weight;
 
 void mark_consider(int v, int g) {
     if (!should_consider(v, g)) return;
+    consider[v] = true;
     tot_weight += weight[v];
-    if (is_valid[v])
-        consider[v] = true;
     for (int i = 0; i < children[v].size(); i++) {
         mark_consider(children[v][i], g);
     }
@@ -245,7 +245,6 @@ int main(int argc, char* argv[]) {
             if (x != -1) {
                 parent[i] = x;
                 is_valid[i] = 0;
-                weight[i] = 1;
             }
         }
 

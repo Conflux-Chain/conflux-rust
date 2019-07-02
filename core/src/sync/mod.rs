@@ -4,6 +4,10 @@
 
 mod error;
 pub mod request_manager;
+
+#[cfg(test)]
+pub mod tests;
+
 mod synchronization_graph;
 mod synchronization_protocol_handler;
 mod synchronization_service;
