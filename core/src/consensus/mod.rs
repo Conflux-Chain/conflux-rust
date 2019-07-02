@@ -36,7 +36,6 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    transaction::Action,
     Block, BlockHeaderBuilder, EpochNumber, SignedTransaction, StateRoot,
     StateRootAuxInfo, StateRootWithAuxInfo, TransactionAddress,
 };
@@ -78,7 +77,6 @@ pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
 pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 240;
 
 const NULL: usize = !0;
-const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
 
 // This is the cap of the size of the anticone barrier. If we have more than
 // this number we will use the brute_force O(n) algorithm instead.
@@ -2276,83 +2274,6 @@ impl ConsensusGraph {
         self.inner
             .read()
             .get_balance_validated(address, epoch_number)
-    }
-
-    pub fn get_related_transactions(
-        &self, address: H160, num_txs: usize, epoch_number: EpochNumber,
-    ) -> Result<Vec<Arc<SignedTransaction>>, String> {
-        let inner = self.inner.read();
-        inner.get_height_from_epoch_number(epoch_number).and_then(
-            |best_epoch_number| {
-                let mut transactions = Vec::new();
-                if num_txs == 0 {
-                    return Ok(transactions);
-                }
-                let earlist_epoch_number = if best_epoch_number
-                    < EPOCH_LIMIT_OF_RELATED_TRANSACTIONS
-                {
-                    0
-                } else {
-                    best_epoch_number - EPOCH_LIMIT_OF_RELATED_TRANSACTIONS + 1
-                };
-                let mut current_epoch_number = best_epoch_number;
-                let mut include_hashes = HashSet::new();
-
-                loop {
-                    let hashes = inner
-                        .block_hashes_by_epoch(EpochNumber::Number(
-                            current_epoch_number.into(),
-                        ))
-                        .unwrap();
-                    for hash in hashes {
-                        let block = self
-                            .data_man
-                            .block_by_hash(&hash, false)
-                            .expect("Error: Cannot get block by hash.");
-                        for tx in block.transactions.iter() {
-                            if include_hashes.contains(&tx.hash()) {
-                                continue;
-                            }
-                            let mut is_valid = false;
-                            if tx.sender() == address {
-                                is_valid = true;
-                            } else if let Action::Call(receiver_address) =
-                                tx.action
-                            {
-                                if receiver_address == address {
-                                    is_valid = true;
-                                }
-                            }
-                            if is_valid {
-                                transactions.push(tx.clone());
-                                include_hashes.insert(tx.hash());
-                                if transactions.len() == num_txs {
-                                    return Ok(transactions);
-                                }
-                            }
-                        }
-                    }
-                    if current_epoch_number == earlist_epoch_number {
-                        break;
-                    }
-                    current_epoch_number -= 1;
-                }
-
-                Ok(transactions)
-            },
-        )
-    }
-
-    pub fn get_account(
-        &self, address: H160, num_txs: usize, epoch_number: EpochNumber,
-    ) -> Result<(U256, Vec<Arc<SignedTransaction>>), String> {
-        let inner = self.inner.read();
-        inner
-            .get_balance_validated(address, epoch_number.clone())
-            .and_then(|balance| {
-                self.get_related_transactions(address, num_txs, epoch_number)
-                    .and_then(|transactions| Ok((balance, transactions)))
-            })
     }
 
     pub fn get_epoch_blocks(
