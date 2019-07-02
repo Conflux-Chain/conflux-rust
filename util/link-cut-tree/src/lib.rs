@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use parking_lot::Mutex;
-use std::cell::RefCell;
 
 const NULL: usize = !0;
 
@@ -379,55 +378,47 @@ impl MinLinkCutTreeInner {
 }
 
 pub struct MinLinkCutTree {
-    inner: Mutex<RefCell<MinLinkCutTreeInner>>,
+    inner: Mutex<MinLinkCutTreeInner>,
 }
 
 impl MinLinkCutTree {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(RefCell::new(MinLinkCutTreeInner::new())),
+            inner: Mutex::new(MinLinkCutTreeInner::new()),
         }
     }
 
-    pub fn size(&self) -> usize { (*self.inner.lock()).borrow().size() }
+    pub fn size(&self) -> usize { self.inner.lock().size() }
 
-    pub fn make_tree(&mut self, v: usize) {
-        (*self.inner.lock()).borrow_mut().make_tree(v);
-    }
+    pub fn make_tree(&mut self, v: usize) { self.inner.lock().make_tree(v); }
 
-    pub fn link(&mut self, v: usize, w: usize) {
-        (*self.inner.lock()).borrow_mut().link(v, w);
-    }
+    pub fn link(&mut self, v: usize, w: usize) { self.inner.lock().link(v, w); }
 
     pub fn lca(&self, v: usize, w: usize) -> usize {
-        (*self.inner.lock()).borrow_mut().lca(v, w)
+        self.inner.lock().lca(v, w)
     }
 
     pub fn ancestor_at(&self, v: usize, at: usize) -> usize {
-        (*self.inner.lock()).borrow_mut().ancestor_at(v, at)
+        self.inner.lock().ancestor_at(v, at)
     }
 
     pub fn set(&mut self, v: usize, value: i128) {
-        (*self.inner.lock()).borrow_mut().set(v, value);
+        self.inner.lock().set(v, value);
     }
 
     pub fn path_apply(&mut self, v: usize, delta: i128) {
-        (*self.inner.lock()).borrow_mut().path_apply(v, delta);
+        self.inner.lock().path_apply(v, delta);
     }
 
     pub fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
-        (*self.inner.lock())
-            .borrow_mut()
-            .catepillar_apply(v, catepillar_delta);
+        self.inner.lock().catepillar_apply(v, catepillar_delta);
     }
 
     pub fn path_aggregate(&self, v: usize) -> i128 {
-        (*self.inner.lock()).borrow_mut().path_aggregate(v)
+        self.inner.lock().path_aggregate(v)
     }
 
-    pub fn get(&self, v: usize) -> i128 {
-        (*self.inner.lock()).borrow_mut().get(v)
-    }
+    pub fn get(&self, v: usize) -> i128 { self.inner.lock().get(v) }
 }
 
 #[cfg(test)]
