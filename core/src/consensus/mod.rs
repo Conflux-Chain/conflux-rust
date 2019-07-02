@@ -1755,6 +1755,41 @@ impl ConsensusGraphInner {
         }
         (total_weight, total_inclusive_weight)
     }
+
+    /// Binary search to find the starting point so we can execute to the end of
+    /// the chain.
+    /// Return the first index that is not executed,
+    /// or return `chain.len()` if they are all executed (impossible for now).
+    ///
+    /// NOTE: If a state for an block exists, all the blocks on its pivot chain
+    /// must have been executed and state committed. The receipts for these
+    /// past blocks may not exist because the receipts on forks will be
+    /// garbage-collected, but when we need them, we will recompute these
+    /// missing receipts in `process_rewards_and_fees`. This 'recompute' is safe
+    /// because the parent state exists. Thus, it's okay that here we do not
+    /// check existence of the receipts that will be needed for reward
+    /// computation during epoch execution.
+    fn find_start_index(&self, chain: &Vec<usize>) -> usize {
+        let mut base = 0;
+        let mut size = chain.len();
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+            let epoch_hash = self.arena[chain[mid]].hash;
+            base = if self.data_man.epoch_executed(&epoch_hash) {
+                mid
+            } else {
+                base
+            };
+            size -= half;
+        }
+        let epoch_hash = self.arena[chain[base]].hash;
+        if self.data_man.epoch_executed(&epoch_hash) {
+            base + 1
+        } else {
+            base
+        }
+    }
 }
 
 pub struct FinalityManager {
@@ -2007,7 +2042,7 @@ impl ConsensusGraph {
     /// consensus graph. This API is used mainly for testing purpose
     pub fn wait_for_generation(&self, hash: &H256) {
         while !self.inner.read().indices.contains_key(hash) {
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(1));
         }
         let best_state_block = self.inner.read().best_state_block_hash();
         self.executor.wait_for_result(best_state_block);
@@ -2249,7 +2284,10 @@ impl ConsensusGraph {
         chain.push(idx);
         chain.reverse();
         let mut epoch_number_map: HashMap<usize, usize> = HashMap::new();
+        let start_index = inner.find_start_index(&chain);
+        debug!("Start execution from index {}", start_index);
 
+        // TODO Only construct epochs from the start_index
         // Construct epochs
         for fork_at in 1..chain.len() {
             // First, identify all the blocks in the current epoch of the
@@ -2309,32 +2347,36 @@ impl ConsensusGraph {
                 .insert(chain[fork_at], reversed_indices);
         }
 
-        let mut last_state_height =
-            if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
+        // We need the state of the fork point to start executing the fork
+        if start_index != 0 {
+            let mut last_state_height = if inner.pivot_chain.len()
+                > DEFERRED_STATE_EPOCH_COUNT as usize
+            {
                 inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize
             } else {
                 0
             };
 
-        last_state_height += 1;
-        while last_state_height <= fork_height {
-            let epoch_index = inner.pivot_chain[last_state_height];
-            let reward_execution_info = inner.get_reward_execution_info(
-                &self.data_man,
-                last_state_height,
-                &inner.pivot_chain,
-            );
-            self.executor.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_index].hash,
-                inner.get_epoch_block_hashes(epoch_index),
-                reward_execution_info,
-                false,
-                false,
-            ));
             last_state_height += 1;
+            while last_state_height <= fork_height {
+                let epoch_index = inner.pivot_chain[last_state_height];
+                let reward_execution_info = inner.get_reward_execution_info(
+                    &self.data_man,
+                    last_state_height,
+                    &inner.pivot_chain,
+                );
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                    inner.arena[epoch_index].hash,
+                    inner.get_epoch_block_hashes(epoch_index),
+                    reward_execution_info,
+                    false,
+                    false,
+                ));
+                last_state_height += 1;
+            }
         }
 
-        for fork_at in 1..chain.len() {
+        for fork_at in start_index..chain.len() {
             let epoch_index = chain[fork_at];
             let reward_index = if fork_height + fork_at
                 > REWARD_EPOCH_COUNT as usize
