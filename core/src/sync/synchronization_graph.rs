@@ -136,7 +136,10 @@ impl SynchronizationGraphInner {
             pending_referee_count: 0,
             referrers: Vec::new(),
             block_header: header,
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
         });
         self.indices.insert(hash, me);
 
@@ -181,7 +184,10 @@ impl SynchronizationGraphInner {
             pending_referee_count: 0,
             referrers: Vec::new(),
             block_header: header.clone(),
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
         });
         self.indices.insert(hash, me);
 
@@ -889,8 +895,10 @@ impl SynchronizationGraph {
             } else {
                 if inner.new_to_be_header_graph_ready(index) {
                     inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
-                    inner.arena[index].timestamp =
-                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                    inner.arena[index].timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
                     debug_assert!(inner.arena[index].parent != NULL);
                     debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
@@ -939,8 +947,10 @@ impl SynchronizationGraph {
                 } else if inner.new_to_be_header_parental_tree_ready(index) {
                     inner.arena[index].graph_status =
                         BLOCK_HEADER_PARENTAL_TREE_READY;
-                    inner.arena[index].timestamp =
-                        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                    inner.arena[index].timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
                     for child in &inner.arena[index].children {
                         debug_assert!(
                             inner.arena[*child].graph_status
@@ -1203,9 +1213,7 @@ impl SynchronizationGraph {
         // calculate in degree of each node
         let mut indices_with_referees = HashSet::new();
         for index in &inner.not_ready_block_indices {
-            debug_assert!(
-                inner.arena[*index].graph_status < BLOCK_GRAPH_READY
-            );
+            debug_assert!(inner.arena[*index].graph_status < BLOCK_GRAPH_READY);
             for child in &inner.arena[*index].children {
                 debug_assert!(
                     inner.arena[*child].graph_status < BLOCK_GRAPH_READY
@@ -1229,7 +1237,10 @@ impl SynchronizationGraph {
             }
         }
 
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let mut expire_set = HashSet::new();
         while let Some(index) = queue.pop_front() {
             if inner.arena[index].graph_status == BLOCK_INVALID
