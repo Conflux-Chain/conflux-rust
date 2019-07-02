@@ -69,8 +69,9 @@ fn create_simple_block(
     block_weight: u32,
 ) -> (H256, Block)
 {
+    sync.consensus.wait_for_generation(&parent_hash);
     let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
-    let exp_diff = sync.inner.read().expected_difficulty(&parent_hash);
+    let exp_diff = sync.expected_difficulty(&parent_hash);
     assert!(
         exp_diff == U256::from(10),
         "Difficulty hike in bench is not supported yet!"

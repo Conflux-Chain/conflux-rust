@@ -22,7 +22,7 @@ use crate::{
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{
-    collections::HashSet,
+    fs,
     path::Path,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -211,11 +211,7 @@ fn test_remove_expire_blocks() {
                 referees: referee[i as usize].clone(),
                 pending_referee_count: 0,
                 referrers: referrers[i as usize].clone(),
-                blockset_in_own_view_of_epoch: HashSet::new(),
-                min_epoch_in_other_views: 0,
-                max_epoch_in_other_views: 0,
                 block_header: Arc::new(blocks[i].block_header.clone()),
-                sequence_number: 0,
                 timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 100,
             });
             assert_eq!(me, i);
@@ -268,4 +264,7 @@ fn test_remove_expire_blocks() {
         assert!(inner.not_ready_block_indices.len() == 1);
         assert!(inner.not_ready_block_indices.contains(&(5 as usize)));
     }
+
+    fs::remove_dir_all("./test.db")
+        .expect("failed to remove directory test.db");
 }

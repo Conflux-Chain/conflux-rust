@@ -373,13 +373,13 @@ impl RequestManager {
             let mut indices = Vec::new();
 
             for (idx, tx_id) in received_tx_ids.iter().enumerate() {
-                if !inflight_transactions.insert(*tx_id) {
-                    // Already being requested
+                if received_transactions.contains_txid(tx_id) {
+                    // Already received
                     continue;
                 }
 
-                if received_transactions.contains_txid(tx_id) {
-                    // Already received
+                if !inflight_transactions.insert(*tx_id) {
+                    // Already being requested
                     continue;
                 }
 

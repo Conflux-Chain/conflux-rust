@@ -1,10 +1,10 @@
 use crate::metrics::ORDER;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
 
 /// EWMAs continuously calculate an exponentially-weighted moving average based
 /// on an outside source of clock ticks.
 pub struct EWMA {
-    uncounted: AtomicU64,
+    uncounted: AtomicUsize,
     alpha: f64,
     rate: AtomicU64,
     init: AtomicBool,
@@ -18,7 +18,7 @@ impl EWMA {
 
     fn new_with_alpha(alpha: f64) -> Self {
         EWMA {
-            uncounted: AtomicU64::new(0),
+            uncounted: AtomicUsize::new(0),
             alpha,
             rate: AtomicU64::new(0),
             init: AtomicBool::new(false),
@@ -29,7 +29,7 @@ impl EWMA {
     pub fn rate(&self) -> f64 { f64::from_bits(self.rate.load(ORDER)) * 1e9 }
 
     /// Update adds n uncounted events.
-    pub fn update(&self, n: u64) { self.uncounted.fetch_add(n, ORDER); }
+    pub fn update(&self, n: usize) { self.uncounted.fetch_add(n, ORDER); }
 
     /// Ticks the clock to update the moving average. It assumes it is called
     /// every 5 seconds.
