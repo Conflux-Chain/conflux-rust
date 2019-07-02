@@ -78,6 +78,7 @@ const LOG_STATISTIC_TIMER: TimerToken = 4;
 const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
+const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -2425,6 +2426,10 @@ impl SynchronizationProtocolHandler {
     fn request_block_need_public(&self) -> bool {
         self.catch_up_mode() && self.protocol_config.request_block_with_public
     }
+
+    fn expire_block_gc(&self) {
+        self.graph.remove_expire_blocks(15 * 30);
+    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -2457,6 +2462,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             Duration::from_millis(1000),
         )
         .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
+        io.register_timer(EXPIRE_BLOCK_GC_TIMER, Duration::from_secs(60 * 15))
+            .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -2533,6 +2540,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                         Some(UpdateNodeOperation::Demotion),
                     );
                 }
+            }
+            EXPIRE_BLOCK_GC_TIMER => {
+                self.expire_block_gc();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
