@@ -2427,9 +2427,7 @@ impl SynchronizationProtocolHandler {
         self.catch_up_mode() && self.protocol_config.request_block_with_public
     }
 
-    fn expire_block_gc(&self) {
-        self.graph.remove_expire_blocks(15 * 30);
-    }
+    fn expire_block_gc(&self) { self.graph.remove_expire_blocks(15 * 30); }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {

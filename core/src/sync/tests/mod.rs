@@ -2,23 +2,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{H256, U256};
 use crate::{
     block_data_manager::BlockDataManager,
     cache_manager::CacheManager,
-    consensus::{
-        ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
-    },
+    consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
-    sync::{
-        SynchronizationGraph, SynchronizationGraphNode,
-    },
+    sync::{SynchronizationGraph, SynchronizationGraphNode},
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool,
 };
+use cfx_types::{H256, U256};
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{
@@ -118,7 +114,7 @@ fn initialize_synchronization_graph(
                 enable_optimistic_execution: false,
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
-                            * execution */
+                               * execution */
         },
         vm.clone(),
         txpool.clone(),
@@ -149,7 +145,14 @@ fn test_remove_expire_blocks() {
         1,
     );
 
-    let sync = initialize_synchronization_graph(genesis_block, "./test.db", 1, 1, 1, 1);
+    let sync = initialize_synchronization_graph(
+        genesis_block,
+        "./test.db",
+        1,
+        1,
+        1,
+        1,
+    );
     // test initialization
     {
         let inner = sync.inner.read();
@@ -162,21 +165,49 @@ fn test_remove_expire_blocks() {
     // prepare graph data
     {
         let mut blocks: Vec<Block> = Vec::new();
-        let parent: Vec<i64> = vec![-1, 0, 0, 0, 3, 100, 2, 100, 4, 100, 9, 100];
+        let parent: Vec<i64> =
+            vec![-1, 0, 0, 0, 3, 100, 2, 100, 4, 100, 9, 100];
         let childrens: Vec<Vec<usize>> = vec![
-            vec![1, 2, 3], vec![], vec![6], vec![4],
-            vec![8], vec![], vec![], vec![],
-            vec![], vec![10], vec![], vec![],
+            vec![1, 2, 3],
+            vec![],
+            vec![6],
+            vec![4],
+            vec![8],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![10],
+            vec![],
+            vec![],
         ];
         let referrers: Vec<Vec<usize>> = vec![
-            vec![], vec![4], vec![], vec![],
-            vec![6], vec![4], vec![], vec![4],
-            vec![], vec![], vec![11], vec![],
+            vec![],
+            vec![4],
+            vec![],
+            vec![],
+            vec![6],
+            vec![4],
+            vec![],
+            vec![4],
+            vec![],
+            vec![],
+            vec![11],
+            vec![],
         ];
         let referee: Vec<Vec<usize>> = vec![
-            vec![], vec![], vec![], vec![],
-            vec![1, 5, 7], vec![], vec![4], vec![],
-            vec![], vec![], vec![], vec![10],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![1, 5, 7],
+            vec![],
+            vec![4],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![10],
         ];
         let graph_status = vec![4, 4, 4, 4, 2, 1, 1, 1, 1, 1, 1, 1];
         for i in 0..12 {
@@ -192,7 +223,8 @@ fn test_remove_expire_blocks() {
             let (_, block) = create_simple_block_impl(
                 parent_hash,
                 vec![],
-                0, i as u64,
+                0,
+                i as u64,
                 U256::from(10),
                 1,
             );
@@ -201,7 +233,11 @@ fn test_remove_expire_blocks() {
 
         let mut inner = sync.inner.write();
         for i in 1..12 {
-            let parent_index = if parent[i] > 12 { !0 as usize } else { parent[i] as usize};
+            let parent_index = if parent[i] > 12 {
+                !0 as usize
+            } else {
+                parent[i] as usize
+            };
             let me = inner.arena.insert(SynchronizationGraphNode {
                 graph_status: graph_status[i as usize],
                 block_ready: false,
@@ -212,7 +248,11 @@ fn test_remove_expire_blocks() {
                 pending_referee_count: 0,
                 referrers: referrers[i as usize].clone(),
                 block_header: Arc::new(blocks[i].block_header.clone()),
-                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 100,
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    - 100,
             });
             assert_eq!(me, i);
             inner.indices.insert(blocks[i as usize].hash(), me);
@@ -239,8 +279,11 @@ fn test_remove_expire_blocks() {
     // expire [9, 10, 14]
     {
         let mut inner = sync.inner.write();
-        inner.arena[9].timestamp = 
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 1000;
+        inner.arena[9].timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 1000;
     }
     {
         sync.remove_expire_blocks(500);
@@ -249,12 +292,15 @@ fn test_remove_expire_blocks() {
         assert!(inner.indices.len() == 9);
         assert!(inner.not_ready_block_indices.len() == 5);
     }
-    
+
     // expire [7]
     {
         let mut inner = sync.inner.write();
-        inner.arena[7].timestamp = 
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 1000;
+        inner.arena[7].timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            - 1000;
     }
     {
         sync.remove_expire_blocks(500);

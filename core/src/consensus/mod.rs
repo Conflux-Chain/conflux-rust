@@ -84,8 +84,8 @@ const EPOCH_LIMIT_OF_RELATED_TRANSACTIONS: usize = 100;
 // this number we will use the brute_force O(n) algorithm instead.
 const ANTICONE_BARRIER_CAP: usize = 1000;
 // The number of epochs per era. Each era is a potential checkpoint position.
-// The parent_edge checking and adaptive checking are defined relative to the era
-// start blocks.
+// The parent_edge checking and adaptive checking are defined relative to the
+// era start blocks.
 pub const ERA_EPOCH_COUNT: usize = 10000;
 
 #[derive(Copy, Clone)]
@@ -817,7 +817,7 @@ impl ConsensusGraphInner {
             height: my_height,
             is_heavy,
             difficulty: *block.block_header.difficulty(),
-            past_weight: 0, // will be updated later below
+            past_weight: 0,     // will be updated later below
             past_era_weight: 0, // will be updated later below
             past_2era_inclusive_weight: 0, // will be updated later below
             pow_quality: block.block_header.pow_quality,
@@ -848,27 +848,40 @@ impl ConsensusGraphInner {
 
         if parent != NULL {
             let era_genesis = self.get_era_block_with_parent(parent, 0);
-            let two_era_genesis = self.get_era_block_with_parent(parent, ERA_EPOCH_COUNT);
+            let two_era_genesis =
+                self.get_era_block_with_parent(parent, ERA_EPOCH_COUNT);
 
-            let weight_in_my_epoch =
-                self.total_weight_in_own_epoch(&self.arena[index].data.blockset_in_own_view_of_epoch, false, None);
-            let weight_era_in_my_epoch =
-                self.total_weight_in_own_epoch(&self.arena[index].data.blockset_in_own_view_of_epoch, false, Some(era_genesis));
-            let inclusive_weight_2era_in_my_epoch =
-                self.total_weight_in_own_epoch(&self.arena[index].data.blockset_in_own_view_of_epoch, true, Some(two_era_genesis));
+            let weight_in_my_epoch = self.total_weight_in_own_epoch(
+                &self.arena[index].data.blockset_in_own_view_of_epoch,
+                false,
+                None,
+            );
+            let weight_era_in_my_epoch = self.total_weight_in_own_epoch(
+                &self.arena[index].data.blockset_in_own_view_of_epoch,
+                false,
+                Some(era_genesis),
+            );
+            let inclusive_weight_2era_in_my_epoch = self
+                .total_weight_in_own_epoch(
+                    &self.arena[index].data.blockset_in_own_view_of_epoch,
+                    true,
+                    Some(two_era_genesis),
+                );
             let past_weight = self.arena[parent].past_weight
                 + self.block_weight(parent, false)
                 + weight_in_my_epoch;
             let past_era_weight = self.arena[parent].past_era_weight
                 + self.block_weight(parent, false)
                 + weight_era_in_my_epoch;
-            let past_2era_inclusive_weight = self.arena[parent].past_2era_inclusive_weight
+            let past_2era_inclusive_weight = self.arena[parent]
+                .past_2era_inclusive_weight
                 + self.block_weight(parent, true)
                 + inclusive_weight_2era_in_my_epoch;
 
             self.arena[index].past_weight = past_weight;
             self.arena[index].past_era_weight = past_era_weight;
-            self.arena[index].past_2era_inclusive_weight = past_2era_inclusive_weight;
+            self.arena[index].past_2era_inclusive_weight =
+                past_2era_inclusive_weight;
         }
 
         debug!(
@@ -1743,8 +1756,10 @@ impl ConsensusGraphInner {
     /// Compute the total weight in the epoch represented by the block of
     /// my_hash.
     pub fn total_weight_in_own_epoch(
-        &self, blockset_in_own_epoch: &HashSet<usize>, inclusive: bool, genesis_opt: Option<usize>,
-    ) -> i128 {
+        &self, blockset_in_own_epoch: &HashSet<usize>, inclusive: bool,
+        genesis_opt: Option<usize>,
+    ) -> i128
+    {
         let gen_index = if let Some(x) = genesis_opt {
             x
         } else {
@@ -1758,7 +1773,8 @@ impl ConsensusGraphInner {
                 if height < gen_height {
                     continue;
                 }
-                let era_index = self.weight_tree.ancestor_at(*index, gen_height as usize);
+                let era_index =
+                    self.weight_tree.ancestor_at(*index, gen_height as usize);
                 if gen_index != era_index {
                     continue;
                 }

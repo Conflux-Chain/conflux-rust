@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::cell::RefCell;
 use parking_lot::Mutex;
+use std::cell::RefCell;
 
 const NULL: usize = !0;
 
@@ -383,11 +383,13 @@ pub struct MinLinkCutTree {
 }
 
 impl MinLinkCutTree {
-    pub fn new() -> Self { Self { inner: Mutex::new(RefCell::new(MinLinkCutTreeInner::new())) } }
-
-    pub fn size(&self) -> usize {
-        (*self.inner.lock()).borrow().size()
+    pub fn new() -> Self {
+        Self {
+            inner: Mutex::new(RefCell::new(MinLinkCutTreeInner::new())),
+        }
     }
+
+    pub fn size(&self) -> usize { (*self.inner.lock()).borrow().size() }
 
     pub fn make_tree(&mut self, v: usize) {
         (*self.inner.lock()).borrow_mut().make_tree(v);
@@ -414,7 +416,9 @@ impl MinLinkCutTree {
     }
 
     pub fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
-        (*self.inner.lock()).borrow_mut().catepillar_apply(v, catepillar_delta);
+        (*self.inner.lock())
+            .borrow_mut()
+            .catepillar_apply(v, catepillar_delta);
     }
 
     pub fn path_aggregate(&self, v: usize) -> i128 {
