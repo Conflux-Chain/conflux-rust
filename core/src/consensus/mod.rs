@@ -405,11 +405,11 @@ impl ConsensusGraphInner {
         (a.0 > b.0) || ((a.0 == b.0) && (*a.1 > *b.1))
     }
 
-    fn get_era_height_with_parent_height(
-        &self, height: u64, offset: usize,
+    fn get_era_height(
+        &self, parent_height: u64, offset: usize,
     ) -> u64 {
-        let era_height = if height > offset as u64 {
-            (height - offset as u64) / ERA_EPOCH_COUNT as u64
+        let era_height = if parent_height > offset as u64 {
+            (parent_height - offset as u64) / ERA_EPOCH_COUNT as u64
                 * ERA_EPOCH_COUNT as u64
         } else {
             0
@@ -419,7 +419,7 @@ impl ConsensusGraphInner {
 
     fn get_era_block_with_parent(&self, parent: usize, offset: usize) -> usize {
         let height = self.arena[parent].height;
-        let era_height = self.get_era_height_with_parent_height(height, offset);
+        let era_height = self.get_era_height(height, offset);
         self.weight_tree.ancestor_at(parent, era_height as usize)
     }
 
@@ -536,9 +536,9 @@ impl ConsensusGraphInner {
         let mut stable = true;
 
         let height = self.arena[parent].height;
-        let era_height = self.get_era_height_with_parent_height(height, 0);
+        let era_height = self.get_era_height(height, 0);
         let two_era_height =
-            self.get_era_height_with_parent_height(height, ERA_EPOCH_COUNT);
+            self.get_era_height(height, ERA_EPOCH_COUNT);
         let era_genesis = self
             .inclusive_weight_tree
             .ancestor_at(parent, era_height as usize);
@@ -673,8 +673,8 @@ impl ConsensusGraphInner {
         }
 
         let era_height = self
-            .get_era_height_with_parent_height(self.arena[parent].height, 0);
-        let two_era_height = self.get_era_height_with_parent_height(
+            .get_era_height(self.arena[parent].height, 0);
+        let two_era_height = self.get_era_height(
             self.arena[parent].height,
             ERA_EPOCH_COUNT,
         );
@@ -1019,7 +1019,7 @@ impl ConsensusGraphInner {
         let parent = self.arena[me].parent;
         let parent_height = self.arena[parent].height;
         let era_height =
-            self.get_era_height_with_parent_height(parent_height, 0);
+            self.get_era_height(parent_height, 0);
 
         // Check the pivot selection decision.
         for consensus_index_in_epoch in
@@ -1075,7 +1075,7 @@ impl ConsensusGraphInner {
         let parent = self.arena[me].parent;
         let parent_height = self.arena[parent].height;
         let era_height =
-            self.get_era_height_with_parent_height(parent_height, 0);
+            self.get_era_height(parent_height, 0);
 
         let mut weight_delta = HashMap::new();
 
