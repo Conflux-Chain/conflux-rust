@@ -47,7 +47,6 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
-    iter::FromIterator,
     sync::Arc,
     thread::sleep,
     time::Duration,
@@ -247,9 +246,6 @@ pub struct ConsensusGraphInner {
     genesis_block_index: usize,
     genesis_block_state_root: StateRoot,
     genesis_block_receipts_root: H256,
-    // The total weights inserted into the consensus graph, including partial
-    // invalid blocks.
-    total_inclusive_weight: i128,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: MinLinkCutTree,
     stable_weight_tree: MinLinkCutTree,
@@ -321,7 +317,6 @@ impl ConsensusGraphInner {
                 .block_header
                 .deferred_receipts_root()
                 .clone(),
-            total_inclusive_weight: 0,
             weight_tree: MinLinkCutTree::new(),
             stable_weight_tree: MinLinkCutTree::new(),
             stable_tree: MinLinkCutTree::new(),
