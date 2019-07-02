@@ -39,7 +39,7 @@ build_config! {
         (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_cors, (Option<String>), None)
-        (jsonrpc_http_keep_alive, (bool), false)
+        (jsonrpc_http_keep_alive, (bool), true)
         (genesis_accounts, (Option<String>), None)
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
