@@ -98,6 +98,7 @@ pub struct SynchronizationGraphInner {
     /// the indices of blocks whose graph_status is not GRAPH_READY
     pub not_ready_block_indices: HashSet<usize>,
     pub old_era_blocks_frontier: VecDeque<usize>,
+    pub old_era_blocks_frontier_set: HashSet<usize>,
 }
 
 impl SynchronizationGraphInner {
@@ -116,6 +117,7 @@ impl SynchronizationGraphInner {
             pow_config,
             not_ready_block_indices: HashSet::new(),
             old_era_blocks_frontier: Default::default(),
+            old_era_blocks_frontier_set: Default::default(),
         };
         inner.genesis_block_index = inner.insert(genesis_header);
         debug!(
@@ -126,6 +128,9 @@ impl SynchronizationGraphInner {
         inner
             .old_era_blocks_frontier
             .push_back(inner.genesis_block_index);
+        inner
+            .old_era_blocks_frontier_set
+            .insert(inner.genesis_block_index);
 
         inner
     }
@@ -148,6 +153,10 @@ impl SynchronizationGraphInner {
             }
 
             // Remove node with index
+            if !self.old_era_blocks_frontier_set.contains(&index) {
+                continue;
+            }
+
             let hash = self.arena[index].block_header.hash();
             assert!(self.arena[index].parent == NULL);
 
@@ -174,7 +183,10 @@ impl SynchronizationGraphInner {
                 self.arena[index].children.iter().map(|x| *x).collect();
             for child in children {
                 self.arena[child].parent = NULL;
+                self.not_ready_block_indices.remove(&child);
                 self.old_era_blocks_frontier.push_back(child);
+                assert!(!self.old_era_blocks_frontier_set.contains(&child));
+                self.old_era_blocks_frontier_set.insert(child);
             }
 
             let referrers: Vec<usize> =
@@ -183,6 +195,7 @@ impl SynchronizationGraphInner {
                 self.arena[referrer].referees.retain(|&x| x != index);
             }
 
+            self.old_era_blocks_frontier_set.remove(&index);
             self.arena.remove(index);
             self.indices.remove(&hash);
             self.data_man.remove_block_header(&hash);
@@ -843,6 +856,7 @@ impl SynchronizationGraph {
     {
         for index in invalid_set {
             inner.not_ready_block_indices.remove(index);
+            inner.old_era_blocks_frontier_set.remove(index);
             let hash = inner.arena[*index].block_header.hash();
             self.consensus.invalidate_block(&hash);
 
