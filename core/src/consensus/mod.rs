@@ -762,7 +762,8 @@ impl ConsensusGraphInner {
 
             if best != era_height {
                 parent = self.weight_tree.ancestor_at(parent, best as usize);
-                let min_agg = self.adaptive_tree.path_aggregate_chop(parent, era_genesis);
+                let min_agg =
+                    self.adaptive_tree.path_aggregate_chop(parent, era_genesis);
                 if min_agg < 0 {
                     debug!("block is adaptive (intra-era): {:?}", min_agg);
                     adaptive = true;
@@ -797,8 +798,9 @@ impl ConsensusGraphInner {
                 parent = self
                     .inclusive_weight_tree
                     .ancestor_at(parent, best as usize);
-                let min_agg =
-                    self.inclusive_adaptive_tree.path_aggregate_chop(parent, two_era_genesis);
+                let min_agg = self
+                    .inclusive_adaptive_tree
+                    .path_aggregate_chop(parent, two_era_genesis);
                 println!("parent {} minagg {}", parent, min_agg);
                 if min_agg < 0 {
                     debug!("block is adaptive (inter-era): {:?}", min_agg);
