@@ -97,6 +97,7 @@ pub struct SynchronizationGraphInner {
     pow_config: ProofOfWorkConfig,
     /// the indices of blocks whose graph_status is not GRAPH_READY
     pub not_ready_block_indices: HashSet<usize>,
+    pub old_era_blocks_frontier: VecDeque<usize>,
 }
 
 impl SynchronizationGraphInner {
@@ -114,6 +115,7 @@ impl SynchronizationGraphInner {
             referrers_by_hash: HashMap::new(),
             pow_config,
             not_ready_block_indices: HashSet::new(),
+            old_era_blocks_frontier: Default::default(),
         };
         inner.genesis_block_index = inner.insert(genesis_header);
         debug!(
@@ -122,6 +124,78 @@ impl SynchronizationGraphInner {
         );
 
         inner
+            .old_era_blocks_frontier
+            .push_back(inner.genesis_block_index);
+
+        inner
+    }
+
+    // FIXME: make it real
+    pub fn get_genesis_in_current_era(&self) -> usize {
+        self.genesis_block_index
+    }
+
+    fn try_clear_old_era_blocks(&mut self) {
+        let max_num_of_cleared_blocks = 2;
+        let mut num_cleared = 0;
+        let era_genesis = self.get_genesis_in_current_era();
+        let mut era_genesis_in_frontier = false;
+
+        while let Some(index) = self.old_era_blocks_frontier.pop_front() {
+            if index == era_genesis {
+                era_genesis_in_frontier = true;
+                continue;
+            }
+
+            // Remove node with index
+            let hash = self.arena[index].block_header.hash();
+            assert!(self.arena[index].parent == NULL);
+
+            let referees: Vec<usize> =
+                self.arena[index].referees.iter().map(|x| *x).collect();
+            for referee in referees {
+                self.arena[referee].referrers.retain(|&x| x != index);
+            }
+            let referee_hashes: Vec<H256> = self.arena[index]
+                .block_header
+                .referee_hashes()
+                .iter()
+                .map(|x| *x)
+                .collect();
+            for referee_hash in referee_hashes {
+                if let Some(referrers) =
+                    self.referrers_by_hash.get_mut(&referee_hash)
+                {
+                    referrers.retain(|&x| x != index);
+                }
+            }
+
+            let children: Vec<usize> =
+                self.arena[index].children.iter().map(|x| *x).collect();
+            for child in children {
+                self.arena[child].parent = NULL;
+                self.old_era_blocks_frontier.push_back(child);
+            }
+
+            let referrers: Vec<usize> =
+                self.arena[index].referrers.iter().map(|x| *x).collect();
+            for referrer in referrers {
+                self.arena[referrer].referees.retain(|&x| x != index);
+            }
+
+            self.arena.remove(index);
+            self.indices.remove(&hash);
+            self.data_man.remove_block_header(&hash);
+
+            num_cleared += 1;
+            if num_cleared == max_num_of_cleared_blocks {
+                break;
+            }
+        }
+
+        if era_genesis_in_frontier {
+            self.old_era_blocks_frontier.push_front(era_genesis);
+        }
     }
 
     pub fn insert_invalid(&mut self, header: Arc<BlockHeader>) -> usize {
@@ -999,6 +1073,8 @@ impl SynchronizationGraph {
         if me_invalid {
             return (false, need_to_relay, me_is_old);
         }
+
+        inner.try_clear_old_era_blocks();
 
         (true, need_to_relay, me_is_old)
     }
