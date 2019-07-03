@@ -62,7 +62,7 @@ impl MultiVersionMerklePatriciaTrie {
                 LRU::<RLFUPosT, DeltaMptDbKey>::new(conf.cache_size),
                 kvdb,
             ),
-            padding: padding,
+            padding,
         }
     }
 
@@ -79,7 +79,7 @@ impl MultiVersionMerklePatriciaTrie {
     pub fn loaded_root_at_epoch(
         &self, epoch_id: EpochId, db_key: DeltaMptDbKey,
     ) -> NodeRefDeltaMpt {
-        let root = NodeRefDeltaMpt::Committed { db_key: db_key };
+        let root = NodeRefDeltaMpt::Committed { db_key };
         self.set_epoch_root(epoch_id, root.clone());
 
         root

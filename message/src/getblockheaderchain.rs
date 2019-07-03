@@ -8,43 +8,46 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct GetBlockHeaders {
+pub struct GetBlockHeaderChain {
     pub request_id: RequestId,
-    pub hashes: Vec<H256>,
+    pub hash: H256,
+    pub max_blocks: u64,
 }
 
-impl Message for GetBlockHeaders {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS }
+impl Message for GetBlockHeaderChain {
+    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADER_CHAIN }
 }
 
-impl Deref for GetBlockHeaders {
+impl Deref for GetBlockHeaderChain {
     type Target = RequestId;
 
     fn deref(&self) -> &Self::Target { &self.request_id }
 }
 
-impl DerefMut for GetBlockHeaders {
+impl DerefMut for GetBlockHeaderChain {
     fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
-impl Encodable for GetBlockHeaders {
+impl Encodable for GetBlockHeaderChain {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.request_id)
-            .append_list(&self.hashes);
+            .append(&self.hash)
+            .append(&self.max_blocks);
     }
 }
 
-impl Decodable for GetBlockHeaders {
+impl Decodable for GetBlockHeaderChain {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
+        if rlp.item_count()? != 3 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        Ok(GetBlockHeaders {
+        Ok(GetBlockHeaderChain {
             request_id: rlp.val_at(0)?,
-            hashes: rlp.list_at(1)?,
+            hash: rlp.val_at(1)?,
+            max_blocks: rlp.val_at(2)?,
         })
     }
 }

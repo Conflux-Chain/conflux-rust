@@ -46,6 +46,7 @@ GET_BLOCK_TXN = 0x11
 GET_BLOCK_TXN_RESPONSE = 0x12
 
 GET_BLOCK_HASHES_BY_EPOCH = 0x17
+GET_BLOCK_HEADER_CHAIN = 0x18
 
 
 class Capability(rlp.Serializable):
@@ -173,6 +174,21 @@ class GetBlockHeaders(rlp.Serializable):
         super().__init__(
             reqid=reqid,
             hashes=hashes,
+        )
+
+
+class GetBlockHeaderChain(rlp.Serializable):
+    fields = [
+        ("reqid", big_endian_int),
+        ("hash", hash32),
+        ("max_blocks", big_endian_int),
+    ]
+
+    def __init__(self, hash, max_blocks, reqid=0):
+        super().__init__(
+            reqid=reqid,
+            hash=hash,
+            max_blocks=max_blocks,
         )
 
 
@@ -423,6 +439,7 @@ msg_id_dict = {
     GetBlockTxn: GET_BLOCK_TXN,
     GetBlockTxnResponse: GET_BLOCK_TXN_RESPONSE,
     GetBlockHashesByEpoch: GET_BLOCK_HASHES_BY_EPOCH,
+    GetBlockHeaderChain: GET_BLOCK_HEADER_CHAIN,
 }
 
 msg_class_dict = {}

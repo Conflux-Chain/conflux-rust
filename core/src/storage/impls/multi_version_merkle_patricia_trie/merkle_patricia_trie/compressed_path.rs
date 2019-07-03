@@ -63,7 +63,7 @@ impl CompressedPathRaw {
         Self {
             path_size: path_size as u16,
             path: MaybeInPlaceByteArray::copy_from(path_slice, path_size),
-            end_mask: end_mask,
+            end_mask,
         }
     }
 
@@ -72,7 +72,7 @@ impl CompressedPathRaw {
         let mut ret = Self {
             path_size: path_size as u16,
             path: MaybeInPlaceByteArray::copy_from(path_slice, path_size),
-            end_mask: end_mask,
+            end_mask,
         };
         ret.path.get_slice_mut(path_size)[path_size - 1] &= end_mask;
 
@@ -81,9 +81,9 @@ impl CompressedPathRaw {
 
     pub fn new_zeroed(path_size: u16, end_mask: u8) -> Self {
         Self {
-            path_size: path_size,
+            path_size,
             path: MaybeInPlaceByteArray::new_zeroed(path_size as usize),
-            end_mask: end_mask,
+            end_mask,
         }
     }
 
@@ -152,7 +152,7 @@ impl CompressedPathRaw {
 
         Self {
             path_size: size as u16,
-            path: path,
+            path,
             end_mask: y.end_mask(),
         }
     }

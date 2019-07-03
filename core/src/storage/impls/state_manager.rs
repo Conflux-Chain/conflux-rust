@@ -116,7 +116,7 @@ impl StateManager {
                     MERKLE_NULL_NODE,
                 ),
             ),
-            db: db,
+            db,
             commit_lock: Mutex::new(AtomicCommit {
                 row_number: RowNumber { value: row_number },
             }),

@@ -139,7 +139,7 @@ impl ConsensusExecutor {
             thread: Mutex::new(None),
             sender: Mutex::new(sender),
             handler: handler.clone(),
-            bench_mode: bench_mode,
+            bench_mode,
         };
         // It receives blocks hashes from on_new_block and execute them
         let handle = thread::Builder::new()
@@ -353,7 +353,6 @@ impl ConsensusExecutionHandler {
     {
         // Check if the state has been computed
         if debug_record.is_none()
-            && self.data_man.storage_manager.contains_state(*epoch_hash)
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
