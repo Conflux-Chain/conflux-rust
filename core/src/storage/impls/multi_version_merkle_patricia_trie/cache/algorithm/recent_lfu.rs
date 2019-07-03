@@ -239,8 +239,8 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
         };
 
         Self {
-            new_metadata: new_metadata,
-            metadata: metadata,
+            new_metadata,
+            metadata,
         }
     }
 }
@@ -544,7 +544,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
 {
     pub fn new(capacity: PosT, lru_capacity: PosT) -> Self {
         Self {
-            capacity: capacity,
+            capacity,
             frequency_heap: RemovableHeap::new(lru_capacity),
             frequency_lru: LRU::new(lru_capacity),
             counter_rng: ChaChaRng::from_entropy(),
@@ -568,7 +568,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
             &mut self.frequency_heap,
             MetadataHeapUtil::<PosT, CacheIndexT, CacheStoreUtilT> {
                 frequency_lru: &mut self.frequency_lru,
-                cache_store_util: cache_store_util,
+                cache_store_util,
             },
         )
     }

@@ -507,11 +507,13 @@ impl<Cost: CostType> Interpreter<Cost> {
                 apply,
             } => {
                 let mem = mem::replace(&mut self.mem, Vec::new());
-                return Err(InterpreterResult::Done(Ok(GasLeft::NeedsReturn {
-                    gas_left: gas.as_u256(),
-                    data: mem.into_return_data(init_off, init_size),
-                    apply_state: apply,
-                })));
+                return Err(InterpreterResult::Done(Ok(
+                    GasLeft::NeedsReturn {
+                        gas_left: gas.as_u256(),
+                        data: mem.into_return_data(init_off, init_size),
+                        apply_state: apply,
+                    },
+                )));
             }
             InstructionResult::StopExecution => {
                 return Err(InterpreterResult::Done(Ok(GasLeft::Known(
@@ -863,9 +865,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let init_size = self.stack.pop_back();
 
                 return Ok(InstructionResult::StopExecutionNeedsReturn {
-                    gas: gas,
-                    init_off: init_off,
-                    init_size: init_size,
+                    gas,
+                    init_off,
+                    init_size,
                     apply: true,
                 });
             }
@@ -874,9 +876,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let init_size = self.stack.pop_back();
 
                 return Ok(InstructionResult::StopExecutionNeedsReturn {
-                    gas: gas,
-                    init_off: init_off,
-                    init_size: init_size,
+                    gas,
+                    init_off,
+                    init_size,
                     apply: false,
                 });
             }
@@ -1187,32 +1189,31 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::DIV => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
-                self.stack.push(if !b.is_zero() {
-                    match b {
-                        ONE => a,
-                        TWO => a >> 1,
-                        TWO_POW_5 => a >> 5,
-                        TWO_POW_8 => a >> 8,
-                        TWO_POW_16 => a >> 16,
-                        TWO_POW_24 => a >> 24,
-                        TWO_POW_64 => a >> 64,
-                        TWO_POW_96 => a >> 96,
-                        TWO_POW_224 => a >> 224,
-                        TWO_POW_248 => a >> 248,
-                        _ => a / b,
-                    }
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !b.is_zero() {
+                        match b {
+                            ONE => a,
+                            TWO => a >> 1,
+                            TWO_POW_5 => a >> 5,
+                            TWO_POW_8 => a >> 8,
+                            TWO_POW_16 => a >> 16,
+                            TWO_POW_24 => a >> 24,
+                            TWO_POW_64 => a >> 64,
+                            TWO_POW_96 => a >> 96,
+                            TWO_POW_224 => a >> 224,
+                            TWO_POW_248 => a >> 248,
+                            _ => a / b,
+                        }
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::MOD => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
-                self.stack.push(if !b.is_zero() {
-                    a % b
-                } else {
-                    U256::zero()
-                });
+                self.stack
+                    .push(if !b.is_zero() { a % b } else { U256::zero() });
             }
             instructions::SDIV => {
                 let (a, sign_a) = get_and_reset_sign(self.stack.pop_back());
@@ -1220,14 +1221,16 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 // -2^255
                 let min = (U256::one() << 255) - U256::one();
-                self.stack.push(if b.is_zero() {
-                    U256::zero()
-                } else if a == min && b == !U256::zero() {
-                    min
-                } else {
-                    let c = a / b;
-                    set_sign(c, sign_a ^ sign_b)
-                });
+                self.stack.push(
+                    if b.is_zero() {
+                        U256::zero()
+                    } else if a == min && b == !U256::zero() {
+                        min
+                    } else {
+                        let c = a / b;
+                        set_sign(c, sign_a ^ sign_b)
+                    },
+                );
             }
             instructions::SMOD => {
                 let ua = self.stack.pop_back();
@@ -1235,12 +1238,14 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let (a, sign_a) = get_and_reset_sign(ua);
                 let b = get_and_reset_sign(ub).0;
 
-                self.stack.push(if !b.is_zero() {
-                    let c = a % b;
-                    set_sign(c, sign_a)
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !b.is_zero() {
+                        let c = a % b;
+                        set_sign(c, sign_a)
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::EXP => {
                 let base = self.stack.pop_back();
@@ -1327,29 +1332,33 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let b = self.stack.pop_back();
                 let c = self.stack.pop_back();
 
-                self.stack.push(if !c.is_zero() {
-                    // upcast to 512
-                    let a5 = U512::from(a);
-                    let res = a5.overflowing_add(U512::from(b)).0;
-                    let x = res % U512::from(c);
-                    U256::from(x)
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !c.is_zero() {
+                        // upcast to 512
+                        let a5 = U512::from(a);
+                        let res = a5.overflowing_add(U512::from(b)).0;
+                        let x = res % U512::from(c);
+                        U256::from(x)
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::MULMOD => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
                 let c = self.stack.pop_back();
 
-                self.stack.push(if !c.is_zero() {
-                    let a5 = U512::from(a);
-                    let res = a5.overflowing_mul(U512::from(b)).0;
-                    let x = res % U512::from(c);
-                    U256::from(x)
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !c.is_zero() {
+                        let a5 = U512::from(a);
+                        let res = a5.overflowing_mul(U512::from(b)).0;
+                        let x = res % U512::from(c);
+                        U256::from(x)
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::SIGNEXTEND => {
                 let bit = self.stack.pop_back();
@@ -1359,11 +1368,8 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                     let bit = number.bit(bit_position);
                     let mask = (U256::one() << bit_position) - U256::one();
-                    self.stack.push(if bit {
-                        number | !mask
-                    } else {
-                        number & mask
-                    });
+                    self.stack
+                        .push(if bit { number | !mask } else { number & mask });
                 }
             }
             instructions::SHL => {

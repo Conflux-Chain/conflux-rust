@@ -29,11 +29,7 @@ impl<T> BitIter<T> {
     pub fn new(
         set: T, masks: [usize; LAYERS], prefix: [u32; LAYERS - 1],
     ) -> Self {
-        BitIter {
-            set: set,
-            masks: masks,
-            prefix: prefix,
-        }
+        BitIter { set, masks, prefix }
     }
 }
 

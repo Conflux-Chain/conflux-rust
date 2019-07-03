@@ -1183,7 +1183,7 @@ impl SynchronizationProtocolHandler {
 
         let msg: Box<dyn Message> = Box::new(GetBlockHashesResponse {
             request_id: req.request_id().into(),
-            hashes: hashes,
+            hashes,
         });
         send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())

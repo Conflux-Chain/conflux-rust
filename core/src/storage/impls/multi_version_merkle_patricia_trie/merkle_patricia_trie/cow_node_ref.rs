@@ -101,7 +101,7 @@ impl CowNodeRef {
         Ok((
             Self {
                 owned: true,
-                node_ref: node_ref,
+                node_ref,
             },
             new_entry,
         ))
@@ -112,7 +112,7 @@ impl CowNodeRef {
     ) -> Self {
         Self {
             owned: owned_node_set.contains(&node_ref),
-            node_ref: node_ref,
+            node_ref,
         }
     }
 
@@ -488,8 +488,7 @@ impl CowNodeRef {
                 NodeRefDeltaMpt::Dirty { index } => *index,
                 _ => unsafe { unreachable_unchecked() },
             };
-            let committed_node_ref =
-                NodeRefDeltaMpt::Committed { db_key: db_key };
+            let committed_node_ref = NodeRefDeltaMpt::Committed { db_key };
             owned_node_set.insert(committed_node_ref.clone());
             // We insert the new node_ref into owned_node_set first because in
             // general inserting to a set may fail, even though it

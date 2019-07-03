@@ -181,7 +181,7 @@ impl<
             )),
             cache: Mutex::new(CacheManager {
                 node_ref_map: NodeRefMapDeltaMpt::new(node_map_size),
-                cache_algorithm: cache_algorithm,
+                cache_algorithm,
             }),
             db_load_lock: Default::default(),
             db: kvdb,
@@ -675,7 +675,7 @@ impl<
     ) -> Self
     {
         NodeCacheUtil {
-            node_memory_manager: node_memory_manager,
+            node_memory_manager,
             node_ref_map: node_map,
         }
     }
