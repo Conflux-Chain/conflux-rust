@@ -17,7 +17,7 @@ impl<'a> State<'a> {
         manager: &'a StateManager, root_node: Option<NodeRefDeltaMpt>,
     ) -> Self {
         Self {
-            manager: manager,
+            manager,
             delta_trie: manager.get_delta_trie(),
             root_node: root_node.clone(),
             owned_node_set: Some(Default::default()),

@@ -84,7 +84,8 @@ const ANTICONE_BARRIER_CAP: usize = 1000;
 // The parent_edge checking and adaptive checking are defined relative to the
 // era start blocks.
 pub const ERA_EPOCH_COUNT: usize = 50000;
-// Here is the delay for us to recycle those orphaned blocks in the boundary of eras.
+// Here is the delay for us to recycle those orphaned blocks in the boundary of
+// eras.
 const ERA_RECYCLE_TRANSACTION_DELAY: usize = 20;
 
 #[derive(Copy, Clone)]
@@ -3185,12 +3186,18 @@ impl ConsensusGraph {
     }
 
     fn recycle_tx_in_block(&self, inner: &ConsensusGraphInner, index: usize) {
-        let block = inner.data_man.block_by_hash(&inner.arena[index].hash, true).expect("Block should always found in the data manager!");
+        let block = inner
+            .data_man
+            .block_by_hash(&inner.arena[index].hash, true)
+            .expect("Block should always found in the data manager!");
         self.txpool.recycle_transactions(block.transactions.clone());
     }
 
-    /// This recycles txs in all blocks outside the era represented by the era block.
-    fn recycle_tx_outside_era(&self, inner: &mut ConsensusGraphInner, era_block: usize) {
+    /// This recycles txs in all blocks outside the era represented by the era
+    /// block.
+    fn recycle_tx_outside_era(
+        &self, inner: &mut ConsensusGraphInner, era_block: usize,
+    ) {
         let mut anticone_tmp = HashSet::new();
         let anticone = if let Some(x) = inner.anticone_cache.get(era_block) {
             x
@@ -3240,16 +3247,18 @@ impl ConsensusGraph {
         let me = self.insert_block_initial(inner, block.clone());
         let parent = inner.arena[me].parent;
         let era_height = inner.get_era_height(inner.arena[parent].height, 0);
-        let cur_pivot_era_block = if inner.pivot_chain.len() > era_height as usize {
-            inner.pivot_chain[era_height as usize]
-        } else {
-            NULL
-        };
+        let cur_pivot_era_block =
+            if inner.pivot_chain.len() > era_height as usize {
+                inner.pivot_chain[era_height as usize]
+            } else {
+                NULL
+            };
         let era_block = inner.get_era_block_with_parent(parent, 0);
 
         // It's only correct to set tx stale after the block is considered
         // terminal for mining.
-        // Note that we conservatively only mark those blocks inside the current pivot era
+        // Note that we conservatively only mark those blocks inside the current
+        // pivot era
         if era_block == cur_pivot_era_block {
             self.txpool.set_tx_packed(block.transactions.clone());
         }
@@ -3464,10 +3473,15 @@ impl ConsensusGraph {
             return;
         }
 
-        let new_pivot_era_block = inner.get_era_block_with_parent(inner.pivot_chain[inner.pivot_chain.len() - 1], 0);
+        let new_pivot_era_block = inner.get_era_block_with_parent(
+            inner.pivot_chain[inner.pivot_chain.len() - 1],
+            0,
+        );
         let new_era_height = inner.arena[new_pivot_era_block].height;
-        if new_era_height as usize + ERA_RECYCLE_TRANSACTION_DELAY < inner.pivot_chain.len() &&
-            inner.last_recycled_era_block != new_pivot_era_block {
+        if new_era_height as usize + ERA_RECYCLE_TRANSACTION_DELAY
+            < inner.pivot_chain.len()
+            && inner.last_recycled_era_block != new_pivot_era_block
+        {
             self.recycle_tx_outside_era(inner, new_pivot_era_block);
             inner.last_recycled_era_block = new_pivot_era_block;
         }

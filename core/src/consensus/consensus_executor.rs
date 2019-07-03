@@ -139,7 +139,7 @@ impl ConsensusExecutor {
             thread: Mutex::new(None),
             sender: Mutex::new(sender),
             handler: handler.clone(),
-            bench_mode: bench_mode,
+            bench_mode,
         };
         // It receives blocks hashes from on_new_block and execute them
         let handle = thread::Builder::new()

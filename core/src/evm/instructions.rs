@@ -447,10 +447,10 @@ impl InstructionInfo {
         name: &'static str, args: usize, ret: usize, tier: GasPriceTier,
     ) -> Self {
         InstructionInfo {
-            name: name,
-            args: args,
-            ret: ret,
-            tier: tier,
+            name,
+            args,
+            ret,
+            tier,
         }
     }
 }

@@ -19,7 +19,7 @@ impl<'trie> SubTrieVisitor<'trie> {
     ) -> Self
     {
         Self {
-            trie_ref: trie_ref,
+            trie_ref,
             root: CowNodeRef::new(root, owned_node_set.as_ref().unwrap()),
             owned_node_set: ReturnAfterUse::new(owned_node_set),
         }
@@ -33,7 +33,7 @@ impl<'trie> SubTrieVisitor<'trie> {
         let cow_child_node =
             CowNodeRef::new(child_node, self.owned_node_set.get_ref());
         SubTrieVisitor {
-            trie_ref: trie_ref,
+            trie_ref,
             root: cow_child_node,
             owned_node_set: ReturnAfterUse::new_from_origin(
                 &mut self.owned_node_set,

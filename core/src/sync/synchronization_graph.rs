@@ -362,11 +362,13 @@ impl SynchronizationGraphInner {
                   self.arena[parent].block_header.timestamp(),
                   self.arena[index].block_header.hash(),
                   self.arena[index].block_header.timestamp());
-            return Err(From::from(BlockError::InvalidTimestamp(OutOfBounds {
-                max: Some(my_timestamp),
-                min: Some(parent_timestamp),
-                found: my_timestamp,
-            })));
+            return Err(From::from(BlockError::InvalidTimestamp(
+                OutOfBounds {
+                    max: Some(my_timestamp),
+                    min: Some(parent_timestamp),
+                    found: my_timestamp,
+                },
+            )));
         }
 
         for referee in &self.arena[index].referees {
@@ -841,7 +843,11 @@ impl SynchronizationGraph {
                 // a part of block later
                 VerificationConfig::compute_header_pow_quality(header);
             }
-            return (true, Vec::new(), inner.arena[*me].parent_referees_too_old);
+            return (
+                true,
+                Vec::new(),
+                inner.arena[*me].parent_referees_too_old,
+            );
         }
 
         let verification_passed = if need_to_verify {
@@ -1168,7 +1174,7 @@ impl SynchronizationGraph {
             best_epoch_number: consensus_inner.best_epoch_number(),
             current_difficulty: consensus_inner.current_difficulty,
             terminal_block_hashes: consensus_inner.terminal_hashes(),
-            deferred_state_root: deferred_state_root,
+            deferred_state_root,
             deferred_receipts_root,
         };
         GuardedValue::new(consensus_inner, value)
