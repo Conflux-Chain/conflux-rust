@@ -46,6 +46,7 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
+    mem,
     sync::Arc,
     thread::sleep,
     time::Duration,
@@ -1967,6 +1968,27 @@ impl ConsensusGraphInner {
             base
         }
     }
+
+    fn reset_epoch_number_in_epoch(&mut self, pivot_index: usize) {
+        self.set_epoch_number_in_epoch(pivot_index, NULL);
+    }
+
+    fn set_epoch_number_in_epoch(
+        &mut self, pivot_index: usize, epoch_number: usize,
+    ) {
+        let block_set = mem::replace(
+            &mut self.arena[pivot_index].data.blockset_in_own_view_of_epoch,
+            Default::default(),
+        );
+        for idx in &block_set {
+            self.arena[*idx].data.epoch_number = epoch_number
+        }
+        self.arena[pivot_index].data.epoch_number = epoch_number;
+        mem::replace(
+            &mut self.arena[pivot_index].data.blockset_in_own_view_of_epoch,
+            block_set,
+        );
+    }
 }
 
 pub struct FinalityManager {
@@ -2861,36 +2883,8 @@ impl ConsensusGraph {
             let mut height = 1;
             while height < new_pivot_chain.len() {
                 // First, identify all the blocks in the current epoch
-                let mut queue = Vec::new();
-                {
-                    let copy_of_fork_at = height;
-                    let enqueue_if_new =
-                        |inner: &mut ConsensusGraphInner,
-                         queue: &mut Vec<usize>,
-                         index| {
-                            if inner.arena[index].data.epoch_number == NULL {
-                                inner.arena[index].data.epoch_number =
-                                    copy_of_fork_at;
-                                queue.push(index);
-                            }
-                        };
-
-                    let mut at = 0;
-                    enqueue_if_new(inner, &mut queue, new_pivot_chain[height]);
-                    while at < queue.len() {
-                        let me = queue[at];
-                        let tmp = inner.arena[me].referees.clone();
-                        for referee in tmp {
-                            enqueue_if_new(inner, &mut queue, referee);
-                        }
-                        enqueue_if_new(
-                            inner,
-                            &mut queue,
-                            inner.arena[me].parent,
-                        );
-                        at += 1;
-                    }
-                }
+                inner
+                    .set_epoch_number_in_epoch(new_pivot_chain[height], height);
 
                 // Construct in-memory receipts root
                 if new_pivot_chain.len() >= DEFERRED_STATE_EPOCH_COUNT as usize
@@ -2914,7 +2908,6 @@ impl ConsensusGraph {
                             .clone(),
                     );
                 }
-
                 height += 1;
             }
 
@@ -3318,6 +3311,8 @@ impl ConsensusGraph {
             let last = inner.pivot_chain.last().cloned().unwrap();
             fork_at = if inner.arena[me].parent == last {
                 inner.pivot_chain.push(me);
+                inner
+                    .set_epoch_number_in_epoch(me, inner.pivot_chain.len() - 1);
                 inner.pivot_chain_metadata.push(Default::default());
                 extend_pivot = true;
                 old_pivot_chain_len
@@ -3335,10 +3330,17 @@ impl ConsensusGraph {
                     (prev_weight, &inner.arena[prev].hash),
                 ) {
                     // The new subtree is heavier, update pivot chain
-                    inner.pivot_chain.truncate(fork_at);
+                    for discarded_idx in inner.pivot_chain.split_off(fork_at) {
+                        // Reset the epoch_number of the discarded fork
+                        inner.reset_epoch_number_in_epoch(discarded_idx)
+                    }
                     let mut u = new;
                     loop {
                         inner.pivot_chain.push(u);
+                        inner.set_epoch_number_in_epoch(
+                            u,
+                            inner.pivot_chain.len() - 1,
+                        );
                         let mut heaviest = NULL;
                         let mut heaviest_weight = 0;
                         for index in &inner.arena[u].children {
@@ -3369,76 +3371,6 @@ impl ConsensusGraph {
                 }
             };
             debug!("Forked at index {}", inner.pivot_chain[fork_at - 1]);
-
-            if fork_at < old_pivot_chain_len {
-                let enqueue_if_obsolete =
-                    |inner: &mut ConsensusGraphInner,
-                     queue: &mut VecDeque<usize>,
-                     index| {
-                        let epoch_number = inner.arena[index].data.epoch_number;
-                        if epoch_number != NULL && epoch_number >= fork_at {
-                            inner.arena[index].data.epoch_number = NULL;
-                            queue.push_back(index);
-                        }
-                    };
-
-                let mut queue = VecDeque::new();
-                enqueue_if_obsolete(inner, &mut queue, last);
-                while let Some(me) = queue.pop_front() {
-                    let tmp = inner.arena[me].referees.clone();
-                    for referee in tmp {
-                        enqueue_if_obsolete(inner, &mut queue, referee);
-                    }
-                    enqueue_if_obsolete(
-                        inner,
-                        &mut queue,
-                        inner.arena[me].parent,
-                    );
-                }
-            }
-
-            assert_ne!(fork_at, 0);
-
-            // Construct epochs
-            let mut pivot_index = fork_at;
-            while pivot_index < inner.pivot_chain.len() {
-                // First, identify all the blocks in the current epoch
-                let mut queue = Vec::new();
-                {
-                    let copy_of_fork_at = pivot_index;
-                    let enqueue_if_new =
-                        |inner: &mut ConsensusGraphInner,
-                         queue: &mut Vec<usize>,
-                         index| {
-                            if inner.arena[index].data.epoch_number == NULL {
-                                inner.arena[index].data.epoch_number =
-                                    copy_of_fork_at;
-                                queue.push(index);
-                            }
-                        };
-
-                    let mut at = 0;
-                    enqueue_if_new(
-                        inner,
-                        &mut queue,
-                        inner.pivot_chain[pivot_index],
-                    );
-                    while at < queue.len() {
-                        let me = queue[at];
-                        let tmp = inner.arena[me].referees.clone();
-                        for referee in tmp {
-                            enqueue_if_new(inner, &mut queue, referee);
-                        }
-                        enqueue_if_new(
-                            inner,
-                            &mut queue,
-                            inner.arena[me].parent,
-                        );
-                        at += 1;
-                    }
-                }
-                pivot_index += 1;
-            }
         }
 
         // Now compute last_pivot_in_block and update pivot_metadata.
