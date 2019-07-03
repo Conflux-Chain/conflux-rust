@@ -60,7 +60,7 @@ function check_integration_tests {
     result=$(
         # Make symbolic link for conflux binary to where integration test assumes its existence.
         rm -rf target; ln -s build target
-        ./test/test_all.py
+        ./tests/test_all.py
     )
     local exit_code=$?
     popd > /dev/null

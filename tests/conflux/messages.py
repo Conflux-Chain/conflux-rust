@@ -155,13 +155,13 @@ class GetBlockHashes(rlp.Serializable):
 class GetBlockHashesByEpoch(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
-        ("epoch_number", big_endian_int),
+        ("epochs", CountableList(big_endian_int)),
     ]
 
-    def __init__(self, epoch_number, reqid=0):
+    def __init__(self, epochs, reqid=0):
         super().__init__(
             reqid=reqid,
-            epoch_number=epoch_number
+            epochs=epochs
         )
 
 
@@ -175,15 +175,13 @@ class BlockHashes(rlp.Serializable):
 class GetBlockHeaders(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
-        ("hash", hash32),
-        ("max_blocks", big_endian_int),
+        ("hashes", CountableList(hash32)),
     ]
 
-    def __init__(self, hash, max_blocks, reqid=0):
+    def __init__(self, hashes, reqid=0):
         super().__init__(
             reqid=reqid,
-            hash=hash,
-            max_blocks=max_blocks
+            hashes=hashes,
         )
 
 

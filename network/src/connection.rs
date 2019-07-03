@@ -5,21 +5,37 @@
 use crate::{
     io::{IoContext, StreamToken},
     throttling::THROTTLING_SERVICE,
+    Error,
 };
 use bytes::Bytes;
+use lazy_static::lazy_static;
+use metrics::{register_meter_with_group, Meter};
 use mio::{deprecated::*, tcp::*, *};
+use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
+use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
     marker::PhantomData,
-    sync::atomic::{AtomicBool, Ordering as AtomicOrdering},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
+        Arc,
+    },
 };
 
-use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
+lazy_static! {
+    static ref READ_METER: Arc<Meter> =
+        register_meter_with_group("network_connection_data", "read");
+    static ref WRITE_METER: Arc<Meter> =
+        register_meter_with_group("network_connection_data", "write");
+    static ref SEND_METER: Arc<Meter> =
+        register_meter_with_group("network_connection_data", "send");
+    static ref SEND_LOW_PRIORITY_METER: Arc<Meter> =
+        register_meter_with_group("network_connection_data", "send_low");
+    static ref SEND_HIGH_PRIORITY_METER: Arc<Meter> =
+        register_meter_with_group("network_connection_data", "send_high");
+}
 
-use crate::Error;
-use std::sync::atomic::AtomicUsize;
-
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WriteStatus {
     Ongoing,
     LowPriority,
@@ -46,6 +62,10 @@ fn decr_high_priority_packets() {
 
 fn has_high_priority_packets() -> bool {
     HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst) > 0
+}
+
+pub fn get_high_priority_packets() -> usize {
+    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst)
 }
 
 pub trait GenericSocket: Read + Write {}
@@ -102,6 +122,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
                         self.token,
                         size
                     );
+                    READ_METER.mark(size);
                     if size == 0 {
                         break;
                     }
@@ -165,6 +186,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
             size
         );
         THROTTLING_SERVICE.write().on_dequeue(size);
+        WRITE_METER.mark(size);
 
         if pos + size < len {
             buf.1 += size;
@@ -200,17 +222,25 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
     ) -> Result<SendQueueStatus, Error>
     {
         if !data.is_empty() {
-            trace!(
-                "Sending packet, token = {}, size = {}",
-                self.token,
-                data.len()
-            );
-            THROTTLING_SERVICE.write().on_enqueue(data.len())?;
+            let size = data.len();
+
+            trace!("Sending packet, token = {}, size = {}", self.token, size);
+
+            SEND_METER.mark(size);
+            THROTTLING_SERVICE.write().on_enqueue(size)?;
             let message = data.to_vec();
             self.send_queue.push_back((message, 0), priority);
-            if priority == SendQueuePriority::High {
-                incr_high_priority_packets();
+
+            match priority {
+                SendQueuePriority::High => {
+                    incr_high_priority_packets();
+                    SEND_HIGH_PRIORITY_METER.mark(size);
+                }
+                SendQueuePriority::Normal => {
+                    SEND_LOW_PRIORITY_METER.mark(size);
+                }
             }
+
             if !self.interest.is_writable() {
                 self.interest.insert(Ready::writable());
             }
@@ -297,6 +327,32 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
     }
 
     pub fn token(&self) -> StreamToken { self.token }
+
+    pub fn details(&self) -> ConnectionDetails {
+        ConnectionDetails {
+            token: self.token,
+            recv_buf: self.recv_buf.len(),
+            priority_queue_normal: self
+                .send_queue
+                .len_by_priority(SendQueuePriority::Normal),
+            priority_queue_high: self
+                .send_queue
+                .len_by_priority(SendQueuePriority::High),
+            interest: format!("{:?}", self.interest),
+            registered: self.registered.load(AtomicOrdering::SeqCst),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionDetails {
+    pub token: StreamToken,
+    pub recv_buf: usize,
+    pub priority_queue_normal: usize,
+    pub priority_queue_high: usize,
+    pub interest: String,
+    pub registered: bool,
 }
 
 #[cfg(test)]

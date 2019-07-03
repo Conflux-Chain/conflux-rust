@@ -9,7 +9,7 @@ mod report;
 pub use self::{
     counter::{Counter, CounterUsize},
     gauge::{Gauge, GaugeUsize},
-    meter::{register_meter, Meter},
+    meter::{register_meter, register_meter_with_group, Meter},
     metrics::enable,
     report::{report_async, FileReporter},
 };

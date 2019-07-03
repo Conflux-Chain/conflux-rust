@@ -26,7 +26,7 @@ pub enum BlockError {
     DifficultyOutOfBounds(OutOfBounds<U256>),
     /// Difficulty header field is invalid; this is a strong error used after
     /// getting a definitive value for difficulty (which is provided).
-    InvalidDifficulty(Mismatch<U256>),
+    InvalidDifficulty(OutOfBounds<U256>),
     /// Proof-of-work aspect of seal, which we assume is a 256-bit value, is
     /// invalid.
     InvalidProofOfWork(OutOfBounds<H256>),
@@ -65,8 +65,8 @@ impl fmt::Display for BlockError {
             DifficultyOutOfBounds(ref oob) => {
                 format!("Invalid block difficulty: {}", oob)
             }
-            InvalidDifficulty(ref mis) => {
-                format!("Invalid block difficulty: {}", mis)
+            InvalidDifficulty(ref oob) => {
+                format!("Invalid block difficulty: {}", oob)
             }
             InvalidProofOfWork(ref oob) => {
                 format!("Block has invalid PoW: {}", oob)

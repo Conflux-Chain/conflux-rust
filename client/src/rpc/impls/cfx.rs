@@ -13,12 +13,17 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
-    storage::StorageManager, PeerInfo, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use jsonrpc_macros::Trailing;
-use network::node_table::{NodeEndpoint, NodeEntry, NodeId};
+use network::{
+    get_high_priority_packets,
+    node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
+    throttling::{self, THROTTLING_SERVICE},
+    SessionDetails,
+};
 use parking_lot::{Condvar, Mutex};
 use primitives::{
     block::MAX_BLOCK_SIZE_IN_BYTES, Action,
@@ -31,8 +36,6 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
-    #[allow(dead_code)]
-    storage_manager: Arc<StorageManager>,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
     exit: Arc<(Mutex<bool>, Condvar)>,
@@ -41,14 +44,13 @@ pub struct RpcImpl {
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        storage_manager: Arc<StorageManager>, block_gen: Arc<BlockGenerator>,
-        tx_pool: SharedTransactionPool, exit: Arc<(Mutex<bool>, Condvar)>,
+        block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
+        exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self
     {
         RpcImpl {
             consensus,
             sync,
-            storage_manager,
             block_gen,
             tx_pool,
             exit,
@@ -291,12 +293,16 @@ impl RpcImpl {
             })
             .and_then(|tx| {
                 let (signed_trans, failed_trans) = self.tx_pool.insert_new_transactions(
-                    self.consensus.best_state_block_hash(),
                     &vec![tx],
                 );
-                if signed_trans.len() + failed_trans.len() != 1 {
+                if signed_trans.len() + failed_trans.len() > 1 {
+                    // This should never happen
                     error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
                     Ok(H256::new().into())
+                } else if signed_trans.len() + failed_trans.len() == 0 {
+                    // For tx in transactions_pubkey_cache, we simply ignore them
+                    debug!("insert_new_transactions ignores inserted transactions");
+                    Err(RpcError::invalid_params(String::from("tx already exist")))
                 } else {
                     if signed_trans.is_empty() {
                         let mut tx_err = String::from("");
@@ -658,6 +664,40 @@ impl RpcImpl {
         self.tx_pool.clear_tx_pool();
         Ok(())
     }
+
+    fn net_throttling(&self) -> RpcResult<throttling::Service> {
+        Ok(THROTTLING_SERVICE.read().clone())
+    }
+
+    fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {
+        match self.sync.get_network_service().get_node(&id) {
+            None => Ok(None),
+            Some((trusted, node)) => {
+                if trusted {
+                    Ok(Some(("trusted".into(), node)))
+                } else {
+                    Ok(Some(("untrusted".into(), node)))
+                }
+            }
+        }
+    }
+
+    fn net_sessions(
+        &self, node_id: Trailing<NodeId>,
+    ) -> RpcResult<Vec<SessionDetails>> {
+        match self
+            .sync
+            .get_network_service()
+            .get_detailed_sessions(node_id.into())
+        {
+            None => Ok(Vec::new()),
+            Some(sessions) => Ok(sessions),
+        }
+    }
+
+    fn net_high_priority_packets(&self) -> RpcResult<usize> {
+        Ok(get_high_priority_packets())
+    }
 }
 
 fn grouped_txs<T, F>(
@@ -918,4 +958,22 @@ impl DebugRpc for DebugRpcImpl {
     }
 
     fn clear_tx_pool(&self) -> RpcResult<()> { self.rpc_impl.clear_tx_pool() }
+
+    fn net_throttling(&self) -> RpcResult<throttling::Service> {
+        self.rpc_impl.net_throttling()
+    }
+
+    fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {
+        self.rpc_impl.net_node(id)
+    }
+
+    fn net_sessions(
+        &self, node_id: Trailing<NodeId>,
+    ) -> RpcResult<Vec<SessionDetails>> {
+        self.rpc_impl.net_sessions(node_id)
+    }
+
+    fn net_high_priority_packets(&self) -> RpcResult<usize> {
+        self.rpc_impl.net_high_priority_packets()
+    }
 }
