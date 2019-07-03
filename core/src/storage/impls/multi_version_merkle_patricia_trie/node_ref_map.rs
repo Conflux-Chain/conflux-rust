@@ -31,7 +31,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait>
     CacheableNodeRefDeltaMpt<CacheAlgoDataT>
 {
     pub fn new(cached: TrieCacheSlotOrCacheAlgoData<CacheAlgoDataT>) -> Self {
-        Self { cached: cached }
+        Self { cached }
     }
 
     pub fn get_cache_info(

@@ -274,7 +274,7 @@ impl Decodable for Capability {
         let mut protocol: ProtocolId = [0u8; 3];
         protocol.clone_from_slice(&p);
         Ok(Capability {
-            protocol: protocol,
+            protocol,
             version: rlp.val_at(1)?,
         })
     }

@@ -260,8 +260,8 @@ pub type Connection<Sizer> = GenericConnection<TcpStream, Sizer>;
 impl<Sizer: PacketSizer> Connection<Sizer> {
     pub fn new(token: StreamToken, socket: TcpStream) -> Self {
         Connection {
-            token: token,
-            socket: socket,
+            token,
+            socket,
             recv_buf: Bytes::new(),
             send_queue: PrioritySendQueue::new(),
             interest: Ready::hup() | Ready::readable(),
@@ -389,7 +389,7 @@ mod tests {
                 read_buf: vec![],
                 write_buf: vec![],
                 cursor: 0,
-                buf_size: buf_size,
+                buf_size,
             }
         }
     }

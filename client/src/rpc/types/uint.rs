@@ -23,7 +23,7 @@ use serde;
 use std::{fmt, str::FromStr};
 
 macro_rules! impl_uint {
-    ($name: ident, $other: ident, $size: expr) => {
+    ($name:ident, $other:ident, $size:expr) => {
         /// Uint serialization.
         #[derive(Debug, Default, Clone, Copy, PartialEq, Hash)]
         pub struct $name($other);

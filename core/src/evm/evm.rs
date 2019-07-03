@@ -49,7 +49,7 @@ impl Finalize for Result<GasLeft> {
     fn finalize<C: Context>(self, context: C) -> Result<FinalizationResult> {
         match self {
             Ok(GasLeft::Known(gas_left)) => Ok(FinalizationResult {
-                gas_left: gas_left,
+                gas_left,
                 apply_state: true,
                 return_data: ReturnData::empty(),
             }),
@@ -59,8 +59,8 @@ impl Finalize for Result<GasLeft> {
                 apply_state,
             }) => context.ret(&gas_left, &data, apply_state).map(|gas_left| {
                 FinalizationResult {
-                    gas_left: gas_left,
-                    apply_state: apply_state,
+                    gas_left,
+                    apply_state,
                     return_data: data,
                 }
             }),

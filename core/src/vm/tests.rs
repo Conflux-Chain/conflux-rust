@@ -169,7 +169,7 @@ impl Context for MockContext {
             gas: *gas,
             sender_address: Some(sender_address.clone()),
             receive_address: Some(receive_address.clone()),
-            value: value,
+            value,
             data: data.to_vec(),
             code_address: Some(code_address.clone()),
         });
@@ -191,7 +191,7 @@ impl Context for MockContext {
 
     fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> Result<()> {
         self.logs.push(MockLogEntry {
-            topics: topics,
+            topics,
             data: data.to_vec(),
         });
         Ok(())

@@ -137,7 +137,10 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
         let mut pre_weight = self.weight.clone();
         if self.left.is_some() {
             if &weight < &self.left.as_ref().unwrap().sum_weight {
-                return self.left.as_ref().and_then(|x| x.get_by_weight(weight));
+                return self
+                    .left
+                    .as_ref()
+                    .and_then(|x| x.get_by_weight(weight));
             } else {
                 pre_weight =
                     pre_weight + self.left.as_ref().unwrap().sum_weight.clone();

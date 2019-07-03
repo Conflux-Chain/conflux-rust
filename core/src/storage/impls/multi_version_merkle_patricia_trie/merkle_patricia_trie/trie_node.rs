@@ -387,8 +387,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
                     return WalkStop::PathDiverted {
                         key_child_index: Some(key_child_index),
                         key_remaining: key_remaining.into(),
-                        matched_path: matched_path,
-                        unmatched_child_index: unmatched_child_index,
+                        matched_path,
+                        unmatched_child_index,
                         unmatched_path_remaining: CompressedPathRaw::new(
                             unmatched_path_remaining,
                             self.path_end_mask,
@@ -483,15 +483,15 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
                         return WalkStop::child_not_found_uninitialized();
                     }
                     return WalkStop::ChildNotFound {
-                        key_remaining: key_remaining,
-                        child_index: child_index,
+                        key_remaining,
+                        child_index,
                     };
                 }
                 Option::Some(child_node) => {
                     return WalkStop::Descent {
-                        key_remaining: key_remaining,
+                        key_remaining,
                         child_node: child_node.into(),
-                        child_index: child_index,
+                        child_index,
                     };
                 }
             }
