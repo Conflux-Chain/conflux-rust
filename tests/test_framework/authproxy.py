@@ -80,7 +80,7 @@ class AuthServiceProxy():
         user = None if self.__url.username is None else self.__url.username.encode('utf8')
         passwd = None if self.__url.password is None else self.__url.password.encode('utf8')
 
-        if connection:
+        if connection is not None:
             # Callables re-use the connection of the original proxy
             self.__conn = connection
         elif self.__url.scheme == 'https':
@@ -101,7 +101,7 @@ class AuthServiceProxy():
         Do a HTTP request, with retry if we get disconnected (e.g. due to a timeout).
         This is a workaround for https://bugs.python.org/issue3566 which is fixed in Python 3.5.
         '''
-        headers = {'Content-type': 'application/json'}
+        headers = {'Content-type': 'application/json', "Connection": "keep-alive"}
         try:
             self.__conn.request(method, path, postdata, headers)
             return self._get_response()

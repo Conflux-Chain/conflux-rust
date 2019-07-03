@@ -621,7 +621,7 @@ impl<
             .cache_algorithm
             .log_usage(&"trie node cache ".into());
         let allocator_ref = self.get_allocator();
-        info!(
+        debug!(
             "trie node allocator: max allowed size: {}, \
              configured idle_size: {}, size: {}, allocated: {}",
             self.size_limit,
@@ -629,19 +629,19 @@ impl<
             allocator_ref.capacity(),
             allocator_ref.len()
         );
-        info!(
+        debug!(
             "number of nodes loaded from db {}",
             self.db_load_counter.load(Ordering::Relaxed)
         );
-        info!(
+        debug!(
             "number of uncached leaf node loads {}",
             self.uncached_leaf_load_times.load(Ordering::Relaxed)
         );
-        info!(
+        debug!(
             "number of db loads for uncached leaf nodes {}",
             self.uncached_leaf_db_loads.load(Ordering::Relaxed)
         );
-        info!(
+        debug!(
             "number of db loads for merkle computation {}",
             self.compute_merkle_db_loads.load(Ordering::Relaxed)
         )

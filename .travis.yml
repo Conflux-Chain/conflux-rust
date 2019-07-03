@@ -13,6 +13,7 @@ matrix:
         install:
             - if [ -f target/Cargo.lock ]; then mv target/Cargo.lock .; fi
             - export RUSTFLAGS="-D warnings"
+            - sh cargo_fmt.sh -- --check
             - cargo build --release
         script:
             - cargo test --release --all

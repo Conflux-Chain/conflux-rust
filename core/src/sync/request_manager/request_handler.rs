@@ -3,8 +3,8 @@ use crate::sync::{
     synchronization_protocol_handler::ProtocolConfiguration, Error, ErrorKind,
 };
 use message::{
-    GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
-    GetCompactBlocks, GetTransactions, Message,
+    GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders, GetBlockTxn,
+    GetBlocks, GetCompactBlocks, GetTransactions, Message,
 };
 use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;
@@ -336,6 +336,7 @@ pub struct SynchronizationPeerRequest {
 #[derive(Debug)]
 pub enum RequestMessage {
     Headers(GetBlockHeaders),
+    HeaderChain(GetBlockHeaderChain),
     Blocks(GetBlocks),
     Compact(GetCompactBlocks),
     BlockTxn(GetBlockTxn),
@@ -347,6 +348,9 @@ impl RequestMessage {
     pub fn set_request_id(&mut self, request_id: u64) {
         match self {
             RequestMessage::Headers(ref mut msg) => {
+                msg.set_request_id(request_id)
+            }
+            RequestMessage::HeaderChain(ref mut msg) => {
                 msg.set_request_id(request_id)
             }
             RequestMessage::Blocks(ref mut msg) => {
@@ -370,6 +374,7 @@ impl RequestMessage {
     pub fn get_msg(&self) -> &Message {
         match self {
             RequestMessage::Headers(ref msg) => msg,
+            RequestMessage::HeaderChain(ref msg) => msg,
             RequestMessage::Blocks(ref msg) => msg,
             RequestMessage::Compact(ref msg) => msg,
             RequestMessage::BlockTxn(ref msg) => msg,
@@ -406,6 +411,7 @@ impl TimedSyncRequests {
     {
         let timeout = match *msg {
             RequestMessage::Headers(_) => conf.headers_request_timeout,
+            RequestMessage::HeaderChain(_) => conf.headers_request_timeout,
             RequestMessage::Epochs(_) => conf.headers_request_timeout,
             RequestMessage::Blocks(_)
             | RequestMessage::Compact(_)
