@@ -689,6 +689,9 @@ impl ConsensusGraphInner {
         let era_genesis = self
             .inclusive_weight_tree
             .ancestor_at(parent, era_height as usize);
+        let two_era_genesis = self
+            .inclusive_weight_tree
+            .ancestor_at(parent, two_era_height as usize);
 
         let total_weight = self.weight_tree.get(era_genesis);
         debug!("total_weight before insert: {}", total_weight);
@@ -719,7 +722,7 @@ impl ConsensusGraphInner {
         let stable = if best != era_height {
             parent = self.weight_tree.ancestor_at(parent, best as usize);
 
-            let a = self.stable_tree.path_aggregate(parent);
+            let a = self.stable_tree.path_aggregate_chop(parent, era_genesis);
             let b = total_weight
                 * (self.inner_conf.adaptive_weight_alpha_num as i128);
             if a < b {
@@ -759,7 +762,7 @@ impl ConsensusGraphInner {
 
             if best != era_height {
                 parent = self.weight_tree.ancestor_at(parent, best as usize);
-                let min_agg = self.adaptive_tree.path_aggregate(parent);
+                let min_agg = self.adaptive_tree.path_aggregate_chop(parent, era_genesis);
                 if min_agg < 0 {
                     debug!("block is adaptive (intra-era): {:?}", min_agg);
                     adaptive = true;
@@ -772,6 +775,7 @@ impl ConsensusGraphInner {
             let mut low = two_era_height + 1;
             let mut best = two_era_height;
 
+            println!("Working parent {} low {} high {}", parent_0, low, high);
             while low <= high {
                 let mid = (low + high) / 2;
                 let p = self
@@ -779,6 +783,7 @@ impl ConsensusGraphInner {
                     .ancestor_at(parent, mid as usize);
                 let gp = self.arena[p].parent;
                 let w = self.inclusive_weight_tree.get(gp);
+                println!("GP {} w {} adjusted_beta {}", gp, w, adjusted_beta);
                 if w > adjusted_beta {
                     best = mid;
                     low = mid + 1;
@@ -786,13 +791,15 @@ impl ConsensusGraphInner {
                     high = mid - 1;
                 }
             }
+            println!("best {}", best);
 
             if best != two_era_height {
                 parent = self
                     .inclusive_weight_tree
                     .ancestor_at(parent, best as usize);
                 let min_agg =
-                    self.inclusive_adaptive_tree.path_aggregate(parent);
+                    self.inclusive_adaptive_tree.path_aggregate_chop(parent, two_era_genesis);
+                println!("parent {} minagg {}", parent, min_agg);
                 if min_agg < 0 {
                     debug!("block is adaptive (inter-era): {:?}", min_agg);
                     adaptive = true;
@@ -3165,17 +3172,17 @@ impl ConsensusGraph {
             debug!("Assume block {} is valid", hash);
             true
         };
-        if !fully_valid {
-            inner.arena[me].data.partial_invalid = true;
-            return;
-        }
+
+        inner.arena[me].data.partial_invalid = !fully_valid;
 
         self.update_lcts_initial(inner, me);
 
         let (stable, adaptive) =
             inner.adaptive_weight(me, &anticone_barrier, weight_tuple.as_ref());
         inner.arena[me].stable = stable;
-        inner.arena[me].adaptive = adaptive;
+        if self.conf.bench_mode && fully_valid {
+            inner.arena[me].adaptive = adaptive;
+        }
 
         self.update_lcts_finalize(inner, me, stable);
     }
@@ -3295,15 +3302,15 @@ impl ConsensusGraph {
         }
 
         inner.arena[me].stable = stable;
-        // FIXME: Is this necessary?
-        inner.arena[me].adaptive = adaptive;
+        if self.conf.bench_mode && fully_valid {
+            inner.arena[me].adaptive = adaptive;
+        }
 
+        let my_weight = self.update_lcts_finalize(inner, me, stable);
         let mut extend_pivot = false;
         let mut fork_at = inner.pivot_chain.len() + 1;
         let old_pivot_chain_len = inner.pivot_chain.len();
         if fully_valid {
-            let my_weight = self.update_lcts_finalize(inner, me, stable);
-
             self.aggregate_total_weight_in_past(my_weight);
 
             let last = inner.pivot_chain.last().cloned().unwrap();

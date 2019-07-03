@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
     era_block[0] = 0;
 
     unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 3659410378;
+    // unsigned seed = 3807485552;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
@@ -293,6 +293,7 @@ int main(int argc, char* argv[]) {
             if (x != -1) {
                 parent[i] = x;
                 is_valid[i] = 0;
+                weight[i] = 1;
             }
         }
 
