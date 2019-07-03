@@ -493,7 +493,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -572,7 +574,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -640,7 +644,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -712,7 +718,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -879,7 +887,7 @@ impl<'a, 'b> Executive<'a, 'b> {
             machine,
             spec,
             depth: parent_depth + 1,
-            static_flag: static_flag,
+            static_flag,
         }
     }
 
@@ -1193,7 +1201,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 cumulative_gas_used: self.env.gas_used,
                 logs: vec![],
                 contracts_created: vec![],
-                output: output,
+                output,
             }),
             Ok(r) => Ok(Executed {
                 exception: if r.apply_state {
@@ -1202,13 +1210,13 @@ impl<'a, 'b> Executive<'a, 'b> {
                     Some(vm::Error::Reverted)
                 },
                 gas: tx.gas,
-                gas_used: gas_used,
-                refunded: refunded,
+                gas_used,
+                refunded,
                 fee: fees_value,
                 cumulative_gas_used: self.env.gas_used,
                 logs: substate.logs,
                 contracts_created: substate.contracts_created,
-                output: output,
+                output,
             }),
         }
     }

@@ -167,7 +167,7 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
             gas_price: self.origin.gas_price,
             value: ActionValue::Transfer(*value),
             code: Some(Arc::new(code.to_vec())),
-            code_hash: code_hash,
+            code_hash,
             data: None,
             call_type: CallType::None,
             params_type: vm::ParamsType::Embedded,
@@ -273,8 +273,8 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
 
         let address = self.origin.address.clone();
         self.substate.logs.push(LogEntry {
-            address: address,
-            topics: topics,
+            address,
+            topics,
             data: data.to_vec(),
         });
 

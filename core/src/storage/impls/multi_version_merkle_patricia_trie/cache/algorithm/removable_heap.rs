@@ -39,7 +39,7 @@ impl<ValueType, PosT: PrimitiveNum>
 {
     pub fn new(value: ValueType) -> Self {
         Self {
-            value: value,
+            value,
             handle: unsafe { mem::uninitialized() },
         }
     }
@@ -292,10 +292,10 @@ impl<
         let pointer_pos = unsafe { heap_base.offset(pos.into()) };
 
         Self {
-            key_comparison: key_comparison,
-            heap_base: heap_base,
-            pointer_pos: pointer_pos,
-            pos: pos,
+            key_comparison,
+            heap_base,
+            pointer_pos,
+            pos,
             _util_marker: PhantomData,
         }
     }
@@ -361,10 +361,10 @@ impl<
         let pointer_pos = unsafe { heap_base.offset(pos.into()) };
 
         Self {
-            key_comparison: key_comparison,
-            heap_base: heap_base,
-            pointer_pos: pointer_pos,
-            pos: pos,
+            key_comparison,
+            heap_base,
+            pointer_pos,
+            pos,
             pos_limit: heap_size / PosT::from(2),
             max_right_child: heap_size - PosT::from(1),
             _util_marker: PhantomData,
@@ -426,7 +426,7 @@ pub struct Hole<ValueType> {
 impl<ValueType> Hole<ValueType> {
     pub fn new(pointer_pos: *mut ValueType) -> Self {
         Self {
-            pointer_pos: pointer_pos,
+            pointer_pos,
             value: unsafe { ptr::read(pointer_pos) },
         }
     }
@@ -435,7 +435,7 @@ impl<ValueType> Hole<ValueType> {
         pointer_pos: *mut ValueType, value: &ValueType,
     ) -> Self {
         Self {
-            pointer_pos: pointer_pos,
+            pointer_pos,
             value: unsafe { ptr::read(value) },
         }
     }
