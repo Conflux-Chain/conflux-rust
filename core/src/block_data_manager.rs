@@ -7,7 +7,7 @@ use crate::{
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
     ext_db::SystemDB,
     pow::TargetDifficultyManager,
-    storage::StorageManager,
+    storage::{state_manager::StateManagerTrait, StorageManager},
     verification::VerificationConfig,
 };
 use cfx_types::{Bloom, H256};
@@ -456,31 +456,37 @@ impl BlockDataManager {
             .collect()
     }
 
+    pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
+        // `block_receipts_root` is not computed when recovering from db with
+        // fast_recover == false. And we should force it to recompute
+        // without checking receipts when fast_recover == false
+        self.get_receipts_root(epoch_hash).is_some()
+            && self.storage_manager.contains_state(*epoch_hash)
+    }
+
     /// Check if all executed results of an epoch exist
     pub fn epoch_executed_and_recovered(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool,
     ) -> bool
     {
-        // `block_receipts_root` is not computed when recovering from db with
-        // fast_recover == false And we should force it to recompute
-        // without checking receipts when fast_recover == false
-        if self.get_receipts_root(epoch_hash).is_none() {
+        if !self.epoch_executed(epoch_hash) {
             return false;
         }
-        let mut epoch_receipts = Vec::new();
-        for h in epoch_block_hashes {
-            if let Some(r) =
-                self.block_results_by_hash_with_epoch(h, epoch_hash, true)
-            {
-                epoch_receipts.push(r.receipts);
-            } else {
-                return false;
-            }
-        }
 
-        // Recover tx address if we will skip pivot chain execution
-        if on_local_pivot && self.record_tx_address {
+        if self.record_tx_address && on_local_pivot {
+            // Check if all blocks receipts are from this epoch
+            let mut epoch_receipts = Vec::new();
+            for h in epoch_block_hashes {
+                if let Some(r) =
+                    self.block_results_by_hash_with_epoch(h, epoch_hash, true)
+                {
+                    epoch_receipts.push(r.receipts);
+                } else {
+                    return false;
+                }
+            }
+            // Recover tx address if we will skip pivot chain execution
             for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
             {
                 let block =

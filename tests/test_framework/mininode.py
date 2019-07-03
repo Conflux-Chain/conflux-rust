@@ -313,6 +313,8 @@ class P2PInterface(P2PConnection):
                     self.had_status = True
                 elif packet_type == GET_BLOCK_HEADERS:
                     self._log_message("receive", "GET_BLOCK_HEADERS of {} {}".format(msg.hash, msg.max_blocks))
+                elif packet_type == GET_BLOCK_HEADER_CHAIN:
+                    self._log_message("receive", "GET_BLOCK_HEADER_CHAIN of {} {}".format(msg.hash, msg.max_blocks))
                 elif packet_type == GET_BLOCK_BODIES:
                     hashes = msg.hashes
                     self._log_message("receive", "GET_BLOCK_BODIES of {} blocks".format(len(hashes)))

@@ -508,7 +508,7 @@ impl fmt::Debug for Session {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDetails {
     pub originated: bool,

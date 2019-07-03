@@ -81,7 +81,7 @@ class RpcClient:
             assert_is_hash_string(r)
 
         assert_greater_than_or_equal(num_txs, 0)
-
+        # print(parent_hash)
         block_hash = self.node.generatefixedblock(parent_hash, referee, num_txs, adaptive)
         assert_is_hash_string(block_hash)
         return block_hash

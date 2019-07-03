@@ -16,10 +16,9 @@ parking_lot = {version="0.6"}
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 io = { path = "util/io" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
-jsonrpc-core = "10.1.0"
-jsonrpc-macros = "10.1.0"
-jsonrpc-tcp-server = "10.1.0"
-jsonrpc-http-server = "10.1.0"
+jsonrpc-core = "12.0.0"
+jsonrpc-tcp-server = "12.0.0"
+jsonrpc-http-server = "12.0.0"
 error-chain = { version = "0.12" }
 log = "0.4"
 ethereum-types = "0.4"

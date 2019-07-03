@@ -249,7 +249,7 @@ pub struct SessionMetadata {
     pub originated: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Capability {
     pub protocol: ProtocolId,
     pub version: u8,
@@ -292,7 +292,7 @@ impl Ord for Capability {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PeerInfo {
     pub id: PeerId,
     pub addr: SocketAddr,

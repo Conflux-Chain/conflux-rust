@@ -12,7 +12,7 @@ export CARGO_TARGET_DIR=$ROOT_DIR/build
 export RUSTFLAGS="-g -D warnings"
 
 function check_build {
-    local -n test_result=$1
+    local -n inner_result=$1
 
     #rm -rf $ROOT_DIR/build && mkdir -p $ROOT_DIR/build
     pushd $ROOT_DIR > /dev/null
@@ -28,11 +28,11 @@ function check_build {
     else
         result="Build succeeded."
     fi
-    test_result=($exit_code "$result")
+    inner_result=($exit_code "$result")
 }
 
 function check_unit_tests {
-    local -n test_result=$1
+    local -n inner_result=$1
 
     pushd $ROOT_DIR > /dev/null
     local result
@@ -43,11 +43,11 @@ function check_unit_tests {
     if [[ $exit_code -ne 0 ]]; then
         result="Unit tests failed."$'\n'"$result"
     fi
-    test_result=($exit_code "$result")
+    inner_result=($exit_code "$result")
 }
 
 function check_integration_tests {
-    local -n test_result=$1
+    local -n inner_result=$1
 
     pushd $ROOT_DIR > /dev/null
     local result
@@ -62,13 +62,13 @@ function check_integration_tests {
     if [[ $exit_code -ne 0 ]]; then
         result="Integration test failed."$'\n'"$result"
     fi
-    test_result=($exit_code "$result")
+    inner_result=($exit_code "$result")
 }
 
 function save_test_result {
-    local -n test_result=$1
-    local exit_code=${test_result[0]}
-    local result=${test_result[1]}
+    local -n inner_result=$1
+    local exit_code=${inner_result[0]}
+    local result=${inner_result[1]}
 
     printf "%s\n" "$result"
     

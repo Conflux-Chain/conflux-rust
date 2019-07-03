@@ -16,6 +16,7 @@ mod cmpctblocks;
 mod getblockbodies;
 mod getblockhashes;
 mod getblockhashesbyepoch;
+mod getblockheaderchain;
 mod getblockheaders;
 mod getblocks;
 mod getblocktxn;
@@ -38,6 +39,7 @@ pub use crate::{
     getblockbodies::GetBlockBodies,
     getblockhashes::GetBlockHashes,
     getblockhashesbyepoch::GetBlockHashesByEpoch,
+    getblockheaderchain::GetBlockHeaderChain,
     getblockheaders::GetBlockHeaders,
     getblocks::GetBlocks,
     getblocktxn::GetBlockTxn,

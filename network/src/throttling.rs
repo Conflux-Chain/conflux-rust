@@ -17,7 +17,7 @@ lazy_static! {
         GaugeUsize::register("network_throttling_queue_size");
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Service {
     queue_capacity: usize,

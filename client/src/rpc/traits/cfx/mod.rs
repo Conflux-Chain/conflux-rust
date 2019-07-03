@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-//! Conflux rpc interfaces.
-
-pub mod cfx;
-
-pub use self::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc};
+pub mod debug;
+pub mod public;
+pub mod test;
