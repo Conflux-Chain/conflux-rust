@@ -550,8 +550,7 @@ impl ConsensusExecutionHandler {
             BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
         );
         if on_local_pivot {
-            self.tx_pool
-                .recycle_failed_executed_transactions(to_pending);
+            self.tx_pool.recycle_transactions(to_pending);
         }
         debug!("Finish processing tx for epoch");
         epoch_receipts
