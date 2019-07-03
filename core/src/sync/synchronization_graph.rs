@@ -136,8 +136,14 @@ impl SynchronizationGraphInner {
     }
 
     // FIXME: make it real
-    pub fn get_genesis_in_current_era(&self) -> usize {
-        self.genesis_block_index
+    fn get_genesis_in_current_era(&self) -> usize { self.genesis_block_index }
+
+    pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
+        let era_genesis = self.get_genesis_in_current_era();
+        (
+            self.arena[era_genesis].block_header.hash(),
+            self.arena[era_genesis].block_header.height(),
+        )
     }
 
     fn try_clear_old_era_blocks(&mut self) {
@@ -616,6 +622,12 @@ impl SynchronizationGraph {
         }
 
         sync_graph
+    }
+
+    pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
+        self.inner
+            .read()
+            .get_genesis_hash_and_height_in_current_era()
     }
 
     /// Compute the expected difficulty for a block given its
