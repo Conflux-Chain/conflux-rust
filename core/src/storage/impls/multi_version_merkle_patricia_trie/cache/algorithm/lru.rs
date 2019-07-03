@@ -79,7 +79,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> LRU<PosT, CacheIndexT> {
 
         Self {
             size: PosT::from(0),
-            capacity: capacity,
+            capacity,
             head: PosT::from(LRUHandle::<PosT>::NULL_POS),
             rear: PosT::from(LRUHandle::<PosT>::HEAD_POS),
             recent: Vec::with_capacity(capacity.into()),
@@ -173,7 +173,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
             }
             self.recent.push(DoubleLinkListNode {
                 next: old_head,
-                cache_index: cache_index,
+                cache_index,
             });
 
             // Update rear.

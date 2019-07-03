@@ -30,7 +30,7 @@ use super::{
 use crate::vm::{self, Spec};
 
 macro_rules! overflowing {
-    ($x: expr) => {{
+    ($x:expr) => {{
         let (v, overflow) = $x;
         if overflow {
             return Err(vm::Error::OutOfGas);
@@ -61,7 +61,7 @@ pub struct Gasometer<Gas> {
 impl<Gas: evm::CostType> Gasometer<Gas> {
     pub fn new(current_gas: Gas) -> Self {
         Gasometer {
-            current_gas: current_gas,
+            current_gas,
             current_mem_gas: Gas::from(0),
         }
     }

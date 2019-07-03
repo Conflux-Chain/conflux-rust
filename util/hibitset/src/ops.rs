@@ -355,7 +355,7 @@ operator!(impl<()()> for BitSetAll);
 operator!(impl<('a)()> for &'a BitSetAll);
 
 macro_rules! iterator {
-    ( $bitset:ident ) => {
+    ($bitset:ident) => {
         impl FromIterator<Index> for $bitset {
             fn from_iter<T>(iter: T) -> Self
             where T: IntoIterator<Item = Index> {

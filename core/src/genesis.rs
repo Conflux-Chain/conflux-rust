@@ -62,7 +62,7 @@ pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {
                     }
                     _ => {
                         return Err(
-                            "balance in toml file requires String type".into()
+                            "balance in toml file requires String type".into(),
                         );
                     }
                 }

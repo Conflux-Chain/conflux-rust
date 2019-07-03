@@ -106,7 +106,7 @@ impl<'a, HeapHandlePosT: PrimitiveNum, ValueType: Ord + Clone>
         >],
     ) -> Self
     {
-        Self { array: array }
+        Self { array }
     }
 }
 

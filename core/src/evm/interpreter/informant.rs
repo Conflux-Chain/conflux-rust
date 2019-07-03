@@ -24,7 +24,7 @@ pub use self::inner::*;
 #[cfg(not(feature = "evm-debug"))]
 mod inner {
     macro_rules! evm_debug {
-        ($x: expr) => {};
+        ($x:expr) => {};
     }
 
     pub struct EvmInformant;
@@ -51,7 +51,7 @@ mod inner {
     use CostType;
 
     macro_rules! evm_debug {
-        ($x: expr) => {
+        ($x:expr) => {
             $x
         };
     }

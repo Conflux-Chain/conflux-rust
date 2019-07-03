@@ -183,7 +183,7 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
         Self {
             bitmap: managed.bitmap,
             table_ptr: unsafe { Self::managed_slice_into_raw(managed.table) },
-            children_count: children_count,
+            children_count,
         }
     }
 
