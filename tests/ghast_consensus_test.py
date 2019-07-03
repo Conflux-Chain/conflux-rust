@@ -43,7 +43,7 @@ test_input_dir = test_dir + "/../core/benchmark/consensus/test/"
 
 failed = set()
 for inp in TEST_INPUT:
-    os.system("rm -rf __consensus*")
+    os.system("rm -rf " + test_dir + "/__consensus*")
     print("Run Sub-testcase: " + inp)
     color = BLUE
     glyph = TICK
@@ -57,7 +57,7 @@ for inp in TEST_INPUT:
         failed.add(inp)
     print(color[1] + glyph + " Sub-testcase " + inp + color[0])
 
-os.system("rm -rf __consensus*")
+os.system("rm -rf " + test_dir + "/__consensus*")
 
 if len(failed) > 0:
     print("The following sub-test cases fail: ")
