@@ -21,7 +21,7 @@ mod types;
 
 use self::{
     impls::cfx::{CfxHandler, DebugRpcImpl, RpcImpl, TestRpcImpl},
-    traits::{Cfx, DebugRpc, TestRpc},
+    traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
 };
 
 pub use self::types::Block as RpcBlock;

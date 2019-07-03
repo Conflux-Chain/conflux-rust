@@ -344,7 +344,7 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionDetails {
     pub token: StreamToken,
