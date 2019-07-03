@@ -46,7 +46,6 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
-    iter::FromIterator,
     sync::Arc,
     thread::sleep,
     time::Duration,
@@ -136,6 +135,8 @@ pub struct ConsensusGraphNodeData {
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
     pub blockset_in_own_view_of_epoch: HashSet<usize>,
+    /// Ordered blocks in this epoch
+    pub ordered_epoch_blocks: Vec<usize>,
     /// The minimum/maximum epoch number of the block in the view of other
     /// blocks including itself.
     pub min_epoch_in_other_views: u64,
@@ -149,6 +150,7 @@ impl ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
             blockset_in_own_view_of_epoch: Default::default(),
+            ordered_epoch_blocks: Default::default(),
             min_epoch_in_other_views: height,
             max_epoch_in_other_views: height,
             sequence_number,
@@ -242,9 +244,6 @@ pub struct ConsensusGraphInner {
     genesis_block_index: usize,
     genesis_block_state_root: StateRoot,
     genesis_block_receipts_root: H256,
-    // It maps internal index of a block to the set of internal indexes of
-    // blocks, when treat the block as the pivot chain block.
-    indices_in_epochs: HashMap<usize, Vec<usize>>,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: MinLinkCutTree,
     inclusive_weight_tree: MinLinkCutTree,
@@ -318,7 +317,6 @@ impl ConsensusGraphInner {
                 .block_header
                 .deferred_receipts_root()
                 .clone(),
-            indices_in_epochs: HashMap::new(),
             weight_tree: MinLinkCutTree::new(),
             inclusive_weight_tree: MinLinkCutTree::new(),
             stable_weight_tree: MinLinkCutTree::new(),
@@ -385,9 +383,6 @@ impl ConsensusGraphInner {
             last_pivot_in_past_blocks,
         });
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
-        inner
-            .indices_in_epochs
-            .insert(0, vec![inner.genesis_block_index]);
 
         inner.anticone_cache.update(0, &BitSet::new());
         inner
@@ -455,16 +450,12 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_epoch_block_hashes(&self, epoch_index: usize) -> Vec<H256> {
-        let reversed_indices =
-            self.indices_in_epochs.get(&epoch_index).unwrap();
-
-        let mut epoch_blocks = Vec::new();
-        {
-            for idx in reversed_indices {
-                epoch_blocks.push(self.arena[*idx].hash);
-            }
-        }
-        epoch_blocks
+        self.arena[epoch_index]
+            .data
+            .ordered_epoch_blocks
+            .iter()
+            .map(|idx| self.arena[*idx].hash)
+            .collect()
     }
 
     pub fn check_mining_adaptive_block(
@@ -912,6 +903,10 @@ impl ConsensusGraphInner {
                     .insert(index);
             }
         }
+        self.arena[pivot].data.ordered_epoch_blocks = self.topological_sort(
+            &self.arena[pivot].data.blockset_in_own_view_of_epoch,
+        );
+        self.arena[pivot].data.ordered_epoch_blocks.push(pivot);
     }
 
     pub fn insert(&mut self, block: &Block) -> (usize, usize) {
@@ -1267,12 +1262,10 @@ impl ConsensusGraphInner {
         anticone_barrier
     }
 
-    fn topological_sort(&self, queue: &Vec<usize>) -> Vec<usize> {
-        let index_set: HashSet<usize> =
-            HashSet::from_iter(queue.iter().cloned());
+    fn topological_sort(&self, index_set: &HashSet<usize>) -> Vec<usize> {
         let mut num_incoming_edges = HashMap::new();
 
-        for me in queue {
+        for me in index_set {
             num_incoming_edges.entry(*me).or_insert(0);
             let parent = self.arena[*me].parent;
             if index_set.contains(&parent) {
@@ -1288,7 +1281,7 @@ impl ConsensusGraphInner {
         let mut candidates = HashSet::new();
         let mut reversed_indices = Vec::new();
 
-        for me in queue {
+        for me in index_set {
             if num_incoming_edges[me] == 0 {
                 candidates.insert(*me);
             }
@@ -1347,15 +1340,11 @@ impl ConsensusGraphInner {
         &self, data_man: &BlockDataManager, epoch_index: usize,
     ) -> Vec<Arc<Block>> {
         let mut epoch_blocks = Vec::new();
-        let reversed_indices =
-            self.indices_in_epochs.get(&epoch_index).unwrap();
-        {
-            for idx in reversed_indices {
-                let block = data_man
-                    .block_by_hash(&self.arena[*idx].hash, false)
-                    .expect("Exist");
-                epoch_blocks.push(block);
-            }
+        for idx in &self.arena[epoch_index].data.ordered_epoch_blocks {
+            let block = data_man
+                .block_by_hash(&self.arena[*idx].hash, false)
+                .expect("Exist");
+            epoch_blocks.push(block);
         }
         epoch_blocks
     }
@@ -1437,7 +1426,8 @@ impl ConsensusGraphInner {
                 let anticone_cutoff_epoch_anticone_set_opt = self
                     .anticone_cache
                     .get(anticone_penalty_cutoff_epoch_index);
-                for index in self.indices_in_epochs.get(&pivot_index).unwrap() {
+                for index in &self.arena[pivot_index].data.ordered_epoch_blocks
+                {
                     let block_consensus_node = &self.arena[*index];
 
                     let mut anticone_overlimited =
@@ -1658,11 +1648,10 @@ impl ConsensusGraphInner {
         );
         self.get_index_from_epoch_number(epoch_number)
             .and_then(|index| {
-                Ok(self
-                    .indices_in_epochs
-                    .get(&index)
-                    .unwrap()
-                    .into_iter()
+                Ok(self.arena[index]
+                    .data
+                    .ordered_epoch_blocks
+                    .iter()
                     .map(|index| self.arena[*index].hash)
                     .collect())
             })
@@ -1914,6 +1903,41 @@ impl ConsensusGraphInner {
             total_weight += self.block_weight(*index, inclusive);
         }
         total_weight
+    }
+
+    /// Binary search to find the starting point so we can execute to the end of
+    /// the chain.
+    /// Return the first index that is not executed,
+    /// or return `chain.len()` if they are all executed (impossible for now).
+    ///
+    /// NOTE: If a state for an block exists, all the blocks on its pivot chain
+    /// must have been executed and state committed. The receipts for these
+    /// past blocks may not exist because the receipts on forks will be
+    /// garbage-collected, but when we need them, we will recompute these
+    /// missing receipts in `process_rewards_and_fees`. This 'recompute' is safe
+    /// because the parent state exists. Thus, it's okay that here we do not
+    /// check existence of the receipts that will be needed for reward
+    /// computation during epoch execution.
+    fn find_start_index(&self, chain: &Vec<usize>) -> usize {
+        let mut base = 0;
+        let mut size = chain.len();
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+            let epoch_hash = self.arena[chain[mid]].hash;
+            base = if self.data_man.epoch_executed(&epoch_hash) {
+                mid
+            } else {
+                base
+            };
+            size -= half;
+        }
+        let epoch_hash = self.arena[chain[base]].hash;
+        if self.data_man.epoch_executed(&epoch_hash) {
+            base + 1
+        } else {
+            base
+        }
     }
 }
 
@@ -2167,7 +2191,7 @@ impl ConsensusGraph {
     /// consensus graph. This API is used mainly for testing purpose
     pub fn wait_for_generation(&self, hash: &H256) {
         while !self.inner.read().indices.contains_key(hash) {
-            sleep(Duration::from_millis(100));
+            sleep(Duration::from_millis(1));
         }
         let best_state_block = self.inner.read().best_state_block_hash();
         self.executor.wait_for_result(best_state_block);
@@ -2331,93 +2355,39 @@ impl ConsensusGraph {
         debug!("Forked at index {} height {}", idx, fork_height);
         chain.push(idx);
         chain.reverse();
-        let mut epoch_number_map: HashMap<usize, usize> = HashMap::new();
+        let start_index = inner.find_start_index(&chain);
+        debug!("Start execution from index {}", start_index);
 
-        // Construct epochs
-        for fork_at in 1..chain.len() {
-            // First, identify all the blocks in the current epoch of the
-            // hypothetical pivot chain
-            let mut queue = Vec::new();
+        // We need the state of the fork point to start executing the fork
+        if start_index != 0 {
+            let mut last_state_height = if inner.pivot_chain.len()
+                > DEFERRED_STATE_EPOCH_COUNT as usize
             {
-                let new_epoch_number = fork_at + fork_height;
-                let enqueue_if_new =
-                    |queue: &mut Vec<usize>,
-                     epoch_number_map: &mut HashMap<usize, usize>,
-                     index| {
-                        let epoch_number = inner.arena[index].data.epoch_number;
-                        if (epoch_number == NULL || epoch_number > fork_height)
-                            && !epoch_number_map.contains_key(&index)
-                        {
-                            epoch_number_map.insert(index, new_epoch_number);
-                            queue.push(index);
-                        }
-                    };
-
-                let mut at = 0;
-                enqueue_if_new(
-                    &mut queue,
-                    &mut epoch_number_map,
-                    chain[fork_at],
-                );
-                while at < queue.len() {
-                    let me = queue[at];
-                    for referee in &inner.arena[me].referees {
-                        enqueue_if_new(
-                            &mut queue,
-                            &mut epoch_number_map,
-                            *referee,
-                        );
-                    }
-                    enqueue_if_new(
-                        &mut queue,
-                        &mut epoch_number_map,
-                        inner.arena[me].parent,
-                    );
-                    at += 1;
-                }
-            }
-
-            // Second, sort all the blocks based on their topological order
-            // and break ties with block hash
-            let reversed_indices = inner.topological_sort(&queue);
-
-            debug!(
-                "Construct epoch_id={}, block_count={}",
-                inner.arena[chain[fork_at]].hash,
-                reversed_indices.len()
-            );
-
-            inner
-                .indices_in_epochs
-                .insert(chain[fork_at], reversed_indices);
-        }
-
-        let mut last_state_height =
-            if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
                 inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize
             } else {
                 0
             };
 
-        last_state_height += 1;
-        while last_state_height <= fork_height {
-            let epoch_index = inner.pivot_chain[last_state_height];
-            let reward_execution_info = inner.get_reward_execution_info(
-                &self.data_man,
-                last_state_height,
-                &inner.pivot_chain,
-            );
-            self.executor.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_index].hash,
-                inner.get_epoch_block_hashes(epoch_index),
-                reward_execution_info,
-                false,
-                false,
-            ));
             last_state_height += 1;
+            while last_state_height <= fork_height {
+                let epoch_index = inner.pivot_chain[last_state_height];
+                let reward_execution_info = inner.get_reward_execution_info(
+                    &self.data_man,
+                    last_state_height,
+                    &inner.pivot_chain,
+                );
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                    inner.arena[epoch_index].hash,
+                    inner.get_epoch_block_hashes(epoch_index),
+                    reward_execution_info,
+                    false,
+                    false,
+                ));
+                last_state_height += 1;
+            }
         }
 
-        for fork_at in 1..chain.len() {
+        for fork_at in start_index..chain.len() {
             let epoch_index = chain[fork_at];
             let reward_index = if fork_height + fork_at
                 > REWARD_EPOCH_COUNT as usize
@@ -2490,15 +2460,7 @@ impl ConsensusGraph {
     ) -> ComputeEpochDebugRecord {
         let epoch_block_hash = inner.arena[epoch_index].hash;
 
-        let epoch_block_hashes = {
-            let epoch_blocks =
-                inner.indices_in_epochs.get(&epoch_index).unwrap();
-
-            epoch_blocks
-                .iter()
-                .map(|index| inner.arena[*index].hash)
-                .collect::<Vec<_>>()
-        };
+        let epoch_block_hashes = inner.get_epoch_block_hashes(epoch_index);
 
         // Parent state root.
         let parent_index = inner.arena[epoch_index].parent;
@@ -2902,18 +2864,6 @@ impl ConsensusGraph {
                     }
                 }
 
-                // Second, sort all the blocks based on their topological order
-                // and break ties with block hash
-                let reversed_indices = inner.topological_sort(&queue);
-                debug!(
-                    "Construct epoch_id={}, block_count={}",
-                    inner.arena[new_pivot_chain[height]].hash,
-                    reversed_indices.len()
-                );
-                inner
-                    .indices_in_epochs
-                    .insert(new_pivot_chain[height], reversed_indices);
-
                 // Construct in-memory receipts root
                 if new_pivot_chain.len() >= DEFERRED_STATE_EPOCH_COUNT as usize
                     && height
@@ -2966,7 +2916,7 @@ impl ConsensusGraph {
                 let pivot_index = inner.pivot_chain[state_height];
                 let pivot_hash = inner.arena[pivot_index].hash.clone();
                 let epoch_indexes =
-                    inner.indices_in_epochs.get(&pivot_index).unwrap().clone();
+                    &inner.arena[pivot_index].data.ordered_epoch_blocks;
                 let mut epoch_receipts =
                     Vec::with_capacity(epoch_indexes.len());
 
@@ -2974,7 +2924,7 @@ impl ConsensusGraph {
                 for i in epoch_indexes {
                     if let Some(r) =
                         self.data_man.block_results_by_hash_with_epoch(
-                            &inner.arena[i].hash,
+                            &inner.arena[*i].hash,
                             &pivot_hash,
                             true,
                         )
@@ -3400,21 +3350,6 @@ impl ConsensusGraph {
                         at += 1;
                     }
                 }
-
-                // Second, sort all the blocks based on their topological order
-                // and break ties with block hash
-                let reversed_indices = inner.topological_sort(&queue);
-
-                debug!(
-                    "Construct epoch_id={}, block_count={}",
-                    inner.arena[inner.pivot_chain[pivot_index]].hash,
-                    reversed_indices.len()
-                );
-
-                inner
-                    .indices_in_epochs
-                    .insert(inner.pivot_chain[pivot_index], reversed_indices);
-
                 pivot_index += 1;
             }
         }
@@ -3596,10 +3531,9 @@ impl ConsensusGraph {
             let mut blocks = Vec::new();
             for epoch_idx in from_epoch..to_epoch {
                 let epoch_hash = inner.arena[epoch_idx].hash;
-                for index in inner
-                    .indices_in_epochs
-                    .get(&inner.pivot_chain[epoch_idx])
-                    .unwrap()
+                for index in &inner.arena[inner.pivot_chain[epoch_idx]]
+                    .data
+                    .ordered_epoch_blocks
                 {
                     let hash = inner.arena[*index].hash;
                     if let Some(block_log_bloom) = self
