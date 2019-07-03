@@ -29,7 +29,7 @@ use strum::IntoEnumIterator;
 /// Node public key
 pub type NodeId = H512;
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Node address info
 pub struct NodeEndpoint {
@@ -168,7 +168,7 @@ pub enum PeerType {
 
 /// A type for representing an interaction (contact) with a node at a given time
 /// that was either a success or a failure.
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NodeContact {
     Success(SystemTime),
@@ -217,7 +217,7 @@ impl NodeContact {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Node {
     pub id: NodeId,

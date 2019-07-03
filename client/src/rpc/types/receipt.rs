@@ -11,7 +11,7 @@ use primitives::{
 };
 use serde_derive::Serialize;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     /// The total gas used in the block following execution of the transaction.

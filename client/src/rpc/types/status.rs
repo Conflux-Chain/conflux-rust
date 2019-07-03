@@ -5,7 +5,7 @@
 use crate::rpc::types::H256;
 use serde_derive::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     /// Hash of the block
