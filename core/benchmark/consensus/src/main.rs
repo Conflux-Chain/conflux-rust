@@ -245,7 +245,7 @@ fn main() {
         .expect("Cannot parse the input file!");
     let h_ratio = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
-    let era_epoch_count = usize::from_str( tokens.next().unwrap())
+    let era_epoch_count = usize::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
     println!(
         "alpha = {}/{} beta = {} h = {} era_epoch_count = {}",
