@@ -792,9 +792,10 @@ impl TransactionPool {
         to_prop.extend(transactions);
     }
 
-    // If a tx is failed executed due to invalid nonce
-    // This function should be invoked to recycle it
-    pub fn recycle_failed_executed_transactions(
+    // If a tx is failed executed due to invalid nonce or if its enclosing block
+    // becomes orphan due to era transition. This function should be invoked
+    // to recycle it
+    pub fn recycle_transactions(
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
         if transactions.is_empty() {
