@@ -50,7 +50,7 @@ fn create_simple_block_impl(
 
 fn initialize_synchronization_graph(
     genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
-    beta: u64, h: u64,
+    beta: u64, h: u64, era_epoch_count: usize,
 ) -> Arc<SynchronizationGraph>
 {
     let ledger_db = db::open_database(
@@ -111,6 +111,7 @@ fn initialize_synchronization_graph(
                 adaptive_weight_alpha_den: alpha_den,
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
+                era_epoch_count,
                 enable_optimistic_execution: false,
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
@@ -152,6 +153,7 @@ fn test_remove_expire_blocks() {
         1,
         1,
         1,
+        50000,
     );
     // test initialization
     {
