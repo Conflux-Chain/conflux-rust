@@ -604,6 +604,7 @@ impl ConsensusGraphInner {
                         break;
                     }
                 }
+                parent = grandparent;
             }
         }
 
@@ -663,6 +664,7 @@ impl ConsensusGraphInner {
         }
         for (index, delta) in &inclusive_weight_delta {
             let parent = self.arena[*index].parent;
+            self.inclusive_weight_tree.path_apply(*index, -delta);
             self.inclusive_adaptive_tree.catepillar_apply(
                 parent,
                 delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
@@ -812,6 +814,7 @@ impl ConsensusGraphInner {
         }
         for (index, delta) in &inclusive_weight_delta {
             let parent = self.arena[*index].parent;
+            self.inclusive_weight_tree.path_apply(*index, *delta);
             self.inclusive_adaptive_tree.catepillar_apply(
                 parent,
                 -delta * (self.inner_conf.adaptive_weight_alpha_num as i128),

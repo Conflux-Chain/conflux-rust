@@ -285,7 +285,8 @@ int main(int argc, char* argv[]) {
         if (rand() % 4 == 0) {
             int x = -1;
             for (int j = 0; j < refs[i].size(); j++)
-                if ((refs[i][j] != parent[i]) && (era_block[refs[i][j]] == era_block[parent[i]])) {
+                if ((refs[i][j] != parent[i]) && (era_block[refs[i][j]] == era_block[parent[i]]) &&
+                    (height[parent[i]] % ERA_BLOCK_COUNT != 0) && (height[refs[i][j]] % ERA_BLOCK_COUNT != 0)) {
                     x = refs[i][j];
                     break;
                 }
