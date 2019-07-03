@@ -2,20 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::super::types::{
-    Block, Bytes, EpochNumber, Receipt as RpcReceipt, Status as RpcStatus,
-    Transaction, Transaction as RpcTransaction, H160 as RpcH160,
-    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
-};
-use cfx_types::H256;
-use cfxcore::PeerInfo;
+use super::super::super::types::Transaction as RpcTransaction;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails,
 };
-use std::{collections::BTreeMap, net::SocketAddr};
+use std::collections::BTreeMap;
 
 #[rpc]
 pub trait DebugRpc {

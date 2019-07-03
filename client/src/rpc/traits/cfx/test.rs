@@ -3,19 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::super::types::{
-    Block, Bytes, EpochNumber, Receipt as RpcReceipt, Status as RpcStatus,
-    Transaction, Transaction as RpcTransaction, H160 as RpcH160,
-    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Block, Bytes, Receipt as RpcReceipt, Status as RpcStatus,
 };
 use cfx_types::H256;
 use cfxcore::PeerInfo;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
-use network::{
-    node_table::{Node, NodeId},
-    throttling, SessionDetails,
-};
-use std::{collections::BTreeMap, net::SocketAddr};
+use network::node_table::NodeId;
+use std::net::SocketAddr;
 
 #[rpc]
 pub trait TestRpc {
@@ -71,8 +66,8 @@ pub trait TestRpc {
 
     #[rpc(name = "generateoneblockspecial")]
     fn generate_one_block_special(
-        &self, num_txs: usize, mut block_size_limit: usize,
-        num_txs_simple: usize, num_txs_erc20: usize,
+        &self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize,
+        num_txs_erc20: usize,
     ) -> RpcResult<()>;
 
     #[rpc(name = "test_generatecustomblock")]
