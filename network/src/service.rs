@@ -485,6 +485,7 @@ impl NetworkServiceInner {
             sessions: SessionManager::new(
                 FIRST_SESSION,
                 MAX_SESSIONS,
+                config.max_incoming_peers,
                 config.nodes_per_ip,
             ),
             handlers: RwLock::new(HashMap::new()),
@@ -657,7 +658,6 @@ impl NetworkServiceInner {
 
         let self_id = self.metadata.id().clone();
         let max_outgoing_peers = self.config.max_outgoing_peers as usize;
-        //let max_incoming_peers = self.config.max_incoming_peers;
         let max_handshakes = self.config.max_handshakes;
         let allow_ips = self.config.ip_filter.clone();
 
