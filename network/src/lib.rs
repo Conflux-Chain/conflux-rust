@@ -97,7 +97,7 @@ pub struct NetworkConfiguration {
     /// Maximum number of outgoing peers
     pub max_outgoing_peers: u32,
     /// Maximum number of incoming peers
-    pub max_incoming_peers: u32,
+    pub max_incoming_peers: usize,
     /// Maximum number of ongoing handshakes
     pub max_handshakes: u32,
     /// List of reserved node addresses.
