@@ -20,7 +20,10 @@ use primitives::{
     TransactionWithSignature,
 };
 use rlp::{Rlp, RlpStream};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
@@ -32,6 +35,7 @@ pub struct BlockDataManager {
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     block_receipts_root: RwLock<HashMap<H256, H256>>,
+    invalid_block_set: RwLock<HashSet<H256>>,
 
     pub record_tx_address: bool,
 
@@ -57,6 +61,7 @@ impl BlockDataManager {
             transaction_addresses: Default::default(),
             block_receipts_root: Default::default(),
             transaction_pubkey_cache: Default::default(),
+            invalid_block_set: Default::default(),
             genesis_block,
             db,
             storage_manager,
@@ -510,6 +515,14 @@ impl BlockDataManager {
             }
         }
         true
+    }
+
+    pub fn invalidate_block(&self, block_hash: H256) {
+        self.invalid_block_set.write().insert(block_hash);
+    }
+
+    pub fn verified_invalid(&self, block_hash: &H256) -> bool {
+        self.invalid_block_set.read().contains(block_hash)
     }
 
     pub fn cached_block_count(&self) -> usize { self.blocks.read().len() }

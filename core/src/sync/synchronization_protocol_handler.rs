@@ -1926,10 +1926,7 @@ impl SynchronizationProtocolHandler {
 
         let headers_to_request = std::iter::once(parent_hash)
             .chain(referee_hashes)
-            .filter(|h| {
-                debug_assert!(!self.graph.verified_invalid(&h));
-                !self.graph.contains_block_header(&h)
-            })
+            .filter(|h| !self.graph.contains_block_header(&h))
             .collect();
 
         self.request_manager.request_block_headers(
