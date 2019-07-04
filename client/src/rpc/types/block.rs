@@ -211,7 +211,7 @@ impl Block {
             epoch_number: consensus_inner
                 .get_block_epoch_number(&b.block_header.hash())
                 .map_or(None, |x| match x {
-                    std::usize::MAX => None,
+                    std::u64::MAX => None,
                     _ => Some(x.into()),
                 }),
             // fee system

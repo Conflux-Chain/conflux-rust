@@ -136,7 +136,7 @@ impl RpcImpl {
 
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
-        let epoch_number: usize = epoch_number.as_usize();
+        let epoch_number = epoch_number.as_usize() as u64;
         info!(
             "RPC Request: cfx_getBlockByHashWithPivotAssumption block_hash={:?} pivot_hash={:?} epoch_number={:?}",
             block_hash, pivot_hash, epoch_number
