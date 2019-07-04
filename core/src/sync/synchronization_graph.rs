@@ -640,20 +640,20 @@ impl SynchronizationGraphInner {
         let children =
             mem::replace(&mut self.arena[index].children, Vec::new());
         for child in &children {
-            if !invalid_set.contains(&index) {
+            if !invalid_set.contains(&child) {
                 self.arena[*child].graph_status = BLOCK_INVALID;
                 queue.push_back(*child);
-                invalid_set.insert(index);
+                invalid_set.insert(*child);
             }
         }
         mem::replace(&mut self.arena[index].children, children);
         let referrers =
             mem::replace(&mut self.arena[index].referrers, Vec::new());
         for referrer in &referrers {
-            if !invalid_set.contains(&index) {
+            if !invalid_set.contains(&referrer) {
                 self.arena[*referrer].graph_status = BLOCK_INVALID;
                 queue.push_back(*referrer);
-                invalid_set.insert(index);
+                invalid_set.insert(*referrer);
             }
         }
         mem::replace(&mut self.arena[index].referrers, referrers);
