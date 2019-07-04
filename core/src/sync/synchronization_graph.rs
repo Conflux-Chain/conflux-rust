@@ -643,6 +643,7 @@ impl SynchronizationGraphInner {
             if !invalid_set.contains(&index) {
                 self.arena[*child].graph_status = BLOCK_INVALID;
                 queue.push_back(*child);
+                invalid_set.insert(index);
             }
         }
         mem::replace(&mut self.arena[index].children, children);
@@ -652,6 +653,7 @@ impl SynchronizationGraphInner {
             if !invalid_set.contains(&index) {
                 self.arena[*referrer].graph_status = BLOCK_INVALID;
                 queue.push_back(*referrer);
+                invalid_set.insert(index);
             }
         }
         mem::replace(&mut self.arena[index].referrers, referrers);
@@ -998,6 +1000,7 @@ impl SynchronizationGraph {
         while let Some(index) = queue.pop_front() {
             if inner.arena[index].graph_status == BLOCK_INVALID {
                 if me == index {
+                    invalid_set.insert(me);
                     me_invalid = true;
                 }
                 inner.set_and_propagate_invalid(
@@ -1025,6 +1028,7 @@ impl SynchronizationGraph {
                             r
                         );
                         if me == index {
+                            invalid_set.insert(me);
                             me_invalid = true;
                         }
                         inner.arena[index].graph_status = BLOCK_INVALID;
@@ -1204,6 +1208,9 @@ impl SynchronizationGraph {
 
         while let Some(index) = queue.pop_front() {
             if inner.arena[index].graph_status == BLOCK_INVALID {
+                if index == me {
+                    invalid_set.insert(me);
+                }
                 inner.set_and_propagate_invalid(
                     &mut queue,
                     &mut invalid_set,
