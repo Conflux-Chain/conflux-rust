@@ -1479,17 +1479,16 @@ impl SynchronizationProtocolHandler {
             // check whether block is in old era
             let (era_genesis_hash, era_genesis_height) =
                 self.graph.get_genesis_hash_and_height_in_current_era();
-            if header.height() < era_genesis_height {
-                continue;
-            }
-            if header.height() == era_genesis_height
-                && header.hash() != era_genesis_hash
+            if (header.height() < era_genesis_height)
+                || (header.height() == era_genesis_height
+                    && header.hash() != era_genesis_hash)
             {
-                continue;
+                // TODO: optimize to make block body empty
+                assert!(true);
             }
 
             // insert into sync graph
-            let (valid, to_relay, is_old) = self.graph.insert_block_header(
+            let (valid, to_relay) = self.graph.insert_block_header(
                 &mut header.clone(),
                 true,
                 false,
@@ -1514,21 +1513,7 @@ impl SynchronizationProtocolHandler {
 
             // check block body
             if !self.graph.contains_block(&hash) {
-                if is_old {
-                    // Create empty block and insert.
-                    let empty_block = Block::new(header.clone(), Vec::new());
-                    let (_, me_to_relay) = self.graph.insert_block(
-                        empty_block,
-                        false,
-                        true,
-                        false,
-                    );
-                    if me_to_relay {
-                        need_to_relay.insert(header.hash());
-                    }
-                } else {
-                    hashes.insert(hash);
-                }
+                hashes.insert(hash);
             }
         }
 
@@ -1858,13 +1843,12 @@ impl SynchronizationProtocolHandler {
 
         assert!(self.graph.contains_block_header(&parent_hash));
         assert!(!self.graph.contains_block_header(&hash));
-        let (success, to_relay, is_old) = self.graph.insert_block_header(
+        let (success, to_relay) = self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
         );
         assert!(success);
-        assert!(!is_old);
         assert!(!self.graph.contains_block(&hash));
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
@@ -2218,28 +2202,14 @@ impl SynchronizationProtocolHandler {
 
         for mut header in headers {
             let hash = header.hash();
-            let (valid, to_relay, is_old) =
+            let (valid, to_relay) =
                 self.graph.insert_block_header(&mut header, true, false);
             if valid {
                 need_to_relay.extend(to_relay);
 
                 // check block body
                 if !self.graph.contains_block(&hash) {
-                    if is_old {
-                        // Create empty block and insert.
-                        let empty_block = Block::new(header, Vec::new());
-                        let (_, me_to_relay) = self.graph.insert_block(
-                            empty_block,
-                            false,
-                            true,
-                            false,
-                        );
-                        if me_to_relay {
-                            need_to_relay.insert(hash);
-                        }
-                    } else {
-                        missed_body_block_hashes.insert(hash);
-                    }
+                    missed_body_block_hashes.insert(hash);
                 }
             }
         }
