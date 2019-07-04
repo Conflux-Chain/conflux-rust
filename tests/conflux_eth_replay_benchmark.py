@@ -58,24 +58,22 @@ class RlpIter:
 
 class ConfluxEthReplayTest(ConfluxTestFramework):
     # For eth + payments.
-    EXPECTED_TX_SIZE_PER_SEC = 250000
+    # EXPECTED_TX_SIZE_PER_SEC = 250000
     # For eth replay
-    # EXPECTED_TX_SIZE_PER_SEC = 400000
+    EXPECTED_TX_SIZE_PER_SEC = 400000
     INITIALIZE_TXS = 200000 + 400 + 400
     INITIALIZE_TPS = 4000
     INITIALIZE_SLEEP = 20
     GENESIS_KEY = decode_hex("9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471")
 
     def __init__(self):
+        self.setup_clean_chain = True
         self.ips = []
         self.remote = True
-        self.local_ip = [172, 31, 17, 152]
+        self.local_ip = [172, 31, 17, 152]  # TODO: fix the local ip
         ConfluxTestFramework.__init__(self)
 
     def set_test_params(self):
-        self.setup_clean_chain = True
-
-        # """ remote
         ips = []
         try:
             with open("/home/ubuntu/ip_file", 'r') as ip_file:
@@ -85,11 +83,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             pass
 
         self.ips = ips
-
         self.num_nodes = len(ips)
-        # """
-
-        # self.num_nodes = 1
 
         self.conf_parameters = {"log_level": "\"debug\"",
                                 # "storage_cache_start_size": "1000000",
@@ -115,18 +109,16 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             self.log.info("Node " + str(i) + " bind to " + self.nodes[i].ip + ":" + self.nodes[i].port)
         self.start_nodes()
         self.log.info("All nodes started, waiting to be connected")
-        # """
 
         """ local nodes
         self.remote = False
         self.setup_nodes(binary=[os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
-            #"../target/debug/conflux")]
             "../target/release/conflux")]
             * self.num_nodes)
         """
 
-        connect_sample_nodes(self.nodes, self.log, 7, 0, 300)
+        connect_sample_nodes(nodes=self.nodes, log=self.log, sample=7, latency_min=0, latency_max=300)
 
     def run_test(self):
         # Start mininode connection
