@@ -57,7 +57,7 @@ impl SyncGraphStatistics {
 
 pub struct BestInformation {
     pub best_block_hash: H256,
-    pub best_epoch_number: usize,
+    pub best_epoch_number: u64,
     pub current_difficulty: U256,
     pub terminal_block_hashes: Vec<H256>,
     pub deferred_state_root: StateRootWithAuxInfo,
