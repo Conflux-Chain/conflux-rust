@@ -556,8 +556,13 @@ impl ConsensusGraphInner {
 
         while self.arena[parent].height != era_height {
             let grandparent = self.arena[parent].parent;
+            let past_era_weight = if grandparent == era_genesis {
+                0
+            } else {
+                self.arena[grandparent].past_era_weight
+            };
             let w = total_weight
-                - self.arena[grandparent].past_era_weight
+                - past_era_weight
                 - self.block_weight(grandparent, false);
             if w > adjusted_beta {
                 let a = subtree_weight[parent];
@@ -703,14 +708,21 @@ impl ConsensusGraphInner {
         let mut low = era_height + 1;
         // [low, high]
         let mut best = era_height;
+        // println!("Working stable parent {} low {} high {}", parent_0, low, high);
 
         while low <= high {
             let mid = (low + high) / 2;
             let p = self.weight_tree.ancestor_at(parent, mid as usize);
             let gp = self.arena[p].parent;
+            let past_era_weight = if gp == era_genesis {
+                0
+            } else {
+                self.arena[gp].past_era_weight
+            };
             let w = total_weight
-                - self.arena[gp].past_era_weight
+                - past_era_weight
                 - self.block_weight(gp, false);
+            // println!("gp {} w {} total_weight {} past_era_weight {}", gp, w, total_weight, self.arena[gp].past_era_weight);
             if w > adjusted_beta {
                 best = mid;
                 low = mid + 1;
@@ -721,10 +733,12 @@ impl ConsensusGraphInner {
 
         let stable = if best != era_height {
             parent = self.weight_tree.ancestor_at(parent, best as usize);
+            // println!("Found best parent {} best {} era_genesis {}", parent, best, era_genesis);
 
             let a = self.stable_tree.path_aggregate_chop(parent, era_genesis);
             let b = total_weight
                 * (self.inner_conf.adaptive_weight_alpha_num as i128);
+            // println!("A {} B {}", a, b);
             if a < b {
                 debug!("block is unstable: {:?} < {:?}!", a, b);
             } else {
@@ -776,7 +790,7 @@ impl ConsensusGraphInner {
             let mut low = two_era_height + 1;
             let mut best = two_era_height;
 
-            println!("Working parent {} low {} high {}", parent_0, low, high);
+            // println!("Working parent {} low {} high {}", parent_0, low, high);
             while low <= high {
                 let mid = (low + high) / 2;
                 let p = self
@@ -784,7 +798,7 @@ impl ConsensusGraphInner {
                     .ancestor_at(parent, mid as usize);
                 let gp = self.arena[p].parent;
                 let w = self.inclusive_weight_tree.get(gp);
-                println!("GP {} w {} adjusted_beta {}", gp, w, adjusted_beta);
+                // println!("GP {} w {} adjusted_beta {}", gp, w, adjusted_beta);
                 if w > adjusted_beta {
                     best = mid;
                     low = mid + 1;
@@ -792,7 +806,7 @@ impl ConsensusGraphInner {
                     high = mid - 1;
                 }
             }
-            println!("best {}", best);
+            // println!("best {}", best);
 
             if best != two_era_height {
                 parent = self
@@ -801,7 +815,7 @@ impl ConsensusGraphInner {
                 let min_agg = self
                     .inclusive_adaptive_tree
                     .path_aggregate_chop(parent, two_era_genesis);
-                println!("parent {} minagg {}", parent, min_agg);
+                // println!("parent {} minagg {}", parent, min_agg);
                 if min_agg < 0 {
                     debug!("block is adaptive (inter-era): {:?}", min_agg);
                     adaptive = true;
@@ -1408,9 +1422,7 @@ impl ConsensusGraphInner {
         let mut queue = VecDeque::new();
         queue.push_back(pivot_block_index);
         visited.add(pivot_block_index as u32);
-        let era_height = self.get_era_height(self.arena[me].height - 1, 0);
-        let last_pivot =
-            max(era_height as usize, self.arena[me].last_pivot_in_past);
+        let last_pivot = self.arena[me].last_pivot_in_past;
         while let Some(index) = queue.pop_front() {
             let parent = self.arena[index].parent;
             if self.arena[parent].data.epoch_number > last_pivot
@@ -3061,11 +3073,16 @@ impl ConsensusGraph {
 
         inner.stable_tree.make_tree(me);
         inner.stable_tree.link(parent, me);
+        let past_era_weight = if inner.arena[parent].height % inner.inner_conf.era_epoch_count as u64 == 0 {
+            0
+        } else {
+            inner.arena[parent].past_era_weight
+        };
         inner.stable_tree.set(
             me,
             (inner.inner_conf.adaptive_weight_alpha_num as i128)
                 * (inner.block_weight(parent, false)
-                    + inner.arena[parent].past_era_weight),
+                    + past_era_weight),
         );
 
         inner.adaptive_tree.make_tree(me);

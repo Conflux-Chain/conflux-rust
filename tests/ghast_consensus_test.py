@@ -35,7 +35,8 @@ TEST_INPUT = [
     "adaptive-case3.in",
     "adaptive-case4.in",
     "era-case1.in",
-    "era-case2.in"]
+    "era-case2.in",
+    "era-case3.in"]
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
 cur_dir = os.getcwd()

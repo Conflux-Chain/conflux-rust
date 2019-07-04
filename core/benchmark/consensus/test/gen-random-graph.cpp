@@ -129,7 +129,11 @@ void process(int n, int g) {
     for (int i = era_height; i < tmp.size(); i++) {
         int last = tmp[i].first;
         int current = tmp[i].second;
-        int g = tot_weight - past_era_weight[last] - weight[last];
+        int past_e_weight = past_era_weight[last];
+        if (height[last] % ERA_BLOCK_COUNT == 0) {
+            past_e_weight = 0;
+        }
+        int g = tot_weight - past_e_weight - weight[last];
         int f = subtree_weight[current];
         if (g > BETA && f * ALPHA_DEN - g * ALPHA_NUM < 0) {
             // fprintf(stderr, "%d %d %d %d\n", last, current, g, f);
@@ -213,7 +217,7 @@ int main(int argc, char* argv[]) {
     era_block[0] = 0;
 
     unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 3807485552;
+    // unsigned seed = 448648640;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
 
