@@ -450,11 +450,7 @@ impl ConsensusGraphInner {
         let execution_task = EpochExecutionTask::new(
             self.arena[epoch_index].hash,
             self.get_epoch_block_hashes(epoch_index),
-            self.get_reward_execution_info(
-                data_man,
-                opt_height,
-                &self.pivot_chain,
-            ),
+            self.get_reward_execution_info(data_man, epoch_index),
             true,
             false,
         );
@@ -1598,11 +1594,11 @@ impl ConsensusGraphInner {
     }
 
     fn get_reward_execution_info(
-        &self, data_man: &BlockDataManager, state_at: usize, chain: &Vec<usize>,
+        &self, data_man: &BlockDataManager, epoch_index: usize,
     ) -> Option<RewardExecutionInfo> {
         self.get_reward_execution_info_from_index(
             data_man,
-            self.get_pivot_reward_index(chain[state_at]),
+            self.get_pivot_reward_index(epoch_index),
         )
     }
 
@@ -2498,11 +2494,8 @@ impl ConsensusGraph {
             last_state_height += 1;
             while last_state_height <= fork_height {
                 let epoch_index = inner.pivot_chain[last_state_height];
-                let reward_execution_info = inner.get_reward_execution_info(
-                    &self.data_man,
-                    last_state_height,
-                    &inner.pivot_chain,
-                );
+                let reward_execution_info = inner
+                    .get_reward_execution_info(&self.data_man, epoch_index);
                 self.executor.enqueue_epoch(EpochExecutionTask::new(
                     inner.arena[epoch_index].hash,
                     inner.get_epoch_block_hashes(epoch_index),
@@ -3009,8 +3002,7 @@ impl ConsensusGraph {
                     let reward_execution_info = inner
                         .get_reward_execution_info(
                             &self.data_man,
-                            state_height,
-                            &inner.pivot_chain,
+                            inner.pivot_chain[state_height],
                         );
                     let epoch_block_hashes = inner.get_epoch_block_hashes(
                         inner.pivot_chain[state_height],
@@ -3443,11 +3435,8 @@ impl ConsensusGraph {
         // Apply transactions in the determined total order
         while state_at < to_state_pos {
             let epoch_index = inner.pivot_chain[state_at];
-            let reward_execution_info = inner.get_reward_execution_info(
-                &self.data_man,
-                state_at,
-                &inner.pivot_chain,
-            );
+            let reward_execution_info =
+                inner.get_reward_execution_info(&self.data_man, epoch_index);
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_index].hash,
                 inner.get_epoch_block_hashes(epoch_index),
