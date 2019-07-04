@@ -708,8 +708,6 @@ impl ConsensusGraphInner {
         let mut low = era_height + 1;
         // [low, high]
         let mut best = era_height;
-        // println!("Working stable parent {} low {} high {}", parent_0, low,
-        // high);
 
         while low <= high {
             let mid = (low + high) / 2;
@@ -722,8 +720,6 @@ impl ConsensusGraphInner {
             };
             let w =
                 total_weight - past_era_weight - self.block_weight(gp, false);
-            // println!("gp {} w {} total_weight {} past_era_weight {}", gp, w,
-            // total_weight, self.arena[gp].past_era_weight);
             if w > adjusted_beta {
                 best = mid;
                 low = mid + 1;
@@ -734,13 +730,10 @@ impl ConsensusGraphInner {
 
         let stable = if best != era_height {
             parent = self.weight_tree.ancestor_at(parent, best as usize);
-            // println!("Found best parent {} best {} era_genesis {}", parent,
-            // best, era_genesis);
 
             let a = self.stable_tree.path_aggregate_chop(parent, era_genesis);
             let b = total_weight
                 * (self.inner_conf.adaptive_weight_alpha_num as i128);
-            // println!("A {} B {}", a, b);
             if a < b {
                 debug!("block is unstable: {:?} < {:?}!", a, b);
             } else {
@@ -792,8 +785,6 @@ impl ConsensusGraphInner {
             let mut low = two_era_height + 1;
             let mut best = two_era_height;
 
-            // println!("Working parent {} low {} high {}", parent_0, low,
-            // high);
             while low <= high {
                 let mid = (low + high) / 2;
                 let p = self
@@ -801,8 +792,7 @@ impl ConsensusGraphInner {
                     .ancestor_at(parent, mid as usize);
                 let gp = self.arena[p].parent;
                 let w = self.inclusive_weight_tree.get(gp);
-                // println!("GP {} w {} adjusted_beta {}", gp, w,
-                // adjusted_beta);
+
                 if w > adjusted_beta {
                     best = mid;
                     low = mid + 1;
@@ -810,7 +800,6 @@ impl ConsensusGraphInner {
                     high = mid - 1;
                 }
             }
-            // println!("best {}", best);
 
             if best != two_era_height {
                 parent = self
@@ -819,7 +808,6 @@ impl ConsensusGraphInner {
                 let min_agg = self
                     .inclusive_adaptive_tree
                     .path_aggregate_chop(parent, two_era_genesis);
-                // println!("parent {} minagg {}", parent, min_agg);
                 if min_agg < 0 {
                     debug!("block is adaptive (inter-era): {:?}", min_agg);
                     adaptive = true;
