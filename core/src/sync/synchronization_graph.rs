@@ -70,6 +70,8 @@ pub struct SynchronizationGraphNode {
     pub graph_status: u8,
     /// Whether the block body is ready.
     pub block_ready: bool,
+    /// Whether parent is in old era and already reclaimed
+    pub parent_reclaimed: bool,
     /// Wether the parent or uncles of the block are older than checkpoint.
     pub parent_referees_too_old: bool,
     /// The index of the parent of the block.
@@ -189,10 +191,14 @@ impl SynchronizationGraphInner {
                 self.arena[index].children.iter().map(|x| *x).collect();
             for child in children {
                 self.arena[child].parent = NULL;
-                self.not_ready_block_indices.remove(&child);
-                self.old_era_blocks_frontier.push_back(child);
-                assert!(!self.old_era_blocks_frontier_set.contains(&child));
-                self.old_era_blocks_frontier_set.insert(child);
+                self.arena[child].parent_reclaimed = true;
+                if self.arena[child].graph_status == BLOCK_GRAPH_READY {
+                    // We can only reclaim graph-ready blocks
+                    self.not_ready_block_indices.remove(&child);
+                    self.old_era_blocks_frontier.push_back(child);
+                    assert!(!self.old_era_blocks_frontier_set.contains(&child));
+                    self.old_era_blocks_frontier_set.insert(child);
+                }
             }
 
             let referrers: Vec<usize> =
@@ -222,6 +228,7 @@ impl SynchronizationGraphInner {
         let me = self.arena.insert(SynchronizationGraphNode {
             graph_status: BLOCK_INVALID,
             block_ready: false,
+            parent_reclaimed: false,
             parent_referees_too_old: false,
             parent: NULL,
             children: Vec::new(),
@@ -270,6 +277,7 @@ impl SynchronizationGraphInner {
                 BLOCK_HEADER_ONLY
             },
             block_ready: *header.parent_hash() == H256::default(),
+            parent_reclaimed: false,
             parent_referees_too_old: false,
             parent: NULL,
             children: Vec::new(),
@@ -371,9 +379,10 @@ impl SynchronizationGraphInner {
         }
 
         let parent = node_me.parent;
-        parent != NULL
-            && self.arena[parent].graph_status
-                >= BLOCK_HEADER_PARENTAL_TREE_READY
+        node_me.parent_reclaimed
+            || (parent != NULL
+                && self.arena[parent].graph_status
+                    >= BLOCK_HEADER_PARENTAL_TREE_READY)
     }
 
     pub fn new_to_be_header_graph_ready(&self, index: usize) -> bool {
@@ -398,8 +407,9 @@ impl SynchronizationGraphInner {
         }
 
         let parent = node_me.parent;
-        parent != NULL
-            && self.arena[parent].graph_status >= BLOCK_HEADER_GRAPH_READY
+        (node_me.parent_reclaimed
+            || (parent != NULL
+                && self.arena[parent].graph_status >= BLOCK_HEADER_GRAPH_READY))
             && !node_me.referees.iter().any(|&referee| {
                 self.arena[referee].graph_status < BLOCK_HEADER_GRAPH_READY
             })
@@ -417,8 +427,9 @@ impl SynchronizationGraphInner {
 
         let parent = node_me.parent;
         node_me.graph_status >= BLOCK_HEADER_GRAPH_READY
-            && parent != NULL
-            && self.arena[parent].graph_status >= BLOCK_GRAPH_READY
+            && (node_me.parent_reclaimed
+                || (parent != NULL
+                    && self.arena[parent].graph_status >= BLOCK_GRAPH_READY))
             && !node_me.referees.iter().any(|&referee| {
                 self.arena[referee].graph_status < BLOCK_GRAPH_READY
             })
@@ -1214,6 +1225,10 @@ impl SynchronizationGraph {
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
                 inner.arena[index].graph_status = BLOCK_GRAPH_READY;
+                if inner.arena[index].parent_reclaimed {
+                    inner.old_era_blocks_frontier.push_back(index);
+                    inner.old_era_blocks_frontier_set.insert(index);
+                }
                 inner.not_ready_block_indices.remove(&index);
 
                 let h = inner.arena[index].block_header.hash();
