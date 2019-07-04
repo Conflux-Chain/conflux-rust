@@ -10,21 +10,36 @@ use io::IoContext;
 use mio::net::TcpStream;
 use parking_lot::RwLock;
 use slab::Slab;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 /// Session manager maintains all ingress and egress TCP connections in thread
 /// safe manner. It supports to limit the connections according to node IP
 /// policy.
 pub struct SessionManager {
     sessions: RwLock<Slab<Arc<RwLock<Session>>, usize>>,
+    max_ingress_sessions: usize,
+    cur_ingress_sessions: AtomicUsize,
     node_id_index: RwLock<HashMap<NodeId, usize>>,
     ip_limit: RwLock<SessionIpLimit>,
 }
 
 impl SessionManager {
-    pub fn new(offset: usize, capacity: usize, nodes_per_ip: usize) -> Self {
+    pub fn new(
+        offset: usize, capacity: usize, max_ingress_sessions: usize,
+        nodes_per_ip: usize,
+    ) -> Self
+    {
         SessionManager {
             sessions: RwLock::new(Slab::new_starting_at(offset, capacity)),
+            max_ingress_sessions,
+            cur_ingress_sessions: AtomicUsize::new(0),
             node_id_index: RwLock::new(HashMap::new()),
             ip_limit: RwLock::new(SessionIpLimit::new(nodes_per_ip)),
         }
@@ -87,6 +102,16 @@ impl SessionManager {
         let mut node_id_index = self.node_id_index.write();
         let mut ip_limit = self.ip_limit.write();
 
+        // limits ingress sessions whose node id is `None`.
+        let ingress = self.cur_ingress_sessions.load(Ordering::Relaxed);
+        if id.is_none() && ingress >= self.max_ingress_sessions {
+            debug!("SessionManager.create: leave on maximum ingress sessions reached");
+            return Err(format!(
+                "maximum ingress sessions reached, current = {}, max = {}",
+                ingress, self.max_ingress_sessions
+            ));
+        }
+
         // ensure the node id is unique if specified.
         if let Some(node_id) = id {
             if node_id_index.contains_key(node_id) {
@@ -136,6 +161,8 @@ impl SessionManager {
 
         assert!(ip_limit.on_add(ip, index));
 
+        self.cur_ingress_sessions.fetch_add(1, Ordering::Relaxed);
+
         debug!("SessionManager.create: leave");
 
         Ok(index)
@@ -155,6 +182,10 @@ impl SessionManager {
                 .ip_limit
                 .write()
                 .on_delete(&session.address().ip(), &session.token()));
+
+            if !session.metadata.originated {
+                self.cur_ingress_sessions.fetch_sub(1, Ordering::Relaxed);
+            }
 
             debug!("SessionManager.remove: session removed");
         }

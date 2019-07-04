@@ -1476,6 +1476,18 @@ impl SynchronizationProtocolHandler {
                 }
             }
 
+            // check whether block is in old era
+            let (era_genesis_hash, era_genesis_height) =
+                self.graph.get_genesis_hash_and_height_in_current_era();
+            if header.height() < era_genesis_height {
+                continue;
+            }
+            if header.height() == era_genesis_height
+                && header.hash() != era_genesis_hash
+            {
+                continue;
+            }
+
             // insert into sync graph
             let (valid, to_relay, is_old) = self.graph.insert_block_header(
                 &mut header.clone(),

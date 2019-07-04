@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 fw = open("genesis-mine.in", "w")
-print("2 3 1000 1000", file = fw)
+print("2 3 1000 1000 50000", file = fw)
 N = 200000
 for i in range(0, N):
     print(-1, -1, -1, 1, i, file = fw)
