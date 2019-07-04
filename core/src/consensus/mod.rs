@@ -1379,6 +1379,10 @@ impl ConsensusGraphInner {
     fn get_pivot_reward_index(
         &self, epoch_index: usize,
     ) -> Option<(usize, usize)> {
+        // We are going to exclude the original genesis block here!
+        if self.arena[epoch_index].height <= REWARD_EPOCH_COUNT {
+            return None;
+        }
         let parent_index = self.arena[epoch_index].parent;
         // Recompute epoch.
         let anticone_cut_height =
