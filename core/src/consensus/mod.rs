@@ -1720,8 +1720,7 @@ impl ConsensusGraphInner {
     }
 
     fn best_state_epoch_number(&self) -> u64 {
-        let pivot_height =
-            self.cur_era_genesis_height + self.pivot_chain.len() as u64;
+        let pivot_height = self.pivot_index_to_height(self.pivot_chain.len());
         if pivot_height < DEFERRED_STATE_EPOCH_COUNT {
             0
         } else {
