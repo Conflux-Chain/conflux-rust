@@ -244,7 +244,6 @@ fn test_remove_expire_blocks() {
                 graph_status: graph_status[i as usize],
                 block_ready: false,
                 parent_reclaimed: false,
-                parent_referees_too_old: false,
                 parent: parent_index,
                 children: childrens[i as usize].clone(),
                 referees: referee[i as usize].clone(),
