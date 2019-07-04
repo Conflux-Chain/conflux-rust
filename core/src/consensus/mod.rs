@@ -143,6 +143,9 @@ pub struct ConsensusGraphNodeData {
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
     pub blockset_in_own_view_of_epoch: HashSet<usize>,
+    /// The number of blocks in the last two era. Only such blocks are counted
+    /// during difficulty adjustment.
+    pub num_epoch_blocks_in_2era: usize,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
     pub ordered_executable_epoch_blocks: Vec<usize>,
@@ -159,6 +162,7 @@ impl ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
             blockset_in_own_view_of_epoch: Default::default(),
+            num_epoch_blocks_in_2era: 0,
             ordered_executable_epoch_blocks: Default::default(),
             min_epoch_in_other_views: height,
             max_epoch_in_other_views: height,
@@ -947,15 +951,25 @@ impl ConsensusGraphInner {
             .filter(|idx| self.is_same_era(**idx, pivot))
             .map(|idx| *idx)
             .collect();
+        let two_era_block = self.get_era_block_with_parent(
+            self.arena[pivot].parent,
+            self.inner_conf.era_epoch_count,
+        );
+        self.arena[pivot].data.num_epoch_blocks_in_2era = self.arena[pivot]
+            .data
+            .blockset_in_own_view_of_epoch
+            .iter()
+            .filter(|idx| {
+                let lca = self.inclusive_weight_tree.lca(**idx, two_era_block);
+                lca == two_era_block
+            })
+            .count();
         self.arena[pivot].data.ordered_executable_epoch_blocks =
             self.topological_sort(&filtered_blockset);
         self.arena[pivot]
             .data
             .ordered_executable_epoch_blocks
             .push(pivot);
-        for index in &self.arena[pivot].data.ordered_executable_epoch_blocks {
-            assert!(self.is_same_era(*index, pivot));
-        }
     }
 
     fn insert(&mut self, block: &Block) -> (usize, usize) {
@@ -1625,10 +1639,7 @@ impl ConsensusGraphInner {
                     &self.arena[cur].hash,
                     |h| {
                         let index = self.indices.get(h).unwrap();
-                        self.arena[*index]
-                            .data
-                            .blockset_in_own_view_of_epoch
-                            .len()
+                        self.arena[*index].data.num_epoch_blocks_in_2era
                     },
                 )
             }
@@ -1659,7 +1670,7 @@ impl ConsensusGraphInner {
                 &new_best_hash,
                 |h| {
                     let index = self.indices.get(h).unwrap();
-                    self.arena[*index].data.blockset_in_own_view_of_epoch.len()
+                    self.arena[*index].data.num_epoch_blocks_in_2era
                 },
             );
         } else {
@@ -3201,23 +3212,16 @@ impl ConsensusGraph {
             &anticone_tmp
         };
 
-        let mut visited = HashSet::new();
         for idx in anticone.iter() {
-            if !visited.contains(idx) {
-                visited.insert(*idx);
-                self.recycle_tx_in_block(inner, *idx);
-            }
+            self.recycle_tx_in_block(inner, *idx);
         }
 
         let future = inner.compute_future_bitset(era_block);
         for idx in future.iter() {
             let index = idx as usize;
-            if !visited.contains(&index) {
-                let lca = inner.inclusive_weight_tree.lca(index, era_block);
-                if lca != era_block {
-                    visited.insert(index);
-                    self.recycle_tx_in_block(inner, index);
-                }
+            let lca = inner.inclusive_weight_tree.lca(index, era_block);
+            if lca != era_block {
+                self.recycle_tx_in_block(inner, index);
             }
         }
     }
