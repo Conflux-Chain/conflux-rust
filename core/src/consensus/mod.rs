@@ -2101,7 +2101,6 @@ pub struct ConsensusGraph {
     pub inner: Arc<RwLock<ConsensusGraphInner>>,
     pub txpool: SharedTransactionPool,
     pub data_man: Arc<BlockDataManager>,
-    pub invalid_blocks: RwLock<HashSet<H256>>,
     executor: Arc<ConsensusExecutor>,
     pub statistics: SharedStatistics,
     finality_manager: RwLock<FinalityManager>,
@@ -2173,7 +2172,6 @@ impl ConsensusGraph {
             inner,
             txpool,
             data_man: data_man.clone(),
-            invalid_blocks: RwLock::new(HashSet::new()),
             executor,
             statistics,
             finality_manager: RwLock::new(FinalityManager {
@@ -2350,14 +2348,6 @@ impl ConsensusGraph {
 
     pub fn best_epoch_number(&self) -> usize {
         self.inner.read().best_epoch_number()
-    }
-
-    pub fn verified_invalid(&self, hash: &H256) -> bool {
-        self.invalid_blocks.read().contains(hash)
-    }
-
-    pub fn invalidate_block(&self, hash: &H256) {
-        self.invalid_blocks.write().insert(hash.clone());
     }
 
     pub fn get_block_total_weight(&self, hash: &H256) -> Option<i128> {

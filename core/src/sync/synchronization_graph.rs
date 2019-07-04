@@ -24,7 +24,7 @@ use slab::Slab;
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
-    ops::DerefMut,
+    mem,
     sync::{
         mpsc::{self, Sender},
         Arc,
@@ -572,6 +572,103 @@ impl SynchronizationGraphInner {
 
         Ok(())
     }
+
+    fn process_invalid_blocks(&mut self, invalid_set: &HashSet<usize>) {
+        for index in invalid_set {
+            let hash = self.arena[*index].block_header.hash();
+            // Mark this block as invalid, so we don't need to request/verify it
+            // again
+            self.data_man.invalidate_block(hash);
+        }
+        self.remove_blocks(invalid_set);
+    }
+
+    fn remove_blocks(&mut self, invalid_set: &HashSet<usize>) {
+        for index in invalid_set {
+            let hash = self.arena[*index].block_header.hash();
+            self.not_ready_block_indices.remove(index);
+            self.old_era_blocks_frontier_set.remove(index);
+
+            let parent = self.arena[*index].parent;
+            if parent != NULL {
+                self.arena[parent].children.retain(|&x| x != *index);
+            }
+            let parent_hash = *self.arena[*index].block_header.parent_hash();
+            if let Some(children) = self.children_by_hash.get_mut(&parent_hash)
+            {
+                children.retain(|&x| x != *index);
+            }
+
+            let referees: Vec<usize> =
+                self.arena[*index].referees.iter().map(|x| *x).collect();
+            for referee in referees {
+                self.arena[referee].referrers.retain(|&x| x != *index);
+            }
+            let referee_hashes: Vec<H256> = self.arena[*index]
+                .block_header
+                .referee_hashes()
+                .iter()
+                .map(|x| *x)
+                .collect();
+            for referee_hash in referee_hashes {
+                if let Some(referrers) =
+                    self.referrers_by_hash.get_mut(&referee_hash)
+                {
+                    referrers.retain(|&x| x != *index);
+                }
+            }
+
+            let children: Vec<usize> =
+                self.arena[*index].children.iter().map(|x| *x).collect();
+            for child in children {
+                debug_assert!(invalid_set.contains(&child));
+                debug_assert!(self.arena[child].graph_status == BLOCK_INVALID);
+                self.arena[child].parent = NULL;
+            }
+
+            let referrers: Vec<usize> =
+                self.arena[*index].referrers.iter().map(|x| *x).collect();
+            for referrer in referrers {
+                debug_assert!(invalid_set.contains(&referrer));
+                debug_assert!(
+                    self.arena[referrer].graph_status == BLOCK_INVALID
+                );
+                self.arena[referrer].referees.retain(|&x| x != *index);
+            }
+
+            self.arena.remove(*index);
+            self.indices.remove(&hash);
+            self.data_man.remove_block_header(&hash);
+            self.data_man.remove_block_from_kv(&hash);
+        }
+    }
+
+    fn set_and_propagate_invalid(
+        &mut self, queue: &mut VecDeque<usize>,
+        invalid_set: &mut HashSet<usize>, index: usize,
+    )
+    {
+        let children =
+            mem::replace(&mut self.arena[index].children, Vec::new());
+        for child in &children {
+            if !invalid_set.contains(&child) {
+                self.arena[*child].graph_status = BLOCK_INVALID;
+                queue.push_back(*child);
+                invalid_set.insert(*child);
+            }
+        }
+        mem::replace(&mut self.arena[index].children, children);
+        let referrers =
+            mem::replace(&mut self.arena[index].referrers, Vec::new());
+        for referrer in &referrers {
+            if !invalid_set.contains(&referrer) {
+                self.arena[*referrer].graph_status = BLOCK_INVALID;
+                queue.push_back(*referrer);
+                invalid_set.insert(*referrer);
+            }
+        }
+        mem::replace(&mut self.arena[index].referrers, referrers);
+    }
 }
 
 pub struct SynchronizationGraph {
@@ -843,98 +940,11 @@ impl SynchronizationGraph {
     }
 
     fn parent_or_referees_invalid(&self, header: &BlockHeader) -> bool {
-        self.consensus.verified_invalid(header.parent_hash())
+        self.data_man.verified_invalid(header.parent_hash())
             || header
                 .referee_hashes()
                 .iter()
-                .any(|referee| self.consensus.verified_invalid(referee))
-    }
-
-    fn set_and_propagate_invalid(
-        inner: &mut SynchronizationGraphInner, queue: &mut VecDeque<usize>,
-        invalid_set: &mut HashSet<usize>, index: usize,
-    )
-    {
-        if !invalid_set.contains(&index) {
-            invalid_set.insert(index);
-            let children: Vec<usize> =
-                inner.arena[index].children.iter().map(|x| *x).collect();
-            for child in children {
-                inner.arena[child].graph_status = BLOCK_INVALID;
-                queue.push_back(child);
-            }
-            let referrers: Vec<usize> =
-                inner.arena[index].referrers.iter().map(|x| *x).collect();
-            for referrer in referrers {
-                inner.arena[referrer].graph_status = BLOCK_INVALID;
-                queue.push_back(referrer);
-            }
-        }
-    }
-
-    fn process_invalid_blocks(
-        &self, inner: &mut SynchronizationGraphInner,
-        invalid_set: &HashSet<usize>,
-    )
-    {
-        for index in invalid_set {
-            inner.not_ready_block_indices.remove(index);
-            inner.old_era_blocks_frontier_set.remove(index);
-            let hash = inner.arena[*index].block_header.hash();
-            self.consensus.invalidate_block(&hash);
-
-            let parent = inner.arena[*index].parent;
-            if parent != NULL {
-                inner.arena[parent].children.retain(|&x| x != *index);
-            }
-            let parent_hash = *inner.arena[*index].block_header.parent_hash();
-            if let Some(children) = inner.children_by_hash.get_mut(&parent_hash)
-            {
-                children.retain(|&x| x != *index);
-            }
-
-            let referees: Vec<usize> =
-                inner.arena[*index].referees.iter().map(|x| *x).collect();
-            for referee in referees {
-                inner.arena[referee].referrers.retain(|&x| x != *index);
-            }
-            let referee_hashes: Vec<H256> = inner.arena[*index]
-                .block_header
-                .referee_hashes()
-                .iter()
-                .map(|x| *x)
-                .collect();
-            for referee_hash in referee_hashes {
-                if let Some(referrers) =
-                    inner.referrers_by_hash.get_mut(&referee_hash)
-                {
-                    referrers.retain(|&x| x != *index);
-                }
-            }
-
-            let children: Vec<usize> =
-                inner.arena[*index].children.iter().map(|x| *x).collect();
-            for child in children {
-                debug_assert!(invalid_set.contains(&child));
-                debug_assert!(inner.arena[child].graph_status == BLOCK_INVALID);
-                inner.arena[child].parent = NULL;
-            }
-
-            let referrers: Vec<usize> =
-                inner.arena[*index].referrers.iter().map(|x| *x).collect();
-            for referrer in referrers {
-                debug_assert!(invalid_set.contains(&referrer));
-                debug_assert!(
-                    inner.arena[referrer].graph_status == BLOCK_INVALID
-                );
-                inner.arena[referrer].referees.retain(|&x| x != *index);
-            }
-
-            inner.arena.remove(*index);
-            inner.indices.remove(&hash);
-            self.data_man.remove_block_header(&hash);
-            self.remove_block_from_kv(&hash);
-        }
+                .any(|referee| self.data_man.verified_invalid(referee))
     }
 
     pub fn insert_block_header(
@@ -944,7 +954,7 @@ impl SynchronizationGraph {
         let mut inner = self.inner.write();
         let hash = header.hash();
 
-        if self.verified_invalid(&hash) {
+        if self.data_man.verified_invalid(&hash) {
             return (false, Vec::new(), me_is_old);
         }
 
@@ -1001,10 +1011,10 @@ impl SynchronizationGraph {
         while let Some(index) = queue.pop_front() {
             if inner.arena[index].graph_status == BLOCK_INVALID {
                 if me == index {
+                    invalid_set.insert(me);
                     me_invalid = true;
                 }
-                Self::set_and_propagate_invalid(
-                    inner.deref_mut(),
+                inner.set_and_propagate_invalid(
                     &mut queue,
                     &mut invalid_set,
                     index,
@@ -1029,11 +1039,11 @@ impl SynchronizationGraph {
                             r
                         );
                         if me == index {
+                            invalid_set.insert(me);
                             me_invalid = true;
                         }
                         inner.arena[index].graph_status = BLOCK_INVALID;
-                        Self::set_and_propagate_invalid(
-                            inner.deref_mut(),
+                        inner.set_and_propagate_invalid(
                             &mut queue,
                             &mut invalid_set,
                             index,
@@ -1111,7 +1121,7 @@ impl SynchronizationGraph {
         }
 
         // Post-processing invalid blocks.
-        self.process_invalid_blocks(inner.deref_mut(), &invalid_set);
+        inner.process_invalid_blocks(&invalid_set);
 
         if me_invalid {
             return (false, need_to_relay, me_is_old);
@@ -1131,14 +1141,6 @@ impl SynchronizationGraph {
         }
     }
 
-    pub fn insert_block_to_kv(&self, block: Arc<Block>, persistent: bool) {
-        self.data_man.insert_block_to_kv(block, persistent)
-    }
-
-    fn remove_block_from_kv(&self, hash: &H256) {
-        self.data_man.remove_block_from_kv(hash)
-    }
-
     pub fn insert_block(
         &self, block: Block, need_to_verify: bool, persistent: bool,
         sync_graph_only: bool,
@@ -1151,7 +1153,7 @@ impl SynchronizationGraph {
 
         let mut inner = self.inner.write();
 
-        if self.verified_invalid(&hash) {
+        if self.data_man.verified_invalid(&hash) {
             insert_success = false;
             // (false, false)
             return (insert_success, need_to_relay);
@@ -1209,7 +1211,7 @@ impl SynchronizationGraph {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
                 self.data_man.insert_compact_block(block.to_compact());
-                self.insert_block_to_kv(block.clone(), persistent);
+                self.data_man.insert_block_to_kv(block.clone(), persistent);
             }
         } else {
             insert_success = false;
@@ -1217,8 +1219,10 @@ impl SynchronizationGraph {
 
         while let Some(index) = queue.pop_front() {
             if inner.arena[index].graph_status == BLOCK_INVALID {
-                Self::set_and_propagate_invalid(
-                    inner.deref_mut(),
+                if index == me {
+                    invalid_set.insert(me);
+                }
+                inner.set_and_propagate_invalid(
                     &mut queue,
                     &mut invalid_set,
                     index,
@@ -1260,7 +1264,7 @@ impl SynchronizationGraph {
         }
 
         // Post-processing invalid blocks.
-        self.process_invalid_blocks(inner.deref_mut(), &invalid_set);
+        inner.process_invalid_blocks(&invalid_set);
         if self.data_man.db.key_value().flush().is_err() {
             warn!("db error when flushing block data");
             insert_success = false;
@@ -1302,10 +1306,6 @@ impl SynchronizationGraph {
     ) -> Result<Vec<H256>, String> {
         self.consensus
             .get_block_hashes_by_epoch(EpochNumber::Number(epoch_number.into()))
-    }
-
-    pub fn verified_invalid(&self, hash: &H256) -> bool {
-        self.consensus.verified_invalid(hash)
     }
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
@@ -1352,11 +1352,11 @@ impl SynchronizationGraph {
         }
 
         let mut queue = VecDeque::new();
-        let mut visited_indices = HashSet::new();
+        let mut expire_set = HashSet::new();
         for index in &inner.not_ready_block_indices {
             if !indices_with_referees.contains(index) {
                 queue.push_back(*index);
-                visited_indices.insert(*index);
+                expire_set.insert(*index);
             }
         }
 
@@ -1364,40 +1364,28 @@ impl SynchronizationGraph {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let mut expire_set = HashSet::new();
         while let Some(index) = queue.pop_front() {
             if inner.arena[index].graph_status == BLOCK_INVALID
                 || now - inner.arena[index].timestamp > expire_time
             {
                 inner.arena[index].graph_status = BLOCK_INVALID;
-                expire_set.insert(index);
-                let children: Vec<usize> =
-                    inner.arena[index].children.iter().map(|x| *x).collect();
-                for child in children {
-                    inner.arena[child].graph_status = BLOCK_INVALID;
-                }
-                let referrers: Vec<usize> =
-                    inner.arena[index].referrers.iter().map(|x| *x).collect();
-                for referrer in referrers {
-                    inner.arena[referrer].graph_status = BLOCK_INVALID;
-                }
-            }
-            for child in &inner.arena[index].children {
-                if !visited_indices.contains(child) {
-                    visited_indices.insert(*child);
-                    queue.push_back(*child);
-                }
-            }
-            for referrer in &inner.arena[index].referrers {
-                if !visited_indices.contains(referrer) {
-                    visited_indices.insert(*referrer);
-                    queue.push_back(*referrer);
-                }
+                inner.set_and_propagate_invalid(
+                    &mut queue,
+                    &mut expire_set,
+                    index,
+                );
+            } else {
+                // `expired_set` is used as `visited` in the iteration, and
+                // should only contain invalid blocks in the
+                // end. A block is visited but valid only if it
+                // is inserted at the start as blocks with no
+                // incoming edges, so it's okay to remove them during the
+                // iteration.
+                expire_set.remove(&index);
             }
         }
 
         debug!("expire_set: {:?}", expire_set);
-
-        self.process_invalid_blocks(inner.deref_mut(), &expire_set);
+        inner.remove_blocks(&expire_set);
     }
 }
