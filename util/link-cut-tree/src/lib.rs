@@ -370,6 +370,14 @@ impl MinLinkCutTreeInner {
         self.tree[v].min
     }
 
+    pub fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
+        self.access(v);
+        self.splay(u);
+        let right_c = self.tree[u].right_child;
+        assert_ne!(u, NULL);
+        self.tree[right_c].min
+    }
+
     pub fn get(&mut self, v: usize) -> i128 {
         self.access(v);
 
@@ -416,6 +424,10 @@ impl MinLinkCutTree {
 
     pub fn path_aggregate(&self, v: usize) -> i128 {
         self.inner.lock().path_aggregate(v)
+    }
+
+    pub fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
+        self.inner.lock().path_aggregate_chop(v, u)
     }
 
     pub fn get(&self, v: usize) -> i128 { self.inner.lock().get(v) }
