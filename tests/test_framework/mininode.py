@@ -386,10 +386,10 @@ class P2PInterface(P2PConnection):
             "receive", "Hello, capabilities:{}".format(capabilities))
         ip = [127, 0, 0, 1]
         if self.remote:
-            if hasattr(self, "local_ip") or not self.local_ip:
-                ip = get_ip_address()
-            else:
-                ip = self.local_ip
+            # if hasattr(self, "local_ip") or not self.local_ip:
+            ip = get_ip_address()
+            # else:
+            #     ip = self.local_ip
         endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
         hello = Hello([Capability(self.protocol, self.protocol_version)], endpoint)
         to_sign = rlp.encode(hello, Hello)

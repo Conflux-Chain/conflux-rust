@@ -70,53 +70,56 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.ips = []
         self.remote = True
-        self.local_ip = [172, 31, 17, 152]  # TODO: fix the local ip
+        self.local_ip = []
         ConfluxTestFramework.__init__(self)
 
     def set_test_params(self):
-        ips = []
-        try:
-            with open("/home/ubuntu/ip_file", 'r') as ip_file:
-                for line in ip_file.readlines():
-                    ips.append(line[:-1])
-        except Exception:
-            pass
+        if self.remote_ips != "":
+            self.remote = True
+        else:
+            self.remote = False
 
-        self.ips = ips
-        self.num_nodes = len(ips)
+        if self.remote:
+            ips = []
+            try:
+                with open(self.options.remote_ips, 'r') as ip_file:
+                    for line in ip_file.readlines():
+                        ips.append(line.strip().strip(','))
+            except Exception:
+                pass
 
-        self.conf_parameters = {"log_level": "\"debug\"",
-                                # "storage_cache_start_size": "1000000",
-                                # Do not re-alloc.
-                                "storage_cache_start_size": "20000000",
-                                "storage_cache_size": "20000000",
-                                "storage_idle_size": "2000000",
-                                "storage_node_map_size": "200000000",
-                                "ledger_cache_size": "3000",
-                                "send_tx_period_ms": "31536000000",
-                                "enable_discovery": "false",
-                                "egress_queue_capacity": "1024",
-                                "egress_min_throttle": "100",
-                                "egress_max_throttle": "1000", }
+            self.ips = ips
+            self.num_nodes = len(ips)
+
+            self.conf_parameters = {"log_level": "\"debug\"",
+                                    # "storage_cache_start_size": "1000000",
+                                    # Do not re-alloc.
+                                    "storage_cache_start_size": "20000000",
+                                    "storage_cache_size": "20000000",
+                                    "storage_idle_size": "2000000",
+                                    "storage_node_map_size": "200000000",
+                                    "ledger_cache_size": "3000",
+                                    "send_tx_period_ms": "31536000000",
+                                    "enable_discovery": "false",
+                                    "egress_queue_capacity": "1024",
+                                    "egress_min_throttle": "100",
+                                    "egress_max_throttle": "1000", }
 
     def setup_network(self):
 
-        binary_path = ["/home/ubuntu/conflux"]
-
-        for ip in self.ips:
-            self.add_remote_nodes(1, user="ubuntu", ip=ip, binary=binary_path, no_pssh=True)
-        for i in range(len(self.nodes)):
-            self.log.info("Node " + str(i) + " bind to " + self.nodes[i].ip + ":" + self.nodes[i].port)
-        self.start_nodes()
-        self.log.info("All nodes started, waiting to be connected")
-
-        """ local nodes
-        self.remote = False
-        self.setup_nodes(binary=[os.path.join(
-            os.path.dirname(os.path.realpath(__file__)),
-            "../target/release/conflux")]
-            * self.num_nodes)
-        """
+        if self.remote:
+            binary_path = ["/home/ubuntu/conflux"]
+            for ip in self.ips:
+                self.add_remote_nodes(1, user="ubuntu", ip=ip, binary=binary_path, no_pssh=True)
+            for i in range(len(self.nodes)):
+                self.log.info("Node " + str(i) + " bind to " + self.nodes[i].ip + ":" + self.nodes[i].port)
+            self.start_nodes()
+            self.log.info("All nodes started, waiting to be connected")
+        else:
+            self.setup_nodes(binary=[os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "../target/release/conflux")]
+                * self.num_nodes)
 
         connect_sample_nodes(nodes=self.nodes, log=self.log, sample=7, latency_min=0, latency_max=300)
 
@@ -419,5 +422,3 @@ class BlockGenThread(threading.Thread):
 
 if __name__ == "__main__":
     ConfluxEthReplayTest().main()
-
-# FIXME: print balance for genesis account
