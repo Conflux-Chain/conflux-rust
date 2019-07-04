@@ -495,7 +495,7 @@ impl ConsensusGraphInner {
         let mut subtree_weight = Vec::new();
         let mut subtree_inclusive_weight = Vec::new();
         let mut subtree_stable_weight = Vec::new();
-        let n = self.arena.len();
+        let n = self.arena.capacity();
         subtree_weight.resize_with(n, Default::default);
         subtree_inclusive_weight.resize_with(n, Default::default);
         subtree_stable_weight.resize_with(n, Default::default);
@@ -1219,8 +1219,8 @@ impl ConsensusGraphInner {
             }
         }
         let mut anticone = BitSet::new();
-        for i in 0..self.arena.len() {
-            if self.arena[i].data.epoch_number > last_in_pivot
+        for (i, node) in self.arena.iter() {
+            if node.data.epoch_number > last_in_pivot
                 && !visited.contains(i as u32)
             {
                 anticone.add(i as u32);
@@ -2954,7 +2954,7 @@ impl ConsensusGraph {
             // Now we construct pivot_chain_metadata and compute
             // last_pivot_in_past
             let mut metadata_to_update = HashSet::new();
-            for i in 1..inner.arena.len() {
+            for (i, _) in inner.arena.iter() {
                 metadata_to_update.insert(i);
             }
             self.recompute_metadata(inner, 0, metadata_to_update);
