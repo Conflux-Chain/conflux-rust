@@ -3635,6 +3635,8 @@ impl ConsensusGraph {
                                     .map(move |(i, log)| LocalizedLogEntry {
                                         entry: log,
                                         block_hash: *hash,
+                                        // TODO
+                                        block_number: 0,
                                         transaction_hash: tx_hash,
                                         // iterating in reverse order
                                         transaction_index: receipts_len - index - 1,

@@ -4,7 +4,7 @@
 
 //! Log entry type definition.
 
-use crate::bytes::Bytes;
+use crate::{block::BlockNumber, bytes::Bytes};
 use cfx_types::{Address, Bloom, BloomInput, H256};
 use heapsize::HeapSizeOf;
 use std::ops::Deref;
@@ -47,6 +47,8 @@ pub struct LocalizedLogEntry {
     pub entry: LogEntry,
     /// Block in which this log was created.
     pub block_hash: H256,
+    /// Block number.
+    pub block_number: BlockNumber,
     /// Hash of transaction in which this log was created.
     pub transaction_hash: H256,
     /// Index of transaction within block.
