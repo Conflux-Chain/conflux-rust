@@ -99,7 +99,7 @@ build_config! {
         (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
-        (era_epoch_count, (usize), ERA_DEFAULT_EPOCH_COUNT)
+        (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
         (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 5000)
