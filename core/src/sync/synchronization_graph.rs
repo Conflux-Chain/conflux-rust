@@ -422,12 +422,14 @@ impl SynchronizationGraphInner {
 
         if self.arena[index].pending_referee_count == 0 {
             for referee in self.arena[index].referees.iter() {
-                referee_timestamps.push(self.arena[*referee].timestamp);
+                referee_timestamps
+                    .push(self.arena[*referee].block_header.timestamp());
             }
         } else {
             let mut referee_hash_in_mem = HashSet::new();
             for referee in self.arena[index].referees.iter() {
-                referee_timestamps.push(self.arena[*referee].timestamp);
+                referee_timestamps
+                    .push(self.arena[*referee].block_header.timestamp());
                 referee_hash_in_mem
                     .insert(self.arena[*referee].block_header.hash());
             }
@@ -770,7 +772,6 @@ impl SynchronizationGraph {
     }
 
     fn recover_graph_from_db(&mut self) {
-        // TODO: refactor code to make it run O(n + m)
         info!("Start full recovery of the block DAG and state from database");
         let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
@@ -840,7 +841,6 @@ impl SynchronizationGraph {
     }
 
     fn fast_recover_graph_from_db(&mut self) {
-        // TODO: refactor code to make it run O(n + m)
         info!("Start fast recovery of the block DAG from database");
         let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
