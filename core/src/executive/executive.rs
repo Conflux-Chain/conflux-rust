@@ -1223,6 +1223,7 @@ impl<'a, 'b> Executive<'a, 'b> {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use crate::{
@@ -1233,6 +1234,10 @@ mod tests {
         storage::{
             tests::new_state_manager_for_testing, StorageManager,
             StorageManagerTrait,
+        },
+        test_helpers::{
+            get_state_for_genesis_write,
+            get_state_for_genesis_write_with_factory,
         },
     };
     use cfx_types::{Address, H256, U256, U512};
@@ -1247,24 +1252,6 @@ mod tests {
             s.max_depth = max_depth
         }));
         machine
-    }
-
-    fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
-        State::new(
-            StateDb::new(storage_manager.get_state_for_genesis_write()),
-            U256::from(0),
-            VmFactory::default(),
-        )
-    }
-
-    fn get_state_for_genesis_write_with_factory(
-        storage_manager: &StorageManager, factory: Factory,
-    ) -> State {
-        State::new(
-            StateDb::new(storage_manager.get_state_for_genesis_write()),
-            U256::from(0),
-            factory.into(),
-        )
     }
 
     #[test]

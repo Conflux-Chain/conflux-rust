@@ -5,7 +5,7 @@
 use super::builtin::Builtin;
 use crate::vm::Spec;
 use cfx_types::{Address, U256};
-use primitives::CardinalNumber;
+use primitives::BlockNumber;
 use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Debug, PartialEq, Default)]
@@ -31,7 +31,7 @@ pub struct CommonParams {
     /// Maximum contract code size that can be deployed.
     pub max_code_size: u64,
     /// Number of first block where max code size limit is active.
-    pub max_code_size_transition: CardinalNumber,
+    pub max_code_size_transition: BlockNumber,
     /// Maximum size of transaction's RLP payload.
     pub max_transaction_size: usize,
 }
@@ -55,7 +55,7 @@ impl CommonParams {
     }
 }
 
-pub type SpecCreationRules = Fn(&mut Spec, CardinalNumber) + Sync + Send;
+pub type SpecCreationRules = Fn(&mut Spec, BlockNumber) + Sync + Send;
 
 pub struct Machine {
     params: CommonParams,
@@ -65,10 +65,10 @@ pub struct Machine {
 
 impl Machine {
     pub fn builtin(
-        &self, address: &Address, cardinal_number: CardinalNumber,
+        &self, address: &Address, block_number: BlockNumber,
     ) -> Option<&Builtin> {
         self.builtins.get(address).and_then(|b| {
-            if b.is_active(cardinal_number) {
+            if b.is_active(block_number) {
                 Some(b)
             } else {
                 None
@@ -84,7 +84,7 @@ impl Machine {
     /// Get the general parameters of the chain.
     pub fn params(&self) -> &CommonParams { &self.params }
 
-    pub fn spec(&self, number: CardinalNumber) -> Spec {
+    pub fn spec(&self, number: BlockNumber) -> Spec {
         let mut spec = Spec::new_spec();
         if let Some(ref rules) = self.spec_rules {
             (rules)(&mut spec, number)

@@ -452,6 +452,7 @@ impl ConsensusExecutionHandler {
                 timestamp: block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
                 gas_used: U256::zero(),
+                last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
             };
             let mut accumulated_fee: U256 = 0.into();
@@ -832,6 +833,7 @@ impl ConsensusExecutionHandler {
             timestamp: Default::default(),
             difficulty: Default::default(),
             gas_used: U256::zero(),
+            last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
         };
         let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);

@@ -345,3 +345,74 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
         // TODO
     }
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use crate::{
+        statedb::StateDb,
+        storage::{
+            new_storage_manager_for_testing, state::StateTrait, StorageManager,
+            StorageManagerTrait,
+        },
+        test_helpers::get_state_for_genesis_write,
+        vm::EnvInfo,
+        vm_factory::VmFactory,
+    };
+    use cfx_types::{Address, U256};
+    use std::ops::Deref;
+
+    #[allow(dead_code)]
+    fn get_test_origin() -> OriginInfo {
+        OriginInfo {
+            address: Address::zero(),
+            origin: Address::zero(),
+            gas_price: U256::zero(),
+            value: U256::zero(),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn get_test_env_info() -> EnvInfo {
+        EnvInfo {
+            number: 100,
+            author: 0.into(),
+            timestamp: 0,
+            difficulty: 0.into(),
+            last_hashes: Arc::new(vec![]),
+            gas_used: 0.into(),
+            gas_limit: 0.into(),
+        }
+    }
+
+    struct TestSetup {
+        storage_manager: Option<Box<StorageManager>>,
+        state: Option<State<'static>>,
+    }
+
+    impl TestSetup {
+        fn init_state(&mut self, storage_manager: &'static StorageManager) {
+            self.state = Some(get_state_for_genesis_write(storage_manager));
+        }
+
+        fn new() -> Self {
+            let storage_manager = Box::new(new_storage_manager_for_testing());
+
+            let mut setup = Self {
+                storage_manager: None,
+                state: None,
+            };
+            setup.storage_manager = Some(storage_manager);
+            setup.init_state(unsafe {
+                &*(setup.storage_manager.as_ref().unwrap().as_ref()
+                    as *const StorageManager)
+            });
+
+            setup
+        }
+    }
+
+    #[test]
+    fn can_be_created() { let _setup = TestSetup::new(); }
+}

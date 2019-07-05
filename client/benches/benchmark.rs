@@ -67,6 +67,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         difficulty: Default::default(),
         gas_used: U256::zero(),
         gas_limit: tx.gas.clone(),
+        last_hashes: Arc::new(vec![]),
     };
     let spec = Spec::new_spec();
     c.bench_function("Execute 1 transaction", move |b| {
