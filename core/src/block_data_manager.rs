@@ -27,6 +27,7 @@ use std::{
 use std::ops::Deref;
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
+const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
 
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
@@ -94,16 +95,48 @@ impl BlockDataManager {
         Some(block.transactions[address.index].clone())
     }
 
-    pub fn block_by_hash_from_db(&self, hash: &H256) -> Option<Block> {
-        debug!("Loading block {} from db", hash);
-        let block = self.db.key_value().get(COL_BLOCKS, hash)
+    fn block_header_from_db(&self, hash: &H256) -> Option<BlockHeader> {
+        let rlp_bytes = self.db.key_value().get(COL_BLOCKS, hash)
             .expect("Low level database error when fetching block. Some issue with disk?")?;
-        let rlp = Rlp::new(&block);
-        let mut block = Block::decode_with_tx_public(&rlp)
+        let rlp = Rlp::new(&rlp_bytes);
+        let mut block_header = rlp.as_val()
             .expect("Wrong block rlp format!");
-        debug!("Finish constructing block {} from db", hash);
-        VerificationConfig::compute_header_pow_quality(&mut block.block_header);
-        Some(block)
+        VerificationConfig::compute_header_pow_quality(&mut block_header);
+        Some(block_header)
+    }
+
+    fn insert_block_header_to_db(&self, header: &BlockHeader) {
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_BLOCKS, &header.hash(), &rlp::encode(header));
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
+    fn block_body_key(block_hash: &H256) -> Vec<u8> {
+        let mut key = Vec::with_capacity(block_hash.len() + 1);
+        key.extend_from_slice(&block_hash);
+        key.push(BLOCK_BODY_SUFFIX_BYTE);
+        key
+    }
+
+    fn block_body_from_db(&self, block_hash: &H256) -> Option<Vec<Arc<SignedTransaction>>> {
+        let rlp_bytes = self.db.key_value().get(COL_BLOCKS, &Self::block_body_key(block_hash))
+            .expect("Low level database error when fetching block. Some issue with disk?")?;
+        let rlp = Rlp::new(&rlp_bytes);
+        let mut block_body = Block::decode_body_with_tx_public(&rlp)
+            .expect("Wrong block rlp format!");
+        Some(block_body)
+    }
+
+    fn insert_block_body_to_db(&self, block_hash: &H256, transactions: &Vec<Arc<SignedTransaction>>) {
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_BLOCKS, &Self::block_body_key(block_hash), &rlp::encode(header));
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
     }
 
     pub fn block_by_hash(
@@ -117,8 +150,13 @@ impl BlockDataManager {
             }
         }
 
-        let block = self.block_by_hash_from_db(hash)?;
-        let block = Arc::new(block);
+        let header = self.block_header_by_hash(hash)?;
+        let block = Arc::new(Block {
+            block_header: *header,
+            transactions: self.block_body_from_db(hash)?,
+            approximated_rlp_size: 0,
+            approximated_rlp_size_with_public: 0,
+        });
 
         if update_cache {
             let mut write = self.blocks.write();
@@ -155,6 +193,13 @@ impl BlockDataManager {
         self.cache_man.lock().note_used(CacheId::Block(hash));
     }
 
+    fn block_status_key(block_hash: &H256) -> Vec<u8> {
+        let mut key = Vec::with_capacity(block_hash.len() + 1);
+        key.extend_from_slice(block_hash);
+        key.push(BLOCK_STATUS_SUFFIX_BYTE);
+        key
+    }
+
     /// Store block status to db. Now the status means if the block is partial
     /// invalid.
     /// The db key is the block hash plus one extra byte, so we can get better
@@ -167,10 +212,7 @@ impl BlockDataManager {
         &self, block_hash: &H256, status: BlockStatus,
     ) {
         let mut dbops = self.db.key_value().transaction();
-        let mut key = Vec::with_capacity(block_hash.len() + 1);
-        key.extend_from_slice(&block_hash);
-        key.push(BLOCK_STATUS_SUFFIX_BYTE);
-        dbops.put(COL_BLOCKS, &key, &*status);
+        dbops.put(COL_BLOCKS, &Self::block_status_key(block_hash), &*status);
         self.db
             .key_value()
             .write(dbops)
@@ -180,12 +222,9 @@ impl BlockDataManager {
     /// Get block status from db. Now the status means if the block is partial
     /// invalid
     pub fn block_status_from_db(&self, block_hash: &H256) -> Option<BlockStatus> {
-        let mut key = Vec::with_capacity(block_hash.len() + 1);
-        key.extend_from_slice(&block_hash);
-        key.push(BLOCK_STATUS_SUFFIX_BYTE);
         self.db
             .key_value()
-            .get(COL_BLOCKS, &key)
+            .get(COL_BLOCKS, &Self::block_status_key(block_hash))
             .expect("crash for db failure")
             .map(|encoded| {
                 BlockStatus::from_db_status(encoded[0])
