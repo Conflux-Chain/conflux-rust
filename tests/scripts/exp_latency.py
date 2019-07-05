@@ -124,6 +124,7 @@ class LatencyExperiment(ArgumentHolder):
         self.max_peers_propagate = 128
         self.metrics_report_interval_ms = 3000
         self.send_tx_period_ms = 1300
+        self.txgen_account_count = 1000
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
@@ -182,7 +183,8 @@ class LatencyExperiment(ArgumentHolder):
             "--tps", str(self.tps),
             "--bandwidth", str(self.bandwidth),
             "--metrics-report-interval-ms", str(self.metrics_report_interval_ms),
-            "--send-tx-period-ms", str(self.send_tx_period_ms)
+            "--send-tx-period-ms", str(self.send_tx_period_ms),
+            "--txgen-account-count", str(self.txgen_account_count),
         ]
 
         if config.data_propagate_enabled:

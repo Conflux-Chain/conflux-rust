@@ -144,6 +144,12 @@ class P2PTest(ConfluxTestFramework):
             default=1300,
             type=int,
         )
+        parser.add_argument(
+            "--txgen-account-count",
+            dest="txgen_account_count",
+            default=1000,
+            type=int,
+        )
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
@@ -192,7 +198,7 @@ class P2PTest(ConfluxTestFramework):
         if self.tx_propagation_enabled:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
-            self.conf_parameters["txgen_account_count"] = str(10000)
+            self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
 
