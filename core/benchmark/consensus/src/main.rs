@@ -92,7 +92,7 @@ fn create_simple_block(
 
 fn initialize_consensus_graph_for_test(
     genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
-    beta: u64, h: u64, era_epoch_count: usize,
+    beta: u64, h: u64, era_epoch_count: u64,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let ledger_db = db::open_database(
@@ -245,7 +245,7 @@ fn main() {
         .expect("Cannot parse the input file!");
     let h_ratio = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
-    let era_epoch_count = usize::from_str(tokens.next().unwrap())
+    let era_epoch_count = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
     println!(
         "alpha = {}/{} beta = {} h = {} era_epoch_count = {}",

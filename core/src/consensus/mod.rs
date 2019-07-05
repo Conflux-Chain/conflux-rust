@@ -44,7 +44,7 @@ use rlp::*;
 use slab::Slab;
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     io::Write,
     mem,
     sync::Arc,
@@ -85,10 +85,10 @@ const ANTICONE_BARRIER_CAP: usize = 1000;
 // The number of epochs per era. Each era is a potential checkpoint position.
 // The parent_edge checking and adaptive checking are defined relative to the
 // era start blocks.
-pub const ERA_DEFAULT_EPOCH_COUNT: usize = 50000;
+pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
 // Here is the delay for us to recycle those orphaned blocks in the boundary of
 // eras.
-const ERA_RECYCLE_TRANSACTION_DELAY: usize = 20;
+const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
@@ -103,7 +103,7 @@ pub struct ConsensusInnerConfig {
     // The number of epochs per era. Each era is a potential checkpoint
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
-    pub era_epoch_count: usize,
+    pub era_epoch_count: u64,
     // Optimistic execution is the feature to execute ahead of the deferred
     // execution boundary. The goal is to pipeline the transaction
     // execution and the block packaging and verification.
@@ -453,11 +453,16 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_era_height(&self, parent_height: u64, offset: usize) -> u64 {
-        let era_height = if parent_height > offset as u64 {
-            (parent_height - offset as u64)
-                / self.inner_conf.era_epoch_count as u64
-                * self.inner_conf.era_epoch_count as u64
+    fn ancestor_at(&self, me: usize, height: u64) -> usize {
+        let height_index = self.height_to_pivot_index(height);
+        self.inclusive_weight_tree.ancestor_at(me, height_index)
+    }
+
+    #[inline]
+    fn get_era_height(&self, parent_height: u64, offset: u64) -> u64 {
+        let era_height = if parent_height > offset {
+            (parent_height - offset) / self.inner_conf.era_epoch_count
+                * self.inner_conf.era_epoch_count
         } else {
             0
         };
@@ -465,13 +470,13 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_era_block_with_parent(&self, parent: usize, offset: usize) -> usize {
+    fn get_era_block_with_parent(&self, parent: usize, offset: u64) -> usize {
         if parent == NULL {
             return 0;
         }
         let height = self.arena[parent].height;
         let era_height = self.get_era_height(height, offset);
-        self.weight_tree.ancestor_at(parent, era_height as usize)
+        self.ancestor_at(parent, era_height)
     }
 
     fn get_optimistic_execution_task(
@@ -584,9 +589,7 @@ impl ConsensusGraphInner {
         let era_height = self.get_era_height(height, 0);
         let two_era_height =
             self.get_era_height(height, self.inner_conf.era_epoch_count);
-        let era_genesis = self
-            .inclusive_weight_tree
-            .ancestor_at(parent, era_height as usize);
+        let era_genesis = self.ancestor_at(parent, era_height);
 
         let total_weight = subtree_weight[era_genesis];
         let adjusted_beta =
@@ -729,12 +732,8 @@ impl ConsensusGraphInner {
             self.arena[parent].height,
             self.inner_conf.era_epoch_count,
         );
-        let era_genesis = self
-            .inclusive_weight_tree
-            .ancestor_at(parent, era_height as usize);
-        let two_era_genesis = self
-            .inclusive_weight_tree
-            .ancestor_at(parent, two_era_height as usize);
+        let era_genesis = self.ancestor_at(parent, era_height);
+        let two_era_genesis = self.ancestor_at(parent, two_era_height);
 
         let total_weight = self.weight_tree.get(era_genesis);
         debug!("total_weight before insert: {}", total_weight);
@@ -749,7 +748,7 @@ impl ConsensusGraphInner {
 
         while low <= high {
             let mid = (low + high) / 2;
-            let p = self.weight_tree.ancestor_at(parent, mid as usize);
+            let p = self.ancestor_at(parent, mid);
             let gp = self.arena[p].parent;
             let past_era_weight = if gp == era_genesis {
                 0
@@ -767,7 +766,7 @@ impl ConsensusGraphInner {
         }
 
         let stable = if best != era_height {
-            parent = self.weight_tree.ancestor_at(parent, best as usize);
+            parent = self.ancestor_at(parent, best);
 
             let a = self.stable_tree.path_aggregate_chop(parent, era_genesis);
             let b = total_weight
@@ -796,7 +795,7 @@ impl ConsensusGraphInner {
 
             while low <= high {
                 let mid = (low + high) / 2;
-                let p = self.weight_tree.ancestor_at(parent, mid as usize);
+                let p = self.ancestor_at(parent, mid);
                 let gp = self.arena[p].parent;
                 let w = self.weight_tree.get(gp);
                 if w > adjusted_beta {
@@ -808,7 +807,7 @@ impl ConsensusGraphInner {
             }
 
             if best != era_height {
-                parent = self.weight_tree.ancestor_at(parent, best as usize);
+                parent = self.ancestor_at(parent, best);
                 let min_agg =
                     self.adaptive_tree.path_aggregate_chop(parent, era_genesis);
                 if min_agg < 0 {
@@ -825,9 +824,7 @@ impl ConsensusGraphInner {
 
             while low <= high {
                 let mid = (low + high) / 2;
-                let p = self
-                    .inclusive_weight_tree
-                    .ancestor_at(parent, mid as usize);
+                let p = self.ancestor_at(parent, mid);
                 let gp = self.arena[p].parent;
                 let w = self.inclusive_weight_tree.get(gp);
 
@@ -840,9 +837,7 @@ impl ConsensusGraphInner {
             }
 
             if best != two_era_height {
-                parent = self
-                    .inclusive_weight_tree
-                    .ancestor_at(parent, best as usize);
+                parent = self.ancestor_at(parent, best);
                 let min_agg = self
                     .inclusive_adaptive_tree
                     .path_aggregate_chop(parent, two_era_genesis);
@@ -925,9 +920,9 @@ impl ConsensusGraphInner {
             if self.arena[parent].height
                 > self.arena[index].data.max_epoch_in_other_views
             {
-                parent = self.weight_tree.ancestor_at(
+                parent = self.ancestor_at(
                     parent,
-                    self.arena[index].data.max_epoch_in_other_views as usize,
+                    self.arena[index].data.max_epoch_in_other_views,
                 );
             }
 
@@ -1133,13 +1128,11 @@ impl ConsensusGraphInner {
                 break;
             }
 
-            let fork = self.weight_tree.ancestor_at(
+            let fork = self.ancestor_at(
                 *consensus_index_in_epoch,
-                self.arena[lca].height as usize + 1,
+                self.arena[lca].height + 1,
             );
-            let pivot = self
-                .weight_tree
-                .ancestor_at(parent, self.arena[lca].height as usize + 1);
+            let pivot = self.ancestor_at(parent, self.arena[lca].height + 1);
 
             let fork_subtree_weight = subtree_weight[fork];
             let pivot_subtree_weight = subtree_weight[pivot];
@@ -1200,13 +1193,11 @@ impl ConsensusGraphInner {
                 break;
             }
 
-            let fork = self.weight_tree.ancestor_at(
+            let fork = self.ancestor_at(
                 *consensus_index_in_epoch,
-                self.arena[lca].height as usize + 1,
+                self.arena[lca].height + 1,
             );
-            let pivot = self
-                .weight_tree
-                .ancestor_at(parent, self.arena[lca].height as usize + 1);
+            let pivot = self.ancestor_at(parent, self.arena[lca].height + 1);
 
             let fork_subtree_weight = self.weight_tree.get(fork);
             let pivot_subtree_weight = self.weight_tree.get(pivot);
@@ -1255,7 +1246,7 @@ impl ConsensusGraphInner {
                 }
             }
         }
-        let mut anticone = BitSet::new();
+        let mut anticone = BitSet::with_capacity(self.arena.len() as u32);
         for (i, node) in self.arena.iter() {
             if node.data.epoch_number > last_in_pivot
                 && !visited.contains(i as u32)
@@ -1268,27 +1259,26 @@ impl ConsensusGraphInner {
 
     fn compute_future_bitset(&self, me: usize) -> BitSet {
         // Compute future set of parent
-        let mut futures = BitSet::new();
         let mut queue: VecDeque<usize> = VecDeque::new();
-        let mut visited = BitSet::new();
+        let mut visited = BitSet::with_capacity(self.arena.len() as u32);
         queue.push_back(me);
+        visited.add(me as u32);
         while let Some(index) = queue.pop_front() {
-            if visited.contains(index as u32) {
-                continue;
-            }
-            if index != me {
-                futures.add(index as u32);
-            }
-
-            visited.add(index as u32);
             for child in &self.arena[index].children {
-                queue.push_back(*child);
+                if !visited.contains(*child as u32) {
+                    visited.add(*child as u32);
+                    queue.push_back(*child);
+                }
             }
             for referrer in &self.arena[index].referrers {
-                queue.push_back(*referrer);
+                if !visited.contains(*referrer as u32) {
+                    visited.add(*referrer as u32);
+                    queue.push_back(*referrer);
+                }
             }
         }
-        futures
+        visited.remove(me as u32);
+        visited
     }
 
     fn compute_anticone(&mut self, me: usize) -> BitSet {
@@ -1384,35 +1374,29 @@ impl ConsensusGraphInner {
             }
         }
 
-        let mut candidates = HashSet::new();
+        let mut candidates = BinaryHeap::new();
         let mut reversed_indices = Vec::new();
 
         for me in index_set {
             if num_incoming_edges[me] == 0 {
-                candidates.insert(*me);
+                candidates.push((self.arena[*me].hash, *me));
             }
         }
-        while !candidates.is_empty() {
-            let me = candidates
-                .iter()
-                .max_by_key(|index| self.arena[**index].hash)
-                .cloned()
-                .unwrap();
-            candidates.remove(&me);
+        while let Some((_, me)) = candidates.pop() {
             reversed_indices.push(me);
 
             let parent = self.arena[me].parent;
             if index_set.contains(&parent) {
                 num_incoming_edges.entry(parent).and_modify(|e| *e -= 1);
                 if num_incoming_edges[&parent] == 0 {
-                    candidates.insert(parent);
+                    candidates.push((self.arena[parent].hash, parent));
                 }
             }
             for referee in &self.arena[me].referees {
                 if index_set.contains(referee) {
                     num_incoming_edges.entry(*referee).and_modify(|e| *e -= 1);
                     if num_incoming_edges[referee] == 0 {
-                        candidates.insert(*referee);
+                        candidates.push((self.arena[*referee].hash, *referee));
                     }
                 }
             }
@@ -2047,8 +2031,7 @@ impl ConsensusGraphInner {
                 if height < gen_height {
                     continue;
                 }
-                let era_index =
-                    self.weight_tree.ancestor_at(*index, gen_height as usize);
+                let era_index = self.ancestor_at(*index, gen_height);
                 if gen_index != era_index {
                     continue;
                 }
@@ -3099,7 +3082,7 @@ impl ConsensusGraph {
         inner.stable_tree.make_tree(me);
         inner.stable_tree.link(parent, me);
         let past_era_weight = if inner.arena[parent].height
-            % inner.inner_conf.era_epoch_count as u64
+            % inner.inner_conf.era_epoch_count
             == 0
         {
             0
@@ -3371,7 +3354,7 @@ impl ConsensusGraph {
                 let fork_at = inner.arena[lca].height + 1;
                 let prev = inner.get_pivot_block_index(fork_at);
                 let prev_weight = inner.weight_tree.get(prev);
-                let new = inner.weight_tree.ancestor_at(me, fork_at as usize);
+                let new = inner.ancestor_at(me, fork_at);
                 let new_weight = inner.weight_tree.get(new);
 
                 if ConsensusGraphInner::is_heavier(
@@ -3467,8 +3450,8 @@ impl ConsensusGraph {
         let new_pivot_era_block = inner
             .get_era_block_with_parent(*inner.pivot_chain.last().unwrap(), 0);
         let new_era_height = inner.arena[new_pivot_era_block].height;
-        if new_era_height as usize + ERA_RECYCLE_TRANSACTION_DELAY
-            < inner.pivot_chain.len()
+        if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
+            < inner.pivot_index_to_height(inner.pivot_chain.len())
             && inner.last_recycled_era_block != new_pivot_era_block
         {
             self.recycle_tx_outside_era(inner, new_pivot_era_block);
@@ -3566,10 +3549,10 @@ impl ConsensusGraph {
         self.inner.read().transaction_count(address, epoch_number)
     }
 
-    pub fn get_ancestor(&self, hash: &H256, n: usize) -> H256 {
+    pub fn get_ancestor(&self, hash: &H256, height: u64) -> H256 {
         let inner = self.inner.write();
         let me = *inner.indices.get(hash).unwrap();
-        let idx = inner.weight_tree.ancestor_at(me, n);
+        let idx = inner.ancestor_at(me, height);
         inner.arena[idx].hash.clone()
     }
 

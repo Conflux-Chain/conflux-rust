@@ -50,7 +50,7 @@ fn create_simple_block_impl(
 
 fn initialize_synchronization_graph(
     genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
-    beta: u64, h: u64, era_epoch_count: usize,
+    beta: u64, h: u64, era_epoch_count: u64,
 ) -> Arc<SynchronizationGraph>
 {
     let ledger_db = db::open_database(
