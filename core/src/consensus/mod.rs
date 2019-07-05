@@ -44,7 +44,7 @@ use rlp::*;
 use slab::Slab;
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     io::Write,
     mem,
     sync::Arc,
@@ -1383,35 +1383,29 @@ impl ConsensusGraphInner {
             }
         }
 
-        let mut candidates = HashSet::new();
+        let mut candidates = BinaryHeap::new();
         let mut reversed_indices = Vec::new();
 
         for me in index_set {
             if num_incoming_edges[me] == 0 {
-                candidates.insert(*me);
+                candidates.push((self.arena[*me].hash, *me));
             }
         }
-        while !candidates.is_empty() {
-            let me = candidates
-                .iter()
-                .max_by_key(|index| self.arena[**index].hash)
-                .cloned()
-                .unwrap();
-            candidates.remove(&me);
+        while let Some((_, me)) = candidates.pop() {
             reversed_indices.push(me);
 
             let parent = self.arena[me].parent;
             if index_set.contains(&parent) {
                 num_incoming_edges.entry(parent).and_modify(|e| *e -= 1);
                 if num_incoming_edges[&parent] == 0 {
-                    candidates.insert(parent);
+                    candidates.push((self.arena[parent].hash, parent));
                 }
             }
             for referee in &self.arena[me].referees {
                 if index_set.contains(referee) {
                     num_incoming_edges.entry(*referee).and_modify(|e| *e -= 1);
                     if num_incoming_edges[referee] == 0 {
-                        candidates.insert(*referee);
+                        candidates.push((self.arena[*referee].hash, *referee));
                     }
                 }
             }
