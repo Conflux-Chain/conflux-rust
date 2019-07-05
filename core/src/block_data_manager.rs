@@ -24,6 +24,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use std::ops::Deref;
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 
@@ -101,14 +102,6 @@ impl BlockDataManager {
         let mut block = Block::decode_with_tx_public(&rlp)
             .expect("Wrong block rlp format!");
         debug!("Finish constructing block {} from db", hash);
-        //let mut block = rlp.as_val::<Block>().expect("Wrong block rlp
-        // format!"); SynchronizationProtocolHandler::recover_public(
-        //    &mut block,
-        //    &mut *self.txpool.transaction_pubkey_cache.write(),
-        //    &mut *self.cache_man.lock(),
-        //    &*self.worker_pool.lock(),
-        //)
-        //.expect("Failed to recover public!");
         VerificationConfig::compute_header_pow_quality(&mut block.block_header);
         Some(block)
     }
@@ -171,14 +164,13 @@ impl BlockDataManager {
     /// again. TODO Maybe we can use in-place modification (operator `merge`
     /// in rocksdb) to keep the status together with the block.
     pub fn insert_block_status_to_db(
-        &self, block_hash: &H256, partial_invalid: bool,
+        &self, block_hash: &H256, status: BlockStatus,
     ) {
         let mut dbops = self.db.key_value().transaction();
         let mut key = Vec::with_capacity(block_hash.len() + 1);
         key.extend_from_slice(&block_hash);
         key.push(BLOCK_STATUS_SUFFIX_BYTE);
-        let value = if partial_invalid { [1] } else { [0] };
-        dbops.put(COL_BLOCKS, &key, &value);
+        dbops.put(COL_BLOCKS, &key, &*status);
         self.db
             .key_value()
             .write(dbops)
@@ -187,7 +179,7 @@ impl BlockDataManager {
 
     /// Get block status from db. Now the status means if the block is partial
     /// invalid
-    pub fn block_status_from_db(&self, block_hash: &H256) -> Option<bool> {
+    pub fn block_status_from_db(&self, block_hash: &H256) -> Option<BlockStatus> {
         let mut key = Vec::with_capacity(block_hash.len() + 1);
         key.extend_from_slice(&block_hash);
         key.push(BLOCK_STATUS_SUFFIX_BYTE);
@@ -196,9 +188,7 @@ impl BlockDataManager {
             .get(COL_BLOCKS, &key)
             .expect("crash for db failure")
             .map(|encoded| {
-                // TODO May encode more data in the future, and should use an
-                // better structure for encoding and decoding
-                encoded[0] == 1
+                BlockStatus::from_db_status(encoded[0])
             })
     }
 
@@ -518,11 +508,29 @@ impl BlockDataManager {
     }
 
     pub fn invalidate_block(&self, block_hash: H256) {
+        self.insert_block_status_to_db(&block_hash, BlockStatus::Invalid);
         self.invalid_block_set.write().insert(block_hash);
     }
 
+    /// Check if a block is already marked as invalid.
     pub fn verified_invalid(&self, block_hash: &H256) -> bool {
-        self.invalid_block_set.read().contains(block_hash)
+        let invalid_block_set = self.invalid_block_set.upgradable_read();
+        if invalid_block_set.contains(block_hash) {
+            return true;
+        } else {
+            if let Some(status) = self.block_status_from_db(block_hash) {
+                match status {
+                    BlockStatus::Invalid => {
+                        RwLockUpgradableReadGuard::upgrade(invalid_block_set).insert(*block_hash);
+                        return true;
+                    }
+                    _ => return false
+                }
+            } else {
+                // No status on disk, so the block is not marked invalid before
+                return false;
+            }
+        }
     }
 
     pub fn cached_block_count(&self) -> usize { self.blocks.read().len() }
@@ -651,5 +659,23 @@ impl BlockReceiptsInfo {
     /// Called after we process rewards, and other fees will not be used w.h.p.
     pub fn retain_epoch(&mut self, epoch: &EpochIndex) {
         self.info_with_epoch.retain(|(e_id, _)| *e_id == *epoch);
+    }
+}
+
+#[derive(Copy)]
+enum BlockStatus {
+    Valid = 0,
+    Invalid = 1,
+    PartialInvalid = 2,
+}
+
+impl BlockStatus {
+    fn from_db_status(db_status: u8) -> Self {
+        match db_status {
+            0 => BlockStatus::Valid,
+            1 => BlockStatus::Invalid,
+            2 => BlockStatus::PartialInvalid,
+            _ => panic!("Read unknown block status from db"),
+        }
     }
 }
