@@ -1255,7 +1255,7 @@ impl ConsensusGraphInner {
                 }
             }
         }
-        let mut anticone = BitSet::new();
+        let mut anticone = BitSet::with_capacity(self.arena.len() as u32);
         for (i, node) in self.arena.iter() {
             if node.data.epoch_number > last_in_pivot
                 && !visited.contains(i as u32)
@@ -1268,27 +1268,26 @@ impl ConsensusGraphInner {
 
     fn compute_future_bitset(&self, me: usize) -> BitSet {
         // Compute future set of parent
-        let mut futures = BitSet::new();
         let mut queue: VecDeque<usize> = VecDeque::new();
-        let mut visited = BitSet::new();
+        let mut visited = BitSet::with_capacity(self.arena.len() as u32);
         queue.push_back(me);
+        visited.add(me as u32);
         while let Some(index) = queue.pop_front() {
-            if visited.contains(index as u32) {
-                continue;
-            }
-            if index != me {
-                futures.add(index as u32);
-            }
-
-            visited.add(index as u32);
             for child in &self.arena[index].children {
-                queue.push_back(*child);
+                if !visited.contains(*child as u32) {
+                    visited.add(*child as u32);
+                    queue.push_back(*child);
+                }
             }
             for referrer in &self.arena[index].referrers {
-                queue.push_back(*referrer);
+                if !visited.contains(*referrer as u32) {
+                    visited.add(*referrer as u32);
+                    queue.push_back(*referrer);
+                }
             }
         }
-        futures
+        visited.remove(me as u32);
+        visited
     }
 
     fn compute_anticone(&mut self, me: usize) -> BitSet {

@@ -600,7 +600,8 @@ impl SynchronizationGraphInner {
 
     fn set_and_propagate_invalid(
         &mut self, queue: &mut VecDeque<usize>,
-        invalid_set: &mut HashSet<usize>, index: usize,
+        invalid_set: &mut HashSet<usize>, visited: &mut HashSet<usize>,
+        index: usize,
     )
     {
         let children =
@@ -608,7 +609,10 @@ impl SynchronizationGraphInner {
         for child in &children {
             if !invalid_set.contains(&child) {
                 self.arena[*child].graph_status = BLOCK_INVALID;
-                queue.push_back(*child);
+                if !visited.contains(&child) {
+                    visited.insert(*child);
+                    queue.push_back(*child);
+                }
                 invalid_set.insert(*child);
             }
         }
@@ -618,7 +622,10 @@ impl SynchronizationGraphInner {
         for referrer in &referrers {
             if !invalid_set.contains(&referrer) {
                 self.arena[*referrer].graph_status = BLOCK_INVALID;
-                queue.push_back(*referrer);
+                if !visited.contains(&referrer) {
+                    visited.insert(*referrer);
+                    queue.push_back(*referrer);
+                }
                 invalid_set.insert(*referrer);
             }
         }
@@ -712,6 +719,7 @@ impl SynchronizationGraph {
     }
 
     fn recover_graph_from_db(&mut self) {
+        // TODO: refactor code to make it run O(n + m)
         info!("Start full recovery of the block DAG and state from database");
         let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
@@ -781,6 +789,7 @@ impl SynchronizationGraph {
     }
 
     fn fast_recover_graph_from_db(&mut self) {
+        // TODO: refactor code to make it run O(n + m)
         info!("Start fast recovery of the block DAG from database");
         let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
@@ -954,7 +963,9 @@ impl SynchronizationGraph {
         let mut need_to_relay: Vec<H256> = Vec::new();
         let mut me_invalid = false;
         let mut invalid_set: HashSet<usize> = HashSet::new();
+        let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
+        visited.insert(me);
         queue.push_back(me);
         while let Some(index) = queue.pop_front() {
             if inner.arena[index].graph_status == BLOCK_INVALID {
@@ -965,6 +976,7 @@ impl SynchronizationGraph {
                 inner.set_and_propagate_invalid(
                     &mut queue,
                     &mut invalid_set,
+                    &mut visited,
                     index,
                 );
             } else {
@@ -994,6 +1006,7 @@ impl SynchronizationGraph {
                         inner.set_and_propagate_invalid(
                             &mut queue,
                             &mut invalid_set,
+                            &mut visited,
                             index,
                         );
                         continue;
@@ -1008,14 +1021,18 @@ impl SynchronizationGraph {
                     for child in &inner.arena[index].children {
                         if inner.arena[*child].graph_status
                             < BLOCK_HEADER_GRAPH_READY
+                            && !visited.contains(child)
                         {
+                            visited.insert(*child);
                             queue.push_back(*child);
                         }
                     }
                     for referrer in &inner.arena[index].referrers {
                         if inner.arena[*referrer].graph_status
                             < BLOCK_HEADER_GRAPH_READY
+                            && !visited.contains(referrer)
                         {
+                            visited.insert(*referrer);
                             queue.push_back(*referrer);
                         }
                     }
@@ -1027,11 +1044,14 @@ impl SynchronizationGraph {
                         .unwrap()
                         .as_secs();
                     for child in &inner.arena[index].children {
-                        debug_assert!(
-                            inner.arena[*child].graph_status
-                                < BLOCK_HEADER_PARENTAL_TREE_READY
-                        );
-                        queue.push_back(*child);
+                        if !visited.contains(child) {
+                            debug_assert!(
+                                inner.arena[*child].graph_status
+                                    < BLOCK_HEADER_PARENTAL_TREE_READY
+                            );
+                            visited.insert(*child);
+                            queue.push_back(*child);
+                        }
                     }
                 }
 
@@ -1129,7 +1149,9 @@ impl SynchronizationGraph {
         }
 
         let mut invalid_set: HashSet<usize> = HashSet::new();
+        let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
+        visited.insert(me);
         queue.push_back(me);
 
         let block = Arc::new(block);
@@ -1154,6 +1176,7 @@ impl SynchronizationGraph {
                 inner.set_and_propagate_invalid(
                     &mut queue,
                     &mut invalid_set,
+                    &mut visited,
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
@@ -1175,16 +1198,24 @@ impl SynchronizationGraph {
                 }
 
                 for child in &inner.arena[index].children {
-                    debug_assert!(
-                        inner.arena[*child].graph_status < BLOCK_GRAPH_READY
-                    );
-                    queue.push_back(*child);
+                    if !visited.contains(child) {
+                        debug_assert!(
+                            inner.arena[*child].graph_status
+                                < BLOCK_GRAPH_READY
+                        );
+                        visited.insert(*child);
+                        queue.push_back(*child);
+                    }
                 }
                 for referrer in &inner.arena[index].referrers {
-                    debug_assert!(
-                        inner.arena[*referrer].graph_status < BLOCK_GRAPH_READY
-                    );
-                    queue.push_back(*referrer);
+                    if !visited.contains(referrer) {
+                        debug_assert!(
+                            inner.arena[*referrer].graph_status
+                                < BLOCK_GRAPH_READY
+                        );
+                        visited.insert(*referrer);
+                        queue.push_back(*referrer);
+                    }
                 }
             }
         }
@@ -1282,10 +1313,11 @@ impl SynchronizationGraph {
 
         let mut queue = VecDeque::new();
         let mut expire_set = HashSet::new();
+        let mut visited = HashSet::new();
         for index in &inner.not_ready_block_indices {
             if !indices_with_referees.contains(index) {
                 queue.push_back(*index);
-                expire_set.insert(*index);
+                visited.insert(*index);
             }
         }
 
@@ -1298,19 +1330,13 @@ impl SynchronizationGraph {
                 || now - inner.arena[index].timestamp > expire_time
             {
                 inner.arena[index].graph_status = BLOCK_INVALID;
+                expire_set.insert(index);
                 inner.set_and_propagate_invalid(
                     &mut queue,
                     &mut expire_set,
+                    &mut visited,
                     index,
                 );
-            } else {
-                // `expired_set` is used as `visited` in the iteration, and
-                // should only contain invalid blocks in the
-                // end. A block is visited but valid only if it
-                // is inserted at the start as blocks with no
-                // incoming edges, so it's okay to remove them during the
-                // iteration.
-                expire_set.remove(&index);
             }
         }
 
