@@ -1650,7 +1650,12 @@ impl SynchronizationProtocolHandler {
             // For chained header requests, we request
             // more chains recursively.
             RequestMessage::HeaderChain(_) => {
-                let last = resp.headers.last().unwrap();
+                if resp.headers.is_empty() {
+                    debug_assert!(hashes.is_empty());
+                    // No dependent headers if the response is empty
+                    return;
+                }
+                let last = resp.headers.last().expect("headers is not empty");
                 let parent_hash = last.parent_hash();
                 let parent_height = last.height();
 
