@@ -347,6 +347,7 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use crate::{
@@ -362,6 +363,7 @@ mod tests {
     use cfx_types::{Address, U256};
     use std::ops::Deref;
 
+    #[allow(dead_code)]
     fn get_test_origin() -> OriginInfo {
         OriginInfo {
             address: Address::zero(),
@@ -371,6 +373,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn get_test_env_info() -> EnvInfo {
         EnvInfo {
             number: 100,
@@ -411,5 +414,5 @@ mod tests {
     }
 
     #[test]
-    fn can_be_created() { let mut setup = TestSetup::new(); }
+    fn can_be_created() { let _setup = TestSetup::new(); }
 }

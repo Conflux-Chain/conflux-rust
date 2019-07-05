@@ -1223,6 +1223,7 @@ impl<'a, 'b> Executive<'a, 'b> {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use crate::{
