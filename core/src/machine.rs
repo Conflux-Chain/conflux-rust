@@ -57,6 +57,7 @@ impl CommonParams {
 
 pub type SpecCreationRules = Fn(&mut Spec, BlockNumber) + Sync + Send;
 
+/// State machine
 pub struct Machine {
     params: CommonParams,
     builtins: Arc<BTreeMap<Address, Builtin>>,
@@ -84,7 +85,7 @@ impl Machine {
     /// Get the general parameters of the chain.
     pub fn params(&self) -> &CommonParams { &self.params }
 
-    pub fn spec(&self, number: BlockNumber) -> Spec {
+    pub fn spec_at(&self, number: BlockNumber) -> Spec {
         let mut spec = Spec::new_spec();
         if let Some(ref rules) = self.spec_rules {
             (rules)(&mut spec, number)

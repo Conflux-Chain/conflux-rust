@@ -341,17 +341,17 @@ fn test_author(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.author = author;
+    let mut ctx = MockContext::new();
+    ctx.env.author = author;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
     );
@@ -365,17 +365,17 @@ fn test_timestamp(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.timestamp = timestamp;
+    let mut ctx = MockContext::new();
+    ctx.env.timestamp = timestamp;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000001234",
     );
@@ -413,17 +413,17 @@ fn test_difficulty(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.difficulty = difficulty;
+    let mut ctx = MockContext::new();
+    ctx.env.difficulty = difficulty;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000001234",
     );
@@ -437,17 +437,17 @@ fn test_gas_limit(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.gas_limit = gas_limit;
+    let mut ctx = MockContext::new();
+    ctx.env.gas_limit = gas_limit;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000001234",
     );
@@ -1089,9 +1089,9 @@ fn assert_set_contains<T: Debug + Eq + PartialEq + Hash>(
     assert!(contains, "Element not found in HashSet");
 }
 
-fn assert_store(context: &MockContext, pos: u64, val: &str) {
+fn assert_store(ctx: &MockContext, pos: u64, val: &str) {
     assert_eq!(
-        context.store.get(&H256::from(pos)).unwrap(),
+        ctx.store.get(&H256::from(pos)).unwrap(),
         &H256::from_str(val).unwrap()
     );
 }

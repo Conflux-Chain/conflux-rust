@@ -43,6 +43,7 @@ priority-send-queue = { path = "../util/priority-send-queue" }
 toml = "0.4"
 metrics = { path = "../util/metrics" }
 hibitset = { path = "../util/hibitset" }
+crossbeam = "0.3"
 
 [dev-dependencies]
 rustc-hex = "1.0"

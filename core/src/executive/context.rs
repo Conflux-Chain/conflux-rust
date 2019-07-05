@@ -1,8 +1,24 @@
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// This file is part of Parity.
+
+// Parity is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Parity is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// Transaction execution environment.
+//! Transaction Execution environment.
 use super::executive::*;
 use crate::{
     bytes::Bytes,
@@ -10,8 +26,8 @@ use crate::{
     state::{CleanupMode, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
-        ContractCreateResult, CreateContractAddress, EnvInfo,
-        MessageCallResult, ReturnData, Spec, TrapKind,
+        ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
+        ReturnData, Spec, TrapKind,
     },
 };
 use cfx_types::{Address, H256, U256};
@@ -27,18 +43,18 @@ pub enum OutputPolicy {
     InitContract,
 }
 
-/// Transaction properties that externalities need to know about.
-pub struct OriginInfo {
+/// Transaction properties that context need to know about.
+pub struct Origin {
     address: Address,
     origin: Address,
     gas_price: U256,
     value: U256,
 }
 
-impl OriginInfo {
+impl Origin {
     /// Populates origin info from action params.
     pub fn from(params: &ActionParams) -> Self {
-        OriginInfo {
+        Origin {
             address: params.address.clone(),
             origin: params.origin.clone(),
             gas_price: params.gas_price,
@@ -53,10 +69,10 @@ impl OriginInfo {
 #[allow(dead_code)]
 pub struct Context<'a, 'b: 'a> {
     state: &'a mut State<'b>,
-    env: &'a EnvInfo,
+    env: &'a Env,
     depth: usize,
     stack_depth: usize,
-    origin: &'a OriginInfo,
+    origin: &'a Origin,
     substate: &'a mut Substate,
     machine: &'a Machine,
     spec: &'a Spec,
@@ -67,10 +83,9 @@ pub struct Context<'a, 'b: 'a> {
 impl<'a, 'b: 'a> Context<'a, 'b> {
     /// Basic `Context` constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a EnvInfo, machine: &'a Machine,
-        spec: &'a Spec, depth: usize, stack_depth: usize,
-        origin: &'a OriginInfo, substate: &'a mut Substate,
-        output: OutputPolicy, static_flag: bool,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
+        spec: &'a Spec, depth: usize, stack_depth: usize, origin: &'a Origin,
+        substate: &'a mut Substate, output: OutputPolicy, static_flag: bool,
     ) -> Self
     {
         Context {
@@ -140,8 +155,6 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
         address_scheme: CreateContractAddress, trap: bool,
     ) -> ::std::result::Result<ContractCreateResult, TrapKind>
     {
-        assert!(trap);
-
         // create new contract address
         let (address, code_hash) = match self.state.nonce(&self.origin.address)
         {
@@ -184,7 +197,25 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
             }
         }
 
-        return Err(TrapKind::Create(params, address));
+        if trap {
+            return Err(TrapKind::Create(params, address));
+        }
+
+        // TODO: handle internal error separately
+        let mut ex = Executive::from_parent(
+            self.state,
+            self.env,
+            self.machine,
+            self.spec,
+            self.depth,
+            self.static_flag,
+        );
+        let out = ex.create_with_crossbeam(
+            params,
+            self.substate,
+            self.stack_depth + 1,
+        );
+        Ok(into_contract_create_result(out, &address, self.substate))
     }
 
     fn call(
@@ -311,7 +342,7 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
 
     fn spec(&self) -> &Spec { &self.spec }
 
-    fn env_info(&self) -> &EnvInfo { &self.env }
+    fn env(&self) -> &Env { &self.env }
 
     fn depth(&self) -> usize { self.depth }
 
@@ -351,21 +382,21 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
 mod tests {
     use super::*;
     use crate::{
+        machine::new_machine,
         statedb::StateDb,
         storage::{
             new_storage_manager_for_testing, state::StateTrait, StorageManager,
             StorageManagerTrait,
         },
         test_helpers::get_state_for_genesis_write,
-        vm::EnvInfo,
+        vm::Env,
         vm_factory::VmFactory,
     };
     use cfx_types::{Address, U256};
     use std::ops::Deref;
 
-    #[allow(dead_code)]
-    fn get_test_origin() -> OriginInfo {
-        OriginInfo {
+    fn get_test_origin() -> Origin {
+        Origin {
             address: Address::zero(),
             origin: Address::zero(),
             gas_price: U256::zero(),
@@ -373,9 +404,8 @@ mod tests {
         }
     }
 
-    #[allow(dead_code)]
-    fn get_test_env_info() -> EnvInfo {
-        EnvInfo {
+    fn get_test_env() -> Env {
+        Env {
             number: 100,
             author: 0.into(),
             timestamp: 0,
@@ -389,6 +419,10 @@ mod tests {
     struct TestSetup {
         storage_manager: Option<Box<StorageManager>>,
         state: Option<State<'static>>,
+        machine: Machine,
+        spec: Spec,
+        substate: Substate,
+        env: Env,
     }
 
     impl TestSetup {
@@ -398,10 +432,17 @@ mod tests {
 
         fn new() -> Self {
             let storage_manager = Box::new(new_storage_manager_for_testing());
+            let machine = new_machine();
+            let env = get_test_env();
+            let spec = machine.spec_at(env.number);
 
             let mut setup = Self {
                 storage_manager: None,
                 state: None,
+                machine,
+                spec,
+                substate: Substate::new(),
+                env,
             };
             setup.storage_manager = Some(storage_manager);
             setup.init_state(unsafe {
@@ -414,5 +455,211 @@ mod tests {
     }
 
     #[test]
-    fn can_be_created() { let _setup = TestSetup::new(); }
+    fn can_be_created() {
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let ctx = Context::new(
+            state,
+            &setup.env,
+            &setup.machine,
+            &setup.spec,
+            0,
+            0,
+            &origin,
+            &mut setup.substate,
+            OutputPolicy::InitContract,
+            false,
+        );
+
+        assert_eq!(ctx.env().number, 100);
+    }
+
+    #[test]
+    fn can_return_block_hash_no_env() {
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let mut ctx = Context::new(
+            state,
+            &setup.env,
+            &setup.machine,
+            &setup.spec,
+            0,
+            0,
+            &origin,
+            &mut setup.substate,
+            OutputPolicy::InitContract,
+            false,
+        );
+
+        let hash = ctx.blockhash(
+            &"0000000000000000000000000000000000000000000000000000000000120000"
+                .parse::<U256>()
+                .unwrap(),
+        );
+
+        assert_eq!(hash, H256::zero());
+    }
+
+    #[test]
+    #[should_panic]
+    fn can_call_fail_empty() {
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let mut ctx = Context::new(
+            state,
+            &setup.env,
+            &setup.machine,
+            &setup.spec,
+            0,
+            0,
+            &origin,
+            &mut setup.substate,
+            OutputPolicy::InitContract,
+            false,
+        );
+
+        // this should panic because we have no balance on any account
+        ctx.call(
+            &"0000000000000000000000000000000000000000000000000000000000120000".parse::<U256>().unwrap(),
+            &Address::new(),
+            &Address::new(),
+            Some("0000000000000000000000000000000000000000000000000000000000150000".parse::<U256>().unwrap()),
+            &[],
+            &Address::new(),
+            CallType::Call,
+            false,
+        ).ok().unwrap();
+    }
+
+    #[test]
+    fn can_log() {
+        let log_data = vec![120u8, 110u8];
+        let log_topics = vec![H256::from(
+            "af0fa234a6af46afa23faf23bcbc1c1cb4bcb7bcbe7e7e7ee3ee2edddddddddd",
+        )];
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+            ctx.log(log_topics, &log_data).unwrap();
+        }
+
+        assert_eq!(setup.substate.logs.len(), 1);
+    }
+
+    #[test]
+    fn can_suicide() {
+        let refund_account = &Address::new();
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+            ctx.suicide(refund_account).unwrap();
+        }
+
+        assert_eq!(setup.substate.suicides.len(), 1);
+    }
+
+    #[test]
+    fn can_create() {
+        use std::str::FromStr;
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let address = {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+            match ctx.create(&U256::max_value(), &U256::zero(), &[], CreateContractAddress::FromSenderAndNonce, false) {
+                Ok(ContractCreateResult::Created(address, _)) => address,
+                _ => panic!("Test create failed; expected Created, got Failed/Reverted."),
+            }
+        };
+
+        assert_eq!(
+            address,
+            Address::from_str("bd770416a3345f91e4b34576cb804a576fa48eb1")
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn can_create2() {
+        use std::str::FromStr;
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let address = {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+
+            match ctx.create(&U256::max_value(), &U256::zero(), &[], CreateContractAddress::FromSenderSaltAndCodeHash(H256::default()), false) {
+                Ok(ContractCreateResult::Created(address, _)) => address,
+                _ => panic!("Test create failed; expected Created, got Failed/Reverted."),
+            }
+        };
+
+        assert_eq!(
+            address,
+            Address::from_str("e33c0c7f7df4809055c3eba6c09cfe4baf1bd9e0")
+                .unwrap()
+        );
+    }
 }

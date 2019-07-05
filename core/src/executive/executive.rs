@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    context::{Context, OriginInfo, OutputPolicy},
+    context::{Context, Origin, OutputPolicy},
     Executed, ExecutionError, ExecutionResult,
 };
 use crate::{
@@ -21,11 +21,29 @@ use std::{cmp, sync::Arc};
 use crate::{
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
-        CreateContractAddress, EnvInfo, ResumeCall, ResumeCreate, ReturnData,
-        Spec, TrapError,
+        CreateContractAddress, Env, ResumeCall, ResumeCreate, ReturnData, Spec,
+        TrapError,
     },
     vm_factory::VmFactory,
 };
+use crossbeam;
+
+#[cfg(debug_assertions)]
+/// Roughly estimate what stack size each level of evm depth will use. (Debug
+/// build)
+const STACK_SIZE_PER_DEPTH: usize = 128 * 1024;
+
+#[cfg(not(debug_assertions))]
+/// Roughly estimate what stack size each level of evm depth will use.
+const STACK_SIZE_PER_DEPTH: usize = 24 * 1024;
+
+#[cfg(debug_assertions)]
+/// Entry stack overhead prior to execution. (Debug build)
+const STACK_SIZE_ENTRY_OVERHEAD: usize = 100 * 1024;
+
+#[cfg(not(debug_assertions))]
+/// Entry stack overhead prior to execution.
+const STACK_SIZE_ENTRY_OVERHEAD: usize = 20 * 1024;
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -109,12 +127,12 @@ enum CallCreateExecutiveKind {
     CallBuiltin(ActionParams),
     ExecCall(ActionParams, Substate),
     ExecCreate(ActionParams, Substate),
-    ResumeCall(OriginInfo, Box<ResumeCall>, Substate),
-    ResumeCreate(OriginInfo, Box<ResumeCreate>, Substate),
+    ResumeCall(Origin, Box<ResumeCall>, Substate),
+    ResumeCreate(Origin, Box<ResumeCreate>, Substate),
 }
 
 pub struct CallCreateExecutive<'a> {
-    env: &'a EnvInfo,
+    env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
     factory: &'a VmFactory,
@@ -129,7 +147,7 @@ pub struct CallCreateExecutive<'a> {
 impl<'a> CallCreateExecutive<'a> {
     /// Create a  new call executive using raw data.
     pub fn new_call_raw(
-        params: ActionParams, env: &'a EnvInfo, machine: &'a Machine,
+        params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
     ) -> Self
@@ -180,7 +198,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     /// Create a new create executive using raw data.
     pub fn new_create_raw(
-        params: ActionParams, env: &'a EnvInfo, machine: &'a Machine,
+        params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
     ) -> Self
@@ -317,9 +335,9 @@ impl<'a> CallCreateExecutive<'a> {
 
     /// Creates `Context` from `Executive`.
     fn as_context<'any, 'b: 'any>(
-        state: &'any mut State<'b>, env: &'any EnvInfo, machine: &'any Machine,
+        state: &'any mut State<'b>, env: &'any Env, machine: &'any Machine,
         spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
-        origin: &'any OriginInfo, substate: &'any mut Substate,
+        origin: &'any Origin, substate: &'any mut Substate,
         output: OutputPolicy,
     ) -> Context<'any, 'b>
     {
@@ -455,7 +473,7 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 }
 
-                let origin = OriginInfo::from(&params);
+                let origin = Origin::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
 
                 let out = {
@@ -533,7 +551,7 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 }
 
-                let origin = OriginInfo::from(&params);
+                let origin = Origin::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
 
                 let out = {
@@ -850,7 +868,7 @@ pub type ExecutiveTrapResult<'a, T> =
 /// Transaction executor.
 pub struct Executive<'a, 'b: 'a> {
     pub state: &'a mut State<'b>,
-    env: &'a mut EnvInfo,
+    env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
     depth: usize,
@@ -860,7 +878,7 @@ pub struct Executive<'a, 'b: 'a> {
 impl<'a, 'b> Executive<'a, 'b> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a mut EnvInfo, machine: &'a Machine,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec,
     ) -> Self
     {
@@ -875,9 +893,8 @@ impl<'a, 'b> Executive<'a, 'b> {
     }
 
     /// Populates executive from parent properties. Increments executive depth.
-    #[allow(dead_code)]
     pub fn from_parent(
-        state: &'a mut State<'b>, env: &'a mut EnvInfo, machine: &'a Machine,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
     ) -> Self
     {
@@ -931,11 +948,32 @@ impl<'a, 'b> Executive<'a, 'b> {
         result
     }
 
+    /// Creates contract with given contract params, if the stack depth is above
+    /// a threshold, create a new thread to execute it.
+    pub fn create_with_crossbeam(
+        &mut self, params: ActionParams, substate: &mut Substate,
+        stack_depth: usize,
+    ) -> vm::Result<FinalizationResult>
+    {
+        let local_stack_size = ::io::LOCAL_STACK_SIZE.with(|sz| sz.get());
+        let depth_threshold = local_stack_size
+            .saturating_sub(STACK_SIZE_ENTRY_OVERHEAD)
+            / STACK_SIZE_PER_DEPTH;
+
+        if stack_depth != depth_threshold {
+            self.create_with_stack_depth(params, substate, stack_depth)
+        } else {
+            crossbeam::scope(|scope| {
+                scope.builder().stack_size(::std::cmp::max(self.spec.max_depth.saturating_sub(depth_threshold) * STACK_SIZE_PER_DEPTH, local_stack_size)).spawn(move || {
+                    self.create_with_stack_depth(params, substate, stack_depth)
+                }).expect("Sub-thread creation cannot fail; the host might run out of resources; qed")
+            }).join()
+        }
+    }
+
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
     ) -> vm::Result<FinalizationResult> {
-        println!("gas={:?}", params.gas);
-
         self.create_with_stack_depth(params, substate, 0)
     }
 
@@ -1113,7 +1151,7 @@ impl<'a, 'b> Executive<'a, 'b> {
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
-        &mut self, tx: &SignedTransaction, substate: Substate,
+        &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
     ) -> ExecutionResult<Executed>
     {
@@ -1140,7 +1178,6 @@ impl<'a, 'b> Executive<'a, 'b> {
         let gas_left = gas_left_prerefund + refunded;
 
         let gas_used = tx.gas - gas_left;
-        self.env.gas_used += tx.gas;
         let refund_value = U256::zero();
         let fees_value = tx.gas * tx.gas_price;
 
@@ -1162,11 +1199,11 @@ impl<'a, 'b> Executive<'a, 'b> {
             fees_value,
             &self.env.author
         );
-        //self.state.add_balance(
-        //    &self.env.author,
-        //    &fees_value,
-        //    substate.to_cleanup_mode(&spec),
-        //)?;
+        self.state.add_balance(
+            &self.env.author,
+            &fees_value,
+            substate.to_cleanup_mode(&spec),
+        )?;
 
         // perform suicides
         for address in &substate.suicides {
@@ -1198,7 +1235,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 gas_used: tx.gas,
                 refunded: U256::zero(),
                 fee: fees_value,
-                cumulative_gas_used: self.env.gas_used,
+                cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
                 output,
@@ -1213,7 +1250,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 gas_used,
                 refunded,
                 fee: fees_value,
-                cumulative_gas_used: self.env.gas_used,
+                cumulative_gas_used: self.env.gas_used + gas_used,
                 logs: substate.logs,
                 contracts_created: substate.contracts_created,
                 output,
@@ -1299,13 +1336,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
+        let mut env = Env::default();
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec_at(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
             ex.create(params, &mut substate).unwrap()
         };
 
@@ -1372,13 +1409,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
+        let mut env = Env::default();
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec_at(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
             ex.create(params, &mut substate).unwrap()
         };
 
@@ -1440,13 +1477,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
+        let mut env = Env::default();
         let machine = make_byzantium_machine(5);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec_at(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
             ex.call(params, &mut substate).unwrap()
         };
 
@@ -1488,9 +1525,9 @@ mod tests {
         params.gas = U256::from(20025);
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::zero());
-        let mut info = EnvInfo::default();
+        let mut env = Env::default();
         let machine = crate::machine::new_machine();
-        let spec = machine.spec(info.number);
+        let spec = machine.spec_at(env.number);
         let mut substate = Substate::new();
 
         let mut output = [0u8; 14];
@@ -1499,7 +1536,7 @@ mod tests {
             return_data,
             ..
         } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
             ex.call(params, &mut substate).unwrap()
         };
         (&mut output)
@@ -1552,13 +1589,13 @@ mod tests {
                 CleanupMode::NoEmpty,
             )
             .unwrap();
-        let mut info = EnvInfo::default();
+        let mut env = Env::default();
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec_at(env.number);
         let mut substate = Substate::new();
 
         let result = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
             ex.create(params, &mut substate)
         };
 
@@ -1590,13 +1627,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
-        info.gas_limit = U256::from(100_000);
+        let mut env = Env::default();
+        env.gas_limit = U256::from(100_000);
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec_at(env.number);
 
         let res = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
             ex.transact(&t)
         };
 
