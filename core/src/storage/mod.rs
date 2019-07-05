@@ -25,4 +25,5 @@ pub use self::{
         StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,
     },
+    tests::new_state_manager_for_testing as new_storage_manager_for_testing,
 };
