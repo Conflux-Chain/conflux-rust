@@ -151,7 +151,9 @@ impl Block {
         stream.drain()
     }
 
-    pub fn decode_body_with_tx_public(rlp: &Rlp) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+    pub fn decode_body_with_tx_public(
+        rlp: &Rlp,
+    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
         if rlp.as_raw().len() != rlp.payload_info()?.total() {
             return Err(DecoderError::RlpIsTooBig);
         }
@@ -163,6 +165,31 @@ impl Block {
         }
 
         Ok(transactions)
+    }
+
+    pub fn encode_with_tx_public(&self) -> Vec<u8> {
+        let mut stream = RlpStream::new();
+        stream
+            .begin_list(2)
+            .append(&self.block_header)
+            .append_raw(&*self.encode_body_with_tx_public(), 1);
+        stream.drain()
+    }
+
+    pub fn decode_with_tx_public(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if rlp.as_raw().len() != rlp.payload_info()?.total() {
+            return Err(DecoderError::RlpIsTooBig);
+        }
+        if rlp.item_count()? != 2 {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+
+        Ok(Block::new_with_rlp_size(
+            rlp.val_at(0)?,
+            Self::decode_body_with_tx_public(&rlp.at(1)?)?,
+            None,
+            Some(rlp.as_raw().len()),
+        ))
     }
 }
 

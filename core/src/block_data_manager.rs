@@ -24,7 +24,6 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use std::ops::Deref;
 
 const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
@@ -99,8 +98,7 @@ impl BlockDataManager {
         let rlp_bytes = self.db.key_value().get(COL_BLOCKS, hash)
             .expect("Low level database error when fetching block. Some issue with disk?")?;
         let rlp = Rlp::new(&rlp_bytes);
-        let mut block_header = rlp.as_val()
-            .expect("Wrong block rlp format!");
+        let mut block_header = rlp.as_val().expect("Wrong block rlp format!");
         VerificationConfig::compute_header_pow_quality(&mut block_header);
         Some(block_header)
     }
@@ -121,18 +119,24 @@ impl BlockDataManager {
         key
     }
 
-    fn block_body_from_db(&self, block_hash: &H256) -> Option<Vec<Arc<SignedTransaction>>> {
+    fn block_body_from_db(
+        &self, block_hash: &H256,
+    ) -> Option<Vec<Arc<SignedTransaction>>> {
         let rlp_bytes = self.db.key_value().get(COL_BLOCKS, &Self::block_body_key(block_hash))
             .expect("Low level database error when fetching block. Some issue with disk?")?;
         let rlp = Rlp::new(&rlp_bytes);
-        let mut block_body = Block::decode_body_with_tx_public(&rlp)
+        let block_body = Block::decode_body_with_tx_public(&rlp)
             .expect("Wrong block rlp format!");
         Some(block_body)
     }
 
-    fn insert_block_body_to_db(&self, block_hash: &H256, transactions: &Vec<Arc<SignedTransaction>>) {
+    fn insert_block_body_to_db(&self, block: &Block) {
         let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_BLOCKS, &Self::block_body_key(block_hash), &rlp::encode(header));
+        dbops.put(
+            COL_BLOCKS,
+            &Self::block_body_key(&block.hash()),
+            &block.encode_body_with_tx_public(),
+        );
         self.db
             .key_value()
             .write(dbops)
@@ -152,7 +156,7 @@ impl BlockDataManager {
 
         let header = self.block_header_by_hash(hash)?;
         let block = Arc::new(Block {
-            block_header: *header,
+            block_header: header.as_ref().clone(),
             transactions: self.block_body_from_db(hash)?,
             approximated_rlp_size: 0,
             approximated_rlp_size_with_public: 0,
@@ -164,6 +168,10 @@ impl BlockDataManager {
             self.cache_man.lock().note_used(CacheId::Block(*hash));
         }
         Some(block)
+    }
+
+    pub fn block_from_db(&self, block_hash: &H256) -> Option<Block> {
+        Some(Block::new(self.block_header_from_db(block_hash)?, self.block_body_from_db(block_hash)?))
     }
 
     pub fn blocks_by_hash_list(
@@ -178,17 +186,10 @@ impl BlockDataManager {
 
     pub fn insert_block_to_kv(&self, block: Arc<Block>, persistent: bool) {
         let hash = block.hash();
-
         if persistent {
-            let mut dbops = self.db.key_value().transaction();
-            //dbops.put(COL_BLOCKS, &hash, &rlp::encode(block.as_ref()));
-            dbops.put(COL_BLOCKS, &hash, &block.encode_with_tx_public());
-            self.db
-                .key_value()
-                .write(dbops)
-                .expect("crash for db failure");
+            self.insert_block_header_to_db(&block.block_header);
+            self.insert_block_body_to_db(&block);
         }
-
         self.blocks.write().insert(hash, block);
         self.cache_man.lock().note_used(CacheId::Block(hash));
     }
@@ -212,7 +213,11 @@ impl BlockDataManager {
         &self, block_hash: &H256, status: BlockStatus,
     ) {
         let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_BLOCKS, &Self::block_status_key(block_hash), &*status);
+        dbops.put(
+            COL_BLOCKS,
+            &Self::block_status_key(block_hash),
+            &[status.to_db_status()],
+        );
         self.db
             .key_value()
             .write(dbops)
@@ -221,14 +226,14 @@ impl BlockDataManager {
 
     /// Get block status from db. Now the status means if the block is partial
     /// invalid
-    pub fn block_status_from_db(&self, block_hash: &H256) -> Option<BlockStatus> {
+    pub fn block_status_from_db(
+        &self, block_hash: &H256,
+    ) -> Option<BlockStatus> {
         self.db
             .key_value()
             .get(COL_BLOCKS, &Self::block_status_key(block_hash))
             .expect("crash for db failure")
-            .map(|encoded| {
-                BlockStatus::from_db_status(encoded[0])
-            })
+            .map(|encoded| BlockStatus::from_db_status(encoded[0]))
     }
 
     pub fn remove_block_from_kv(&self, hash: &H256) {
@@ -244,17 +249,25 @@ impl BlockDataManager {
     pub fn block_header_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<BlockHeader>> {
-        // TODO If we persist headers, we should try to get it from db
-        self.block_headers
-            .read()
-            .get(hash)
-            .map(|header_ref| header_ref.clone())
+        let block_headers = self.block_headers.upgradable_read();
+        if let Some(header) = block_headers
+            .get(hash) {
+            return Some(header.clone())
+        } else {
+            let maybe_header = self.block_header_from_db(hash);
+            maybe_header.map(|header| {
+                let header_arc = Arc::new(header);
+                RwLockUpgradableReadGuard::upgrade(block_headers).insert(header_arc.hash(), header_arc.clone());
+                self.cache_man.lock().note_used(CacheId::BlockHeader(header_arc.hash()));
+                header_arc
+            })
+        }
     }
 
-    pub fn insert_block_header(
-        &self, hash: H256, header: Arc<BlockHeader>,
-    ) -> Option<Arc<BlockHeader>> {
-        self.block_headers.write().insert(hash, header)
+    pub fn insert_block_header(&self, hash: H256, header: Arc<BlockHeader>) {
+        self.insert_block_header_to_db(&header);
+        self.block_headers.write().insert(hash, header);
+        self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
     }
 
     pub fn remove_block_header(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
@@ -560,10 +573,11 @@ impl BlockDataManager {
             if let Some(status) = self.block_status_from_db(block_hash) {
                 match status {
                     BlockStatus::Invalid => {
-                        RwLockUpgradableReadGuard::upgrade(invalid_block_set).insert(*block_hash);
+                        RwLockUpgradableReadGuard::upgrade(invalid_block_set)
+                            .insert(*block_hash);
                         return true;
                     }
-                    _ => return false
+                    _ => return false,
                 }
             } else {
                 // No status on disk, so the block is not marked invalid before
@@ -576,6 +590,7 @@ impl BlockDataManager {
 
     /// Get current cache size.
     pub fn cache_size(&self) -> CacheSize {
+        let block_headers = self.block_headers.read().heap_size_of_children();
         let blocks = self.blocks.read().heap_size_of_children();
         let compact_blocks = self.compact_blocks.read().heap_size_of_children();
         let block_receipts = self.block_receipts.read().heap_size_of_children();
@@ -584,6 +599,7 @@ impl BlockDataManager {
         let transaction_pubkey =
             self.transaction_pubkey_cache.read().heap_size_of_children();
         CacheSize {
+            block_headers,
             blocks,
             block_receipts,
             transaction_addresses,
@@ -594,6 +610,7 @@ impl BlockDataManager {
 
     pub fn block_cache_gc(&self) {
         let current_size = self.cache_size().total();
+        let mut block_headers = self.block_headers.write();
         let mut blocks = self.blocks.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut executed_results = self.block_receipts.write();
@@ -629,16 +646,21 @@ impl BlockDataManager {
                     CacheId::TransactionPubkey(ref h) => {
                         transaction_pubkey_cache.remove(h);
                     }
+                    CacheId::BlockHeader(ref h) => {
+                        block_headers.remove(h);
+                    }
                 }
             }
 
+            block_headers.shrink_to_fit();
             blocks.shrink_to_fit();
             executed_results.shrink_to_fit();
             tx_address.shrink_to_fit();
             transaction_pubkey_cache.shrink_to_fit();
             compact_blocks.shrink_to_fit();
 
-            blocks.heap_size_of_children()
+            block_headers.heap_size_of_children()
+                + blocks.heap_size_of_children()
                 + executed_results.heap_size_of_children()
                 + tx_address.heap_size_of_children()
                 + transaction_pubkey_cache.heap_size_of_children()
@@ -701,8 +723,8 @@ impl BlockReceiptsInfo {
     }
 }
 
-#[derive(Copy)]
-enum BlockStatus {
+#[derive(Copy, Clone)]
+pub enum BlockStatus {
     Valid = 0,
     Invalid = 1,
     PartialInvalid = 2,
@@ -717,4 +739,6 @@ impl BlockStatus {
             _ => panic!("Read unknown block status from db"),
         }
     }
+
+    fn to_db_status(&self) -> u8 { *self as u8 }
 }
