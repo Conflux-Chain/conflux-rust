@@ -367,7 +367,7 @@ impl Database {
 					Err(_) => {
 						// retry and create CFs
 						match DB::open_cf(&opts, path, &[]) {
-							Ok(mut db) => {
+							Ok(db) => {
 								cfs = cfnames.iter()
 									.enumerate()
 									.map(|(i, n)| db.create_cf(n, &cf_options[i]))

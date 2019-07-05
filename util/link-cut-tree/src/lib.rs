@@ -43,13 +43,15 @@ struct MinLinkCutTreeInner {
 }
 
 impl MinLinkCutTreeInner {
-    pub fn new() -> Self { Self { tree: Vec::new() } }
+    fn new() -> Self { Self { tree: Vec::new() } }
 
-    pub fn size(&self) -> usize { self.tree.len() }
+    fn size(&self) -> usize { self.tree.len() }
 
-    pub fn make_tree(&mut self, v: usize) {
+    fn make_tree(&mut self, v: usize) {
         if self.tree.len() <= v {
             self.tree.resize(v + 1, MinNode::default());
+        } else {
+            self.tree[v] = MinNode::default();
         }
     }
 
@@ -272,6 +274,13 @@ impl MinLinkCutTreeInner {
         last
     }
 
+    fn split_root(&mut self, parent: usize, v: usize) {
+        self.access(parent);
+        self.splay(v);
+        assert_eq!(self.tree[v].path_parent, parent);
+        self.tree[v].path_parent = NULL;
+    }
+
     #[allow(dead_code)]
     fn debug(&self, num: usize) {
         for v in 0..num {
@@ -289,7 +298,7 @@ impl MinLinkCutTreeInner {
     }
 
     /// Make w a new child of v
-    pub fn link(&mut self, v: usize, w: usize) {
+    fn link(&mut self, v: usize, w: usize) {
         if v == NULL || w == NULL {
             return;
         }
@@ -298,12 +307,12 @@ impl MinLinkCutTreeInner {
         self.tree[w].path_parent = v;
     }
 
-    pub fn lca(&mut self, v: usize, w: usize) -> usize {
+    fn lca(&mut self, v: usize, w: usize) -> usize {
         self.access(v);
         self.access(w)
     }
 
-    pub fn ancestor_at(&mut self, v: usize, at: usize) -> usize {
+    fn ancestor_at(&mut self, v: usize, at: usize) -> usize {
         self.access(v);
 
         let mut u = self.tree[v].left_child;
@@ -331,14 +340,14 @@ impl MinLinkCutTreeInner {
         NULL
     }
 
-    pub fn set(&mut self, v: usize, value: i128) {
+    fn set(&mut self, v: usize, value: i128) {
         self.access(v);
 
         self.tree[v].value = value;
         self.update(v);
     }
 
-    pub fn path_apply(&mut self, v: usize, delta: i128) {
+    fn path_apply(&mut self, v: usize, delta: i128) {
         self.access(v);
 
         self.tree[v].value += delta;
@@ -350,7 +359,7 @@ impl MinLinkCutTreeInner {
         self.update(v);
     }
 
-    pub fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
+    fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
         self.access(v);
 
         self.tree[v].catepillar_value += catepillar_delta;
@@ -364,21 +373,22 @@ impl MinLinkCutTreeInner {
         self.update(v);
     }
 
-    pub fn path_aggregate(&mut self, v: usize) -> i128 {
+    fn path_aggregate(&mut self, v: usize) -> i128 {
         self.access(v);
 
         self.tree[v].min
     }
 
-    pub fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
+    fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
         self.access(v);
         self.splay(u);
         let right_c = self.tree[u].right_child;
-        assert_ne!(u, NULL);
+        assert_ne!(right_c, NULL);
+        self.update(right_c);
         self.tree[right_c].min
     }
 
-    pub fn get(&mut self, v: usize) -> i128 {
+    fn get(&mut self, v: usize) -> i128 {
         self.access(v);
 
         self.tree[v].value
@@ -428,6 +438,10 @@ impl MinLinkCutTree {
 
     pub fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
         self.inner.lock().path_aggregate_chop(v, u)
+    }
+
+    pub fn split_root(&mut self, parent: usize, v: usize) {
+        self.inner.lock().split_root(parent, v);
     }
 
     pub fn get(&self, v: usize) -> i128 { self.inner.lock().get(v) }
