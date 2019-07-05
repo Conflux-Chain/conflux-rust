@@ -138,11 +138,11 @@ impl BlockDataManager {
     pub fn blocks_by_hash_list(
         &self, hashes: &Vec<H256>, update_cache: bool,
     ) -> Option<Vec<Arc<Block>>> {
-        let mut epoch_blocks = Vec::new();
+        let mut blocks = Vec::new();
         for h in hashes {
-            epoch_blocks.push(self.block_by_hash(h, update_cache)?);
+            blocks.push(self.block_by_hash(h, update_cache)?);
         }
-        Some(epoch_blocks)
+        Some(blocks)
     }
 
     pub fn insert_block_to_kv(&self, block: Arc<Block>, persistent: bool) {

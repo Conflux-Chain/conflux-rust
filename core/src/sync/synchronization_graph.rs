@@ -390,64 +390,130 @@ impl SynchronizationGraphInner {
             })
     }
 
+    // Get parent (height, timestamp, gas_limit, difficulty, referee_timestamps)
+    // This function assumes that the parent and referee information MUST exist
+    // in memory or in disk.
+    fn get_parent_and_referee_info(
+        &self, index: usize,
+    ) -> (u64, u64, U256, U256, Vec<u64>) {
+        let parent_height;
+        let parent_timestamp;
+        let parent_gas_limit;
+        let parent_difficulty;
+        let mut referee_timestamps = Vec::new();
+        let parent = self.arena[index].parent;
+        if parent != NULL {
+            parent_height = self.arena[parent].block_header.height();
+            parent_timestamp = self.arena[parent].block_header.timestamp();
+            parent_gas_limit = *self.arena[parent].block_header.gas_limit();
+            parent_difficulty = *self.arena[parent].block_header.difficulty();
+        } else {
+            let parent_hash = self.arena[index].block_header.parent_hash();
+            let parent_block = self
+                .data_man
+                .block_by_hash(parent_hash, true)
+                .unwrap()
+                .clone();
+            parent_height = parent_block.block_header.height();
+            parent_timestamp = parent_block.block_header.timestamp();
+            parent_gas_limit = *parent_block.block_header.gas_limit();
+            parent_difficulty = *parent_block.block_header.difficulty();
+        }
+
+        if self.arena[index].pending_referee_count == 0 {
+            for referee in self.arena[index].referees.iter() {
+                referee_timestamps
+                    .push(self.arena[*referee].block_header.timestamp());
+            }
+        } else {
+            let mut referee_hash_in_mem = HashSet::new();
+            for referee in self.arena[index].referees.iter() {
+                referee_timestamps
+                    .push(self.arena[*referee].block_header.timestamp());
+                referee_hash_in_mem
+                    .insert(self.arena[*referee].block_header.hash());
+            }
+
+            for referee_hash in self.arena[index].block_header.referee_hashes()
+            {
+                if !referee_hash_in_mem.contains(referee_hash) {
+                    let referee_block = self
+                        .data_man
+                        .block_by_hash(referee_hash, true)
+                        .unwrap()
+                        .clone();
+                    referee_timestamps
+                        .push(referee_block.block_header.timestamp());
+                }
+            }
+        }
+
+        (
+            parent_height,
+            parent_timestamp,
+            parent_gas_limit,
+            parent_difficulty,
+            referee_timestamps,
+        )
+    }
+
     fn verify_header_graph_ready_block(
         &self, index: usize,
     ) -> Result<(), Error> {
         let epoch = self.arena[index].block_header.height();
-        let parent = self.arena[index].parent;
+        let (
+            parent_height,
+            parent_timestamp,
+            parent_gas_limit,
+            parent_difficulty,
+            referee_timestamps,
+        ) = self.get_parent_and_referee_info(index);
+
         // Verify the height and epoch numbers are correct
-        if self.arena[parent].block_header.height() + 1 != epoch {
-            warn!(
-                "Invalid height. mine {}, parent {}",
-                epoch,
-                self.arena[parent].block_header.height()
-            );
+        if parent_height + 1 != epoch {
+            warn!("Invalid height. mine {}, parent {}", epoch, parent_height);
             return Err(From::from(BlockError::InvalidHeight(Mismatch {
-                expected: self.arena[parent].block_header.height() + 1,
+                expected: parent_height + 1,
                 found: epoch,
             })));
         }
 
         // Verify the timestamp being correctly set
         let my_timestamp = self.arena[index].block_header.timestamp();
-        let parent_timestamp = self.arena[parent].block_header.timestamp();
         if parent_timestamp > my_timestamp {
             let my_timestamp = UNIX_EPOCH + Duration::from_secs(my_timestamp);
-            let parent_timestamp =
+            let pa_timestamp =
                 UNIX_EPOCH + Duration::from_secs(parent_timestamp);
 
             warn!("Invalid timestamp: parent {:?} timestamp {}, me {:?} timestamp {}",
-                  self.arena[parent].block_header.hash(),
-                  self.arena[parent].block_header.timestamp(),
+                  self.arena[index].block_header.parent_hash().clone(),
+                  parent_timestamp,
                   self.arena[index].block_header.hash(),
                   self.arena[index].block_header.timestamp());
             return Err(From::from(BlockError::InvalidTimestamp(
                 OutOfBounds {
                     max: Some(my_timestamp),
-                    min: Some(parent_timestamp),
+                    min: Some(pa_timestamp),
                     found: my_timestamp,
                 },
             )));
         }
 
-        for referee in &self.arena[index].referees {
-            let referee_timestamp =
-                self.arena[*referee].block_header.timestamp();
+        for referee_timestamp in referee_timestamps {
             if referee_timestamp > my_timestamp {
                 let my_timestamp =
                     UNIX_EPOCH + Duration::from_secs(my_timestamp);
-                let referee_timestamp =
+                let ref_timestamp =
                     UNIX_EPOCH + Duration::from_secs(referee_timestamp);
 
-                warn!("Invalid timestamp: referee {:?} timestamp {}, me {:?} timestamp {}",
-                      self.arena[*referee].block_header.hash(),
-                      self.arena[*referee].block_header.timestamp(),
+                warn!("Invalid timestamp: referee timestamp {:?}, me {:?} timestamp {:?}",
+                      ref_timestamp,
                       self.arena[index].block_header.hash(),
-                      self.arena[index].block_header.timestamp());
+                      my_timestamp);
                 return Err(From::from(BlockError::InvalidTimestamp(
                     OutOfBounds {
                         max: Some(my_timestamp),
-                        min: Some(referee_timestamp),
+                        min: Some(ref_timestamp),
                         found: my_timestamp,
                     },
                 )));
@@ -458,7 +524,6 @@ impl SynchronizationGraphInner {
         let machine = new_machine();
         let gas_limit_divisor = machine.params().gas_limit_bound_divisor;
         let min_gas_limit = machine.params().min_gas_limit;
-        let parent_gas_limit = *self.arena[parent].block_header.gas_limit();
         let gas_lower = max(
             parent_gas_limit - parent_gas_limit / gas_limit_divisor,
             min_gas_limit,
@@ -479,34 +544,29 @@ impl SynchronizationGraphInner {
         let my_diff = *self.arena[index].block_header.difficulty();
         let mut min_diff = my_diff;
         let mut max_diff = my_diff;
-        let parent_hash = self.arena[index].block_header.parent_hash();
-        let parent_index = *self.indices.get(parent_hash).unwrap();
-        let parent_epoch = self.arena[parent_index].block_header.height();
         let initial_difficulty: U256 =
             self.pow_config.initial_difficulty.into();
 
-        if parent_epoch < self.pow_config.difficulty_adjustment_epoch_period {
+        if parent_height < self.pow_config.difficulty_adjustment_epoch_period {
             if my_diff != initial_difficulty {
                 difficulty_invalid = true;
                 min_diff = initial_difficulty;
                 max_diff = initial_difficulty;
             }
         } else {
-            let last_period_upper = (parent_epoch
+            let last_period_upper = (parent_height
                 / self.pow_config.difficulty_adjustment_epoch_period)
                 * self.pow_config.difficulty_adjustment_epoch_period;
-            let parent_diff =
-                *self.arena[parent_index].block_header.difficulty();
-            if last_period_upper != parent_epoch {
+            if last_period_upper != parent_height {
                 // parent_epoch should not trigger difficulty adjustment
-                if my_diff != parent_diff {
+                if my_diff != parent_difficulty {
                     difficulty_invalid = true;
-                    min_diff = parent_diff;
-                    max_diff = parent_diff;
+                    min_diff = parent_difficulty;
+                    max_diff = parent_difficulty;
                 }
             } else {
                 let (lower, upper) =
-                    self.pow_config.get_adjustment_bound(parent_diff);
+                    self.pow_config.get_adjustment_bound(parent_difficulty);
                 min_diff = lower;
                 max_diff = upper;
                 if my_diff < min_diff || my_diff > max_diff {
@@ -712,7 +772,6 @@ impl SynchronizationGraph {
     }
 
     fn recover_graph_from_db(&mut self) {
-        // TODO: refactor code to make it run O(n + m)
         info!("Start full recovery of the block DAG and state from database");
         let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
@@ -782,7 +841,6 @@ impl SynchronizationGraph {
     }
 
     fn fast_recover_graph_from_db(&mut self) {
-        // TODO: refactor code to make it run O(n + m)
         info!("Start fast recovery of the block DAG from database");
         let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
             .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
@@ -976,7 +1034,6 @@ impl SynchronizationGraph {
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_secs();
-                    debug_assert!(inner.arena[index].parent != NULL);
                     debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
 
