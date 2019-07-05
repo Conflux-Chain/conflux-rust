@@ -6,3 +6,4 @@ then
     shift
 fi
 cargo +nightly-2019-07-03 fmt --all $@
+
