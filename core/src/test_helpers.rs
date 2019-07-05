@@ -1,12 +1,8 @@
 use crate::{
     evm::Factory,
-    state::{CleanupMode, State, Substate},
+    state::State,
     statedb::StateDb,
-    storage::{
-        new_storage_manager_for_testing, state::StateTrait, StorageManager,
-        StorageManagerTrait,
-    },
-    vm::EnvInfo,
+    storage::{StorageManager, StorageManagerTrait},
     vm_factory::VmFactory,
 };
 
