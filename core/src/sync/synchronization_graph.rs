@@ -409,7 +409,7 @@ impl SynchronizationGraphInner {
             parent_difficulty = *self.arena[parent].block_header.difficulty();
         } else {
             let parent_hash = self.arena[index].block_header.parent_hash();
-            let parent_header= self
+            let parent_header = self
                 .data_man
                 .block_header_by_hash(parent_hash)
                 .unwrap()
@@ -442,8 +442,7 @@ impl SynchronizationGraphInner {
                         .block_header_by_hash(referee_hash)
                         .unwrap()
                         .clone();
-                    referee_timestamps
-                        .push(referee_header.timestamp());
+                    referee_timestamps.push(referee_header.timestamp());
                 }
             }
         }

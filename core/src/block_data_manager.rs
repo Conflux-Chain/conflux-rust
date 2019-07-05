@@ -171,7 +171,10 @@ impl BlockDataManager {
     }
 
     pub fn block_from_db(&self, block_hash: &H256) -> Option<Block> {
-        Some(Block::new(self.block_header_from_db(block_hash)?, self.block_body_from_db(block_hash)?))
+        Some(Block::new(
+            self.block_header_from_db(block_hash)?,
+            self.block_body_from_db(block_hash)?,
+        ))
     }
 
     pub fn blocks_by_hash_list(
@@ -250,15 +253,17 @@ impl BlockDataManager {
         &self, hash: &H256,
     ) -> Option<Arc<BlockHeader>> {
         let block_headers = self.block_headers.upgradable_read();
-        if let Some(header) = block_headers
-            .get(hash) {
-            return Some(header.clone())
+        if let Some(header) = block_headers.get(hash) {
+            return Some(header.clone());
         } else {
             let maybe_header = self.block_header_from_db(hash);
             maybe_header.map(|header| {
                 let header_arc = Arc::new(header);
-                RwLockUpgradableReadGuard::upgrade(block_headers).insert(header_arc.hash(), header_arc.clone());
-                self.cache_man.lock().note_used(CacheId::BlockHeader(header_arc.hash()));
+                RwLockUpgradableReadGuard::upgrade(block_headers)
+                    .insert(header_arc.hash(), header_arc.clone());
+                self.cache_man
+                    .lock()
+                    .note_used(CacheId::BlockHeader(header_arc.hash()));
                 header_arc
             })
         }
