@@ -380,6 +380,11 @@ fn main() {
 
     let n = hashes.len();
     for i in 1..n {
+        let pending = consensus.inner.read().is_pending(&hashes[i]).unwrap();
+        if pending {
+            println!("Block {} is pending, skip the checking!", i);
+            continue;
+        }
         let partial_invalid = consensus
             .inner
             .read()

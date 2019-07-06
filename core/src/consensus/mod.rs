@@ -143,6 +143,7 @@ impl ConsensusGraphStatistics {
 pub struct ConsensusGraphNodeData {
     pub epoch_number: u64,
     pub partial_invalid: bool,
+    pub pending: bool,
     /// The indices set of the blocks in the epoch when the current
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
@@ -165,6 +166,7 @@ impl ConsensusGraphNodeData {
         ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
+            pending: false,
             blockset_in_own_view_of_epoch: Default::default(),
             num_epoch_blocks_in_2era: 0,
             ordered_executable_epoch_blocks: Default::default(),
@@ -260,6 +262,9 @@ pub struct ConsensusGraphInner {
     cur_era_genesis_block_index: usize,
     // The height of the ``current'' era_genesis block
     cur_era_genesis_height: u64,
+    // The height of the ``stable'' era block, unless from the start, it is always
+    // era_epoch_count higher than era_genesis_height
+    cur_era_stable_height: u64,
     // The ``original'' genesis state root and receipts root.
     genesis_block_state_root: StateRoot,
     genesis_block_receipts_root: H256,
@@ -329,6 +334,7 @@ impl ConsensusGraphInner {
             terminal_hashes: Default::default(),
             cur_era_genesis_block_index: NULL,
             cur_era_genesis_height: 0,
+            cur_era_stable_height: 0,
             genesis_block_state_root: data_man
                 .genesis_block()
                 .block_header
@@ -457,7 +463,7 @@ impl ConsensusGraphInner {
 
     #[inline]
     fn ancestor_at(&self, me: usize, height: u64) -> usize {
-        let height_index = self.height_to_pivot_index(height);
+        let height_index = height as usize;/*self.height_to_pivot_index(height)*/;
         self.inclusive_weight_tree.ancestor_at(me, height_index)
     }
 
@@ -1915,6 +1921,12 @@ impl ConsensusGraphInner {
         })
     }
 
+    pub fn is_pending(&self, block_hash: &H256) -> Option<bool> {
+        self.indices
+            .get(block_hash)
+            .and_then(|block_index| Some(self.arena[*block_index].data.pending))
+    }
+
     fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
     ) -> Option<(Receipt, TransactionAddress)> {
@@ -2095,6 +2107,25 @@ impl ConsensusGraphInner {
             &mut self.arena[pivot_index].data.blockset_in_own_view_of_epoch,
             block_set,
         );
+    }
+
+    fn checkpoint_at(&mut self, new_era_block_index: usize) {
+        let new_era_height = self.arena[new_era_block_index].height;
+        let new_era_pivot_index = self.height_to_pivot_index(new_era_height);
+        assert!(new_era_pivot_index < self.pivot_chain.len());
+        let era_parent = self.arena[new_era_block_index].parent;
+        self.pivot_chain = self.pivot_chain.split_off(new_era_pivot_index);
+        self.pivot_chain_metadata = self.pivot_chain_metadata.split_off(new_era_pivot_index);
+        /*self.weight_tree.split_root(era_parent, new_era_block_index);
+        self.inclusive_weight_tree.split_root(era_parent, new_era_block_index);
+        self.stable_weight_tree.split_root(era_parent, new_era_block_index);
+        self.stable_tree.split_root(era_parent, new_era_block_index);
+        self.adaptive_tree.split_root(era_parent, new_era_block_index);
+        self.inclusive_adaptive_tree.split_root(era_parent, new_era_block_index);*/
+        self.cur_era_genesis_block_index = new_era_block_index;
+        self.cur_era_genesis_height = new_era_height;
+        self.cur_era_stable_height = new_era_height + self.inner_conf.era_epoch_count;
+        // TODO: Cleanup other content
     }
 }
 
@@ -3186,8 +3217,10 @@ impl ConsensusGraph {
         } else {
             None
         };
-        let fully_valid = match self.data_man.block_status_from_db(hash) {
-            Some(BlockStatus::Valid) => true,
+        let (fully_valid, pending) = match self.data_man.block_status_from_db(hash) {
+            Some(BlockStatus::Valid) => (true, false),
+            Some(BlockStatus::Pending) => (true, true),
+            Some(BlockStatus::PartialInvalid) => (false, false),
             None => {
                 // FIXME If the status of a block close to terminals is missing
                 // (likely to happen) and we try to check its validity with the
@@ -3209,10 +3242,9 @@ impl ConsensusGraph {
 
                 // The assumed value should be false after we fix this issue.
                 // Now we optimistically hope that they are valid.
-                debug!("Assume block {} is valid", hash);
-                true
+                debug!("Assume block {} is valid/pending", hash);
+                (true, true)
             }
-            Some(BlockStatus::PartialInvalid) => false,
             Some(BlockStatus::Invalid) => {
                 // Blocks marked invalid should not exist in database, so should
                 // not be inserted during construction.
@@ -3221,6 +3253,7 @@ impl ConsensusGraph {
         };
 
         inner.arena[me].data.partial_invalid = !fully_valid;
+        inner.arena[me].data.pending = pending;
 
         self.update_lcts_initial(inner, me);
 
@@ -3272,6 +3305,25 @@ impl ConsensusGraph {
         }
     }
 
+    fn should_form_checkpoint_at(&self, inner: &mut ConsensusGraphInner) -> usize {
+        // FIXME: We should use finality to implement this function
+        let best_height = inner.best_epoch_number();
+        if best_height <= 500 {
+            return inner.cur_era_genesis_block_index;
+        }
+        let stable_height = best_height - 500;
+        let stable_era_height = inner.get_era_height(stable_height - 1, 0);
+        if stable_era_height < inner.inner_conf.era_epoch_count {
+            return inner.cur_era_genesis_block_index;
+        }
+        let safe_era_height = stable_era_height - inner.inner_conf.era_epoch_count;
+        if inner.cur_era_genesis_height > safe_era_height {
+            return inner.cur_era_genesis_block_index;
+        }
+        let safe_era_pivot_index = inner.height_to_pivot_index(safe_era_height);
+        inner.pivot_chain[safe_era_pivot_index]
+    }
+
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
     pub fn on_new_block(&self, hash: &H256) {
@@ -3289,6 +3341,7 @@ impl ConsensusGraph {
         let me = self.insert_block_initial(inner, block.clone());
         let parent = inner.arena[me].parent;
         let era_height = inner.get_era_height(inner.arena[parent].height, 0);
+        let mut fully_valid = true;
         let cur_pivot_era_block = if inner
             .pivot_index_to_height(inner.pivot_chain.len())
             > era_height
@@ -3307,6 +3360,8 @@ impl ConsensusGraph {
             self.txpool.set_tx_packed(block.transactions.clone());
         }
 
+        let pending = inner.ancestor_at(parent, inner.cur_era_stable_height) != inner.get_pivot_block_index(inner.cur_era_stable_height);
+
         let anticone_barrier = inner.compute_anticone(me);
 
         let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP {
@@ -3320,24 +3375,34 @@ impl ConsensusGraph {
         let (stable, adaptive) =
             inner.adaptive_weight(me, &anticone_barrier, weight_tuple.as_ref());
 
-        let fully_valid = self.check_block_full_validity(
-            me,
-            block.as_ref(),
-            inner,
-            adaptive,
-            &anticone_barrier,
-            weight_tuple.as_ref(),
-        );
+        if !pending {
+            let fully_valid = self.check_block_full_validity(
+                me,
+                block.as_ref(),
+                inner,
+                adaptive,
+                &anticone_barrier,
+                weight_tuple.as_ref(),
+            );
+        }
         self.data_man.insert_block_status_to_db(
             hash,
-            if fully_valid {
+            if pending {
+                BlockStatus::Pending
+            } else if fully_valid {
                 BlockStatus::Valid
             } else {
                 BlockStatus::PartialInvalid
             },
         );
 
-        if !fully_valid {
+        if pending {
+            inner.arena[me].data.pending = true;
+            debug!(
+                "Block {} (hash = {}) is pending",
+                me, inner.arena[me].hash
+            );
+        } else if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
             debug!(
                 "Block {} (hash = {}) is partially invalid",
@@ -3357,14 +3422,15 @@ impl ConsensusGraph {
 
         let my_weight = self.update_lcts_finalize(inner, me, stable);
         let mut extend_pivot = false;
+        let mut pivot_changed = false;
         let mut fork_at =
             inner.pivot_index_to_height(inner.pivot_chain.len() + 1);
         let old_pivot_chain_len = inner.pivot_chain.len();
-        if fully_valid {
+        if fully_valid && !pending {
             self.aggregate_total_weight_in_past(my_weight);
 
             let last = inner.pivot_chain.last().cloned().unwrap();
-            fork_at = if inner.arena[me].parent == last {
+            if inner.arena[me].parent == last {
                 inner.pivot_chain.push(me);
                 inner.set_epoch_number_in_epoch(
                     me,
@@ -3372,11 +3438,11 @@ impl ConsensusGraph {
                 );
                 inner.pivot_chain_metadata.push(Default::default());
                 extend_pivot = true;
-                inner.pivot_index_to_height(old_pivot_chain_len)
+                pivot_changed = true;
+                fork_at = inner.pivot_index_to_height(old_pivot_chain_len)
             } else {
                 let lca = inner.weight_tree.lca(last, me);
-
-                let fork_at = inner.arena[lca].height + 1;
+                fork_at = inner.arena[lca].height + 1;
                 let prev = inner.get_pivot_block_index(fork_at);
                 let prev_weight = inner.weight_tree.get(prev);
                 let new = inner.ancestor_at(me, fork_at);
@@ -3390,10 +3456,10 @@ impl ConsensusGraph {
                     for discarded_idx in inner
                         .pivot_chain
                         .split_off(inner.height_to_pivot_index(fork_at))
-                    {
-                        // Reset the epoch_number of the discarded fork
-                        inner.reset_epoch_number_in_epoch(discarded_idx)
-                    }
+                        {
+                            // Reset the epoch_number of the discarded fork
+                            inner.reset_epoch_number_in_epoch(discarded_idx)
+                        }
                     let mut u = new;
                     loop {
                         inner.pivot_chain.push(u);
@@ -3409,12 +3475,12 @@ impl ConsensusGraph {
                             let weight = inner.weight_tree.get(*index);
                             if heaviest == NULL
                                 || ConsensusGraphInner::is_heavier(
-                                    (weight, &inner.arena[*index].hash),
-                                    (
-                                        heaviest_weight,
-                                        &inner.arena[heaviest].hash,
-                                    ),
-                                )
+                                (weight, &inner.arena[*index].hash),
+                                (
+                                    heaviest_weight,
+                                    &inner.arena[heaviest].hash,
+                                ),
+                            )
                             {
                                 heaviest = *index;
                                 heaviest_weight = weight;
@@ -3425,11 +3491,11 @@ impl ConsensusGraph {
                         }
                         u = heaviest;
                     }
-                    fork_at
+                    pivot_changed = true;
                 } else {
                     // The previous subtree is still heavier, nothing is updated
-                    debug!("Finish Consensus.on_new_block() with pivot chain unchanged");
-                    inner.pivot_index_to_height(old_pivot_chain_len)
+                    debug!("Old pivot chain is heavier, pivot chain unchanged");
+                    fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
                 }
             };
             debug!(
@@ -3445,15 +3511,19 @@ impl ConsensusGraph {
             let update_at = fork_at - 1;
             let mut last_pivot_to_update = HashSet::new();
             last_pivot_to_update.insert(me);
-            let update_index = inner.height_to_pivot_index(update_at);
-            for pivot_index in update_index..old_pivot_chain_len {
-                for x in &inner.pivot_chain_metadata[pivot_index]
-                    .last_pivot_in_past_blocks
-                {
-                    last_pivot_to_update.insert(*x);
+            if pivot_changed {
+                let update_index = inner.height_to_pivot_index(update_at);
+                for pivot_index in update_index..old_pivot_chain_len {
+                    for x in &inner.pivot_chain_metadata[pivot_index]
+                        .last_pivot_in_past_blocks
+                        {
+                            last_pivot_to_update.insert(*x);
+                        }
                 }
+                self.recompute_metadata(inner, fork_at, last_pivot_to_update);
+            } else {
+                self.recompute_metadata(inner, inner.get_pivot_height(), last_pivot_to_update);
             }
-            self.recompute_metadata(inner, fork_at, last_pivot_to_update);
         } else {
             let height = inner.arena[me].height;
             inner.arena[me].last_pivot_in_past = height;
@@ -3461,14 +3531,10 @@ impl ConsensusGraph {
             inner.pivot_chain_metadata[p_index]
                 .last_pivot_in_past_blocks
                 .insert(me);
-            //            inner
-            //                .pivot_future_weights
-            //                .add(height,
-            // &SignedBigNum::pos(inner.block_weight(me)));
         }
 
         // Now we can safely return
-        if !fully_valid {
+        if !fully_valid || pending {
             return;
         }
 
@@ -3533,6 +3599,12 @@ impl ConsensusGraph {
             None
         };
         inner.persist_terminals();
+        let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
+        if self.should_form_checkpoint_at(inner) != inner.cur_era_genesis_block_index {
+            info!("Working on the checkpoint for block {} height {}", &inner.arena[inner.cur_era_genesis_block_index].hash, inner.cur_era_genesis_height);
+            inner.checkpoint_at(new_checkpoint_era_genesis);
+            info!("New checkpoint formed at block {} height {}", &inner.arena[inner.cur_era_genesis_block_index].hash, inner.cur_era_genesis_height);
+        }
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 

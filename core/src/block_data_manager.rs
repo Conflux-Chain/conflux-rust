@@ -739,6 +739,7 @@ pub enum BlockStatus {
     Valid = 0,
     Invalid = 1,
     PartialInvalid = 2,
+    Pending = 3,
 }
 
 impl BlockStatus {
@@ -747,6 +748,7 @@ impl BlockStatus {
             0 => BlockStatus::Valid,
             1 => BlockStatus::Invalid,
             2 => BlockStatus::PartialInvalid,
+            3 => BlockStatus::Pending,
             _ => panic!("Read unknown block status from db"),
         }
     }
