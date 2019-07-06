@@ -245,14 +245,14 @@ impl RequestContainer {
             }
             save_req
         } else {
-            warn!("Remove out of bound request peer={} request_id={} low={} next={}", self.peer_id, request_id, self.lowest_request_id, self.next_request_id);
+            debug!("Remove out of bound request peer={} request_id={} low={} next={}", self.peer_id, request_id, self.lowest_request_id, self.next_request_id);
             None
         }
     }
 
     // Match request with given response.
     // Could return the following error:
-    // 1. UnexpectedResponse:
+    // 1. RequestNotFound:
     //      In this case, no request is matched, so NO need to
     //      handle the resending of the request for caller;
     // 2. Error from send_message():
@@ -307,7 +307,7 @@ impl RequestContainer {
             }
             Ok(*removed_req.message)
         } else {
-            bail!(ErrorKind::UnexpectedResponse)
+            bail!(ErrorKind::RequestNotFound)
         }
     }
 

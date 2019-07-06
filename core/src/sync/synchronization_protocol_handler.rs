@@ -403,6 +403,7 @@ impl SynchronizationProtocolHandler {
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
             ErrorKind::UnexpectedResponse => disconnect = false,
+            ErrorKind::RequestNotFound => disconnect = false,
             ErrorKind::TooManyTrans => {}
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
             ErrorKind::Network(kind) => match kind {
