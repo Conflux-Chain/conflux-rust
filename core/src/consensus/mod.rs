@@ -468,6 +468,11 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    fn lca(&self, me: usize, v: usize) -> usize {
+        self.inclusive_weight_tree.lca(me, v)
+    }
+
+    #[inline]
     fn get_era_height(&self, parent_height: u64, offset: u64) -> u64 {
         let era_height = if parent_height > offset {
             (parent_height - offset) / self.inner_conf.era_epoch_count
@@ -1001,7 +1006,7 @@ impl ConsensusGraphInner {
             .blockset_in_own_view_of_epoch
             .iter()
             .filter(|idx| {
-                let lca = self.inclusive_weight_tree.lca(**idx, two_era_block);
+                let lca = self.lca(**idx, two_era_block);
                 lca == two_era_block
             })
             .count();
@@ -1126,7 +1131,7 @@ impl ConsensusGraphInner {
                 continue;
             }
 
-            let lca = self.weight_tree.lca(*consensus_index_in_epoch, parent);
+            let lca = self.lca(*consensus_index_in_epoch, parent);
             assert!(lca != *consensus_index_in_epoch);
             // If it is outside current era, we will skip!
             if self.arena[lca].height < era_height {
@@ -1191,7 +1196,7 @@ impl ConsensusGraphInner {
                 continue;
             }
 
-            let lca = self.weight_tree.lca(*consensus_index_in_epoch, parent);
+            let lca = self.lca(*consensus_index_in_epoch, parent);
             assert!(lca != *consensus_index_in_epoch);
             // If it is outside the era, we will skip!
             if self.arena[lca].height < era_height {
@@ -3298,7 +3303,7 @@ impl ConsensusGraph {
         let future = inner.compute_future_bitset(era_block);
         for idx in future.iter() {
             let index = idx as usize;
-            let lca = inner.inclusive_weight_tree.lca(index, era_block);
+            let lca = inner.lca(index, era_block);
             if lca != era_block {
                 self.recycle_tx_in_block(inner, index);
             }
@@ -3441,7 +3446,7 @@ impl ConsensusGraph {
                 pivot_changed = true;
                 fork_at = inner.pivot_index_to_height(old_pivot_chain_len)
             } else {
-                let lca = inner.weight_tree.lca(last, me);
+                let lca = inner.lca(last, me);
                 fork_at = inner.arena[lca].height + 1;
                 let prev = inner.get_pivot_block_index(fork_at);
                 let prev_weight = inner.weight_tree.get(prev);
