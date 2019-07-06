@@ -535,7 +535,7 @@ impl<'a> State<'a> {
 
         let mut maybe_acc = self
             .db
-            .get_account(address, false)?
+            .get_account(address)?
             .map(|acc| OverlayAccount::new(address, acc));
         if let Some(ref mut account) = maybe_acc.as_mut() {
             if !Self::update_account_cache(require, account, &self.db) {
@@ -580,7 +580,7 @@ impl<'a> State<'a> {
         if !contains_key {
             let account = self
                 .db
-                .get_account(address, false)?
+                .get_account(address)?
                 .map(|acc| OverlayAccount::new(address, acc));
             self.insert_cache(address, AccountEntry::new_clean(account));
         }
@@ -628,12 +628,14 @@ mod tests {
         StorageManagerTrait,
     };
     use cfx_types::{Address, H256, U256};
+    use primitives::StateRootAuxInfo;
 
     fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
         State::new(
             StateDb::new(
                 storage_manager
-                    .get_state_for_next_epoch(epoch_id)
+                    // FIXME: None?
+                    .get_state_for_next_epoch(Snapshot::new(&epoch_id, None))
                     .unwrap()
                     .unwrap(),
             ),

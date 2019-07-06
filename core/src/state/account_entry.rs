@@ -86,7 +86,6 @@ impl OverlayAccount {
             address: self.address.clone(),
             balance: self.balance.clone(),
             nonce: self.nonce.clone(),
-            original_storage_root: KECCAK_EMPTY,
             code_hash: self.code_hash.clone(),
         }
     }

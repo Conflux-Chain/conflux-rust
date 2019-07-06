@@ -30,8 +30,6 @@ impl<PosT: PrimitiveNum> LRUHandle<PosT> {
         self.set_handle(prev_pos);
     }
 
-    fn placement_new_evicted(&mut self) { self.set_evicted(); }
-
     pub fn is_hit(&self) -> bool { self.prev_pos != PosT::from(Self::NULL_POS) }
 
     fn set_evicted(&mut self) { self.prev_pos = PosT::from(Self::NULL_POS); }

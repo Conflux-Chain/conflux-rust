@@ -5,16 +5,18 @@
 pub struct SubTrieVisitor<'trie> {
     root: CowNodeRef,
 
-    trie_ref: &'trie MultiVersionMerklePatriciaTrie,
+    trie_ref: &'trie MerklePatriciaTrie,
 
     /// We use ReturnAfterUse because only one SubTrieVisitor(the deepest) can
     /// hold the mutable reference of owned_node_set.
     owned_node_set: ReturnAfterUse<'trie, OwnedNodeSet>,
 }
 
+type MerklePatriciaTrie = DeltaMpt;
+
 impl<'trie> SubTrieVisitor<'trie> {
     pub fn new(
-        trie_ref: &'trie MultiVersionMerklePatriciaTrie, root: NodeRefDeltaMpt,
+        trie_ref: &'trie MerklePatriciaTrie, root: NodeRefDeltaMpt,
         owned_node_set: &'trie mut Option<OwnedNodeSet>,
     ) -> Self
     {
@@ -41,18 +43,10 @@ impl<'trie> SubTrieVisitor<'trie> {
         }
     }
 
-    fn get_trie_ref(&self) -> &'trie MultiVersionMerklePatriciaTrie {
-        self.trie_ref
-    }
+    fn get_trie_ref(&self) -> &'trie MerklePatriciaTrie { self.trie_ref }
 
     fn node_memory_manager(&self) -> &'trie NodeMemoryManagerDeltaMpt {
         &self.get_trie_ref().get_node_memory_manager()
-    }
-
-    fn memory_allocator_borrow(
-        &self,
-    ) -> AllocatorRef<'trie, CacheAlgoDataDeltaMpt> {
-        self.node_memory_manager().get_allocator()
     }
 
     fn get_trie_node<'a>(
@@ -323,8 +317,9 @@ impl<'trie> SubTrieVisitor<'trie> {
     // FIXME: existence of the prefix. However with tombstone, the
     // FIXME: corresponding action is mark_delete_all, which can operate on
     // FIXME: non-existing prefix in delta-MPT.
-    // FIXME: When iterating, maybe skip existing marks because they make no
-    // differences.
+    // FIXME: When iterating, skip existing marks because they were already
+    // FIXME: deleted.
+    #[allow(unused)]
     pub fn mark_delete_all() {
         // FIXME: implement.
         unimplemented!();
@@ -352,8 +347,8 @@ impl<'trie> SubTrieVisitor<'trie> {
         let key_prefix: CompressedPathRaw;
         match trie_node_ref.walk::<Write>(key_remaining) {
             WalkStop::ChildNotFound {
-                key_remaining,
-                child_index,
+                key_remaining: _,
+                child_index: _,
             } => return Ok((None, false, node_cow.into_child())),
             WalkStop::Arrived => {
                 // To enumerate the subtree.
@@ -361,8 +356,8 @@ impl<'trie> SubTrieVisitor<'trie> {
             }
             WalkStop::PathDiverted {
                 key_child_index,
-                key_remaining,
-                matched_path,
+                key_remaining: _,
+                matched_path: _,
                 unmatched_child_index,
                 unmatched_path_remaining,
             } => {
@@ -684,11 +679,12 @@ use super::{
         guarded_value::GuardedValue,
         node_memory_manager::*,
         return_after_use::ReturnAfterUse,
-        MultiVersionMerklePatriciaTrie,
+        DeltaMpt,
     },
     merkle::*,
     trie_node::{access_mode::*, *},
     *,
 };
 use parking_lot::MutexGuard;
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use std::hint::unreachable_unchecked;

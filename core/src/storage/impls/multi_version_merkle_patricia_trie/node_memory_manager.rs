@@ -28,8 +28,6 @@ pub type CacheAlgoDataDeltaMpt =
 pub type TrieNodeDeltaMpt = TrieNode<CacheAlgoDataDeltaMpt>;
 
 pub type SlabVacantEntryDeltaMpt<'a> = VacantEntry<'a, TrieNodeDeltaMpt>;
-type AllocatorDeltaMpt =
-    Slab<TrieNodeDeltaMpt, super::slab::Entry<TrieNodeDeltaMpt>>;
 pub type AllocatorRefRefDeltaMpt<'a> =
     &'a AllocatorRef<'a, CacheAlgoDataDeltaMpt>;
 
@@ -111,10 +109,8 @@ pub struct NodeMemoryManager<
     /// that the get is always successful when exiting the critical
     /// section.
     db_load_lock: Mutex<()>,
-    // TODO(yz): use a more specific db because the row number need to be
-    // managed.
     /// This db access is read only.
-    db: Arc<KeyValueDB>,
+    db: Arc<DeltaDbTrait + Send + Sync>,
 
     // TODO(yz): use other atomic integer types when they becomes
     // available in rust stable.
@@ -124,6 +120,7 @@ pub struct NodeMemoryManager<
     pub compute_merkle_db_loads: AtomicUsize,
 }
 
+#[allow(unused)]
 impl<
         CacheAlgoDataT: CacheAlgoDataTrait,
         CacheAlgorithmT: CacheAlgorithm<
@@ -169,7 +166,7 @@ impl<
     pub fn new(
         cache_start_size: u32, cache_size: u32, idle_size: u32,
         node_map_size: u32, cache_algorithm: CacheAlgorithmT,
-        kvdb: Arc<KeyValueDB>,
+        kvdb: Arc<DeltaDbTrait + Send + Sync>,
     ) -> Self
     {
         let size_limit = cache_size + idle_size;
@@ -251,10 +248,7 @@ impl<
     {
         self.db_load_counter.fetch_add(1, Ordering::Relaxed);
         // We never save null node in db.
-        let rlp_bytes = self
-            .db
-            .get(COL_DELTA_TRIE, db_key.to_string().as_bytes())?
-            .unwrap();
+        let rlp_bytes = self.db.get(db_key.to_string().as_bytes())?.unwrap();
         let rlp = Rlp::new(rlp_bytes.as_ref());
         let mut trie_node = TrieNode::decode(&rlp)?;
 
@@ -267,7 +261,7 @@ impl<
         match cache_mut.node_ref_map.get(db_key) {
             None => {}
             Some(cache_info) => match cache_info.get_cache_info() {
-                TrieCacheSlotOrCacheAlgoData::TrieCacheSlot(cache_slot) => unsafe {
+                TrieCacheSlotOrCacheAlgoData::TrieCacheSlot(_cache_slot) => unsafe {
                     // This should not happen.
                     unreachable_unchecked();
                 },
@@ -296,6 +290,7 @@ impl<
 
     /// This method is currently unused but kept for future use and for the sake
     /// of completeness.
+    #[allow(dead_code)]
     pub unsafe fn delete_from_cache(
         &self, cache_algorithm: &mut CacheAlgorithmT,
         node_ref_map: &mut NodeRefMapDeltaMpt<CacheAlgoDataT>,
@@ -404,7 +399,7 @@ impl<
     ) -> &'a mut TrieNode<CacheAlgoDataT>
     {
         match node {
-            NodeRefDeltaMpt::Committed { ref db_key } => {
+            NodeRefDeltaMpt::Committed { db_key: _ } => {
                 unreachable_unchecked();
             }
             NodeRefDeltaMpt::Dirty { ref index } => NodeMemoryManager::<
@@ -478,7 +473,9 @@ impl<
                     // Release the lock in fast path to prevent deadlock.
                     cache_manager_mut_wrapped.take();
 
-                    let db_load_mutex = self.db_load_lock.lock();
+                    // The mutex is used. The preceding underscore is only to
+                    // make compiler happy.
+                    let _db_load_mutex = self.db_load_lock.lock();
                     cache_manager_mut_wrapped = Some(cache_manager.lock());
                     let maybe_cache_slot = cache_manager_mut_wrapped
                         .as_mut()
@@ -526,7 +523,7 @@ impl<
 
                 Ok(GuardedValue::new(cache_manager_mut_wrapped, trie_node))
             }
-            NodeRefDeltaMpt::Dirty { ref index } => unreachable_unchecked(),
+            NodeRefDeltaMpt::Dirty { index: _ } => unreachable_unchecked(),
         }
     }
 
@@ -559,7 +556,7 @@ impl<
     >
     {
         match node {
-            NodeRefDeltaMpt::Committed { ref db_key } => unsafe {
+            NodeRefDeltaMpt::Committed { db_key: _ } => unsafe {
                 self.load_unowned_node_internal_unchecked(
                     allocator,
                     node,
@@ -754,7 +751,7 @@ impl<
 }
 
 use super::{
-    super::{super::super::db::COL_DELTA_TRIE, errors::*},
+    super::{super::storage_db::delta_db::DeltaDbTrait, errors::*},
     cache::algorithm::{
         lru::LRU, CacheAccessResult, CacheAlgoDataTrait, CacheAlgorithm,
         CacheIndexTrait, CacheStoreUtil,
@@ -764,7 +761,6 @@ use super::{
     node_ref_map::*,
     slab::Slab,
 };
-use kvdb::KeyValueDB;
 use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use rlp::*;
 use std::{

@@ -2,12 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    hash::KECCAK_EMPTY,
-    storage::{
-        Error as StorageError, ErrorKind as StorageErrorKind, Storage,
-        StorageTrait,
-    },
+use crate::storage::{
+    Error as StorageError, ErrorKind as StorageErrorKind, Storage, StorageTrait,
 };
 use cfx_types::{Address, H256};
 use primitives::{Account, EpochId, StateRootWithAuxInfo};
@@ -62,9 +58,8 @@ impl<'a> StateDb<'a> {
         Ok(Some(::rlp::decode::<T>(raw.as_ref())?))
     }
 
-    pub fn get_account(
-        &self, address: &Address, with_storage_root: bool,
-    ) -> Result<Option<Account>> {
+    // TODO: check if we need storage root, if so, implement.
+    pub fn get_account(&self, address: &Address) -> Result<Option<Account>> {
         let key = self.account_key(address);
         let raw = match self.storage.get(key.as_ref()) {
             Ok(maybe_value) => match maybe_value {
@@ -76,6 +71,11 @@ impl<'a> StateDb<'a> {
             }
         };
         //        println!("get key={:?} value={:?}", key, raw);
+
+        // TODO: check if we need storage root.
+        // The commented out code below demonstrates how to obtain
+        // the storage root in Delta MPT.
+        /*
         let storage_root;
         if with_storage_root {
             let storage_root_key = StorageKey::new_storage_root_key(
@@ -89,8 +89,8 @@ impl<'a> StateDb<'a> {
         } else {
             storage_root = KECCAK_EMPTY;
         }
-        let account =
-            Account::new_from_rlp(address, raw.as_ref(), &storage_root)?;
+        */
+        let account = Account::new_from_rlp(address, raw.as_ref())?;
         Ok(Some(account))
     }
 

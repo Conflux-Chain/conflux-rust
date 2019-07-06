@@ -25,4 +25,3 @@ pub use self::{
     subtrie_visitor::SubTrieVisitor,
     trie_node::TrieNode,
 };
-pub use primitives::{MerkleHash, MERKLE_NULL_NODE};

@@ -13,6 +13,8 @@ pub struct HeapHandle<PosT> {
 impl<PosT: PrimitiveNum> HeapHandle<PosT> {
     pub const NULL_POS: i32 = -1;
 
+    // Used in tests and by a currently unused class.
+    #[allow(dead_code)]
     pub fn get_pos(&self) -> PosT { self.pos }
 
     // Update heap handle for value being moved in heap.
@@ -37,6 +39,8 @@ pub struct TrivialValueWithHeapHandle<ValueType, PosT: PrimitiveNum> {
 impl<ValueType, PosT: PrimitiveNum>
     TrivialValueWithHeapHandle<ValueType, PosT>
 {
+    // Used in tests.
+    #[allow(dead_code)]
     pub fn new(value: ValueType) -> Self {
         Self {
             value,
@@ -98,6 +102,8 @@ pub trait HeapValueUtil<ValueType, PosT: PrimitiveNum> {
 /// handle is stored together.
 ///
 /// Do not use this heap value util in real application.
+// Used in tests.
+#[allow(dead_code)]
 pub struct TrivialHeapValueUtil<ValueType: Ord + Clone, PosT: PrimitiveNum> {
     __marker_pos_t: PhantomData<PosT>,
     __marker_value_type: PhantomData<ValueType>,
@@ -162,6 +168,8 @@ pub struct RemovableHeap<PosT: PrimitiveNum, ValueType> {
 }
 
 impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
+    // Used in tests and by a currently unused class.
+    #[allow(dead_code)]
     pub fn new(capacity: PosT) -> Self {
         if capacity == PosT::from(HeapHandle::<PosT>::NULL_POS) {
             panic!("LRU: capacity {:?} is too large!", capacity)
@@ -285,8 +293,8 @@ impl<
     for UpOrderChecker<ValueType, KeyType, PosT, ValueUtilT>
 {
     fn new(
-        heap_base: *mut ValueType, pos: PosT, heap_size: PosT,
-        key_comparison: KeyType, value_util: &mut ValueUtilT,
+        heap_base: *mut ValueType, pos: PosT, _heap_size: PosT,
+        key_comparison: KeyType, _value_util: &mut ValueUtilT,
     ) -> Self
     {
         let pointer_pos = unsafe { heap_base.offset(pos.into()) };
@@ -355,7 +363,7 @@ impl<
 {
     fn new(
         heap_base: *mut ValueType, pos: PosT, heap_size: PosT,
-        key_comparison: KeyType, value_util: &mut ValueUtilT,
+        key_comparison: KeyType, _value_util: &mut ValueUtilT,
     ) -> Self
     {
         let pointer_pos = unsafe { heap_base.offset(pos.into()) };
@@ -488,6 +496,8 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         heap_size
     }
 
+    // Used in tests and by a currently unused class.
+    #[allow(dead_code)]
     pub fn insert<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
         &mut self, value: ValueType, value_util: &mut ValueUtilT,
     ) -> Result<PosT> {
@@ -527,6 +537,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     /// to point to the non-heap location.
     ///
     /// Unsafe because the emptiness is unchecked.
+    #[allow(dead_code)]
     pub unsafe fn replace_head_unchecked<
         ValueUtilT: HeapValueUtil<ValueType, PosT>,
     >(
@@ -541,6 +552,8 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         self.replace_head_unchecked_with_hole(hole, value, value_util);
     }
 
+    // Used in tests and by a currently unused class.
+    #[allow(dead_code)]
     pub fn pop_head<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
         &mut self, value_util: &mut ValueUtilT,
     ) -> Option<ValueType> {
@@ -612,6 +625,8 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     }
 
     /// Unsafe because the pos is unchecked.
+    // Used in tests and by a currently unused class.
+    #[allow(dead_code)]
     pub unsafe fn replace_at_unchecked<
         ValueUtilT: HeapValueUtil<ValueType, PosT>,
     >(
@@ -633,6 +648,8 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     }
 
     /// Unsafe because the pos is unchecked.
+    // Used in tests and by a currently unused class.
+    #[allow(dead_code)]
     pub unsafe fn move_out_from_heap_at_unchecked<
         ValueUtilT: HeapValueUtil<ValueType, PosT>,
     >(
@@ -771,6 +788,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     }
 
     /// User may call this function when user decreased value at pos.
+    #[allow(dead_code)]
     pub fn sift_up<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
         &mut self, pos: PosT, value_util: &mut ValueUtilT,
     ) -> bool {

@@ -23,7 +23,7 @@ pub const MERKLE_NULL_NODE: MerkleHash = KECCAK_EMPTY;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateRootAuxInfo {
     pub previous_snapshot_root: MerkleHash,
-    pub intermediate_delta_epoch_id: MerkleHash,
+    pub intermediate_delta_epoch_id: EpochId,
 }
 
 impl Default for StateRootAuxInfo {
@@ -87,6 +87,7 @@ impl Decodable for StateRootAuxInfo {
     }
 }
 
+use super::EpochId;
 use crate::hash::KECCAK_EMPTY;
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};

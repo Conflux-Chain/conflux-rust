@@ -12,9 +12,7 @@ pub struct Account {
     pub balance: U256,
     pub nonce: U256,
     pub code_hash: H256,
-
-    /// Not part of rlp.
-    pub original_storage_root: H256,
+    // TODO: check if we need the storage root, and if so, implement.
 }
 
 impl Account {
@@ -25,20 +23,14 @@ impl Account {
             address: address.clone(),
             balance: balance.clone(),
             nonce: nonce.clone(),
-            original_storage_root: KECCAK_EMPTY,
             code_hash: KECCAK_EMPTY,
         }
     }
 
-    pub fn set_original_storage_root(&mut self, storage_root: &H256) {
-        self.original_storage_root = *storage_root;
-    }
-
     pub fn new_from_rlp(
-        address: &Address, rlp_bytes: &[u8], storage_root: &H256,
+        address: &Address, rlp_bytes: &[u8],
     ) -> Result<Account, DecoderError> {
-        let mut account = rlp::decode::<Account>(rlp_bytes)?;
-        account.set_original_storage_root(&storage_root);
+        let account = rlp::decode::<Account>(rlp_bytes)?;
         if !account.address.eq(address) {
             return Err(DecoderError::Custom("Address mismatch."));
         }
@@ -53,7 +45,6 @@ impl Decodable for Account {
             address: rlp.val_at(0)?,
             balance: rlp.val_at(1)?,
             nonce: rlp.val_at(2)?,
-            original_storage_root: KECCAK_EMPTY,
             code_hash: rlp.val_at(3)?,
         })
     }
