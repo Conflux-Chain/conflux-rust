@@ -218,14 +218,14 @@ impl<T> IntoOption<T> for Entry<T> {
     fn into_option_ref(&self) -> Option<&T> {
         match self {
             Entry::Occupied(ref val) => Some(val),
-            Entry::Vacant(index) => None,
+            Entry::Vacant(_index) => None,
         }
     }
 
     fn into_option_mut(&mut self) -> Option<&mut T> {
         match self {
             Entry::Occupied(ref mut val) => Some(val),
-            Entry::Vacant(index) => None,
+            Entry::Vacant(_index) => None,
         }
     }
 }
@@ -437,13 +437,13 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
 
     // TODO(yz): resize_default is nightly only.
     fn resize_up(&mut self, capacity: usize, new_capacity: usize) {
-        for i in capacity..new_capacity {
+        for _i in capacity..new_capacity {
             self.entries.push(E::default());
         }
     }
 
     fn resize_down(&mut self, capacity: usize, new_capacity: usize) {
-        for i in new_capacity..capacity {
+        for _i in new_capacity..capacity {
             self.entries.pop();
         }
     }

@@ -14,7 +14,7 @@ use cfxcore::{
     machine::new_machine,
     state::State,
     statedb::StateDb,
-    storage::state_manager::StateManagerTrait,
+    storage::state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
     vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
 };
@@ -78,7 +78,11 @@ fn txexe_benchmark(c: &mut Criterion) {
                     .data_man
                     .storage_manager
                     .get_state_for_next_epoch(
-                        handler.consensus.best_block_hash(),
+                        // FIXME: delta height
+                        SnapshotAndEpochIdRef::new(
+                            &handler.consensus.best_block_hash(),
+                            None,
+                        ),
                     )
                     .unwrap()
                     .unwrap(),

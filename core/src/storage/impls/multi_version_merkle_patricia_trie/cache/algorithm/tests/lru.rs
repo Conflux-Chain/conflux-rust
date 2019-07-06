@@ -82,18 +82,16 @@ mod test_lru_algorithm_size_1 {
     #[test]
     fn test_lru_algorithm_size_1() {
         // The cache should always contain the most recently accessed element.
-        let empty = true;
-        let key_range = 10;
         let mut lru = LRU::<u32, i32>::new(1);
         let mut cache_store_util = CacheUtil::default();
 
         let mut rng = get_rng_for_test();
-        for steps in 0..100000 {
+        for _steps in 0..100000 {
             let mut possible_actions =
                 Vec::<Weighted<PossibleActions>>::with_capacity(4);
             match cache_store_util.current_key {
                 None => {}
-                Some(key) => {
+                Some(_) => {
                     possible_actions.push(Weighted::<PossibleActions> {
                         weight: 3,
                         item: PossibleActions::AccessLast,
@@ -110,7 +108,7 @@ mod test_lru_algorithm_size_1 {
             });
             match cache_store_util.previous_key {
                 None => {}
-                Some(key) => {
+                Some(_) => {
                     possible_actions.push(Weighted::<PossibleActions> {
                         weight: 1,
                         item: PossibleActions::DeleteOther,
@@ -233,7 +231,7 @@ mod test_lru_algorithm {
     impl<'a> CacheUtil<'a> {
         fn prepare(&mut self, key: i32) { self.most_recent_key = Some(key); }
 
-        fn done(&mut self, key: i32) { self.most_recent_key.take(); }
+        fn done(&mut self, _key: i32) { self.most_recent_key.take(); }
     }
 
     #[derive(Debug)]
@@ -292,7 +290,7 @@ mod test_lru_algorithm {
         for k in 0..key_range {
             previous_accesses.push(k);
         }
-        for c in 0..cache_size * 3 {
+        for _c in 0..cache_size * 3 {
             previous_accesses.push(candidate_sampler.sample(&mut rng));
         }
         rng.shuffle(&mut previous_accesses);
