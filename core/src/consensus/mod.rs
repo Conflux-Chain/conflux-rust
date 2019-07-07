@@ -3381,7 +3381,7 @@ impl ConsensusGraph {
             inner.adaptive_weight(me, &anticone_barrier, weight_tuple.as_ref());
 
         if !pending {
-            let fully_valid = self.check_block_full_validity(
+            fully_valid = self.check_block_full_validity(
                 me,
                 block.as_ref(),
                 inner,
