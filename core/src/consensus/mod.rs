@@ -92,6 +92,8 @@ pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
 // Here is the delay for us to recycle those orphaned blocks in the boundary of
 // eras.
 const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
+// FIXME: We should use finality to determine the checkpoint moment instead.
+const ERA_CHECKPOINT_GAP: u64 = 50000;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
@@ -308,6 +310,9 @@ pub struct ConsensusGraphNode {
     pub is_heavy: bool,
     pub difficulty: U256,
     /// The total weight of its past set (exclude itself)
+    // FIXME: This field is not maintained during after the checkpoint.
+    // We should review the finality computation and check whether we
+    // still need this field!
     pub past_weight: i128,
     /// The total weight of its past set in its own era
     pub past_era_weight: i128,
@@ -3498,10 +3503,10 @@ impl ConsensusGraph {
     ) -> usize {
         // FIXME: We should use finality to implement this function
         let best_height = inner.best_epoch_number();
-        if best_height <= 500 {
+        if best_height <= ERA_CHECKPOINT_GAP {
             return inner.cur_era_genesis_block_index;
         }
-        let stable_height = best_height - 500;
+        let stable_height = best_height - ERA_CHECKPOINT_GAP;
         let stable_era_height = inner.get_era_height(stable_height - 1, 0);
         if stable_era_height < inner.inner_conf.era_epoch_count {
             return inner.cur_era_genesis_block_index;
@@ -4040,6 +4045,14 @@ impl ConsensusGraph {
         &self, block_hash: &H256,
     ) -> (StateRootWithAuxInfo, H256) {
         self.executor.wait_for_result(*block_hash)
+    }
+
+    /// Return the current era genesis block (checkpoint block) in the consesus
+    /// graph. This API is used by the SynchronizationLayer to trim data
+    /// before the checkpoint.
+    pub fn current_era_genesis_hash(&self) -> H256 {
+        let inner = self.inner.read();
+        inner.arena[inner.cur_era_genesis_block_index].hash.clone()
     }
 }
 
