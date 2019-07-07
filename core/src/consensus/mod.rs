@@ -256,14 +256,18 @@ pub struct ConsensusGraphInner {
     pub pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     // The set of *graph* tips in the TreeGraph.
     pub terminal_hashes: HashSet<H256>,
+    // The map to connect reference edges of legacy node before the current
+    // era. It maps the hash of a legacy node to a list of referred nodes
+    // inside the current era.
+    legacy_refs: HashMap<H256, Vec<usize>>,
     // The ``current'' era_genesis block index. It will start being the
     // original genesis. As time goes, it will move to future era genesis
     // checkpoint.
     cur_era_genesis_block_index: usize,
     // The height of the ``current'' era_genesis block
     cur_era_genesis_height: u64,
-    // The height of the ``stable'' era block, unless from the start, it is always
-    // era_epoch_count higher than era_genesis_height
+    // The height of the ``stable'' era block, unless from the start, it is
+    // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
     // The ``original'' genesis state root and receipts root.
     genesis_block_state_root: StateRoot,
@@ -332,6 +336,7 @@ impl ConsensusGraphInner {
             pivot_chain_metadata: Vec::new(),
             optimistic_executed_height: None,
             terminal_hashes: Default::default(),
+            legacy_refs: HashMap::new(),
             cur_era_genesis_block_index: NULL,
             cur_era_genesis_height: 0,
             cur_era_stable_height: 0,
@@ -463,7 +468,7 @@ impl ConsensusGraphInner {
 
     #[inline]
     fn ancestor_at(&self, me: usize, height: u64) -> usize {
-        let height_index = height as usize;/*self.height_to_pivot_index(height)*/;
+        let height_index = self.height_to_pivot_index(height);
         self.inclusive_weight_tree.ancestor_at(me, height_index)
     }
 
@@ -1018,6 +1023,32 @@ impl ConsensusGraphInner {
             .push(pivot);
     }
 
+    fn insert_referee_if_not_duplicate(
+        &self, referees: &mut Vec<usize>, me: usize,
+    ) {
+        // We do not insert current genesis
+        if self.cur_era_genesis_block_index == me {
+            return;
+        }
+        // TODO: maybe consider a more vigorous mechanism
+        let mut found = false;
+        for i in 0..referees.len() {
+            let x = referees[i];
+            let lca = self.lca(x, me);
+            if lca == me {
+                found = true;
+                break;
+            } else if lca == x {
+                found = true;
+                referees[i] = me;
+                break;
+            }
+        }
+        if !found {
+            referees.push(me);
+        }
+    }
+
     fn insert(&mut self, block: &Block) -> (usize, usize) {
         let hash = block.hash();
 
@@ -1034,12 +1065,17 @@ impl ConsensusGraphInner {
             NULL
         };
 
-        let referees: Vec<usize> = block
-            .block_header
-            .referee_hashes()
-            .iter()
-            .map(|hash| self.indices.get(hash).cloned().unwrap())
-            .collect();
+        let mut referees: Vec<usize> = Vec::new();
+        for hash in block.block_header.referee_hashes().iter() {
+            if let Some(x) = self.indices.get(hash) {
+                self.insert_referee_if_not_duplicate(&mut referees, *x);
+            } else if let Some(r) = self.legacy_refs.get(hash) {
+                for index in r {
+                    self.insert_referee_if_not_duplicate(&mut referees, *index);
+                }
+            }
+        }
+
         for referee in &referees {
             self.terminal_hashes.remove(&self.arena[*referee].hash);
         }
@@ -2114,23 +2150,130 @@ impl ConsensusGraphInner {
         );
     }
 
+    fn process_referees(
+        &self, old_referees: &Vec<usize>, era_blockset: &HashSet<usize>,
+        legacy_refs: &HashMap<H256, Vec<usize>>,
+    ) -> Vec<usize>
+    {
+        let mut referees = Vec::new();
+        for referee in old_referees {
+            let hash = self.arena[*referee].hash;
+            if era_blockset.contains(referee) {
+                self.insert_referee_if_not_duplicate(&mut referees, *referee);
+            } else if let Some(r) = legacy_refs.get(&hash) {
+                for r_index in r {
+                    self.insert_referee_if_not_duplicate(
+                        &mut referees,
+                        *r_index,
+                    );
+                }
+            }
+        }
+        referees
+    }
+
     fn checkpoint_at(&mut self, new_era_block_index: usize) {
+        // We first compute the set of blocks inside the new era
+        let mut new_era_blockset = HashSet::new();
+        new_era_blockset.clear();
+        let mut queue = VecDeque::new();
+        queue.push_back(new_era_block_index);
+        new_era_blockset.insert(new_era_block_index);
+        while let Some(x) = queue.pop_front() {
+            for child in self.arena[x].children.iter() {
+                queue.push_back(*child);
+                new_era_blockset.insert(*child);
+            }
+        }
+
+        // Now we topologically sort the blocks outside the era
+        let mut outside_blocks = HashSet::new();
+        for (index, _) in self.arena.iter() {
+            if !new_era_blockset.contains(&index) {
+                outside_blocks.insert(index);
+            }
+        }
+        let sorted_outside_blocks = self.topological_sort(&outside_blocks);
+        // Next we are going to compute the new legacy_refs map based on current
+        // graph information
+        let mut new_legacy_refs = HashMap::new();
+        for index in sorted_outside_blocks.iter() {
+            let referees = self.process_referees(
+                &self.arena[*index].referees,
+                &new_era_blockset,
+                &new_legacy_refs,
+            );
+            if !referees.is_empty() {
+                new_legacy_refs.insert(self.arena[*index].hash, referees);
+            }
+        }
+        // Now we append all existing legacy_refs into the new_legacy_refs
+        for (hash, old_referees) in self.legacy_refs.iter() {
+            let referees = self.process_referees(
+                &old_referees,
+                &new_era_blockset,
+                &new_legacy_refs,
+            );
+            if !referees.is_empty() {
+                new_legacy_refs.insert(*hash, referees);
+            }
+        }
+        // Next we are going to recompute all referee and referrer information
+        // in arena
+        let era_parent = self.arena[new_era_block_index].parent;
         let new_era_height = self.arena[new_era_block_index].height;
         let new_era_pivot_index = self.height_to_pivot_index(new_era_height);
+        for v in new_era_blockset.iter() {
+            self.arena[*v].referrers = Vec::new();
+        }
+        for v in new_era_blockset.iter() {
+            let me = *v;
+            let new_referees = self.process_referees(
+                &self.arena[me].referees,
+                &new_era_blockset,
+                &new_legacy_refs,
+            );
+            for u in new_referees.iter() {
+                self.arena[*u].referrers.push(me);
+            }
+            self.arena[me].referees = new_referees;
+            // We no longer need to consider blocks outside our era when computing blockset_in_epoch
+            self.arena[me].data.min_epoch_in_other_views = max(self.arena[me].data.min_epoch_in_other_views, new_era_height + 1);
+            assert!(self.arena[me].data.max_epoch_in_other_views >= new_era_height);
+        }
+        // Now we are ready to cleanup outside blocks in inner data structures
+        self.legacy_refs = new_legacy_refs;
+        self.arena[new_era_block_index].parent = NULL;
+        for index in outside_blocks {
+            let hash = self.arena[index].hash;
+            self.indices.remove(&hash);
+            self.terminal_hashes.remove(&hash);
+            self.arena.remove(index);
+        }
         assert!(new_era_pivot_index < self.pivot_chain.len());
-        let era_parent = self.arena[new_era_block_index].parent;
         self.pivot_chain = self.pivot_chain.split_off(new_era_pivot_index);
-        self.pivot_chain_metadata = self.pivot_chain_metadata.split_off(new_era_pivot_index);
-        /*self.weight_tree.split_root(era_parent, new_era_block_index);
-        self.inclusive_weight_tree.split_root(era_parent, new_era_block_index);
-        self.stable_weight_tree.split_root(era_parent, new_era_block_index);
+        self.pivot_chain_metadata =
+            self.pivot_chain_metadata.split_off(new_era_pivot_index);
+        self.anticone_cache.intersect_update(&new_era_blockset);
+
+        // Chop off all link-cut-trees in the inner data structure
+        // println!("era_parent {}, new_era_block_index {}, cur_era_genesis {}", era_parent, new_era_block_index, self.cur_era_genesis_block_index);
+        self.weight_tree.split_root(era_parent, new_era_block_index);
+        self.inclusive_weight_tree
+            .split_root(era_parent, new_era_block_index);
+        self.stable_weight_tree
+            .split_root(era_parent, new_era_block_index);
         self.stable_tree.split_root(era_parent, new_era_block_index);
-        self.adaptive_tree.split_root(era_parent, new_era_block_index);
-        self.inclusive_adaptive_tree.split_root(era_parent, new_era_block_index);*/
+        self.adaptive_tree
+            .split_root(era_parent, new_era_block_index);
+        self.inclusive_adaptive_tree
+            .split_root(era_parent, new_era_block_index);
+
         self.cur_era_genesis_block_index = new_era_block_index;
         self.cur_era_genesis_height = new_era_height;
-        self.cur_era_stable_height = new_era_height + self.inner_conf.era_epoch_count;
-        // TODO: Cleanup other content
+        self.cur_era_stable_height =
+            new_era_height + self.inner_conf.era_epoch_count;
+        // TODO: Maybe we need to clean up data_manager?
     }
 }
 
@@ -3204,6 +3347,25 @@ impl ConsensusGraph {
         weight
     }
 
+    fn process_outside_block(
+        &self, inner: &mut ConsensusGraphInner, block: Arc<Block>,
+    ) {
+        let mut referees = Vec::new();
+        for hash in block.block_header.referee_hashes().iter() {
+            if let Some(x) = inner.indices.get(hash) {
+                inner.insert_referee_if_not_duplicate(&mut referees, *x);
+            } else if let Some(r) = inner.legacy_refs.get(hash) {
+                for index in r {
+                    inner
+                        .insert_referee_if_not_duplicate(&mut referees, *index);
+                }
+            }
+        }
+        inner
+            .legacy_refs
+            .insert(block.block_header.hash(), referees);
+    }
+
     /// This is the function to insert a new block into the consensus graph
     /// during construction. We by pass many verifications because those
     /// blocks are from our own database so we trust them. After inserting
@@ -3213,6 +3375,11 @@ impl ConsensusGraph {
         let block = self.data_man.block_by_hash(hash, false).unwrap();
 
         let inner = &mut *self.inner.write();
+        let parent_hash = block.block_header.parent_hash();
+        if !inner.indices.contains_key(&parent_hash) {
+            self.process_outside_block(inner, block);
+            return;
+        }
 
         let me = self.insert_block_initial(inner, block.clone());
 
@@ -3222,7 +3389,10 @@ impl ConsensusGraph {
         } else {
             None
         };
-        let (fully_valid, pending) = match self.data_man.block_status_from_db(hash) {
+        let (fully_valid, pending) = match self
+            .data_man
+            .block_status_from_db(hash)
+        {
             Some(BlockStatus::Valid) => (true, false),
             Some(BlockStatus::Pending) => (true, true),
             Some(BlockStatus::PartialInvalid) => (false, false),
@@ -3310,7 +3480,9 @@ impl ConsensusGraph {
         }
     }
 
-    fn should_form_checkpoint_at(&self, inner: &mut ConsensusGraphInner) -> usize {
+    fn should_form_checkpoint_at(
+        &self, inner: &mut ConsensusGraphInner,
+    ) -> usize {
         // FIXME: We should use finality to implement this function
         let best_height = inner.best_epoch_number();
         if best_height <= 500 {
@@ -3321,7 +3493,8 @@ impl ConsensusGraph {
         if stable_era_height < inner.inner_conf.era_epoch_count {
             return inner.cur_era_genesis_block_index;
         }
-        let safe_era_height = stable_era_height - inner.inner_conf.era_epoch_count;
+        let safe_era_height =
+            stable_era_height - inner.inner_conf.era_epoch_count;
         if inner.cur_era_genesis_height > safe_era_height {
             return inner.cur_era_genesis_block_index;
         }
@@ -3342,6 +3515,11 @@ impl ConsensusGraph {
         );
 
         let mut inner = &mut *self.inner.write();
+        let parent_hash = block.block_header.parent_hash();
+        if !inner.indices.contains_key(&parent_hash) {
+            self.process_outside_block(inner, block);
+            return;
+        }
 
         let me = self.insert_block_initial(inner, block.clone());
         let parent = inner.arena[me].parent;
@@ -3365,7 +3543,8 @@ impl ConsensusGraph {
             self.txpool.set_tx_packed(block.transactions.clone());
         }
 
-        let pending = inner.ancestor_at(parent, inner.cur_era_stable_height) != inner.get_pivot_block_index(inner.cur_era_stable_height);
+        let pending = inner.ancestor_at(parent, inner.cur_era_stable_height)
+            != inner.get_pivot_block_index(inner.cur_era_stable_height);
 
         let anticone_barrier = inner.compute_anticone(me);
 
@@ -3403,10 +3582,7 @@ impl ConsensusGraph {
 
         if pending {
             inner.arena[me].data.pending = true;
-            debug!(
-                "Block {} (hash = {}) is pending",
-                me, inner.arena[me].hash
-            );
+            debug!("Block {} (hash = {}) is pending", me, inner.arena[me].hash);
         } else if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
             debug!(
@@ -3461,10 +3637,10 @@ impl ConsensusGraph {
                     for discarded_idx in inner
                         .pivot_chain
                         .split_off(inner.height_to_pivot_index(fork_at))
-                        {
-                            // Reset the epoch_number of the discarded fork
-                            inner.reset_epoch_number_in_epoch(discarded_idx)
-                        }
+                    {
+                        // Reset the epoch_number of the discarded fork
+                        inner.reset_epoch_number_in_epoch(discarded_idx)
+                    }
                     let mut u = new;
                     loop {
                         inner.pivot_chain.push(u);
@@ -3480,12 +3656,12 @@ impl ConsensusGraph {
                             let weight = inner.weight_tree.get(*index);
                             if heaviest == NULL
                                 || ConsensusGraphInner::is_heavier(
-                                (weight, &inner.arena[*index].hash),
-                                (
-                                    heaviest_weight,
-                                    &inner.arena[heaviest].hash,
-                                ),
-                            )
+                                    (weight, &inner.arena[*index].hash),
+                                    (
+                                        heaviest_weight,
+                                        &inner.arena[heaviest].hash,
+                                    ),
+                                )
                             {
                                 heaviest = *index;
                                 heaviest_weight = weight;
@@ -3521,13 +3697,17 @@ impl ConsensusGraph {
                 for pivot_index in update_index..old_pivot_chain_len {
                     for x in &inner.pivot_chain_metadata[pivot_index]
                         .last_pivot_in_past_blocks
-                        {
-                            last_pivot_to_update.insert(*x);
-                        }
+                    {
+                        last_pivot_to_update.insert(*x);
+                    }
                 }
                 self.recompute_metadata(inner, fork_at, last_pivot_to_update);
             } else {
-                self.recompute_metadata(inner, inner.get_pivot_height(), last_pivot_to_update);
+                self.recompute_metadata(
+                    inner,
+                    inner.get_pivot_height(),
+                    last_pivot_to_update,
+                );
             }
         } else {
             let height = inner.arena[me].height;
@@ -3605,10 +3785,20 @@ impl ConsensusGraph {
         };
         inner.persist_terminals();
         let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
-        if self.should_form_checkpoint_at(inner) != inner.cur_era_genesis_block_index {
-            info!("Working on the checkpoint for block {} height {}", &inner.arena[inner.cur_era_genesis_block_index].hash, inner.cur_era_genesis_height);
+        if self.should_form_checkpoint_at(inner)
+            != inner.cur_era_genesis_block_index
+        {
+            info!(
+                "Working on the checkpoint for block {} height {}",
+                &inner.arena[inner.cur_era_genesis_block_index].hash,
+                inner.cur_era_genesis_height
+            );
             inner.checkpoint_at(new_checkpoint_era_genesis);
-            info!("New checkpoint formed at block {} height {}", &inner.arena[inner.cur_era_genesis_block_index].hash, inner.cur_era_genesis_height);
+            info!(
+                "New checkpoint formed at block {} height {}",
+                &inner.arena[inner.cur_era_genesis_block_index].hash,
+                inner.cur_era_genesis_height
+            );
         }
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
