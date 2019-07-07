@@ -2237,9 +2237,19 @@ impl ConsensusGraphInner {
                 self.arena[*u].referrers.push(me);
             }
             self.arena[me].referees = new_referees;
-            // We no longer need to consider blocks outside our era when computing blockset_in_epoch
-            self.arena[me].data.min_epoch_in_other_views = max(self.arena[me].data.min_epoch_in_other_views, new_era_height + 1);
-            assert!(self.arena[me].data.max_epoch_in_other_views >= new_era_height);
+            // We no longer need to consider blocks outside our era when
+            // computing blockset_in_epoch
+            self.arena[me].data.min_epoch_in_other_views = max(
+                self.arena[me].data.min_epoch_in_other_views,
+                new_era_height + 1,
+            );
+            assert!(
+                self.arena[me].data.max_epoch_in_other_views >= new_era_height
+            );
+            self.arena[me]
+                .data
+                .blockset_in_own_view_of_epoch
+                .retain(|v| new_era_blockset.contains(v));
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         self.legacy_refs = new_legacy_refs;
@@ -2254,10 +2264,13 @@ impl ConsensusGraphInner {
         self.pivot_chain = self.pivot_chain.split_off(new_era_pivot_index);
         self.pivot_chain_metadata =
             self.pivot_chain_metadata.split_off(new_era_pivot_index);
+        for d in self.pivot_chain_metadata.iter_mut() {
+            d.last_pivot_in_past_blocks
+                .retain(|v| new_era_blockset.contains(v));
+        }
         self.anticone_cache.intersect_update(&new_era_blockset);
 
         // Chop off all link-cut-trees in the inner data structure
-        // println!("era_parent {}, new_era_block_index {}, cur_era_genesis {}", era_parent, new_era_block_index, self.cur_era_genesis_block_index);
         self.weight_tree.split_root(era_parent, new_era_block_index);
         self.inclusive_weight_tree
             .split_root(era_parent, new_era_block_index);
@@ -3082,7 +3095,7 @@ impl ConsensusGraph {
                         stack.push((0, *referee));
                     }
                 }
-            } else if stage == 1 && me != 0 {
+            } else if stage == 1 && me != inner.cur_era_genesis_block_index {
                 let mut last_pivot = inner.arena[parent].last_pivot_in_past;
                 for referee in &inner.arena[me].referees {
                     let x = inner.arena[*referee].last_pivot_in_past;
@@ -3556,10 +3569,15 @@ impl ConsensusGraph {
 
         self.update_lcts_initial(inner, me);
 
-        let (stable, adaptive) =
-            inner.adaptive_weight(me, &anticone_barrier, weight_tuple.as_ref());
-
+        let mut stable = true;
         if !pending {
+            let (stable_v, adaptive) = inner.adaptive_weight(
+                me,
+                &anticone_barrier,
+                weight_tuple.as_ref(),
+            );
+            stable = stable_v;
+
             fully_valid = self.check_block_full_validity(
                 me,
                 block.as_ref(),
@@ -3568,6 +3586,11 @@ impl ConsensusGraph {
                 &anticone_barrier,
                 weight_tuple.as_ref(),
             );
+
+            inner.arena[me].stable = stable;
+            if self.conf.bench_mode && fully_valid {
+                inner.arena[me].adaptive = adaptive;
+            }
         }
         self.data_man.insert_block_status_to_db(
             hash,
@@ -3594,11 +3617,6 @@ impl ConsensusGraph {
                 "Block {} (hash = {}) is fully valid",
                 me, inner.arena[me].hash
             );
-        }
-
-        inner.arena[me].stable = stable;
-        if self.conf.bench_mode && fully_valid {
-            inner.arena[me].adaptive = adaptive;
         }
 
         let my_weight = self.update_lcts_finalize(inner, me, stable);
