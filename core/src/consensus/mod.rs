@@ -348,7 +348,8 @@ impl ConsensusGraphInner {
             inner_conf,
             anticone_cache: AnticoneCache::new(),
             sequence_number_of_block_entrance: 0,
-            last_recycled_era_block: NULL,
+            // TODO handle checkpoint in recovery
+            last_recycled_era_block: 0,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -1220,6 +1221,10 @@ impl ConsensusGraphInner {
 
     fn compute_anticone_bruteforce(&self, me: usize) -> BitSet {
         let parent = self.arena[me].parent;
+        if parent == NULL {
+            // This is genesis, so the anticone should be empty
+            return BitSet::new();
+        }
         let mut last_in_pivot = self.arena[parent].last_pivot_in_past;
         for referee in &self.arena[me].referees {
             last_in_pivot =
