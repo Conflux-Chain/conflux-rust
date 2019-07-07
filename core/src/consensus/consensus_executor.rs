@@ -688,6 +688,10 @@ impl ConsensusExecutionHandler {
                 let info = tx_fee
                     .entry(tx.hash())
                     .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
+                // The same transaction is executed only once.
+                debug_assert!(
+                    fee.is_zero() || info.0.is_zero() || info.1.len() == 0
+                );
                 // `false` means the block is fully valid
                 // Partial invalid blocks will not share the tx fee
                 if reward_info.epoch_block_anticone_overlimited[enum_idx]
@@ -695,10 +699,6 @@ impl ConsensusExecutionHandler {
                 {
                     info.1.insert(block_hash);
                 }
-                // The same transaction is executed only once.
-                debug_assert!(
-                    fee.is_zero() || info.1.len() == 1 || info.0.is_zero()
-                );
                 if !fee.is_zero() && info.0.is_zero() {
                     info.0 = fee;
                 }
