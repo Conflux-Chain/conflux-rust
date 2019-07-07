@@ -41,11 +41,13 @@ pub struct MultiVersionMerklePatriciaTrie {
 
 impl MultiVersionMerklePatriciaTrie {
     pub fn padding(
-        snapshot_root: MerkleHash, intermediate_delta_root: MerkleHash,
+        snapshot_root: &MerkleHash, intermediate_delta_root: &MerkleHash,
     ) -> KeyPadding {
-        let buffer = Vec::with_capacity(
+        let mut buffer = Vec::with_capacity(
             snapshot_root.0.len() + intermediate_delta_root.0.len(),
         );
+        buffer.extend_from_slice(&snapshot_root.0);
+        buffer.extend_from_slice(&intermediate_delta_root.0);
         keccak(&buffer).0
     }
 

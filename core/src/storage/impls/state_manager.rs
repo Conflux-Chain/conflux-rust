@@ -112,8 +112,8 @@ impl StateManager {
                 db.key_value().clone(),
                 conf,
                 MultiVersionMerklePatriciaTrie::padding(
-                    MERKLE_NULL_NODE,
-                    MERKLE_NULL_NODE,
+                    &MERKLE_NULL_NODE,
+                    &MERKLE_NULL_NODE,
                 ),
             ),
             db,
