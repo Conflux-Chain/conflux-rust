@@ -409,15 +409,15 @@ impl SynchronizationGraphInner {
             parent_difficulty = *self.arena[parent].block_header.difficulty();
         } else {
             let parent_hash = self.arena[index].block_header.parent_hash();
-            let parent_block = self
+            let parent_header = self
                 .data_man
-                .block_by_hash(parent_hash, true)
+                .block_header_by_hash(parent_hash)
                 .unwrap()
                 .clone();
-            parent_height = parent_block.block_header.height();
-            parent_timestamp = parent_block.block_header.timestamp();
-            parent_gas_limit = *parent_block.block_header.gas_limit();
-            parent_difficulty = *parent_block.block_header.difficulty();
+            parent_height = parent_header.height();
+            parent_timestamp = parent_header.timestamp();
+            parent_gas_limit = *parent_header.gas_limit();
+            parent_difficulty = *parent_header.difficulty();
         }
 
         if self.arena[index].pending_referee_count == 0 {
@@ -437,13 +437,12 @@ impl SynchronizationGraphInner {
             for referee_hash in self.arena[index].block_header.referee_hashes()
             {
                 if !referee_hash_in_mem.contains(referee_hash) {
-                    let referee_block = self
+                    let referee_header = self
                         .data_man
-                        .block_by_hash(referee_hash, true)
+                        .block_header_by_hash(referee_hash)
                         .unwrap()
                         .clone();
-                    referee_timestamps
-                        .push(referee_block.block_header.timestamp());
+                    referee_timestamps.push(referee_header.timestamp());
                 }
             }
         }
@@ -799,7 +798,7 @@ impl SynchronizationGraph {
                 continue;
             }
 
-            if let Some(mut block) = self.block_by_hash_from_db(&hash) {
+            if let Some(mut block) = self.data_man.block_from_db(&hash) {
                 // This is for constructing synchronization graph.
                 let (success, _) = self.insert_block_header(
                     &mut block.block_header,
@@ -869,7 +868,7 @@ impl SynchronizationGraph {
                 continue;
             }
 
-            if let Some(mut block) = self.block_by_hash_from_db(&hash) {
+            if let Some(mut block) = self.data_man.block_from_db(&hash) {
                 // This is for constructing synchronization graph.
                 let (success, _) = self.insert_block_header(
                     &mut block.block_header,
@@ -942,10 +941,6 @@ impl SynchronizationGraph {
 
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
         self.data_man.block_by_hash(hash, true)
-    }
-
-    pub fn block_by_hash_from_db(&self, hash: &H256) -> Option<Block> {
-        self.data_man.block_by_hash_from_db(hash)
     }
 
     pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }

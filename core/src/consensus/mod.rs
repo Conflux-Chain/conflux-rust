@@ -28,7 +28,7 @@ use crate::{
 };
 use cfx_types::{into_i128, into_u256, Bloom, H160, H256, U256, U512};
 // use fenwick_tree::FenwickTree;
-use crate::pow::target_difficulty;
+use crate::{block_data_manager::BlockStatus, pow::target_difficulty};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::MinLinkCutTree;
 use parking_lot::RwLock;
@@ -3173,33 +3173,38 @@ impl ConsensusGraph {
         } else {
             None
         };
-        let fully_valid = if let Some(partial_invalid) =
-            self.data_man.block_status_from_db(hash)
-        {
-            !partial_invalid
-        } else {
-            // FIXME If the status of a block close to terminals is missing
-            // (likely to happen) and we try to check its validity with the
-            // commented code, we will recompute the whole DAG from genesis
-            // because the pivot chain is empty now, which is not what we
-            // want for fast recovery. A better solution is
-            // to assume it's partial invalid, construct the pivot chain and
-            // other data like block_receipts_root first, and then check its
-            // full validity. The pivot chain might need to be updated
-            // depending on the validity result.
+        let fully_valid = match self.data_man.block_status_from_db(hash) {
+            Some(BlockStatus::Valid) => true,
+            None => {
+                // FIXME If the status of a block close to terminals is missing
+                // (likely to happen) and we try to check its validity with the
+                // commented code, we will recompute the whole DAG from genesis
+                // because the pivot chain is empty now, which is not what we
+                // want for fast recovery. A better solution is
+                // to assume it's partial invalid, construct the pivot chain and
+                // other data like block_receipts_root first, and then check its
+                // full validity. The pivot chain might need to be updated
+                // depending on the validity result.
 
-            // The correct logic here should be as follows, but this
-            // solution is very costly
-            // ```
-            // let valid = self.check_block_full_validity(me, &block, inner, sync_inner);
-            // self.insert_block_status_to_db(hash, !valid);
-            // valid
-            // ```
+                // The correct logic here should be as follows, but this
+                // solution is very costly
+                // ```
+                // let valid = self.check_block_full_validity(me, &block, inner, sync_inner);
+                // self.insert_block_status_to_db(hash, !valid);
+                // valid
+                // ```
 
-            // The assumed value should be false after we fix this issue.
-            // Now we optimistically hope that they are valid.
-            debug!("Assume block {} is valid", hash);
-            true
+                // The assumed value should be false after we fix this issue.
+                // Now we optimistically hope that they are valid.
+                debug!("Assume block {} is valid", hash);
+                true
+            }
+            Some(BlockStatus::PartialInvalid) => false,
+            Some(BlockStatus::Invalid) => {
+                // Blocks marked invalid should not exist in database, so should
+                // not be inserted during construction.
+                unreachable!()
+            }
         };
 
         inner.arena[me].data.partial_invalid = !fully_valid;
@@ -3310,7 +3315,14 @@ impl ConsensusGraph {
             &anticone_barrier,
             weight_tuple.as_ref(),
         );
-        self.data_man.insert_block_status_to_db(hash, !fully_valid);
+        self.data_man.insert_block_status_to_db(
+            hash,
+            if fully_valid {
+                BlockStatus::Valid
+            } else {
+                BlockStatus::PartialInvalid
+            },
+        );
 
         if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
