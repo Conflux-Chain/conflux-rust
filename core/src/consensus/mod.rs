@@ -415,7 +415,7 @@ impl ConsensusGraphInner {
         });
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
 
-        inner.anticone_cache.update(0, &BitSet::new());
+        inner.anticone_cache.update(inner.cur_era_genesis_block_index, &BitSet::new());
         inner
     }
 
