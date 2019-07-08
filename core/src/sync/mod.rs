@@ -17,7 +17,7 @@ pub use self::{
     error::{Error, ErrorKind},
     synchronization_graph::{
         SharedSynchronizationGraph, SyncGraphStatistics, SynchronizationGraph,
-        SynchronizationGraphInner, SynchronizationGraphNode,
+        SynchronizationGraphInner, SynchronizationGraphNode, REFEREE_BOUND,
     },
     synchronization_protocol_handler::{
         ProtocolConfiguration, SynchronizationProtocolHandler,
