@@ -382,7 +382,6 @@ impl ConsensusGraphInner {
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
-            total_processed_blocks: 1,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -1977,8 +1976,7 @@ impl ConsensusGraphInner {
 
     pub fn block_receipts_by_hash(
         &self, hash: &H256, update_cache: bool,
-    ) -> Option<Arc<Vec<Receipt
-{
+    ) -> Option<Arc<Vec<Receipt>>> {
         self.get_epoch_hash_for_block(hash).and_then(|epoch| {
             trace!("Block {} is in epoch {}", hash, epoch);
             self.data_man
