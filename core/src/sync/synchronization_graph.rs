@@ -211,24 +211,34 @@ impl SynchronizationGraphInner {
         }
     }
 
-    fn try_reclaim_expire_block(&mut self) -> Vec<usize> {
-        let mut reclaimed_blocks = Vec::new();
-        let not_ready_blocks_frontier = self.not_ready_blocks_frontier.clone();
+    fn try_recover_expire_block(&mut self) -> Vec<usize> {
+        let mut result_blocks = Vec::new();
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();;
-        for index in not_ready_blocks_frontier {
-            let parent_hash = self.arena[index].block_header.parent_hash();
+        for index in &self.not_ready_blocks_frontier {
+            let parent_hash = self.arena[*index].block_header.parent_hash();
+
+            // parent and referees are all in memory, ignore recover
+            if self.arena[*index].parent != NULL
+                && self.arena[*index].pending_referee_count == 0
+            {
+                continue;
+            }
 
             // check whether parent is BLOCK_GRAPH_READY
             let parent_graph_ready: bool = {
-                if self.arena[index].parent == NULL
+                if self.arena[*index].parent == NULL
                     && !self.data_man.verified_invalid(parent_hash)
                 {
-                    true
-                } else if self.arena[index].parent != NULL
-                    && self.arena[self.arena[index].parent].graph_status
+                    if let Some(_) = self.data_man.block_by_hash(parent_hash, false) {
+                        !self.data_man.verified_invalid(parent_hash)
+                    } else {
+                        false
+                    }
+                } else if self.arena[*index].parent != NULL
+                    && self.arena[self.arena[*index].parent].graph_status
                         == BLOCK_GRAPH_READY
                 {
                     true
@@ -243,14 +253,14 @@ impl SynchronizationGraphInner {
 
             // check whether referees are BLOCK_GRAPH_READY
             let mut referee_graph_ready = true;
-            if self.arena[index].pending_referee_count == 0 {
-                for referee in self.arena[index].referees.iter() {
+            if self.arena[*index].pending_referee_count == 0 {
+                for referee in self.arena[*index].referees.iter() {
                     referee_graph_ready &=
                         self.arena[*referee].graph_status == BLOCK_GRAPH_READY;
                 }
             } else {
                 let mut referee_hash_in_mem = HashSet::new();
-                for referee in self.arena[index].referees.iter() {
+                for referee in self.arena[*index].referees.iter() {
                     referee_graph_ready &=
                         self.arena[*referee].graph_status == BLOCK_GRAPH_READY;
                     referee_hash_in_mem
@@ -258,33 +268,38 @@ impl SynchronizationGraphInner {
                 }
 
                 for referee_hash in
-                    self.arena[index].block_header.referee_hashes()
+                    self.arena[*index].block_header.referee_hashes()
                 {
                     if !referee_hash_in_mem.contains(referee_hash) {
-                        referee_graph_ready &=
-                            !self.data_man.verified_invalid(referee_hash);
+                        referee_graph_ready &= {
+                            if let Some(_) = self.data_man.block_by_hash(referee_hash, false) {
+                                !self.data_man.verified_invalid(referee_hash)
+                            } else {
+                                false
+                            }
+                        }
                     }
                 }
             }
 
             if referee_graph_ready {
                 // do check
-                let r = self.verify_header_graph_ready_block(index);
+                let r = self.verify_header_graph_ready_block(*index);
                 if r.is_err() {
                     continue;
                 }
-                if self.arena[index].block_ready {
-                    // reclaim as BLOCK_GRAPH_READY
-                    reclaimed_blocks.push(index);
+                if self.arena[*index].block_ready {
+                    // recover as BLOCK_GRAPH_READY
+                    result_blocks.push(*index);
                 } else {
-                    // reclaim as BLOCK_HEADER_GRAPH_READY
-                    self.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
-                    self.arena[index].timestamp = now;
+                    // recover as BLOCK_HEADER_GRAPH_READY
+                    self.arena[*index].graph_status = BLOCK_HEADER_GRAPH_READY;
+                    self.arena[*index].timestamp = now;
                 }
             }
         }
 
-        reclaimed_blocks
+        result_blocks
     }
 
     pub fn insert_invalid(&mut self, header: Arc<BlockHeader>) -> usize {
@@ -1197,7 +1212,6 @@ impl SynchronizationGraph {
         }
 
         inner.try_clear_old_era_blocks();
-        inner.try_reclaim_expire_block();
 
         (true, need_to_relay)
     }
@@ -1225,12 +1239,9 @@ impl SynchronizationGraph {
         // maintain not_ready_blocks_frontier set
         inner.not_ready_blocks_count -= 1;
         inner.not_ready_blocks_frontier.remove(&index);
-        let children =
-            mem::replace(&mut inner.arena[index].children, Vec::new());
-        for child in &children {
+        for child in &inner.arena[index].children {
             inner.not_ready_blocks_frontier.insert(*child);
         }
-        mem::replace(&mut inner.arena[index].children, children);
 
         let h = inner.arena[index].block_header.hash();
         debug!("Block {:?} is graph ready", h);
@@ -1390,13 +1401,13 @@ impl SynchronizationGraph {
         inner.sync_graph.inserted_block_count += 1;
     }
 
-    pub fn remove_expire_blocks(&self, expire_time: u64, reclaim: bool) {
+    pub fn remove_expire_blocks(&self, expire_time: u64, recover: bool) {
         let inner = &mut *self.inner.write();
 
-        if reclaim {
-            let recalimed_blocks = inner.try_reclaim_expire_block();
+        if recover {
+            let blocks = inner.try_recover_expire_block();
 
-            for index in recalimed_blocks {
+            for index in blocks {
                 self.set_graph_ready(inner, index, false);
             }
         }
