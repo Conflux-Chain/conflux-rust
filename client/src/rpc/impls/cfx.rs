@@ -93,7 +93,7 @@ impl RpcImpl {
     fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<RpcBlock> {
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
         inner
             .get_hash_from_epoch_number(
@@ -118,7 +118,7 @@ impl RpcImpl {
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
 
         if let Some(block) = self.consensus.data_man.block_by_hash(&hash, false)
         {
@@ -132,7 +132,7 @@ impl RpcImpl {
     fn block_by_hash_with_pivot_assumption(
         &self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64,
     ) -> RpcResult<RpcBlock> {
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
 
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
@@ -162,7 +162,7 @@ impl RpcImpl {
 
     fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
         Ok(inner
             .all_blocks_with_topo_order()
             .iter()
@@ -209,8 +209,6 @@ impl RpcImpl {
         info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
 
         self.consensus
-            .inner
-            .read_recursive()
             .block_hashes_by_epoch(self.get_primitive_epoch_number(num))
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
@@ -384,14 +382,16 @@ impl RpcImpl {
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty
         );
-        let hash = self.block_gen.generate_fixed_block(
+        match self.block_gen.generate_fixed_block(
             parent_hash,
             referee,
             num_txs,
             difficulty,
             adaptive,
-        );
-        Ok(hash)
+        ) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(RpcError::invalid_params(e)),
+        }
     }
 
     fn generate_one_block(
@@ -436,14 +436,15 @@ impl RpcImpl {
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
 
-        let hash = self.block_gen.generate_custom_block_with_parent(
+        match self.block_gen.generate_custom_block_with_parent(
             parent_hash,
             referee,
             transactions,
             adaptive,
-        );
-
-        Ok(hash)
+        ) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(RpcError::invalid_params(e)),
+        }
     }
 
     fn decode_raw_txs(
@@ -850,13 +851,13 @@ impl TestRpc for TestRpcImpl {
         adaptive: bool, difficulty: Option<u64>,
     ) -> RpcResult<H256>
     {
-        self.rpc_impl.generate_fixed_block(
+        Ok(self.rpc_impl.generate_fixed_block(
             parent_hash,
             referee,
             num_txs,
             difficulty.unwrap_or(0),
             adaptive,
-        )
+        )?)
     }
 
     fn generate_one_block(

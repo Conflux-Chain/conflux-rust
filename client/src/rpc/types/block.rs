@@ -139,7 +139,7 @@ pub struct Block {
 
 impl Block {
     pub fn new(
-        b: &PrimitiveBlock, consensus_inner: &mut ConsensusGraphInner,
+        b: &PrimitiveBlock, consensus_inner: &ConsensusGraphInner,
         include_txs: bool,
     ) -> Self
     {
