@@ -6,4 +6,4 @@
 
 pub mod cfx;
 
-pub use self::cfx::{Cfx, DebugRpc, TestRpc};
+pub use self::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc};

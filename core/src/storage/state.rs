@@ -48,9 +48,6 @@ pub trait StateTrait {
     // TODO(yz): verifiable proof related methods.
 }
 
-use super::impls::{
-    errors::*,
-    multi_version_merkle_patricia_trie::merkle_patricia_trie::MerkleHash,
-};
+use super::impls::errors::*;
 use crate::statedb::KeyPadding;
-use primitives::{EpochId, StateRootWithAuxInfo};
+use primitives::{EpochId, MerkleHash, StateRootWithAuxInfo};

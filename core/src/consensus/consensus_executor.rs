@@ -9,7 +9,10 @@ use crate::{
     machine::new_machine,
     state::{CleanupMode, State},
     statedb::StateDb,
-    storage::{state::StateTrait, state_manager::StateManagerTrait},
+    storage::{
+        state::StateTrait,
+        state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
+    },
     vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
@@ -139,7 +142,7 @@ impl ConsensusExecutor {
             thread: Mutex::new(None),
             sender: Mutex::new(sender),
             handler: handler.clone(),
-            bench_mode: bench_mode,
+            bench_mode,
         };
         // It receives blocks hashes from on_new_block and execute them
         let handle = thread::Builder::new()
@@ -321,7 +324,10 @@ impl ConsensusExecutionHandler {
         let state_root = self
             .data_man
             .storage_manager
-            .get_state_no_commit(task.epoch_hash)
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                &task.epoch_hash,
+                None,
+            ))
             .unwrap()
             // Unwrapping is safe because the state is assumed to exist.
             .unwrap()
@@ -353,7 +359,6 @@ impl ConsensusExecutionHandler {
     {
         // Check if the state has been computed
         if debug_record.is_none()
-            && self.data_man.storage_manager.contains_state(*epoch_hash)
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
@@ -385,7 +390,11 @@ impl ConsensusExecutionHandler {
                 self.data_man
                     .storage_manager
                     .get_state_for_next_epoch(
-                        *pivot_block.block_header.parent_hash(),
+                        // FIXME: delta height.
+                        SnapshotAndEpochIdRef::new(
+                            pivot_block.block_header.parent_hash(),
+                            Some(pivot_block.block_header.height() - 1),
+                        ),
                     )
                     .unwrap()
                     // Unwrapping is safe because the state exists.
@@ -453,6 +462,7 @@ impl ConsensusExecutionHandler {
                 timestamp: block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
                 gas_used: U256::zero(),
+                last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
             };
             let mut accumulated_fee: U256 = 0.into();
@@ -551,8 +561,7 @@ impl ConsensusExecutionHandler {
             BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
         );
         if on_local_pivot {
-            self.tx_pool
-                .recycle_failed_executed_transactions(to_pending);
+            self.tx_pool.recycle_transactions(to_pending);
         }
         debug!("Finish processing tx for epoch");
         epoch_receipts
@@ -689,6 +698,10 @@ impl ConsensusExecutionHandler {
                 let info = tx_fee
                     .entry(tx.hash())
                     .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
+                // The same transaction is executed only once.
+                debug_assert!(
+                    fee.is_zero() || info.0.is_zero() || info.1.len() == 0
+                );
                 // `false` means the block is fully valid
                 // Partial invalid blocks will not share the tx fee
                 if reward_info.epoch_block_anticone_overlimited[enum_idx]
@@ -696,10 +709,6 @@ impl ConsensusExecutionHandler {
                 {
                     info.1.insert(block_hash);
                 }
-                // The same transaction is executed only once.
-                debug_assert!(
-                    fee.is_zero() || info.1.len() == 1 || info.0.is_zero()
-                );
                 if !fee.is_zero() && info.0.is_zero() {
                     info.0 = fee;
                 }
@@ -799,7 +808,11 @@ impl ConsensusExecutionHandler {
                 self.data_man
                     .storage_manager
                     .get_state_for_next_epoch(
-                        *pivot_block.block_header.parent_hash(),
+                        // FIXME: delta height
+                        SnapshotAndEpochIdRef::new(
+                            pivot_block.block_header.parent_hash(),
+                            Some(pivot_block.block_header.height() - 1),
+                        ),
                     )
                     .unwrap()
                     // Unwrapping is safe because the state exists.
@@ -820,7 +833,9 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_no_commit(*epoch_id)
+                    .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                        epoch_id, None,
+                    ))
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap(),
@@ -834,6 +849,7 @@ impl ConsensusExecutionHandler {
             timestamp: Default::default(),
             difficulty: Default::default(),
             gas_used: U256::zero(),
+            last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
         };
         let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);

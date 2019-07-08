@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    traits::cfx::{Cfx, DebugRpc, TestRpc},
+    traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
     types::{
         Block as RpcBlock, Bytes, EpochNumber, Receipt as RpcReceipt, Receipt,
         Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
@@ -17,7 +17,6 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
-use jsonrpc_macros::Trailing;
 use network::{
     get_high_priority_packets,
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
@@ -79,7 +78,7 @@ impl RpcImpl {
     }
 
     fn epoch_number(
-        &self, epoch_num: Trailing<EpochNumber>,
+        &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
@@ -137,7 +136,7 @@ impl RpcImpl {
 
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
-        let epoch_number: usize = epoch_number.as_usize();
+        let epoch_number = epoch_number.as_usize() as u64;
         info!(
             "RPC Request: cfx_getBlockByHashWithPivotAssumption block_hash={:?} pivot_hash={:?} epoch_number={:?}",
             block_hash, pivot_hash, epoch_number
@@ -218,7 +217,7 @@ impl RpcImpl {
     }
 
     fn balance(
-        &self, address: RpcH160, num: Trailing<EpochNumber>,
+        &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
@@ -235,7 +234,7 @@ impl RpcImpl {
 
     //    fn account(
     //        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
-    //        epoch_num: Trailing<EpochNumber>,
+    //        epoch_num: Option<EpochNumber>,
     //    ) -> RpcResult<Account>
     //    {
     //        let inner = &mut *self.consensus.inner.write();
@@ -267,7 +266,7 @@ impl RpcImpl {
     //    }
 
     fn transaction_count(
-        &self, address: RpcH160, num: Trailing<EpochNumber>,
+        &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         info!(
@@ -480,7 +479,7 @@ impl RpcImpl {
     }
 
     fn generate_block_with_fake_txs(
-        &self, raw_txs_without_data: Bytes, tx_data_len: Trailing<usize>,
+        &self, raw_txs_without_data: Bytes, tx_data_len: Option<usize>,
     ) -> RpcResult<H256> {
         let transactions = self
             .decode_raw_txs(raw_txs_without_data, tx_data_len.unwrap_or(0))?;
@@ -545,7 +544,7 @@ impl RpcImpl {
     }
 
     fn call(
-        &self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>,
+        &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
         let epoch = self.get_primitive_epoch_number(epoch);
@@ -718,7 +717,7 @@ impl RpcImpl {
     }
 
     fn net_sessions(
-        &self, node_id: Trailing<NodeId>,
+        &self, node_id: Option<NodeId>,
     ) -> RpcResult<Vec<SessionDetails>> {
         match self
             .sync
@@ -777,7 +776,7 @@ impl Cfx for CfxHandler {
     fn gas_price(&self) -> RpcResult<RpcU256> { self.rpc_impl.gas_price() }
 
     fn epoch_number(
-        &self, epoch_num: Trailing<EpochNumber>,
+        &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         self.rpc_impl.epoch_number(epoch_num)
     }
@@ -815,14 +814,14 @@ impl Cfx for CfxHandler {
     }
 
     fn balance(
-        &self, address: RpcH160, num: Trailing<EpochNumber>,
+        &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         self.rpc_impl.balance(address, num)
     }
 
     //    fn account(
     //        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
-    //        epoch_num: Trailing<EpochNumber>,
+    //        epoch_num: Option<EpochNumber>,
     //    ) -> RpcResult<Account>
     //    {
     //        self.rpc_impl
@@ -830,7 +829,7 @@ impl Cfx for CfxHandler {
     //    }
 
     fn transaction_count(
-        &self, address: RpcH160, num: Trailing<EpochNumber>,
+        &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         self.rpc_impl.transaction_count(address, num)
     }
@@ -840,7 +839,7 @@ impl Cfx for CfxHandler {
     }
 
     fn call(
-        &self, rpc_tx: RpcTransaction, epoch: Trailing<EpochNumber>,
+        &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         self.rpc_impl.call(rpc_tx, epoch)
     }
@@ -883,7 +882,7 @@ impl TestRpc for TestRpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        adaptive: bool, difficulty: Trailing<u64>,
+        adaptive: bool, difficulty: Option<u64>,
     ) -> RpcResult<H256>
     {
         self.rpc_impl.generate_fixed_block(
@@ -916,7 +915,7 @@ impl TestRpc for TestRpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-        adaptive: Trailing<bool>,
+        adaptive: Option<bool>,
     ) -> RpcResult<H256>
     {
         self.rpc_impl.generate_custom_block(
@@ -928,7 +927,7 @@ impl TestRpc for TestRpcImpl {
     }
 
     fn generate_block_with_fake_txs(
-        &self, raw_txs_without_data: Bytes, tx_data_len: Trailing<usize>,
+        &self, raw_txs_without_data: Bytes, tx_data_len: Option<usize>,
     ) -> RpcResult<H256> {
         self.rpc_impl
             .generate_block_with_fake_txs(raw_txs_without_data, tx_data_len)
@@ -1007,7 +1006,7 @@ impl DebugRpc for DebugRpcImpl {
     }
 
     fn net_sessions(
-        &self, node_id: Trailing<NodeId>,
+        &self, node_id: Option<NodeId>,
     ) -> RpcResult<Vec<SessionDetails>> {
         self.rpc_impl.net_sessions(node_id)
     }

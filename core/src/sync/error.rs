@@ -30,6 +30,12 @@ error_chain! {
             display("Unexpected response"),
         }
 
+        RequestNotFound {
+            description("The response is received after the request timeout or \
+            there is not request for the response"),
+            display("Request not found for the respond"),
+        }
+
         TooManyTrans {
             description("Send too many transactions to node in catch-up mode"),
             display("Sent too many transactions"),

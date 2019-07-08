@@ -7,8 +7,8 @@ use super::{
 use crate::sync::Error;
 use cfx_types::H256;
 use message::{
-    GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
-    GetCompactBlocks, GetTransactions, TransIndex,
+    GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders, GetBlockTxn,
+    GetBlocks, GetCompactBlocks, GetTransactions, TransIndex,
 };
 use metrics::{Gauge, GaugeUsize};
 use network::{NetworkContext, PeerId};
@@ -19,6 +19,7 @@ pub use request_handler::{
     RequestHandler, RequestMessage, SynchronizationPeerRequest,
 };
 use std::{
+    cmp::Ordering,
     collections::{binary_heap::BinaryHeap, hash_map::Entry, HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
@@ -35,6 +36,7 @@ lazy_static! {
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
     Header(H256),
+    HeaderChain(H256),
     Block(H256),
     Epoch(u64),
 }
@@ -59,8 +61,7 @@ pub struct RequestManager {
     epochs_in_flight: Mutex<HashSet<u64>>,
 
     /// Each element is (timeout_time, request, chosen_peer)
-    waiting_requests:
-        Mutex<BinaryHeap<(Instant, WaitingRequest, Option<PeerId>)>>,
+    waiting_requests: Mutex<BinaryHeap<TimedWaitingRequest>>,
 
     /// The following fields are used to control how to
     /// propagate transactions in normal case.
@@ -124,11 +125,14 @@ impl RequestManager {
                     Entry::Vacant(entry) => {
                         entry.insert(*REQUEST_START_WAITING_TIME);
                         if peer_id.is_none() {
-                            self.waiting_requests.lock().push((
-                                Instant::now() + *REQUEST_START_WAITING_TIME,
-                                WaitingRequest::Header(*hash),
-                                *peer_id,
-                            ));
+                            self.waiting_requests.lock().push(
+                                TimedWaitingRequest::new(
+                                    Instant::now()
+                                        + *REQUEST_START_WAITING_TIME,
+                                    WaitingRequest::Header(*hash),
+                                    *peer_id,
+                                ),
+                            );
                             debug!(
                                 "Header {:?} request is delayed for later",
                                 hash
@@ -147,11 +151,13 @@ impl RequestManager {
                             "Header {:?} is requested again, delay for {:?}",
                             hash, t
                         );
-                        self.waiting_requests.lock().push((
-                            Instant::now() + *t,
-                            WaitingRequest::Header(*hash),
-                            *peer_id,
-                        ));
+                        self.waiting_requests.lock().push(
+                            TimedWaitingRequest::new(
+                                Instant::now() + *t,
+                                WaitingRequest::Header(*hash),
+                                *peer_id,
+                            ),
+                        );
                         *t += *REQUEST_START_WAITING_TIME;
                         false
                     }
@@ -196,7 +202,7 @@ impl RequestManager {
                 peer_id, hashes, e
             );
             for hash in hashes {
-                self.waiting_requests.lock().push((
+                self.waiting_requests.lock().push(TimedWaitingRequest::new(
                     Instant::now() + *REQUEST_START_WAITING_TIME,
                     WaitingRequest::Header(hash),
                     None,
@@ -204,6 +210,87 @@ impl RequestManager {
             }
         } else {
             debug!("Requesting headers peer={:?} hashes={:?}", peer_id, hashes);
+        }
+    }
+
+    /// Request a header if it's not already in_flight. The request is delayed
+    /// if the header is requested before.
+    pub fn request_block_header_chain(
+        &self, io: &NetworkContext, peer_id: Option<PeerId>, hash: &H256,
+        max_blocks: u64,
+    )
+    {
+        if !self.headers_in_flight.lock().insert(*hash) {
+            // Already inflight, return directly
+            return;
+        }
+        let mut header_request_waittime = self.header_request_waittime.lock();
+        match header_request_waittime.entry(*hash) {
+            Entry::Occupied(mut e) => {
+                // Requested before, so wait for the stored time and increase it
+                let t = e.get_mut();
+                self.waiting_requests.lock().push(TimedWaitingRequest::new(
+                    Instant::now() + *t,
+                    WaitingRequest::HeaderChain(*hash),
+                    peer_id,
+                ));
+                *t += *REQUEST_START_WAITING_TIME;
+                debug!(
+                    "Block header request is delayed peer={:?} hash={:?}",
+                    peer_id, hash
+                );
+                return;
+            }
+            Entry::Vacant(e) => {
+                // Not requested before, so store the initial wait time
+                e.insert(*REQUEST_START_WAITING_TIME);
+                if peer_id.is_none() {
+                    // No available peer, so add to the waiting queue directly
+                    // to be sent later
+                    self.waiting_requests.lock().push(
+                        TimedWaitingRequest::new(
+                            Instant::now() + *REQUEST_START_WAITING_TIME,
+                            WaitingRequest::HeaderChain(*hash),
+                            peer_id,
+                        ),
+                    );
+                    debug!(
+                        "Block header request is delayed peer={:?} hash={:?}",
+                        peer_id, hash
+                    );
+                    return;
+                }
+            }
+        }
+
+        if let Err(e) = self.request_handler.send_request(
+            io,
+            peer_id.unwrap(),
+            Box::new(RequestMessage::HeaderChain(GetBlockHeaderChain {
+                request_id: 0.into(),
+                hash: *hash,
+                max_blocks,
+            })),
+            SendQueuePriority::High,
+        ) {
+            warn!("Error requesting block header peer={:?} hash={} max_blocks={} err={:?}", peer_id, hash, max_blocks, e);
+
+            // TODO handle different errors
+            // Currently we just queue the request and send it later with the
+            // same logic as delayed requests, so we do not remove
+            // it from `headers_in_flight`. We can reach here only
+            // if the request is not waited before, so we just wait for
+            // the initial value.
+            self.waiting_requests.lock().push(TimedWaitingRequest::new(
+                Instant::now() + *REQUEST_START_WAITING_TIME,
+                WaitingRequest::HeaderChain(*hash),
+                None,
+            ));
+        } else {
+            debug!(
+                "Requesting block header peer={:?} hash={} max_blocks={}",
+                peer_id, hash, max_blocks
+            );
         }
     }
 
@@ -245,7 +332,7 @@ impl RequestManager {
                 peer_id, epochs, e
             );
             for epoch_number in epochs {
-                self.waiting_requests.lock().push((
+                self.waiting_requests.lock().push(TimedWaitingRequest::new(
                     Instant::now() + *REQUEST_START_WAITING_TIME,
                     WaitingRequest::Epoch(epoch_number),
                     None,
@@ -270,11 +357,14 @@ impl RequestManager {
                     Entry::Vacant(entry) => {
                         entry.insert(*REQUEST_START_WAITING_TIME);
                         if peer_id.is_none() {
-                            self.waiting_requests.lock().push((
-                                Instant::now() + *REQUEST_START_WAITING_TIME,
-                                WaitingRequest::Block(*hash),
-                                *peer_id,
-                            ));
+                            self.waiting_requests.lock().push(
+                                TimedWaitingRequest::new(
+                                    Instant::now()
+                                        + *REQUEST_START_WAITING_TIME,
+                                    WaitingRequest::Block(*hash),
+                                    *peer_id,
+                                ),
+                            );
                             debug!(
                                 "Block {:?} request is delayed for later",
                                 hash
@@ -293,11 +383,13 @@ impl RequestManager {
                             "Block {:?} is requested again, delay for {:?}",
                             hash, t
                         );
-                        self.waiting_requests.lock().push((
-                            Instant::now() + *t,
-                            WaitingRequest::Block(*hash),
-                            *peer_id,
-                        ));
+                        self.waiting_requests.lock().push(
+                            TimedWaitingRequest::new(
+                                Instant::now() + *t,
+                                WaitingRequest::Block(*hash),
+                                *peer_id,
+                            ),
+                        );
                         *t += *REQUEST_START_WAITING_TIME;
                         false
                     }
@@ -345,7 +437,7 @@ impl RequestManager {
                 peer_id, hashes, e
             );
             for hash in hashes {
-                self.waiting_requests.lock().push((
+                self.waiting_requests.lock().push(TimedWaitingRequest::new(
                     Instant::now() + *REQUEST_START_WAITING_TIME,
                     WaitingRequest::Block(hash),
                     None,
@@ -444,7 +536,7 @@ impl RequestManager {
                 peer_id, hashes, e
             );
             for hash in hashes {
-                self.waiting_requests.lock().push((
+                self.waiting_requests.lock().push(TimedWaitingRequest::new(
                     Instant::now() + *REQUEST_START_WAITING_TIME,
                     WaitingRequest::Block(hash),
                     None,
@@ -497,6 +589,14 @@ impl RequestManager {
                     get_headers.hashes.clone(),
                 );
             }
+            RequestMessage::HeaderChain(get_headers) => {
+                self.request_block_header_chain(
+                    io,
+                    chosen_peer,
+                    &get_headers.hash,
+                    get_headers.max_blocks,
+                );
+            }
             RequestMessage::Blocks(get_blocks) => {
                 self.request_blocks(
                     io,
@@ -538,6 +638,9 @@ impl RequestManager {
                 for hash in &get_headers.hashes {
                     headers_in_flight.remove(hash);
                 }
+            }
+            RequestMessage::HeaderChain(ref get_headers) => {
+                self.headers_in_flight.lock().remove(&get_headers.hash);
             }
             RequestMessage::Blocks(ref get_blocks) => {
                 let mut blocks_in_flight = self.blocks_in_flight.lock();
@@ -784,12 +887,13 @@ impl RequestManager {
                 break;
             }
             let req = waiting_requests.pop().expect("queue not empty");
-            if req.0 >= now {
+            if req.time_to_send >= now {
                 waiting_requests.push(req);
                 break;
             } else {
-                let maybe_peer =
-                    req.2.or_else(|| self.syn.get_random_peer(&HashSet::new()));
+                let maybe_peer = req
+                    .peer
+                    .or_else(|| self.syn.get_random_peer(&HashSet::new()));
                 let chosen_peer = match maybe_peer {
                     Some(p) => p,
                     None => {
@@ -800,7 +904,7 @@ impl RequestManager {
 
                 // Waiting requests are already in-flight, so send them without
                 // checking
-                match &req.1 {
+                match &req.request {
                     WaitingRequest::Header(h) => {
                         if let Err(e) = self.request_handler.send_request(
                             io,
@@ -821,7 +925,7 @@ impl RequestManager {
                             // should
                             // be in `headers_waittime`, and thus we can remove
                             // `or_insert`
-                            waiting_requests.push((
+                            waiting_requests.push(TimedWaitingRequest::new(
                                 Instant::now()
                                     + *headers_waittime
                                         .entry(*h)
@@ -830,6 +934,37 @@ impl RequestManager {
                                         })
                                         .or_insert(*REQUEST_START_WAITING_TIME),
                                 WaitingRequest::Header(*h),
+                                None,
+                            ));
+                        }
+                    }
+                    WaitingRequest::HeaderChain(h) => {
+                        if let Err(e) = self.request_handler.send_request(
+                            io,
+                            chosen_peer,
+                            Box::new(RequestMessage::HeaderChain(
+                                GetBlockHeaderChain {
+                                    request_id: 0.into(),
+                                    hash: *h,
+                                    max_blocks: 1,
+                                },
+                            )),
+                            SendQueuePriority::High,
+                        ) {
+                            warn!("Error requesting waiting block header peer={:?} hash={} max_blocks={} err={:?}", chosen_peer, h, 1, e);
+                            // TODO `h` is got from `waiting_requests`, so it
+                            // should
+                            // be in `headers_waittime`, and thus we can remove
+                            // `or_insert`
+                            waiting_requests.push(TimedWaitingRequest::new(
+                                Instant::now()
+                                    + *headers_waittime
+                                        .entry(*h)
+                                        .and_modify(|t| {
+                                            *t += *REQUEST_START_WAITING_TIME
+                                        })
+                                        .or_insert(*REQUEST_START_WAITING_TIME),
+                                WaitingRequest::HeaderChain(*h),
                                 None,
                             ));
                         }
@@ -850,7 +985,7 @@ impl RequestManager {
                             SendQueuePriority::High,
                         ) {
                             warn!("Error requesting waiting epoch peer={:?} epoch_number={} err={:?}", chosen_peer, n, e);
-                            waiting_requests.push((
+                            waiting_requests.push(TimedWaitingRequest::new(
                                 Instant::now() + *REQUEST_START_WAITING_TIME,
                                 WaitingRequest::Epoch(*n),
                                 None,
@@ -875,20 +1010,22 @@ impl RequestManager {
                             // be in `blocks_waittime`, and thus we can remove
                             // `or_insert`
                             for hash in blocks {
-                                waiting_requests.push((
-                                    Instant::now()
-                                        + *blocks_waittime
-                                            .entry(*h)
-                                            .and_modify(|t| {
-                                                *t +=
+                                waiting_requests.push(
+                                    TimedWaitingRequest::new(
+                                        Instant::now()
+                                            + *blocks_waittime
+                                                .entry(*h)
+                                                .and_modify(|t| {
+                                                    *t +=
                                                     *REQUEST_START_WAITING_TIME
-                                            })
-                                            .or_insert(
-                                                *REQUEST_START_WAITING_TIME,
-                                            ),
-                                    WaitingRequest::Block(hash),
-                                    None,
-                                ));
+                                                })
+                                                .or_insert(
+                                                    *REQUEST_START_WAITING_TIME,
+                                                ),
+                                        WaitingRequest::Block(hash),
+                                        None,
+                                    ),
+                                );
                             }
                         }
                     }
@@ -920,6 +1057,10 @@ impl RequestManager {
                                 headers_in_flight.remove(hash);
                                 header_waittime.remove(hash);
                             }
+                        }
+                        RequestMessage::HeaderChain(get_headers) => {
+                            headers_in_flight.remove(&get_headers.hash);
+                            header_waittime.remove(&get_headers.hash);
                         }
                         RequestMessage::Blocks(get_blocks) => {
                             for hash in &get_blocks.hashes {
@@ -956,5 +1097,41 @@ impl RequestManager {
         } else {
             debug!("Peer already removed form request manager when disconnected peer={}", peer);
         }
+    }
+}
+
+#[derive(Debug)]
+struct TimedWaitingRequest {
+    time_to_send: Instant,
+    request: WaitingRequest,
+    peer: Option<PeerId>,
+}
+
+impl TimedWaitingRequest {
+    fn new(
+        time_to_send: Instant, request: WaitingRequest, peer: Option<PeerId>,
+    ) -> Self {
+        Self {
+            time_to_send,
+            request,
+            peer,
+        }
+    }
+}
+
+impl Ord for TimedWaitingRequest {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.time_to_send.cmp(&self.time_to_send)
+    }
+}
+impl PartialOrd for TimedWaitingRequest {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        other.time_to_send.partial_cmp(&self.time_to_send)
+    }
+}
+impl Eq for TimedWaitingRequest {}
+impl PartialEq for TimedWaitingRequest {
+    fn eq(&self, other: &Self) -> bool {
+        self.time_to_send == other.time_to_send
     }
 }

@@ -43,6 +43,7 @@ build_msgid! {
     GET_TRANSACTIONS = 0x15
     GET_TRANSACTIONS_RESPONSE = 0x16
     GET_BLOCK_HASHES_BY_EPOCH = 0x17
+    GET_BLOCK_HEADER_CHAIN = 0x18
 }
 
 impl From<u8> for MsgId {
@@ -66,7 +67,7 @@ pub trait Message: Send + Sync + Encodable + 'static {
     fn is_size_sensitive(&self) -> bool { false }
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct RequestId {
     request_id: u64,
 }

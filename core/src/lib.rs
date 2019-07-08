@@ -60,6 +60,8 @@ pub mod verification;
 pub mod vm;
 pub mod vm_factory;
 
+pub mod test_helpers;
+
 pub use crate::{
     consensus::{ConsensusGraph, SharedConsensusGraph},
     sync::{

@@ -28,7 +28,7 @@ use std::{error, fmt};
 /// Errors concerning log filtering.
 pub enum FilterError {
     /// Filter has wrong epoch numbers set.
-    InvalidEpochNumber { from_epoch: usize, to_epoch: usize },
+    InvalidEpochNumber { from_epoch: u64, to_epoch: u64 },
 }
 
 impl fmt::Display for FilterError {
@@ -56,10 +56,10 @@ impl error::Error for FilterError {
 #[derive(Debug, PartialEq)]
 pub struct Filter {
     /// Search will be applied from this epoch number.
-    pub from_epoch: usize,
+    pub from_epoch: u64,
 
     /// Till this epoch number.
-    pub to_epoch: usize,
+    pub to_epoch: u64,
 
     /// Search will be applied in these blocks if given.
     /// This will override from/to_epoch fields.

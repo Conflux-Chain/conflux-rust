@@ -9,6 +9,7 @@ mod call_request;
 mod epoch_number;
 mod hash;
 mod index;
+mod log;
 mod receipt;
 mod status;
 mod transaction;
@@ -22,6 +23,7 @@ pub use self::{
     epoch_number::EpochNumber,
     hash::{H160, H2048, H256, H512, H64},
     index::Index,
+    log::Log,
     receipt::Receipt,
     status::Status,
     transaction::Transaction,

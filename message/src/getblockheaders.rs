@@ -7,7 +7,7 @@ use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GetBlockHeaders {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,

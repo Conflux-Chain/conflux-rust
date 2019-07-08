@@ -90,6 +90,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
         }
     }
 
+    #[allow(unused)]
     fn get_mut_most_recently_accessed(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
     ) -> CacheAlgoDataSetterMostRecentlyAccessed<CacheStoreUtilT, CacheIndexT>

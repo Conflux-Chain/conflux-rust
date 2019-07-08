@@ -20,19 +20,20 @@
 
 //! Environment information for transaction execution.
 
-use cfx_types::{Address, U256};
-use primitives::CardinalNumber;
+use cfx_types::{Address, H256, U256};
+use primitives::BlockNumber;
+use std::sync::Arc;
 
 /// Simple vector of hashes, should be at most 256 items large, can be smaller
 /// if being used for a block whose number is less than 257.
-//pub type LastHashes = Vec<H256>;
+pub type LastHashes = Vec<H256>;
 
 /// Information concerning the execution environment for a
 /// message-call/contract-creation.
 #[derive(Debug, Clone)]
 pub struct EnvInfo {
-    /// The cardinal number.
-    pub number: CardinalNumber,
+    /// The block number.
+    pub number: BlockNumber,
     /// The block author.
     pub author: Address,
     /// The block timestamp.
@@ -41,6 +42,8 @@ pub struct EnvInfo {
     pub difficulty: U256,
     /// The block gas limit.
     pub gas_limit: U256,
+    /// The last 256 block hashes.
+    pub last_hashes: Arc<LastHashes>,
     /// The gas used.
     pub gas_used: U256,
 }
@@ -53,6 +56,7 @@ impl Default for EnvInfo {
             timestamp: 0,
             difficulty: 0.into(),
             gas_limit: 0.into(),
+            last_hashes: Arc::new(vec![]),
             gas_used: 0.into(),
         }
     }

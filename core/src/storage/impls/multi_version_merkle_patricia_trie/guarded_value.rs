@@ -11,15 +11,12 @@ pub struct GuardedValue<GuardType, ValueType> {
 
 impl<GuardType, ValueType> GuardedValue<GuardType, ValueType> {
     pub fn new(guard: GuardType, value: ValueType) -> Self {
-        Self {
-            guard: guard,
-            value: value,
-        }
+        Self { guard, value }
     }
 
     /// Not yet useful but defined for completeness.
     pub fn new_with_fn<F: FnOnce(&GuardType) -> ValueType>(
-        guard: GuardType, f: F,
+        _guard: GuardType, _f: F,
     ) -> Self {
         unimplemented!()
     }

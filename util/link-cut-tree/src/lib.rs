@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use parking_lot::Mutex;
+
 const NULL: usize = !0;
 
 #[derive(Clone)]
@@ -36,18 +38,20 @@ impl Default for MinNode {
     }
 }
 
-pub struct MinLinkCutTree {
+struct MinLinkCutTreeInner {
     tree: Vec<MinNode>,
 }
 
-impl MinLinkCutTree {
-    pub fn new() -> Self { Self { tree: Vec::new() } }
+impl MinLinkCutTreeInner {
+    fn new() -> Self { Self { tree: Vec::new() } }
 
-    pub fn size(&self) -> usize { self.tree.len() }
+    fn size(&self) -> usize { self.tree.len() }
 
-    pub fn make_tree(&mut self, v: usize) {
+    fn make_tree(&mut self, v: usize) {
         if self.tree.len() <= v {
             self.tree.resize(v + 1, MinNode::default());
+        } else {
+            self.tree[v] = MinNode::default();
         }
     }
 
@@ -270,6 +274,13 @@ impl MinLinkCutTree {
         last
     }
 
+    fn split_root(&mut self, parent: usize, v: usize) {
+        self.access(parent);
+        self.splay(v);
+        assert_eq!(self.tree[v].path_parent, parent);
+        self.tree[v].path_parent = NULL;
+    }
+
     #[allow(dead_code)]
     fn debug(&self, num: usize) {
         for v in 0..num {
@@ -287,7 +298,7 @@ impl MinLinkCutTree {
     }
 
     /// Make w a new child of v
-    pub fn link(&mut self, v: usize, w: usize) {
+    fn link(&mut self, v: usize, w: usize) {
         if v == NULL || w == NULL {
             return;
         }
@@ -296,12 +307,12 @@ impl MinLinkCutTree {
         self.tree[w].path_parent = v;
     }
 
-    pub fn lca(&mut self, v: usize, w: usize) -> usize {
+    fn lca(&mut self, v: usize, w: usize) -> usize {
         self.access(v);
         self.access(w)
     }
 
-    pub fn ancestor_at(&mut self, v: usize, at: usize) -> usize {
+    fn ancestor_at(&mut self, v: usize, at: usize) -> usize {
         self.access(v);
 
         let mut u = self.tree[v].left_child;
@@ -329,14 +340,14 @@ impl MinLinkCutTree {
         NULL
     }
 
-    pub fn set(&mut self, v: usize, value: i128) {
+    fn set(&mut self, v: usize, value: i128) {
         self.access(v);
 
         self.tree[v].value = value;
         self.update(v);
     }
 
-    pub fn path_apply(&mut self, v: usize, delta: i128) {
+    fn path_apply(&mut self, v: usize, delta: i128) {
         self.access(v);
 
         self.tree[v].value += delta;
@@ -348,7 +359,7 @@ impl MinLinkCutTree {
         self.update(v);
     }
 
-    pub fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
+    fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
         self.access(v);
 
         self.tree[v].catepillar_value += catepillar_delta;
@@ -362,17 +373,78 @@ impl MinLinkCutTree {
         self.update(v);
     }
 
-    pub fn path_aggregate(&mut self, v: usize) -> i128 {
+    fn path_aggregate(&mut self, v: usize) -> i128 {
         self.access(v);
 
         self.tree[v].min
     }
 
-    pub fn get(&mut self, v: usize) -> i128 {
+    fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
+        self.access(v);
+        self.splay(u);
+        let right_c = self.tree[u].right_child;
+        assert_ne!(right_c, NULL);
+        self.update(right_c);
+        self.tree[right_c].min
+    }
+
+    fn get(&mut self, v: usize) -> i128 {
         self.access(v);
 
         self.tree[v].value
     }
+}
+
+pub struct MinLinkCutTree {
+    inner: Mutex<MinLinkCutTreeInner>,
+}
+
+impl MinLinkCutTree {
+    pub fn new() -> Self {
+        Self {
+            inner: Mutex::new(MinLinkCutTreeInner::new()),
+        }
+    }
+
+    pub fn size(&self) -> usize { self.inner.lock().size() }
+
+    pub fn make_tree(&mut self, v: usize) { self.inner.lock().make_tree(v); }
+
+    pub fn link(&mut self, v: usize, w: usize) { self.inner.lock().link(v, w); }
+
+    pub fn lca(&self, v: usize, w: usize) -> usize {
+        self.inner.lock().lca(v, w)
+    }
+
+    pub fn ancestor_at(&self, v: usize, at: usize) -> usize {
+        self.inner.lock().ancestor_at(v, at)
+    }
+
+    pub fn set(&mut self, v: usize, value: i128) {
+        self.inner.lock().set(v, value);
+    }
+
+    pub fn path_apply(&mut self, v: usize, delta: i128) {
+        self.inner.lock().path_apply(v, delta);
+    }
+
+    pub fn catepillar_apply(&mut self, v: usize, catepillar_delta: i128) {
+        self.inner.lock().catepillar_apply(v, catepillar_delta);
+    }
+
+    pub fn path_aggregate(&self, v: usize) -> i128 {
+        self.inner.lock().path_aggregate(v)
+    }
+
+    pub fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
+        self.inner.lock().path_aggregate_chop(v, u)
+    }
+
+    pub fn split_root(&mut self, parent: usize, v: usize) {
+        self.inner.lock().split_root(parent, v);
+    }
+
+    pub fn get(&self, v: usize) -> i128 { self.inner.lock().get(v) }
 }
 
 #[cfg(test)]

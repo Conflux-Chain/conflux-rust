@@ -142,13 +142,37 @@ impl Block {
         keccak(rlp_stream.out())
     }
 
-    pub fn encode_with_tx_public(&self) -> Vec<u8> {
+    pub fn encode_body_with_tx_public(&self) -> Vec<u8> {
         let mut stream = RlpStream::new();
-        stream.begin_list(2).append(&self.block_header);
         stream.begin_list(self.transactions.len());
         for tx in &self.transactions {
             stream.append(tx.as_ref());
         }
+        stream.drain()
+    }
+
+    pub fn decode_body_with_tx_public(
+        rlp: &Rlp,
+    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        if rlp.as_raw().len() != rlp.payload_info()?.total() {
+            return Err(DecoderError::RlpIsTooBig);
+        }
+
+        let signed_transactions = rlp.as_list()?;
+        let mut transactions = Vec::with_capacity(signed_transactions.len());
+        for tx in signed_transactions {
+            transactions.push(Arc::new(tx));
+        }
+
+        Ok(transactions)
+    }
+
+    pub fn encode_with_tx_public(&self) -> Vec<u8> {
+        let mut stream = RlpStream::new();
+        stream
+            .begin_list(2)
+            .append(&self.block_header)
+            .append_raw(&*self.encode_body_with_tx_public(), 1);
         stream.drain()
     }
 
@@ -160,15 +184,9 @@ impl Block {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let signed_transactions = rlp.list_at::<SignedTransaction>(1)?;
-        let mut transactions = Vec::with_capacity(signed_transactions.len());
-        for tx in signed_transactions {
-            transactions.push(Arc::new(tx));
-        }
-
         Ok(Block::new_with_rlp_size(
             rlp.val_at(0)?,
-            transactions,
+            Self::decode_body_with_tx_public(&rlp.at(1)?)?,
             None,
             Some(rlp.as_raw().len()),
         ))

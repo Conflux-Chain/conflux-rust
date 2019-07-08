@@ -493,7 +493,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -572,7 +574,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -640,7 +644,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -712,7 +718,9 @@ impl<'a> CallCreateExecutive<'a> {
                             resume,
                             unconfirmed_substate,
                         );
-                        return Err(TrapError::Create(subparams, address, self));
+                        return Err(TrapError::Create(
+                            subparams, address, self,
+                        ));
                     }
                 };
 
@@ -879,7 +887,7 @@ impl<'a, 'b> Executive<'a, 'b> {
             machine,
             spec,
             depth: parent_depth + 1,
-            static_flag: static_flag,
+            static_flag,
         }
     }
 
@@ -1193,7 +1201,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 cumulative_gas_used: self.env.gas_used,
                 logs: vec![],
                 contracts_created: vec![],
-                output: output,
+                output,
             }),
             Ok(r) => Ok(Executed {
                 exception: if r.apply_state {
@@ -1202,19 +1210,20 @@ impl<'a, 'b> Executive<'a, 'b> {
                     Some(vm::Error::Reverted)
                 },
                 gas: tx.gas,
-                gas_used: gas_used,
-                refunded: refunded,
+                gas_used,
+                refunded,
                 fee: fees_value,
                 cumulative_gas_used: self.env.gas_used,
                 logs: substate.logs,
                 contracts_created: substate.contracts_created,
-                output: output,
+                output,
             }),
         }
     }
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use crate::{
@@ -1225,6 +1234,10 @@ mod tests {
         storage::{
             tests::new_state_manager_for_testing, StorageManager,
             StorageManagerTrait,
+        },
+        test_helpers::{
+            get_state_for_genesis_write,
+            get_state_for_genesis_write_with_factory,
         },
     };
     use cfx_types::{Address, H256, U256, U512};
@@ -1239,24 +1252,6 @@ mod tests {
             s.max_depth = max_depth
         }));
         machine
-    }
-
-    fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
-        State::new(
-            StateDb::new(storage_manager.get_state_for_genesis_write()),
-            U256::from(0),
-            VmFactory::default(),
-        )
-    }
-
-    fn get_state_for_genesis_write_with_factory(
-        storage_manager: &StorageManager, factory: Factory,
-    ) -> State {
-        State::new(
-            StateDb::new(storage_manager.get_state_for_genesis_write()),
-            U256::from(0),
-            factory.into(),
-        )
     }
 
     #[test]

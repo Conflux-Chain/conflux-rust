@@ -12,8 +12,6 @@ extern crate rlp_derive;
 extern crate log;
 extern crate unexpected;
 
-pub type CardinalNumber = u64;
-
 pub mod account;
 pub mod block;
 pub mod block_header;

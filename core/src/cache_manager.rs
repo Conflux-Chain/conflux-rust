@@ -29,6 +29,7 @@ const COLLECTION_QUEUE_SIZE: usize = 8;
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum CacheId {
     Block(H256),
+    BlockHeader(H256),
     BlockReceipts(H256),
     TransactionAddress(H256),
     TransactionPubkey(H256),
@@ -51,9 +52,9 @@ where T: Eq + Hash
     ) -> Self
     {
         CacheManager {
-            pref_cache_size: pref_cache_size,
-            max_cache_size: max_cache_size,
-            bytes_per_cache_entry: bytes_per_cache_entry,
+            pref_cache_size,
+            max_cache_size,
+            bytes_per_cache_entry,
             cache_usage: (0..COLLECTION_QUEUE_SIZE)
                 .into_iter()
                 .map(|_| Default::default())
@@ -116,6 +117,8 @@ where T: Eq + Hash
 
 #[derive(Debug)]
 pub struct CacheSize {
+    /// Blocks header cache size.
+    pub block_headers: usize,
     /// Blocks cache size.
     pub blocks: usize,
     /// Block Receipts cache size.
