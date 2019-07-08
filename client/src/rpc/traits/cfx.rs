@@ -208,6 +208,9 @@ build_rpc_trait! {
         #[rpc(name = "txpool_status")]
         fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
 
+        #[rpc(name = "tx_inspect")]
+        fn tx_inspect(&self, H256) -> RpcResult<BTreeMap<String, String>>;
+
         #[rpc(name = "txpool_inspect")]
         fn txpool_inspect(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
 
