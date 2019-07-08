@@ -216,13 +216,13 @@ impl BlockGenerator {
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         difficulty: u64, adaptive: bool,
-    ) -> Block
+    ) -> Result<Block, String>
     {
         let (state_root, receipts_root) =
             self.graph.consensus.compute_deferred_state_for_block(
                 &parent_hash,
                 DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-            );
+            )?;
 
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
         let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
@@ -233,7 +233,7 @@ impl BlockGenerator {
             block_size_limit,
         );
 
-        self.assemble_new_block_impl(
+        Ok(self.assemble_new_block_impl(
             parent_hash,
             referee,
             state_root,
@@ -242,7 +242,7 @@ impl BlockGenerator {
             transactions,
             difficulty,
             Some(adaptive),
-        )
+        ))
     }
 
     /// Assemble a new block without nonce
@@ -345,7 +345,7 @@ impl BlockGenerator {
     pub fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         difficulty: u64, adaptive: bool,
-    ) -> H256
+    ) -> Result<H256, String>
     {
         let block = self.assemble_new_fixed_block(
             parent_hash,
@@ -353,8 +353,8 @@ impl BlockGenerator {
             num_txs,
             difficulty,
             adaptive,
-        );
-        self.generate_block_impl(block)
+        )?;
+        Ok(self.generate_block_impl(block))
     }
 
     /// Generate a block with transactions in the pool
@@ -398,13 +398,13 @@ impl BlockGenerator {
     pub fn generate_custom_block_with_parent(
         &self, parent_hash: H256, referee: Vec<H256>,
         transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
-    ) -> H256
+    ) -> Result<H256, String>
     {
         let (state_root, receipts_root) =
             self.graph.consensus.compute_deferred_state_for_block(
                 &parent_hash,
                 DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-            );
+            )?;
 
         let block = self.assemble_new_block_impl(
             parent_hash,
@@ -417,7 +417,7 @@ impl BlockGenerator {
             Some(adaptive),
         );
 
-        self.generate_block_impl(block)
+        Ok(self.generate_block_impl(block))
     }
 
     fn generate_block_impl(&self, block_init: Block) -> H256 {
