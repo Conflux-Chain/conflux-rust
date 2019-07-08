@@ -75,7 +75,8 @@ class P2PTest(ConfluxTestFramework):
         sender_addr = eth_utils.encode_hex(privtoaddr(sender_key))
         receiver_addr = eth_utils.encode_hex(privtoaddr(receiver_sk))
         sender_balance = default_config["TOTAL_COIN"] - value - gas_price * 21000
-        self.nodes[0].generate(5, 0)
+        # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
+        self.nodes[0].generate(2000, 0)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)), value)
         time.sleep(1)

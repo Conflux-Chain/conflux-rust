@@ -380,7 +380,9 @@ impl ConsensusGraphInner {
             inner_conf,
             anticone_cache: AnticoneCache::new(),
             sequence_number_of_block_entrance: 0,
-            last_recycled_era_block: NULL,
+            // TODO handle checkpoint in recovery
+            last_recycled_era_block: 0,
+            total_processed_blocks: 1,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -443,7 +445,9 @@ impl ConsensusGraphInner {
         });
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
 
-        inner.anticone_cache.update(0, &BitSet::new());
+        inner
+            .anticone_cache
+            .update(inner.cur_era_genesis_block_index, &BitSet::new());
         inner
     }
 
@@ -1284,6 +1288,10 @@ impl ConsensusGraphInner {
 
     fn compute_anticone_bruteforce(&self, me: usize) -> BitSet {
         let parent = self.arena[me].parent;
+        if parent == NULL {
+            // This is genesis, so the anticone should be empty
+            return BitSet::new();
+        }
         let mut last_in_pivot = self.arena[parent].last_pivot_in_past;
         for referee in &self.arena[me].referees {
             last_in_pivot =
@@ -1969,7 +1977,8 @@ impl ConsensusGraphInner {
 
     pub fn block_receipts_by_hash(
         &self, hash: &H256, update_cache: bool,
-    ) -> Option<Arc<Vec<Receipt>>> {
+    ) -> Option<Arc<Vec<Receipt
+{
         self.get_epoch_hash_for_block(hash).and_then(|epoch| {
             trace!("Block {} is in epoch {}", hash, epoch);
             self.data_man
