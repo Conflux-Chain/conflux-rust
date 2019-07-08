@@ -426,24 +426,6 @@ fn main() {
         }
     }
 
-    //    while sync.block_count() != consensus.block_count() {
-    //        if last_check_time.elapsed().unwrap().as_secs() >= 5 {
-    //            let last_time_elapsed =
-    //                last_check_time.elapsed().unwrap().as_millis() as f64 /
-    // 1_000.0;            last_check_time = time::SystemTime::now();
-    //            let consensus_block_cnt = consensus.block_count();
-    //            println!(
-    //                "Consensus count {}, Consensus block {}/s, Elapsed {}",
-    //                consensus_block_cnt,
-    //                (consensus_block_cnt - last_consensus_block_cnt) as f64
-    //                    / last_time_elapsed,
-    //                start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0
-    //            );
-    //            last_consensus_block_cnt = consensus_block_cnt;
-    //        }
-    //        thread::sleep(time::Duration::from_millis(100));
-    //    }
-
     let n = hashes.len();
     let last_hash = hashes[n - 1];
     while consensus.get_total_processed_blocks() != n {
