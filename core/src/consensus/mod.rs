@@ -31,10 +31,13 @@ use crate::{
 };
 use cfx_types::{into_i128, into_u256, Bloom, H160, H256, U256, U512};
 // use fenwick_tree::FenwickTree;
-use crate::{block_data_manager::BlockStatus, pow::target_difficulty};
+use crate::{
+    block_data_manager::BlockStatus, pow::target_difficulty,
+    storage::GuardedValue,
+};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::MinLinkCutTree;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -132,39 +135,41 @@ pub struct ConsensusConfig {
 #[derive(Debug)]
 pub struct ConsensusGraphStatistics {
     pub inserted_block_count: usize,
+    pub processed_block_count: usize,
 }
 
 impl ConsensusGraphStatistics {
     pub fn new() -> ConsensusGraphStatistics {
         ConsensusGraphStatistics {
             inserted_block_count: 0,
+            processed_block_count: 0,
         }
     }
 }
 
-pub struct ConsensusGraphNodeData {
-    pub epoch_number: u64,
-    pub partial_invalid: bool,
-    pub pending: bool,
+struct ConsensusGraphNodeData {
+    epoch_number: u64,
+    partial_invalid: bool,
+    pending: bool,
     /// The indices set of the blocks in the epoch when the current
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
-    pub blockset_in_own_view_of_epoch: HashSet<usize>,
+    blockset_in_own_view_of_epoch: HashSet<usize>,
     /// The number of blocks in the last two era. Only such blocks are counted
     /// during difficulty adjustment.
-    pub num_epoch_blocks_in_2era: usize,
+    num_epoch_blocks_in_2era: usize,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
-    pub ordered_executable_epoch_blocks: Vec<usize>,
+    ordered_executable_epoch_blocks: Vec<usize>,
     /// The minimum/maximum epoch number of the block in the view of other
     /// blocks including itself.
-    pub min_epoch_in_other_views: u64,
-    pub max_epoch_in_other_views: u64,
-    pub sequence_number: u64,
+    min_epoch_in_other_views: u64,
+    max_epoch_in_other_views: u64,
+    sequence_number: u64,
 }
 
 impl ConsensusGraphNodeData {
-    pub fn new(epoch_number: u64, height: u64, sequence_number: u64) -> Self {
+    fn new(epoch_number: u64, height: u64, sequence_number: u64) -> Self {
         ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
@@ -179,10 +184,10 @@ impl ConsensusGraphNodeData {
     }
 }
 
-pub struct ConsensusGraphPivotData {
+struct ConsensusGraphPivotData {
     /// The set of blocks whose last_pivot_in_past point to this pivot chain
     /// location
-    pub last_pivot_in_past_blocks: HashSet<usize>,
+    last_pivot_in_past_blocks: HashSet<usize>,
 }
 
 impl Default for ConsensusGraphPivotData {
@@ -191,6 +196,15 @@ impl Default for ConsensusGraphPivotData {
             last_pivot_in_past_blocks: HashSet::new(),
         }
     }
+}
+
+pub struct BestInformation {
+    pub best_block_hash: H256,
+    pub best_epoch_number: u64,
+    pub current_difficulty: U256,
+    pub terminal_block_hashes: Vec<H256>,
+    pub deferred_state_root: StateRootWithAuxInfo,
+    pub deferred_receipts_root: H256,
 }
 
 ///
@@ -249,15 +263,15 @@ impl Default for ConsensusGraphPivotData {
 pub struct ConsensusGraphInner {
     // This slab hold consensus graph node data and the array index is the
     // internal index.
-    pub arena: Slab<ConsensusGraphNode>,
+    arena: Slab<ConsensusGraphNode>,
     // indices maps block hash to internal index.
-    pub indices: HashMap<H256, usize>,
+    indices: HashMap<H256, usize>,
     // The current pivot chain indexes.
-    pub pivot_chain: Vec<usize>,
+    pivot_chain: Vec<usize>,
     // The metadata associated with each pivot chain block
-    pub pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
+    pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     // The set of *graph* tips in the TreeGraph.
-    pub terminal_hashes: HashSet<H256>,
+    terminal_hashes: HashSet<H256>,
     // The map to connect reference edges of legacy node before the current
     // era. It maps the hash of a legacy node to a list of referred nodes
     // inside the current era.
@@ -288,7 +302,7 @@ pub struct ConsensusGraphInner {
     inclusive_adaptive_tree: MinLinkCutTree,
     pow_config: ProofOfWorkConfig,
     // It maintains the expected difficulty of the next local mined block.
-    pub current_difficulty: U256,
+    current_difficulty: U256,
     // data_man is the handle to access raw block data
     data_man: Arc<BlockDataManager>,
     // Optimistic execution is the feature to execute ahead of the deferred
@@ -296,37 +310,35 @@ pub struct ConsensusGraphInner {
     // execution and the block packaging and verification.
     // optimistic_executed_height is the number of step to go ahead
     optimistic_executed_height: Option<u64>,
-    pub inner_conf: ConsensusInnerConfig,
+    inner_conf: ConsensusInnerConfig,
     // The cache to store Anticone information of each node. This could be very
     // large so we periodically remove old ones in the cache.
-    pub anticone_cache: AnticoneCache,
-    pub sequence_number_of_block_entrance: u64,
-    pub total_processed_blocks: usize,
-    pub last_recycled_era_block: usize,
+    anticone_cache: AnticoneCache,
+    sequence_number_of_block_entrance: u64,
+    last_recycled_era_block: usize,
 }
 
-pub struct ConsensusGraphNode {
-    pub hash: H256,
-    pub height: u64,
-    pub is_heavy: bool,
-    pub difficulty: U256,
+struct ConsensusGraphNode {
+    hash: H256,
+    height: u64,
+    is_heavy: bool,
+    difficulty: U256,
     /// The total weight of its past set (exclude itself)
     // FIXME: This field is not maintained during after the checkpoint.
     // We should review the finality computation and check whether we
     // still need this field!
-    pub past_weight: i128,
+    past_weight: i128,
     /// The total weight of its past set in its own era
-    pub past_era_weight: i128,
-    pub pow_quality: U256,
-    pub stable: bool,
-    pub adaptive: bool,
-    pub parent: usize,
-    pub era_block: usize,
-    pub last_pivot_in_past: u64,
-    pub children: Vec<usize>,
-    pub referrers: Vec<usize>,
-    pub referees: Vec<usize>,
-    pub data: ConsensusGraphNodeData,
+    past_era_weight: i128,
+    stable: bool,
+    adaptive: bool,
+    parent: usize,
+    era_block: usize,
+    last_pivot_in_past: u64,
+    children: Vec<usize>,
+    referrers: Vec<usize>,
+    referees: Vec<usize>,
+    data: ConsensusGraphNodeData,
 }
 
 impl ConsensusGraphInner {
@@ -368,7 +380,6 @@ impl ConsensusGraphInner {
             inner_conf,
             anticone_cache: AnticoneCache::new(),
             sequence_number_of_block_entrance: 0,
-            total_processed_blocks: 1,
             last_recycled_era_block: NULL,
         };
 
@@ -1095,7 +1106,6 @@ impl ConsensusGraphInner {
             difficulty: *block.block_header.difficulty(),
             past_weight: 0,     // will be updated later below
             past_era_weight: 0, // will be updated later below
-            pow_quality: block.block_header.pow_quality,
             stable: true,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -1756,7 +1766,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    pub fn best_block_hash(&self) -> H256 {
+    fn best_block_hash(&self) -> H256 {
         self.arena[*self.pivot_chain.last().unwrap()].hash
     }
 
@@ -1773,7 +1783,7 @@ impl ConsensusGraphInner {
         self.get_pivot_block_index(self.best_state_epoch_number())
     }
 
-    pub fn best_state_block_hash(&self) -> H256 {
+    fn best_state_block_hash(&self) -> H256 {
         self.arena[self.best_state_index()].hash
     }
 
@@ -1795,7 +1805,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    pub fn best_epoch_number(&self) -> u64 {
+    fn best_epoch_number(&self) -> u64 {
         self.cur_era_genesis_height + self.pivot_chain.len() as u64 - 1
     }
 
@@ -1830,7 +1840,7 @@ impl ConsensusGraphInner {
             .and_then(|index| Ok(self.arena[index].hash))
     }
 
-    pub fn block_hashes_by_epoch(
+    fn block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
         debug!(
@@ -1888,7 +1898,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    pub fn terminal_hashes(&self) -> Vec<H256> {
+    fn terminal_hashes(&self) -> Vec<H256> {
         self.terminal_hashes
             .iter()
             .map(|hash| hash.clone())
@@ -2319,7 +2329,7 @@ pub struct TotalWeightInPast {
 /// avoid executing too many execution reroll caused by transaction order
 /// oscillation. It defers the transaction execution for a few epochs.
 pub struct ConsensusGraph {
-    pub conf: ConsensusConfig,
+    conf: ConsensusConfig,
     pub inner: Arc<RwLock<ConsensusGraphInner>>,
     pub txpool: SharedTransactionPool,
     pub data_man: Arc<BlockDataManager>,
@@ -3395,7 +3405,7 @@ impl ConsensusGraph {
         let block = self.data_man.block_by_hash(hash, false).unwrap();
 
         let inner = &mut *self.inner.write();
-        inner.total_processed_blocks += 1;
+        self.statistics.inc_consensus_graph_processed_block_count();
 
         let parent_hash = block.block_header.parent_hash();
         if !inner.indices.contains_key(&parent_hash) {
@@ -3536,8 +3546,8 @@ impl ConsensusGraph {
             block.size(),
         );
 
+        self.statistics.inc_consensus_graph_processed_block_count();
         let mut inner = &mut *self.inner.write();
-        inner.total_processed_blocks += 1;
         let parent_hash = block.block_header.parent_hash();
         if !inner.indices.contains_key(&parent_hash) {
             self.process_outside_block(inner, block);
@@ -4058,8 +4068,41 @@ impl ConsensusGraph {
         inner.arena[inner.cur_era_genesis_block_index].hash.clone()
     }
 
-    pub fn get_total_processed_blocks(&self) -> usize {
-        self.inner.read().total_processed_blocks
+    /// Get the number of processed blocks (i.e., the number of calls to
+    /// on_new_block() and on_new_block_construction_only())
+    pub fn get_processed_block_count(&self) -> usize {
+        self.statistics.get_consensus_graph_processed_block_count()
+    }
+
+    /// This function is called when preparing a new block for generation. It
+    /// propagate the ReadGuard up to make the read-lock live longer so that
+    /// the whole block packing process can be atomic.
+    pub fn get_best_info(
+        &self,
+    ) -> GuardedValue<
+        RwLockUpgradableReadGuard<ConsensusGraphInner>,
+        BestInformation,
+    > {
+        let consensus_inner = self.inner.upgradable_read();
+        let (deferred_state_root, deferred_receipts_root) =
+            self.wait_for_block_state(&consensus_inner.best_state_block_hash());
+        let value = BestInformation {
+            best_block_hash: consensus_inner.best_block_hash(),
+            best_epoch_number: consensus_inner.best_epoch_number(),
+            current_difficulty: consensus_inner.current_difficulty,
+            terminal_block_hashes: consensus_inner.terminal_hashes(),
+            deferred_state_root,
+            deferred_receipts_root,
+        };
+        GuardedValue::new(consensus_inner, value)
+    }
+
+    pub fn block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.inner
+            .read_recursive()
+            .block_hashes_by_epoch(epoch_number)
     }
 }
 

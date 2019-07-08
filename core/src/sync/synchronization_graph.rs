@@ -10,14 +10,12 @@ use crate::{
     machine::new_machine,
     pow::ProofOfWorkConfig,
     statistics::SharedStatistics,
-    storage::GuardedValue,
     verification::*,
 };
 use cfx_types::{H256, U256};
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
-    StateRootWithAuxInfo,
 };
 use rlp::Rlp;
 use slab::Slab;
@@ -53,15 +51,6 @@ impl SyncGraphStatistics {
             inserted_block_count: 1,
         }
     }
-}
-
-pub struct BestInformation {
-    pub best_block_hash: H256,
-    pub best_epoch_number: u64,
-    pub current_difficulty: U256,
-    pub terminal_block_hashes: Vec<H256>,
-    pub deferred_state_root: StateRootWithAuxInfo,
-    pub deferred_receipts_root: H256,
 }
 
 pub struct SynchronizationGraphNode {
@@ -1263,27 +1252,6 @@ impl SynchronizationGraph {
         );
 
         (insert_success, need_to_relay)
-    }
-
-    pub fn get_best_info(
-        &self,
-    ) -> GuardedValue<
-        RwLockUpgradableReadGuard<ConsensusGraphInner>,
-        BestInformation,
-    > {
-        let consensus_inner = self.consensus.inner.upgradable_read();
-        let (deferred_state_root, deferred_receipts_root) = self
-            .consensus
-            .wait_for_block_state(&consensus_inner.best_state_block_hash());
-        let value = BestInformation {
-            best_block_hash: consensus_inner.best_block_hash(),
-            best_epoch_number: consensus_inner.best_epoch_number(),
-            current_difficulty: consensus_inner.current_difficulty,
-            terminal_block_hashes: consensus_inner.terminal_hashes(),
-            deferred_state_root,
-            deferred_receipts_root,
-        };
-        GuardedValue::new(consensus_inner, value)
     }
 
     pub fn get_block_hashes_by_epoch(
