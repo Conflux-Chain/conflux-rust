@@ -89,6 +89,7 @@ build_config! {
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
         (p2p_nodes_per_ip, (usize), 1)
+        (session_ip_limits, (String), "1,8,4,2".into())
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
@@ -186,6 +187,8 @@ impl Configuration {
         }
         network_config.test_mode = self.raw_conf.test_mode;
         network_config.nodes_per_ip = self.raw_conf.p2p_nodes_per_ip;
+        network_config.session_ip_limit_config =
+            self.raw_conf.session_ip_limits.clone().into();
         network_config.fast_discovery_refresh_timeout = Duration::from_millis(
             self.raw_conf.discovery_fast_refresh_timeout_ms,
         );

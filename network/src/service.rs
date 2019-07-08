@@ -486,7 +486,7 @@ impl NetworkServiceInner {
                 FIRST_SESSION,
                 MAX_SESSIONS,
                 config.max_incoming_peers,
-                config.nodes_per_ip,
+                &config.session_ip_limit_config,
             ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
