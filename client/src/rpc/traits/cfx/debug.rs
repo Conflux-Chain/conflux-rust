@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::super::types::Transaction as RpcTransaction;
+use super::super::super::types::{
+    Transaction as RpcTransaction, H256 as RpcH256,
+};
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use network::{
@@ -15,6 +17,9 @@ use std::collections::BTreeMap;
 pub trait DebugRpc {
     #[rpc(name = "txpool_status")]
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
+
+    #[rpc(name = "tx_inspect")]
+    fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>>;
 
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(

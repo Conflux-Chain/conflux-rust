@@ -609,6 +609,42 @@ impl RpcImpl {
         Ok(ret)
     }
 
+    fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>> {
+        let mut ret: BTreeMap<String, String> = BTreeMap::new();
+        let hash: H256 = hash.into();
+        if let Some(tx) = self.tx_pool.get_transaction(&hash) {
+            ret.insert("exist".into(), "true".into());
+            if self.tx_pool.check_tx_packed_in_deferred_pool(&hash) {
+                ret.insert("packed".into(), "true".into());
+            } else {
+                ret.insert("packed".into(), "false".into());
+            }
+            let (local_nonce, local_balance) =
+                self.tx_pool.get_local_account_info(&tx.sender());
+            let (state_nonce, state_balance) =
+                self.tx_pool.get_state_account_info(&tx.sender());
+            ret.insert(
+                "local nonce".into(),
+                serde_json::to_string(&local_nonce).unwrap(),
+            );
+            ret.insert(
+                "local balance".into(),
+                serde_json::to_string(&local_balance).unwrap(),
+            );
+            ret.insert(
+                "state nonce".into(),
+                serde_json::to_string(&state_nonce).unwrap(),
+            );
+            ret.insert(
+                "state balance".into(),
+                serde_json::to_string(&state_balance).unwrap(),
+            );
+        } else {
+            ret.insert("exist".into(), "false".into());
+        }
+        Ok(ret)
+    }
+
     fn txpool_inspect(
         &self,
     ) -> RpcResult<
@@ -936,6 +972,10 @@ impl DebugRpcImpl {
 impl DebugRpc for DebugRpcImpl {
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
         self.rpc_impl.txpool_status()
+    }
+
+    fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>> {
+        self.rpc_impl.tx_inspect(hash)
     }
 
     fn txpool_inspect(
