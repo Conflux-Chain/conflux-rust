@@ -608,8 +608,9 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    fn tx_inspect(&self, hash: H256) -> RpcResult<BTreeMap<String, String>> {
+    fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>> {
         let mut ret: BTreeMap<String, String> = BTreeMap::new();
+        let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
             ret.insert("exist".into(), "true".into());
             if self.tx_pool.check_tx_packed_in_deferred_pool(&hash) {
@@ -972,7 +973,7 @@ impl DebugRpc for DebugRpcImpl {
         self.rpc_impl.txpool_status()
     }
 
-    fn tx_inspect(&self, hash: H256) -> RpcResult<BTreeMap<String, String>> {
+    fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>> {
         self.rpc_impl.tx_inspect(hash)
     }
 
