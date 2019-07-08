@@ -144,6 +144,10 @@ impl NoncePool {
         ret
     }
 
+    fn get_tx_by_nonce(&self, nonce: U256) -> Option<TxWithReadyInfo> {
+        self.inner.get(&nonce).map(|x| x.clone())
+    }
+
     fn get_lowest_nonce(&self) -> Option<&U256> {
         self.inner.iter().next().map(|(k, _)| k)
     }
@@ -232,6 +236,18 @@ impl DeferredPool {
             bucket.recalculate_readiness_with_local_info(nonce, balance)
         } else {
             None
+        }
+    }
+
+    fn check_tx_packed(&self, addr: Address, nonce: U256) -> bool {
+        if let Some(bucket) = self.buckets.get(&addr) {
+            if let Some(tx_with_ready_info) = bucket.get_tx_by_nonce(nonce) {
+                tx_with_ready_info.is_already_packed()
+            } else {
+                false
+            }
+        } else {
+            false
         }
     }
 }
@@ -415,12 +431,12 @@ impl TransactionPoolInner {
             .insert((*address).clone(), (nonce, balance));
     }
 
-    fn get_nonce_from_storage(
+    fn get_nonce_and_balance_from_storage(
         &self, address: &Address, account_cache: &mut AccountCache,
-    ) -> U256 {
+    ) -> (U256, U256) {
         match account_cache.get_account_mut(address) {
-            Some(account) => account.nonce.clone(),
-            None => 0.into(),
+            Some(account) => (account.nonce.clone(), account.balance.clone()),
+            None => (0.into(), 0.into()),
         }
     }
 
@@ -479,6 +495,15 @@ impl TransactionPoolInner {
             .recalculate_readiness_with_local_info(addr, nonce, balance);
         self.ready_account_pool.update(addr, ret);
     }
+
+    fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
+        match self.txs.get(tx_hash) {
+            Some(tx) => {
+                self.deferred_pool.check_tx_packed(tx.sender(), tx.nonce())
+            }
+            None => false,
+        }
+    }
 }
 
 pub struct TransactionPool {
@@ -515,6 +540,24 @@ impl TransactionPool {
         &self, tx_hash: &H256,
     ) -> Option<Arc<SignedTransaction>> {
         self.inner.read().get(tx_hash)
+    }
+
+    pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
+        self.inner.read().check_tx_packed_in_deferred_pool(tx_hash)
+    }
+
+    pub fn get_local_account_info(&self, address: &Address) -> (U256, U256) {
+        self.inner
+            .read()
+            .get_local_nonce_and_balance(address)
+            .unwrap_or((0.into(), 0.into()))
+    }
+
+    pub fn get_state_account_info(&self, address: &Address) -> (U256, U256) {
+        let mut account_cache = self.get_best_state_account_cache();
+        self.inner
+            .read()
+            .get_nonce_and_balance_from_storage(address, &mut account_cache)
     }
 
     pub fn insert_new_transactions(
@@ -727,8 +770,10 @@ impl TransactionPool {
             return Err(format!("Transaction discarded due to insufficient txpool capacity: {:?}", transaction.hash()));
         }
         */
-        let state_nonce =
-            inner.get_nonce_from_storage(&transaction.sender, account_cache);
+        let (state_nonce, _) = inner.get_nonce_and_balance_from_storage(
+            &transaction.sender,
+            account_cache,
+        );
 
         if transaction.nonce
             >= state_nonce
@@ -900,6 +945,13 @@ impl TransactionPool {
 
         for tx in too_big_txs {
             inner.ready_account_pool.insert(tx);
+        }
+
+        // FIXME: to be optimized by only recalculating readiness once for one
+        //  sender
+        for tx in packed_transactions.iter().rev() {
+            inner.insert(tx.clone(), false, true);
+            inner.recalculate_readiness_with_local_info(&tx.sender());
         }
 
         if log::max_level() >= log::Level::Debug {
