@@ -221,6 +221,60 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
     log4rs::init_config(log_config).unwrap();
 }
 
+fn check_results(
+    start: usize, end: usize, consensus: Arc<ConsensusGraph>,
+    hashes: &Vec<H256>, valid_indices: &HashMap<usize, i32>,
+    stable_indices: &HashMap<usize, i32>,
+    adaptive_indices: &HashMap<usize, i32>,
+)
+{
+    for i in start..end {
+        let pending = consensus.inner.read().is_pending(&hashes[i]);
+        if pending == None {
+            //println!("Block {} is skipped!", i);
+            continue;
+        }
+        if let Some(true) = pending {
+            println!("Block {} is pending, skip the checking!", i);
+            continue;
+        }
+        let partial_invalid = consensus
+            .inner
+            .read()
+            .is_partial_invalid(&hashes[i])
+            .unwrap();
+        let valid = *valid_indices.get(&i).unwrap();
+        let invalid = (valid == 0);
+        if valid != -1 {
+            assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
+        }
+        let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
+        let stable_v = *stable_indices.get(&i).unwrap();
+        if !invalid && stable_v != -1 {
+            let stable1 = (stable_v == 1);
+            assert!(
+                stable0 == stable1,
+                "Block {} stable status: Consensus graph {} != actual {}",
+                i,
+                stable0,
+                stable1
+            );
+        }
+        let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
+        let adaptive_v = *adaptive_indices.get(&i).unwrap();
+        if !invalid && adaptive_v != -1 {
+            let adaptive1 = (adaptive_v == 1);
+            assert!(
+                adaptive0 == adaptive1,
+                "Block {} adaptive status: Consensus graph {} != actual {}",
+                i,
+                adaptive0,
+                adaptive1
+            );
+        }
+    }
+}
+
 fn main() {
     // initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
 
@@ -356,53 +410,18 @@ fn main() {
         let n = hashes.len();
         if (n != 0) && (n % check_batch_size == 0) {
             let last_hash = hashes[n - 1];
-            while consensus.inner.read().is_pending(&last_hash) == None {
+            while consensus.get_total_processed_blocks() != n {
                 thread::sleep(time::Duration::from_millis(100));
             }
-            for i in last_checked..n {
-                let pending =
-                    consensus.inner.read().is_pending(&hashes[i]).unwrap();
-                if pending {
-                    println!("Block {} is pending, skip the checking!", i);
-                    continue;
-                }
-                let partial_invalid = consensus
-                    .inner
-                    .read()
-                    .is_partial_invalid(&hashes[i])
-                    .unwrap();
-                let valid = *valid_indices.get(&i).unwrap();
-                let invalid = (valid == 0);
-                if valid != -1 {
-                    assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
-                }
-                let stable0 =
-                    consensus.inner.read().is_stable(&hashes[i]).unwrap();
-                let stable_v = *stable_indices.get(&i).unwrap();
-                if !invalid && stable_v != -1 {
-                    let stable1 = (stable_v == 1);
-                    assert!(
-                        stable0 == stable1,
-                        "Block {} stable status: Consensus graph {} != actual {}",
-                        i,
-                        stable0,
-                        stable1
-                    );
-                }
-                let adaptive0 =
-                    consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
-                let adaptive_v = *adaptive_indices.get(&i).unwrap();
-                if !invalid && adaptive_v != -1 {
-                    let adaptive1 = (adaptive_v == 1);
-                    assert!(
-                        adaptive0 == adaptive1,
-                        "Block {} adaptive status: Consensus graph {} != actual {}",
-                        i,
-                        adaptive0,
-                        adaptive1
-                    );
-                }
-            }
+            check_results(
+                last_checked,
+                n,
+                consensus.clone(),
+                &hashes,
+                &valid_indices,
+                &stable_indices,
+                &adaptive_indices,
+            );
             last_checked = n;
         }
     }
@@ -427,7 +446,7 @@ fn main() {
 
     let n = hashes.len();
     let last_hash = hashes[n - 1];
-    while consensus.inner.read().is_pending(&last_hash) == None {
+    while consensus.get_total_processed_blocks() != n {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
@@ -444,47 +463,15 @@ fn main() {
         }
         thread::sleep(time::Duration::from_millis(100));
     }
-    for i in last_checked..n {
-        let pending = consensus.inner.read().is_pending(&hashes[i]).unwrap();
-        if pending {
-            println!("Block {} is pending, skip the checking!", i);
-            continue;
-        }
-        let partial_invalid = consensus
-            .inner
-            .read()
-            .is_partial_invalid(&hashes[i])
-            .unwrap();
-        let valid = *valid_indices.get(&i).unwrap();
-        let invalid = (valid == 0);
-        if valid != -1 {
-            assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
-        }
-        let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
-        let stable_v = *stable_indices.get(&i).unwrap();
-        if !invalid && stable_v != -1 {
-            let stable1 = (stable_v == 1);
-            assert!(
-                stable0 == stable1,
-                "Block {} stable status: Consensus graph {} != actual {}",
-                i,
-                stable0,
-                stable1
-            );
-        }
-        let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
-        let adaptive_v = *adaptive_indices.get(&i).unwrap();
-        if !invalid && adaptive_v != -1 {
-            let adaptive1 = (adaptive_v == 1);
-            assert!(
-                adaptive0 == adaptive1,
-                "Block {} adaptive status: Consensus graph {} != actual {}",
-                i,
-                adaptive0,
-                adaptive1
-            );
-        }
-    }
+    check_results(
+        last_checked,
+        n,
+        consensus.clone(),
+        &hashes,
+        &valid_indices,
+        &stable_indices,
+        &adaptive_indices,
+    );
 
     println!("Total Block count: {}", n);
     println!("Final Consensus Block count: {}", consensus.block_count());

@@ -93,7 +93,7 @@ pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
 // eras.
 const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
 // FIXME: We should use finality to determine the checkpoint moment instead.
-const ERA_CHECKPOINT_GAP: u64 = 50000;
+const ERA_CHECKPOINT_GAP: u64 = 500;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
@@ -301,6 +301,7 @@ pub struct ConsensusGraphInner {
     // large so we periodically remove old ones in the cache.
     pub anticone_cache: AnticoneCache,
     pub sequence_number_of_block_entrance: u64,
+    pub total_processed_blocks: usize,
     pub last_recycled_era_block: usize,
 }
 
@@ -367,6 +368,7 @@ impl ConsensusGraphInner {
             inner_conf,
             anticone_cache: AnticoneCache::new(),
             sequence_number_of_block_entrance: 0,
+            total_processed_blocks: 1,
             last_recycled_era_block: NULL,
         };
 
@@ -3393,6 +3395,8 @@ impl ConsensusGraph {
         let block = self.data_man.block_by_hash(hash, false).unwrap();
 
         let inner = &mut *self.inner.write();
+        inner.total_processed_blocks += 1;
+
         let parent_hash = block.block_header.parent_hash();
         if !inner.indices.contains_key(&parent_hash) {
             self.process_outside_block(inner, block);
@@ -3533,6 +3537,7 @@ impl ConsensusGraph {
         );
 
         let mut inner = &mut *self.inner.write();
+        inner.total_processed_blocks += 1;
         let parent_hash = block.block_header.parent_hash();
         if !inner.indices.contains_key(&parent_hash) {
             self.process_outside_block(inner, block);
@@ -4053,6 +4058,10 @@ impl ConsensusGraph {
     pub fn current_era_genesis_hash(&self) -> H256 {
         let inner = self.inner.read();
         inner.arena[inner.cur_era_genesis_block_index].hash.clone()
+    }
+
+    pub fn get_total_processed_blocks(&self) -> usize {
+        self.inner.read().total_processed_blocks
     }
 }
 
