@@ -410,7 +410,7 @@ fn main() {
         let n = hashes.len();
         if (n != 0) && (n % check_batch_size == 0) {
             let last_hash = hashes[n - 1];
-            while consensus.get_total_processed_blocks() != n {
+            while consensus.get_processed_block_count() != n - 1 {
                 thread::sleep(time::Duration::from_millis(100));
             }
             check_results(
@@ -428,7 +428,7 @@ fn main() {
 
     let n = hashes.len();
     let last_hash = hashes[n - 1];
-    while consensus.get_total_processed_blocks() != n {
+    while consensus.get_processed_block_count() != n - 1 {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;

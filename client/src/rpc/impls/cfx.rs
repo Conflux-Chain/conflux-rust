@@ -93,7 +93,7 @@ impl RpcImpl {
     fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<RpcBlock> {
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
         inner
             .get_hash_from_epoch_number(
@@ -118,7 +118,7 @@ impl RpcImpl {
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
 
         if let Some(block) = self.consensus.data_man.block_by_hash(&hash, false)
         {
@@ -132,7 +132,7 @@ impl RpcImpl {
     fn block_by_hash_with_pivot_assumption(
         &self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64,
     ) -> RpcResult<RpcBlock> {
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
 
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
@@ -162,7 +162,7 @@ impl RpcImpl {
 
     fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
         Ok(inner
             .all_blocks_with_topo_order()
             .iter()
@@ -209,8 +209,6 @@ impl RpcImpl {
         info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
 
         self.consensus
-            .inner
-            .read_recursive()
             .block_hashes_by_epoch(self.get_primitive_epoch_number(num))
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))

@@ -63,10 +63,10 @@ pub mod vm_factory;
 pub mod test_helpers;
 
 pub use crate::{
-    consensus::{ConsensusGraph, SharedConsensusGraph},
+    consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
     sync::{
-        BestInformation, SharedSynchronizationGraph,
-        SharedSynchronizationService, SynchronizationService,
+        SharedSynchronizationGraph, SharedSynchronizationService,
+        SynchronizationService,
     },
     transaction_pool::{SharedTransactionPool, TransactionPool},
 };

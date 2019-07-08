@@ -256,7 +256,8 @@ impl BlockGenerator {
         // ensure transaction pool consistency.
         let (best_info, transactions) = {
             // get the best block
-            let (_guarded, best_info) = self.graph.get_best_info().into();
+            let (_guarded, best_info) =
+                self.graph.consensus.get_best_info().into();
 
             let transactions_from_pool = self.txpool.pack_transactions(
                 num_txs,
@@ -299,8 +300,12 @@ impl BlockGenerator {
         }
 
         // 1st Check: if the parent block changed
-        let best_block_hash =
-            self.graph.get_best_info().as_ref().best_block_hash;
+        let best_block_hash = self
+            .graph
+            .consensus
+            .get_best_info()
+            .as_ref()
+            .best_block_hash;
         if best_block_hash != *block.unwrap().block_header.parent_hash() {
             return true;
         }
@@ -370,7 +375,7 @@ impl BlockGenerator {
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) -> H256 {
         // get the best block
-        let (_, best_info) = self.graph.get_best_info().into();
+        let (_, best_info) = self.graph.consensus.get_best_info().into();
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);
