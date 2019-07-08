@@ -7,7 +7,10 @@ use crate::{
     db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
     ext_db::SystemDB,
     pow::TargetDifficultyManager,
-    storage::{state_manager::StateManagerTrait, StorageManager},
+    storage::{
+        state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
+        StorageManager,
+    },
     verification::VerificationConfig,
 };
 use cfx_types::{Bloom, H256};
@@ -513,7 +516,10 @@ impl BlockDataManager {
         // fast_recover == false. And we should force it to recompute
         // without checking receipts when fast_recover == false
         self.get_receipts_root(epoch_hash).is_some()
-            && self.storage_manager.contains_state(*epoch_hash)
+            && self
+                .storage_manager
+                .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
+                .unwrap()
     }
 
     /// Check if all executed results of an epoch exist
@@ -733,6 +739,7 @@ pub enum BlockStatus {
     Valid = 0,
     Invalid = 1,
     PartialInvalid = 2,
+    Pending = 3,
 }
 
 impl BlockStatus {
@@ -741,6 +748,7 @@ impl BlockStatus {
             0 => BlockStatus::Valid,
             1 => BlockStatus::Invalid,
             2 => BlockStatus::PartialInvalid,
+            3 => BlockStatus::Pending,
             _ => panic!("Read unknown block status from db"),
         }
     }

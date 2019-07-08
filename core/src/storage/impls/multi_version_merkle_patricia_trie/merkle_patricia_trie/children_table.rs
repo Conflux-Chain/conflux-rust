@@ -370,7 +370,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn get_bitmap(&self) -> u16 { self.bitmap }
 
     /// This method is unnecessary.
-    fn set_bitmap(&mut self, bitmap: u16) { unimplemented!() }
+    fn set_bitmap(&mut self, _bitmap: u16) { unimplemented!() }
 
     fn set_next_child_index(&mut self, child_index: u8) {
         self.next_child_index = child_index;
@@ -419,7 +419,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn get_bitmap(&self) -> u16 { self.bitmap }
 
     /// This method is unnecessary.
-    fn set_bitmap(&mut self, bitmap: u16) { unimplemented!() }
+    fn set_bitmap(&mut self, _bitmap: u16) { unimplemented!() }
 
     fn set_next_child_index(&mut self, child_index: u8) {
         self.next_child_index = child_index;
@@ -471,7 +471,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn set_bitmap(&mut self, bitmap: u16) { self.bitmap = bitmap }
 
     /// This method is unnecessary.
-    fn set_next_child_index(&mut self, child_index: u8) { unimplemented!() }
+    fn set_next_child_index(&mut self, _child_index: u8) { unimplemented!() }
 
     fn get_current_element(&self) -> &'a NodeRefT { unsafe { &*self.elements } }
 
@@ -514,7 +514,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     fn set_bitmap(&mut self, bitmap: u16) { self.bitmap = bitmap }
 
     /// This method is unnecessary.
-    fn set_next_child_index(&mut self, child_index: u8) { unimplemented!() }
+    fn set_next_child_index(&mut self, _child_index: u8) { unimplemented!() }
 
     fn get_current_element(&self) -> &'a mut NodeRefT {
         unsafe { &mut *self.elements }
@@ -593,7 +593,7 @@ impl<NodeRefT: NodeRefTrait> Decodable for ChildrenTable<NodeRefT> {
         Ok(match item_count {
             0...1 => Self::default(),
             16 => Self {
-                bitmap: !0u16,
+                bitmap: CompactedChildrenTable::<NodeRefT>::all_bits(),
                 table: rlp.as_list::<NodeRefT>()?.into_boxed_slice(),
             },
             _ => Self {

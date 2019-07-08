@@ -18,7 +18,7 @@ fn initialize_heap(
             capacity,
         );
     let mut heap_util = TrivialHeapValueUtil::default();
-    for i in 0..non_heap_size {
+    for _i in 0..non_heap_size {
         let mut hole: Hole<TrivialValueWithHeapHandle<i64, u32>> =
             unsafe { mem::uninitialized() };
         hole.value = TrivialValueWithHeapHandle::<i64, u32>::new(
@@ -32,7 +32,7 @@ fn initialize_heap(
 
     // Save the sum in the last value.
     let mut sum = 0i64;
-    for i in non_heap_size..capacity - 1 {
+    for _i in non_heap_size..capacity - 1 {
         let value = rng.gen_range(0, 1000000);
         sum += value;
         heap.insert(
@@ -69,7 +69,7 @@ fn check_and_sort_heap(
     let value = heap.pop_head(&mut heap_util).unwrap();
     let mut sum = value.value;
     assert_eq!(true, value.value >= 0);
-    for i in 1..capacity - non_heap_size - 1 {
+    for _i in 1..capacity - non_heap_size - 1 {
         let new_value = heap.pop_head(&mut heap_util).unwrap();
         sum += new_value.value;
         assert_eq!(true, new_value >= value);
@@ -162,7 +162,7 @@ fn initialize_heap_with_removals_and_updates(
     let update_ratio_inverse = 3;
 
     let mut sum = 0i64;
-    for i in 0..init_size + insert_size {
+    for _i in 0..init_size + insert_size {
         let value = rng.gen_range(0, 1000000);
         sum += value;
         values.push(TrivialValueWithHeapHandle::new(value));
@@ -170,7 +170,7 @@ fn initialize_heap_with_removals_and_updates(
 
     {
         let mut removals_set = HashSet::new();
-        for i in 0..kept_removals {
+        for _i in 0..kept_removals {
             loop {
                 let pos = rng.gen_range::<usize>(0, init_size as usize);
                 if removals_set.get(&pos).is_none() {
@@ -182,7 +182,7 @@ fn initialize_heap_with_removals_and_updates(
             }
         }
 
-        for i in 0..removals {
+        for _i in 0..removals {
             loop {
                 let pos = rng
                     .gen_range::<usize>(0, (init_size + insert_size) as usize);
@@ -195,7 +195,7 @@ fn initialize_heap_with_removals_and_updates(
             }
         }
 
-        for i in 0..updates {
+        for _i in 0..updates {
             loop {
                 let pos = rng
                     .gen_range::<usize>(0, (init_size + insert_size) as usize);
@@ -290,7 +290,7 @@ fn check_and_sort_heap_array_pos(
         value = 0;
     }
     let mut sum = value;
-    for i in 1..size - non_heap_size - 1 {
+    for _i in 1..size - non_heap_size - 1 {
         let value_pos = heap
             .pop_head(&mut ArrayPosHeapValueUtil::new(values))
             .unwrap();

@@ -138,8 +138,9 @@ impl Drop for CowNodeRef {
 impl CowNodeRef {
     pub fn is_owned(&self) -> bool { self.owned }
 
+    // FIXME: refactor node_memory_manager?
     fn convert_to_owned<'a>(
-        &mut self, node_memory_manager: &'a NodeMemoryManagerDeltaMpt,
+        &mut self, _node_memory_manager: &'a NodeMemoryManagerDeltaMpt,
         allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet,
     ) -> Result<Option<SlabVacantEntryDeltaMpt<'a>>>
@@ -189,6 +190,7 @@ impl CowNodeRef {
     /// of delete_node and into_child. when the trie node obtained from
     /// CowNodeRef is through get_trie_node, because the lifetime
     /// is shorter.
+    // FIXME: the comment above seems broken.
     pub fn delete_node(
         mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
         owned_node_set: &mut OwnedNodeSet,
@@ -211,10 +213,9 @@ impl CowNodeRef {
     }
 
     /// The deletion is always successful. When return value is Error, the
-    /// iteration fails.
+    /// failing part is iteration.
     pub fn delete_subtree(
-        mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &OwnedNodeSet,
+        mut self, trie: &DeltaMpt, owned_node_set: &OwnedNodeSet,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
     ) -> Result<()>
@@ -270,15 +271,19 @@ impl CowNodeRef {
         }
     }
 
+    // FIXME: Revisit methods including a trie parameter are subject
+    // FIXME: to refactor because we are going to separate node
+    // FIXME: memory manager from mpt, and we are probably going
+    // FIXME: to have a new trait for a MPT.
     fn commit_dirty_recurse_into_children(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet, trie_node: &mut TrieNodeDeltaMpt,
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
+        trie_node: &mut TrieNodeDeltaMpt,
         commit_transaction: &mut AtomicCommitTransaction,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<()>
     {
-        for (i, node_ref_mut) in trie_node.children_table.iter_mut() {
+        for (_i, node_ref_mut) in trie_node.children_table.iter_mut() {
             let node_ref = node_ref_mut.clone();
             let mut cow_child_node = Self::new(node_ref.into(), owned_node_set);
             if cow_child_node.is_owned() {
@@ -327,8 +332,7 @@ impl CowNodeRef {
 
     /// Get if unowned, compute if owned.
     pub fn get_or_compute_merkle(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet,
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<MerkleHash>
     {
@@ -369,8 +373,8 @@ impl CowNodeRef {
     }
 
     fn get_or_compute_children_merkles(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet, trie_node: &mut TrieNodeDeltaMpt,
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
+        trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<MaybeMerkleTable>
     {
@@ -411,8 +415,7 @@ impl CowNodeRef {
     // FIXME: Where to put which method? CowNodeRef, MVMPT / MPT,
     // FIXME: SubTrieVisitor?
     pub fn iterate_internal(
-        &self, owned_node_set: &OwnedNodeSet,
-        trie: &MultiVersionMerklePatriciaTrie,
+        &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
     ) -> Result<()>
@@ -458,8 +461,8 @@ impl CowNodeRef {
 
     /// Recursively commit dirty nodes.
     pub fn commit_dirty_recursively(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet, trie_node: &mut TrieNodeDeltaMpt,
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
+        trie_node: &mut TrieNodeDeltaMpt,
         commit_transaction: &mut AtomicCommitTransaction,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
@@ -512,8 +515,7 @@ impl CowNodeRef {
     }
 
     pub fn cow_merge_path(
-        self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet,
+        self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         child_node_ref: NodeRefDeltaMpt, child_index: u8,
     ) -> Result<CowNodeRef>
@@ -684,7 +686,6 @@ impl CowNodeRef {
             Some(new_entry) => {
                 let (new_trie_node, output) =
                     f_ref(trie_node.as_ref().as_ref());
-                let key = new_entry.key();
                 new_entry.insert(new_trie_node);
                 Ok(output)
             }
@@ -729,13 +730,14 @@ use super::{
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
-        MultiVersionMerklePatriciaTrie,
+        DeltaMpt,
     },
     merkle::*,
     mpt_value::MptValue,
     *,
 };
 use parking_lot::MutexGuard;
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
     cell::Cell, hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,

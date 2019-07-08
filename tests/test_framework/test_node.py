@@ -121,7 +121,7 @@ class TestNode:
         # potentially interfere with our attempt to authenticate
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
-        my_env["RUST_BACKTRACE"] = "1"
+        my_env["RUST_BACKTRACE"] = "full"
         if not self.remote:
             # ssh_args = '-o "StrictHostKeyChecking no"'
             # cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(

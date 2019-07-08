@@ -167,7 +167,7 @@ fn test_children_table_updates() {
 
 #[test]
 fn test_children_table_type_conversions() {
-    enumerate_and_test(|existence, children_list, children_table| {
+    enumerate_and_test(|_existence, _children_list, children_table| {
         assert_eq!(children_table, children_table.clone());
 
         let children_table_ref = children_table.to_ref();

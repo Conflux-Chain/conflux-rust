@@ -42,6 +42,8 @@ impl<PosT: PrimitiveNum> RecentLFUHandle<PosT> {
 
     fn placement_new_handle(&mut self, pos: PosT) { self.set_handle(pos); }
 
+    // The code is used by an currently unused class.
+    #[allow(unused)]
     fn placement_new_evicted(&mut self) { self.set_evicted(); }
 
     pub fn is_lru_hit(&self) -> bool { self.pos != PosT::from(Self::NULL_POS) }
@@ -98,7 +100,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
         RANDOM_BITS & rng.gen::<FrequencyType>()
     }
 
-    fn inc_visit_counter<RngT: Rng>(&mut self, rng: &mut RngT) {
+    fn inc_visit_counter<RngT: Rng>(&mut self, _rng: &mut RngT) {
         if !self.is_visit_counter_maximum() {
             self.frequency += RANDOM_BITS + 1
         }
@@ -256,7 +258,7 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheStoreUtil
     }
 
     fn get_most_recently_accessed(
-        &self, element_index: Self::ElementIndex,
+        &self, _element_index: Self::ElementIndex,
     ) -> LRUHandle<PosT> {
         self.new_metadata.lru_handle
     }
@@ -270,7 +272,7 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheStoreUtil
     }
 
     fn set_most_recently_accessed(
-        &mut self, element_index: <Self as CacheStoreUtil>::ElementIndex,
+        &mut self, _element_index: Self::ElementIndex,
         algo_data: &LRUHandle<PosT>,
     )
     {
@@ -539,6 +541,8 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     }
 }
 
+// The code is used in tests.
+#[allow(dead_code)]
 impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     RecentLFU<PosT, CacheIndexT>
 {

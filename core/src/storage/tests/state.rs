@@ -9,7 +9,7 @@ fn generate_keys(number_of_keys: usize) -> Vec<[u8; 4]> {
 
     let mut keys_num: Vec<u32> = Default::default();
 
-    for i in 0..number_of_keys {
+    for _i in 0..number_of_keys {
         keys_num.push(rng.gen());
     }
 
@@ -66,7 +66,6 @@ fn test_set_get() {
 
 #[test]
 fn test_get_set_at_second_commit() {
-    let rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
     let keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
     let set_size = 10000;
@@ -90,7 +89,7 @@ fn test_get_set_at_second_commit() {
     state_0.commit(epoch_id_0).unwrap();
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(epoch_id_0)
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id_0, None))
         .unwrap()
         .unwrap();
     println!("Set new {} keys for state_1.", keys_1_new.len(),);
@@ -178,7 +177,7 @@ fn test_set_delete() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(epoch_id)
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id, None))
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -188,9 +187,7 @@ fn test_set_delete() {
     rng.shuffle(keys.as_mut());
 
     println!("Testing with {} delete operations.", keys.len());
-    let mut count = 0;
     for key in &keys {
-        count += 1;
         let value = state
             .delete(key)
             .expect("Failed to delete key.")
@@ -236,7 +233,7 @@ fn test_set_delete_all() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(epoch_id)
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id, None))
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -249,10 +246,7 @@ fn test_set_delete_all() {
 
     println!("Testing with {} delete_all operations.", keys.len());
     let mut values = Vec::with_capacity(keys.len());
-    let mut count = 0;
     for key in &keys {
-        count += 1;
-
         let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
 
         let value =
@@ -283,7 +277,9 @@ fn test_set_delete_all() {
     assert_eq!(state_root, empty_state_root);
 }
 
-fn print(key: &[u8]) {
+// Kept for debugging.
+#[allow(dead_code)]
+pub fn print_mpt_key(key: &[u8]) {
     print!("key = (");
     for char in key {
         print!(
@@ -316,7 +312,7 @@ fn test_set_order() {
             .set(&actual_key, &actual_value)
             .expect("Failed to insert key.");
     }
-    let merkle_0 = state_0.compute_state_root().unwrap();
+    let _merkle_0 = state_0.compute_state_root().unwrap();
     epoch_id[0] = 1;
     state_0.commit(epoch_id).unwrap();
 
@@ -374,14 +370,17 @@ fn test_set_order_concurrent() {
             .set(&actual_key, &actual_value)
             .expect("Failed to insert key.");
     }
-    let merkle_0 = state_0.compute_state_root().unwrap();
+    let _merkle_0 = state_0.compute_state_root().unwrap();
     epoch_id[0] = 1;
     state_0.commit(epoch_id).unwrap();
 
     let parent_epoch_0 = epoch_id;
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(parent_epoch_0)
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+            &parent_epoch_0,
+            None,
+        ))
         .unwrap()
         .unwrap();
     println!("Setting state_1 with {} keys.", keys.len());
@@ -412,7 +411,10 @@ fn test_set_order_concurrent() {
         let merkle_1 = merkle_1.clone();
         threads.push(thread::spawn(move || {
             let mut state_2 = state_manager
-                .get_state_for_next_epoch(parent_epoch_0)
+                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+                    &parent_epoch_0,
+                    None,
+                ))
                 .unwrap()
                 .unwrap();
             println!(
