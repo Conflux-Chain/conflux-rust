@@ -232,7 +232,9 @@ impl SynchronizationGraphInner {
                 if self.arena[*index].parent == NULL
                     && !self.data_man.verified_invalid(parent_hash)
                 {
-                    if let Some(_) = self.data_man.block_by_hash(parent_hash, false) {
+                    if let Some(_) =
+                        self.data_man.block_by_hash(parent_hash, false)
+                    {
                         !self.data_man.verified_invalid(parent_hash)
                     } else {
                         false
@@ -272,7 +274,9 @@ impl SynchronizationGraphInner {
                 {
                     if !referee_hash_in_mem.contains(referee_hash) {
                         referee_graph_ready &= {
-                            if let Some(_) = self.data_man.block_by_hash(referee_hash, false) {
+                            if let Some(_) =
+                                self.data_man.block_by_hash(referee_hash, false)
+                            {
                                 !self.data_man.verified_invalid(referee_hash)
                             } else {
                                 false
