@@ -17,7 +17,7 @@ use crate::{
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_types::{H256, U256, U512};
+use cfx_types::{H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
@@ -101,12 +101,12 @@ impl EpochExecutionTask {
     }
 }
 
-/// `sender` is used to return the computed `(state_root, receipts_root)` to the
-/// thread who sends this task.
+/// `sender` is used to return the computed `(state_root, receipts_root,
+/// logs_bloom_hash)` to the thread who sends this task.
 #[derive(Debug)]
 struct GetExecutionResultTask {
     pub epoch_hash: H256,
-    pub sender: Sender<(StateRootWithAuxInfo, H256)>,
+    pub sender: Sender<(StateRootWithAuxInfo, H256, H256)>,
 }
 
 pub struct ConsensusExecutor {
@@ -198,16 +198,21 @@ impl ConsensusExecutor {
     }
 
     /// Wait until all tasks currently in the queue to be executed and return
-    /// `(state_root, receipts_root)` of the given `epoch_hash`.
+    /// `(state_root, receipts_root, logs_bloom_hash)` of the given
+    /// `epoch_hash`.
     ///
     /// It is the caller's responsibility to ensure that `epoch_hash` is indeed
     /// computed when all the tasks before are finished.
     // TODO Release Consensus inner lock if possible when the function is called
     pub fn wait_for_result(
         &self, epoch_hash: H256,
-    ) -> (StateRootWithAuxInfo, H256) {
+    ) -> (StateRootWithAuxInfo, H256, H256) {
         if self.bench_mode {
-            (Default::default(), KECCAK_EMPTY_LIST_RLP)
+            (
+                Default::default(),
+                KECCAK_EMPTY_LIST_RLP,
+                KECCAK_EMPTY_BLOOM,
+            )
         } else {
             let (sender, receiver) = channel();
             self.sender
@@ -337,8 +342,12 @@ impl ConsensusExecutionHandler {
 
         let receipts_root =
             self.data_man.get_receipts_root(&task.epoch_hash).unwrap();
+
+        let logs_bloom_hash =
+            self.data_man.get_logs_bloom_hash(&task.epoch_hash).unwrap();
+
         task.sender
-            .send((state_root, receipts_root))
+            .send((state_root, receipts_root, logs_bloom_hash))
             .expect("Consensus Worker fails");
     }
 
@@ -428,13 +437,17 @@ impl ConsensusExecutionHandler {
             state.commit(*epoch_hash).unwrap();
         };
         debug!(
-            "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}",
+            "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
             on_local_pivot,
             epoch_hash,
             state_root,
             self
                 .data_man
                 .get_receipts_root(&epoch_hash)
+                .unwrap(),
+            self
+                .data_man
+                .get_logs_bloom_hash(&epoch_hash)
                 .unwrap()
         );
     }
@@ -556,13 +569,21 @@ impl ConsensusExecutionHandler {
                 n_invalid_nonce, n_ok, n_other
             );
         }
+
         self.data_man.insert_receipts_root(
             pivot_block.hash(),
             BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
         );
+
+        self.data_man.insert_logs_bloom_hash(
+            pivot_block.hash(),
+            BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
+        );
+
         if on_local_pivot {
             self.tx_pool.recycle_transactions(to_pending);
         }
+
         debug!("Finish processing tx for epoch");
         epoch_receipts
     }

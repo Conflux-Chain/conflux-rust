@@ -201,7 +201,7 @@ impl ConsensusNewBlockHandler {
 
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
-    ) -> Result<(StateRootWithAuxInfo, H256), String> {
+    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
         // If we already computed the state of the block before, we should not
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
@@ -213,12 +213,14 @@ impl ConsensusNewBlockHandler {
             {
                 match maybe_cached_state {
                     Some(cached_state) => {
-                        if let Some(receipts_root) =
-                            self.data_man.get_receipts_root(&block_hash)
-                        {
+                        if let (Some(receipts_root), Some(logs_bloom_hash)) = (
+                            self.data_man.get_receipts_root(&block_hash),
+                            self.data_man.get_logs_bloom_hash(&block_hash),
+                        ) {
                             return Ok((
                                 cached_state.get_state_root().unwrap().unwrap(),
                                 receipts_root,
+                                logs_bloom_hash,
                             ));
                         }
                     }
@@ -297,14 +299,14 @@ impl ConsensusNewBlockHandler {
             ));
         }
 
-        let (state_root, receipts_root) =
+        let (state_root, receipts_root, logs_bloom_hash) =
             self.executor.wait_for_result(*block_hash);
         debug!(
-            "Epoch {:?} has state_root={:?} receipts_root={:?}",
-            inner.arena[me].hash, state_root, receipts_root
+            "Epoch {:?} has state_root={:?} receipts_root={:?} logs_bloom_hash={:?}",
+            inner.arena[me].hash, state_root, receipts_root, logs_bloom_hash
         );
 
-        Ok((state_root, receipts_root))
+        Ok((state_root, receipts_root, logs_bloom_hash))
     }
 
     fn log_debug_epoch_computation(
@@ -490,6 +492,8 @@ impl ConsensusNewBlockHandler {
                 == inner.genesis_block_state_root
                 && *block.block_header.deferred_receipts_root()
                     == inner.genesis_block_receipts_root
+                && *block.block_header.deferred_logs_bloom_hash()
+                    == inner.genesis_block_logs_bloom_hash
         } else {
             let mut deferred = new;
             for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
@@ -503,6 +507,10 @@ impl ConsensusNewBlockHandler {
 
             let correct_receipts_root =
                 self.data_man.get_receipts_root(&inner.arena[deferred].hash);
+            let correct_logs_bloom_hash = self
+                .data_man
+                .get_logs_bloom_hash(&inner.arena[deferred].hash);
+
             if self
                 .data_man
                 .storage_manager
@@ -512,6 +520,7 @@ impl ConsensusNewBlockHandler {
                 ))
                 .unwrap()
                 && correct_receipts_root.is_some()
+                && correct_logs_bloom_hash.is_some()
             {
                 let mut valid = true;
                 let correct_state_root = self
@@ -539,20 +548,34 @@ impl ConsensusNewBlockHandler {
                     .ok();
                     valid = false;
                 }
+
                 if *block.block_header.deferred_receipts_root()
                     != correct_receipts_root.unwrap()
                 {
                     warn!(
-                        "Invalid receipt root: should be {:?}",
+                        "Invalid receipt root: {:?}, should be {:?}",
+                        *block.block_header.deferred_receipts_root(),
                         correct_receipts_root
                     );
                     valid = false;
                 }
+
+                if *block.block_header.deferred_logs_bloom_hash()
+                    != correct_logs_bloom_hash.unwrap()
+                {
+                    warn!(
+                        "Invalid logs bloom hash: {:?}, should be {:?}",
+                        *block.block_header.deferred_logs_bloom_hash(),
+                        correct_logs_bloom_hash
+                    );
+                    valid = false;
+                }
+
                 valid
             } else {
                 // Call the expensive function to check this state root
                 let deferred_hash = inner.arena[deferred].hash;
-                let (state_root, receipts_root) = self
+                let (state_root, receipts_root, logs_bloom_hash) = self
                     .compute_state_for_block(&deferred_hash, inner)
                     .unwrap();
 
@@ -572,6 +595,8 @@ impl ConsensusNewBlockHandler {
                     == state_root.state_root
                     && *block.block_header.deferred_receipts_root()
                         == receipts_root
+                    && *block.block_header.deferred_logs_bloom_hash()
+                        == logs_bloom_hash
             }
         };
 
@@ -872,12 +897,22 @@ impl ConsensusNewBlockHandler {
                     )]]
                 .hash
                 .clone();
+
                 self.data_man.insert_receipts_root(
                     inner.arena[new_pivot_chain[pivot_index]].hash,
                     self.data_man
                         .block_header_by_hash(&future_block_hash)
                         .unwrap()
                         .deferred_receipts_root()
+                        .clone(),
+                );
+
+                self.data_man.insert_logs_bloom_hash(
+                    inner.arena[new_pivot_chain[pivot_index]].hash,
+                    self.data_man
+                        .block_header_by_hash(&future_block_hash)
+                        .unwrap()
+                        .deferred_logs_bloom_hash()
                         .clone(),
                 );
             }

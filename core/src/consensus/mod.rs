@@ -29,7 +29,9 @@ use crate::{
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
-use cfx_types::{into_i128, into_u256, Bloom, H160, H256, U256, U512};
+use cfx_types::{
+    into_i128, into_u256, Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+};
 // use fenwick_tree::FenwickTree;
 use crate::{pow::target_difficulty, storage::GuardedValue};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
@@ -202,6 +204,7 @@ pub struct BestInformation {
     pub terminal_block_hashes: Vec<H256>,
     pub deferred_state_root: StateRootWithAuxInfo,
     pub deferred_receipts_root: H256,
+    pub deferred_logs_bloom_hash: H256,
 }
 
 ///
@@ -282,9 +285,10 @@ pub struct ConsensusGraphInner {
     // The height of the ``stable'' era block, unless from the start, it is
     // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
-    // The ``original'' genesis state root and receipts root.
+    // The ``original'' genesis state root, receipts root, and logs bloom hash.
     genesis_block_state_root: StateRoot,
     genesis_block_receipts_root: H256,
+    genesis_block_logs_bloom_hash: H256,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: MinLinkCutTree,
     inclusive_weight_tree: MinLinkCutTree,
@@ -366,6 +370,11 @@ impl ConsensusGraphInner {
                 .block_header
                 .deferred_receipts_root()
                 .clone(),
+            genesis_block_logs_bloom_hash: data_man
+                .genesis_block()
+                .block_header
+                .deferred_logs_bloom_hash()
+                .clone(),
             weight_tree: MinLinkCutTree::new(),
             inclusive_weight_tree: MinLinkCutTree::new(),
             stable_weight_tree: MinLinkCutTree::new(),
@@ -446,6 +455,7 @@ impl ConsensusGraphInner {
             last_pivot_in_past_blocks,
         });
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
+        assert!(inner.genesis_block_logs_bloom_hash == KECCAK_EMPTY_BLOOM);
 
         inner
             .anticone_cache
@@ -2560,7 +2570,7 @@ impl ConsensusGraph {
     /// root of a given block
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
-    ) -> Result<(StateRootWithAuxInfo, H256), String> {
+    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
         self.new_block_handler
             .compute_state_for_block(block_hash, inner)
     }
@@ -2569,7 +2579,7 @@ impl ConsensusGraph {
     /// block given a delay.
     pub fn compute_deferred_state_for_block(
         &self, block_hash: &H256, delay: usize,
-    ) -> Result<(StateRootWithAuxInfo, H256), String> {
+    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
         let inner = &mut *self.inner.write();
 
         let idx_opt = inner.indices.get(block_hash);
@@ -2855,10 +2865,10 @@ impl ConsensusGraph {
     }
 
     /// Wait for a block's epoch is computed.
-    /// Return the state_root and receipts_root
+    /// Return the state_root, receipts_root, and logs_bloom_hash
     pub fn wait_for_block_state(
         &self, block_hash: &H256,
-    ) -> (StateRootWithAuxInfo, H256) {
+    ) -> (StateRootWithAuxInfo, H256, H256) {
         self.executor.wait_for_result(*block_hash)
     }
 
@@ -2886,8 +2896,11 @@ impl ConsensusGraph {
         BestInformation,
     > {
         let consensus_inner = self.inner.upgradable_read();
-        let (deferred_state_root, deferred_receipts_root) =
-            self.wait_for_block_state(&consensus_inner.best_state_block_hash());
+        let (
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+        ) = self.wait_for_block_state(&consensus_inner.best_state_block_hash());
         let mut bounded_terminal_hashes = consensus_inner.terminal_hashes();
         if let Some(referee_bound) = referee_bound_opt {
             if bounded_terminal_hashes.len() > referee_bound {
@@ -2913,6 +2926,7 @@ impl ConsensusGraph {
             terminal_block_hashes: bounded_terminal_hashes,
             deferred_state_root,
             deferred_receipts_root,
+            deferred_logs_bloom_hash,
         };
         GuardedValue::new(consensus_inner, value)
     }
