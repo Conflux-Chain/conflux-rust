@@ -607,8 +607,9 @@ impl BlockDataManager {
         let block_receipts = self.block_receipts.read().heap_size_of_children();
         let transaction_addresses =
             self.transaction_addresses.read().heap_size_of_children();
-        let transaction_pubkey =
-            self.transaction_pubkey_cache.read().heap_size_of_children();
+        let transaction_pubkey = SignedTransaction::heap_size_of_iter(
+            self.transaction_pubkey_cache.read().values(),
+        );
         CacheSize {
             block_headers,
             blocks,

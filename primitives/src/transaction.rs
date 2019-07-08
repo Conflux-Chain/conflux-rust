@@ -9,7 +9,7 @@ use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{error, fmt, mem, ops::Deref};
+use std::{error, fmt, mem, ops::Deref, sync::Arc};
 use unexpected::OutOfBounds;
 
 /// Fake address for unsigned transactions.
@@ -481,6 +481,13 @@ impl SignedTransaction {
         } else {
             Ok(true)
         }
+    }
+
+    pub fn heap_size_of_iter<'a, T>(tx_iter: T) -> usize
+    where T: Iterator<Item = &'a Arc<SignedTransaction>> {
+        tx_iter.fold(0, |acc, x| {
+            acc + x.heap_size_of_children() / Arc::strong_count(x)
+        })
     }
 }
 

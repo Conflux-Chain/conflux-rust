@@ -40,9 +40,8 @@ pub struct Block {
 
 impl HeapSizeOf for Block {
     fn heap_size_of_children(&self) -> usize {
-        // Ignores the size of Arc<SignedTransaction>
         self.block_header.heap_size_of_children()
-            + self.transactions.heap_size_of_children()
+            + SignedTransaction::heap_size_of_iter(self.transactions.iter())
     }
 }
 
