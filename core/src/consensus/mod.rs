@@ -22,7 +22,10 @@ use crate::{
     state::State,
     statedb::StateDb,
     statistics::SharedStatistics,
-    storage::{state::StateTrait, StorageManagerTrait},
+    storage::{
+        state::StateTrait, state_manager::SnapshotAndEpochIdRef,
+        StorageManagerTrait,
+    },
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
@@ -1733,10 +1736,9 @@ impl ConsensusGraphInner {
         &self, data_man: &'a BlockDataManager,
     ) -> Option<State<'a>> {
         let best_state_hash = self.best_state_block_hash();
-        if let Ok(state) = data_man
-            .storage_manager
-            .get_state_no_commit(best_state_hash)
-        {
+        if let Ok(state) = data_man.storage_manager.get_state_no_commit(
+            SnapshotAndEpochIdRef::new(&best_state_hash, None),
+        ) {
             state.map(|db| {
                 State::new(StateDb::new(db), 0.into(), Default::default())
             })
@@ -1821,17 +1823,15 @@ impl ConsensusGraphInner {
         let maybe_state = self
             .data_man
             .storage_manager
-            .get_state_no_commit(hash)
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
             .map_err(|e| format!("Error to get state, err={:?}", e))?;
         if let Some(state) = maybe_state {
             let state_db = StateDb::new(state);
-            Ok(
-                if let Ok(maybe_acc) = state_db.get_account(&address, false) {
-                    maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
-                } else {
-                    0.into()
-                },
-            )
+            Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+                maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
+            } else {
+                0.into()
+            })
         } else {
             Err(format!(
                 "State for epoch (number={:?} hash={:?}) does not exist",
@@ -1949,7 +1949,7 @@ impl ConsensusGraphInner {
         let state_db = StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_no_commit(hash)
+                .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
                 .unwrap()
                 .unwrap(),
         );
@@ -2475,7 +2475,10 @@ impl ConsensusGraph {
             let maybe_cached_state = self
                 .data_man
                 .storage_manager
-                .get_state_no_commit(block_hash.clone())
+                .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                    &block_hash.clone(),
+                    None,
+                ))
                 .unwrap();
             match maybe_cached_state {
                 Some(cached_state) => {
@@ -2601,7 +2604,10 @@ impl ConsensusGraph {
         let parent_state_root = inner
             .data_man
             .storage_manager
-            .get_state_no_commit(parent_block_hash)
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                &parent_block_hash,
+                None,
+            ))
             .unwrap()
             // Unwrapping is safe because the state exists.
             .unwrap()
@@ -2784,14 +2790,21 @@ impl ConsensusGraph {
             if self
                 .data_man
                 .storage_manager
-                .contains_state(inner.arena[deferred].hash)
+                .contains_state(SnapshotAndEpochIdRef::new(
+                    &inner.arena[deferred].hash,
+                    None,
+                ))
+                .unwrap()
                 && correct_receipts_root.is_some()
             {
                 let mut valid = true;
                 let correct_state_root = self
                     .data_man
                     .storage_manager
-                    .get_state_no_commit(inner.arena[deferred].hash)
+                    .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                        &inner.arena[deferred].hash,
+                        None,
+                    ))
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap()

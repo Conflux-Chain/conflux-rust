@@ -64,11 +64,8 @@ impl<'storage> AccountCache<'storage> {
         &mut self, address: &Address,
     ) -> Option<&mut Account> {
         if !self.accounts.contains_key(&address) {
-            let account = self
-                .storage
-                .get_account(&address, false)
-                .ok()
-                .and_then(|x| x);
+            let account =
+                self.storage.get_account(&address).ok().and_then(|x| x);
             if let Some(account) = account {
                 self.accounts.insert((*address).clone(), account);
             }

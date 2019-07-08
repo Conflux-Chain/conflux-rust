@@ -112,6 +112,7 @@ impl MaybeInPlaceByteArray {
     }
 }
 
+#[allow(unused)]
 impl MaybeInPlaceByteArray {
     pub const MAX_INPLACE_SIZE: usize = 8;
     pub const MAX_SIZE_U16: usize = 0xffff;
