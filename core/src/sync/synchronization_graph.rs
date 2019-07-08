@@ -239,15 +239,6 @@ impl SynchronizationGraphInner {
 
             if !parent_graph_ready {
                 continue;
-            } else {
-                let r = self.verify_header_graph_ready_block(index);
-                if r.is_err() {
-                    continue;
-                }
-                // reclaim as BLOCK_HEADER_GRAPH_READY
-                self.arena[index].graph_status =
-                    BLOCK_HEADER_PARENTAL_TREE_READY;
-                self.arena[index].timestamp = now;
             }
 
             // check whether referees are BLOCK_GRAPH_READY
@@ -1257,7 +1248,7 @@ impl SynchronizationGraph {
 
         let hash = block.hash();
 
-        let mut inner = self.inner.write();
+        let inner = &mut *self.inner.write();
 
         if self.data_man.verified_invalid(&hash) {
             insert_success = false;
@@ -1334,32 +1325,7 @@ impl SynchronizationGraph {
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
-                inner.arena[index].graph_status = BLOCK_GRAPH_READY;
-                if inner.arena[index].parent_reclaimed {
-                    inner.old_era_blocks_frontier.push_back(index);
-                    inner.old_era_blocks_frontier_set.insert(index);
-                }
-
-                // maintain not_ready_blocks_frontier set
-                inner.not_ready_blocks_count -= 1;
-                inner.not_ready_blocks_frontier.remove(&index);
-                let children =
-                    mem::replace(&mut inner.arena[index].children, Vec::new());
-                for child in &children {
-                    inner.not_ready_blocks_frontier.insert(*child);
-                }
-                mem::replace(&mut inner.arena[index].children, children);
-
-                let h = inner.arena[index].block_header.hash();
-                debug!("Block {:?} is graph ready", h);
-                if !sync_graph_only {
-                    // Make Consensus Worker handle the block in order
-                    // asynchronously
-                    self.consensus_sender.lock().send(h).expect("Cannot fail");
-                } else {
-                    self.consensus.on_new_block_construction_only(&h);
-                }
-
+                self.set_graph_ready(inner, index, sync_graph_only);
                 for child in &inner.arena[index].children {
                     debug_assert!(
                         inner.arena[*child].graph_status < BLOCK_GRAPH_READY
