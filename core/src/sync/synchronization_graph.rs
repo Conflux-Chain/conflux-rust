@@ -420,7 +420,9 @@ impl SynchronizationGraphInner {
             parent_difficulty = *parent_header.difficulty();
         }
 
-        if self.arena[index].pending_referee_count == 0 {
+        if self.arena[index].referees.len()
+            == self.arena[index].block_header.referee_hashes().len()
+        {
             for referee in self.arena[index].referees.iter() {
                 referee_timestamps
                     .push(self.arena[*referee].block_header.timestamp());
