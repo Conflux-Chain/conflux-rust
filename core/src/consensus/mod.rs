@@ -1949,7 +1949,8 @@ impl ConsensusGraphInner {
 
     pub fn block_receipts_by_hash(
         &self, hash: &H256, update_cache: bool,
-    ) -> Option<Arc<Vec<Receipt>>> {
+    ) -> Option<Arc<Vec<Receipt
+{
         self.get_epoch_hash_for_block(hash).and_then(|epoch| {
             trace!("Block {} is in epoch {}", hash, epoch);
             self.data_man
