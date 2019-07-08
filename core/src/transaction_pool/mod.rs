@@ -947,6 +947,13 @@ impl TransactionPool {
             inner.ready_account_pool.insert(tx);
         }
 
+        // FIXME: to be optimized by only recalculating readiness once for one
+        //  sender
+        for tx in packed_transactions.iter().rev() {
+            inner.insert(tx.clone(), false, true);
+            inner.recalculate_readiness_with_local_info(&tx.sender());
+        }
+
         if log::max_level() >= log::Level::Debug {
             let mut rlp_s = RlpStream::new();
             for tx in &packed_transactions {
