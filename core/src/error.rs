@@ -27,6 +27,8 @@ pub enum BlockError {
     /// Difficulty header field is invalid; this is a strong error used after
     /// getting a definitive value for difficulty (which is provided).
     InvalidDifficulty(OutOfBounds<U256>),
+    /// The number of referees is out of bound.
+    InvalidNumOfReferees(OutOfBounds<U256>),
     /// Proof-of-work aspect of seal, which we assume is a 256-bit value, is
     /// invalid.
     InvalidProofOfWork(OutOfBounds<H256>),

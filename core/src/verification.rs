@@ -11,6 +11,8 @@ use primitives::{Block, BlockHeader};
 use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
 
+const MAX_NUM_OF_REFEREES: usize = 256;
+
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {
     pub verify_timestamp: bool,
@@ -69,6 +71,17 @@ impl VerificationConfig {
     ) -> Result<(), Error> {
         // verify POW
         self.verify_pow(header)?;
+
+        // verify bound for number of referees
+        if header.referee_hashes().len() > MAX_NUM_OF_REFEREES {
+            return Err(From::from(BlockError::InvalidNumOfReferees(
+                OutOfBounds {
+                    min: Some(0.into()),
+                    max: Some(MAX_NUM_OF_REFEREES.into()),
+                    found: header.referee_hashes().len().into(),
+                },
+            )));
+        }
 
         // verify non-duplicated parent and referee hashes
         let mut direct_ancestor_hashes = HashSet::new();
