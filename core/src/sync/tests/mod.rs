@@ -161,7 +161,8 @@ fn test_remove_expire_blocks() {
         assert!(inner.genesis_block_index == 0);
         assert!(inner.arena.len() == 1);
         assert!(inner.indices.len() == 1);
-        assert!(inner.not_ready_block_indices.len() == 0);
+        assert!(inner.not_ready_blocks_count == 0);
+        assert!(inner.not_ready_blocks_frontier.len() == 0);
     }
 
     // prepare graph data
@@ -258,24 +259,52 @@ fn test_remove_expire_blocks() {
             });
             assert_eq!(me, i);
             inner.indices.insert(blocks[i as usize].hash(), me);
-            if graph_status[i as usize] != 4 {
-                inner.not_ready_block_indices.insert(me);
+            if graph_status[i as usize] != 4
+                && (parent_index > 12 || graph_status[parent_index] == 4)
+            {
+                let status = {
+                    if parent_index > 12 {
+                        5
+                    } else {
+                        graph_status[parent_index]
+                    }
+                };
+                println!(
+                    "insert {} parent {} parent_status {}",
+                    i, parent_index, status
+                );
+                inner.not_ready_blocks_frontier.insert(me);
             }
         }
+        inner.not_ready_blocks_count = 8;
 
-        println!("{:?}", inner.indices);
+        println!("{:?}", inner.not_ready_blocks_frontier);
         assert!(inner.arena.len() == 12);
         assert!(inner.indices.len() == 12);
-        assert!(inner.not_ready_block_indices.len() == 8);
+        assert!(inner.not_ready_blocks_count == 8);
+        assert!(inner.not_ready_blocks_frontier.len() == 6);
+        assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(9 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(11 as usize)));
     }
 
     // not expire any blocks
     {
-        sync.remove_expire_blocks(1000);
+        sync.remove_expire_blocks(1000, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 12);
         assert!(inner.indices.len() == 12);
-        assert!(inner.not_ready_block_indices.len() == 8);
+        assert!(inner.not_ready_blocks_count == 8);
+        assert!(inner.not_ready_blocks_frontier.len() == 6);
+        assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(9 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(11 as usize)));
     }
 
     // expire [9, 10, 14]
@@ -288,11 +317,16 @@ fn test_remove_expire_blocks() {
             - 1000;
     }
     {
-        sync.remove_expire_blocks(500);
+        sync.remove_expire_blocks(500, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 9);
         assert!(inner.indices.len() == 9);
-        assert!(inner.not_ready_block_indices.len() == 5);
+        assert!(inner.not_ready_blocks_count == 5);
+        assert!(inner.not_ready_blocks_frontier.len() == 4);
+        assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
     }
 
     // expire [7]
@@ -305,12 +339,13 @@ fn test_remove_expire_blocks() {
             - 1000;
     }
     {
-        sync.remove_expire_blocks(500);
+        sync.remove_expire_blocks(500, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 5);
         assert!(inner.indices.len() == 5);
-        assert!(inner.not_ready_block_indices.len() == 1);
-        assert!(inner.not_ready_block_indices.contains(&(5 as usize)));
+        assert!(inner.not_ready_blocks_count == 1);
+        assert!(inner.not_ready_blocks_frontier.len() == 1);
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
     }
 
     fs::remove_dir_all("./test.db")
