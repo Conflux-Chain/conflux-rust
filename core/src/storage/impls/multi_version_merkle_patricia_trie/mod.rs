@@ -10,6 +10,8 @@ pub(super) mod row_number;
 
 pub use self::node_ref_map::DEFAULT_NODE_MAP_SIZE;
 
+pub type DeltaMpt = MultiVersionMerklePatriciaTrie;
+
 pub struct MultiVersionMerklePatriciaTrie {
     // TODO(yz): revisit the comment below. With snapshot we may have special
     // TODO(yz): api to create empty epoch.
@@ -31,12 +33,18 @@ pub struct MultiVersionMerklePatriciaTrie {
     // TODO(yz): we should separate disk db from node_memory_manager because
     // TODO(yz): in different delta we don't share cache & db but we share
     // TODO(yz): memory.
+    // FIXME: this is a big refactor. Add snapshot to storage manager first.
     node_memory_manager: NodeMemoryManagerDeltaMpt,
     /// The padding is uniquely generated for each DeltaMPT, and it's used to
     /// compute padding bytes for address and storage_key. The padding setup
     /// is against an attack where adversary artificially build deep paths in
     /// MPT.
     pub padding: KeyPadding,
+    /// Take care of database clean-ups for DeltaMpt.
+    // The variable is used in drop. Variable with non-trivial dtor shouldn't
+    // trigger the compiler warning.
+    #[allow(unused)]
+    delta_mpts_releaser: DeltaDbReleaser,
 }
 
 impl MultiVersionMerklePatriciaTrie {
@@ -52,8 +60,11 @@ impl MultiVersionMerklePatriciaTrie {
     }
 
     pub fn new(
-        kvdb: Arc<KeyValueDB>, conf: StorageConfiguration, padding: KeyPadding,
-    ) -> Self {
+        kvdb: Arc<DeltaDbTrait + Send + Sync>, conf: StorageConfiguration,
+        padding: KeyPadding, snapshot_root: MerkleHash,
+        storage_manager: Arc<StorageManager>,
+    ) -> Self
+    {
         Self {
             root_by_version: Default::default(),
             node_memory_manager: NodeMemoryManagerDeltaMpt::new(
@@ -65,13 +76,20 @@ impl MultiVersionMerklePatriciaTrie {
                 kvdb,
             ),
             padding,
+            delta_mpts_releaser: DeltaDbReleaser {
+                snapshot_root,
+                storage_manager,
+            },
         }
     }
 
+    // FIXME: implement the logic.
+    pub fn should_shift_snapshot(&self) -> Result<bool> { Ok(false) }
+
     pub fn get_root_at_epoch(
-        &self, epoch_id: EpochId,
+        &self, epoch_id: &EpochId,
     ) -> Option<NodeRefDeltaMpt> {
-        self.root_by_version.read().get(&epoch_id).cloned()
+        self.root_by_version.read().get(epoch_id).cloned()
     }
 
     pub fn set_epoch_root(&self, epoch_id: EpochId, root: NodeRefDeltaMpt) {
@@ -122,12 +140,14 @@ use self::{
     cache::algorithm::lru::LRU, merkle_patricia_trie::*,
     node_memory_manager::*, node_ref_map::DeltaMptDbKey,
 };
-use super::errors::*;
+use super::{
+    super::storage_db::delta_db::DeltaDbTrait, errors::*,
+    storage_manager::storage_manager::*,
+};
 use crate::{
     statedb::KeyPadding, storage::state_manager::StorageConfiguration,
 };
 use keccak_hash::keccak;
-use kvdb::KeyValueDB;
 use parking_lot::RwLock;
-use primitives::EpochId;
+use primitives::{EpochId, MerkleHash};
 use std::{collections::HashMap, sync::Arc};

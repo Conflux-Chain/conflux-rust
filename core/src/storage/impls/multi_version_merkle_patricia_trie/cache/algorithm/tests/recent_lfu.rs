@@ -66,7 +66,7 @@ impl<'a> CacheStoreUtil for CacheUtil<'a> {
 impl<'a> CacheUtil<'a> {
     fn prepare(&mut self, key: i32) { self.most_recent_key = Some(key); }
 
-    fn done(&mut self, key: i32) { self.most_recent_key.take(); }
+    fn done(&mut self, _key: i32) { self.most_recent_key.take(); }
 }
 
 #[derive(Debug)]
@@ -127,7 +127,7 @@ fn r_lfu_algorithm_smoke_test() {
     let candidate_sampler = Uniform::new(0, key_range);
     let probability_sampler = Uniform::new(0.0, 1.0);
     let delete_probability = 0.1;
-    for actions in 1..10000 {
+    for _actions in 1..10000 {
         let key = candidate_sampler.sample(&mut rng);
 
         if probability_sampler.sample(&mut rng) >= delete_probability {

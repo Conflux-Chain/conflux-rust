@@ -9,7 +9,10 @@ use crate::{
     machine::new_machine,
     state::{CleanupMode, State},
     statedb::StateDb,
-    storage::{state::StateTrait, state_manager::StateManagerTrait},
+    storage::{
+        state::StateTrait,
+        state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
+    },
     vm::{EnvInfo, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
@@ -321,7 +324,10 @@ impl ConsensusExecutionHandler {
         let state_root = self
             .data_man
             .storage_manager
-            .get_state_no_commit(task.epoch_hash)
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                &task.epoch_hash,
+                None,
+            ))
             .unwrap()
             // Unwrapping is safe because the state is assumed to exist.
             .unwrap()
@@ -384,7 +390,11 @@ impl ConsensusExecutionHandler {
                 self.data_man
                     .storage_manager
                     .get_state_for_next_epoch(
-                        *pivot_block.block_header.parent_hash(),
+                        // FIXME: delta height.
+                        SnapshotAndEpochIdRef::new(
+                            pivot_block.block_header.parent_hash(),
+                            Some(pivot_block.block_header.height() - 1),
+                        ),
                     )
                     .unwrap()
                     // Unwrapping is safe because the state exists.
@@ -798,7 +808,11 @@ impl ConsensusExecutionHandler {
                 self.data_man
                     .storage_manager
                     .get_state_for_next_epoch(
-                        *pivot_block.block_header.parent_hash(),
+                        // FIXME: delta height
+                        SnapshotAndEpochIdRef::new(
+                            pivot_block.block_header.parent_hash(),
+                            Some(pivot_block.block_header.height() - 1),
+                        ),
                     )
                     .unwrap()
                     // Unwrapping is safe because the state exists.
@@ -819,7 +833,9 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_no_commit(*epoch_id)
+                    .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                        epoch_id, None,
+                    ))
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap(),

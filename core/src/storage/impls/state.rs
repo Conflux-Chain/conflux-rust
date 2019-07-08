@@ -6,23 +6,51 @@ pub type OwnedNodeSet = BTreeSet<NodeRefDeltaMpt>;
 
 pub struct State<'a> {
     manager: &'a StateManager,
-    delta_trie: &'a MultiVersionMerklePatriciaTrie,
-    root_node: Option<NodeRefDeltaMpt>,
+    snapshot_db: Arc<SnapshotDb>,
+    intermediate_trie: Option<Arc<DeltaMpt>>,
+    intermediate_trie_root: Option<NodeRefDeltaMpt>,
+    delta_trie: Arc<DeltaMpt>,
+    delta_trie_root: Option<NodeRefDeltaMpt>,
     owned_node_set: Option<OwnedNodeSet>,
     dirty: bool,
 }
 
 impl<'a> State<'a> {
-    pub fn new(
-        manager: &'a StateManager, root_node: Option<NodeRefDeltaMpt>,
-    ) -> Self {
+    pub fn new(manager: &'a StateManager, state_trees: StateTrees) -> Self {
         Self {
             manager,
-            delta_trie: manager.get_delta_trie(),
-            root_node: root_node.clone(),
+            snapshot_db: state_trees.0,
+            intermediate_trie: state_trees.1,
+            intermediate_trie_root: state_trees.2,
+            delta_trie: state_trees.3,
+            delta_trie_root: state_trees.4,
             owned_node_set: Some(Default::default()),
             dirty: false,
         }
+    }
+
+    pub fn get_from_delta(
+        &self, mpt: &'a DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
+        access_key: &[u8],
+    ) -> Result<Option<Box<[u8]>>>
+    {
+        // Get won't create any new nodes so it's fine to pass an empty
+        // owned_node_set.
+        let mut empty_owned_node_set: Option<OwnedNodeSet> =
+            Some(Default::default());
+        match maybe_root_node {
+            None => Ok(None),
+            Some(root_node) => {
+                SubTrieVisitor::new(mpt, root_node, &mut empty_owned_node_set)
+                    .get(access_key)
+            }
+        }
+    }
+
+    pub fn get_from_snapshot(
+        &self, access_key: &[u8],
+    ) -> Result<Option<Box<[u8]>>> {
+        SnapshotDbTrait::get(&*self.snapshot_db, access_key)
     }
 }
 
@@ -47,7 +75,7 @@ impl<'a> StateTrait for State<'a> {
         match self.get_root_node() {
             None => Ok(None),
             Some(root_node) => SubTrieVisitor::new(
-                self.delta_trie,
+                &self.delta_trie,
                 root_node,
                 &mut empty_owned_node_set,
             )
@@ -56,28 +84,43 @@ impl<'a> StateTrait for State<'a> {
     }
 
     fn get(&self, access_key: &[u8]) -> Result<Option<Box<[u8]>>> {
-        // Get won't create any new nodes so it's fine to pass an empty
-        // owned_node_set.
-        let mut empty_owned_node_set: Option<OwnedNodeSet> =
-            Some(Default::default());
-        let maybe_root_node = self.get_root_node();
-        match maybe_root_node {
-            None => Ok(None),
-            Some(root_node) => SubTrieVisitor::new(
-                self.delta_trie,
-                root_node,
-                &mut empty_owned_node_set,
-            )
-            .get(access_key),
+        let maybe_delta_value = self.get_from_delta(
+            &self.delta_trie,
+            self.delta_trie_root.clone(),
+            access_key,
+        );
+        if maybe_delta_value.is_err()
+            || maybe_delta_value.as_ref().unwrap().is_some()
+        {
+            return maybe_delta_value;
         }
+        match self.intermediate_trie {
+            None => {}
+            Some(_) => {
+                let maybe_delta_value = self.get_from_delta(
+                    self.intermediate_trie.as_ref().unwrap(),
+                    self.intermediate_trie_root.clone(),
+                    access_key,
+                );
+                if maybe_delta_value.is_err()
+                    || maybe_delta_value.as_ref().unwrap().is_some()
+                {
+                    return maybe_delta_value;
+                }
+            }
+        }
+        //let maybe_intermediate_value = self.get_from_delta();
+        self.get_from_snapshot(access_key)
     }
 
+    // FIXME: re-implement all other methods.
     fn set(&mut self, access_key: &[u8], value: &[u8]) -> Result<()> {
         self.pre_modification();
 
-        self.root_node = SubTrieVisitor::new(
-            self.delta_trie,
-            self.get_or_create_root_node()?,
+        let root_node = self.get_or_create_root_node()?;
+        self.delta_trie_root = SubTrieVisitor::new(
+            &self.delta_trie,
+            root_node,
             &mut self.owned_node_set,
         )
         .set(access_key, value)?
@@ -93,12 +136,13 @@ impl<'a> StateTrait for State<'a> {
             None => Ok(None),
             Some(old_root_node) => {
                 let (old_value, _, root_node) = SubTrieVisitor::new(
-                    self.delta_trie,
+                    &self.delta_trie,
                     old_root_node,
                     &mut self.owned_node_set,
                 )
                 .delete(access_key)?;
-                self.root_node = root_node.map(|maybe_node| maybe_node.into());
+                self.delta_trie_root =
+                    root_node.map(|maybe_node| maybe_node.into());
                 Ok(old_value)
             }
         }
@@ -113,12 +157,13 @@ impl<'a> StateTrait for State<'a> {
             None => Ok(None),
             Some(old_root_node) => {
                 let (deleted, _, root_node) = SubTrieVisitor::new(
-                    self.delta_trie,
+                    &self.delta_trie,
                     old_root_node,
                     &mut self.owned_node_set,
                 )
                 .delete_all(access_key_prefix, access_key_prefix)?;
-                self.root_node = root_node.map(|maybe_node| maybe_node.into());
+                self.delta_trie_root =
+                    root_node.map(|maybe_node| maybe_node.into());
                 Ok(deleted)
             }
         }
@@ -187,11 +232,11 @@ impl<'a> State<'a> {
 
     // FIXME: move to merkle_patricia_trie mod
     fn get_root_node(&self) -> Option<NodeRefDeltaMpt> {
-        self.root_node.clone()
+        self.delta_trie_root.clone()
     }
 
     fn get_or_create_root_node(&mut self) -> Result<NodeRefDeltaMpt> {
-        if self.root_node.is_none() {
+        if self.delta_trie_root.is_none() {
             let allocator =
                 self.delta_trie.get_node_memory_manager().get_allocator();
             let (root_cow, entry) = CowNodeRef::new_uninitialized_node(
@@ -201,7 +246,7 @@ impl<'a> State<'a> {
             // Insert empty node.
             entry.insert(Default::default());
 
-            self.root_node =
+            self.delta_trie_root =
                 root_cow.into_child().map(|maybe_node| maybe_node.into());
         }
 
@@ -210,7 +255,7 @@ impl<'a> State<'a> {
     }
 
     fn compute_merkle_root(&mut self) -> Result<MerkleHash> {
-        match &self.root_node {
+        match &self.delta_trie_root {
             None => {
                 // Don't commit empty state. Empty state shouldn't exists since
                 // genesis block.
@@ -224,7 +269,7 @@ impl<'a> State<'a> {
                 let allocator =
                     self.delta_trie.get_node_memory_manager().get_allocator();
                 let merkle = cow_root.get_or_compute_merkle(
-                    self.delta_trie,
+                    &self.delta_trie,
                     self.owned_node_set.as_mut().unwrap(),
                     &allocator,
                 )?;
@@ -236,14 +281,14 @@ impl<'a> State<'a> {
     }
 
     fn get_merkle_root(&self) -> Result<Option<MerkleHash>> {
-        self.delta_trie.get_merkle(self.root_node.clone())
+        self.delta_trie.get_merkle(self.delta_trie_root.clone())
     }
 
     fn do_db_commit(&mut self, epoch_id: EpochId) -> Result<()> {
         // TODO(yz): accumulate to db write counter.
         self.dirty = false;
 
-        let maybe_root_node = self.root_node.clone();
+        let maybe_root_node = self.delta_trie_root.clone();
         match maybe_root_node {
             None => {
                 // Don't commit empty state. Empty state shouldn't exists after
@@ -277,7 +322,7 @@ impl<'a> State<'a> {
                             )
                     };
                     let result = cow_root.commit_dirty_recursively(
-                        self.delta_trie,
+                        &self.delta_trie,
                         self.owned_node_set.as_mut().unwrap(),
                         trie_node_mut,
                         &mut commit_transaction,
@@ -288,7 +333,8 @@ impl<'a> State<'a> {
                             .lock(),
                         &allocator,
                     );
-                    self.root_node = cow_root.into_child().map(|r| r.into());
+                    self.delta_trie_root =
+                        cow_root.into_child().map(|r| r.into());
                     result?;
 
                     // TODO: check the guarantee of underlying db on transaction
@@ -306,9 +352,9 @@ impl<'a> State<'a> {
                 }
 
                 let db_key = *{
-                    match self.root_node.as_ref().unwrap() {
+                    match self.delta_trie_root.as_ref().unwrap() {
                         // Dirty state are committed.
-                        NodeRefDeltaMpt::Dirty { index } => unsafe {
+                        NodeRefDeltaMpt::Dirty { index: _ } => unsafe {
                             unreachable_unchecked();
                         },
                         // Empty block's state root points to its base state.
@@ -332,14 +378,16 @@ impl<'a> State<'a> {
                     .key_value()
                     .write(commit_transaction.transaction)?;
 
-                self.manager.number_commited_nodes.fetch_add(
+                self.manager.number_committed_nodes.fetch_add(
                     (commit_transaction.info.row_number.value
                         - start_row_number) as usize,
                     Ordering::Relaxed,
                 );
 
-                self.manager
-                    .mpt_commit_state_root(epoch_id, self.root_node.clone());
+                self.manager.mpt_commit_state_root(
+                    epoch_id,
+                    self.delta_trie_root.clone(),
+                );
             }
         }
 
@@ -364,14 +412,19 @@ impl<'a> State<'a> {
 }
 
 use super::{
-    super::{super::db::COL_DELTA_TRIE, state::*, state_manager::*},
-    errors::*,
-    multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::*, MultiVersionMerklePatriciaTrie,
+    super::{
+        super::db::COL_DELTA_TRIE, state::*, state_manager::*, storage_db::*,
     },
+    errors::*,
+    multi_version_merkle_patricia_trie::{merkle_patricia_trie::*, DeltaMpt},
+    state_manager::*,
 };
 use crate::statedb::KeyPadding;
-use primitives::{EpochId, StateRoot, StateRootWithAuxInfo};
+use primitives::{
+    EpochId, MerkleHash, StateRoot, StateRootWithAuxInfo, MERKLE_NULL_NODE,
+};
 use std::{
-    collections::BTreeSet, hint::unreachable_unchecked, sync::atomic::Ordering,
+    collections::BTreeSet,
+    hint::unreachable_unchecked,
+    sync::{atomic::Ordering, Arc},
 };

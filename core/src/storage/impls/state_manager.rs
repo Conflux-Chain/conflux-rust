@@ -4,6 +4,12 @@
 
 pub use super::super::super::db::COL_DELTA_TRIE;
 
+// TODO: Set the parameter large enough because we haven't implement background
+// snapshotting.
+/// The rule should be somewhat friendly to new miners so that they know which
+/// block starts a new snapshot by looking at consensus graph.
+pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 1_000_000_000_000_000;
+
 // FIXME: commit is per DeltaMPT.
 #[derive(Default)]
 pub struct AtomicCommit {
@@ -15,18 +21,28 @@ pub struct AtomicCommitTransaction<'a> {
     pub transaction: DBTransaction,
 }
 
+pub type DeltaDbManager = DeltaDbManagerRocksdb;
+pub type SnapshotDbManager = SnapshotDbManagerSqlite;
+pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
+
+// TODO: remove option on intermediate tree.
+pub type StateTrees = (
+    Arc<SnapshotDb>,
+    Option<Arc<DeltaMpt>>,
+    Option<NodeRefDeltaMpt>,
+    Arc<DeltaMpt>,
+    Option<NodeRefDeltaMpt>,
+);
+
 pub struct StateManager {
-    delta_trie: MultiVersionMerklePatriciaTrie,
+    delta_trie: Arc<DeltaMpt>,
     pub db: Arc<SystemDB>,
+    storage_manager: Arc<StorageManager>,
     commit_lock: Mutex<AtomicCommit>,
-    pub number_commited_nodes: AtomicUsize,
+    pub number_committed_nodes: AtomicUsize,
 }
 
 impl StateManager {
-    pub(super) fn get_delta_trie(&self) -> &MultiVersionMerklePatriciaTrie {
-        &self.delta_trie
-    }
-
     pub fn start_commit(&self) -> AtomicCommitTransaction {
         AtomicCommitTransaction {
             info: self.commit_lock.lock().unwrap(),
@@ -35,7 +51,7 @@ impl StateManager {
     }
 
     fn load_state_root_node_ref_from_db(
-        &self, epoch_id: EpochId,
+        &self, epoch_id: &EpochId,
     ) -> Result<Option<NodeRefDeltaMpt>> {
         let db_key_result = Self::parse_row_number(
             self.db.key_value().get(
@@ -49,17 +65,17 @@ impl StateManager {
             ),
         )?;
         match db_key_result {
-            Some(db_key) => {
-                Ok(Some(self.delta_trie.loaded_root_at_epoch(epoch_id, db_key)))
-            }
+            Some(db_key) => Ok(Some(
+                self.delta_trie.loaded_root_at_epoch(*epoch_id, db_key),
+            )),
             None => Ok(None),
         }
     }
 
     fn get_state_root_node_ref(
-        &self, epoch_id: EpochId,
+        &self, delta_mpt: &DeltaMpt, epoch_id: &EpochId,
     ) -> Result<Option<NodeRefDeltaMpt>> {
-        let node_ref = self.delta_trie.get_root_at_epoch(epoch_id);
+        let node_ref = delta_mpt.get_root_at_epoch(epoch_id);
         if node_ref.is_none() {
             self.load_state_root_node_ref_from_db(epoch_id)
         } else {
@@ -97,6 +113,7 @@ impl StateManager {
         })
     }
 
+    // FIXME: change the parameter.
     pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Self {
         let row_number = Self::parse_row_number(
             db.key_value()
@@ -107,20 +124,25 @@ impl StateManager {
         .unwrap_or_default();
         debug!("Storage conf {:?}", conf);
 
+        let storage_manager = Arc::new(StorageManager::new(
+            DeltaDbManagerRocksdb::new(db.clone()),
+        ));
+
         Self {
-            delta_trie: MultiVersionMerklePatriciaTrie::new(
-                db.key_value().clone(),
+            delta_trie: StorageManager::new_delta_mpt(
+                storage_manager.clone(),
+                &MERKLE_NULL_NODE,
+                &MERKLE_NULL_NODE,
                 conf,
-                MultiVersionMerklePatriciaTrie::padding(
-                    &MERKLE_NULL_NODE,
-                    &MERKLE_NULL_NODE,
-                ),
-            ),
+            )
+            // It's fine to unwrap in initialization.
+            .unwrap(),
             db,
             commit_lock: Mutex::new(AtomicCommit {
                 row_number: RowNumber { value: row_number },
             }),
-            number_commited_nodes: Default::default(),
+            number_committed_nodes: Default::default(),
+            storage_manager,
         }
     }
 
@@ -158,7 +180,7 @@ impl StateManager {
         self.delta_trie.log_usage();
         info!(
             "number of nodes committed to db {}",
-            self.number_commited_nodes.load(Ordering::Relaxed),
+            self.number_committed_nodes.load(Ordering::Relaxed),
         );
     }
 
@@ -167,61 +189,169 @@ impl StateManager {
     pub unsafe fn get_state_readonly_assumed_existence(
         &self, epoch_id: EpochId,
     ) -> Result<State> {
-        Ok(self.get_state_no_commit(epoch_id)?.unwrap())
+        Ok(self
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(&epoch_id, None))?
+            .unwrap())
+    }
+
+    // FIXME: Fix implementation.
+    // Empty Snapshot is a Snapshot. Empty intermediate delta mpt should be a
+    // DeltaMpt.
+    pub fn get_state_trees(
+        &self, epoch_id: &SnapshotAndEpochIdRef,
+    ) -> Result<Option<StateTrees>> {
+        let maybe_snapshot =
+            self.storage_manager.get_snapshot(&epoch_id.snapshot_root)?;
+        let maybe_intermediate_mpt = None;
+        // FIXME: delta_mpt is determined by snapshot.
+        let delta_mpt = self.delta_trie.clone();
+
+        match maybe_snapshot {
+            None => Ok(None),
+            Some(snapshot) => {
+                let intermediate_root = None;
+                let maybe_delta_root = self
+                    .get_state_root_node_ref(&delta_mpt, epoch_id.epoch_id)?;
+                if maybe_delta_root.is_none() {
+                    Ok(None)
+                } else {
+                    Ok(Some((
+                        snapshot,
+                        maybe_intermediate_mpt,
+                        intermediate_root,
+                        delta_mpt,
+                        maybe_delta_root,
+                    )))
+                }
+            }
+        }
+    }
+
+    pub fn get_state_trees_for_next_epoch(
+        &self, parent_epoch_id: &SnapshotAndEpochIdRef,
+    ) -> Result<Option<StateTrees>> {
+        let maybe_snapshot;
+        // TODO: implement shift logic for intermediate and delta mpt as well.
+        let maybe_intermediate_mpt = None;
+        let delta_mpt = self.delta_trie.clone();
+        let intermediate_root = None;
+        let delta_root;
+
+        // Should shift to a new snapshot
+        // When the delta_height is set to None (e.g. in tests), we assume that
+        // the snapshot shift check is disabled.
+        if parent_epoch_id.delta_height.unwrap_or_default()
+            == SNAPSHOT_EPOCHS_CAPACITY
+        {
+            maybe_snapshot = self.storage_manager.get_snapshot_by_epoch_id(
+                parent_epoch_id.intermediate_delta_epoch_id,
+            )?;
+            delta_root = None;
+        } else {
+            maybe_snapshot = self
+                .storage_manager
+                .get_snapshot(&parent_epoch_id.snapshot_root)?;
+            delta_root = self.get_state_root_node_ref(
+                &delta_mpt,
+                parent_epoch_id.epoch_id,
+            )?;
+            if delta_root.is_none() {
+                return Ok(None);
+            }
+        }
+
+        match maybe_snapshot {
+            None => Ok(None),
+            Some(snapshot) => Ok(Some((
+                snapshot,
+                maybe_intermediate_mpt,
+                intermediate_root,
+                delta_mpt,
+                delta_root,
+            ))),
+        }
     }
 }
 
 impl StateManagerTrait for StateManager {
-    fn from_snapshot(snapshot: &Snapshot) -> Self { unimplemented!() }
-
-    fn make_snapshot(&self, epoch_id: EpochId) -> Snapshot { unimplemented!() }
-
-    fn get_state_no_commit(&self, epoch_id: EpochId) -> Result<Option<State>> {
-        Ok(self
-            .get_state_root_node_ref(epoch_id)?
-            .map(|root_node_ref| State::new(self, Some(root_node_ref))))
-    }
-
-    fn get_state_at(&self, epoch_id: EpochId) -> Result<State> {
-        // FIXME: only allow existing epoch id and H256::Default().
-        Ok(State::new(self, self.get_state_root_node_ref(epoch_id)?))
-    }
-
-    fn get_state_for_genesis_write(&self) -> State { State::new(self, None) }
-
-    fn get_state_for_next_epoch(
-        &self, parent_epoch_id: EpochId,
+    fn get_state_no_commit(
+        &self, epoch_id: SnapshotAndEpochIdRef,
     ) -> Result<Option<State>> {
-        // FIXME: deal with snapshot shift.
-        Ok(self
-            .get_state_root_node_ref(parent_epoch_id)?
-            .map(|root_node_ref| State::new(self, Some(root_node_ref))))
-    }
-
-    fn contains_state(&self, epoch_id: EpochId) -> bool {
-        if let Ok(root_node) = self.get_state_root_node_ref(epoch_id) {
-            root_node.is_some()
-        } else {
-            warn!("Fail to load state for epoch {}", epoch_id);
-            false
+        let maybe_state_trees = self.get_state_trees(&epoch_id)?;
+        match maybe_state_trees {
+            None => Ok(None),
+            Some(state_trees) => Ok(Some(State::new(self, state_trees))),
         }
     }
 
-    fn drop_state_outside(&self, epoch_id: EpochId) { unimplemented!() }
+    fn get_state_for_genesis_write(&self) -> State {
+        State::new(
+            self,
+            (
+                self.storage_manager
+                    .get_snapshot(&MERKLE_NULL_NODE)
+                    .unwrap()
+                    .unwrap(),
+                None,
+                None,
+                self.delta_trie.clone(),
+                None,
+            ),
+        )
+    }
+
+    fn get_state_for_next_epoch(
+        &self, parent_epoch_id: SnapshotAndEpochIdRef,
+    ) -> Result<Option<State>> {
+        let maybe_state_trees =
+            self.get_state_trees_for_next_epoch(&parent_epoch_id)?;
+        match maybe_state_trees {
+            None => Ok(None),
+            Some(state_trees) => Ok(Some(State::new(self, state_trees))),
+        }
+    }
+
+    fn contains_state(&self, epoch_id: SnapshotAndEpochIdRef) -> Result<bool> {
+        let maybe_state_trees = self.get_state_trees(&epoch_id)?;
+        Ok(match maybe_state_trees {
+            None => {
+                warn!("Failed to load state for epoch {:?}", epoch_id);
+                false
+            }
+            Some(_) => true,
+        })
+    }
+
+    // FIXME: split into 2 methods.
+    fn drop_state_outside(&self, _epoch_id: EpochId) { unimplemented!() }
+
+    fn get_snapshot_wire_format(
+        &self, _snapshot_root: MerkleHash,
+    ) -> Result<Option<Snapshot>> {
+        unimplemented!()
+    }
 }
 
 use super::{
-    super::{state::*, state_manager::*},
+    super::{
+        snapshot_manager::SnapshotManagerTrait, state::*, state_manager::*,
+        storage_db::*,
+    },
     errors::*,
     multi_version_merkle_patricia_trie::{
         merkle_patricia_trie::NodeRefDeltaMpt, row_number::*, *,
     },
+    storage_db::{
+        delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
+        snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
+    },
+    storage_manager::storage_manager::StorageManager,
 };
 use crate::{ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb};
 use cfx_types::{Address, U256};
 use kvdb::{DBTransaction, DBValue};
 use primitives::{
-    Account, Block, BlockHeaderBuilder, EpochId, MERKLE_NULL_NODE,
+    Account, Block, BlockHeaderBuilder, EpochId, MerkleHash, MERKLE_NULL_NODE,
 };
 use std::{
     collections::HashMap,
