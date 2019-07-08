@@ -3813,9 +3813,7 @@ impl ConsensusGraph {
         };
         inner.persist_terminals();
         let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
-        if self.should_form_checkpoint_at(inner)
-            != inner.cur_era_genesis_block_index
-        {
+        if new_checkpoint_era_genesis != inner.cur_era_genesis_block_index {
             info!(
                 "Working on the checkpoint for block {} height {}",
                 &inner.arena[inner.cur_era_genesis_block_index].hash,
