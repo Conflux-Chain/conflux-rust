@@ -93,7 +93,7 @@ pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
 // eras.
 const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
 // FIXME: We should use finality to determine the checkpoint moment instead.
-const ERA_CHECKPOINT_GAP: u64 = 500;
+const ERA_CHECKPOINT_GAP: u64 = 50000;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
