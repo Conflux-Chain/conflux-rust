@@ -73,4 +73,12 @@ impl AnticoneCache {
             None
         }
     }
+
+    pub fn intersect_update(&mut self, era_blockset: &HashSet<usize>) {
+        let seq_number = self.seq_number;
+        self.data.retain(|_, (s, seq)| {
+            s.retain(|v| era_blockset.contains(v));
+            seq_number - *seq <= CACHE_INDEX_STRIDE as u64
+        });
+    }
 }

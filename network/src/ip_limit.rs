@@ -9,7 +9,6 @@ use std::{
     net::IpAddr,
 };
 
-pub type SessionIpLimit = IpLimit<usize>;
 pub type NodeIpLimit = IpLimit<NodeId>;
 
 /// IP address limitation for sessions or nodes.
@@ -96,8 +95,10 @@ impl<KEY: Hash + Eq> IpLimit<KEY> {
 
 #[cfg(test)]
 mod tests {
-    use super::SessionIpLimit;
+    use super::IpLimit;
     use std::{net::IpAddr, str::FromStr};
+
+    type SessionIpLimit = IpLimit<usize>;
 
     fn new_ip(ip: &str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
 

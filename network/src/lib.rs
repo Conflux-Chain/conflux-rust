@@ -39,6 +39,7 @@ pub type PeerId = usize;
 mod connection;
 mod discovery;
 mod error;
+mod ip;
 mod ip_limit;
 mod ip_utils;
 mod node_database;
@@ -51,6 +52,7 @@ pub mod throttling;
 pub use crate::{
     connection::get_high_priority_packets,
     error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
+    ip::SessionIpLimitConfig,
     node_table::Node,
     service::NetworkService,
     session::SessionDetails,
@@ -121,6 +123,7 @@ pub struct NetworkConfiguration {
     pub test_mode: bool,
     /// Maximum number of P2P nodes per IP address.
     pub nodes_per_ip: usize,
+    pub session_ip_limit_config: SessionIpLimitConfig,
 }
 
 impl Default for NetworkConfiguration {
@@ -153,6 +156,7 @@ impl NetworkConfiguration {
                 DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
             test_mode: false,
             nodes_per_ip: 1,
+            session_ip_limit_config: SessionIpLimitConfig::default(),
         }
     }
 

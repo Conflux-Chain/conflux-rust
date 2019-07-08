@@ -3,8 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    ip_limit::SessionIpLimit, node_table::NodeId, service::NetworkServiceInner,
-    session::Session, NetworkIoMessage,
+    ip::{new_session_ip_limit, SessionIpLimit, SessionIpLimitConfig},
+    node_table::NodeId,
+    service::NetworkServiceInner,
+    session::Session,
+    NetworkIoMessage,
 };
 use io::IoContext;
 use mio::net::TcpStream;
@@ -27,13 +30,13 @@ pub struct SessionManager {
     max_ingress_sessions: usize,
     cur_ingress_sessions: AtomicUsize,
     node_id_index: RwLock<HashMap<NodeId, usize>>,
-    ip_limit: RwLock<SessionIpLimit>,
+    ip_limit: RwLock<Box<SessionIpLimit>>,
 }
 
 impl SessionManager {
     pub fn new(
         offset: usize, capacity: usize, max_ingress_sessions: usize,
-        nodes_per_ip: usize,
+        ip_limit_config: &SessionIpLimitConfig,
     ) -> Self
     {
         SessionManager {
@@ -41,7 +44,7 @@ impl SessionManager {
             max_ingress_sessions,
             cur_ingress_sessions: AtomicUsize::new(0),
             node_id_index: RwLock::new(HashMap::new()),
-            ip_limit: RwLock::new(SessionIpLimit::new(nodes_per_ip)),
+            ip_limit: RwLock::new(new_session_ip_limit(ip_limit_config)),
         }
     }
 
@@ -127,7 +130,7 @@ impl SessionManager {
 
         // validate against node IP policy.
         let ip = address.ip();
-        if !ip_limit.is_ip_allowed(&ip) {
+        if !ip_limit.is_allowed(&ip) {
             debug!("SessionManager.create: leave on IP policy limited");
             return Err(format!(
                 "IP policy limited, nodeId = {:?}, addr = {:?}",
@@ -159,7 +162,7 @@ impl SessionManager {
             node_id_index.insert(node_id.clone(), index);
         }
 
-        assert!(ip_limit.on_add(ip, index));
+        assert!(ip_limit.add(ip));
 
         self.cur_ingress_sessions.fetch_add(1, Ordering::Relaxed);
 
@@ -178,10 +181,7 @@ impl SessionManager {
                 self.node_id_index.write().remove(node_id);
             }
 
-            assert!(self
-                .ip_limit
-                .write()
-                .on_delete(&session.address().ip(), &session.token()));
+            assert!(self.ip_limit.write().remove(&session.address().ip()));
 
             if !session.metadata.originated {
                 self.cur_ingress_sessions.fetch_sub(1, Ordering::Relaxed);
