@@ -386,10 +386,7 @@ impl ConsensusGraphInner {
         // NOTE: Only genesis block will be first inserted into consensus graph
         // and then into synchronization graph. All the other blocks will be
         // inserted first into synchronization graph then consensus graph.
-        // At current point, genesis block is not in synchronization graph,
-        // so we cannot compute its past_weight from
-        // sync_graph.total_weight_in_own_epoch().
-        // For genesis block, its past_weight is simply zero.
+        // For genesis block, its past weight is simply zero (default value).
         let (genesis_index, _) =
             inner.insert(data_man.genesis_block().as_ref());
         inner.cur_era_genesis_block_index = genesis_index;
@@ -2688,36 +2685,38 @@ impl ConsensusGraph {
     /// root of a given block
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
-    ) -> (StateRootWithAuxInfo, H256) {
+    ) -> Result<(StateRootWithAuxInfo, H256), String> {
         // If we already computed the state of the block before, we should not
         // do it again
-        // FIXME: propagate the error up
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            let maybe_cached_state = self
-                .data_man
-                .storage_manager
-                .get_state_no_commit(SnapshotAndEpochIdRef::new(
-                    &block_hash.clone(),
-                    None,
-                ))
-                .unwrap();
-            match maybe_cached_state {
-                Some(cached_state) => {
-                    if let Some(receipts_root) =
-                        self.data_man.get_receipts_root(&block_hash)
-                    {
-                        return (
-                            cached_state.get_state_root().unwrap().unwrap(),
-                            receipts_root,
-                        );
+            if let Ok(maybe_cached_state) =
+                self.data_man.storage_manager.get_state_no_commit(
+                    SnapshotAndEpochIdRef::new(&block_hash.clone(), None),
+                )
+            {
+                match maybe_cached_state {
+                    Some(cached_state) => {
+                        if let Some(receipts_root) =
+                            self.data_man.get_receipts_root(&block_hash)
+                        {
+                            return Ok((
+                                cached_state.get_state_root().unwrap().unwrap(),
+                                receipts_root,
+                            ));
+                        }
                     }
+                    None => {}
                 }
-                None => {}
+            } else {
+                return Err("Internal storage error".to_owned());
             }
         }
-        // FIXME: propagate the error up
-        let me: usize = inner.indices.get(block_hash).unwrap().clone();
+        let me_opt = inner.indices.get(block_hash);
+        if me_opt == None {
+            return Err("Block hash not found!".to_owned());
+        }
+        let me: usize = *me_opt.unwrap();
         let block_height = inner.arena[me].height;
         let mut fork_height = block_height;
         let mut chain: Vec<usize> = Vec::new();
@@ -2782,7 +2781,6 @@ impl ConsensusGraph {
             ));
         }
 
-        // FIXME: Propagate errors upward
         let (state_root, receipts_root) =
             self.executor.wait_for_result(*block_hash);
         debug!(
@@ -2790,22 +2788,32 @@ impl ConsensusGraph {
             inner.arena[me].hash, state_root, receipts_root
         );
 
-        (state_root, receipts_root)
+        Ok((state_root, receipts_root))
     }
 
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
-    /// FIXME: Checkpoint may cause this function fail
     pub fn compute_deferred_state_for_block(
         &self, block_hash: &H256, delay: usize,
-    ) -> (StateRootWithAuxInfo, H256) {
+    ) -> Result<(StateRootWithAuxInfo, H256), String> {
         let inner = &mut *self.inner.write();
 
-        // FIXME: Propagate errors upward
-        let mut idx = inner.indices.get(block_hash).unwrap().clone();
+        let idx_opt = inner.indices.get(block_hash);
+        if idx_opt == None {
+            return Err(
+                "Parent hash is too old for computing the deferred state"
+                    .to_owned(),
+            );
+        }
+        let mut idx = *idx_opt.unwrap();
         for _i in 0..delay {
             if idx == inner.cur_era_genesis_block_index {
-                break;
+                // If it is the original genesis, we just break
+                if inner.arena[inner.cur_era_genesis_block_index].height == 0 {
+                    break;
+                } else {
+                    return Err("Parent hash is too old for computing the deferred state".to_owned());
+                }
             }
             idx = inner.arena[idx].parent;
         }
@@ -3058,8 +3066,9 @@ impl ConsensusGraph {
             } else {
                 // Call the expensive function to check this state root
                 let deferred_hash = inner.arena[deferred].hash;
-                let (state_root, receipts_root) =
-                    self.compute_state_for_block(&deferred_hash, inner);
+                let (state_root, receipts_root) = self
+                    .compute_state_for_block(&deferred_hash, inner)
+                    .unwrap();
 
                 if state_root.state_root
                     != *block.block_header.deferred_state_root()

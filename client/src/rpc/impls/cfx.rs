@@ -382,14 +382,16 @@ impl RpcImpl {
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty
         );
-        let hash = self.block_gen.generate_fixed_block(
+        match self.block_gen.generate_fixed_block(
             parent_hash,
             referee,
             num_txs,
             difficulty,
             adaptive,
-        );
-        Ok(hash)
+        ) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(RpcError::invalid_params(e)),
+        }
     }
 
     fn generate_one_block(
@@ -434,14 +436,15 @@ impl RpcImpl {
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
 
-        let hash = self.block_gen.generate_custom_block_with_parent(
+        match self.block_gen.generate_custom_block_with_parent(
             parent_hash,
             referee,
             transactions,
             adaptive,
-        );
-
-        Ok(hash)
+        ) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(RpcError::invalid_params(e)),
+        }
     }
 
     fn decode_raw_txs(
@@ -848,13 +851,13 @@ impl TestRpc for TestRpcImpl {
         adaptive: bool, difficulty: Option<u64>,
     ) -> RpcResult<H256>
     {
-        self.rpc_impl.generate_fixed_block(
+        Ok(self.rpc_impl.generate_fixed_block(
             parent_hash,
             referee,
             num_txs,
             difficulty.unwrap_or(0),
             adaptive,
-        )
+        )?)
     }
 
     fn generate_one_block(
