@@ -268,6 +268,11 @@ impl SynchronizationGraphInner {
             }
 
             if referee_graph_ready {
+                // do check
+                let r = self.verify_header_graph_ready_block(index);
+                if r.is_err() {
+                    continue;
+                }
                 if self.arena[index].block_ready {
                     // reclaim as BLOCK_GRAPH_READY
                     reclaimed_blocks.push(index);
