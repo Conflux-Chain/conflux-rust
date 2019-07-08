@@ -1830,14 +1830,34 @@ impl ConsensusGraphInner {
         &self, epoch_number: EpochNumber,
     ) -> Result<usize, String> {
         self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| Ok(self.get_pivot_block_index(height)))
+            .and_then(|height| {
+                if height >= self.cur_era_genesis_height {
+                    Ok(self.get_pivot_block_index(height))
+                } else {
+                    Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
+                }
+            })
     }
 
     pub fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<H256, String> {
-        self.get_index_from_epoch_number(epoch_number)
-            .and_then(|index| Ok(self.arena[index].hash))
+        let height = self.get_height_from_epoch_number(epoch_number)?;
+        if height >= self.cur_era_genesis_height {
+            Ok(self.arena[self.get_pivot_block_index(height)].hash)
+        } else {
+            let mut hash = self.arena[self.cur_era_genesis_block_index].hash;
+            let step = self.cur_era_genesis_height - height;
+            for _ in 0..step {
+                hash = self
+                    .data_man
+                    .block_header_by_hash(&hash)
+                    .unwrap()
+                    .parent_hash()
+                    .clone();
+            }
+            Ok(hash)
+        }
     }
 
     fn block_hashes_by_epoch(
