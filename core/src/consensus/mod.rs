@@ -4132,7 +4132,7 @@ impl ConsensusGraph {
                     let a_lca = consensus_inner.lca(*a_idx, *best_idx);
                     tmp.push((consensus_inner.arena[a_lca].height, hash));
                 }
-                tmp.sort_unstable_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
+                tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
                 bounded_terminal_hashes = tmp
                     .split_off(referee_bound)
                     .iter()
