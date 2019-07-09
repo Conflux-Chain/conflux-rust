@@ -32,9 +32,8 @@ fi
 
 cd conflux-rust
 git reset --hard
-git fetch
-git checkout $branch
-git pull
+git fetch --all
+git checkout origin/$branch
 cargo update
 cargo build --release --features "deadlock_detection"
 ./dev-support/dep_pip3.sh
