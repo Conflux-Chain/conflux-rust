@@ -32,9 +32,6 @@ use std::{
 };
 use unexpected::{Mismatch, OutOfBounds};
 
-// The maximum number of referees allowed for each block
-pub const REFEREE_BOUND: usize = 200;
-
 const NULL: usize = !0;
 const BLOCK_INVALID: u8 = 0;
 const BLOCK_HEADER_ONLY: u8 = 1;
@@ -944,10 +941,6 @@ impl SynchronizationGraph {
     }
 
     fn parent_or_referees_invalid(&self, header: &BlockHeader) -> bool {
-        // A block will be invalid if it has more than REFEREE_BOUND referees
-        if header.referee_hashes().len() > REFEREE_BOUND {
-            return false;
-        }
         self.data_man.verified_invalid(header.parent_hash())
             || header
                 .referee_hashes()

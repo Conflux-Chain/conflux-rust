@@ -4,9 +4,9 @@
 
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*, sync::REFEREE_BOUND,
+    consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, SharedSynchronizationGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    SharedSynchronizationService, SharedTransactionPool, REFEREE_BOUND,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
