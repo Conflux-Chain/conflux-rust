@@ -22,7 +22,7 @@
 
 use super::{
     call_type::CallType,
-    env_info::EnvInfo,
+    env::Env,
     error::{Result, TrapKind},
     return_data::ReturnData,
     spec::Spec,
@@ -141,11 +141,11 @@ pub trait Context {
     /// Address to which funds should be refunded.
     fn suicide(&mut self, refund_address: &Address) -> Result<()>;
 
-    /// Returns spec.
+    /// Returns specification.
     fn spec(&self) -> &Spec;
 
-    /// Returns environment info.
-    fn env_info(&self) -> &EnvInfo;
+    /// Returns environment.
+    fn env(&self) -> &Env;
 
     /// Returns current depth of execution.
     ///

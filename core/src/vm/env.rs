@@ -31,7 +31,7 @@ pub type LastHashes = Vec<H256>;
 /// Information concerning the execution environment for a
 /// message-call/contract-creation.
 #[derive(Debug, Clone)]
-pub struct EnvInfo {
+pub struct Env {
     /// The block number.
     pub number: BlockNumber,
     /// The block author.
@@ -48,9 +48,9 @@ pub struct EnvInfo {
     pub gas_used: U256,
 }
 
-impl Default for EnvInfo {
+impl Default for Env {
     fn default() -> Self {
-        EnvInfo {
+        Env {
             number: 0,
             author: Address::default(),
             timestamp: 0,
@@ -68,8 +68,8 @@ mod tests {
 
     #[test]
     fn it_can_be_created_as_default() {
-        let default_env_info = EnvInfo::default();
+        let default_env = Env::default();
 
-        assert_eq!(default_env_info.difficulty, 0.into());
+        assert_eq!(default_env.difficulty, 0.into());
     }
 }
