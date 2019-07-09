@@ -171,10 +171,16 @@ impl SynchronizationGraphInner {
                 .map(|x| *x)
                 .collect();
             for referee_hash in referee_hashes {
+                let mut remove_referee_hash: bool = false;
                 if let Some(referrers) =
                     self.referrers_by_hash.get_mut(&referee_hash)
                 {
                     referrers.retain(|&x| x != index);
+                    remove_referee_hash = referrers.len() == 0;
+                }
+                // clean empty key
+                if remove_referee_hash {
+                    self.referrers_by_hash.remove(&referee_hash);
                 }
             }
 
@@ -705,9 +711,15 @@ impl SynchronizationGraphInner {
                 self.arena[parent].children.retain(|&x| x != *index);
             }
             let parent_hash = *self.arena[*index].block_header.parent_hash();
+            let mut remove_parent_hash: bool = false;
             if let Some(children) = self.children_by_hash.get_mut(&parent_hash)
             {
                 children.retain(|&x| x != *index);
+                remove_parent_hash = children.len() == 0;
+            }
+            // clean empty hash key
+            if remove_parent_hash {
+                self.children_by_hash.remove(&parent_hash);
             }
 
             let referees: Vec<usize> =
@@ -722,10 +734,16 @@ impl SynchronizationGraphInner {
                 .map(|x| *x)
                 .collect();
             for referee_hash in referee_hashes {
+                let mut remove_referee_hash: bool = false;
                 if let Some(referrers) =
                     self.referrers_by_hash.get_mut(&referee_hash)
                 {
                     referrers.retain(|&x| x != *index);
+                    remove_referee_hash = referrers.len() == 0;
+                }
+                // clean empty hash key
+                if remove_referee_hash {
+                    self.referrers_by_hash.remove(&parent_hash);
                 }
             }
 
@@ -1267,6 +1285,45 @@ impl SynchronizationGraph {
         }
     }
 
+    fn propagate_graph_status(
+        &self, inner: &mut SynchronizationGraphInner,
+        frontier_index_list: Vec<usize>, sync_graph_only: bool,
+    ) -> HashSet<usize>
+    {
+        let mut queue = VecDeque::new();
+        let mut invalid_set = HashSet::new();
+        for index in frontier_index_list {
+            queue.push_back(index);
+        }
+
+        while let Some(index) = queue.pop_front() {
+            if inner.arena[index].graph_status == BLOCK_INVALID {
+                invalid_set.insert(index);
+                inner.set_and_propagate_invalid(
+                    &mut queue,
+                    &mut invalid_set,
+                    index,
+                );
+            } else if inner.new_to_be_block_graph_ready(index) {
+                self.set_graph_ready(inner, index, sync_graph_only);
+                for child in &inner.arena[index].children {
+                    debug_assert!(
+                        inner.arena[*child].graph_status < BLOCK_GRAPH_READY
+                    );
+                    queue.push_back(*child);
+                }
+                for referrer in &inner.arena[index].referrers {
+                    debug_assert!(
+                        inner.arena[*referrer].graph_status < BLOCK_GRAPH_READY
+                    );
+                    queue.push_back(*referrer);
+                }
+            }
+        }
+
+        invalid_set
+    }
+
     pub fn insert_block(
         &self, block: Block, need_to_verify: bool, persistent: bool,
         sync_graph_only: bool,
@@ -1325,10 +1382,6 @@ impl SynchronizationGraph {
             };
         }
 
-        let mut invalid_set: HashSet<usize> = HashSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(me);
-
         let block = Arc::new(block);
         if inner.arena[me].graph_status != BLOCK_INVALID {
             // If we are rebuilding the graph from db, we do not insert all
@@ -1343,32 +1396,9 @@ impl SynchronizationGraph {
             insert_success = false;
         }
 
-        while let Some(index) = queue.pop_front() {
-            if inner.arena[index].graph_status == BLOCK_INVALID {
-                if index == me {
-                    invalid_set.insert(me);
-                }
-                inner.set_and_propagate_invalid(
-                    &mut queue,
-                    &mut invalid_set,
-                    index,
-                );
-            } else if inner.new_to_be_block_graph_ready(index) {
-                self.set_graph_ready(inner, index, sync_graph_only);
-                for child in &inner.arena[index].children {
-                    debug_assert!(
-                        inner.arena[*child].graph_status < BLOCK_GRAPH_READY
-                    );
-                    queue.push_back(*child);
-                }
-                for referrer in &inner.arena[index].referrers {
-                    debug_assert!(
-                        inner.arena[*referrer].graph_status < BLOCK_GRAPH_READY
-                    );
-                    queue.push_back(*referrer);
-                }
-            }
-        }
+        let invalid_set =
+            self.propagate_graph_status(inner, vec![me], sync_graph_only);
+
         if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
             need_to_relay = true;
         }
@@ -1418,11 +1448,25 @@ impl SynchronizationGraph {
         let inner = &mut *self.inner.write();
 
         if recover {
+            // TODO: maybe we need to relay those blocks
+            // TODO: maybe we need to propagate header graph status
             let blocks = inner.try_recover_expire_block();
 
-            for index in blocks {
-                self.set_graph_ready(inner, index, false);
+            for index in &blocks {
+                if inner.arena[*index].parent == NULL {
+                    // make sure this block will be insert into
+                    // old_era_blocks_frontier later
+                    inner.arena[*index].parent_reclaimed = true;
+                    inner.arena[*index].graph_status = BLOCK_HEADER_GRAPH_READY;
+                    inner.arena[*index].pending_referee_count = 0;
+                }
             }
+            // since in `new_to_be_block_graph_ready`, we only check
+            // graph_status and parent_reclaimed
+            // in function `propagate_graph_status` will change graph status
+            // from BLOCK_HEADER_GRAPH_READY to BLOCK_GRAPH_READY
+            let invalid_set = self.propagate_graph_status(inner, blocks, false);
+            debug_assert!(invalid_set.len() == 0);
         }
 
         // only remove when there are more than 10% expired blocks
