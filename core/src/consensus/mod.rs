@@ -2346,7 +2346,10 @@ impl ConsensusGraphInner {
         self.cur_era_genesis_height = new_era_height;
         self.cur_era_stable_height =
             new_era_height + self.inner_conf.era_epoch_count;
-        // TODO: Maybe we need to clean up data_manager?
+
+        self.data_man.set_cur_consensus_era_genesis_hash(
+            &self.arena[new_era_block_index].hash,
+        );
     }
 }
 

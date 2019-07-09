@@ -40,6 +40,7 @@ pub struct BlockDataManager {
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     block_receipts_root: RwLock<HashMap<H256, H256>>,
     invalid_block_set: RwLock<HashSet<H256>>,
+    cur_consensus_era_genesis_hash: RwLock<H256>,
 
     pub record_tx_address: bool,
 
@@ -57,6 +58,7 @@ impl BlockDataManager {
         cache_man: Arc<Mutex<CacheManager<CacheId>>>, record_tx_address: bool,
     ) -> Self
     {
+        let genesis_hash = genesis_block.block_header.hash();
         let data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
@@ -72,6 +74,7 @@ impl BlockDataManager {
             cache_man,
             record_tx_address,
             target_difficulty_manager: TargetDifficultyManager::new(),
+            cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
         };
 
         data_man.insert_receipts_root(
@@ -678,6 +681,15 @@ impl BlockDataManager {
                 + transaction_pubkey_cache.heap_size_of_children()
                 + compact_blocks.heap_size_of_children()
         });
+    }
+
+    pub fn set_cur_consensus_era_genesis_hash(&self, hash: &H256) {
+        let mut cur_era_hash = self.cur_consensus_era_genesis_hash.write();
+        *cur_era_hash = hash.clone();
+    }
+
+    pub fn get_cur_consensus_era_genesis_hash(&self) -> H256 {
+        self.cur_consensus_era_genesis_hash.read().clone()
     }
 }
 
