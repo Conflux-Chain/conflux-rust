@@ -13,7 +13,7 @@ use crate::{
         state::StateTrait,
         state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
     },
-    vm::{EnvInfo, Spec},
+    vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
@@ -456,7 +456,7 @@ impl ConsensusExecutionHandler {
                 block.hash(),
                 block.transactions.len()
             );
-            let mut env = EnvInfo {
+            let mut env = Env {
                 number: 0, // TODO: replace 0 with correct cardinal number
                 author: block.block_header.author().clone(),
                 timestamp: block.block_header.timestamp(),
@@ -843,7 +843,7 @@ impl ConsensusExecutionHandler {
             0.into(),
             self.vm.clone(),
         );
-        let mut env = EnvInfo {
+        let mut env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number
             author: Default::default(),
             timestamp: Default::default(),

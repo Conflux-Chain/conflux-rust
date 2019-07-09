@@ -19,6 +19,5 @@ pub use self::{
 };
 pub use crate::vm::{
     ActionParams, CallType, CleanDustMode, Context, ContractCreateResult,
-    CreateContractAddress, EnvInfo, GasLeft, MessageCallResult, ReturnData,
-    Spec,
+    CreateContractAddress, Env, GasLeft, MessageCallResult, ReturnData, Spec,
 };
