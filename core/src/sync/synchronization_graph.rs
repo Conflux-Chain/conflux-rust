@@ -220,7 +220,8 @@ impl SynchronizationGraphInner {
         for index in &self.not_ready_blocks_frontier {
             let parent_hash = self.arena[*index].block_header.parent_hash();
 
-            // parent and referees are all in memory, ignore recover
+            // parent and referees are all in memory, status must be
+            // BLOCK_HEADER_GRAPH_READY no need to recover
             if self.arena[*index].parent != NULL
                 && self.arena[*index].pending_referee_count == 0
             {
@@ -228,10 +229,11 @@ impl SynchronizationGraphInner {
             }
 
             // check whether parent is BLOCK_GRAPH_READY
+            // 1. parent not in memory and not invalid in disk (assume this
+            // block was BLOCK_GRAPH_READY)
+            // 2. parent in memory and status is BLOCK_GRAPH_READY
             let parent_graph_ready: bool = {
-                if self.arena[*index].parent == NULL
-                    && !self.data_man.verified_invalid(parent_hash)
-                {
+                if self.arena[*index].parent == NULL {
                     if let Some(_) =
                         self.data_man.block_by_hash(parent_hash, false)
                     {
@@ -254,8 +256,13 @@ impl SynchronizationGraphInner {
             }
 
             // check whether referees are BLOCK_GRAPH_READY
+            //  1. referees which are in memory and status is BLOCK_GRAPH_READY
+            //  2. referees which are not in memory and not invalid in disk
+            // (assume these blocks are BLOCK_GRAPH_READY)
             let mut referee_graph_ready = true;
             if self.arena[*index].pending_referee_count == 0 {
+                // since all relcaimed blocks are all BLOCK_GRAPH_READY, only
+                // need to check those in memory block
                 for referee in self.arena[*index].referees.iter() {
                     referee_graph_ready &=
                         self.arena[*referee].graph_status == BLOCK_GRAPH_READY;
