@@ -49,7 +49,7 @@ use rayon::prelude::*;
 use rlp::*;
 use slab::Slab;
 use std::{
-    cmp::{max, min},
+    cmp::{max, min, Reverse},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     io::Write,
     mem,
@@ -4114,7 +4114,7 @@ impl ConsensusGraph {
     /// propagate the ReadGuard up to make the read-lock live longer so that
     /// the whole block packing process can be atomic.
     pub fn get_best_info(
-        &self,
+        &self, referee_bound_opt: Option<usize>,
     ) -> GuardedValue<
         RwLockUpgradableReadGuard<ConsensusGraphInner>,
         BestInformation,
@@ -4122,11 +4122,29 @@ impl ConsensusGraph {
         let consensus_inner = self.inner.upgradable_read();
         let (deferred_state_root, deferred_receipts_root) =
             self.wait_for_block_state(&consensus_inner.best_state_block_hash());
+        let mut bounded_terminal_hashes = consensus_inner.terminal_hashes();
+        if let Some(referee_bound) = referee_bound_opt {
+            if bounded_terminal_hashes.len() > referee_bound {
+                let mut tmp = Vec::new();
+                let best_idx = consensus_inner.pivot_chain.last().unwrap();
+                for hash in bounded_terminal_hashes {
+                    let a_idx = consensus_inner.indices.get(&hash).unwrap();
+                    let a_lca = consensus_inner.lca(*a_idx, *best_idx);
+                    tmp.push((consensus_inner.arena[a_lca].height, hash));
+                }
+                tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
+                bounded_terminal_hashes = tmp
+                    .split_off(referee_bound)
+                    .iter()
+                    .map(|(_, b)| b.clone())
+                    .collect()
+            }
+        }
         let value = BestInformation {
             best_block_hash: consensus_inner.best_block_hash(),
             best_epoch_number: consensus_inner.best_epoch_number(),
             current_difficulty: consensus_inner.current_difficulty,
-            terminal_block_hashes: consensus_inner.terminal_hashes(),
+            terminal_block_hashes: bounded_terminal_hashes,
             deferred_state_root,
             deferred_receipts_root,
         };

@@ -36,6 +36,8 @@ pub enum BlockError {
     InvalidTimestamp(OutOfBounds<SystemTime>),
     /// Timestamp header field is too far in future.
     TemporarilyInvalid(OutOfBounds<SystemTime>),
+    /// Too many referees in a block
+    TooManyReferees(OutOfBounds<usize>),
     /// Too many transactions from a particular address.
     TooManyTransactions(Address),
     /// Parent given is unknown.
@@ -83,6 +85,7 @@ impl fmt::Display for BlockError {
                 format!("Future timestamp in header: {}", oob)
             }
             UnknownParent(ref hash) => format!("Unknown parent: {}", hash),
+            TooManyReferees(ref num) => format!("Too many referees: {}", num),
             TooManyTransactions(ref address) => {
                 format!("Too many transactions from: {}", address)
             }

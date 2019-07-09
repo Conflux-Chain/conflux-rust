@@ -6,6 +6,7 @@ extern crate tempdir;
 
 use self::tempdir::TempDir;
 use super::super::{BlockGenerator, Client, ClientHandle, Configuration};
+use cfxcore::REFEREE_BOUND;
 use parking_lot::{Condvar, Mutex};
 use std::{
     sync::Arc,
@@ -22,7 +23,7 @@ fn test_mining_10_epochs_inner(handle: &ClientHandle) {
     let sync_graph = handle.sync.get_synchronization_graph();
     let best_block_hash = sync_graph
         .consensus
-        .get_best_info()
+        .get_best_info(Some(REFEREE_BOUND))
         .as_ref()
         .best_block_hash;
     let start_height =
@@ -35,7 +36,7 @@ fn test_mining_10_epochs_inner(handle: &ClientHandle) {
     while instant.elapsed() < max_timeout {
         let new_best_block_hash = sync_graph
             .consensus
-            .get_best_info()
+            .get_best_info(Some(REFEREE_BOUND))
             .as_ref()
             .best_block_hash;
         let end_height = sync_graph
@@ -50,7 +51,7 @@ fn test_mining_10_epochs_inner(handle: &ClientHandle) {
     }
     let new_best_block_hash = sync_graph
         .consensus
-        .get_best_info()
+        .get_best_info(Some(REFEREE_BOUND))
         .as_ref()
         .best_block_hash;
     let end_height = sync_graph
