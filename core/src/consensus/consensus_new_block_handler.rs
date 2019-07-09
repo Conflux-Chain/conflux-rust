@@ -974,6 +974,12 @@ impl ConsensusNewBlockHandler {
                         &epoch_receipts,
                     ),
                 );
+                self.data_man.insert_logs_bloom_hash(
+                    pivot_hash,
+                    BlockHeaderBuilder::compute_block_logs_bloom_hash(
+                        &epoch_receipts,
+                    ),
+                );
             } else {
                 let reward_execution_info = inner.get_reward_execution_info(
                     &self.data_man,
