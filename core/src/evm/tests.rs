@@ -393,7 +393,7 @@ fn test_number(factory: super::Factory) {
     ctx.env.number = number;
 
     let gas_left = {
-        let mut vm = factory.create(params, ctx.spec(), ctx.depth());
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
         test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
