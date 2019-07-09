@@ -20,7 +20,7 @@ from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.rpc_timewait = 60
+        self.rpc_timewait = 6000
         self.num_nodes = 1
         self.conf_parameters = {
             "log_level": "\"debug\"",
@@ -321,7 +321,7 @@ class P2PTest(ConfluxTestFramework):
 
         start = time.time()
         # Wait for at most 120 seconds
-        while time.time() - start <= 120:
+        while time.time() - start <= 6000:
             block_counts = []
             best_blocks = []
             block_count_futures = []
