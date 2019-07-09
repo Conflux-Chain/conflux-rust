@@ -22,7 +22,7 @@ class RlpIter:
         self.bytes = bytearray()
         self.eof = False
         self.offset = 0
-        self.batch_size = batch_size
+        self.batch_size = batch_size 
 
     def __iter__(self):
         return self
@@ -76,7 +76,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     def set_test_params(self):
         pass
 
-    def setup_network(self):
+    def setup_chain(self):
         if self.options.remote_ips != "":
             self.remote = True
         else:
@@ -93,21 +93,25 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
 
             self.ips = ips
             self.num_nodes = len(ips)
+        else:
+            self.num_nodes = 1
 
-            self.conf_parameters = {"log_level": "\"debug\"",
-                                    # "storage_cache_start_size": "1000000",
-                                    # Do not re-alloc.
-                                    "storage_cache_start_size": "20000000",
-                                    "storage_cache_size": "20000000",
-                                    "storage_idle_size": "2000000",
-                                    "storage_node_map_size": "200000000",
-                                    "ledger_cache_size": "3000",
-                                    "send_tx_period_ms": "31536000000",
-                                    "enable_discovery": "false",
-                                    "egress_queue_capacity": "1024",
-                                    "egress_min_throttle": "100",
-                                    "egress_max_throttle": "1000", }
+        self.conf_parameters = {"log_level": "\"debug\"",
+                                # "storage_cache_start_size": "1000000",
+                                # Do not re-alloc.
+                                "storage_cache_start_size": "20000000",
+                                "storage_cache_size": "20000000",
+                                "storage_idle_size": "2000000",
+                                "storage_node_map_size": "200000000",
+                                "ledger_cache_size": "3000",
+                                "send_tx_period_ms": "31536000000",
+                                "enable_discovery": "false",
+                                "egress_queue_capacity": "1024",
+                                "egress_min_throttle": "100",
+                                "egress_max_throttle": "1000", }
+        self.initialize_chain_clean()
 
+    def setup_network(self):
         if self.remote:
             binary_path = ["/home/ubuntu/conflux"]
             for ip in self.ips:
@@ -116,13 +120,13 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                 self.log.info("Node " + str(i) + " bind to " + self.nodes[i].ip + ":" + self.nodes[i].port)
             self.start_nodes()
             self.log.info("All nodes started, waiting to be connected")
+            connect_sample_nodes(nodes=self.nodes, log=self.log, sample=7, latency_min=0, latency_max=300)
         else:
             self.setup_nodes(binary=[os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 "../target/release/conflux")]
                 * self.num_nodes)
 
-        connect_sample_nodes(nodes=self.nodes, log=self.log, sample=7, latency_min=0, latency_max=300)
 
     def run_test(self):
         # Start mininode connection
@@ -227,6 +231,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                                     gas=gas, gas_price=gas_price, data=tx_data)
             init_txs.append(tx)
 
+        print(self.nodes)
         self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
 
         tx_count = len(init_txs)

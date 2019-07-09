@@ -514,6 +514,8 @@ def checktx(node, tx_hash):
 
 
 def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
+    print("nodes=", nodes)
+    print("sample=", sample)
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
     threads = []
