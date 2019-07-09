@@ -1,4 +1,4 @@
-use super::debug::*;
+use super::super::debug::*;
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::{
@@ -35,6 +35,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use crate::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use std::fmt::{Debug, Formatter};
 
@@ -256,6 +257,115 @@ impl ConsensusExecutor {
         if let Some(thread) = self.thread.lock().take() {
             thread.join().ok();
         }
+    }
+
+    pub fn compute_state_for_block(
+        &self, block_hash: &H256, inner: &ConsensusGraphInner,
+    ) -> Result<(StateRootWithAuxInfo, H256), String> {
+        // If we already computed the state of the block before, we should not
+        // do it again
+        debug!("compute_state_for_block {:?}", block_hash);
+        {
+            if let Ok(maybe_cached_state) =
+                self.handler.data_man.storage_manager.get_state_no_commit(
+                    SnapshotAndEpochIdRef::new(&block_hash.clone(), None),
+                )
+            {
+                match maybe_cached_state {
+                    Some(cached_state) => {
+                        if let Some(receipts_root) =
+                            self.handler.data_man.get_receipts_root(&block_hash)
+                        {
+                            return Ok((
+                                cached_state.get_state_root().unwrap().unwrap(),
+                                receipts_root,
+                            ));
+                        }
+                    }
+                    None => {}
+                }
+            } else {
+                return Err("Internal storage error".to_owned());
+            }
+        }
+        let me_opt = inner.indices.get(block_hash);
+        if me_opt == None {
+            return Err("Block hash not found!".to_owned());
+        }
+        let me: usize = *me_opt.unwrap();
+        let block_height = inner.arena[me].height;
+        let mut fork_height = block_height;
+        let mut chain: Vec<usize> = Vec::new();
+        let mut idx = me;
+        while fork_height > 0
+            && (fork_height >= inner.get_pivot_height()
+                || inner.get_pivot_block_index(fork_height) != idx)
+        {
+            chain.push(idx);
+            fork_height -= 1;
+            idx = inner.arena[idx].parent;
+        }
+        // Because we have genesis at height 0, this should always be true
+        debug_assert!(inner.get_pivot_block_index(fork_height) == idx);
+        debug!("Forked at index {} height {}", idx, fork_height);
+        chain.push(idx);
+        chain.reverse();
+        let start_index = inner.find_start_index(&chain);
+        debug!("Start execution from index {}", start_index);
+
+        // We need the state of the fork point to start executing the fork
+        if start_index != 0 {
+            let mut last_state_height =
+                if inner.get_pivot_height() > DEFERRED_STATE_EPOCH_COUNT {
+                    inner.get_pivot_height() - DEFERRED_STATE_EPOCH_COUNT
+                } else {
+                    0
+                };
+
+            last_state_height += 1;
+            while last_state_height <= fork_height {
+                let epoch_index =
+                    inner.get_pivot_block_index(last_state_height);
+                let reward_execution_info = inner.get_reward_execution_info(
+                    &self.handler.data_man,
+                    epoch_index,
+                );
+                self.enqueue_epoch(EpochExecutionTask::new(
+                    inner.arena[epoch_index].hash,
+                    inner.get_epoch_block_hashes(epoch_index),
+                    reward_execution_info,
+                    false,
+                    false,
+                ));
+                last_state_height += 1;
+            }
+        }
+
+        for fork_index in start_index..chain.len() {
+            let epoch_index = chain[fork_index];
+            let reward_index = inner.get_pivot_reward_index(epoch_index);
+
+            let reward_execution_info = inner
+                .get_reward_execution_info_from_index(
+                    &self.handler.data_man,
+                    reward_index,
+                );
+            self.enqueue_epoch(EpochExecutionTask::new(
+                inner.arena[epoch_index].hash,
+                inner.get_epoch_block_hashes(epoch_index),
+                reward_execution_info,
+                false,
+                false,
+            ));
+        }
+
+        let (state_root, receipts_root) = self.wait_for_result(*block_hash);
+        debug!(
+            "Epoch {:?} has state_root={:?} receipts_root={:?}",
+            inner.arena[me].hash, state_root, receipts_root
+        );
+
+        Ok((state_root, receipts_root))
     }
 }
 
