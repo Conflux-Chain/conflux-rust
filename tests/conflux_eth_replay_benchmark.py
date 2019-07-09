@@ -74,6 +74,9 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         ConfluxTestFramework.__init__(self)
 
     def set_test_params(self):
+        pass
+
+    def setup_network(self):
         if self.options.remote_ips != "":
             self.remote = True
         else:
@@ -104,8 +107,6 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                                     "egress_queue_capacity": "1024",
                                     "egress_min_throttle": "100",
                                     "egress_max_throttle": "1000", }
-
-    def setup_network(self):
 
         if self.remote:
             binary_path = ["/home/ubuntu/conflux"]
