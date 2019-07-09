@@ -5,7 +5,7 @@
 mod action_params;
 mod call_type;
 mod context;
-mod env_info;
+mod env;
 mod error;
 mod return_data;
 mod spec;
@@ -18,7 +18,7 @@ pub use self::{
     context::{
         Context, ContractCreateResult, CreateContractAddress, MessageCallResult,
     },
-    env_info::EnvInfo,
+    env::Env,
     error::{Error, ExecTrapResult, Result, TrapError, TrapKind, TrapResult},
     return_data::{GasLeft, ReturnData},
     spec::{CleanDustMode, Spec, WasmCosts},

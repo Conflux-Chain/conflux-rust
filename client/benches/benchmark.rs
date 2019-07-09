@@ -15,7 +15,7 @@ use cfxcore::{
     state::State,
     statedb::StateDb,
     storage::state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
-    vm::{EnvInfo, Spec},
+    vm::{Env, Spec},
     vm_factory::VmFactory,
 };
 use client::{Client, Configuration};
@@ -60,7 +60,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     };
     let tx = tx.sign(kp.secret());
     let machine = new_machine();
-    let mut env = EnvInfo {
+    let mut env = Env {
         number: 0, // TODO: replace 0 with correct cardinal number
         author: Default::default(),
         timestamp: Default::default(),
