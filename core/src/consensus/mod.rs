@@ -311,9 +311,9 @@ impl ConsensusGraph {
         inner.get_executable_epoch_blocks(&self.data_man, epoch_index)
     }
 
-    // TODO Merge logic.
     /// This is a very expensive call to force the engine to recompute the state
     /// root of a given block
+    #[inline]
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &ConsensusGraphInner,
     ) -> Result<(StateRootWithAuxInfo, H256), String> {
@@ -353,7 +353,6 @@ impl ConsensusGraph {
     /// construct_pivot() should be used after on_new_block_construction_only()
     /// calls. It builds the pivot chain and ists state at once, avoiding
     /// intermediate redundant computation triggered by on_new_block().
-    /// FIXME: Checkpoint will require a new way to catch up
     pub fn construct_pivot(&self) {
         {
             let inner = &mut *self.inner.write();
@@ -365,6 +364,11 @@ impl ConsensusGraph {
         }
     }
 
+    /// This is the function to insert a new block into the consensus graph
+    /// during construction. We by pass many verifications because those
+    /// blocks are from our own database so we trust them. After inserting
+    /// all blocks with this function, we need to call construct_pivot() to
+    /// finish the building from db!
     pub fn on_new_block_construction_only(&self, hash: &H256) {
         let block = self.data_man.block_by_hash(hash, true).unwrap();
 
@@ -381,6 +385,8 @@ impl ConsensusGraph {
             .on_new_block_construction_only(inner, hash, block);
     }
 
+    /// This is the main function that SynchronizationGraph calls to deliver a
+    /// new block to the consensus graph.
     pub fn on_new_block(&self, hash: &H256) {
         let block = self.data_man.block_by_hash(hash, true).unwrap();
 
