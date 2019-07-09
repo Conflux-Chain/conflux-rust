@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub struct StorageManagerArchiveNode<SnapshotDbManager: SnapshotDbManagerTrait>
 {
     snapshot_db_manager: SnapshotDbManager,

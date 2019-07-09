@@ -126,8 +126,10 @@ impl SynchronizationGraphInner {
         inner
     }
 
-    // FIXME: make it real
-    fn get_genesis_in_current_era(&self) -> usize { self.genesis_block_index }
+    fn get_genesis_in_current_era(&self) -> usize {
+        let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
+        *self.indices.get(&genesis_hash).unwrap()
+    }
 
     pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
         let era_genesis = self.get_genesis_in_current_era();
