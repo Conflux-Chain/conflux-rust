@@ -74,7 +74,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         ConfluxTestFramework.__init__(self)
 
     def set_test_params(self):
-        if self.remote_ips != "":
+        if self.options.remote_ips != "":
             self.remote = True
         else:
             self.remote = False

@@ -102,9 +102,9 @@ class ConfluxTestFramework:
         parser.add_argument(
             "--tmpdir", dest="tmpdir", help="Root directory for datadirs")
         parser.add_argument(
-            "--remoteips", dest="remote_ips", help="The file of ip list for remote conflux nodes")
+            "--remoteips", default="", dest="remote_ips", help="The file of ip list for remote conflux nodes")
         parser.add_argument(
-            "--localip", dest="local_ip", help="Local ip")
+            "--localip", default="", dest="local_ip", help="Local ip")
         parser.add_argument(
             "-l",
             "--loglevel",
