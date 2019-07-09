@@ -39,8 +39,8 @@ use crate::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use std::fmt::{Debug, Formatter};
 
-// TODO: Parallelize anticone calculation by moving calculation into task.
-/// The struct includes most information to compute rewards for old epochs
+/// The RewardExecutionInfo struct includes most information to compute rewards
+/// for old epochs
 pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_anticone_overlimited: Vec<bool>,
@@ -71,7 +71,8 @@ enum ExecutionTask {
     Stop,
 }
 
-/// The struct includes all the information needed to execute an epoch
+/// The EpochExecutionTask struct includes all the information needed to execute
+/// an epoch
 #[derive(Debug)]
 pub struct EpochExecutionTask {
     pub epoch_hash: H256,
@@ -110,6 +111,7 @@ struct GetExecutionResultTask {
     pub sender: Sender<(StateRootWithAuxInfo, H256)>,
 }
 
+/// ConsensusExecutor processes transaction execution tasks.
 pub struct ConsensusExecutor {
     /// The thread responsible for execution transactions
     thread: Mutex<Option<JoinHandle<()>>>,
@@ -259,6 +261,45 @@ impl ConsensusExecutor {
         }
     }
 
+    /// Binary search to find the starting point so we can execute to the end of
+    /// the chain.
+    /// Return the first index that is not executed,
+    /// or return `chain.len()` if they are all executed (impossible for now).
+    ///
+    /// NOTE: If a state for an block exists, all the blocks on its pivot chain
+    /// must have been executed and state committed. The receipts for these
+    /// past blocks may not exist because the receipts on forks will be
+    /// garbage-collected, but when we need them, we will recompute these
+    /// missing receipts in `process_rewards_and_fees`. This 'recompute' is safe
+    /// because the parent state exists. Thus, it's okay that here we do not
+    /// check existence of the receipts that will be needed for reward
+    /// computation during epoch execution.
+    fn find_start_index(
+        inner: &ConsensusGraphInner, chain: &Vec<usize>,
+    ) -> usize {
+        let mut base = 0;
+        let mut size = chain.len();
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+            let epoch_hash = inner.arena[chain[mid]].hash;
+            base = if inner.data_man.epoch_executed(&epoch_hash) {
+                mid
+            } else {
+                base
+            };
+            size -= half;
+        }
+        let epoch_hash = inner.arena[chain[base]].hash;
+        if inner.data_man.epoch_executed(&epoch_hash) {
+            base + 1
+        } else {
+            base
+        }
+    }
+
+    /// This is a blocking call to force the execution engine to compute the
+    /// state of a block immediately
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &ConsensusGraphInner,
     ) -> Result<(StateRootWithAuxInfo, H256), String> {
@@ -310,7 +351,7 @@ impl ConsensusExecutor {
         debug!("Forked at index {} height {}", idx, fork_height);
         chain.push(idx);
         chain.reverse();
-        let start_index = inner.find_start_index(&chain);
+        let start_index = ConsensusExecutor::find_start_index(inner, &chain);
         debug!("Start execution from index {}", start_index);
 
         // We need the state of the fork point to start executing the fork

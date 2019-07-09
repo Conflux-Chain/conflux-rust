@@ -11,7 +11,6 @@ use crate::{
         ANTICONE_PENALTY_RATIO, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
         DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
     },
-    db::COL_MISC,
     hash::KECCAK_EMPTY_LIST_RLP,
     pow::{target_difficulty, ProofOfWorkConfig},
     state::State,
@@ -24,7 +23,6 @@ use link_cut_tree::MinLinkCutTree;
 use primitives::{
     receipt::Receipt, Block, EpochNumber, StateRoot, TransactionAddress,
 };
-use rlp::RlpStream;
 use slab::Slab;
 use std::{
     cmp::{max, min},
@@ -847,6 +845,8 @@ impl ConsensusGraphInner {
         (stable, adaptive)
     }
 
+    /// Determine whether we should generate adaptive blocks or not. It is used
+    /// both for block generations and for block validations.
     fn adaptive_weight(
         &mut self, me: usize, anticone_barrier: &BitSet,
         weight_tuple: Option<&(Vec<i128>, Vec<i128>, Vec<i128>)>,
@@ -1288,8 +1288,6 @@ impl ConsensusGraphInner {
         total_weight
     }
 
-    // TODO: consider moving the logic to background when consensus locks are
-    // broken down.
     fn get_reward_execution_info_from_index(
         &self, data_man: &BlockDataManager,
         reward_index: Option<(usize, usize)>,
@@ -1758,21 +1756,6 @@ impl ConsensusGraphInner {
         Ok(())
     }
 
-    fn persist_terminals(&self) {
-        let mut terminals = Vec::with_capacity(self.terminal_hashes.len());
-        for h in &self.terminal_hashes {
-            terminals.push(h);
-        }
-        let mut rlp_stream = RlpStream::new();
-        rlp_stream.begin_list(terminals.len());
-        for hash in terminals {
-            rlp_stream.append(hash);
-        }
-        let mut dbops = self.data_man.db.key_value().transaction();
-        dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
-        self.data_man.db.key_value().write(dbops).expect("db error");
-    }
-
     /// Compute the block weight following the GHAST algorithm:
     /// For partially invalid block, the weight is always 0
     /// If a block is not adaptive, the weight is its difficulty
@@ -1824,40 +1807,5 @@ impl ConsensusGraphInner {
             total_weight += self.block_weight(*index, inclusive);
         }
         total_weight
-    }
-
-    /// Binary search to find the starting point so we can execute to the end of
-    /// the chain.
-    /// Return the first index that is not executed,
-    /// or return `chain.len()` if they are all executed (impossible for now).
-    ///
-    /// NOTE: If a state for an block exists, all the blocks on its pivot chain
-    /// must have been executed and state committed. The receipts for these
-    /// past blocks may not exist because the receipts on forks will be
-    /// garbage-collected, but when we need them, we will recompute these
-    /// missing receipts in `process_rewards_and_fees`. This 'recompute' is safe
-    /// because the parent state exists. Thus, it's okay that here we do not
-    /// check existence of the receipts that will be needed for reward
-    /// computation during epoch execution.
-    fn find_start_index(&self, chain: &Vec<usize>) -> usize {
-        let mut base = 0;
-        let mut size = chain.len();
-        while size > 1 {
-            let half = size / 2;
-            let mid = base + half;
-            let epoch_hash = self.arena[chain[mid]].hash;
-            base = if self.data_man.epoch_executed(&epoch_hash) {
-                mid
-            } else {
-                base
-            };
-            size -= half;
-        }
-        let epoch_hash = self.arena[chain[base]].hash;
-        if self.data_man.epoch_executed(&epoch_hash) {
-            base + 1
-        } else {
-            base
-        }
     }
 }

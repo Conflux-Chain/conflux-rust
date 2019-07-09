@@ -47,6 +47,9 @@ pub struct ConsensusNewBlockHandler {
     finality_manager: RwLock<FinalityManager>,
 }
 
+/// ConsensusNewBlockHandler contains all sub-routines for handling new arriving
+/// blocks from network or db. It manipulates and updates ConsensusGraphInner
+/// object accordingly.
 impl ConsensusNewBlockHandler {
     pub fn new(
         conf: ConsensusConfig, txpool: SharedTransactionPool,
@@ -1168,6 +1171,14 @@ impl ConsensusNewBlockHandler {
         inner.pivot_chain[safe_era_pivot_index]
     }
 
+    fn persist_terminals(&self, inner: &ConsensusGraphInner) {
+        let mut terminals = Vec::with_capacity(inner.terminal_hashes.len());
+        for h in &inner.terminal_hashes {
+            terminals.push(h.clone());
+        }
+        self.data_man.insert_terminals_to_db(&terminals);
+    }
+
     pub fn construct_pivot_info(&self, inner: &mut ConsensusGraphInner) {
         assert_eq!(inner.pivot_chain.len(), 1);
         assert_eq!(inner.pivot_chain[0], inner.cur_era_genesis_block_index);
@@ -1309,11 +1320,6 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    /// This is the function to insert a new block into the consensus graph
-    /// during construction. We by pass many verifications because those
-    /// blocks are from our own database so we trust them. After inserting
-    /// all blocks with this function, we need to call construct_pivot() to
-    /// finish the building from db!ss
     pub fn on_new_block_construction_only(
         &self, inner: &mut ConsensusGraphInner, hash: &H256, block: Arc<Block>,
     ) {
@@ -1385,8 +1391,6 @@ impl ConsensusNewBlockHandler {
         self.update_lcts_finalize(inner, me, stable);
     }
 
-    /// This is the main function that SynchronizationGraph calls to deliver a
-    /// new block to the consensus graph.
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, hash: &H256, block: Arc<Block>,
     ) {
@@ -1669,7 +1673,7 @@ impl ConsensusNewBlockHandler {
         } else {
             None
         };
-        inner.persist_terminals();
+        self.persist_terminals(inner);
         let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
         if new_checkpoint_era_genesis != inner.cur_era_genesis_block_index {
             info!(
