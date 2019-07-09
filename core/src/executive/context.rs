@@ -10,8 +10,8 @@ use crate::{
     state::{CleanupMode, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
-        ContractCreateResult, CreateContractAddress, EnvInfo,
-        MessageCallResult, ReturnData, Spec, TrapKind,
+        ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
+        ReturnData, Spec, TrapKind,
     },
 };
 use cfx_types::{Address, H256, U256};
@@ -53,7 +53,7 @@ impl OriginInfo {
 #[allow(dead_code)]
 pub struct Context<'a, 'b: 'a> {
     state: &'a mut State<'b>,
-    env: &'a EnvInfo,
+    env: &'a Env,
     depth: usize,
     stack_depth: usize,
     origin: &'a OriginInfo,
@@ -67,7 +67,7 @@ pub struct Context<'a, 'b: 'a> {
 impl<'a, 'b: 'a> Context<'a, 'b> {
     /// Basic `Context` constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a EnvInfo, machine: &'a Machine,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
@@ -311,7 +311,7 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
 
     fn spec(&self) -> &Spec { &self.spec }
 
-    fn env_info(&self) -> &EnvInfo { &self.env }
+    fn env(&self) -> &Env { &self.env }
 
     fn depth(&self) -> usize { self.depth }
 
@@ -357,7 +357,7 @@ mod tests {
             StorageManagerTrait,
         },
         test_helpers::get_state_for_genesis_write,
-        vm::EnvInfo,
+        vm::Env,
         vm_factory::VmFactory,
     };
     use cfx_types::{Address, U256};
@@ -374,8 +374,8 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    fn get_test_env_info() -> EnvInfo {
-        EnvInfo {
+    fn get_test_env() -> Env {
+        Env {
             number: 100,
             author: 0.into(),
             timestamp: 0,

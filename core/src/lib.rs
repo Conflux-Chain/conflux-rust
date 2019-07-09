@@ -69,5 +69,6 @@ pub use crate::{
         SynchronizationService,
     },
     transaction_pool::{SharedTransactionPool, TransactionPool},
+    verification::REFEREE_BOUND,
 };
 pub use network::PeerInfo;

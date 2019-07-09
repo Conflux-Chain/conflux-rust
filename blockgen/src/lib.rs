@@ -6,7 +6,7 @@ use cfx_types::{Address, H256, U256};
 use cfxcore::{
     consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, SharedSynchronizationGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    SharedSynchronizationService, SharedTransactionPool, REFEREE_BOUND,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -256,8 +256,11 @@ impl BlockGenerator {
         // ensure transaction pool consistency.
         let (best_info, transactions) = {
             // get the best block
-            let (_guarded, best_info) =
-                self.graph.consensus.get_best_info().into();
+            let (_guarded, best_info) = self
+                .graph
+                .consensus
+                .get_best_info(Some(REFEREE_BOUND))
+                .into();
 
             let transactions_from_pool = self.txpool.pack_transactions(
                 num_txs,
@@ -303,7 +306,7 @@ impl BlockGenerator {
         let best_block_hash = self
             .graph
             .consensus
-            .get_best_info()
+            .get_best_info(Some(REFEREE_BOUND))
             .as_ref()
             .best_block_hash;
         if best_block_hash != *block.unwrap().block_header.parent_hash() {
@@ -375,7 +378,11 @@ impl BlockGenerator {
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) -> H256 {
         // get the best block
-        let (_, best_info) = self.graph.consensus.get_best_info().into();
+        let (_, best_info) = self
+            .graph
+            .consensus
+            .get_best_info(Some(REFEREE_BOUND))
+            .into();
         let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.terminal_block_hashes;
         referee.retain(|r| *r != best_block_hash);

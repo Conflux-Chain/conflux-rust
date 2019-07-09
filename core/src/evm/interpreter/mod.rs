@@ -1108,20 +1108,19 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::COINBASE => {
                 self.stack
-                    .push(address_to_u256(context.env_info().author.clone()));
+                    .push(address_to_u256(context.env().author.clone()));
             }
             instructions::TIMESTAMP => {
-                self.stack.push(U256::from(context.env_info().timestamp));
+                self.stack.push(U256::from(context.env().timestamp));
             }
             instructions::NUMBER => {
-                //
-                // self.stack.push(U256::from(context.env_info().number));
+                self.stack.push(U256::from(context.env().number));
             }
             instructions::DIFFICULTY => {
-                self.stack.push(context.env_info().difficulty.clone());
+                self.stack.push(context.env().difficulty.clone());
             }
             instructions::GASLIMIT => {
-                self.stack.push(context.env_info().gas_limit.clone());
+                self.stack.push(context.env().gas_limit.clone());
             }
 
             // Stack instructions

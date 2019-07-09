@@ -44,16 +44,16 @@ fn test_add(factory: super::Factory) {
     params.address = address.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_988));
     assert_store(
-        &context,
+        &ctx,
         0,
         "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe",
     );
@@ -69,16 +69,16 @@ fn test_sha3(factory: super::Factory) {
     params.address = address.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_961));
     assert_store(
-        &context,
+        &ctx,
         0,
         "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
     );
@@ -94,16 +94,16 @@ fn test_address(factory: super::Factory) {
     params.address = address.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
     );
@@ -150,16 +150,16 @@ fn test_sender(factory: super::Factory) {
     params.sender = sender.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "000000000000000000000000cd1722f2947def4cf144679da39c4c32bdc35681",
     );
@@ -190,18 +190,18 @@ fn test_extcodecopy(factory: super::Factory) {
     params.sender = sender.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.codes.insert(sender, Arc::new(sender_code));
+    let mut ctx = MockContext::new();
+    ctx.codes.insert(sender, Arc::new(sender_code));
 
     //let gas_left = {
     {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     //assert_eq!(gas_left, U256::from(79_935));
     assert_store(
-        &context,
+        &ctx,
         0,
         "6005600055000000000000000000000000000000000000000000000000000000",
     );
@@ -217,17 +217,17 @@ fn test_log_empty(factory: super::Factory) {
     params.address = address.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(99_619));
-    assert_eq!(context.logs.len(), 1);
-    assert_eq!(context.logs[0].topics.len(), 0);
-    assert!(context.logs[0].data.is_empty());
+    assert_eq!(ctx.logs.len(), 1);
+    assert_eq!(ctx.logs[0].topics.len(), 0);
+    assert!(ctx.logs[0].data.is_empty());
 }
 
 evm_test! {test_log_sender: test_log_sender_int}
@@ -251,25 +251,25 @@ fn test_log_sender(factory: super::Factory) {
     params.sender = sender.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(98_974));
-    assert_eq!(context.logs.len(), 1);
-    assert_eq!(context.logs[0].topics.len(), 1);
+    assert_eq!(ctx.logs.len(), 1);
+    assert_eq!(ctx.logs[0].topics.len(), 1);
     assert_eq!(
-        context.logs[0].topics[0],
+        ctx.logs[0].topics[0],
         H256::from_str(
             "000000000000000000000000cd1722f3947def4cf144679da39c4c32bdc35681"
         )
         .unwrap()
     );
     assert_eq!(
-        context.logs[0].data,
+        ctx.logs[0].data,
         "ff00000000000000000000000000000000000000000000000000000000000000"
             .from_hex()
             .unwrap()
@@ -290,16 +290,16 @@ fn test_blockhash(factory: super::Factory) {
     params.address = address.clone();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.blockhashes.insert(U256::zero(), blockhash.clone());
+    let mut ctx = MockContext::new();
+    ctx.blockhashes.insert(U256::zero(), blockhash.clone());
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_974));
-    assert_eq!(context.store.get(&H256::new()).unwrap(), &blockhash);
+    assert_eq!(ctx.store.get(&H256::new()).unwrap(), &blockhash);
 }
 
 evm_test! {test_calldataload: test_calldataload_int}
@@ -317,16 +317,16 @@ fn test_calldataload(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     params.data = Some(data);
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_991));
     assert_store(
-        &context,
+        &ctx,
         0,
         "23ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff23",
     );
@@ -341,17 +341,17 @@ fn test_author(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.author = author;
+    let mut ctx = MockContext::new();
+    ctx.env.author = author;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
     );
@@ -365,45 +365,45 @@ fn test_timestamp(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.timestamp = timestamp;
+    let mut ctx = MockContext::new();
+    ctx.env.timestamp = timestamp;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000001234",
     );
 }
 
-//evm_test!{test_number: test_number_int}
-//fn test_number(factory: super::Factory) {
-//    let number = 0x1234;
-//    let code = "43600055".from_hex().unwrap();
-//
-//    let mut params = ActionParams::default();
-//    params.gas = U256::from(100_000);
-//    params.code = Some(Arc::new(code));
-//    let mut context = MockContext::new();
-//    context.info.number = number;
-//
-//    let gas_left = {
-//        let mut vm = factory.create(params, context.spec(), context.depth());
-//        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
-//    };
-//
-//    assert_eq!(gas_left, U256::from(79_995));
-//    assert_store(
-//        &context,
-//        0,
-//        "0000000000000000000000000000000000000000000000000000000000001234",
-//    );
-//}
+evm_test! {test_number: test_number_int}
+fn test_number(factory: super::Factory) {
+    let number = 0x1234;
+    let code = "43600055".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(100_000);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+    ctx.env.number = number;
+
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+
+    assert_eq!(gas_left, U256::from(79_995));
+    assert_store(
+        &ctx,
+        0,
+        "0000000000000000000000000000000000000000000000000000000000001234",
+    );
+}
 
 evm_test! {test_difficulty: test_difficulty_int}
 fn test_difficulty(factory: super::Factory) {
@@ -413,17 +413,17 @@ fn test_difficulty(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.difficulty = difficulty;
+    let mut ctx = MockContext::new();
+    ctx.env.difficulty = difficulty;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000001234",
     );
@@ -437,17 +437,17 @@ fn test_gas_limit(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
-    context.info.gas_limit = gas_limit;
+    let mut ctx = MockContext::new();
+    ctx.env.gas_limit = gas_limit;
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_eq!(gas_left, U256::from(79_995));
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000001234",
     );
@@ -460,15 +460,15 @@ fn test_mul(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "000000000000000000000000000000000000000000000000734349397b853383",
     );
@@ -482,15 +482,15 @@ fn test_sub(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000012364ad0302",
     );
@@ -504,15 +504,15 @@ fn test_div(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "000000000000000000000000000000000000000000000000000000000002e0ac",
     );
@@ -526,15 +526,15 @@ fn test_div_zero(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
@@ -550,20 +550,20 @@ fn test_mod(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000076b4b",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
@@ -579,20 +579,20 @@ fn test_smod(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000076b4b",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
@@ -608,20 +608,20 @@ fn test_sdiv(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "000000000000000000000000000000000000000000000000000000000002e0ac",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
@@ -635,26 +635,26 @@ fn test_exp(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     //let gas_left = {
     {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "90fd23767b60204c3d6fc8aec9e70a42a3f127140879c133a20129a597ed0c59",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000012365124623",
     );
     assert_store(
-        &context,
+        &ctx,
         2,
         "0000000000000000000000000000000000000000000000000000000000000001",
     );
@@ -668,30 +668,30 @@ fn test_comparison(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000000000000001",
     );
     assert_store(
-        &context,
+        &ctx,
         2,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
     assert_store(
-        &context,
+        &ctx,
         3,
         "0000000000000000000000000000000000000000000000000000000000000001",
     );
@@ -708,30 +708,30 @@ fn test_signed_comparison(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000000000000001",
     );
     assert_store(
-        &context,
+        &ctx,
         2,
         "0000000000000000000000000000000000000000000000000000000000000001",
     );
     assert_store(
-        &context,
+        &ctx,
         3,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
@@ -745,40 +745,40 @@ fn test_bitops(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(150_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "00000000000000000000000000000000000000000000000000000000000000f0",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000000000000fff",
     );
     assert_store(
-        &context,
+        &ctx,
         2,
         "0000000000000000000000000000000000000000000000000000000000000f0f",
     );
     assert_store(
-        &context,
+        &ctx,
         3,
         "0000000000000000000000000000000000000000000000000000000000000001",
     );
     assert_store(
-        &context,
+        &ctx,
         4,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
     assert_store(
-        &context,
+        &ctx,
         5,
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     );
@@ -792,30 +792,30 @@ fn test_addmod_mulmod(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000001",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "000000000000000000000000000000000000000000000000000000000000000f",
     );
     assert_store(
-        &context,
+        &ctx,
         2,
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     );
     assert_store(
-        &context,
+        &ctx,
         3,
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     );
@@ -829,20 +829,20 @@ fn test_byte(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000000",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "00000000000000000000000000000000000000000000000000000000000000ff",
     );
@@ -856,20 +856,20 @@ fn test_signextend(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000fff",
     );
     assert_store(
-        &context,
+        &ctx,
         1,
         "00000000000000000000000000000000000000000000000000000000000000ff",
     );
@@ -884,11 +884,11 @@ fn test_badinstruction_int() {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let err = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap_err()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap_err()
     };
 
     match err {
@@ -904,15 +904,15 @@ fn test_pop(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     let gas_left = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "00000000000000000000000000000000000000000000000000000000000000f0",
     );
@@ -931,41 +931,41 @@ fn test_extops(factory: super::Factory) {
     params.gas_price = U256::from(0x32);
     params.value = ActionValue::Transfer(U256::from(0x99));
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     //let gas_left = {
     {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000004",
     ); // PC / CALLDATASIZE
     assert_store(
-        &context,
+        &ctx,
         1,
         "00000000000000000000000000000000000000000000000000000000000249ee",
     ); // GAS
     assert_store(
-        &context,
+        &ctx,
         2,
         "0000000000000000000000000000000000000000000000000000000000000032",
     ); // GASPRICE
     assert_store(
-        &context,
+        &ctx,
         3,
         "0000000000000000000000000000000000000000000000000000000000000020",
     ); // CODESIZE
     assert_store(
-        &context,
+        &ctx,
         4,
         "0000000000000000000000000000000000000000000000000000000000000099",
     ); // CALLVALUE
     assert_store(
-        &context,
+        &ctx,
         5,
         "0000000000000000000000000000000000000000000000000000000000000032",
     );
@@ -979,25 +979,22 @@ fn test_jumps(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.gas = U256::from(150_000);
     params.code = Some(Arc::new(code));
-    let mut context = MockContext::new();
+    let mut ctx = MockContext::new();
 
     //let gas_left = {
     {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
-    assert_eq!(
-        context.sstore_clears,
-        context.spec().sstore_refund_gas as i128
-    );
+    assert_eq!(ctx.sstore_clears, ctx.spec().sstore_refund_gas as i128);
     assert_store(
-        &context,
+        &ctx,
         0,
         "0000000000000000000000000000000000000000000000000000000000000000",
     ); // 5!
     assert_store(
-        &context,
+        &ctx,
         1,
         "0000000000000000000000000000000000000000000000000000000000000078",
     ); // 5!
@@ -1014,8 +1011,8 @@ fn test_calls(factory: super::Factory) {
     params.gas = U256::from(150_000);
     params.code = Some(Arc::new(code));
     params.address = address.clone();
-    let mut context = MockContext::new();
-    context.balances = {
+    let mut ctx = MockContext::new();
+    ctx.balances = {
         let mut s = HashMap::new();
         s.insert(params.address.clone(), params.gas);
         s
@@ -1023,12 +1020,12 @@ fn test_calls(factory: super::Factory) {
 
     //let gas_left = {
     {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
     assert_set_contains(
-        &context.calls,
+        &ctx.calls,
         &MockCall {
             call_type: MockCallType::Call,
             create_scheme: None,
@@ -1041,7 +1038,7 @@ fn test_calls(factory: super::Factory) {
         },
     );
     assert_set_contains(
-        &context.calls,
+        &ctx.calls,
         &MockCall {
             call_type: MockCallType::Call,
             create_scheme: None,
@@ -1054,7 +1051,7 @@ fn test_calls(factory: super::Factory) {
         },
     );
     //assert_eq!(gas_left, U256::from(91_405));
-    assert_eq!(context.calls.len(), 2);
+    assert_eq!(ctx.calls.len(), 2);
 }
 
 evm_test! {test_create_in_staticcall: test_create_in_staticcall_int}
@@ -1066,16 +1063,16 @@ fn test_create_in_staticcall(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     params.address = address.clone();
-    let mut context = MockContext::new_spec();
-    context.is_static = true;
+    let mut ctx = MockContext::new_spec();
+    ctx.is_static = true;
 
     let err = {
-        let vm = factory.create(params, context.spec(), context.depth());
-        test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap_err()
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap_err()
     };
 
     assert_eq!(err, vm::Error::MutableCallInStaticContext);
-    assert_eq!(context.calls.len(), 0);
+    assert_eq!(ctx.calls.len(), 0);
 }
 
 fn assert_set_contains<T: Debug + Eq + PartialEq + Hash>(
@@ -1089,9 +1086,9 @@ fn assert_set_contains<T: Debug + Eq + PartialEq + Hash>(
     assert!(contains, "Element not found in HashSet");
 }
 
-fn assert_store(context: &MockContext, pos: u64, val: &str) {
+fn assert_store(ctx: &MockContext, pos: u64, val: &str) {
     assert_eq!(
-        context.store.get(&H256::from(pos)).unwrap(),
+        ctx.store.get(&H256::from(pos)).unwrap(),
         &H256::from_str(val).unwrap()
     );
 }
