@@ -298,7 +298,8 @@ impl ConsensusExecutor {
         }
     }
 
-    /// This is a blocking call to force the execution engine to compute the state of a block immediately
+    /// This is a blocking call to force the execution engine to compute the
+    /// state of a block immediately
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &ConsensusGraphInner,
     ) -> Result<(StateRootWithAuxInfo, H256), String> {
