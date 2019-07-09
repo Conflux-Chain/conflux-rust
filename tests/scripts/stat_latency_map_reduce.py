@@ -199,7 +199,7 @@ class NodeLogMapper:
 
         if "Statistics" in line:
             sync_len = int(parse_value(line, "SyncGraphStatistics { inserted_block_count: ", " }"))
-            cons_len = int(parse_value(line, "ConsensusGraphStatistics { inserted_block_count: ", " }"))
+            cons_len = int(parse_value(line, "ConsensusGraphStatistics { inserted_block_count: ", ","))
             assert sync_len >= cons_len, "invalid statistics for sync/cons gap, log line = {}".format(line)
             self.sync_cons_gaps.append(sync_len - cons_len)
 
