@@ -46,7 +46,7 @@ run_latency_exp () {
 
     # Terminate master instance and delete slave images
     # Comment this line if the data on the master instances are needed for further analysis
-    ./terminate-on-demand.sh
+#    ./terminate-on-demand.sh
 }
 
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>

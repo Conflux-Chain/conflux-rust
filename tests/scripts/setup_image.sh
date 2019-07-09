@@ -38,6 +38,6 @@ git pull
 cargo update
 cargo build --release --features "deadlock_detection"
 ./dev-support/dep_pip3.sh
-cd test/scripts
+cd tests/scripts
 cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py ~
 
