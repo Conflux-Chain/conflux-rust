@@ -580,8 +580,8 @@ impl SynchronizationProtocolHandler {
                                     .data_man
                                     .transaction_pubkey_cache
                                     .read(),
-                            );
-                        }
+                            )
+                        };
                         if !missing.is_empty() {
                             debug!(
                                 "Request {} missing tx in {}",
