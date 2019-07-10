@@ -78,6 +78,14 @@ lazy_static! {
         );
     static ref BLOCK_HANDLE_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "block_handler_timer");
+    static ref CMPCT_BLOCK_HANDLE_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "compact_block_handler_timer");
+    static ref BLOCK_TXN_HANDLE_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "block_txn_handler_timer");
+    static ref BLOCK_RECOVER_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync:recover_block");
+    static ref CMPCT_BLOCK_RECOVER_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync:recover_compact_block");
     static ref TX_HANDLE_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "tx_handler_timer");
 }
@@ -523,7 +531,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_compact_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
+        let _timer = MeterTimer::time_func(CMPCT_BLOCK_HANDLE_TIMER.as_ref());
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!(
             "on_get_compact_blocks_response request_id={} compact={} block={}",
@@ -564,13 +572,16 @@ impl SynchronizationProtocolHandler {
                         continue;
                     } else {
                         debug!("Cmpct block Processing, hash={}", hash);
-                        let missing = cmpct.build_partial(
-                            &*self
-                                .graph
-                                .data_man
-                                .transaction_pubkey_cache
-                                .read(),
-                        );
+                        let missing = {
+                            let _timer = MeterTimer::time_func(CMPCT_BLOCK_RECOVER_TIMER.as_ref());
+                            cmpct.build_partial(
+                                &*self
+                                    .graph
+                                    .data_man
+                                    .transaction_pubkey_cache
+                                    .read(),
+                            );
+                        }
                         if !missing.is_empty() {
                             debug!(
                                 "Request {} missing tx in {}",
@@ -794,7 +805,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_blocktxn_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
+        let _timer = MeterTimer::time_func(BLOCK_TXN_HANDLE_TIMER.as_ref());
         let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
         let resp_hash = resp.block_hash;
@@ -2314,6 +2325,7 @@ impl SynchronizationProtocolHandler {
         cache_man: &mut CacheManager<CacheId>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError>
     {
+        let _timer = MeterTimer::time_func(BLOCK_RECOVER_TIMER.as_ref());
         let mut recovered_transactions = Vec::with_capacity(transactions.len());
         for transaction in transactions {
             let tx_hash = transaction.hash();
@@ -2351,6 +2363,7 @@ impl SynchronizationProtocolHandler {
         cache_man: &mut CacheManager<CacheId>, worker_pool: &ThreadPool,
     ) -> Result<(), DecoderError>
     {
+        let _timer = MeterTimer::time_func(BLOCK_RECOVER_TIMER.as_ref());
         debug!("recover public for block started.");
         let mut recovered_transactions =
             Vec::with_capacity(block.transactions.len());

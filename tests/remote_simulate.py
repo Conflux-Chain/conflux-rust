@@ -177,7 +177,7 @@ class P2PTest(ConfluxTestFramework):
         # storage
         # FIXME ledger_cache_size is set to 8G because duplicated transactions in blocks will be counted multiple times,
         # But as Arc they will not actually take that much space
-        self.conf_parameters["ledger_cache_size"] = str(8000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_start_size"] = str(1000000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)

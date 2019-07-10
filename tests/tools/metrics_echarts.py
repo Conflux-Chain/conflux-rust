@@ -114,7 +114,7 @@ def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
 
     for (key, metric) in metrics.items():
         chart = (
-            Line()
+            Line(init_opts=opts.InitOpts(width="2000px",height="2000px"))
             .add_xaxis(metric.timestamps)
             .set_global_opts(title_opts=opts.TitleOpts(title=key))
         )
