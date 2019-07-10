@@ -38,8 +38,7 @@ pub struct BlockDataManager {
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
-    block_receipts_root: RwLock<HashMap<H256, H256>>,
-    block_logs_bloom_hash: RwLock<HashMap<H256, H256>>,
+    epoch_execution_commitments: RwLock<HashMap<H256, (H256, H256)>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
 
@@ -66,8 +65,7 @@ impl BlockDataManager {
             compact_blocks: Default::default(),
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
-            block_receipts_root: Default::default(),
-            block_logs_bloom_hash: Default::default(),
+            epoch_execution_commitments: Default::default(),
             transaction_pubkey_cache: Default::default(),
             invalid_block_set: Default::default(),
             genesis_block,
@@ -79,17 +77,15 @@ impl BlockDataManager {
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
         };
 
-        data_man.insert_receipts_root(
+        data_man.insert_epoch_execution_commitments(
             data_man.genesis_block.hash(),
             *data_man.genesis_block.block_header.deferred_receipts_root(),
-        );
-        data_man.insert_logs_bloom_hash(
-            data_man.genesis_block.hash(),
             *data_man
                 .genesis_block
                 .block_header
                 .deferred_logs_bloom_hash(),
         );
+
         data_man.insert_block_header(
             data_man.genesis_block.hash(),
             Arc::new(data_man.genesis_block.block_header.clone()),
@@ -505,31 +501,18 @@ impl BlockDataManager {
         }
     }
 
-    pub fn insert_receipts_root(
-        &self, block_hash: H256, receipts_root: H256,
-    ) -> Option<H256> {
-        self.block_receipts_root
+    pub fn insert_epoch_execution_commitments(
+        &self, block_hash: H256, receipts_root: H256, logs_bloom_hash: H256,
+    ) -> Option<(H256, H256)> {
+        self.epoch_execution_commitments
             .write()
-            .insert(block_hash, receipts_root)
+            .insert(block_hash, (receipts_root, logs_bloom_hash))
     }
 
-    pub fn get_receipts_root(&self, block_hash: &H256) -> Option<H256> {
-        self.block_receipts_root
-            .read()
-            .get(block_hash)
-            .map(Clone::clone)
-    }
-
-    pub fn insert_logs_bloom_hash(
-        &self, block_hash: H256, logs_bloom_hash: H256,
-    ) -> Option<H256> {
-        self.block_logs_bloom_hash
-            .write()
-            .insert(block_hash, logs_bloom_hash)
-    }
-
-    pub fn get_logs_bloom_hash(&self, block_hash: &H256) -> Option<H256> {
-        self.block_logs_bloom_hash
+    pub fn get_epoch_execution_commitments(
+        &self, block_hash: &H256,
+    ) -> Option<(H256, H256)> {
+        self.epoch_execution_commitments
             .read()
             .get(block_hash)
             .map(Clone::clone)
@@ -568,8 +551,7 @@ impl BlockDataManager {
         // `block_receipts_root` is not computed when recovering from db with
         // fast_recover == false. And we should force it to recompute
         // without checking receipts when fast_recover == false
-        self.get_receipts_root(epoch_hash).is_some()
-            && self.get_logs_bloom_hash(epoch_hash).is_some()
+        self.get_epoch_execution_commitments(epoch_hash).is_some()
             && self
                 .storage_manager
                 .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
