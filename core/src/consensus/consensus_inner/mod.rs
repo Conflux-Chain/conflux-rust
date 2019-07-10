@@ -17,7 +17,9 @@ use crate::{
     statedb::StateDb,
     storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
 };
-use cfx_types::{into_i128, into_u256, H160, H256, U256, U512};
+use cfx_types::{
+    into_i128, into_u256, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+};
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::MinLinkCutTree;
 use primitives::{
@@ -189,9 +191,10 @@ pub struct ConsensusGraphInner {
     // The height of the ``stable'' era block, unless from the start, it is
     // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
-    // The ``original'' genesis state root and receipts root.
+    // The ``original'' genesis state root, receipts root, and logs bloom hash.
     genesis_block_state_root: StateRoot,
     genesis_block_receipts_root: H256,
+    genesis_block_logs_bloom_hash: H256,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: MinLinkCutTree,
     inclusive_weight_tree: MinLinkCutTree,
@@ -273,6 +276,11 @@ impl ConsensusGraphInner {
                 .block_header
                 .deferred_receipts_root()
                 .clone(),
+            genesis_block_logs_bloom_hash: data_man
+                .genesis_block()
+                .block_header
+                .deferred_logs_bloom_hash()
+                .clone(),
             weight_tree: MinLinkCutTree::new(),
             inclusive_weight_tree: MinLinkCutTree::new(),
             stable_weight_tree: MinLinkCutTree::new(),
@@ -353,6 +361,7 @@ impl ConsensusGraphInner {
             last_pivot_in_past_blocks,
         });
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
+        assert!(inner.genesis_block_logs_bloom_hash == KECCAK_EMPTY_BLOOM);
 
         inner
             .anticone_cache

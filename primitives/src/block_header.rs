@@ -8,7 +8,7 @@ use crate::{
     hash::{keccak, KECCAK_EMPTY_LIST_RLP},
     receipt::Receipt,
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
 use heapsize::HeapSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
@@ -33,6 +33,8 @@ pub struct BlockHeaderRlpPart {
     deferred_state_root: StateRoot,
     /// Deferred block receipts root.
     deferred_receipts_root: H256,
+    /// Deferred block logs bloom hash.
+    deferred_logs_bloom_hash: H256,
     /// Block difficulty.
     difficulty: U256,
     /// Whether it is an adaptive block (from GHAST algorithm)
@@ -54,6 +56,7 @@ impl PartialEq for BlockHeaderRlpPart {
             && self.transactions_root == o.transactions_root
             && self.deferred_state_root == o.deferred_state_root
             && self.deferred_receipts_root == o.deferred_receipts_root
+            && self.deferred_logs_bloom_hash == o.deferred_logs_bloom_hash
             && self.difficulty == o.difficulty
             && self.adaptive == o.adaptive
             && self.gas_limit == o.gas_limit
@@ -133,6 +136,11 @@ impl BlockHeader {
         &self.deferred_receipts_root
     }
 
+    /// Get the deferred block logs bloom hash field of the header.
+    pub fn deferred_logs_bloom_hash(&self) -> &H256 {
+        &self.deferred_logs_bloom_hash
+    }
+
     /// Get the difficulty field of the header.
     pub fn difficulty(&self) -> &U256 { &self.difficulty }
 
@@ -184,7 +192,7 @@ impl BlockHeader {
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
-            .begin_list(11)
+            .begin_list(12)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -192,6 +200,7 @@ impl BlockHeader {
             .append(&self.transactions_root)
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
+            .append(&self.deferred_logs_bloom_hash)
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
@@ -202,7 +211,7 @@ impl BlockHeader {
     fn stream_rlp(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
-            .begin_list(12)
+            .begin_list(13)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -210,6 +219,7 @@ impl BlockHeader {
             .append(&self.transactions_root)
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
+            .append(&self.deferred_logs_bloom_hash)
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
@@ -223,7 +233,7 @@ impl BlockHeader {
     fn stream_wire_rlp(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
-            .begin_list(13)
+            .begin_list(14)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -231,6 +241,7 @@ impl BlockHeader {
             .append(&self.transactions_root)
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
+            .append(&self.deferred_logs_bloom_hash)
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
@@ -255,6 +266,7 @@ pub struct BlockHeaderBuilder {
     deferred_state_root: StateRoot,
     deferred_state_root_aux_info: StateRootAuxInfo,
     deferred_receipts_root: H256,
+    deferred_logs_bloom_hash: H256,
     difficulty: U256,
     adaptive: bool,
     gas_limit: U256,
@@ -273,6 +285,7 @@ impl BlockHeaderBuilder {
             deferred_state_root: Default::default(),
             deferred_state_root_aux_info: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
+            deferred_logs_bloom_hash: KECCAK_EMPTY_BLOOM,
             difficulty: U256::default(),
             adaptive: false,
             gas_limit: U256::zero(),
@@ -325,6 +338,13 @@ impl BlockHeaderBuilder {
         self
     }
 
+    pub fn with_deferred_logs_bloom_hash(
+        &mut self, deferred_logs_bloom_hash: H256,
+    ) -> &mut Self {
+        self.deferred_logs_bloom_hash = deferred_logs_bloom_hash;
+        self
+    }
+
     pub fn with_difficulty(&mut self, difficulty: U256) -> &mut Self {
         self.difficulty = difficulty;
         self
@@ -362,6 +382,7 @@ impl BlockHeaderBuilder {
                 transactions_root: self.transactions_root,
                 deferred_state_root: self.deferred_state_root.clone(),
                 deferred_receipts_root: self.deferred_receipts_root,
+                deferred_logs_bloom_hash: self.deferred_logs_bloom_hash,
                 difficulty: self.difficulty,
                 adaptive: self.adaptive,
                 gas_limit: self.gas_limit,
@@ -391,6 +412,20 @@ impl BlockHeaderBuilder {
 
         keccak(rlp_stream.out())
     }
+
+    pub fn compute_block_logs_bloom_hash(
+        receipts: &Vec<Arc<Vec<Receipt>>>,
+    ) -> H256 {
+        let bloom = receipts.iter().map(|x| x.as_ref()).flatten().fold(
+            Bloom::zero(),
+            |mut b, r| {
+                b.accrue_bloom(&r.log_bloom);
+                b
+            },
+        );
+
+        keccak(bloom)
+    }
 }
 
 impl Encodable for BlockHeader {
@@ -411,19 +446,154 @@ impl Decodable for BlockHeader {
                 transactions_root: r.val_at(4)?,
                 deferred_state_root: r.val_at(5)?,
                 deferred_receipts_root: r.val_at(6)?,
-                difficulty: r.val_at(7)?,
-                adaptive: r.val_at::<u8>(8)? == 1,
-                gas_limit: r.val_at(9)?,
-                referee_hashes: r.list_at(10)?,
-                nonce: r.val_at(11)?,
+                deferred_logs_bloom_hash: r.val_at(7)?,
+                difficulty: r.val_at(8)?,
+                adaptive: r.val_at::<u8>(9)? == 1,
+                gas_limit: r.val_at(10)?,
+                referee_hashes: r.list_at(11)?,
+                nonce: r.val_at(12)?,
             },
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: rlp_size,
-            state_root_aux_info: r.val_at(12)?,
+            state_root_aux_info: r.val_at(13)?,
         };
         header.compute_hash();
 
         Ok(header)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BlockHeaderBuilder;
+    use crate::{hash::keccak, receipt::Receipt};
+    use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM};
+    use std::sync::Arc;
+
+    #[test]
+    fn test_logs_bloom_hash_no_receipts() {
+        let receipts = vec![]; // Vec<_>
+        let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
+        assert_eq!(hash, KECCAK_EMPTY_BLOOM);
+
+        let receipts = (1..11).map(|_| Arc::new(vec![])).collect(); // Vec<Arc<Vec<_>>>
+        let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
+        assert_eq!(hash, KECCAK_EMPTY_BLOOM);
+    }
+
+    #[test]
+    fn test_logs_bloom_hash_empty_receipts() {
+        let receipt = Receipt {
+            gas_used: 0.into(),
+            logs: vec![],
+            outcome_status: 0.into(),
+            log_bloom: Bloom::zero(),
+        };
+
+        // 10 blocks with 10 empty receipts each
+        let receipts: Vec<Arc<Vec<Receipt>>> = (1..11)
+            .map(|_| Arc::new((1..11).map(|_| receipt.clone()).collect()))
+            .collect();
+        let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
+        assert_eq!(hash, KECCAK_EMPTY_BLOOM);
+    }
+
+    #[test]
+    fn test_logs_bloom_hash() {
+        let block1 = vec![
+            Receipt {
+                gas_used: 0.into(),
+                logs: vec![],
+                outcome_status: 0.into(),
+                log_bloom: "11111111111111111111111111111111\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000"
+                    .into(),
+            },
+            Receipt {
+                gas_used: 0.into(),
+                logs: vec![],
+                outcome_status: 0.into(),
+                log_bloom: "00000000000000000000000000000000\
+                            22222222222222222222222222222222\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000\
+                            00000000000000000000000000000000"
+                    .into(),
+            },
+        ];
+
+        let block2 = vec![Receipt {
+            gas_used: 0.into(),
+            logs: vec![],
+            outcome_status: 0.into(),
+            log_bloom: "44444444444444440000000000000000\
+                        44444444444444440000000000000000\
+                        44444444444444440000000000000000\
+                        44444444444444440000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000\
+                        00000000000000000000000000000000"
+                .into(),
+        }];
+
+        let expected = keccak(
+            "55555555555555551111111111111111\
+             66666666666666662222222222222222\
+             44444444444444440000000000000000\
+             44444444444444440000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000\
+             00000000000000000000000000000000"
+                .parse::<Bloom>()
+                .unwrap(),
+        );
+
+        let receipts = vec![Arc::new(block1), Arc::new(block2)];
+        let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
+        assert_eq!(hash, expected);
     }
 }

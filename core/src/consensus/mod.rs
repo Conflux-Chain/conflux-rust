@@ -113,6 +113,7 @@ pub struct BestInformation {
     pub terminal_block_hashes: Vec<H256>,
     pub deferred_state_root: StateRootWithAuxInfo,
     pub deferred_receipts_root: H256,
+    pub deferred_logs_bloom_hash: H256,
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -316,7 +317,7 @@ impl ConsensusGraph {
     #[inline]
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &ConsensusGraphInner,
-    ) -> Result<(StateRootWithAuxInfo, H256), String> {
+    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
         self.executor.compute_state_for_block(block_hash, inner)
     }
 
@@ -324,7 +325,7 @@ impl ConsensusGraph {
     /// block given a delay.
     pub fn compute_deferred_state_for_block(
         &self, block_hash: &H256, delay: usize,
-    ) -> Result<(StateRootWithAuxInfo, H256), String> {
+    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
         let inner = &mut *self.inner.write();
 
         let idx_opt = inner.indices.get(block_hash);
@@ -616,10 +617,10 @@ impl ConsensusGraph {
     }
 
     /// Wait for a block's epoch is computed.
-    /// Return the state_root and receipts_root
+    /// Return the state_root, receipts_root, and logs_bloom_hash
     pub fn wait_for_block_state(
         &self, block_hash: &H256,
-    ) -> (StateRootWithAuxInfo, H256) {
+    ) -> (StateRootWithAuxInfo, H256, H256) {
         self.executor.wait_for_result(*block_hash)
     }
 
@@ -647,8 +648,11 @@ impl ConsensusGraph {
         BestInformation,
     > {
         let consensus_inner = self.inner.upgradable_read();
-        let (deferred_state_root, deferred_receipts_root) =
-            self.wait_for_block_state(&consensus_inner.best_state_block_hash());
+        let (
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+        ) = self.wait_for_block_state(&consensus_inner.best_state_block_hash());
         let mut bounded_terminal_hashes = consensus_inner.terminal_hashes();
         if let Some(referee_bound) = referee_bound_opt {
             if bounded_terminal_hashes.len() > referee_bound {
@@ -674,6 +678,7 @@ impl ConsensusGraph {
             terminal_block_hashes: bounded_terminal_hashes,
             deferred_state_root,
             deferred_receipts_root,
+            deferred_logs_bloom_hash,
         };
         GuardedValue::new(consensus_inner, value)
     }

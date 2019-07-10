@@ -39,6 +39,7 @@ pub struct BlockDataManager {
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     block_receipts_root: RwLock<HashMap<H256, H256>>,
+    block_logs_bloom_hash: RwLock<HashMap<H256, H256>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
 
@@ -66,6 +67,7 @@ impl BlockDataManager {
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
             block_receipts_root: Default::default(),
+            block_logs_bloom_hash: Default::default(),
             transaction_pubkey_cache: Default::default(),
             invalid_block_set: Default::default(),
             genesis_block,
@@ -80,6 +82,13 @@ impl BlockDataManager {
         data_man.insert_receipts_root(
             data_man.genesis_block.hash(),
             *data_man.genesis_block.block_header.deferred_receipts_root(),
+        );
+        data_man.insert_logs_bloom_hash(
+            data_man.genesis_block.hash(),
+            *data_man
+                .genesis_block
+                .block_header
+                .deferred_logs_bloom_hash(),
         );
         data_man.insert_block_header(
             data_man.genesis_block.hash(),
@@ -511,6 +520,21 @@ impl BlockDataManager {
             .map(Clone::clone)
     }
 
+    pub fn insert_logs_bloom_hash(
+        &self, block_hash: H256, logs_bloom_hash: H256,
+    ) -> Option<H256> {
+        self.block_logs_bloom_hash
+            .write()
+            .insert(block_hash, logs_bloom_hash)
+    }
+
+    pub fn get_logs_bloom_hash(&self, block_hash: &H256) -> Option<H256> {
+        self.block_logs_bloom_hash
+            .read()
+            .get(block_hash)
+            .map(Clone::clone)
+    }
+
     pub fn cache_transaction(
         &self, tx_hash: &H256, tx: Arc<SignedTransaction>,
     ) {
@@ -545,6 +569,7 @@ impl BlockDataManager {
         // fast_recover == false. And we should force it to recompute
         // without checking receipts when fast_recover == false
         self.get_receipts_root(epoch_hash).is_some()
+            && self.get_logs_bloom_hash(epoch_hash).is_some()
             && self
                 .storage_manager
                 .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
