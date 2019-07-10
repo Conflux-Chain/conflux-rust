@@ -10,9 +10,7 @@ use message::{
     GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders, GetBlockTxn,
     GetBlocks, GetCompactBlocks, GetTransactions, TransIndex,
 };
-use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
-};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature, TxPropagateId};
@@ -32,8 +30,8 @@ mod request_handler;
 pub mod tx_handler;
 
 lazy_static! {
-    static ref TX_REQUEST_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register("tx_diff_set_size");
+    static ref TX_REQUEST_METER: Arc<Meter> =
+        register_meter_with_group("tx_pool", "tx_diff_set_size");
     static ref REQUEST_MANAGER_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "request_manager::request_not_tx");
     static ref REQUEST_MANAGER_TX_TIMER: Arc<Meter> =
@@ -493,7 +491,7 @@ impl RequestManager {
 
             (indices, tx_ids)
         };
-        TX_REQUEST_GAUGE.update(tx_ids.len());
+        TX_REQUEST_METER.mark(tx_ids.len());
         debug!("Request {} tx from peer={}", tx_ids.len(), peer_id);
         if let Err(e) = self.request_handler.send_request(
             io,

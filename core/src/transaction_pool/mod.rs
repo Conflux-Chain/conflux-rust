@@ -38,9 +38,17 @@ lazy_static! {
     static ref TX_POOL_READY_GAUGE: Arc<Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "ready_size");
     static ref TX_POOL_INSERT_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "insert_new_tx_timer");
+        register_meter_with_group("timer", "tx_pool::insert_new_tx");
     static ref TX_POOL_RECOVER_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "recover_public_timer");
+        register_meter_with_group("timer", "tx_pool::recover_public");
+    static ref TX_POOL_GET_STATE: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::get_state");
+    static ref TX_POOL_GET_AND_UPDATE_STATE: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::get_and_update_state");
+    static ref TX_POOL_RECYCLE: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::recycle");
+    static ref TX_POOL_INNER_INSERT_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::inner_insert");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
@@ -440,6 +448,7 @@ impl TransactionPoolInner {
     fn get_nonce_and_balance_from_storage(
         &self, address: &Address, account_cache: &mut AccountCache,
     ) -> (U256, U256) {
+        let _timer = MeterTimer::time_func(TX_POOL_GET_STATE.as_ref());
         match account_cache.get_account_mut(address) {
             Some(account) => (account.nonce.clone(), account.balance.clone()),
             None => (0.into(), 0.into()),
@@ -449,6 +458,8 @@ impl TransactionPoolInner {
     fn get_and_update_nonce_and_balance_from_storage(
         &mut self, address: &Address, account_cache: &mut AccountCache,
     ) -> (U256, U256) {
+        let _timer =
+            MeterTimer::time_func(TX_POOL_GET_AND_UPDATE_STATE.as_ref());
         let ret = match account_cache.get_account_mut(address) {
             Some(account) => (account.nonce.clone(), account.balance.clone()),
             None => (0.into(), 0.into()),
@@ -496,6 +507,7 @@ impl TransactionPoolInner {
     ) {
         let (nonce, balance) = self
             .get_and_update_nonce_and_balance_from_storage(addr, account_cache);
+        let _timer = MeterTimer::time_func(TX_POOL_RECYCLE.as_ref());
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
@@ -878,6 +890,7 @@ impl TransactionPool {
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> InsertResult
     {
+        let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         trace!(
             "Insert tx into deferred pool, hash={:?} sender={:?}",
             transaction.hash(),
