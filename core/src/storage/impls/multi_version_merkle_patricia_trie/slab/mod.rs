@@ -110,7 +110,10 @@
 
 use super::super::errors::*;
 use parking_lot::Mutex;
-use std::{fmt, iter::IntoIterator, marker::PhantomData, mem, ops, ptr, slice};
+use std::{
+    cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, mem, ops,
+    ptr, slice,
+};
 
 /// Pre-allocated storage for a uniform data type.
 /// The modified slab offers internal mutability which mimics the behavior of
@@ -132,12 +135,22 @@ pub struct Slab<T, E: EntryTrait<T> = Entry<T>> {
     // when allocating space for new element. We would like to keep the size of
     // initialized entry in AllocRelatedFields#size_initialized instead of
     // vector.
-    entries: Vec<E>,
+    entries: UnsafeCell<Vec<E>>,
 
     /// Fields which are modified when allocate / delete an entry.
     alloc_fields: Mutex<AllocRelatedFields>,
 
     value_type: PhantomData<T>,
+}
+
+unsafe impl<T, E> Sync for Slab<T, E> where E: EntryTrait<T> {}
+
+impl<T, E: EntryTrait<T>> Slab<T, E> {
+    #[inline]
+    fn entries(&self) -> &Vec<E> { unsafe { &*self.entries.get() } }
+
+    #[inline]
+    fn entries_mut(&self) -> &mut Vec<E> { unsafe { &mut *self.entries.get() } }
 }
 
 #[derive(Default)]
@@ -349,7 +362,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// let slab: Slab<i32> = Slab::with_capacity(10);
     /// assert_eq!(slab.capacity(), 10);
     /// ```
-    pub fn capacity(&self) -> usize { self.entries.capacity() }
+    pub fn capacity(&self) -> usize { self.entries().capacity() }
 
     /// Reserve capacity for at least `additional` more values to be stored
     /// without allocating.
@@ -384,7 +397,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
             return Ok(());
         }
         let need_add = self.len() + additional - old_capacity;
-        self.entries.reserve(need_add);
+        self.entries_mut().reserve(need_add);
         // TODO(yz): should return error instead of panic, however, try_reserve*
         // is only in nightly.        self.entries.
         // try_reserve(need_add).chain_err(|| ErrorKind::OutOfMem)?;
@@ -429,7 +442,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         // TODO(yz): should return error instead of panic, however, try_reserve*
         // is only in nightly.        self.entries.
         // try_reserve_exact(need_add).chain_err(|| ErrorKind::OutOfMem)?;
-        self.entries.reserve_exact(need_add);
+        self.entries_mut().reserve_exact(need_add);
         let capacity = self.capacity();
         self.resize_up(old_capacity, capacity);
         Ok(())
@@ -438,13 +451,13 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     // TODO(yz): resize_default is nightly only.
     fn resize_up(&mut self, capacity: usize, new_capacity: usize) {
         for _i in capacity..new_capacity {
-            self.entries.push(E::default());
+            self.entries_mut().push(E::default());
         }
     }
 
     fn resize_down(&mut self, capacity: usize, new_capacity: usize) {
         for _i in new_capacity..capacity {
-            self.entries.pop();
+            self.entries_mut().pop();
         }
     }
 
@@ -495,7 +508,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         let new_capacity = self.alloc_fields.get_mut().size_initialized;
 
         self.resize_down(capacity, new_capacity);
-        self.entries.shrink_to_fit();
+        self.entries_mut().shrink_to_fit();
     }
 
     /// Clear the slab of all values.
@@ -576,7 +589,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     // TODO(yz): let the iter stop at the size_initialized.
     pub fn iter(&self) -> Iter<T, E> {
         Iter {
-            entries: self.entries.iter(),
+            entries: self.entries().iter(),
             curr: 0,
             value_type: PhantomData,
         }
@@ -611,7 +624,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     // TODO(yz): let the iter stop at the size_initialized.
     pub fn iter_mut(&mut self) -> IterMut<T, E> {
         IterMut {
-            entries: self.entries.iter_mut(),
+            entries: self.entries_mut().iter_mut(),
             curr: 0,
             value_type: PhantomData,
         }
@@ -634,7 +647,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab.get(123), None);
     /// ```
     pub fn get(&self, key: usize) -> Option<&T> {
-        self.entries
+        self.entries_mut()
             .get(key)
             .and_then(|entry| entry.into_option_ref())
     }
@@ -660,9 +673,9 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     // This method is unsafe because user may pass the same key to get_mut at
     // the same time.
     pub unsafe fn get_mut(&self, key: usize) -> Option<&mut T> {
-        self.entries.get(key).and_then(|entry| {
-            Self::cast_element_ref_mut(entry).into_option_mut()
-        })
+        self.entries_mut()
+            .get_mut(key)
+            .and_then(|entry| entry.into_option_mut())
     }
 
     /// Return a reference to the value associated with the given key without
@@ -710,12 +723,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         self.get_element_at(key).get_occupied_mut()
     }
 
-    fn cast_element_ref_mut(r: &E) -> &mut E {
-        unsafe { &mut *((r as *const E) as *mut E) }
-    }
-
     fn get_element_at(&self, key: usize) -> &mut E {
-        unsafe { Self::cast_element_ref_mut(self.entries.get_unchecked(key)) }
+        unsafe { self.entries_mut().get_unchecked_mut(key) }
     }
 
     /// Insert a value in the slab, returning key assigned to the value.
@@ -747,7 +756,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     pub fn allocate(&self) -> Result<usize> {
         let mut alloc_fields = self.alloc_fields.lock();
         let key = alloc_fields.next;
-        if key == self.entries.capacity() {
+        if key == self.entries().capacity() {
             Err(Error::from_kind(ErrorKind::OutOfMem))
         } else {
             alloc_fields.used += 1;
@@ -755,7 +764,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
                 alloc_fields.next = key + 1;
                 alloc_fields.size_initialized = alloc_fields.next;
             } else {
-                alloc_fields.next = self.entries[key].get_next_vacant_index();
+                alloc_fields.next =
+                    self.entries_mut()[key].get_next_vacant_index();
             }
             Ok(key)
         }
@@ -821,12 +831,11 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     pub fn remove(&self, key: usize) -> Result<T> {
         let mut alloc_fields = self.alloc_fields.lock();
         let next = alloc_fields.next;
-        let old_value = match self.entries.get(key) {
-            Some(ref val) => {
+        let old_value = match self.entries_mut().get_mut(key) {
+            Some(val) => {
                 alloc_fields.used -= 1;
                 alloc_fields.next = key;
-                Self::cast_element_ref_mut(val)
-                    .take_occupied_and_replace(E::from_vacant_index(next))
+                val.take_occupied_and_replace(E::from_vacant_index(next))
             }
             None => {
                 // Index out of range.
@@ -882,7 +891,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where F: FnMut(usize, &mut T) -> bool {
-        for i in 0..self.entries.len() {
+        for i in 0..self.entries().len() {
             let keep = unsafe { self.get_mut(i).map_or(true, |v| f(i, v)) };
 
             if !keep {
@@ -895,7 +904,9 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
 impl<T, E: EntryTrait<T>> ops::Index<usize> for Slab<T, E> {
     type Output = T;
 
-    fn index(&self, key: usize) -> &T { self.entries[key].get_occupied_ref() }
+    fn index(&self, key: usize) -> &T {
+        unsafe { self.entries_mut().get_unchecked(key).get_occupied_ref() }
+    }
 }
 
 impl<'a, T, E: EntryTrait<T>> IntoIterator for &'a Slab<T, E> {
@@ -1041,4 +1052,19 @@ impl<'a, T, E: EntryTrait<T>> Iterator for IterMut<'a, T, E> {
 
         None
     }
+}
+
+trait UnsafeCellExt {
+    type Type;
+
+    unsafe fn as_ref(&self) -> &Self::Type;
+    unsafe fn as_mut(&self) -> &mut Self::Type;
+}
+
+impl<T> UnsafeCellExt for UnsafeCell<T> {
+    type Type = T;
+
+    unsafe fn as_ref(&self) -> &T { &*self.get() }
+
+    unsafe fn as_mut(&self) -> &mut T { &mut *self.get() }
 }
