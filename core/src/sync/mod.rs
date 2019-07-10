@@ -173,13 +173,13 @@ pub mod msg_sender {
         let mut raw = Bytes::new();
         raw.push(msg.msg_id().into());
         raw.extend(msg.rlp_bytes().iter());
+        let size = raw.len();
 
         if let Err(e) = io.send(peer, raw, priority) {
             debug!("Error sending message: {:?}", e);
             return Err(e);
         };
 
-        let size = raw.len();
         match msg.msg_id().into() {
             MsgId::STATUS => ON_STATUS_METER.mark(size),
             MsgId::GET_BLOCK_HEADERS_RESPONSE => {
