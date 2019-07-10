@@ -16,7 +16,8 @@ pub struct CowNodeRef {
 }
 
 pub struct MaybeOwnedTrieNode<'a> {
-    trie_node: &'a TrieNodeDeltaMpt,
+    trie_node: *const TrieNodeDeltaMpt,
+    _marker: PhantomData<&'a TrieNodeDeltaMpt>, 
 }
 
 type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
@@ -61,7 +62,10 @@ impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMpt> {
         x: Self,
     ) -> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
         let (guard, value) = x.into();
-        GuardedValue::new(guard, MaybeOwnedTrieNode { trie_node: value })
+        GuardedValue::new(guard, MaybeOwnedTrieNode { 
+            trie_node: value,
+            _marker: PhantomData
+        })
     }
 }
 
@@ -76,15 +80,14 @@ impl<'a> MaybeOwnedTrieNode<'a> {
 impl<'a> Deref for MaybeOwnedTrieNode<'a> {
     type Target = TrieNodeDeltaMpt;
 
-    fn deref(&self) -> &Self::Target { self.trie_node }
+    fn deref(&self) -> &Self::Target { unsafe { &*self.trie_node } }
 }
 
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub unsafe fn owned_as_mut_unchecked(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *(self.trie_node as *const TrieNodeDeltaMpt
-            as *mut TrieNodeDeltaMpt)
+        &mut *(self.trie_node as *mut TrieNodeDeltaMpt)
     }
 }
 
@@ -741,4 +744,5 @@ use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
     cell::Cell, hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
+    marker::PhantomData,
 };
