@@ -251,7 +251,7 @@ fn test_remove_expire_blocks() {
                 pending_referee_count: 0,
                 referrers: referrers[i as usize].clone(),
                 block_header: Arc::new(blocks[i].block_header.clone()),
-                timestamp: SystemTime::now()
+                last_update_timestamp: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs()
@@ -312,7 +312,7 @@ fn test_remove_expire_blocks() {
     // expire [9, 10, 14]
     {
         let mut inner = sync.inner.write();
-        inner.arena[9].timestamp = SystemTime::now()
+        inner.arena[9].last_update_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
@@ -334,7 +334,7 @@ fn test_remove_expire_blocks() {
     // expire [7]
     {
         let mut inner = sync.inner.write();
-        inner.arena[7].timestamp = SystemTime::now()
+        inner.arena[7].last_update_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
