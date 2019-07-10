@@ -174,6 +174,11 @@ pub mod msg_sender {
         raw.push(msg.msg_id().into());
         raw.extend(msg.rlp_bytes().iter());
 
+        if let Err(e) = io.send(peer, raw, priority) {
+            debug!("Error sending message: {:?}", e);
+            return Err(e);
+        };
+
         let size = raw.len();
         match msg.msg_id().into() {
             MsgId::STATUS => ON_STATUS_METER.mark(size),
@@ -223,10 +228,6 @@ pub mod msg_sender {
             _ => OTHER_HIGH_METER.mark(size),
         }
 
-        if let Err(e) = io.send(peer, raw, priority) {
-            debug!("Error sending message: {:?}", e);
-            return Err(e);
-        };
         debug!(
             "Send message({}) to {:?}",
             msg.msg_id(),
