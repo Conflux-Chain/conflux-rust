@@ -279,7 +279,7 @@ impl ConsensusExecutor {
     /// because the parent state exists. Thus, it's okay that here we do not
     /// check existence of the receipts that will be needed for reward
     /// computation during epoch execution.
-    fn find_start_index(
+    fn find_start_chain_index(
         inner: &ConsensusGraphInner, chain: &Vec<usize>,
     ) -> usize {
         let mut base = 0;
@@ -340,7 +340,7 @@ impl ConsensusExecutor {
                 return Err("Internal storage error".to_owned());
             }
         }
-        let me_opt = inner.indices.get(block_hash);
+        let me_opt = inner.hash_to_arena_indices.get(block_hash);
         if me_opt == None {
             return Err("Block hash not found!".to_owned());
         }
@@ -351,22 +351,23 @@ impl ConsensusExecutor {
         let mut idx = me;
         while fork_height > 0
             && (fork_height >= inner.get_pivot_height()
-                || inner.get_pivot_block_index(fork_height) != idx)
+                || inner.get_pivot_block_arena_index(fork_height) != idx)
         {
             chain.push(idx);
             fork_height -= 1;
             idx = inner.arena[idx].parent;
         }
         // Because we have genesis at height 0, this should always be true
-        debug_assert!(inner.get_pivot_block_index(fork_height) == idx);
+        debug_assert!(inner.get_pivot_block_arena_index(fork_height) == idx);
         debug!("Forked at index {} height {}", idx, fork_height);
         chain.push(idx);
         chain.reverse();
-        let start_index = ConsensusExecutor::find_start_index(inner, &chain);
-        debug!("Start execution from index {}", start_index);
+        let start_chain_index =
+            ConsensusExecutor::find_start_chain_index(inner, &chain);
+        debug!("Start execution from index {}", start_chain_index);
 
         // We need the state of the fork point to start executing the fork
-        if start_index != 0 {
+        if start_chain_index != 0 {
             let mut last_state_height =
                 if inner.get_pivot_height() > DEFERRED_STATE_EPOCH_COUNT {
                     inner.get_pivot_height() - DEFERRED_STATE_EPOCH_COUNT
@@ -376,15 +377,15 @@ impl ConsensusExecutor {
 
             last_state_height += 1;
             while last_state_height <= fork_height {
-                let epoch_index =
-                    inner.get_pivot_block_index(last_state_height);
+                let epoch_arena_index =
+                    inner.get_pivot_block_arena_index(last_state_height);
                 let reward_execution_info = inner.get_reward_execution_info(
                     &self.handler.data_man,
-                    epoch_index,
+                    epoch_arena_index,
                 );
                 self.enqueue_epoch(EpochExecutionTask::new(
-                    inner.arena[epoch_index].hash,
-                    inner.get_epoch_block_hashes(epoch_index),
+                    inner.arena[epoch_arena_index].hash,
+                    inner.get_epoch_block_hashes(epoch_arena_index),
                     reward_execution_info,
                     false,
                     false,
@@ -393,9 +394,9 @@ impl ConsensusExecutor {
             }
         }
 
-        for fork_index in start_index..chain.len() {
-            let epoch_index = chain[fork_index];
-            let reward_index = inner.get_pivot_reward_index(epoch_index);
+        for fork_chain_index in start_chain_index..chain.len() {
+            let epoch_arena_index = chain[fork_chain_index];
+            let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
 
             let reward_execution_info = inner
                 .get_reward_execution_info_from_index(
@@ -403,8 +404,8 @@ impl ConsensusExecutor {
                     reward_index,
                 );
             self.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_index].hash,
-                inner.get_epoch_block_hashes(epoch_index),
+                inner.arena[epoch_arena_index].hash,
+                inner.get_epoch_block_hashes(epoch_arena_index),
                 reward_execution_info,
                 false,
                 false,

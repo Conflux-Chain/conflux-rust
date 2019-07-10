@@ -160,7 +160,7 @@ fn test_remove_expire_blocks() {
         let inner = sync.inner.read();
         assert!(inner.genesis_block_index == 0);
         assert!(inner.arena.len() == 1);
-        assert!(inner.indices.len() == 1);
+        assert!(inner.hash_to_arena_indices.len() == 1);
         assert!(inner.not_ready_blocks_count == 0);
         assert!(inner.not_ready_blocks_frontier.len() == 0);
     }
@@ -258,7 +258,9 @@ fn test_remove_expire_blocks() {
                     - 100,
             });
             assert_eq!(me, i);
-            inner.indices.insert(blocks[i as usize].hash(), me);
+            inner
+                .hash_to_arena_indices
+                .insert(blocks[i as usize].hash(), me);
             if graph_status[i as usize] != 4
                 && (parent_index > 12 || graph_status[parent_index] == 4)
             {
@@ -280,7 +282,7 @@ fn test_remove_expire_blocks() {
 
         println!("{:?}", inner.not_ready_blocks_frontier);
         assert!(inner.arena.len() == 12);
-        assert!(inner.indices.len() == 12);
+        assert!(inner.hash_to_arena_indices.len() == 12);
         assert!(inner.not_ready_blocks_count == 8);
         assert!(inner.not_ready_blocks_frontier.len() == 6);
         assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
@@ -296,7 +298,7 @@ fn test_remove_expire_blocks() {
         sync.remove_expire_blocks(1000, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 12);
-        assert!(inner.indices.len() == 12);
+        assert!(inner.hash_to_arena_indices.len() == 12);
         assert!(inner.not_ready_blocks_count == 8);
         assert!(inner.not_ready_blocks_frontier.len() == 6);
         assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
@@ -320,7 +322,7 @@ fn test_remove_expire_blocks() {
         sync.remove_expire_blocks(500, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 9);
-        assert!(inner.indices.len() == 9);
+        assert!(inner.hash_to_arena_indices.len() == 9);
         assert!(inner.not_ready_blocks_count == 5);
         assert!(inner.not_ready_blocks_frontier.len() == 4);
         assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
@@ -342,7 +344,7 @@ fn test_remove_expire_blocks() {
         sync.remove_expire_blocks(500, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 5);
-        assert!(inner.indices.len() == 5);
+        assert!(inner.hash_to_arena_indices.len() == 5);
         assert!(inner.not_ready_blocks_count == 1);
         assert!(inner.not_ready_blocks_frontier.len() == 1);
         assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));

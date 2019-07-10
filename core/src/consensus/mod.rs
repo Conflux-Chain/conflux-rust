@@ -204,7 +204,7 @@ impl ConsensusGraph {
     /// Wait for the generation and the execution completion of a block in the
     /// consensus graph. This API is used mainly for testing purpose
     pub fn wait_for_generation(&self, hash: &H256) {
-        while !self.inner.read().indices.contains_key(hash) {
+        while !self.inner.read().hash_to_arena_indices.contains_key(hash) {
             sleep(Duration::from_millis(1));
         }
         let best_state_block = self.inner.read().best_state_block_hash();
@@ -218,7 +218,8 @@ impl ConsensusGraph {
         difficulty: &U256,
     ) -> bool
     {
-        let parent_index = *inner.indices.get(parent_hash).unwrap();
+        let parent_index =
+            *inner.hash_to_arena_indices.get(parent_hash).unwrap();
         inner.check_mining_adaptive_block(parent_index, *difficulty)
     }
 
@@ -234,7 +235,7 @@ impl ConsensusGraph {
 
     //    pub fn get_block_total_weight(&self, hash: &H256) -> Option<i128> {
     //        let w = self.inner.write();
-    //        if let Some(idx) = w.indices.get(hash).cloned() {
+    //        if let Some(idx) = w.hash_to_arena_indices.get(hash).cloned() {
     //            Some(w.weight_tree.get(idx))
     //        } else {
     //            None
@@ -307,9 +308,9 @@ impl ConsensusGraph {
     }
 
     pub fn get_epoch_blocks(
-        &self, inner: &ConsensusGraphInner, epoch_index: usize,
+        &self, inner: &ConsensusGraphInner, epoch_arena_index: usize,
     ) -> Vec<Arc<Block>> {
-        inner.get_executable_epoch_blocks(&self.data_man, epoch_index)
+        inner.get_executable_epoch_blocks(&self.data_man, epoch_arena_index)
     }
 
     /// This is a very expensive call to force the engine to recompute the state
@@ -328,7 +329,7 @@ impl ConsensusGraph {
     ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
         let inner = &mut *self.inner.write();
 
-        let idx_opt = inner.indices.get(block_hash);
+        let idx_opt = inner.hash_to_arena_indices.get(block_hash);
         if idx_opt == None {
             return Err(
                 "Parent hash is too old for computing the deferred state"
@@ -337,9 +338,11 @@ impl ConsensusGraph {
         }
         let mut idx = *idx_opt.unwrap();
         for _i in 0..delay {
-            if idx == inner.cur_era_genesis_block_index {
+            if idx == inner.cur_era_genesis_block_arena_index {
                 // If it is the original genesis, we just break
-                if inner.arena[inner.cur_era_genesis_block_index].height == 0 {
+                if inner.arena[inner.cur_era_genesis_block_arena_index].height
+                    == 0
+                {
                     break;
                 } else {
                     return Err("Parent hash is too old for computing the deferred state".to_owned());
@@ -443,7 +446,7 @@ impl ConsensusGraph {
 
     pub fn get_ancestor(&self, hash: &H256, height: u64) -> H256 {
         let inner = self.inner.write();
-        let me = *inner.indices.get(hash).unwrap();
+        let me = *inner.hash_to_arena_indices.get(hash).unwrap();
         let idx = inner.ancestor_at(me, height);
         inner.arena[idx].hash.clone()
     }
@@ -462,7 +465,9 @@ impl ConsensusGraph {
     }
 
     /// Returns the total number of blocks in consensus graph
-    pub fn block_count(&self) -> usize { self.inner.read().indices.len() }
+    pub fn block_count(&self) -> usize {
+        self.inner.read().hash_to_arena_indices.len()
+    }
 
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
         self.call_virtual(tx, EpochNumber::LatestState)
@@ -503,10 +508,11 @@ impl ConsensusGraph {
 
             let mut blocks = Vec::new();
             for epoch_number in from_epoch..to_epoch {
-                let epoch_hash =
-                    inner.arena[inner.get_pivot_block_index(epoch_number)].hash;
+                let epoch_hash = inner.arena
+                    [inner.get_pivot_block_arena_index(epoch_number)]
+                .hash;
                 for index in &inner.arena
-                    [inner.get_pivot_block_index(epoch_number)]
+                    [inner.get_pivot_block_arena_index(epoch_number)]
                 .data
                 .ordered_executable_epoch_blocks
                 {
@@ -629,7 +635,9 @@ impl ConsensusGraph {
     /// before the checkpoint.
     pub fn current_era_genesis_hash(&self) -> H256 {
         let inner = self.inner.read();
-        inner.arena[inner.cur_era_genesis_block_index].hash.clone()
+        inner.arena[inner.cur_era_genesis_block_arena_index]
+            .hash
+            .clone()
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
@@ -659,7 +667,10 @@ impl ConsensusGraph {
                 let mut tmp = Vec::new();
                 let best_idx = consensus_inner.pivot_chain.last().unwrap();
                 for hash in bounded_terminal_hashes {
-                    let a_idx = consensus_inner.indices.get(&hash).unwrap();
+                    let a_idx = consensus_inner
+                        .hash_to_arena_indices
+                        .get(&hash)
+                        .unwrap();
                     let a_lca = consensus_inner.lca(*a_idx, *best_idx);
                     tmp.push((consensus_inner.arena[a_lca].height, hash));
                 }

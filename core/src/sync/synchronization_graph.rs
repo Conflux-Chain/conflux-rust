@@ -76,7 +76,7 @@ pub struct SynchronizationGraphNode {
 
 pub struct SynchronizationGraphInner {
     pub arena: Slab<SynchronizationGraphNode>,
-    pub indices: HashMap<H256, usize>,
+    pub hash_to_arena_indices: HashMap<H256, usize>,
     pub data_man: Arc<BlockDataManager>,
     pub genesis_block_index: usize,
     children_by_hash: HashMap<H256, Vec<usize>>,
@@ -97,7 +97,7 @@ impl SynchronizationGraphInner {
     {
         let mut inner = SynchronizationGraphInner {
             arena: Slab::new(),
-            indices: HashMap::new(),
+            hash_to_arena_indices: HashMap::new(),
             data_man,
             genesis_block_index: NULL,
             children_by_hash: HashMap::new(),
@@ -126,7 +126,7 @@ impl SynchronizationGraphInner {
 
     fn get_genesis_in_current_era(&self) -> usize {
         let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
-        *self.indices.get(&genesis_hash).unwrap()
+        *self.hash_to_arena_indices.get(&genesis_hash).unwrap()
     }
 
     pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
@@ -203,7 +203,7 @@ impl SynchronizationGraphInner {
 
             self.old_era_blocks_frontier_set.remove(&index);
             self.arena.remove(index);
-            self.indices.remove(&hash);
+            self.hash_to_arena_indices.remove(&hash);
             self.data_man.remove_block_header(&hash);
 
             num_cleared += 1;
@@ -336,7 +336,7 @@ impl SynchronizationGraphInner {
                 .unwrap()
                 .as_secs(),
         });
-        self.indices.insert(hash, me);
+        self.hash_to_arena_indices.insert(hash, me);
 
         if let Some(children) = self.children_by_hash.remove(&hash) {
             for child in &children {
@@ -384,11 +384,13 @@ impl SynchronizationGraphInner {
                 .unwrap()
                 .as_secs(),
         });
-        self.indices.insert(hash, me);
+        self.hash_to_arena_indices.insert(hash, me);
 
         let parent_hash = header.parent_hash().clone();
         if parent_hash != H256::default() {
-            if let Some(parent) = self.indices.get(&parent_hash).cloned() {
+            if let Some(parent) =
+                self.hash_to_arena_indices.get(&parent_hash).cloned()
+            {
                 self.arena[me].parent = parent;
                 self.arena[parent].children.push(me);
             } else {
@@ -399,7 +401,9 @@ impl SynchronizationGraphInner {
             }
         }
         for referee_hash in header.referee_hashes() {
-            if let Some(referee) = self.indices.get(referee_hash).cloned() {
+            if let Some(referee) =
+                self.hash_to_arena_indices.get(referee_hash).cloned()
+            {
                 self.arena[me].referees.push(referee);
                 self.arena[referee].referrers.push(me);
             } else {
@@ -764,7 +768,7 @@ impl SynchronizationGraphInner {
             }
 
             self.arena.remove(*index);
-            self.indices.remove(&hash);
+            self.hash_to_arena_indices.remove(&hash);
             self.data_man.remove_block_header(&hash);
             self.data_man.remove_block_from_kv(&hash);
         }
@@ -1047,7 +1051,7 @@ impl SynchronizationGraph {
     pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }
 
     pub fn contains_block_header(&self, hash: &H256) -> bool {
-        self.inner.read().indices.contains_key(hash)
+        self.inner.read().hash_to_arena_indices.contains_key(hash)
     }
 
     fn parent_or_referees_invalid(&self, header: &BlockHeader) -> bool {
@@ -1068,7 +1072,7 @@ impl SynchronizationGraph {
             return (false, Vec::new());
         }
 
-        if inner.indices.contains_key(&hash) {
+        if inner.hash_to_arena_indices.contains_key(&hash) {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
@@ -1233,7 +1237,7 @@ impl SynchronizationGraph {
 
     pub fn contains_block(&self, hash: &H256) -> bool {
         let inner = self.inner.read();
-        if let Some(index) = inner.indices.get(hash) {
+        if let Some(index) = inner.hash_to_arena_indices.get(hash) {
             inner.arena[*index].block_ready
         } else {
             false
@@ -1326,11 +1330,12 @@ impl SynchronizationGraph {
             return (insert_success, need_to_relay);
         }
 
-        let contains_block = if let Some(index) = inner.indices.get(&hash) {
-            inner.arena[*index].block_ready
-        } else {
-            false
-        };
+        let contains_block =
+            if let Some(index) = inner.hash_to_arena_indices.get(&hash) {
+                inner.arena[*index].block_ready
+            } else {
+                false
+            };
 
         if contains_block {
             // (true, false)
@@ -1339,7 +1344,7 @@ impl SynchronizationGraph {
 
         self.statistics.inc_sync_graph_inserted_block_count();
 
-        let me = *inner.indices.get(&hash).unwrap();
+        let me = *inner.hash_to_arena_indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
         debug_assert!(!inner.arena[me].block_ready);
         inner.arena[me].block_ready = true;
