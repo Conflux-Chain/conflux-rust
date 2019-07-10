@@ -257,18 +257,20 @@ impl BlockGenerator {
         // NOTE: We need to lock consensus inner during `pack_transactions` to
         // ensure transaction pool consistency.
         let (best_info, transactions) = {
+            let transactions_from_pool = self.txpool.pack_transactions(
+                num_txs,
+                block_gas_limit,
+                block_size_limit,
+            );
+
             // get the best block
             let (_guarded, best_info) = self
                 .graph
                 .consensus
                 .get_best_info(Some(REFEREE_BOUND))
                 .into();
+            drop(_guarded);
 
-            let transactions_from_pool = self.txpool.pack_transactions(
-                num_txs,
-                block_gas_limit,
-                block_size_limit,
-            );
             let transactions = [
                 additional_transactions.as_slice(),
                 transactions_from_pool.as_slice(),
