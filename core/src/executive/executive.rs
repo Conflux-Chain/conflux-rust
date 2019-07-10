@@ -1112,7 +1112,7 @@ impl<'a, 'b> Executive<'a, 'b> {
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
-        &mut self, tx: &SignedTransaction, mut substate: Substate,
+        &mut self, tx: &SignedTransaction, substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
     ) -> ExecutionResult<Executed>
     {
