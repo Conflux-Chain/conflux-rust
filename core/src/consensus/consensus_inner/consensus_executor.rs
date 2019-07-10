@@ -628,7 +628,7 @@ impl ConsensusExecutionHandler {
                 block.transactions.len()
             );
             let mut env = Env {
-                number: 0, // TODO: replace 0 with correct cardinal number
+                number: 0, // TODO: replace 0 with correct block number
                 author: block.block_header.author().clone(),
                 timestamp: block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
@@ -637,79 +637,77 @@ impl ConsensusExecutionHandler {
                 gas_limit: U256::from(block.block_header.gas_limit()),
             };
             let mut accumulated_fee: U256 = 0.into();
-            let mut ex = Executive::new(state, &mut env, &machine, &spec);
             let mut n_invalid_nonce = 0;
             let mut n_ok = 0;
             let mut n_other = 0;
-            let mut last_cumulative_gas_used = U256::zero();
-            {
-                for (idx, transaction) in block.transactions.iter().enumerate()
-                {
-                    let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
-                    let mut transaction_logs = Vec::new();
+            let mut cumulative_gas_used = U256::zero();
+            for (idx, transaction) in block.transactions.iter().enumerate() {
+                let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
+                let mut transaction_logs = Vec::new();
 
-                    let r = ex.transact(transaction);
-                    // TODO Store fine-grained output status in receipts.
-                    // Note now NotEnoughCash has
-                    // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
-                    // but its nonce is increased, which might need fixing.
-                    match r {
-                        Err(ExecutionError::NotEnoughBaseGas {
-                            required: _,
-                            got: _,
-                        })
-                        | Err(ExecutionError::SenderMustExist {})
-                        | Err(ExecutionError::Internal(_)) => {
-                            warn!(
-                                    "tx execution error: transaction={:?}, err={:?}",
-                                    transaction, r
-                                );
-                        }
-                        Err(ExecutionError::InvalidNonce { expected, got }) => {
-                            n_invalid_nonce += 1;
-                            trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
-                            // Add future transactions back to pool if we are
-                            // not verifying forking chain
-                            if on_local_pivot && got > expected {
-                                trace!(
-                                        "To re-add transaction ({:?}) to pending pool",
-                                        transaction.clone()
-                                    );
-                                to_pending.push(transaction.clone());
-                            }
-                        }
-                        Ok(executed) => {
-                            last_cumulative_gas_used =
-                                executed.cumulative_gas_used;
-                            n_ok += 1;
-                            trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
-                            accumulated_fee += executed.fee;
-                            transaction_logs = executed.logs;
-                            tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
-                        }
-                        _ => {
-                            n_other += 1;
-                            trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
+                let r = {
+                    Executive::new(state, &env, &machine, &spec)
+                        .transact(transaction)
+                };
+                // TODO Store fine-grained output status in receipts.
+                // Note now NotEnoughCash has
+                // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
+                // but its nonce is increased, which might need fixing.
+                match r {
+                    Err(ExecutionError::NotEnoughBaseGas {
+                        required: _,
+                        got: _,
+                    })
+                    | Err(ExecutionError::SenderMustExist {})
+                    | Err(ExecutionError::Internal(_)) => {
+                        warn!(
+                            "tx execution error: transaction={:?}, err={:?}",
+                            transaction, r
+                        );
+                    }
+                    Err(ExecutionError::InvalidNonce { expected, got }) => {
+                        n_invalid_nonce += 1;
+                        trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
+                        // Add future transactions back to pool if we are
+                        // not verifying forking chain
+                        if on_local_pivot && got > expected {
+                            trace!(
+                                "To re-add transaction ({:?}) to pending pool",
+                                transaction.clone()
+                            );
+                            to_pending.push(transaction.clone());
                         }
                     }
-                    let receipt = Receipt::new(
-                        tx_outcome_status,
-                        last_cumulative_gas_used,
-                        transaction_logs,
-                    );
-                    receipts.push(receipt);
+                    Ok(executed) => {
+                        env.gas_used = executed.cumulative_gas_used;
+                        cumulative_gas_used = executed.cumulative_gas_used;
+                        n_ok += 1;
+                        trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                        accumulated_fee += executed.fee;
+                        transaction_logs = executed.logs;
+                        tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                    }
+                    _ => {
+                        n_other += 1;
+                        trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
+                    }
+                }
+                let receipt = Receipt::new(
+                    tx_outcome_status,
+                    cumulative_gas_used,
+                    transaction_logs,
+                );
+                receipts.push(receipt);
 
-                    if on_local_pivot {
-                        let hash = transaction.hash();
-                        let tx_addr = TransactionAddress {
-                            block_hash: block.hash(),
-                            index: idx,
-                        };
-                        if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
-                            self.data_man.insert_transaction_address_to_kv(
-                                &hash, &tx_addr,
-                            );
-                        }
+                if on_local_pivot {
+                    let hash = transaction.hash();
+                    let tx_addr = TransactionAddress {
+                        block_hash: block.hash(),
+                        index: idx,
+                    };
+                    if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
+                        self.data_man
+                            .insert_transaction_address_to_kv(&hash, &tx_addr);
                     }
                 }
             }
@@ -1022,7 +1020,7 @@ impl ConsensusExecutionHandler {
             0.into(),
             self.vm.clone(),
         );
-        let mut env = Env {
+        let env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number
             author: Default::default(),
             timestamp: Default::default(),
@@ -1031,7 +1029,7 @@ impl ConsensusExecutionHandler {
             last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
         };
-        let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let r = ex.transact(tx);
         trace!("Execution result {:?}", r);
         r.map(|r| (r.output, r.gas_used))

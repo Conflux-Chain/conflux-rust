@@ -850,7 +850,7 @@ pub type ExecutiveTrapResult<'a, T> =
 /// Transaction executor.
 pub struct Executive<'a, 'b: 'a> {
     pub state: &'a mut State<'b>,
-    env: &'a mut Env,
+    env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
     depth: usize,
@@ -860,7 +860,7 @@ pub struct Executive<'a, 'b: 'a> {
 impl<'a, 'b> Executive<'a, 'b> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a mut Env, machine: &'a Machine,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec,
     ) -> Self
     {
@@ -875,9 +875,8 @@ impl<'a, 'b> Executive<'a, 'b> {
     }
 
     /// Populates executive from parent properties. Increments executive depth.
-    #[allow(dead_code)]
     pub fn from_parent(
-        state: &'a mut State<'b>, env: &'a mut Env, machine: &'a Machine,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
     ) -> Self
     {
@@ -1140,7 +1139,6 @@ impl<'a, 'b> Executive<'a, 'b> {
         let gas_left = gas_left_prerefund + refunded;
 
         let gas_used = tx.gas - gas_left;
-        self.env.gas_used += tx.gas;
         let refund_value = U256::zero();
         let fees_value = tx.gas * tx.gas_price;
 
@@ -1162,11 +1160,11 @@ impl<'a, 'b> Executive<'a, 'b> {
             fees_value,
             &self.env.author
         );
-        //self.state.add_balance(
-        //    &self.env.author,
-        //    &fees_value,
-        //    substate.to_cleanup_mode(&spec),
-        //)?;
+        //        self.state.add_balance(
+        //            &self.env.author,
+        //            &fees_value,
+        //            substate.to_cleanup_mode(&spec),
+        //        )?;
 
         // perform suicides
         for address in &substate.suicides {
@@ -1198,7 +1196,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 gas_used: tx.gas,
                 refunded: U256::zero(),
                 fee: fees_value,
-                cumulative_gas_used: self.env.gas_used,
+                cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
                 output,
@@ -1213,7 +1211,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 gas_used,
                 refunded,
                 fee: fees_value,
-                cumulative_gas_used: self.env.gas_used,
+                cumulative_gas_used: self.env.gas_used + gas_used,
                 logs: substate.logs,
                 contracts_created: substate.contracts_created,
                 output,
@@ -1299,13 +1297,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
             .unwrap();
-        let mut env = Env::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(0);
         let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.create(params, &mut substate).unwrap()
         };
 
@@ -1372,13 +1370,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
-        let mut env = Env::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(0);
         let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.create(params, &mut substate).unwrap()
         };
 
@@ -1440,13 +1438,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
-        let mut env = Env::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(5);
         let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.call(params, &mut substate).unwrap()
         };
 
@@ -1488,7 +1486,7 @@ mod tests {
         params.gas = U256::from(20025);
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::zero());
-        let mut env = Env::default();
+        let env = Env::default();
         let machine = crate::machine::new_machine();
         let spec = machine.spec(env.number);
         let mut substate = Substate::new();
@@ -1499,7 +1497,7 @@ mod tests {
             return_data,
             ..
         } = {
-            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.call(params, &mut substate).unwrap()
         };
         (&mut output)
@@ -1552,13 +1550,13 @@ mod tests {
                 CleanupMode::NoEmpty,
             )
             .unwrap();
-        let mut env = Env::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(0);
         let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let result = {
-            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.create(params, &mut substate)
         };
 
@@ -1596,7 +1594,7 @@ mod tests {
         let spec = machine.spec(env.number);
 
         let res = {
-            let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.transact(&t)
         };
 
