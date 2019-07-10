@@ -277,15 +277,16 @@ class P2PTest(ConfluxTestFramework):
             # find an idle node to generate block
             p = random.randint(0, num_nodes - 1)
             retry = 0
-            while retry < 10:
+            while retry < 50000:
                 pre_thread = threads.get(p)
                 if pre_thread is not None and pre_thread.is_alive():
                     p = random.randint(0, num_nodes - 1)
                     retry += 1
+                    time.sleep(0.01)
                 else:
                     break
 
-            if retry >= 10:
+            if retry >= 50000:
                 self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
                 break
 
