@@ -37,12 +37,17 @@ use std::{
 
 use crate::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use hash::KECCAK_EMPTY_LIST_RLP;
-use metrics::{Gauge, GaugeTimer, GaugeUsize};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::fmt::{Debug, Formatter};
 
 lazy_static! {
-    static ref CONSENSIS_EXECUTION_TIMER: Arc<Gauge<usize>> =
-        GaugeUsize::register_with_group("timer", "consensus_execution_timer");
+    static ref CONSENSIS_EXECUTION_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "consensus::handle_epoch_execution");
+    static ref CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER: Arc<Meter> =
+        register_meter_with_group(
+            "timer",
+            "consensus::compute_state_for_block"
+        );
 }
 
 // TODO: Parallelize anticone calculation by moving calculation into task.
@@ -268,6 +273,9 @@ impl ConsensusExecutor {
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &ConsensusGraphInner,
     ) -> Result<(StateRootWithAuxInfo, H256), String> {
+        let _timer = MeterTimer::time_func(
+            CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER.as_ref(),
+        );
         // If we already computed the state of the block before, we should not
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
@@ -427,7 +435,7 @@ impl ConsensusExecutionHandler {
     }
 
     fn handle_epoch_execution(&self, task: EpochExecutionTask) {
-        let _timer = GaugeTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
+        let _timer = MeterTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
         self.compute_epoch(
             &task.epoch_hash,
             &task.epoch_block_hashes,

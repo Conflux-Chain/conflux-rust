@@ -13,6 +13,7 @@ use crate::{
     verification::*,
 };
 use cfx_types::{H256, U256};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
@@ -31,6 +32,13 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use unexpected::{Mismatch, OutOfBounds};
+
+lazy_static! {
+    static ref SYNC_INSERT_HEADER: Arc<Meter> =
+        register_meter_with_group("timer", "sync::insert_block_header");
+    static ref SYNC_INSERT_BLOCK: Arc<Meter> =
+        register_meter_with_group("timer", "sync::insert_block");
+}
 
 const NULL: usize = !0;
 const BLOCK_INVALID: u8 = 0;
@@ -1077,6 +1085,7 @@ impl SynchronizationGraph {
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool, bench_mode: bool,
     ) -> (bool, Vec<H256>) {
+        let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         let mut inner = self.inner.write();
         let hash = header.hash();
 
@@ -1329,6 +1338,7 @@ impl SynchronizationGraph {
         sync_graph_only: bool,
     ) -> (bool, bool)
     {
+        let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
         let mut insert_success = true;
         let mut need_to_relay = false;
 

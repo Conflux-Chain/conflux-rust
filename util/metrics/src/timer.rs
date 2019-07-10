@@ -1,23 +1,23 @@
-use crate::Gauge;
+use crate::Meter;
 use std::time::Instant;
 
-pub struct GaugeTimer {
-    gauge: &'static Gauge<usize>,
+pub struct MeterTimer {
+    meter: &'static Meter,
     start: Instant,
 }
 
-impl GaugeTimer {
-    pub fn time_func(gauge: &'static Gauge<usize>) -> Self {
+impl MeterTimer {
+    pub fn time_func(meter: &'static Meter) -> Self {
         Self {
-            gauge,
+            meter,
             start: Instant::now(),
         }
     }
 }
 
-impl Drop for GaugeTimer {
+impl Drop for MeterTimer {
     fn drop(&mut self) {
-        self.gauge
-            .update((Instant::now() - self.start).as_micros() as usize)
+        self.meter
+            .mark((Instant::now() - self.start).as_micros() as usize)
     }
 }

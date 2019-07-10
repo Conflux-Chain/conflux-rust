@@ -13,5 +13,5 @@ pub use self::{
     meter::{register_meter, register_meter_with_group, Meter},
     metrics::enable,
     report::{report_async, FileReporter},
-    timer::GaugeTimer,
+    timer::MeterTimer,
 };

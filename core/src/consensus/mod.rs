@@ -23,7 +23,7 @@ pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
 use crate::storage::GuardedValue;
-use metrics::{Gauge, GaugeTimer, GaugeUsize};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     filter::{Filter, FilterError},
@@ -41,8 +41,8 @@ use std::{
     time::Duration,
 };
 lazy_static! {
-    static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Gauge<usize>> =
-        GaugeUsize::register_with_group("timer", "consensus_on_new_block_timer");
+    static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "consensus_on_new_block_timer");
 }
 
 const MIN_MAINTAINED_RISK: f64 = 0.000001;
@@ -316,15 +316,6 @@ impl ConsensusGraph {
         inner.get_executable_epoch_blocks(&self.data_man, epoch_index)
     }
 
-    // TODO Merge logic.
-    /// This is a very expensive call to force the engine to recompute the state
-    /// root of a given block
-    pub fn compute_state_for_block(
-        &self, block_hash: &H256, inner: &ConsensusGraphInner,
-    ) -> Result<(StateRootWithAuxInfo, H256), String> {
-        self.executor.compute_state_for_block(block_hash, inner)
-    }
-
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
     pub fn compute_deferred_state_for_block(
@@ -388,7 +379,7 @@ impl ConsensusGraph {
 
     pub fn on_new_block(&self, hash: &H256) {
         let _timer =
-            GaugeTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
+            MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         let block = self.data_man.block_by_hash(hash, true).unwrap();
 
         debug!(

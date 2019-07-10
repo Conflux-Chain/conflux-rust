@@ -5,7 +5,7 @@
 #![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_manager::CacheManager,
     consensus::{
         ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
@@ -40,7 +40,6 @@ use std::{
     thread, time,
 };
 use threadpool::ThreadPool;
-use cfxcore::block_data_manager::DataManagerConfiguration;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
