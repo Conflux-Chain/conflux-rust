@@ -5,7 +5,6 @@
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::{ConsensusGraphInner, SharedConsensusGraph},
-    db::COL_MISC,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
     pow::ProofOfWorkConfig,
@@ -17,7 +16,6 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
 };
-use rlp::Rlp;
 use slab::Slab;
 use std::{
     cmp::max,
@@ -888,18 +886,11 @@ impl SynchronizationGraph {
     fn recover_graph_from_db(&mut self) {
         // TODO: refactor code to make it run O(n + m)
         info!("Start full recovery of the block DAG and state from database");
-        let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
-            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
-            {
-                Some(terminals) => {
-                    let rlp = Rlp::new(&terminals);
-                    rlp.as_list::<H256>().expect("Failed to decode terminals!")
-                }
-                None => {
-                    info!("No terminals got from db");
-                    return;
-                }
-            };
+        let terminals_opt = self.data_man.terminals_from_db();
+        if terminals_opt.is_none() {
+            return;
+        }
+        let terminals = terminals_opt.unwrap();
 
         debug!("Get terminals {:?}", terminals);
         let mut queue = VecDeque::new();
@@ -958,18 +949,11 @@ impl SynchronizationGraph {
     fn fast_recover_graph_from_db(&mut self) {
         // TODO: refactor code to make it run O(n + m)
         info!("Start fast recovery of the block DAG from database");
-        let terminals = match self.data_man.db.key_value().get(COL_MISC, b"terminals")
-            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
-            {
-                Some(terminals) => {
-                    let rlp = Rlp::new(&terminals);
-                    rlp.as_list::<H256>().expect("Failed to decode terminals!")
-                }
-                None => {
-                    info!("No terminals got from db");
-                    return;
-                }
-            };
+        let terminals_opt = self.data_man.terminals_from_db();
+        if terminals_opt.is_none() {
+            return;
+        }
+        let terminals = terminals_opt.unwrap();
         debug!("Get terminals {:?}", terminals);
 
         let mut queue = VecDeque::new();
