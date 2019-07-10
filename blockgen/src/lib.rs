@@ -160,9 +160,9 @@ impl BlockGenerator {
     fn assemble_new_block_impl(
         &self, parent_hash: H256, referee: Vec<H256>,
         deferred_state_root_with_aux_info: StateRootWithAuxInfo,
-        deferred_receipts_root: H256, block_gas_limit: U256,
-        transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
-        adaptive_opt: Option<bool>,
+        deferred_receipts_root: H256, deferred_logs_bloom_hash: H256,
+        block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
+        difficulty: u64, adaptive_opt: Option<bool>,
     ) -> Block
     {
         let parent_height =
@@ -201,6 +201,7 @@ impl BlockGenerator {
             .with_author(self.mining_author)
             .with_deferred_state_root(deferred_state_root_with_aux_info)
             .with_deferred_receipts_root(deferred_receipts_root)
+            .with_deferred_logs_bloom_hash(deferred_logs_bloom_hash)
             .with_difficulty(expected_difficulty)
             .with_adaptive(adaptive)
             .with_referee_hashes(referee)
@@ -218,7 +219,7 @@ impl BlockGenerator {
         difficulty: u64, adaptive: bool,
     ) -> Result<Block, String>
     {
-        let (state_root, receipts_root) =
+        let (state_root, receipts_root, logs_bloom_hash) =
             self.graph.consensus.compute_deferred_state_for_block(
                 &parent_hash,
                 DEFERRED_STATE_EPOCH_COUNT as usize - 1,
@@ -238,6 +239,7 @@ impl BlockGenerator {
             referee,
             state_root,
             receipts_root,
+            logs_bloom_hash,
             block_gas_limit,
             transactions,
             difficulty,
@@ -284,6 +286,7 @@ impl BlockGenerator {
             referee,
             best_info.deferred_state_root,
             best_info.deferred_receipts_root,
+            best_info.deferred_logs_bloom_hash,
             block_gas_limit,
             transactions,
             0,
@@ -393,6 +396,7 @@ impl BlockGenerator {
             referee,
             best_info.deferred_state_root,
             best_info.deferred_receipts_root,
+            best_info.deferred_logs_bloom_hash,
             block_gas_limit,
             transactions,
             0,
@@ -407,7 +411,7 @@ impl BlockGenerator {
         transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
     ) -> Result<H256, String>
     {
-        let (state_root, receipts_root) =
+        let (state_root, receipts_root, logs_bloom_hash) =
             self.graph.consensus.compute_deferred_state_for_block(
                 &parent_hash,
                 DEFERRED_STATE_EPOCH_COUNT as usize - 1,
@@ -418,6 +422,7 @@ impl BlockGenerator {
             referee,
             state_root,
             receipts_root,
+            logs_bloom_hash,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             transactions,
             0,
