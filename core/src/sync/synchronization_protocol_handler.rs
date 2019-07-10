@@ -2478,9 +2478,10 @@ impl SynchronizationProtocolHandler {
         self.catch_up_mode() && self.protocol_config.request_block_with_public
     }
 
-    fn expire_block_gc(&self) {
+    fn expire_block_gc(&self, io: &NetworkContext) {
         // remove expire blocks every 450 seconds
-        self.graph.remove_expire_blocks(15 * 30, true);
+        let need_to_relay = self.graph.remove_expire_blocks(15 * 30, true);
+        self.relay_blocks(io, need_to_relay).ok();
     }
 }
 
@@ -2594,7 +2595,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 }
             }
             EXPIRE_BLOCK_GC_TIMER => {
-                self.expire_block_gc();
+                self.expire_block_gc(io);
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
