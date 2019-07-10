@@ -10,7 +10,9 @@ use message::{
     GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders, GetBlockTxn,
     GetBlocks, GetCompactBlocks, GetTransactions, TransIndex,
 };
-use metrics::{Gauge, GaugeUsize};
+use metrics::{
+    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
+};
 use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature, TxPropagateId};
@@ -32,7 +34,12 @@ pub mod tx_handler;
 lazy_static! {
     static ref TX_REQUEST_GAUGE: Arc<Gauge<usize>> =
         GaugeUsize::register("tx_diff_set_size");
+    static ref REQUEST_MANAGER_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "request_manager::request_not_tx");
+    static ref REQUEST_MANAGER_TX_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "request_manager::request_tx");
 }
+
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
 enum WaitingRequest {
     Header(H256),
@@ -177,6 +184,7 @@ impl RequestManager {
         mut hashes: Vec<H256>,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         self.preprocess_header_request(&mut hashes, &peer_id);
         if hashes.is_empty() {
             debug!("All headers in_flight, skip requesting");
@@ -220,6 +228,7 @@ impl RequestManager {
         max_blocks: u64,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         if !self.headers_in_flight.lock().insert(*hash) {
             // Already inflight, return directly
             return;
@@ -409,6 +418,7 @@ impl RequestManager {
         mut hashes: Vec<H256>, with_public: bool,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         self.preprocess_block_request(&mut hashes, &peer_id);
         if hashes.is_empty() {
             debug!("All blocks in_flight, skip requesting");
@@ -453,6 +463,7 @@ impl RequestManager {
         received_tx_ids: &Vec<TxPropagateId>,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
         if received_tx_ids.is_empty() {
             return;
         }
@@ -511,6 +522,7 @@ impl RequestManager {
         mut hashes: Vec<H256>,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         self.preprocess_block_request(&mut hashes, &peer_id);
         if hashes.is_empty() {
             debug!("All blocks in_flight, skip requesting");
@@ -555,6 +567,7 @@ impl RequestManager {
         indexes: Vec<usize>,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         if let Err(e) = self.request_handler.send_request(
             io,
             peer_id,
@@ -692,6 +705,7 @@ impl RequestManager {
         mut received_headers: HashSet<H256>,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!(
             "headers_received: req_hashes={:?} received_headers={:?}",
             req_hashes, received_headers

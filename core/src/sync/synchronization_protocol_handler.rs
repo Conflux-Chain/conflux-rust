@@ -56,8 +56,26 @@ use threadpool::ThreadPool;
 lazy_static! {
     static ref TX_PROPAGATE_GAUGE: Arc<Gauge<usize>> =
         GaugeUsize::register("tx_propagate_set_size");
-    static ref BLOCK_HEADER_HANDLE_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "block_header_handler_timer");
+    static ref BLOCK_HEADER_HANDLE_BEFORE_TIMER: Arc<Meter> =
+        register_meter_with_group(
+            "timer",
+            "sync_protocol_handler::on_block_headers::before"
+        );
+    static ref BLOCK_HEADER_HANDLE_LOOP_TIMER: Arc<Meter> =
+        register_meter_with_group(
+            "timer",
+            "sync_protocol_handler::on_block_headers::loop"
+        );
+    static ref BLOCK_HEADER_HANDLE_AFTER1_TIMER: Arc<Meter> =
+        register_meter_with_group(
+            "timer",
+            "sync_protocol_handler::on_block_headers::after1"
+        );
+    static ref BLOCK_HEADER_HANDLE_AFTER2_TIMER: Arc<Meter> =
+        register_meter_with_group(
+            "timer",
+            "sync_protocol_handler::on_block_headers::after2"
+        );
     static ref BLOCK_HANDLE_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "block_handler_timer");
     static ref TX_HANDLE_TIMER: Arc<Meter> =
@@ -1440,14 +1458,12 @@ impl SynchronizationProtocolHandler {
     fn on_block_headers_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
+        let _timer1 =
+            MeterTimer::time_func(BLOCK_HEADER_HANDLE_BEFORE_TIMER.as_ref());
         let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
-
         let id = block_headers.request_id();
         let req = self.request_manager.match_request(io, peer, id)?;
-
-        self.validate_block_headers_response(io, &req, &block_headers)?;
 
         // process request
         let mut hashes = HashSet::new();
@@ -1461,6 +1477,7 @@ impl SynchronizationProtocolHandler {
             .unwrap()
             .as_secs();
 
+        self.validate_block_headers_response(io, &req, &block_headers)?;
         let timestamp_validation_result =
             if self.graph.verification_config.verify_timestamp {
                 block_headers
@@ -1472,12 +1489,13 @@ impl SynchronizationProtocolHandler {
             } else {
                 Ok(())
             };
-
         now_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
+        let _timer2 =
+            MeterTimer::time_func(BLOCK_HEADER_HANDLE_LOOP_TIMER.as_ref());
         for header in &block_headers.headers {
             let hash = header.hash();
             returned_headers.insert(hash);
@@ -1531,6 +1549,8 @@ impl SynchronizationProtocolHandler {
             }
         }
 
+        let _timer3 =
+            MeterTimer::time_func(BLOCK_HEADER_HANDLE_AFTER1_TIMER.as_ref());
         // do not request headers we just received
         dependent_hashes.remove(&H256::default());
         for hash in &returned_headers {
@@ -1563,6 +1583,8 @@ impl SynchronizationProtocolHandler {
             self.syn.get_random_peer(&exclude)
         };
 
+        let _timer4 =
+            MeterTimer::time_func(BLOCK_HEADER_HANDLE_AFTER2_TIMER.as_ref());
         // request missing headers
         self.request_dependent_headers(
             io,
