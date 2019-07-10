@@ -1388,7 +1388,7 @@ impl SynchronizationProtocolHandler {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
         let best_peer_epoch = self.best_peer_epoch().unwrap_or(0);
-        let my_best_epoch = self.graph.best_epoch_number();
+        let my_best_epoch = self.graph.consensus.best_epoch_number();
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
@@ -2513,7 +2513,7 @@ impl SynchronizationProtocolHandler {
 
         peer_best_epoches.sort();
         let middle_epoch = peer_best_epoches[peer_best_epoches.len() / 2];
-        let catch_up_mode = self.graph.best_epoch_number()
+        let catch_up_mode = self.graph.consensus.best_epoch_number()
             + CATCH_UP_EPOCH_LAG_THRESHOLD
             < middle_epoch;
         self.syn
@@ -2534,7 +2534,7 @@ impl SynchronizationProtocolHandler {
         info!(
             "Catch-up mode: {}, latest epoch: {}",
             catch_up_mode,
-            self.graph.best_epoch_number()
+            self.graph.consensus.best_epoch_number()
         );
 
         let trans_prop_ctrl_msg: Box<dyn Message> =

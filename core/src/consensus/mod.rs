@@ -137,6 +137,10 @@ pub struct ConsensusGraph {
     executor: Arc<ConsensusExecutor>,
     pub statistics: SharedStatistics,
     pub new_block_handler: ConsensusNewBlockHandler,
+
+    /// Make sure that it is only modified when holding inner lock to prevent
+    /// any inconsistency
+    best_epoch_number: RwLock<u64>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -181,6 +185,7 @@ impl ConsensusGraph {
             new_block_handler: ConsensusNewBlockHandler::new(
                 conf, txpool, data_man, executor, statistics,
             ),
+            best_epoch_number: RwLock::new(0),
         }
     }
 
@@ -231,19 +236,6 @@ impl ConsensusGraph {
     ) -> Result<u64, String> {
         self.inner.read().get_height_from_epoch_number(epoch_number)
     }
-
-    pub fn best_epoch_number(&self) -> u64 {
-        self.inner.read().best_epoch_number()
-    }
-
-    //    pub fn get_block_total_weight(&self, hash: &H256) -> Option<i128> {
-    //        let w = self.inner.write();
-    //        if let Some(idx) = w.indices.get(hash).cloned() {
-    //            Some(w.weight_tree.get(idx))
-    //        } else {
-    //            None
-    //        }
-    //    }
 
     pub fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         self.inner.read().get_block_epoch_number(hash)
@@ -392,6 +384,7 @@ impl ConsensusGraph {
         self.statistics.inc_consensus_graph_processed_block_count();
         let inner = &mut *self.inner.write();
         self.new_block_handler.on_new_block(inner, hash, block);
+        *self.best_epoch_number.write() = inner.best_epoch_number();
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -677,6 +670,8 @@ impl ConsensusGraph {
             .read_recursive()
             .block_hashes_by_epoch(epoch_number)
     }
+
+    pub fn best_epoch_number(&self) -> u64 { *self.best_epoch_number.read() }
 }
 
 impl Drop for ConsensusGraph {

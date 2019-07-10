@@ -28,12 +28,12 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation"
 
     # Terminate slave instances
-    rm -rf tmp_data
-    mkdir tmp_data
-    cd tmp_data
-    ../list-on-demand.sh $slave_role || true
-    ../terminate-on-demand.sh
-    cd ..
+#    rm -rf tmp_data
+#    mkdir tmp_data
+#    cd tmp_data
+#    ../list-on-demand.sh $slave_role || true
+#    ../terminate-on-demand.sh
+#    cd ..
 
     # Download results
     archive_file="exp_stat_latency.tgz"

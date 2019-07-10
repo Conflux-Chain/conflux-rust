@@ -1049,10 +1049,6 @@ impl SynchronizationGraph {
         )
     }
 
-    pub fn best_epoch_number(&self) -> u64 {
-        self.consensus.best_epoch_number() as u64
-    }
-
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
         self.data_man
             .block_header_by_hash(hash)
