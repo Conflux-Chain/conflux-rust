@@ -208,6 +208,10 @@ impl DeferredPool {
         self.buckets.contains_key(addr)
     }
 
+    fn check_tx_exists(&self, tx: Arc<SignedTransaction>) -> bool {
+        unimplemented!()
+    }
+
     fn remove_lowest_nonce(
         &mut self, addr: &Address,
     ) -> Option<TxWithReadyInfo> {
@@ -221,6 +225,10 @@ impl DeferredPool {
                 ret
             }
         }
+    }
+
+    fn count_unexecuted_transaction(&self, addr: &Address) -> usize {
+        unimplemented!()
     }
 
     fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
@@ -319,6 +327,8 @@ impl ReadyAccountPool {
 
 pub struct TransactionPoolInner {
     capacity: usize,
+    total_received_count: usize,
+    unexecuted_transaction_count: usize,
     deferred_pool: DeferredPool,
     ready_account_pool: ReadyAccountPool,
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
@@ -330,6 +340,8 @@ impl TransactionPoolInner {
     pub fn with_capacity(capacity: usize) -> Self {
         TransactionPoolInner {
             capacity,
+            total_received_count: 0,
+            unexecuted_transaction_count: 0,
             deferred_pool: DeferredPool::new(),
             ready_account_pool: ReadyAccountPool::new(),
             ready_nonces_and_balances: HashMap::new(),
@@ -344,17 +356,43 @@ impl TransactionPoolInner {
         self.ready_nonces_and_balances.clear();
         self.garbage_collection_queue.clear();
         self.txs.clear();
+        self.total_received_count = 0;
+        self.unexecuted_transaction_count = 0;
     }
 
     pub fn len(&self) -> usize { self.txs.len() }
+
+    pub fn total_received(&self) -> usize { self.total_received_count }
+
+    pub fn total_unexecuted(&self) -> usize { self.unexecuted_transaction_count }
 
     fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
         self.txs.get(tx_hash).map(|x| x.clone())
     }
 
+    fn is_full(&self) -> bool {
+        return self.garbage_collection_queue.len() >= self.capacity
+    }
+
     fn collect_garbage(&mut self) {
-        while self.garbage_collection_queue.len() > self.capacity {
+        while self.is_full() {
             let addr = self.garbage_collection_queue.pop_front().unwrap();
+
+            // abort if a tx'nonce >= ready nonce
+            let (ready_nonce, _) = self
+                .get_local_nonce_and_balance(&addr)
+                .unwrap_or((0.into(), 0.into()));
+
+            let lowest_nonce = *self.deferred_pool.get_lowest_nonce(&addr).unwrap();
+
+            if lowest_nonce >= ready_nonce {
+                warn!("a unexecuted tx is trying to be garbage-collected and stopped");
+                self.garbage_collection_queue.push_front(addr);
+                break;
+            }
+
+            self.unexecuted_transaction_count -= self.deferred_pool.count_unexecuted_transaction(&addr);
+
             let removed_tx = self
                 .deferred_pool
                 .remove_lowest_nonce(&addr)
@@ -365,18 +403,12 @@ impl TransactionPoolInner {
             // maintain ready account pool
             if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
                 if ready_tx.hash() == removed_tx.hash() {
-                    warn!("a ready tx is garbage-collected");
+                    warn!("a ready tx is be garbage-collected");
                     self.ready_account_pool.remove(&addr);
                 }
             }
 
-            // alert if a tx after ready nonce is collected
-            let (nonce, _) = self
-                .get_local_nonce_and_balance(&addr)
-                .unwrap_or((0.into(), 0.into()));
-            if removed_tx.nonce() >= nonce {
-                warn!("a tx after execution is garbage-collected");
-            }
+            self.unexecuted_transaction_count += self.deferred_pool.count_unexecuted_transaction(&addr);
 
             // maintain ready info
             if !self.deferred_pool.contain_address(&addr) {
@@ -393,6 +425,15 @@ impl TransactionPoolInner {
         force: bool,
     ) -> InsertResult
     {
+        if !self.deferred_pool.check_tx_exists(transaction.clone()) {
+            self.collect_garbage();
+            if self.is_full() {
+                return InsertResult::Failed("Transaction Pool is full".into())
+            }
+        }
+
+        self.unexecuted_transaction_count -= self.deferred_pool.count_unexecuted_transaction(&transaction.sender());
+
         let result = self.deferred_pool.insert(
             TxWithReadyInfo {
                 transaction: transaction.clone(),
@@ -406,7 +447,6 @@ impl TransactionPoolInner {
                 self.garbage_collection_queue
                     .push_back(transaction.sender());
                 self.txs.insert(transaction.hash(), transaction);
-                self.collect_garbage();
             }
             InsertResult::Failed(_) => {}
             InsertResult::Updated(replaced_tx) => {
@@ -414,6 +454,7 @@ impl TransactionPoolInner {
                 self.txs.insert(transaction.hash(), transaction);
             }
         }
+        self.unexecuted_transaction_count += self.deferred_pool.count_unexecuted_transaction(&transaction.sender());
 
         result
     }
