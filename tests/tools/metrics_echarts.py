@@ -88,6 +88,7 @@ class MetricGrouping(Metric):
     def add_yaxis(self, chart:Line):
         for (name, values) in self.values.items():
             chart.add_yaxis(name, values,is_selected=False)
+        chart.set_global_opts(legend_opts=opts.LegendOpts(type_="scroll", pos_bottom="bottom"))
 
 def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
     assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(metrics_log_file)
@@ -121,7 +122,6 @@ def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
 
         output_html_file = metrics_log_file + ".{}.html".format(key)
         print("[{}]: {}".format(key, output_html_file))
-        chart.set_series_opts()
         chart.render(output_html_file)
 
 if __name__ == "__main__":
