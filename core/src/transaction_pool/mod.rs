@@ -49,6 +49,12 @@ lazy_static! {
         register_meter_with_group("timer", "tx_pool::recycle");
     static ref TX_POOL_INNER_INSERT_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "tx_pool::inner_insert");
+    static ref TX_POOL_LOCK_INCLUDED_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::lock_included");
+    static ref TX_POOL_CACHE_LOCK_INCLUDED_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::cache_lock_included");
+    static ref TX_POOL_LOCK_EXCLUDED_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::lock_excluded");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
@@ -684,12 +690,15 @@ impl TransactionPool {
         let mut account_cache = self.get_best_state_account_cache();
         let mut passed_transactions = Vec::new();
         {
+            let _timer = MeterTimer::time_func(TX_POOL_LOCK_INCLUDED_TIMER.as_ref());
             let mut inner = self.inner.write();
             let inner = &mut *inner;
+            let _timer = MeterTimer::time_func(TX_POOL_CACHE_LOCK_INCLUDED_TIMER.as_ref());
 
             for txes in signed_trans {
                 for tx in txes {
                     self.data_man.cache_transaction(&tx.hash(), tx.clone());
+                    let _timer = MeterTimer::time_func(TX_POOL_LOCK_EXCLUDED_TIMER.as_ref());
                     if let Err(e) = self.verify_transaction(tx.as_ref()) {
                         warn!("Transaction discarded due to failure of passing verification {:?}: {}", tx.hash(), e);
                         failures.insert(tx.hash(), e);

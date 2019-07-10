@@ -336,6 +336,10 @@ class P2PTest(ConfluxTestFramework):
             for f in block_count_futures:
                 assert f.exception() is None, "failed to get block count: {}".format(f.exception())
                 block_counts.append(f.result())
+            max_count = max(block_counts)
+            for i in range(len(block_counts)):
+                if block_counts[i] < max_count - 50:
+                    self.log.info("{}: {}".format(i, block_counts[i]))
 
             for f in best_block_futures:
                 assert f.exception() is None, "failed to get best block: {}".format(f.exception())
