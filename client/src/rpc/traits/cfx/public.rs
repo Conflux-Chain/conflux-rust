@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::super::types::{
-    Block, Bytes, EpochNumber, Transaction, Transaction as RpcTransaction,
-    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Block, Bytes, EpochNumber, Filter as RpcFilter, Log as RpcLog, Transaction,
+    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+    U256 as RpcU256, U64 as RpcU64,
 };
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
@@ -12,6 +13,10 @@ use jsonrpc_derive::rpc;
 /// Cfx rpc interface.
 #[rpc]
 pub trait Cfx {
+    ///
+    #[rpc(name = "cfx_getLogs")]
+    fn logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
+
     //        /// Returns protocol version encoded as a string (quotes are
     // necessary).        #[rpc(name = "cfx_protocolVersion")]
     //        fn protocol_version(&self) -> RpcResult<String>;
