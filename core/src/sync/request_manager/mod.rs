@@ -789,6 +789,7 @@ impl RequestManager {
         peer: Option<PeerId>, with_public: bool,
     )
     {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!(
             "blocks_received: req_hashes={:?} received_blocks={:?} peer={:?}",
             req_hashes, received_blocks, peer
@@ -842,6 +843,7 @@ impl RequestManager {
     pub fn transactions_received(
         &self, received_transactions: &HashSet<TxPropagateId>,
     ) {
+        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
         let mut inflight_transactions =
             self.inflight_requested_transactions.lock();
         for tx in received_transactions {
