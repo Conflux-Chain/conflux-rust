@@ -16,7 +16,7 @@ class P2PTest(ConfluxTestFramework):
         self.num_nodes = 8
         self.conf_parameters["generate_tx"] = "true"
         # Every node generates 1 tx every second
-        self.conf_parameters["generate_tx_period_us"] = "100000"
+        self.conf_parameters["generate_tx_period_us"] = "10000"
         self.conf_parameters["log_level"] = "\"debug\""
 
     def setup_network(self):
@@ -43,6 +43,7 @@ class P2PTest(ConfluxTestFramework):
             time.sleep(random.random()/30)
         wait_for_block_count(self.nodes[0], block_number)
         sync_blocks(self.nodes, timeout=30)
+        exit()
         self.log.info("Pass")
 
 

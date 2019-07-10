@@ -23,7 +23,7 @@ pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
 use crate::storage::GuardedValue;
-use metrics::{GaugeTimer, Gauge, GaugeUsize};
+use metrics::{Gauge, GaugeTimer, GaugeUsize};
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     filter::{Filter, FilterError},
@@ -38,11 +38,11 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
     thread::sleep,
-    time::{Duration, Instant},
+    time::Duration,
 };
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Gauge<usize>> =
-        GaugeUsize::register("consensus_on_new_block_timer");
+        GaugeUsize::register_with_group("timer", "consensus_on_new_block_timer");
 }
 
 const MIN_MAINTAINED_RISK: f64 = 0.000001;
@@ -387,7 +387,8 @@ impl ConsensusGraph {
     }
 
     pub fn on_new_block(&self, hash: &H256) {
-        let timer = GaugeTimer::time_func(&CONSENSIS_ON_NEW_BLOCK_TIMER);
+        let _timer =
+            GaugeTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         let block = self.data_man.block_by_hash(hash, true).unwrap();
 
         debug!(

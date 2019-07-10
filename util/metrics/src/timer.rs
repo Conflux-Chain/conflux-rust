@@ -17,6 +17,7 @@ impl GaugeTimer {
 
 impl Drop for GaugeTimer {
     fn drop(&mut self) {
-        self.gauge.update((Instant::now() - self.start).as_micros() as usize)
+        self.gauge
+            .update((Instant::now() - self.start).as_micros() as usize)
     }
 }

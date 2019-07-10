@@ -40,6 +40,7 @@ use std::{
     thread, time,
 };
 use threadpool::ThreadPool;
+use cfxcore::block_data_manager::DataManagerConfiguration;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
@@ -132,7 +133,7 @@ fn initialize_consensus_graph_for_test(
         ledger_db.clone(),
         storage_manager,
         cache_man,
-        false,
+        DataManagerConfiguration::new(false, true),
     ));
 
     let txpool = Arc::new(TransactionPool::with_capacity(

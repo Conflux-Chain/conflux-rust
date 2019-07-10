@@ -37,7 +37,13 @@ use std::{
 
 use crate::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use hash::KECCAK_EMPTY_LIST_RLP;
+use metrics::{Gauge, GaugeTimer, GaugeUsize};
 use std::fmt::{Debug, Formatter};
+
+lazy_static! {
+    static ref CONSENSIS_EXECUTION_TIMER: Arc<Gauge<usize>> =
+        GaugeUsize::register_with_group("timer", "consensus_execution_timer");
+}
 
 // TODO: Parallelize anticone calculation by moving calculation into task.
 /// The struct includes most information to compute rewards for old epochs
@@ -421,6 +427,7 @@ impl ConsensusExecutionHandler {
     }
 
     fn handle_epoch_execution(&self, task: EpochExecutionTask) {
+        let _timer = GaugeTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
         self.compute_epoch(
             &task.epoch_hash,
             &task.epoch_block_hashes,

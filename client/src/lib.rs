@@ -192,7 +192,7 @@ impl Client {
             ledger_db.clone(),
             storage_manager,
             cache_man,
-            conf.raw_conf.record_tx_address,
+            conf.data_mananger_config(),
         ));
 
         let txpool = Arc::new(TransactionPool::with_capacity(

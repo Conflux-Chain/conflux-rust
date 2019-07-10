@@ -36,7 +36,7 @@ use crate::{
     pow::WORKER_COMPUTATION_PARALLELISM,
     verification::VerificationConfig,
 };
-use metrics::{Gauge, GaugeUsize};
+use metrics::{Gauge, GaugeTimer, GaugeUsize};
 use primitives::{
     Block, BlockHeader, SignedTransaction, TransactionWithSignature,
     TxPropagateId,
@@ -54,6 +54,12 @@ use threadpool::ThreadPool;
 lazy_static! {
     static ref TX_PROPAGATE_GAUGE: Arc<Gauge<usize>> =
         GaugeUsize::register("tx_propagate_set_size");
+    static ref BLOCK_HEADER_HANDLE_TIMER: Arc<Gauge<usize>> =
+        GaugeUsize::register_with_group("timer", "block_header_handler_timer");
+    static ref BLOCK_HANDLE_TIMER: Arc<Gauge<usize>> =
+        GaugeUsize::register_with_group("timer", "block_handler_timer");
+    static ref TX_HANDLE_TIMER: Arc<Gauge<usize>> =
+        GaugeUsize::register_with_group("timer", "tx_handler_timer");
 }
 
 const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
@@ -497,6 +503,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_compact_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = GaugeTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!(
             "on_get_compact_blocks_response request_id={} compact={} block={}",
@@ -622,6 +629,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_transactions_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = GaugeTimer::time_func(TX_HANDLE_TIMER.as_ref());
         let resp = rlp.as_val::<GetTransactionsResponse>()?;
         debug!("on_get_transactions_response {:?}", resp.request_id());
 
@@ -766,6 +774,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_blocktxn_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = GaugeTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
         let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
         let resp_hash = resp.block_hash;
@@ -1429,6 +1438,7 @@ impl SynchronizationProtocolHandler {
     fn on_block_headers_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = GaugeTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
         let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
 
@@ -1691,6 +1701,7 @@ impl SynchronizationProtocolHandler {
     fn on_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = GaugeTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
         let blocks = rlp.as_val::<GetBlocksResponse>()?;
         debug!(
             "on_blocks_response, get block hashes {:?}",
