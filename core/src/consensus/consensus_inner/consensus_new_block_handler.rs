@@ -1247,22 +1247,19 @@ impl ConsensusNewBlockHandler {
                 .hash
                 .clone();
 
+                let future_block_header = self
+                    .data_man
+                    .block_header_by_hash(&future_block_hash)
+                    .unwrap();
+
                 self.data_man.insert_receipts_root(
                     inner.arena[new_pivot_chain[pivot_index]].hash,
-                    self.data_man
-                        .block_header_by_hash(&future_block_hash)
-                        .unwrap()
-                        .deferred_receipts_root()
-                        .clone(),
+                    future_block_header.deferred_receipts_root().clone(),
                 );
 
                 self.data_man.insert_logs_bloom_hash(
                     inner.arena[new_pivot_chain[pivot_index]].hash,
-                    self.data_man
-                        .block_header_by_hash(&future_block_hash)
-                        .unwrap()
-                        .deferred_logs_bloom_hash()
-                        .clone(),
+                    future_block_header.deferred_logs_bloom_hash().clone(),
                 );
             }
             height += 1;
