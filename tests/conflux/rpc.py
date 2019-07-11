@@ -4,6 +4,7 @@ import rlp
 
 from .config import default_config
 from .transactions import Transaction
+from .filter import Filter
 from .utils import privtoaddr, sha3_256
 
 import sys
@@ -97,7 +98,11 @@ class RpcClient:
         block_hash = self.node.test_generatecustomblock(parent_hash, referee, encoded_txs)
         assert_is_hash_string(block_hash)
         return block_hash
-    
+
+    def get_logs(self, filter: Filter) -> list:
+        logs = self.node.cfx_getLogs(filter.__dict__)
+        return logs
+
     def gas_price(self) -> int:
         return int(self.node.cfx_gasPrice(), 0)
 

@@ -574,7 +574,8 @@ impl RpcImpl {
             .map_err(|e| RpcError::invalid_params(e))
     }
 
-    fn logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        info!("RPC Request: get_logs({:?})", filter);
         self.consensus
             .logs(filter.into())
             .map_err(|e| {
@@ -786,10 +787,6 @@ impl Cfx for CfxHandler {
         self.rpc_impl.estimate_gas(rpc_tx)
     }
 
-    fn logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
-        self.rpc_impl.logs(filter)
-    }
-
     fn gas_price(&self) -> RpcResult<RpcU256> { self.rpc_impl.gas_price() }
 
     fn epoch_number(
@@ -859,6 +856,10 @@ impl Cfx for CfxHandler {
         &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         self.rpc_impl.call(rpc_tx, epoch)
+    }
+
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        self.rpc_impl.get_logs(filter)
     }
 }
 

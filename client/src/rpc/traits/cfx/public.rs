@@ -13,10 +13,6 @@ use jsonrpc_derive::rpc;
 /// Cfx rpc interface.
 #[rpc]
 pub trait Cfx {
-    ///
-    #[rpc(name = "cfx_getLogs")]
-    fn logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
-
     //        /// Returns protocol version encoded as a string (quotes are
     // necessary).        #[rpc(name = "cfx_protocolVersion")]
     //        fn protocol_version(&self) -> RpcResult<String>;
@@ -125,6 +121,10 @@ pub trait Cfx {
     fn call(
         &self, tx: RpcTransaction, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<Bytes>;
+
+    /// Returns logs matching the filter provided.
+    #[rpc(name = "cfx_getLogs")]
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
 
     //        /// Estimate gas needed for execution of given contract.
     //        #[rpc(name = "cfx_estimateGas")]
