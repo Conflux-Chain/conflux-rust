@@ -223,9 +223,16 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_stable_height =
             new_era_height + inner.inner_conf.era_epoch_count;
 
+        let prev_era = inner.data_man.get_cur_consensus_era_genesis_hash();
+        let cur_era = inner.arena[new_era_block_arena_index].hash.clone();
+
         inner.data_man.set_cur_consensus_era_genesis_hash(
             &inner.arena[new_era_block_arena_index].hash,
         );
+
+        inner
+            .data_man
+            .insert_checkpoint_hashes_to_db(&prev_era, &cur_era);
     }
 
     fn compute_anticone_bruteforce(
