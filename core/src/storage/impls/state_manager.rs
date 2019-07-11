@@ -281,10 +281,7 @@ impl StateManagerTrait for StateManager {
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees(&epoch_id)?;
         match maybe_state_trees {
-            None => {
-                println!("get epoch id {:?}", epoch_id);
-                Ok(None)
-            }
+            None => Ok(None),
             Some(state_trees) => Ok(Some(State::new(self, state_trees))),
         }
     }
