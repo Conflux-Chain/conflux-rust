@@ -112,7 +112,7 @@ build_config! {
         (max_peers_propagation, (usize), 128)
         (future_block_buffer_capacity, (usize), 32768)
         (txgen_account_count, (usize), 10)
-        (persist_header, (bool), false)
+        (persist_header, (bool), true)
     }
     {
         (

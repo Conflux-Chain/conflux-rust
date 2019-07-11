@@ -67,7 +67,7 @@ lazy_static! {
     static ref CMPCT_BLOCK_RECOVER_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "sync:recover_compact_block");
     static ref TX_HANDLE_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "tx_handler_timer");
+        register_meter_with_group("timer", "sync::on_tx_response");
 }
 
 const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
@@ -1426,6 +1426,8 @@ impl SynchronizationProtocolHandler {
         let id = block_headers.request_id();
         let req = self.request_manager.match_request(io, peer, id)?;
 
+        self.validate_block_headers_response(io, &req, &block_headers)?;
+
         // process request
         let mut hashes = HashSet::new();
         let mut dependent_hashes = HashSet::new();
@@ -1438,7 +1440,6 @@ impl SynchronizationProtocolHandler {
             .unwrap()
             .as_secs();
 
-        self.validate_block_headers_response(io, &req, &block_headers)?;
         let timestamp_validation_result =
             if self.graph.verification_config.verify_timestamp {
                 block_headers

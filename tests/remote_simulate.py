@@ -20,7 +20,7 @@ from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.rpc_timewait = 6000
+        self.rpc_timewait = 60
         self.num_nodes = 1
         self.conf_parameters = {
             "log_level": "\"debug\"",
@@ -175,8 +175,6 @@ class P2PTest(ConfluxTestFramework):
         target_memory = 16
 
         # storage
-        # FIXME ledger_cache_size is set to 8G because duplicated transactions in blocks will be counted multiple times,
-        # But as Arc they will not actually take that much space
         self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_start_size"] = str(1000000 // target_memory * self.options.storage_memory_mb)
@@ -277,7 +275,7 @@ class P2PTest(ConfluxTestFramework):
             # find an idle node to generate block
             p = random.randint(0, num_nodes - 1)
             retry = 0
-            while retry < 50000:
+            while retry < 10:
                 pre_thread = threads.get(p)
                 if pre_thread is not None and pre_thread.is_alive():
                     p = random.randint(0, num_nodes - 1)
@@ -286,7 +284,7 @@ class P2PTest(ConfluxTestFramework):
                 else:
                     break
 
-            if retry >= 50000:
+            if retry >= 10:
                 self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
                 break
 
@@ -322,7 +320,7 @@ class P2PTest(ConfluxTestFramework):
 
         start = time.time()
         # Wait for at most 120 seconds
-        while time.time() - start <= 6000:
+        while time.time() - start <= 120:
             block_counts = []
             best_blocks = []
             block_count_futures = []
@@ -339,7 +337,7 @@ class P2PTest(ConfluxTestFramework):
             max_count = max(block_counts)
             for i in range(len(block_counts)):
                 if block_counts[i] < max_count - 50:
-                    self.log.info("{}: {}".format(i, block_counts[i]))
+                    self.log.info("Slow: {}: {}".format(i, block_counts[i]))
 
             for f in best_block_futures:
                 assert f.exception() is None, "failed to get best block: {}".format(f.exception())
