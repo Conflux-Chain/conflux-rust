@@ -151,6 +151,7 @@ impl StateManager {
     pub fn initialize(
         &self, genesis_accounts: HashMap<Address, U256>,
         genesis_gas_limit: U256, test_net_version: Address,
+        initial_difficulty: U256,
     ) -> Block
     {
         let mut state = StateDb::new(self.get_state_for_genesis_write());
@@ -167,6 +168,7 @@ impl StateManager {
                 .with_deferred_state_root(state_root)
                 .with_gas_limit(genesis_gas_limit)
                 .with_author(test_net_version)
+                .with_difficulty(initial_difficulty)
                 .build(),
             Vec::new(),
         );
@@ -279,7 +281,10 @@ impl StateManagerTrait for StateManager {
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees(&epoch_id)?;
         match maybe_state_trees {
-            None => Ok(None),
+            None => {
+                println!("get epoch id {:?}", epoch_id);
+                Ok(None)
+            }
             Some(state_trees) => Ok(Some(State::new(self, state_trees))),
         }
     }
