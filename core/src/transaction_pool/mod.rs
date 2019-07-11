@@ -31,9 +31,9 @@ use std::{
 use threadpool::ThreadPool;
 
 lazy_static! {
-    static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
+    static ref TX_POOL_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "size");
-    static ref TX_POOL_READY_GAUGE: Arc<Gauge<usize>> =
+    static ref TX_POOL_READY_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "ready_size");
 }
 

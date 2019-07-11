@@ -55,7 +55,7 @@ impl CommonParams {
     }
 }
 
-pub type SpecCreationRules = Fn(&mut Spec, BlockNumber) + Sync + Send;
+pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
 
 pub struct Machine {
     params: CommonParams,

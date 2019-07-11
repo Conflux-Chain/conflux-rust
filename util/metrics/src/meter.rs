@@ -29,7 +29,7 @@ pub trait Meter: Send + Sync {
 struct NoopMeter;
 impl Meter for NoopMeter {}
 
-pub fn register_meter(name: &'static str) -> Arc<Meter> {
+pub fn register_meter(name: &'static str) -> Arc<dyn Meter> {
     if !is_enabled() {
         return Arc::new(NoopMeter);
     }
@@ -45,7 +45,7 @@ pub fn register_meter(name: &'static str) -> Arc<Meter> {
 
 pub fn register_meter_with_group(
     group: &'static str, name: &'static str,
-) -> Arc<Meter> {
+) -> Arc<dyn Meter> {
     if !is_enabled() {
         return Arc::new(NoopMeter);
     }

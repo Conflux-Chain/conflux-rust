@@ -62,7 +62,7 @@ impl RequestHandler {
     // 2. UnknownPeer:
     //      No need to let caller handle request resending;
     pub fn match_request(
-        &self, io: &NetworkContext, peer_id: PeerId, request_id: u64,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         let mut peers = self.peers.lock();
         let mut requests_queue = self.requests_queue.lock();
@@ -79,8 +79,8 @@ impl RequestHandler {
     }
 
     pub fn send_request(
-        &self, io: &NetworkContext, peer: PeerId, mut msg: Box<RequestMessage>,
-        priority: SendQueuePriority,
+        &self, io: &dyn NetworkContext, peer: PeerId,
+        mut msg: Box<RequestMessage>, priority: SendQueuePriority,
     ) -> Result<(), Error>
     {
         let mut peers = self.peers.lock();
@@ -136,7 +136,7 @@ impl RequestHandler {
     }
 
     pub fn get_timeout_requests(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
     ) -> Vec<RequestMessage> {
         // Check if in-flight requests timeout
         let mut timeout_requests = Vec::new();
@@ -259,7 +259,7 @@ impl RequestContainer {
     //      This also does NOT introduce needs to handle request
     //      resending for caller;
     pub fn match_request(
-        &mut self, io: &NetworkContext, request_id: u64,
+        &mut self, io: &dyn NetworkContext, request_id: u64,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
     ) -> Result<RequestMessage, Error>
@@ -371,7 +371,7 @@ impl RequestMessage {
         }
     }
 
-    pub fn get_msg(&self) -> &Message {
+    pub fn get_msg(&self) -> &dyn Message {
         match self {
             RequestMessage::Headers(ref msg) => msg,
             RequestMessage::HeaderChain(ref msg) => msg,

@@ -30,7 +30,7 @@ mod request_handler;
 pub mod tx_handler;
 
 lazy_static! {
-    static ref TX_REQUEST_GAUGE: Arc<Gauge<usize>> =
+    static ref TX_REQUEST_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register("tx_diff_set_size");
 }
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -173,7 +173,7 @@ impl RequestManager {
     }
 
     pub fn request_block_headers(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
         mut hashes: Vec<H256>,
     )
     {
@@ -186,7 +186,7 @@ impl RequestManager {
     }
 
     fn request_headers_unchecked(
-        &self, io: &NetworkContext, peer_id: PeerId, hashes: Vec<H256>,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, hashes: Vec<H256>,
     ) {
         if let Err(e) = self.request_handler.send_request(
             io,
@@ -216,7 +216,7 @@ impl RequestManager {
     /// Request a header if it's not already in_flight. The request is delayed
     /// if the header is requested before.
     pub fn request_block_header_chain(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, hash: &H256,
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>, hash: &H256,
         max_blocks: u64,
     )
     {
@@ -303,7 +303,7 @@ impl RequestManager {
     }
 
     pub fn request_epoch_hashes(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
         mut epochs: Vec<u64>,
     )
     {
@@ -316,7 +316,7 @@ impl RequestManager {
     }
 
     fn request_epochs_unchecked(
-        &self, io: &NetworkContext, peer_id: PeerId, epochs: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, epochs: Vec<u64>,
     ) {
         if let Err(e) = self.request_handler.send_request(
             io,
@@ -405,7 +405,7 @@ impl RequestManager {
     }
 
     pub fn request_blocks(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
         mut hashes: Vec<H256>, with_public: bool,
     )
     {
@@ -418,7 +418,7 @@ impl RequestManager {
     }
 
     fn request_blocks_unchecked(
-        &self, io: &NetworkContext, peer_id: PeerId, hashes: Vec<H256>,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, hashes: Vec<H256>,
         with_public: bool,
     )
     {
@@ -449,7 +449,7 @@ impl RequestManager {
     }
 
     pub fn request_transactions(
-        &self, io: &NetworkContext, peer_id: PeerId, window_index: usize,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, window_index: usize,
         received_tx_ids: &Vec<TxPropagateId>,
     )
     {
@@ -507,7 +507,7 @@ impl RequestManager {
     }
 
     pub fn request_compact_blocks(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
         mut hashes: Vec<H256>,
     )
     {
@@ -520,8 +520,10 @@ impl RequestManager {
     }
 
     pub fn request_compact_block_unchecked(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
-    ) {
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        hashes: Vec<H256>,
+    )
+    {
         if let Err(e) = self.request_handler.send_request(
             io,
             peer_id.unwrap(),
@@ -551,7 +553,7 @@ impl RequestManager {
     }
 
     pub fn request_blocktxn(
-        &self, io: &NetworkContext, peer_id: PeerId, block_hash: H256,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, block_hash: H256,
         indexes: Vec<usize>,
     )
     {
@@ -578,7 +580,7 @@ impl RequestManager {
     }
 
     pub fn send_request_again(
-        &self, io: &NetworkContext, request: &RequestMessage,
+        &self, io: &dyn NetworkContext, request: &RequestMessage,
     ) {
         let chosen_peer = self.syn.get_random_peer(&HashSet::new());
         match request {
@@ -630,7 +632,7 @@ impl RequestManager {
     }
 
     pub fn remove_mismatch_request(
-        &self, io: &NetworkContext, req: &RequestMessage,
+        &self, io: &dyn NetworkContext, req: &RequestMessage,
     ) {
         match req {
             RequestMessage::Headers(ref get_headers) => {
@@ -677,7 +679,7 @@ impl RequestManager {
     // Match request with given response.
     // No need to let caller handle request resending.
     pub fn match_request(
-        &self, io: &NetworkContext, peer_id: PeerId, request_id: u64,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         self.request_handler.match_request(io, peer_id, request_id)
     }
@@ -688,7 +690,7 @@ impl RequestManager {
     /// responsibility to ensure that the removed request either has already
     /// received or will be requested by the caller again.
     pub fn headers_received(
-        &self, io: &NetworkContext, req_hashes: HashSet<H256>,
+        &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
         mut received_headers: HashSet<H256>,
     )
     {
@@ -728,7 +730,7 @@ impl RequestManager {
 
     /// Remove from `epochs_in_flight` when a epoch is received.
     pub fn epochs_received(
-        &self, io: &NetworkContext, req_epochs: HashSet<u64>,
+        &self, io: &dyn NetworkContext, req_epochs: HashSet<u64>,
         mut received_epochs: HashSet<u64>,
     )
     {
@@ -770,7 +772,7 @@ impl RequestManager {
     /// received or will be requested by the caller again (the case for
     /// `Blocktxn`).
     pub fn blocks_received(
-        &self, io: &NetworkContext, req_hashes: HashSet<H256>,
+        &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
         mut received_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<PeerId>, with_public: bool,
     )
@@ -864,7 +866,7 @@ impl RequestManager {
             .append_transactions(transactions)
     }
 
-    pub fn resend_timeout_requests(&self, io: &NetworkContext) {
+    pub fn resend_timeout_requests(&self, io: &dyn NetworkContext) {
         debug!("resend_timeout_requests: start");
         let timeout_requests = self.request_handler.get_timeout_requests(io);
         for req in timeout_requests {
@@ -875,7 +877,7 @@ impl RequestManager {
 
     /// Send waiting requests that their backoff delay have passes
     pub fn resend_waiting_requests(
-        &self, io: &NetworkContext, with_public: bool,
+        &self, io: &dyn NetworkContext, with_public: bool,
     ) {
         debug!("resend_waiting_requests: start");
         let mut headers_waittime = self.header_request_waittime.lock();
@@ -1038,7 +1040,7 @@ impl RequestManager {
         self.request_handler.add_peer(peer);
     }
 
-    pub fn on_peer_disconnected(&self, io: &NetworkContext, peer: PeerId) {
+    pub fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
         if let Some(unfinished_requests) =
             self.request_handler.remove_peer(peer)
         {

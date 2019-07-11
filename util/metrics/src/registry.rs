@@ -12,27 +12,29 @@ lazy_static! {
 
 #[derive(Default)]
 pub struct Registry {
-    metrics: HashMap<String, Arc<Metric>>,
+    metrics: HashMap<String, Arc<dyn Metric>>,
 }
 
 impl Registry {
-    pub fn register(&mut self, name: String, metric: Arc<Metric>) {
+    pub fn register(&mut self, name: String, metric: Arc<dyn Metric>) {
         assert!(!self.metrics.contains_key(&name));
         self.metrics.insert(name, metric);
     }
 
-    pub fn get_all(&self) -> &HashMap<String, Arc<Metric>> { &self.metrics }
+    pub fn get_all(&self) -> &HashMap<String, Arc<dyn Metric>> { &self.metrics }
 }
 
 #[derive(Default)]
 pub struct GroupingRegistry {
-    groups: HashMap<String, HashMap<String, Arc<Metric>>>,
+    groups: HashMap<String, HashMap<String, Arc<dyn Metric>>>,
 }
 
 impl GroupingRegistry {
     pub fn register(
-        &mut self, group_name: String, metric_name: String, metric: Arc<Metric>,
-    ) {
+        &mut self, group_name: String, metric_name: String,
+        metric: Arc<dyn Metric>,
+    )
+    {
         let group_entry = self
             .groups
             .entry(group_name)
@@ -41,7 +43,9 @@ impl GroupingRegistry {
         group_entry.insert(metric_name, metric);
     }
 
-    pub fn get_all(&self) -> &HashMap<String, HashMap<String, Arc<Metric>>> {
+    pub fn get_all(
+        &self,
+    ) -> &HashMap<String, HashMap<String, Arc<dyn Metric>>> {
         &self.groups
     }
 }

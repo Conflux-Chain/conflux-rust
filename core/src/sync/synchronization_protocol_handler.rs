@@ -52,7 +52,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 lazy_static! {
-    static ref TX_PROPAGATE_GAUGE: Arc<Gauge<usize>> =
+    static ref TX_PROPAGATE_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register("tx_propagate_set_size");
 }
 
@@ -302,7 +302,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn dispatch_message(
-        &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         if !self.syn.contains_peer(&peer) {
@@ -385,7 +385,7 @@ impl SynchronizationProtocolHandler {
 
     /// Error handling for dispatched messages.
     fn handle_error(
-        &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error,
+        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error,
     ) {
         warn!(
             "Error while handling message, peer={}, msgid={:?}, error={:?}",
@@ -448,7 +448,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_compact_blocks(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         if !self.syn.contains_peer(&peer) {
             warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_CMPCT_BLOCKS", peer);
@@ -495,7 +495,7 @@ impl SynchronizationProtocolHandler {
     ///             it's sent to requested_manager as requested but not received
     /// block, and the full block
     fn on_get_compact_blocks_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!(
@@ -604,7 +604,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_transactions_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp = rlp.as_val::<GetTransactionsResponse>()?;
         debug!("on_get_transactions_response {:?}", resp.request_id());
@@ -643,7 +643,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_transactions(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let get_transactions = rlp.as_val::<GetTransactions>()?;
         let transactions = self
@@ -664,7 +664,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_trans_digests(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let transaction_digests = rlp.as_val::<TransactionDigests>()?;
 
@@ -701,7 +701,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_blocktxn(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetBlockTxn = rlp.as_val()?;
         debug!("on_get_blocktxn");
@@ -748,7 +748,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_blocktxn_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
@@ -907,7 +907,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_block_headers(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req = rlp.as_val::<GetBlockHeaders>()?;
         debug!("on_get_block_headers, msg=:{:?}", req);
@@ -940,7 +940,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_block_header_chain(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req = rlp.as_val::<GetBlockHeaderChain>()?;
         debug!("on_get_block_header_chain, msg=:{:?}", req);
@@ -986,7 +986,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_blocks(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req = rlp.as_val::<GetBlocks>()?;
         debug!("on_get_blocks, msg=:{:?}", req);
@@ -1089,7 +1089,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_terminal_block_hashes(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req = rlp.as_val::<GetTerminalBlockHashes>()?;
         debug!("on_get_terminal_block_hashes, msg=:{:?}", req);
@@ -1104,7 +1104,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_terminal_block_hashes_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let terminal_block_hashes =
             rlp.as_val::<GetTerminalBlockHashesResponse>()?;
@@ -1131,7 +1131,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_get_block_hashes_by_epoch(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req = rlp.as_val::<GetBlockHashesByEpoch>()?;
         debug!("on_get_block_hashes_by_epoch, msg=:{:?}", req);
@@ -1161,7 +1161,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_block_hashes_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp = rlp.as_val::<GetBlockHashesResponse>()?;
         debug!("on_block_hashes_response, msg={:?}", resp);
@@ -1221,7 +1221,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_status(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let status = rlp.as_val::<Status>()?;
         if !self.syn.on_status(peer) {
@@ -1267,7 +1267,7 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn start_sync(&self, io: &NetworkContext) {
+    fn start_sync(&self, io: &dyn NetworkContext) {
         if self.catch_up_mode() {
             self.request_epochs(io);
         } else {
@@ -1275,7 +1275,7 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    fn request_missing_terminals(&self, io: &NetworkContext) {
+    fn request_missing_terminals(&self, io: &dyn NetworkContext) {
         let peers: Vec<PeerId> =
             self.syn.peers.read().keys().cloned().collect();
 
@@ -1324,7 +1324,7 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    fn request_epochs(&self, io: &NetworkContext) {
+    fn request_epochs(&self, io: &dyn NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
         let best_peer_epoch = self.best_peer_epoch().unwrap_or(0);
@@ -1396,7 +1396,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_block_headers_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
@@ -1544,7 +1544,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn validate_block_headers_response(
-        &self, io: &NetworkContext, req: &RequestMessage,
+        &self, io: &dyn NetworkContext, req: &RequestMessage,
         resp: &GetBlockHeadersResponse,
     ) -> Result<(), Error>
     {
@@ -1585,8 +1585,9 @@ impl SynchronizationProtocolHandler {
     }
 
     fn request_dependent_headers(
-        &self, io: &NetworkContext, peer: Option<PeerId>, req: &RequestMessage,
-        resp: &GetBlockHeadersResponse, hashes: HashSet<&H256>,
+        &self, io: &dyn NetworkContext, peer: Option<PeerId>,
+        req: &RequestMessage, resp: &GetBlockHeadersResponse,
+        hashes: HashSet<&H256>,
     )
     {
         match &req {
@@ -1638,7 +1639,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_blocks_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let blocks = rlp.as_val::<GetBlocksResponse>()?;
         debug!(
@@ -1676,7 +1677,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_blocks_with_public_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let blocks = rlp.as_val::<GetBlocksWithPublicResponse>()?;
         debug!(
@@ -1715,7 +1716,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_blocks_inner(
-        &self, io: &NetworkContext, task: RecoverPublicTask,
+        &self, io: &dyn NetworkContext, task: RecoverPublicTask,
     ) -> Result<(), Error> {
         let mut need_to_relay = Vec::new();
         let mut received_blocks = HashSet::new();
@@ -1770,7 +1771,9 @@ impl SynchronizationProtocolHandler {
         self.relay_blocks(io, need_to_relay)
     }
 
-    fn on_blocks_inner_task(&self, io: &NetworkContext) -> Result<(), Error> {
+    fn on_blocks_inner_task(
+        &self, io: &dyn NetworkContext,
+    ) -> Result<(), Error> {
         let task = self.recover_public_queue.lock().pop_front().unwrap();
         self.on_blocks_inner(io, task)
     }
@@ -1828,7 +1831,7 @@ impl SynchronizationProtocolHandler {
     // TODO This is only used in tests now. Maybe we can add a rpc to send full
     // block and remove NEW_BLOCK from p2p
     fn on_new_block(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let new_block = rlp.as_val::<NewBlock>()?;
         let mut block = new_block.block;
@@ -1864,7 +1867,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_new_block_hashes(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let new_block_hashes = rlp.as_val::<NewBlockHashes>()?;
         debug!("on_new_block_hashes, msg={:?}", new_block_hashes);
@@ -1905,7 +1908,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn broadcast_message(
-        &self, io: &NetworkContext, skip_id: PeerId, msg: &Message,
+        &self, io: &dyn NetworkContext, skip_id: PeerId, msg: &dyn Message,
         priority: SendQueuePriority,
     ) -> Result<(), NetworkError>
     {
@@ -1936,7 +1939,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn send_status(
-        &self, io: &NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), NetworkError> {
         debug!("Sending status message to {:?}", peer);
 
@@ -1953,7 +1956,9 @@ impl SynchronizationProtocolHandler {
         send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
     }
 
-    pub fn announce_new_blocks(&self, io: &NetworkContext, hashes: &[H256]) {
+    pub fn announce_new_blocks(
+        &self, io: &dyn NetworkContext, hashes: &[H256],
+    ) {
         for hash in hashes {
             let block = self.graph.block_by_hash(hash).unwrap();
             let msg: Box<dyn Message> = Box::new(NewBlock {
@@ -1975,7 +1980,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn relay_blocks(
-        &self, io: &NetworkContext, need_to_relay: Vec<H256>,
+        &self, io: &dyn NetworkContext, need_to_relay: Vec<H256>,
     ) -> Result<(), Error> {
         if !need_to_relay.is_empty() && !self.catch_up_mode() {
             let new_block_hash_msg: Box<dyn Message> =
@@ -2017,7 +2022,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn propagate_transactions_to_peers(
-        &self, io: &NetworkContext, peers: Vec<PeerId>,
+        &self, io: &dyn NetworkContext, peers: Vec<PeerId>,
     ) {
         let lucky_peers = {
             peers
@@ -2110,7 +2115,7 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    pub fn check_future_blocks(&self, io: &NetworkContext) {
+    pub fn check_future_blocks(&self, io: &dyn NetworkContext) {
         let now_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -2152,7 +2157,7 @@ impl SynchronizationProtocolHandler {
             .ok();
     }
 
-    pub fn propagate_new_transactions(&self, io: &NetworkContext) {
+    pub fn propagate_new_transactions(&self, io: &dyn NetworkContext) {
         if self.syn.peers.read().is_empty() || self.catch_up_mode() {
             return;
         }
@@ -2161,7 +2166,7 @@ impl SynchronizationProtocolHandler {
         self.propagate_transactions_to_peers(io, peers);
     }
 
-    pub fn remove_expired_flying_request(&self, io: &NetworkContext) {
+    pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
         self.request_manager
             .resend_waiting_requests(io, self.request_block_need_public());
@@ -2357,7 +2362,7 @@ impl SynchronizationProtocolHandler {
         self.graph.update_total_weight_in_past();
     }
 
-    fn update_catch_up_mode(&self, io: &NetworkContext) {
+    fn update_catch_up_mode(&self, io: &dyn NetworkContext) {
         let mut peer_best_epoches = {
             let peers = self.syn.peers.read();
             peers
@@ -2417,7 +2422,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn dispatch_recover_public_task(
-        &self, io: &NetworkContext, blocks: Vec<Block>,
+        &self, io: &dyn NetworkContext, blocks: Vec<Block>,
         requested: HashSet<H256>, failed_peer: PeerId, compact: bool,
     )
     {
@@ -2434,8 +2439,10 @@ impl SynchronizationProtocolHandler {
     }
 
     fn request_missing_blocks(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
-    ) {
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        hashes: Vec<H256>,
+    )
+    {
         // FIXME: This is a naive strategy. Need to
         // make it more sophisticated.
         let catch_up_mode = self.catch_up_mode();
@@ -2448,8 +2455,10 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn request_blocks(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
-    ) {
+        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        hashes: Vec<H256>,
+    )
+    {
         self.request_manager.request_blocks(
             io,
             peer_id,
@@ -2459,7 +2468,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn blocks_received(
-        &self, io: &NetworkContext, req_hashes: HashSet<H256>,
+        &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<PeerId>,
     )
@@ -2478,7 +2487,7 @@ impl SynchronizationProtocolHandler {
         self.catch_up_mode() && self.protocol_config.request_block_with_public
     }
 
-    fn expire_block_gc(&self, io: &NetworkContext) {
+    fn expire_block_gc(&self, io: &dyn NetworkContext) {
         // remove expire blocks every 450 seconds
         let need_to_relay = self.graph.remove_expire_blocks(15 * 30, true);
         self.relay_blocks(io, need_to_relay).ok();
@@ -2486,7 +2495,7 @@ impl SynchronizationProtocolHandler {
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
-    fn initialize(&self, io: &NetworkContext) {
+    fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(TX_TIMER, self.protocol_config.send_tx_period)
             .expect("Error registering transactions timer");
         io.register_timer(
@@ -2519,7 +2528,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
     }
 
-    fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
@@ -2527,7 +2536,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_work_dispatch(
-        &self, io: &NetworkContext, work_type: HandlerWorkType,
+        &self, io: &dyn NetworkContext, work_type: HandlerWorkType,
     ) {
         if work_type == SyncHandlerWorkType::RecoverPublic as HandlerWorkType {
             if let Err(e) = self.on_blocks_inner_task(io) {
@@ -2538,7 +2547,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         }
     }
 
-    fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId) {
         info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
@@ -2551,14 +2560,14 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         }
     }
 
-    fn on_peer_disconnected(&self, io: &NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
         info!("Peer disconnected: peer={:?}", peer);
         self.syn.peers.write().remove(&peer);
         self.syn.handshaking_peers.write().remove(&peer);
         self.request_manager.on_peer_disconnected(io, peer);
     }
 
-    fn on_timeout(&self, io: &NetworkContext, timer: TimerToken) {
+    fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
         trace!("Timeout: timer={:?}", timer);
         match timer {
             TX_TIMER => {

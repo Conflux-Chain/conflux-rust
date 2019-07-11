@@ -110,7 +110,7 @@ pub struct NodeMemoryManager<
     /// section.
     db_load_lock: Mutex<()>,
     /// This db access is read only.
-    db: Arc<DeltaDbTrait + Send + Sync>,
+    db: Arc<dyn DeltaDbTrait + Send + Sync>,
 
     // TODO(yz): use other atomic integer types when they becomes
     // available in rust stable.
@@ -166,7 +166,7 @@ impl<
     pub fn new(
         cache_start_size: u32, cache_size: u32, idle_size: u32,
         node_map_size: u32, cache_algorithm: CacheAlgorithmT,
-        kvdb: Arc<DeltaDbTrait + Send + Sync>,
+        kvdb: Arc<dyn DeltaDbTrait + Send + Sync>,
     ) -> Self
     {
         let size_limit = cache_size + idle_size;

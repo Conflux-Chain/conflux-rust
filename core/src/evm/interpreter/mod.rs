@@ -192,7 +192,7 @@ pub struct Interpreter<Cost: CostType> {
 
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
-        mut self: Box<Self>, context: &mut vm::Context,
+        mut self: Box<Self>, context: &mut dyn vm::Context,
     ) -> vm::ExecTrapResult<GasLeft> {
         loop {
             let result = self.step(context);
@@ -218,7 +218,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
 impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
     fn resume_call(
         mut self: Box<Self>, result: MessageCallResult,
-    ) -> Box<vm::Exec> {
+    ) -> Box<dyn vm::Exec> {
         {
             let this = &mut *self;
             let (out_off, out_size) = this.resume_output_range.take().expect("Box<ResumeCall> is obtained from a call opcode; resume_output_range is always set after those opcodes are executed; qed");
@@ -263,7 +263,7 @@ impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
 impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
     fn resume_create(
         mut self: Box<Self>, result: ContractCreateResult,
-    ) -> Box<vm::Exec> {
+    ) -> Box<dyn vm::Exec> {
         match result {
             ContractCreateResult::Created(address, gas_left) => {
                 self.stack.push(address_to_u256(address));
@@ -328,7 +328,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 
     /// Execute a single step on the VM.
     #[inline(always)]
-    pub fn step(&mut self, context: &mut vm::Context) -> InterpreterResult {
+    pub fn step(&mut self, context: &mut dyn vm::Context) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -359,7 +359,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Inner helper function for step.
     #[inline(always)]
     fn step_inner(
-        &mut self, context: &mut vm::Context,
+        &mut self, context: &mut dyn vm::Context,
     ) -> Result<Never, InterpreterResult> {
         let result = match self.resume_result.take() {
             Some(result) => result,
@@ -541,7 +541,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn verify_instruction(
-        &self, context: &vm::Context, instruction: Instruction,
+        &self, context: &dyn vm::Context, instruction: Instruction,
         info: &InstructionInfo,
     ) -> vm::Result<()>
     {
@@ -586,7 +586,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn mem_written(
-        instruction: Instruction, stack: &Stack<U256>,
+        instruction: Instruction, stack: &dyn Stack<U256>,
     ) -> Option<(usize, usize)> {
         let read = |pos| stack.peek(pos).low_u64() as usize;
         let written = match instruction {
@@ -614,7 +614,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn store_written(
-        instruction: Instruction, stack: &Stack<U256>,
+        instruction: Instruction, stack: &dyn Stack<U256>,
     ) -> Option<(U256, U256)> {
         match instruction {
             instructions::SSTORE => {
@@ -625,7 +625,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn exec_instruction(
-        &mut self, gas: Cost, context: &mut vm::Context,
+        &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
     ) -> vm::Result<InstructionResult<Cost>>
     {
@@ -1430,7 +1430,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn copy_data_to_memory(
-        mem: &mut Vec<u8>, stack: &mut Stack<U256>, source: &[u8],
+        mem: &mut Vec<u8>, stack: &mut dyn Stack<U256>, source: &[u8],
     ) {
         let dest_offset = stack.pop_back();
         let source_offset = stack.pop_back();
@@ -1517,7 +1517,9 @@ mod tests {
     use rustc_hex::FromHex;
     use std::sync::Arc;
 
-    fn interpreter(params: ActionParams, context: &vm::Context) -> Box<Exec> {
+    fn interpreter(
+        params: ActionParams, context: &dyn vm::Context,
+    ) -> Box<dyn Exec> {
         Factory::new(VMType::Interpreter, 1).create(
             params,
             context.spec(),

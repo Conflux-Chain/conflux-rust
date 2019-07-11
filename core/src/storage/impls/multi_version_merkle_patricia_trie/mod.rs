@@ -60,7 +60,7 @@ impl MultiVersionMerklePatriciaTrie {
     }
 
     pub fn new(
-        kvdb: Arc<DeltaDbTrait + Send + Sync>, conf: StorageConfiguration,
+        kvdb: Arc<dyn DeltaDbTrait + Send + Sync>, conf: StorageConfiguration,
         padding: KeyPadding, snapshot_root: MerkleHash,
         storage_manager: Arc<StorageManager>,
     ) -> Self

@@ -46,113 +46,115 @@ pub mod msg_sender {
     use metrics::{register_meter_with_group, Meter};
     use std::sync::Arc;
     lazy_static! {
-        static ref ON_STATUS_METER: Arc<Meter> =
+        static ref ON_STATUS_METER: Arc<dyn Meter> =
             register_meter_with_group("network_connection_data", "on_status");
-        static ref GET_BLOCK_HEADER_RESPONSE_METER: Arc<Meter> =
+        static ref GET_BLOCK_HEADER_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_block_header_response"
             );
-        static ref GET_BLOCK_HEADERS_METER: Arc<Meter> =
+        static ref GET_BLOCK_HEADERS_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_block_headers"
             );
-        static ref GET_BLOCK_HEADER_CHAIN_METER: Arc<Meter> =
+        static ref GET_BLOCK_HEADER_CHAIN_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_block_header_chain"
             );
-        static ref NEW_BLOCK_METER: Arc<Meter> =
+        static ref NEW_BLOCK_METER: Arc<dyn Meter> =
             register_meter_with_group("network_connection_data", "new_block");
-        static ref NEW_BLOCK_HASHES_METER: Arc<Meter> =
+        static ref NEW_BLOCK_HASHES_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "new_block_hashes"
             );
-        static ref GET_BLOCKS_RESPONSE_METER: Arc<Meter> =
+        static ref GET_BLOCKS_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_blocks_response"
             );
-        static ref GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER: Arc<Meter> =
+        static ref GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_blocks_with_public_response"
             );
-        static ref GET_BLOCKS_METER: Arc<Meter> =
+        static ref GET_BLOCKS_METER: Arc<dyn Meter> =
             register_meter_with_group("network_connection_data", "get_blocks");
-        static ref GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER: Arc<Meter> =
+        static ref GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_terminal_block_hashes_response"
             );
-        static ref GET_TERMINAL_BLOCK_HASHES_METER: Arc<Meter> =
+        static ref GET_TERMINAL_BLOCK_HASHES_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_terminal_block_hashes"
             );
-        static ref TRANSACTIONS_METER: Arc<Meter> = register_meter_with_group(
-            "network_connection_data",
-            "transactions"
-        );
-        static ref GET_CMPCT_BLOCKS_METER: Arc<Meter> =
+        static ref TRANSACTIONS_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "transactions"
+            );
+        static ref GET_CMPCT_BLOCKS_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_cmpct_blocks"
             );
-        static ref GET_CMPCT_BLOCKS_RESPONSE_METER: Arc<Meter> =
+        static ref GET_CMPCT_BLOCKS_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_cmpct_blocks_response"
             );
-        static ref GET_BLOCK_TXN_METER: Arc<Meter> = register_meter_with_group(
-            "network_connection_data",
-            "get_block_txn"
-        );
-        static ref GET_BLOCK_TXN_RESPOPNSE_METER: Arc<Meter> =
+        static ref GET_BLOCK_TXN_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "get_block_txn"
+            );
+        static ref GET_BLOCK_TXN_RESPOPNSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_block_txn_response"
             );
-        static ref TRANSACTION_PROPAGATION_CONTROL_METER: Arc<Meter> =
+        static ref TRANSACTION_PROPAGATION_CONTROL_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "transaction_propagation_control"
             );
-        static ref TRANSACTION_DIGESTS_METER: Arc<Meter> =
+        static ref TRANSACTION_DIGESTS_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "transaction_digests"
             );
-        static ref GET_TRANSACTIONS_METER: Arc<Meter> =
+        static ref GET_TRANSACTIONS_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_transactions"
             );
-        static ref GET_TRANSACTIONS_RESPONSE_METER: Arc<Meter> =
+        static ref GET_TRANSACTIONS_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_transactions_response"
             );
-        static ref GET_BLOCK_HASHES_BY_EPOCH_METER: Arc<Meter> =
+        static ref GET_BLOCK_HASHES_BY_EPOCH_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_block_hashes_by_epoch"
             );
-        static ref GET_BLOCK_HASHES_RESPONSE_METER: Arc<Meter> =
+        static ref GET_BLOCK_HASHES_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
                 "get_block_hashes_response"
             );
-        static ref OTHER_HIGH_METER: Arc<Meter> = register_meter_with_group(
+        static ref OTHER_HIGH_METER: Arc<dyn Meter> = register_meter_with_group(
             "network_connection_data",
             "other_high_meter"
         );
     }
 
     pub fn send_message(
-        io: &NetworkContext, peer: PeerId, msg: &Message,
+        io: &dyn NetworkContext, peer: PeerId, msg: &dyn Message,
         priority: SendQueuePriority,
     ) -> Result<(), NetworkError>
     {
@@ -160,7 +162,7 @@ pub mod msg_sender {
     }
 
     pub fn send_message_with_throttling(
-        io: &NetworkContext, peer: PeerId, msg: &Message,
+        io: &dyn NetworkContext, peer: PeerId, msg: &dyn Message,
         priority: SendQueuePriority, throttling_disabled: bool,
     ) -> Result<(), NetworkError>
     {

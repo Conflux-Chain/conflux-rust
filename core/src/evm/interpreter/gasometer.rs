@@ -118,8 +118,9 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
     /// that the current context
     /// provides to the child context.
     pub fn requirements(
-        &mut self, context: &vm::Context, instruction: Instruction,
-        info: &InstructionInfo, stack: &Stack<U256>, current_mem_size: usize,
+        &mut self, context: &dyn vm::Context, instruction: Instruction,
+        info: &InstructionInfo, stack: &dyn Stack<U256>,
+        current_mem_size: usize,
     ) -> vm::Result<InstructionRequirements<Gas>>
     {
         let spec = context.spec();
