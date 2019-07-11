@@ -416,7 +416,7 @@ impl SynchronizationProtocolHandler {
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
-            ErrorKind::UnexpectedResponse => disconnect = false,
+            ErrorKind::UnexpectedResponse => disconnect = true,
             ErrorKind::RequestNotFound => disconnect = false,
             ErrorKind::TooManyTrans => {}
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
