@@ -36,7 +36,7 @@ use crate::{
     pow::WORKER_COMPUTATION_PARALLELISM,
     verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
 };
-use metrics::{Gauge, GaugeUsize};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
     Block, BlockHeader, SignedTransaction, TransactionWithSignature,
     TxPropagateId,
@@ -52,8 +52,22 @@ use std::{
 };
 use threadpool::ThreadPool;
 lazy_static! {
-    static ref TX_PROPAGATE_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register("tx_propagate_set_size");
+    static ref TX_PROPAGATE_METER: Arc<Meter> =
+        register_meter_with_group("tx_pool", "tx_propagate_set_size");
+    static ref BLOCK_HEADER_HANDLE_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync::on_block_headers");
+    static ref BLOCK_HANDLE_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync::on_blocks");
+    static ref CMPCT_BLOCK_HANDLE_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync::on_compact_block");
+    static ref BLOCK_TXN_HANDLE_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync::on_block_txn");
+    static ref BLOCK_RECOVER_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync:recover_block");
+    static ref CMPCT_BLOCK_RECOVER_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync:recover_compact_block");
+    static ref TX_HANDLE_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "sync::on_tx_response");
 }
 
 const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
@@ -497,6 +511,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_compact_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(CMPCT_BLOCK_HANDLE_TIMER.as_ref());
         let resp: GetCompactBlocksResponse = rlp.as_val()?;
         debug!(
             "on_get_compact_blocks_response request_id={} compact={} block={}",
@@ -537,13 +552,18 @@ impl SynchronizationProtocolHandler {
                         continue;
                     } else {
                         debug!("Cmpct block Processing, hash={}", hash);
-                        let missing = cmpct.build_partial(
-                            &*self
-                                .graph
-                                .data_man
-                                .transaction_pubkey_cache
-                                .read(),
-                        );
+                        let missing = {
+                            let _timer = MeterTimer::time_func(
+                                CMPCT_BLOCK_RECOVER_TIMER.as_ref(),
+                            );
+                            cmpct.build_partial(
+                                &*self
+                                    .graph
+                                    .data_man
+                                    .transaction_pubkey_cache
+                                    .read(),
+                            )
+                        };
                         if !missing.is_empty() {
                             debug!(
                                 "Request {} missing tx in {}",
@@ -606,6 +626,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_transactions_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
         let resp = rlp.as_val::<GetTransactionsResponse>()?;
         debug!("on_get_transactions_response {:?}", resp.request_id());
 
@@ -750,6 +771,7 @@ impl SynchronizationProtocolHandler {
     fn on_get_blocktxn_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(BLOCK_TXN_HANDLE_TIMER.as_ref());
         let resp: GetBlockTxnResponse = rlp.as_val()?;
         debug!("on_get_blocktxn_response");
         let resp_hash = resp.block_hash;
@@ -1328,7 +1350,7 @@ impl SynchronizationProtocolHandler {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
         let best_peer_epoch = self.best_peer_epoch().unwrap_or(0);
-        let my_best_epoch = self.graph.best_epoch_number();
+        let my_best_epoch = self.graph.consensus.best_epoch_number();
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
@@ -1386,9 +1408,9 @@ impl SynchronizationProtocolHandler {
     fn on_block_headers_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
         let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
-
         let id = block_headers.request_id();
         let req = self.request_manager.match_request(io, peer, id)?;
 
@@ -1421,7 +1443,6 @@ impl SynchronizationProtocolHandler {
             } else {
                 Ok(())
             };
-
         now_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -1632,6 +1653,7 @@ impl SynchronizationProtocolHandler {
     fn on_blocks_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
         let blocks = rlp.as_val::<GetBlocksResponse>()?;
         debug!(
             "on_blocks_response, get block hashes {:?}",
@@ -2067,7 +2089,7 @@ impl SynchronizationProtocolHandler {
         tx_msg.window_index = self
             .request_manager
             .append_sent_transactions(sent_transactions);
-        TX_PROPAGATE_GAUGE.update(tx_msg.trans_short_ids.len());
+        TX_PROPAGATE_METER.mark(tx_msg.trans_short_ids.len());
 
         if tx_msg.trans_short_ids.is_empty() {
             return;
@@ -2165,6 +2187,7 @@ impl SynchronizationProtocolHandler {
         cache_man: &mut CacheManager<CacheId>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError>
     {
+        let _timer = MeterTimer::time_func(BLOCK_RECOVER_TIMER.as_ref());
         let mut recovered_transactions = Vec::with_capacity(transactions.len());
         for transaction in transactions {
             let tx_hash = transaction.hash();
@@ -2202,6 +2225,7 @@ impl SynchronizationProtocolHandler {
         cache_man: &mut CacheManager<CacheId>, worker_pool: &ThreadPool,
     ) -> Result<(), DecoderError>
     {
+        let _timer = MeterTimer::time_func(BLOCK_RECOVER_TIMER.as_ref());
         debug!("recover public for block started.");
         let mut recovered_transactions =
             Vec::with_capacity(block.transactions.len());
@@ -2364,7 +2388,7 @@ impl SynchronizationProtocolHandler {
 
         peer_best_epoches.sort();
         let middle_epoch = peer_best_epoches[peer_best_epoches.len() / 2];
-        let catch_up_mode = self.graph.best_epoch_number()
+        let catch_up_mode = self.graph.consensus.best_epoch_number()
             + CATCH_UP_EPOCH_LAG_THRESHOLD
             < middle_epoch;
         self.syn
@@ -2385,7 +2409,7 @@ impl SynchronizationProtocolHandler {
         info!(
             "Catch-up mode: {}, latest epoch: {}",
             catch_up_mode,
-            self.graph.best_epoch_number()
+            self.graph.consensus.best_epoch_number()
         );
 
         let trans_prop_ctrl_msg: Box<dyn Message> =

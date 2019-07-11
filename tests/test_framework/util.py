@@ -271,6 +271,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "session_ip_limits": "\"0,0,0,0\"",
                         "enable_discovery": "false",
                         "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
+                        "metrics_enabled": "true",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]

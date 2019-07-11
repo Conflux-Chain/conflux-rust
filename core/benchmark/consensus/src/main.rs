@@ -5,7 +5,7 @@
 #![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_manager::CacheManager,
     consensus::{
         ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
@@ -132,7 +132,7 @@ fn initialize_consensus_graph_for_test(
         ledger_db.clone(),
         storage_manager,
         cache_man,
-        false,
+        DataManagerConfiguration::new(false, true),
     ));
 
     let txpool = Arc::new(TransactionPool::with_capacity(
