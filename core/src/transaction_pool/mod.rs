@@ -1011,11 +1011,10 @@ impl TransactionPool {
     }
 
     pub fn notify_new_best_info(&self, best_info: Arc<BestInformation>) {
-        let mut consensus_best_info = self.consensus_best_info.lock();
-        *consensus_best_info = best_info;
-
         let mut set_tx_buffer = self.set_tx_requests.lock();
         let mut recycle_tx_buffer = self.recycle_tx_requests.lock();
+        let mut consensus_best_info = self.consensus_best_info.lock();
+        *consensus_best_info = best_info;
 
         let mut account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write();

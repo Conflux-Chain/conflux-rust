@@ -188,7 +188,9 @@ impl ConsensusGraph {
             best_info: RwLock::new(Arc::new(Default::default())),
         };
         graph.update_best_info(&*graph.inner.read());
-        graph.txpool.notify_new_best_info(graph.best_info.read().clone());
+        graph
+            .txpool
+            .notify_new_best_info(graph.best_info.read().clone());
         graph
     }
 
