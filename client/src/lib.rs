@@ -123,7 +123,7 @@ impl Client {
             WORKER_COMPUTATION_PARALLELISM,
         )));
 
-        let network_config = conf.net_config();
+        let network_config = conf.net_config()?;
         let cache_config = conf.cache_config();
 
         let db_config = conf.db_config();

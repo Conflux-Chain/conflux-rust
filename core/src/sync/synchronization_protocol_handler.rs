@@ -620,23 +620,7 @@ impl SynchronizationProtocolHandler {
         );
 
         // Broadcast completed block_header_ready blocks
-        if !completed_blocks.is_empty() && !self.catch_up_mode() {
-            let new_block_hash_msg: Box<dyn Message> =
-                Box::new(NewBlockHashes {
-                    block_hashes: completed_blocks,
-                });
-            self.broadcast_message(
-                io,
-                PeerId::max_value(),
-                new_block_hash_msg.as_ref(),
-                SendQueuePriority::High,
-            )
-            .unwrap_or_else(|e| {
-                warn!("Error broadcasting blocks, err={:?}", e);
-            });
-        }
-
-        Ok(())
+        self.relay_blocks(io, completed_blocks)
     }
 
     fn on_get_transactions_response(
@@ -863,22 +847,7 @@ impl SynchronizationProtocolHandler {
                                 request_from_same_peer = true;
                             }
                             if to_relay && !self.catch_up_mode() {
-                                let new_block_hash_msg: Box<dyn Message> =
-                                    Box::new(NewBlockHashes {
-                                        block_hashes: blocks,
-                                    });
-                                self.broadcast_message(
-                                    io,
-                                    PeerId::max_value(),
-                                    new_block_hash_msg.as_ref(),
-                                    SendQueuePriority::High,
-                                )
-                                .unwrap_or_else(|e| {
-                                    warn!(
-                                        "Error broadcasting blocks, err={:?}",
-                                        e
-                                    );
-                                });
+                                self.relay_blocks(io, blocks).ok();
                             }
                         }
                         None => {
@@ -1581,35 +1550,15 @@ impl SynchronizationProtocolHandler {
         );
 
         // request missing blocks
-        // FIXME: This is a naive strategy. Need to
-        // make it more sophisticated.
-        let catch_up_mode = self.catch_up_mode();
-        if catch_up_mode {
-            self.request_blocks(io, chosen_peer, hashes.into_iter().collect());
-        } else {
-            self.request_manager.request_compact_blocks(
-                io,
-                chosen_peer,
-                hashes.into_iter().collect(),
-            );
-        }
+        self.request_missing_blocks(
+            io,
+            chosen_peer,
+            hashes.into_iter().collect(),
+        );
 
         // relay if necessary
-        if !need_to_relay.is_empty() && !catch_up_mode {
-            let new_block_hash_msg: Box<dyn Message> =
-                Box::new(NewBlockHashes {
-                    block_hashes: need_to_relay.into_iter().collect(),
-                });
-            self.broadcast_message(
-                io,
-                PeerId::max_value(),
-                new_block_hash_msg.as_ref(),
-                SendQueuePriority::High,
-            )
-            .unwrap_or_else(|e| {
-                warn!("Error broadcasting blocks, err={:?}", e);
-            });
-        }
+        self.relay_blocks(io, need_to_relay.into_iter().collect())
+            .ok();
 
         timestamp_validation_result
     }
@@ -1839,23 +1788,7 @@ impl SynchronizationProtocolHandler {
             chosen_peer,
         );
 
-        if !need_to_relay.is_empty() && !self.catch_up_mode() {
-            let new_block_hash_msg: Box<dyn Message> =
-                Box::new(NewBlockHashes {
-                    block_hashes: need_to_relay,
-                });
-            self.broadcast_message(
-                io,
-                PeerId::max_value(),
-                new_block_hash_msg.as_ref(),
-                SendQueuePriority::High,
-            )
-            .unwrap_or_else(|e| {
-                warn!("Error broadcasting blocks, err={:?}", e);
-            });
-        }
-
-        Ok(())
+        self.relay_blocks(io, need_to_relay)
     }
 
     fn on_blocks_inner_task(&self, io: &NetworkContext) -> Result<(), Error> {
@@ -1948,22 +1881,7 @@ impl SynchronizationProtocolHandler {
         let need_to_relay = self.on_new_decoded_block(block, true, true)?;
 
         // broadcast the hash of the newly got block
-        if !need_to_relay.is_empty() && !self.catch_up_mode() {
-            let new_block_hash_msg: Box<dyn Message> =
-                Box::new(NewBlockHashes {
-                    block_hashes: need_to_relay,
-                });
-            self.broadcast_message(
-                io,
-                PeerId::max_value(),
-                new_block_hash_msg.as_ref(),
-                SendQueuePriority::High,
-            )
-            .unwrap_or_else(|e| {
-                warn!("Error broadcasting blocks, err={:?}", e);
-            });
-        }
-        Ok(())
+        self.relay_blocks(io, need_to_relay)
     }
 
     fn on_new_block_hashes(
@@ -2244,39 +2162,15 @@ impl SynchronizationProtocolHandler {
         let chosen_peer = self.syn.get_random_peer(&HashSet::new());
 
         // request missing blocks
-        // FIXME: This is a naive strategy. Need to
-        // make it more sophisticated.
-        let catch_up_mode = self.catch_up_mode();
-        if catch_up_mode {
-            self.request_blocks(
-                io,
-                chosen_peer,
-                missed_body_block_hashes.into_iter().collect(),
-            );
-        } else {
-            self.request_manager.request_compact_blocks(
-                io,
-                chosen_peer,
-                missed_body_block_hashes.into_iter().collect(),
-            );
-        }
+        self.request_missing_blocks(
+            io,
+            chosen_peer,
+            missed_body_block_hashes.into_iter().collect(),
+        );
 
         // relay if necessary
-        if !need_to_relay.is_empty() && !catch_up_mode {
-            let new_block_hash_msg: Box<dyn Message> =
-                Box::new(NewBlockHashes {
-                    block_hashes: need_to_relay.into_iter().collect(),
-                });
-            self.broadcast_message(
-                io,
-                PeerId::max_value(),
-                new_block_hash_msg.as_ref(),
-                SendQueuePriority::High,
-            )
-            .unwrap_or_else(|e| {
-                warn!("Error broadcasting blocks, err={:?}", e);
-            });
-        }
+        self.relay_blocks(io, need_to_relay.into_iter().collect())
+            .ok();
     }
 
     pub fn propagate_new_transactions(&self, io: &NetworkContext) {
@@ -2562,6 +2456,20 @@ impl SynchronizationProtocolHandler {
         io.dispatch_work(SyncHandlerWorkType::RecoverPublic as HandlerWorkType);
     }
 
+    fn request_missing_blocks(
+        &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
+    ) {
+        // FIXME: This is a naive strategy. Need to
+        // make it more sophisticated.
+        let catch_up_mode = self.catch_up_mode();
+        if catch_up_mode {
+            self.request_blocks(io, peer_id, hashes);
+        } else {
+            self.request_manager
+                .request_compact_blocks(io, peer_id, hashes);
+        }
+    }
+
     pub fn request_blocks(
         &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
     ) {
@@ -2593,8 +2501,10 @@ impl SynchronizationProtocolHandler {
         self.catch_up_mode() && self.protocol_config.request_block_with_public
     }
 
-    fn expire_block_gc(&self) {
-        self.graph.remove_expire_blocks(15 * 30, true);
+    fn expire_block_gc(&self, io: &NetworkContext) {
+        // remove expire blocks every 450 seconds
+        let need_to_relay = self.graph.remove_expire_blocks(15 * 30, true);
+        self.relay_blocks(io, need_to_relay).ok();
     }
 }
 
@@ -2708,7 +2618,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 }
             }
             EXPIRE_BLOCK_GC_TIMER => {
-                self.expire_block_gc();
+                self.expire_block_gc(io);
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }

@@ -118,6 +118,7 @@ pub struct BestInformation {
     pub terminal_block_hashes: Vec<H256>,
     pub deferred_state_root: StateRootWithAuxInfo,
     pub deferred_receipts_root: H256,
+    pub deferred_logs_bloom_hash: H256,
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -213,7 +214,7 @@ impl ConsensusGraph {
     /// Wait for the generation and the execution completion of a block in the
     /// consensus graph. This API is used mainly for testing purpose
     pub fn wait_for_generation(&self, hash: &H256) {
-        while !self.inner.read().indices.contains_key(hash) {
+        while !self.inner.read().hash_to_arena_indices.contains_key(hash) {
             sleep(Duration::from_millis(1));
         }
         let best_state_block = self.inner.read().best_state_block_hash();
@@ -227,7 +228,8 @@ impl ConsensusGraph {
         difficulty: &U256,
     ) -> bool
     {
-        let parent_index = *inner.indices.get(parent_hash).unwrap();
+        let parent_index =
+            *inner.hash_to_arena_indices.get(parent_hash).unwrap();
         inner.check_mining_adaptive_block(parent_index, *difficulty)
     }
 
@@ -303,19 +305,28 @@ impl ConsensusGraph {
     }
 
     pub fn get_epoch_blocks(
-        &self, inner: &ConsensusGraphInner, epoch_index: usize,
+        &self, inner: &ConsensusGraphInner, epoch_arena_index: usize,
     ) -> Vec<Arc<Block>> {
-        inner.get_executable_epoch_blocks(&self.data_man, epoch_index)
+        inner.get_executable_epoch_blocks(&self.data_man, epoch_arena_index)
+    }
+
+    /// This is a very expensive call to force the engine to recompute the state
+    /// root of a given block
+    #[inline]
+    pub fn compute_state_for_block(
+        &self, block_hash: &H256, inner: &ConsensusGraphInner,
+    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
+        self.executor.compute_state_for_block(block_hash, inner)
     }
 
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
     pub fn compute_deferred_state_for_block(
         &self, block_hash: &H256, delay: usize,
-    ) -> Result<(StateRootWithAuxInfo, H256), String> {
+    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
         let inner = &mut *self.inner.write();
 
-        let idx_opt = inner.indices.get(block_hash);
+        let idx_opt = inner.hash_to_arena_indices.get(block_hash);
         if idx_opt == None {
             return Err(
                 "Parent hash is too old for computing the deferred state"
@@ -324,9 +335,11 @@ impl ConsensusGraph {
         }
         let mut idx = *idx_opt.unwrap();
         for _i in 0..delay {
-            if idx == inner.cur_era_genesis_block_index {
+            if idx == inner.cur_era_genesis_block_arena_index {
                 // If it is the original genesis, we just break
-                if inner.arena[inner.cur_era_genesis_block_index].height == 0 {
+                if inner.arena[inner.cur_era_genesis_block_arena_index].height
+                    == 0
+                {
                     break;
                 } else {
                     return Err("Parent hash is too old for computing the deferred state".to_owned());
@@ -341,7 +354,6 @@ impl ConsensusGraph {
     /// construct_pivot() should be used after on_new_block_construction_only()
     /// calls. It builds the pivot chain and ists state at once, avoiding
     /// intermediate redundant computation triggered by on_new_block().
-    /// FIXME: Checkpoint will require a new way to catch up
     pub fn construct_pivot(&self) {
         {
             let inner = &mut *self.inner.write();
@@ -353,6 +365,11 @@ impl ConsensusGraph {
         }
     }
 
+    /// This is the function to insert a new block into the consensus graph
+    /// during construction. We by pass many verifications because those
+    /// blocks are from our own database so we trust them. After inserting
+    /// all blocks with this function, we need to call construct_pivot() to
+    /// finish the building from db!
     pub fn on_new_block_construction_only(&self, hash: &H256) {
         let block = self.data_man.block_by_hash(hash, true).unwrap();
 
@@ -369,6 +386,8 @@ impl ConsensusGraph {
             .on_new_block_construction_only(inner, hash, block);
     }
 
+    /// This is the main function that SynchronizationGraph calls to deliver a
+    /// new block to the consensus graph.
     pub fn on_new_block(&self, hash: &H256) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
@@ -427,7 +446,7 @@ impl ConsensusGraph {
 
     pub fn get_ancestor(&self, hash: &H256, height: u64) -> H256 {
         let inner = self.inner.write();
-        let me = *inner.indices.get(hash).unwrap();
+        let me = *inner.hash_to_arena_indices.get(hash).unwrap();
         let idx = inner.ancestor_at(me, height);
         inner.arena[idx].hash.clone()
     }
@@ -446,7 +465,9 @@ impl ConsensusGraph {
     }
 
     /// Returns the total number of blocks in consensus graph
-    pub fn block_count(&self) -> usize { self.inner.read().indices.len() }
+    pub fn block_count(&self) -> usize {
+        self.inner.read().hash_to_arena_indices.len()
+    }
 
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
         self.call_virtual(tx, EpochNumber::LatestState)
@@ -487,10 +508,11 @@ impl ConsensusGraph {
 
             let mut blocks = Vec::new();
             for epoch_number in from_epoch..to_epoch {
-                let epoch_hash =
-                    inner.arena[inner.get_pivot_block_index(epoch_number)].hash;
+                let epoch_hash = inner.arena
+                    [inner.get_pivot_block_arena_index(epoch_number)]
+                .hash;
                 for index in &inner.arena
-                    [inner.get_pivot_block_index(epoch_number)]
+                    [inner.get_pivot_block_arena_index(epoch_number)]
                 .data
                 .ordered_executable_epoch_blocks
                 {
@@ -601,10 +623,10 @@ impl ConsensusGraph {
     }
 
     /// Wait for a block's epoch is computed.
-    /// Return the state_root and receipts_root
+    /// Return the state_root, receipts_root, and logs_bloom_hash
     pub fn wait_for_block_state(
         &self, block_hash: &H256,
-    ) -> (StateRootWithAuxInfo, H256) {
+    ) -> (StateRootWithAuxInfo, H256, H256) {
         self.executor.wait_for_result(*block_hash)
     }
 
@@ -613,7 +635,9 @@ impl ConsensusGraph {
     /// before the checkpoint.
     pub fn current_era_genesis_hash(&self) -> H256 {
         let inner = self.inner.read();
-        inner.arena[inner.cur_era_genesis_block_index].hash.clone()
+        inner.arena[inner.cur_era_genesis_block_arena_index]
+            .hash
+            .clone()
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
@@ -632,15 +656,21 @@ impl ConsensusGraph {
         BestInformation,
     > {
         let consensus_inner = self.inner.upgradable_read();
-        let (deferred_state_root, deferred_receipts_root) =
-            self.wait_for_block_state(&consensus_inner.best_state_block_hash());
+        let (
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+        ) = self.wait_for_block_state(&consensus_inner.best_state_block_hash());
         let mut bounded_terminal_hashes = consensus_inner.terminal_hashes();
         if let Some(referee_bound) = referee_bound_opt {
             if bounded_terminal_hashes.len() > referee_bound {
                 let mut tmp = Vec::new();
                 let best_idx = consensus_inner.pivot_chain.last().unwrap();
                 for hash in bounded_terminal_hashes {
-                    let a_idx = consensus_inner.indices.get(&hash).unwrap();
+                    let a_idx = consensus_inner
+                        .hash_to_arena_indices
+                        .get(&hash)
+                        .unwrap();
                     let a_lca = consensus_inner.lca(*a_idx, *best_idx);
                     tmp.push((consensus_inner.arena[a_lca].height, hash));
                 }
@@ -659,6 +689,7 @@ impl ConsensusGraph {
             terminal_block_hashes: bounded_terminal_hashes,
             deferred_state_root,
             deferred_receipts_root,
+            deferred_logs_bloom_hash,
         };
         GuardedValue::new(consensus_inner, value)
     }

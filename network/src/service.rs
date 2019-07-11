@@ -493,7 +493,7 @@ impl NetworkServiceInner {
             timer_counter: RwLock::new(HANDLER_TIMER),
             node_db: RwLock::new(NodeDatabase::new(
                 nodes_path,
-                config.nodes_per_ip,
+                config.subnet_quota,
             )),
             reserved_nodes: RwLock::new(HashSet::new()),
             nodes: RwLock::new(HashMap::new()),

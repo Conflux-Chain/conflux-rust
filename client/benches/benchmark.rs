@@ -60,7 +60,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     };
     let tx = tx.sign(kp.secret());
     let machine = new_machine();
-    let mut env = Env {
+    let env = Env {
         number: 0, // TODO: replace 0 with correct cardinal number
         author: Default::default(),
         timestamp: Default::default(),
@@ -90,7 +90,7 @@ fn txexe_benchmark(c: &mut Criterion) {
             0.into(),
             VmFactory::new(1024 * 32),
         );
-        let mut ex = Executive::new(&mut state, &mut env, &machine, &spec);
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         b.iter(|| {
             ex.transact(&tx).unwrap();
             ex.state.clear();

@@ -50,7 +50,6 @@ impl OriginInfo {
 }
 
 /// Implementation of evm context.
-#[allow(dead_code)]
 pub struct Context<'a, 'b: 'a> {
     state: &'a mut State<'b>,
     env: &'a Env,
@@ -140,8 +139,6 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
         address_scheme: CreateContractAddress, trap: bool,
     ) -> ::std::result::Result<ContractCreateResult, TrapKind>
     {
-        assert!(trap);
-
         // create new contract address
         let (address, code_hash) = match self.state.nonce(&self.origin.address)
         {
@@ -184,7 +181,24 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
             }
         }
 
-        return Err(TrapKind::Create(params, address));
+        if trap {
+            return Err(TrapKind::Create(params, address));
+        }
+
+        let mut ex = Executive::from_parent(
+            self.state,
+            self.env,
+            self.machine,
+            self.spec,
+            self.depth,
+            self.static_flag,
+        );
+        let out = ex.create_with_stack_depth(
+            params,
+            self.substate,
+            self.stack_depth + 1,
+        );
+        Ok(into_contract_create_result(out, &address, self.substate))
     }
 
     fn call(
@@ -351,6 +365,7 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
 mod tests {
     use super::*;
     use crate::{
+        machine::new_machine,
         statedb::StateDb,
         storage::{
             new_storage_manager_for_testing, state::StateTrait, StorageManager,
@@ -389,6 +404,10 @@ mod tests {
     struct TestSetup {
         storage_manager: Option<Box<StorageManager>>,
         state: Option<State<'static>>,
+        machine: Machine,
+        spec: Spec,
+        substate: Substate,
+        env: Env,
     }
 
     impl TestSetup {
@@ -398,10 +417,17 @@ mod tests {
 
         fn new() -> Self {
             let storage_manager = Box::new(new_storage_manager_for_testing());
+            let machine = new_machine();
+            let env = get_test_env();
+            let spec = machine.spec(env.number);
 
             let mut setup = Self {
                 storage_manager: None,
                 state: None,
+                machine,
+                spec,
+                substate: Substate::new(),
+                env,
             };
             setup.storage_manager = Some(storage_manager);
             setup.init_state(unsafe {
@@ -414,5 +440,261 @@ mod tests {
     }
 
     #[test]
-    fn can_be_created() { let _setup = TestSetup::new(); }
+    fn can_be_created() {
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let ctx = Context::new(
+            state,
+            &setup.env,
+            &setup.machine,
+            &setup.spec,
+            0,
+            0,
+            &origin,
+            &mut setup.substate,
+            OutputPolicy::InitContract,
+            false,
+        );
+
+        assert_eq!(ctx.env().number, 100);
+    }
+
+    #[test]
+    fn can_return_block_hash_no_env() {
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let mut ctx = Context::new(
+            state,
+            &setup.env,
+            &setup.machine,
+            &setup.spec,
+            0,
+            0,
+            &origin,
+            &mut setup.substate,
+            OutputPolicy::InitContract,
+            false,
+        );
+
+        let hash = ctx.blockhash(
+            &"0000000000000000000000000000000000000000000000000000000000120000"
+                .parse::<U256>()
+                .unwrap(),
+        );
+
+        assert_eq!(hash, H256::zero());
+    }
+
+    //    #[test]
+    //    fn can_return_block_hash() {
+    //        let test_hash = H256::from(
+    //
+    // "afafafafafafafafafafafbcbcbcbcbcbcbcbcbcbeeeeeeeeeeeeedddddddddd",
+    //        );
+    //        let test_env_number = 0x120001;
+    //
+    //        let mut setup = TestSetup::new();
+    //        {
+    //            let env = &mut setup.env;
+    //            env.number = test_env_number;
+    //            let mut last_hashes = (*env.last_hashes).clone();
+    //            last_hashes.push(test_hash.clone());
+    //            env.last_hashes = Arc::new(last_hashes);
+    //        }
+    //        let state = &mut setup.state.unwrap();
+    //        let origin = get_test_origin();
+    //
+    //        let mut ctx = Context::new(
+    //            state,
+    //            &setup.env,
+    //            &setup.machine,
+    //            &setup.spec,
+    //            0,
+    //            0,
+    //            &origin,
+    //            &mut setup.substate,
+    //            OutputPolicy::InitContract,
+    //            false,
+    //        );
+    //
+    //        let hash = ctx.blockhash(
+    //
+    // &"0000000000000000000000000000000000000000000000000000000000120000"
+    //                .parse::<U256>()
+    //                .unwrap(),
+    //        );
+    //
+    //        assert_eq!(test_hash, hash);
+    //    }
+
+    #[test]
+    #[should_panic]
+    fn can_call_fail_empty() {
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let mut ctx = Context::new(
+            state,
+            &setup.env,
+            &setup.machine,
+            &setup.spec,
+            0,
+            0,
+            &origin,
+            &mut setup.substate,
+            OutputPolicy::InitContract,
+            false,
+        );
+
+        // this should panic because we have no balance on any account
+        ctx.call(
+            &"0000000000000000000000000000000000000000000000000000000000120000".parse::<U256>().unwrap(),
+            &Address::new(),
+            &Address::new(),
+            Some("0000000000000000000000000000000000000000000000000000000000150000".parse::<U256>().unwrap()),
+            &[],
+            &Address::new(),
+            CallType::Call,
+            false,
+        ).ok().unwrap();
+    }
+
+    #[test]
+    fn can_log() {
+        let log_data = vec![120u8, 110u8];
+        let log_topics = vec![H256::from(
+            "af0fa234a6af46afa23faf23bcbc1c1cb4bcb7bcbe7e7e7ee3ee2edddddddddd",
+        )];
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+            ctx.log(log_topics, &log_data).unwrap();
+        }
+
+        assert_eq!(setup.substate.logs.len(), 1);
+    }
+
+    #[test]
+    fn can_suiside() {
+        let refund_account = &Address::new();
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+            ctx.suicide(refund_account).unwrap();
+        }
+
+        assert_eq!(setup.substate.suicides.len(), 1);
+    }
+
+    #[test]
+    fn can_create() {
+        use std::str::FromStr;
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let address = {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+            match ctx.create(
+                &U256::max_value(),
+                &U256::zero(),
+                &[],
+                CreateContractAddress::FromSenderAndNonce,
+                false,
+            ) {
+                Ok(ContractCreateResult::Created(address, _)) => address,
+                _ => panic!(
+                    "Test create failed; expected Created, got Failed/Reverted"
+                ),
+            }
+        };
+
+        assert_eq!(
+            address,
+            Address::from_str("bd770416a3345f91e4b34576cb804a576fa48eb1")
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn can_create2() {
+        use std::str::FromStr;
+
+        let mut setup = TestSetup::new();
+        let state = &mut setup.state.unwrap();
+        let origin = get_test_origin();
+
+        let address = {
+            let mut ctx = Context::new(
+                state,
+                &setup.env,
+                &setup.machine,
+                &setup.spec,
+                0,
+                0,
+                &origin,
+                &mut setup.substate,
+                OutputPolicy::InitContract,
+                false,
+            );
+
+            match ctx.create(&U256::max_value(), &U256::zero(), &[], CreateContractAddress::FromSenderSaltAndCodeHash(H256::default()), false) {
+                Ok(ContractCreateResult::Created(address, _)) => address,
+                _ => panic!("Test create failed; expected Created, got Failed/Reverted."),
+            }
+        };
+
+        assert_eq!(
+            address,
+            Address::from_str("e33c0c7f7df4809055c3eba6c09cfe4baf1bd9e0")
+                .unwrap()
+        );
+    }
 }

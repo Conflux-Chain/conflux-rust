@@ -17,8 +17,8 @@ HASH_MAX = 1 << 256
 
 def create_block(parent_hash=default_config["GENESIS_PREVHASH"], height=0, timestamp=None, difficulty=TEST_DIFFICULTY, transactions=[],
                  gas_limit=3000000000, referee_hashes=[], author=default_config["GENESIS_COINBASE"],
-                 deferred_state_root=default_config["GENESIS_STATE_ROOT"],
-                 deferred_receipts_root=default_config["GENESIS_RECEIPTS_ROOT"], adaptive=0):
+                 deferred_state_root=default_config["GENESIS_STATE_ROOT"], deferred_receipts_root=default_config["GENESIS_RECEIPTS_ROOT"],
+                 deferred_logs_bloom_hash=default_config["GENESIS_LOGS_BLOOM_HASH"], adaptive=0):
     if timestamp is None:
         timestamp = int(time.time())
     tx_root = utils.sha3(rlp.encode(Transactions(transactions)))
@@ -27,7 +27,7 @@ def create_block(parent_hash=default_config["GENESIS_PREVHASH"], height=0, times
         header = BlockHeader(parent_hash=parent_hash, height=height, difficulty=difficulty, timestamp=timestamp,
                              author=author, transactions_root=tx_root, gas_limit=gas_limit,
                              referee_hashes=referee_hashes, nonce=nonce, deferred_state_root=deferred_state_root,
-                             deferred_receipts_root=deferred_receipts_root, adaptive=adaptive)
+                             deferred_receipts_root=deferred_receipts_root, deferred_logs_bloom_hash=deferred_logs_bloom_hash, adaptive=adaptive)
         if header.pow_decimal() * difficulty < HASH_MAX:
             break
         nonce += 1

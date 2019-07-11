@@ -4,7 +4,7 @@
 
 use crate::{
     cache_manager::{CacheId, CacheManager, CacheSize},
-    db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_TX_ADDRESS},
+    db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_MISC, COL_TX_ADDRESS},
     ext_db::SystemDB,
     pow::TargetDifficultyManager,
     storage::{
@@ -38,7 +38,7 @@ pub struct BlockDataManager {
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
-    block_receipts_root: RwLock<HashMap<H256, H256>>,
+    epoch_execution_commitments: RwLock<HashMap<H256, (H256, H256)>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
 
@@ -66,7 +66,7 @@ impl BlockDataManager {
             compact_blocks: Default::default(),
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
-            block_receipts_root: Default::default(),
+            epoch_execution_commitments: Default::default(),
             transaction_pubkey_cache: Default::default(),
             invalid_block_set: Default::default(),
             genesis_block,
@@ -78,10 +78,15 @@ impl BlockDataManager {
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
         };
 
-        data_man.insert_receipts_root(
+        data_man.insert_epoch_execution_commitments(
             data_man.genesis_block.hash(),
             *data_man.genesis_block.block_header.deferred_receipts_root(),
+            *data_man
+                .genesis_block
+                .block_header
+                .deferred_logs_bloom_hash(),
         );
+
         data_man.insert_block_header(
             data_man.genesis_block.hash(),
             Arc::new(data_man.genesis_block.block_header.clone()),
@@ -135,6 +140,32 @@ impl BlockDataManager {
         let block_body = Block::decode_body_with_tx_public(&rlp)
             .expect("Wrong block rlp format!");
         Some(block_body)
+    }
+
+    pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
+        let mut rlp_stream = RlpStream::new();
+        rlp_stream.begin_list(terminals.len());
+        for hash in terminals {
+            rlp_stream.append(hash);
+        }
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
+        self.db.key_value().write(dbops).expect("db error");
+    }
+
+    pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
+        match self.db.key_value().get(COL_MISC, b"terminals")
+            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
+            {
+                Some(terminals) => {
+                    let rlp = Rlp::new(&terminals);
+                    Some(rlp.as_list::<H256>().expect("Failed to decode terminals!"))
+                }
+                None => {
+                    info!("No terminals got from db");
+                    None
+                }
+            }
     }
 
     fn insert_block_body_to_db(&self, block: &Block) {
@@ -475,16 +506,18 @@ impl BlockDataManager {
         }
     }
 
-    pub fn insert_receipts_root(
-        &self, block_hash: H256, receipts_root: H256,
-    ) -> Option<H256> {
-        self.block_receipts_root
+    pub fn insert_epoch_execution_commitments(
+        &self, block_hash: H256, receipts_root: H256, logs_bloom_hash: H256,
+    ) -> Option<(H256, H256)> {
+        self.epoch_execution_commitments
             .write()
-            .insert(block_hash, receipts_root)
+            .insert(block_hash, (receipts_root, logs_bloom_hash))
     }
 
-    pub fn get_receipts_root(&self, block_hash: &H256) -> Option<H256> {
-        self.block_receipts_root
+    pub fn get_epoch_execution_commitments(
+        &self, block_hash: &H256,
+    ) -> Option<(H256, H256)> {
+        self.epoch_execution_commitments
             .read()
             .get(block_hash)
             .map(Clone::clone)
@@ -523,7 +556,7 @@ impl BlockDataManager {
         // `block_receipts_root` is not computed when recovering from db with
         // fast_recover == false. And we should force it to recompute
         // without checking receipts when fast_recover == false
-        self.get_receipts_root(epoch_hash).is_some()
+        self.get_epoch_execution_commitments(epoch_hash).is_some()
             && self
                 .storage_manager
                 .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
