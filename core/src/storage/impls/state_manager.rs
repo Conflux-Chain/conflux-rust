@@ -285,7 +285,7 @@ impl StateManagerTrait for StateManager {
     }
 
     fn get_state_for_genesis_write(&self) -> State {
-        State::new(
+        let mut state = State::new(
             self,
             (
                 self.storage_manager
@@ -297,7 +297,11 @@ impl StateManagerTrait for StateManager {
                 self.delta_trie.clone(),
                 None,
             ),
-        )
+        );
+
+        state.get_or_create_root_node();
+
+        state
     }
 
     fn get_state_for_next_epoch(
