@@ -10,7 +10,7 @@ from test_framework.util import *
 import pickle
 
 
-class MessageTest(ConfluxTestFramework):
+class SingleBench(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
@@ -110,4 +110,4 @@ class MessageTest(ConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    MessageTest().main()
+    SingleBench().main()

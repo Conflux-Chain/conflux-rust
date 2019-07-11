@@ -15,7 +15,7 @@ CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address)"))
 CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
 NUM_CALLS = 20
 
-class P2PTest(ConfluxTestFramework):
+class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
@@ -166,4 +166,4 @@ class P2PTest(ConfluxTestFramework):
         assert_equal(type(log["topics"]), list)
 
 if __name__ == "__main__":
-    P2PTest().main()
+    LogFilteringTest().main()
