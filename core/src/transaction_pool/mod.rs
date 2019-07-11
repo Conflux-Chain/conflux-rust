@@ -11,9 +11,9 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    block_data_manager::BlockDataManager, executive,
-    pow::WORKER_COMPUTATION_PARALLELISM, statedb::StateDb, storage::Storage,
-    vm,
+    block_data_manager::BlockDataManager, consensus::BestInformation,
+    executive, pow::WORKER_COMPUTATION_PARALLELISM, statedb::StateDb,
+    storage::Storage, vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
 use metrics::{
@@ -523,7 +523,10 @@ pub struct TransactionPool {
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
     spec: vm::Spec,
-    pub best_executed_epoch: Mutex<EpochId>,
+    best_executed_epoch: Mutex<EpochId>,
+    consensus_best_info: Mutex<Arc<BestInformation>>,
+    set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
+    recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
 }
 
 pub type SharedTransactionPool = Arc<TransactionPool>;
@@ -542,6 +545,9 @@ impl TransactionPool {
             data_man,
             spec: vm::Spec::new_spec(),
             best_executed_epoch: Mutex::new(genesis_hash),
+            consensus_best_info: Mutex::new(Arc::new(Default::default())),
+            set_tx_requests: Mutex::new(Default::default()),
+            recycle_tx_requests: Mutex::new(Default::default()),
         }
     }
 
@@ -858,23 +864,10 @@ impl TransactionPool {
             // Fast return. Also used to for bench mode.
             return;
         }
-        let mut account_cache = self.get_best_state_account_cache();
-        let mut inner = self.inner.write();
-        let inner = inner.deref_mut();
+
+        let mut recycle_req_buffer = self.recycle_tx_requests.lock();
         for tx in transactions {
-            debug!(
-                "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
-                account nonce = {}, hash = {:?} .",
-                &tx.nonce, &tx.sender,
-                &account_cache.get_account_mut(&tx.sender).map_or(0.into(), |x| x.nonce), tx.hash);
-            self.add_transaction_and_check_readiness_without_lock(
-                inner,
-                &mut account_cache,
-                tx,
-                false,
-                true,
-            )
-            .ok();
+            recycle_req_buffer.push(tx);
         }
     }
 
@@ -901,18 +894,9 @@ impl TransactionPool {
             // Fast return. Also used to for bench mode.
             return;
         }
-        let mut inner = self.inner.write();
-        let inner = inner.deref_mut();
-        let mut account_cache = self.get_best_state_account_cache();
+        let mut tx_req_buffer = self.set_tx_requests.lock();
         for tx in transactions {
-            self.add_transaction_and_check_readiness_without_lock(
-                inner,
-                &mut account_cache,
-                tx,
-                true,
-                false,
-            )
-            .ok();
+            tx_req_buffer.push(tx);
         }
     }
 
@@ -1024,6 +1008,67 @@ impl TransactionPool {
         let deferred_txs = inner.txs.values().map(|v| v.clone()).collect();
 
         (ready_txs, deferred_txs)
+    }
+
+    pub fn notify_new_best_info(&self, best_info: Arc<BestInformation>) {
+        let mut set_tx_buffer = self.set_tx_requests.lock();
+        let mut recycle_tx_buffer = self.recycle_tx_requests.lock();
+        let mut consensus_best_info = self.consensus_best_info.lock();
+        *consensus_best_info = best_info;
+
+        let mut account_cache = self.get_best_state_account_cache();
+        let mut inner = self.inner.write();
+        let inner = inner.deref_mut();
+
+        while let Some(tx) = set_tx_buffer.pop() {
+            self.add_transaction_and_check_readiness_without_lock(
+                inner,
+                &mut account_cache,
+                tx,
+                true,
+                false,
+            )
+            .ok();
+        }
+
+        while let Some(tx) = recycle_tx_buffer.pop() {
+            debug!(
+                "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
+                account nonce = {}, hash = {:?} .",
+                &tx.nonce, &tx.sender,
+                &account_cache.get_account_mut(&tx.sender).map_or(0.into(), |x| x.nonce), tx.hash);
+            self.add_transaction_and_check_readiness_without_lock(
+                inner,
+                &mut account_cache,
+                tx,
+                false,
+                true,
+            )
+            .ok();
+        }
+    }
+
+    pub fn get_best_info_with_packed_transactions(
+        &self, num_txs: usize, block_size_limit: usize, block_gas_limit: U256,
+        additional_transactions: Vec<Arc<SignedTransaction>>,
+    ) -> (Arc<BestInformation>, Vec<Arc<SignedTransaction>>)
+    {
+        let consensus_best_info = self.consensus_best_info.lock();
+
+        let transactions_from_pool =
+            self.pack_transactions(num_txs, block_gas_limit, block_size_limit);
+
+        let transactions = [
+            additional_transactions.as_slice(),
+            transactions_from_pool.as_slice(),
+        ]
+        .concat();
+
+        (consensus_best_info.clone(), transactions)
+    }
+
+    pub fn set_best_executed_epoch(&self, best_executed_epoch: &EpochId) {
+        *self.best_executed_epoch.lock() = best_executed_epoch.clone();
     }
 
     fn get_best_state_account_cache(&self) -> AccountCache {

@@ -19,6 +19,7 @@ use cfxcore::{
         request_manager::tx_handler::ReceivedTransactionContainer,
         SynchronizationGraph,
     },
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool,
@@ -91,9 +92,9 @@ fn create_simple_block(
 }
 
 fn initialize_consensus_graph_for_test(
-    genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
-    beta: u64, h: u64, era_epoch_count: u64,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
+    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
+    era_epoch_count: u64,
+) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
 {
     let ledger_db = db::open_database(
         db_dir,
@@ -117,6 +118,21 @@ fn initialize_consensus_graph_for_test(
         StorageConfiguration::default(),
     ));
 
+    let mut genesis_accounts = HashMap::new();
+    genesis_accounts.insert(
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(0),
+    );
+
+    let genesis_block = Arc::new(storage_manager.initialize(
+        genesis_accounts,
+        DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(10),
+    ));
+
+    let genesis_hash = genesis_block.hash();
+
     let mb = 1024 * 1024;
     let max_cache_size = 2048 * mb; // DEFAULT_LEDGER_CACHE_SIZE
     let pref_cache_size = max_cache_size * 3 / 4;
@@ -128,7 +144,7 @@ fn initialize_consensus_graph_for_test(
     )));
 
     let data_man = Arc::new(BlockDataManager::new(
-        Arc::new(genesis_block),
+        genesis_block.clone(),
         ledger_db.clone(),
         storage_manager,
         cache_man,
@@ -174,7 +190,7 @@ fn initialize_consensus_graph_for_test(
         true,
     ));
 
-    (sync, consensus)
+    (sync, consensus, genesis_block)
 }
 
 fn initialize_logger(log_file: &str, log_level: LevelFilter) {
@@ -306,17 +322,16 @@ fn main() {
         alpha_num, alpha_den, beta, h_ratio, era_epoch_count
     );
 
-    let (genesis_hash, genesis_block) = create_simple_block_impl(
-        H256::default(),
-        vec![],
-        0,
-        0,
-        U256::from(10),
-        1,
-    );
+    //    let (genesis_hash, genesis_block) = create_simple_block_impl(
+    //        H256::default(),
+    //        vec![],
+    //        0,
+    //        0,
+    //        U256::from(10),
+    //        1,
+    //    );
 
-    let (sync, consensus) = initialize_consensus_graph_for_test(
-        genesis_block.clone(),
+    let (sync, consensus, genesis_block) = initialize_consensus_graph_for_test(
         db_dir,
         alpha_den,
         alpha_num,

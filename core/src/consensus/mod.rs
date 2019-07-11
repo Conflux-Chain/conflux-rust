@@ -16,15 +16,15 @@ use crate::{
     consensus::confirmation::ConfirmationTrait, pow::ProofOfWorkConfig,
     state::State, statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool, vm_factory::VmFactory,
+    REFEREE_BOUND,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
 pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
-use crate::storage::GuardedValue;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use parking_lot::RwLock;
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -111,14 +111,14 @@ impl ConsensusGraphStatistics {
     }
 }
 
+#[derive(Default)]
 pub struct BestInformation {
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
-    pub terminal_block_hashes: Vec<H256>,
-    pub deferred_state_root: StateRootWithAuxInfo,
-    pub deferred_receipts_root: H256,
-    pub deferred_logs_bloom_hash: H256,
+    pub terminal_block_hashes: Option<Vec<H256>>,
+    pub bounded_terminal_block_hashes: Vec<H256>,
+    pub best_state_block_hash: H256,
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -138,10 +138,9 @@ pub struct ConsensusGraph {
     executor: Arc<ConsensusExecutor>,
     pub statistics: SharedStatistics,
     pub new_block_handler: ConsensusNewBlockHandler,
-
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
-    best_epoch_number: RwLock<u64>,
+    best_info: RwLock<Arc<BestInformation>>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -177,7 +176,7 @@ impl ConsensusGraph {
             conf.bench_mode,
         ));
 
-        ConsensusGraph {
+        let graph = ConsensusGraph {
             inner,
             txpool: txpool.clone(),
             data_man: data_man.clone(),
@@ -186,8 +185,13 @@ impl ConsensusGraph {
             new_block_handler: ConsensusNewBlockHandler::new(
                 conf, txpool, data_man, executor, statistics,
             ),
-            best_epoch_number: RwLock::new(0),
-        }
+            best_info: RwLock::new(Arc::new(Default::default())),
+        };
+        graph.update_best_info(&*graph.inner.read());
+        graph
+            .txpool
+            .notify_new_best_info(graph.best_info.read().clone());
+        graph
     }
 
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
@@ -237,6 +241,10 @@ impl ConsensusGraph {
         &self, epoch_number: EpochNumber,
     ) -> Result<u64, String> {
         self.inner.read().get_height_from_epoch_number(epoch_number)
+    }
+
+    pub fn best_epoch_number(&self) -> u64 {
+        self.best_info.read().best_epoch_number
     }
 
     pub fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
@@ -365,6 +373,40 @@ impl ConsensusGraph {
         }
     }
 
+    fn update_best_info(&self, inner: &ConsensusGraphInner) {
+        let mut best_info = self.best_info.write();
+
+        let terminal_hashes = inner.terminal_hashes();
+        let (terminal_block_hashes, bounded_terminal_block_hashes) =
+            if terminal_hashes.len() > REFEREE_BOUND {
+                let mut tmp = Vec::new();
+                let best_idx = inner.pivot_chain.last().unwrap();
+                for hash in terminal_hashes.iter() {
+                    let a_idx = inner.hash_to_arena_indices.get(hash).unwrap();
+                    let a_lca = inner.lca(*a_idx, *best_idx);
+                    tmp.push((inner.arena[a_lca].height, hash));
+                }
+                tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
+                let bounded_hashes = tmp
+                    .split_off(REFEREE_BOUND)
+                    .iter()
+                    .map(|(_, b)| (*b).clone())
+                    .collect();
+                (Some(terminal_hashes), bounded_hashes)
+            } else {
+                (None, terminal_hashes)
+            };
+
+        *best_info = Arc::new(BestInformation {
+            best_block_hash: inner.best_block_hash(),
+            best_epoch_number: inner.best_epoch_number(),
+            current_difficulty: inner.current_difficulty,
+            terminal_block_hashes,
+            bounded_terminal_block_hashes,
+            best_state_block_hash: inner.best_state_block_hash(),
+        });
+    }
+
     /// This is the function to insert a new block into the consensus graph
     /// during construction. We by pass many verifications because those
     /// blocks are from our own database so we trust them. After inserting
@@ -381,9 +423,14 @@ impl ConsensusGraph {
         );
 
         self.statistics.inc_consensus_graph_processed_block_count();
-        let inner = &mut *self.inner.write();
-        self.new_block_handler
-            .on_new_block_construction_only(inner, hash, block);
+        {
+            let inner = &mut *self.inner.write();
+            self.new_block_handler
+                .on_new_block_construction_only(inner, hash, block);
+            self.update_best_info(inner);
+        }
+        self.txpool
+            .notify_new_best_info(self.best_info.read().clone());
     }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
@@ -401,13 +448,18 @@ impl ConsensusGraph {
         );
 
         self.statistics.inc_consensus_graph_processed_block_count();
-        let inner = &mut *self.inner.write();
-        self.new_block_handler.on_new_block(inner, hash, block);
-        *self.best_epoch_number.write() = inner.best_epoch_number();
+        {
+            let inner = &mut *self.inner.write();
+            self.new_block_handler.on_new_block(inner, hash, block);
+
+            self.update_best_info(inner);
+        }
+        self.txpool
+            .notify_new_best_info(self.best_info.read().clone());
     }
 
     pub fn best_block_hash(&self) -> H256 {
-        self.inner.read().best_block_hash()
+        self.best_info.read().best_block_hash
     }
 
     pub fn best_state_epoch_number(&self) -> u64 {
@@ -649,49 +701,8 @@ impl ConsensusGraph {
     /// This function is called when preparing a new block for generation. It
     /// propagate the ReadGuard up to make the read-lock live longer so that
     /// the whole block packing process can be atomic.
-    pub fn get_best_info(
-        &self, referee_bound_opt: Option<usize>,
-    ) -> GuardedValue<
-        RwLockUpgradableReadGuard<ConsensusGraphInner>,
-        BestInformation,
-    > {
-        let consensus_inner = self.inner.upgradable_read();
-        let (
-            deferred_state_root,
-            deferred_receipts_root,
-            deferred_logs_bloom_hash,
-        ) = self.wait_for_block_state(&consensus_inner.best_state_block_hash());
-        let mut bounded_terminal_hashes = consensus_inner.terminal_hashes();
-        if let Some(referee_bound) = referee_bound_opt {
-            if bounded_terminal_hashes.len() > referee_bound {
-                let mut tmp = Vec::new();
-                let best_idx = consensus_inner.pivot_chain.last().unwrap();
-                for hash in bounded_terminal_hashes {
-                    let a_idx = consensus_inner
-                        .hash_to_arena_indices
-                        .get(&hash)
-                        .unwrap();
-                    let a_lca = consensus_inner.lca(*a_idx, *best_idx);
-                    tmp.push((consensus_inner.arena[a_lca].height, hash));
-                }
-                tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
-                bounded_terminal_hashes = tmp
-                    .split_off(referee_bound)
-                    .iter()
-                    .map(|(_, b)| b.clone())
-                    .collect()
-            }
-        }
-        let value = BestInformation {
-            best_block_hash: consensus_inner.best_block_hash(),
-            best_epoch_number: consensus_inner.best_epoch_number(),
-            current_difficulty: consensus_inner.current_difficulty,
-            terminal_block_hashes: bounded_terminal_hashes,
-            deferred_state_root,
-            deferred_receipts_root,
-            deferred_logs_bloom_hash,
-        };
-        GuardedValue::new(consensus_inner, value)
+    pub fn get_best_info(&self) -> Arc<BestInformation> {
+        self.best_info.read().clone()
     }
 
     pub fn block_hashes_by_epoch(
@@ -701,8 +712,6 @@ impl ConsensusGraph {
             .read_recursive()
             .block_hashes_by_epoch(epoch_number)
     }
-
-    pub fn best_epoch_number(&self) -> u64 { *self.best_epoch_number.read() }
 }
 
 impl Drop for ConsensusGraph {

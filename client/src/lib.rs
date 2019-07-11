@@ -174,6 +174,7 @@ impl Client {
             genesis_accounts,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             TESTNET_VERSION.into(),
+            U256::zero(),
         );
         debug!("Initialize genesis_block={:?}", genesis_block);
 

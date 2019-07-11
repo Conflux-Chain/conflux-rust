@@ -1115,11 +1115,16 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let req = rlp.as_val::<GetTerminalBlockHashes>()?;
         debug!("on_get_terminal_block_hashes, msg=:{:?}", req);
-        let (_guard, best_info) =
-            self.graph.consensus.get_best_info(None).into();
+        let best_info = self.graph.consensus.get_best_info();
+        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
+        {
+            x.clone()
+        } else {
+            best_info.bounded_terminal_block_hashes.clone()
+        };
         let msg: Box<dyn Message> = Box::new(GetTerminalBlockHashesResponse {
             request_id: req.request_id().into(),
-            hashes: best_info.terminal_block_hashes,
+            hashes: terminal_hashes,
         });
         send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
@@ -1954,15 +1959,20 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), NetworkError> {
         debug!("Sending status message to {:?}", peer);
 
-        let (_guard, best_info) =
-            self.graph.consensus.get_best_info(None).into();
+        let best_info = self.graph.consensus.get_best_info();
 
+        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
+        {
+            x.clone()
+        } else {
+            best_info.bounded_terminal_block_hashes.clone()
+        };
         let msg: Box<dyn Message> = Box::new(Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
             genesis_hash: self.graph.genesis_hash(),
             best_epoch: best_info.best_epoch_number as u64,
-            terminal_block_hashes: best_info.terminal_block_hashes,
+            terminal_block_hashes: terminal_hashes,
         });
         send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
     }
