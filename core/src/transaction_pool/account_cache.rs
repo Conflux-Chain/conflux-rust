@@ -16,10 +16,6 @@ impl<'storage> AccountCache<'storage> {
         }
     }
 
-    pub fn get_ready_account(&mut self, address: &Address) -> Option<&Account> {
-        self.accounts.get(address)
-    }
-
     pub fn get_account_mut(
         &mut self, address: &Address,
     ) -> Option<&mut Account> {
