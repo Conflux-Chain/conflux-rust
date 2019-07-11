@@ -602,7 +602,6 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up
         let state_root = if on_local_pivot {
             state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
-            println!("Commit {}", epoch_hash);
             self.tx_pool.set_best_executed_epoch(epoch_hash);
         } else {
             state.commit(*epoch_hash).unwrap();
