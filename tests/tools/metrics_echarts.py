@@ -23,6 +23,8 @@ class Metric:
             return MetricGrouping(name)
         elif metric_type == "Meter":
             return MetricMeter(name)
+        elif metric_type == "Histogram":
+            return MetricHistogram(name)
         elif metric_type in ["Gauge", "Counter"]:
             return MetricGauge(name)
         else:
@@ -66,6 +68,28 @@ class MetricMeter(Metric):
         chart.add_yaxis("m5", self.m5)
         chart.add_yaxis("m15", self.m15)
         chart.add_yaxis("mean", self.mean)
+
+class MetricHistogram(Metric):
+    def __init__(self, name:str):
+        Metric.__init__(self, name)
+        self.values = {}
+
+    def append(self, timestamp, metric):
+        self.timestamps.append(timestamp)
+        assert metric.startswith("{") and metric.endswith("}")
+        for kv in metric[1:-1].split(", "):
+            fields = kv.split(": ")
+            key = fields[0]
+            value = fields[1]
+
+            if self.values.get(key) is None:
+                self.values[key] = [value]
+            else:
+                self.values[key].append(value)
+
+    def add_yaxis(self, chart:Line):
+        for (name, values) in self.values.items():
+            chart.add_yaxis(name, values)
 
 class MetricGrouping(Metric):
     def __init__(self, name:str):
