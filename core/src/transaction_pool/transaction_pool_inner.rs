@@ -1,5 +1,6 @@
 use super::{account_cache::AccountCache, impls::TreapMap};
 use cfx_types::{Address, H256, H512, U256, U512};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use rlp::*;
 use std::{
@@ -7,15 +8,12 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use metrics::{
-    register_meter_with_group, Meter, MeterTimer,
-};
 
 pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<Meter> =
-    register_meter_with_group("timer", "tx_pool::recalculate");
+        register_meter_with_group("timer", "tx_pool::recalculate");
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -704,12 +702,9 @@ impl TransactionPoolInner {
     }
 }
 
-
 #[cfg(test)]
 mod test_transaction_pool_inner {
-    use super::InsertResult;
-    use super::TxWithReadyInfo;
-    use super::DeferredPool;
+    use super::{DeferredPool, InsertResult, TxWithReadyInfo};
     use cfx_types::{Address, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
@@ -727,7 +722,7 @@ mod test_transaction_pool_inner {
                 value: U256::from(value),
                 data: Vec::new(),
             }
-                .sign(sender.secret()),
+            .sign(sender.secret()),
         )
     }
 
