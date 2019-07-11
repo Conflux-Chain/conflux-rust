@@ -423,10 +423,12 @@ impl ConsensusGraph {
         );
 
         self.statistics.inc_consensus_graph_processed_block_count();
-        let inner = &mut *self.inner.write();
-        self.new_block_handler
-            .on_new_block_construction_only(inner, hash, block);
-        self.update_best_info(inner);
+        {
+            let inner = &mut *self.inner.write();
+            self.new_block_handler
+                .on_new_block_construction_only(inner, hash, block);
+            self.update_best_info(inner);
+        }
         self.txpool
             .notify_new_best_info(self.best_info.read().clone());
     }
@@ -446,10 +448,12 @@ impl ConsensusGraph {
         );
 
         self.statistics.inc_consensus_graph_processed_block_count();
-        let inner = &mut *self.inner.write();
-        self.new_block_handler.on_new_block(inner, hash, block);
+        {
+            let inner = &mut *self.inner.write();
+            self.new_block_handler.on_new_block(inner, hash, block);
 
-        self.update_best_info(inner);
+            self.update_best_info(inner);
+        }
         self.txpool
             .notify_new_best_info(self.best_info.read().clone());
     }
