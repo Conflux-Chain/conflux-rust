@@ -4,6 +4,7 @@
 
 use blockgen::BlockGeneratorConfig;
 use cfxcore::{
+    block_data_manager::DataManagerConfiguration,
     consensus::{
         ConsensusConfig, ConsensusInnerConfig,
         ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
@@ -111,6 +112,7 @@ build_config! {
         (max_peers_propagation, (usize), 128)
         (future_block_buffer_capacity, (usize), 32768)
         (txgen_account_count, (usize), 10)
+        (persist_header, (bool), true)
     }
     {
         (
@@ -341,6 +343,13 @@ impl Configuration {
         BlockGeneratorConfig {
             test_chain_path: self.raw_conf.load_test_chain.clone(),
         }
+    }
+
+    pub fn data_mananger_config(&self) -> DataManagerConfiguration {
+        DataManagerConfiguration::new(
+            self.raw_conf.record_tx_address,
+            self.raw_conf.persist_header,
+        )
     }
 }
 

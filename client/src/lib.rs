@@ -60,7 +60,7 @@ use txgen::{
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
 const TESTNET_VERSION: &'static str =
-    "0000000000000000000000000000000000000008";
+    "0000000000000000000000000000000000000009";
 
 pub struct ClientHandle {
     pub debug_rpc_http_server: Option<HttpServer>,
@@ -174,6 +174,7 @@ impl Client {
             genesis_accounts,
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             TESTNET_VERSION.into(),
+            U256::zero(),
         );
         debug!("Initialize genesis_block={:?}", genesis_block);
 
@@ -192,7 +193,7 @@ impl Client {
             ledger_db.clone(),
             storage_manager,
             cache_man,
-            conf.raw_conf.record_tx_address,
+            conf.data_mananger_config(),
         ));
 
         let txpool = Arc::new(TransactionPool::with_capacity(
