@@ -42,7 +42,7 @@ pub struct NodeIpLimit {
 impl NodeIpLimit {
     pub fn new(subnet_quota: usize) -> Self {
         NodeIpLimit {
-            subnet_type: SubnetType::B,
+            subnet_type: SubnetType::C,
             subnet_quota,
             evict_timeout: DEFAULT_EVICT_TIMEOUT,
             buckets: Vec::new(),
@@ -413,10 +413,9 @@ mod tests {
 
         // same subnet
         assert_eq!(limit.is_quota_allowed(&new_ip("127.0.0.3")), false);
-        assert_eq!(limit.is_quota_allowed(&new_ip("127.0.1.1")), false);
 
         // different subnet
-        assert_eq!(limit.is_quota_allowed(&new_ip("127.1.0.1")), true);
+        assert_eq!(limit.is_quota_allowed(&new_ip("127.0.1.1")), true);
     }
 
     #[test]
