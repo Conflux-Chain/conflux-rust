@@ -223,22 +223,14 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_stable_height =
             new_era_height + inner.inner_conf.era_epoch_count;
 
-        let prev_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
-        let prev_era_pivot_index = inner.height_to_pivot_index(
-            inner.arena[new_era_block_arena_index].height,
-        );
-        let cur_era_pivot_index =
-            prev_era_pivot_index + inner.inner_conf.era_epoch_count as usize;
-        let cur_era_arena_index = inner.pivot_chain[cur_era_pivot_index];
-        let cur_era_hash = inner.arena[cur_era_arena_index].hash.clone();
-
-        inner.data_man.set_cur_consensus_era_genesis_hash(
-            &inner.arena[new_era_block_arena_index].hash,
-        );
+        let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
+        let next_era_arena_index =
+            inner.pivot_chain[inner.inner_conf.era_epoch_count as usize];
+        let next_era_hash = inner.arena[next_era_arena_index].hash.clone();
 
         inner
             .data_man
-            .insert_checkpoint_hashes_to_db(&prev_era_hash, &cur_era_hash);
+            .set_cur_consensus_era_genesis_hash(&cur_era_hash, &next_era_hash);
     }
 
     fn compute_anticone_bruteforce(

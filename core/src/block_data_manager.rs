@@ -744,9 +744,13 @@ impl BlockDataManager {
         });
     }
 
-    pub fn set_cur_consensus_era_genesis_hash(&self, hash: &H256) {
-        let mut cur_era_hash = self.cur_consensus_era_genesis_hash.write();
-        *cur_era_hash = hash.clone();
+    pub fn set_cur_consensus_era_genesis_hash(
+        &self, cur_era_hash: &H256, next_era_hash: &H256,
+    ) {
+        self.insert_checkpoint_hashes_to_db(cur_era_hash, next_era_hash);
+
+        let mut era_hash = self.cur_consensus_era_genesis_hash.write();
+        *era_hash = cur_era_hash.clone();
     }
 
     pub fn get_cur_consensus_era_genesis_hash(&self) -> H256 {
