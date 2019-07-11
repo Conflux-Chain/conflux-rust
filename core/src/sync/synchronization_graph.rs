@@ -12,6 +12,7 @@ use crate::{
     verification::*,
 };
 use cfx_types::{H256, U256};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
@@ -29,6 +30,13 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use unexpected::{Mismatch, OutOfBounds};
+
+lazy_static! {
+    static ref SYNC_INSERT_HEADER: Arc<Meter> =
+        register_meter_with_group("timer", "sync::insert_block_header");
+    static ref SYNC_INSERT_BLOCK: Arc<Meter> =
+        register_meter_with_group("timer", "sync::insert_block");
+}
 
 const NULL: usize = !0;
 const BLOCK_INVALID: u8 = 0;
@@ -488,17 +496,16 @@ impl SynchronizationGraphInner {
             })
     }
 
-    // Get parent (height, timestamp, gas_limit, difficulty, referee_timestamps)
+    // Get parent (height, timestamp, gas_limit, difficulty)
     // This function assumes that the parent and referee information MUST exist
     // in memory or in disk.
     fn get_parent_and_referee_info(
         &self, index: usize,
-    ) -> (u64, u64, U256, U256, Vec<u64>) {
+    ) -> (u64, u64, U256, U256) {
         let parent_height;
         let parent_timestamp;
         let parent_gas_limit;
         let parent_difficulty;
-        let mut referee_timestamps = Vec::new();
         let parent = self.arena[index].parent;
         if parent != NULL {
             parent_height = self.arena[parent].block_header.height();
@@ -518,41 +525,11 @@ impl SynchronizationGraphInner {
             parent_difficulty = *parent_header.difficulty();
         }
 
-        if self.arena[index].referees.len()
-            == self.arena[index].block_header.referee_hashes().len()
-        {
-            for referee in self.arena[index].referees.iter() {
-                referee_timestamps
-                    .push(self.arena[*referee].block_header.timestamp());
-            }
-        } else {
-            let mut referee_hash_in_mem = HashSet::new();
-            for referee in self.arena[index].referees.iter() {
-                referee_timestamps
-                    .push(self.arena[*referee].block_header.timestamp());
-                referee_hash_in_mem
-                    .insert(self.arena[*referee].block_header.hash());
-            }
-
-            for referee_hash in self.arena[index].block_header.referee_hashes()
-            {
-                if !referee_hash_in_mem.contains(referee_hash) {
-                    let referee_header = self
-                        .data_man
-                        .block_header_by_hash(referee_hash)
-                        .unwrap()
-                        .clone();
-                    referee_timestamps.push(referee_header.timestamp());
-                }
-            }
-        }
-
         (
             parent_height,
             parent_timestamp,
             parent_gas_limit,
             parent_difficulty,
-            referee_timestamps,
         )
     }
 
@@ -565,7 +542,6 @@ impl SynchronizationGraphInner {
             parent_timestamp,
             parent_gas_limit,
             parent_difficulty,
-            referee_timestamps,
         ) = self.get_parent_and_referee_info(index);
 
         // Verify the height and epoch numbers are correct
@@ -596,27 +572,6 @@ impl SynchronizationGraphInner {
                     found: my_timestamp,
                 },
             )));
-        }
-
-        for referee_timestamp in referee_timestamps {
-            if referee_timestamp > my_timestamp {
-                let my_timestamp =
-                    UNIX_EPOCH + Duration::from_secs(my_timestamp);
-                let ref_timestamp =
-                    UNIX_EPOCH + Duration::from_secs(referee_timestamp);
-
-                warn!("Invalid timestamp: referee timestamp {:?}, me {:?} timestamp {:?}",
-                      ref_timestamp,
-                      self.arena[index].block_header.hash(),
-                      my_timestamp);
-                return Err(From::from(BlockError::InvalidTimestamp(
-                    OutOfBounds {
-                        max: Some(my_timestamp),
-                        min: Some(ref_timestamp),
-                        found: my_timestamp,
-                    },
-                )));
-            }
         }
 
         // Verify the gas limit is respected
@@ -1025,10 +980,6 @@ impl SynchronizationGraph {
         )
     }
 
-    pub fn best_epoch_number(&self) -> u64 {
-        self.consensus.best_epoch_number() as u64
-    }
-
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
         self.data_man
             .block_header_by_hash(hash)
@@ -1038,6 +989,11 @@ impl SynchronizationGraph {
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         self.block_header_by_hash(hash)
             .map(|header| header.height())
+    }
+
+    pub fn block_timestamp_by_hash(&self, hash: &H256) -> Option<u64> {
+        self.block_header_by_hash(hash)
+            .map(|header| header.timestamp())
     }
 
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
@@ -1164,6 +1120,7 @@ impl SynchronizationGraph {
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool, bench_mode: bool,
     ) -> (bool, Vec<H256>) {
+        let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         let inner = &mut *self.inner.write();
         let hash = header.hash();
 
@@ -1331,6 +1288,7 @@ impl SynchronizationGraph {
         sync_graph_only: bool,
     ) -> (bool, bool)
     {
+        let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
         let mut insert_success = true;
         let mut need_to_relay = false;
 

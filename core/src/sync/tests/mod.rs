@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_manager::CacheManager,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
@@ -90,7 +90,7 @@ fn initialize_synchronization_graph(
         ledger_db.clone(),
         storage_manager,
         cache_man,
-        false,
+        DataManagerConfiguration::new(false, true),
     ));
 
     let txpool = Arc::new(TransactionPool::with_capacity(

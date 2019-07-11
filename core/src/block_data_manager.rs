@@ -42,7 +42,7 @@ pub struct BlockDataManager {
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
 
-    pub record_tx_address: bool,
+    config: DataManagerConfiguration,
 
     pub genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
@@ -55,7 +55,8 @@ impl BlockDataManager {
     pub fn new(
         genesis_block: Arc<Block>, db: Arc<SystemDB>,
         storage_manager: Arc<StorageManager>,
-        cache_man: Arc<Mutex<CacheManager<CacheId>>>, record_tx_address: bool,
+        cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        config: DataManagerConfiguration,
     ) -> Self
     {
         let genesis_hash = genesis_block.block_header.hash();
@@ -72,7 +73,7 @@ impl BlockDataManager {
             db,
             storage_manager,
             cache_man,
-            record_tx_address,
+            config,
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
         };
@@ -292,6 +293,8 @@ impl BlockDataManager {
         let block_headers = self.block_headers.upgradable_read();
         if let Some(header) = block_headers.get(hash) {
             return Some(header.clone());
+        } else if !self.config.persist_header {
+            return None;
         } else {
             let maybe_header = self.block_header_from_db(hash);
             maybe_header.map(|header| {
@@ -307,9 +310,11 @@ impl BlockDataManager {
     }
 
     pub fn insert_block_header(&self, hash: H256, header: Arc<BlockHeader>) {
-        self.insert_block_header_to_db(&header);
+        if self.config.persist_header {
+            self.insert_block_header_to_db(&header);
+            self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
+        }
         self.block_headers.write().insert(hash, header);
-        self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
     }
 
     pub fn remove_block_header(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
@@ -468,7 +473,7 @@ impl BlockDataManager {
     pub fn insert_transaction_address_to_kv(
         &self, hash: &H256, tx_address: &TransactionAddress,
     ) {
-        if !self.record_tx_address {
+        if !self.config.record_tx_address {
             return;
         }
         self.transaction_addresses
@@ -568,7 +573,7 @@ impl BlockDataManager {
             return false;
         }
 
-        if self.record_tx_address && on_local_pivot {
+        if self.config.record_tx_address && on_local_pivot {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
@@ -800,4 +805,18 @@ impl BlockStatus {
     }
 
     fn to_db_status(&self) -> u8 { *self as u8 }
+}
+
+pub struct DataManagerConfiguration {
+    record_tx_address: bool,
+    persist_header: bool,
+}
+
+impl DataManagerConfiguration {
+    pub fn new(record_tx_address: bool, persist_header: bool) -> Self {
+        Self {
+            record_tx_address,
+            persist_header,
+        }
+    }
 }

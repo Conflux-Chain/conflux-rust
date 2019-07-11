@@ -175,9 +175,7 @@ class P2PTest(ConfluxTestFramework):
         target_memory = 16
 
         # storage
-        # FIXME ledger_cache_size is set to 8G because duplicated transactions in blocks will be counted multiple times,
-        # But as Arc they will not actually take that much space
-        self.conf_parameters["ledger_cache_size"] = str(8000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_start_size"] = str(1000000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
@@ -282,6 +280,7 @@ class P2PTest(ConfluxTestFramework):
                 if pre_thread is not None and pre_thread.is_alive():
                     p = random.randint(0, num_nodes - 1)
                     retry += 1
+                    time.sleep(0.01)
                 else:
                     break
 
@@ -335,6 +334,10 @@ class P2PTest(ConfluxTestFramework):
             for f in block_count_futures:
                 assert f.exception() is None, "failed to get block count: {}".format(f.exception())
                 block_counts.append(f.result())
+            max_count = max(block_counts)
+            for i in range(len(block_counts)):
+                if block_counts[i] < max_count - 50:
+                    self.log.info("Slow: {}: {}".format(i, block_counts[i]))
 
             for f in best_block_futures:
                 assert f.exception() is None, "failed to get best block: {}".format(f.exception())

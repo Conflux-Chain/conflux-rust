@@ -5,6 +5,7 @@
 use crate::{
     error::{BlockError, Error},
     pow,
+    sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
 use cfx_types::H256;
 use primitives::{Block, BlockHeader};
@@ -13,6 +14,9 @@ use unexpected::{Mismatch, OutOfBounds};
 
 // The maximum number of referees allowed for each block
 pub const REFEREE_BOUND: usize = 200;
+
+const VALID_TIME_DRIFT: u64 = 10 * 60;
+pub const ACCEPTABLE_TIME_DRIFT: u64 = 5 * 60;
 
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {
@@ -62,6 +66,17 @@ impl VerificationConfig {
 
         assert!(header.pow_quality >= *header.difficulty());
 
+        Ok(())
+    }
+
+    pub fn validate_header_timestamp(
+        &self, header: &BlockHeader, now: u64,
+    ) -> Result<(), SyncError> {
+        let invalid_threshold = now + VALID_TIME_DRIFT;
+        if header.timestamp() > invalid_threshold {
+            warn!("block {} has incorrect timestamp", header.hash());
+            return Err(SyncErrorKind::InvalidTimestamp.into());
+        }
         Ok(())
     }
 

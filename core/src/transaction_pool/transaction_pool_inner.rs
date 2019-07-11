@@ -7,8 +7,16 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
+use metrics::{
+    register_meter_with_group, Meter, MeterTimer,
+};
 
 pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+
+lazy_static! {
+    static ref TX_POOL_RECALCULATE: Arc<Meter> =
+    register_meter_with_group("timer", "tx_pool::recalculate");
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TxWithReadyInfo {
@@ -525,6 +533,7 @@ impl TransactionPoolInner {
     ) {
         let (nonce, balance) = self
             .get_and_update_nonce_and_balance_from_storage(addr, account_cache);
+        let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
@@ -680,6 +689,7 @@ impl TransactionPoolInner {
             ));
         }
 
+        let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let result = self.insert(transaction.clone(), packed, force);
         if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));

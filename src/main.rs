@@ -241,14 +241,6 @@ fn main() {
                 .takes_value(true)
                 .validator(from_str_validator::<usize>),
         )
-        .arg(
-            Arg::with_name("p2p-nodes-per-ip")
-                .long("p2p-nodes-per-ip")
-                .value_name("VALUE")
-                .help("Sets maximum number of P2P nodes for one IP address. Set 0 to allow unlimited nodes.")
-                .takes_value(true)
-                .validator(from_str_validator::<usize>),
-        )
         .get_matches_from(std::env::args().collect::<Vec<_>>());
 
     let conf = Configuration::parse(&matches).unwrap();

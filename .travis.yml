@@ -43,10 +43,6 @@ matrix:
             - pyenv install 3.6.2
             - pyenv global 3.6.2
             - ./dev-support/dep_pip3.sh
-            # solc is required for integration tests to compile ERC20 contract.
-            - wget -O solc https://github.com/ethereum/solidity/releases/download/v0.5.2/solc-static-linux
-            - chmod +x solc
-            - export PATH=$PATH:$PWD
         install:
             - if [ -f target/Cargo.lock ]; then mv target/Cargo.lock .; fi
             - export RUSTFLAGS="-g -D warnings"
