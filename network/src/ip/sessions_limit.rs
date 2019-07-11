@@ -1,4 +1,8 @@
-use std::{collections::HashMap, hash::Hash, net::IpAddr, str::FromStr};
+use crate::ip::util::SubnetType;
+use std::{
+    collections::HashMap, convert::TryFrom, hash::Hash, net::IpAddr,
+    str::FromStr,
+};
 
 /// SessionIpLimit is used to limits the number of sessions for a single IP
 /// address or subnet.
@@ -17,28 +21,32 @@ pub struct SessionIpLimitConfig {
     subnet_c_quota: usize,
 }
 
-impl From<String> for SessionIpLimitConfig {
-    fn from(val: String) -> Self {
-        let mut nums = Vec::new();
+impl TryFrom<String> for SessionIpLimitConfig {
+    type Error = String;
 
-        for s in val.split(",").collect::<Vec<&str>>() {
+    fn try_from(value: String) -> Result<Self, String> {
+        let configs: Vec<&str> = value.split(",").collect();
+
+        let mut nums = Vec::new();
+        for s in configs {
             let num = usize::from_str(s)
-                .expect("failed to parse number for SessionIpLimitConfig");
+                .map_err(|e| format!("failed to parse number: {:?}", e))?;
             nums.push(num);
         }
 
-        assert_eq!(
-            nums.len(),
-            4,
-            "invalid number of fields for SessionIpLimitConfig"
-        );
+        if nums.len() != 4 {
+            return Err(format!(
+                "invalid number of fields, expected = 4, actual = {}",
+                nums.len()
+            ));
+        }
 
-        SessionIpLimitConfig {
+        Ok(SessionIpLimitConfig {
             single_ip_quota: nums[0],
             subnet_a_quota: nums[1],
             subnet_b_quota: nums[2],
             subnet_c_quota: nums[3],
-        }
+        })
     }
 }
 
@@ -55,15 +63,24 @@ pub fn new_session_ip_limit(
     }
 
     if config.subnet_a_quota > 0 {
-        limits.push(Box::new(SubnetLimit::new(config.subnet_a_quota, 8)));
+        limits.push(Box::new(SubnetLimit::new(
+            config.subnet_a_quota,
+            SubnetType::A,
+        )));
     }
 
     if config.subnet_b_quota > 0 {
-        limits.push(Box::new(SubnetLimit::new(config.subnet_b_quota, 16)));
+        limits.push(Box::new(SubnetLimit::new(
+            config.subnet_b_quota,
+            SubnetType::B,
+        )));
     }
 
     if config.subnet_c_quota > 0 {
-        limits.push(Box::new(SubnetLimit::new(config.subnet_c_quota, 24)));
+        limits.push(Box::new(SubnetLimit::new(
+            config.subnet_c_quota,
+            SubnetType::C,
+        )));
     }
 
     if limits.is_empty() {
@@ -157,53 +174,36 @@ impl SessionIpLimit for SingleIpLimit {
 
 struct SubnetLimit {
     inner: GenericLimit<u32>,
-    prefix_bits: usize, // Only 8, 16 and 24 allowed
-}
-
-pub fn subnet(ip: &IpAddr, prefix_bits: usize) -> u32 {
-    debug_assert!(prefix_bits == 8 || prefix_bits == 16 || prefix_bits == 24);
-
-    match ip {
-        IpAddr::V4(ipv4) => {
-            let num: u32 = ipv4.clone().into();
-            num >> (32 - prefix_bits)
-        }
-        IpAddr::V6(ipv6) => {
-            let num: u128 = ipv6.clone().into();
-            (num >> (128 - prefix_bits)) as u32
-        }
-    }
+    subnet_type: SubnetType,
 }
 
 impl SubnetLimit {
-    fn new(quota: usize, prefix_bits: usize) -> Self {
-        assert!(prefix_bits == 8 || prefix_bits == 16 || prefix_bits == 24);
-
+    fn new(quota: usize, subnet_type: SubnetType) -> Self {
         SubnetLimit {
             inner: GenericLimit::new(quota),
-            prefix_bits,
+            subnet_type,
         }
     }
 }
 
 impl SessionIpLimit for SubnetLimit {
     fn contains(&self, ip: &IpAddr) -> bool {
-        let subnet = subnet(ip, self.prefix_bits);
+        let subnet = self.subnet_type.subnet(ip);
         self.inner.contains(&subnet)
     }
 
     fn is_allowed(&self, ip: &IpAddr) -> bool {
-        let subnet = subnet(ip, self.prefix_bits);
+        let subnet = self.subnet_type.subnet(ip);
         self.inner.is_allowed(&subnet)
     }
 
     fn add(&mut self, ip: IpAddr) -> bool {
-        let subnet = subnet(&ip, self.prefix_bits);
+        let subnet = self.subnet_type.subnet(&ip);
         self.inner.add(subnet)
     }
 
     fn remove(&mut self, ip: &IpAddr) -> bool {
-        let subnet = subnet(ip, self.prefix_bits);
+        let subnet = self.subnet_type.subnet(ip);
         self.inner.remove(&subnet)
     }
 }
@@ -250,14 +250,14 @@ impl SessionIpLimit for CompositeLimit {
 
 #[cfg(test)]
 mod tests {
-    use super::{new_session_ip_limit, subnet, SessionIpLimit};
-    use std::{net::IpAddr, str::FromStr};
+    use super::{new_session_ip_limit, SessionIpLimit};
+    use std::{convert::TryInto, net::IpAddr, str::FromStr};
 
     fn new_ip(ip: &'static str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
 
     fn new_limit(config: &str) -> Box<SessionIpLimit> {
         let config: String = config.into();
-        new_session_ip_limit(&config.into())
+        new_session_ip_limit(&config.try_into().unwrap())
     }
 
     #[test]
@@ -317,47 +317,5 @@ mod tests {
         assert_eq!(limit.add(new_ip("127.1.0.1")), true);
         assert_eq!(limit.add(new_ip("127.2.0.1")), true);
         assert_eq!(limit.add(new_ip("127.3.0.1")), true);
-    }
-
-    #[test]
-    fn test_subnet() {
-        assert_eq!(
-            subnet(&new_ip("127.0.0.1"), 24),
-            subnet(&new_ip("127.0.0.2"), 24)
-        );
-        assert_ne!(
-            subnet(&new_ip("127.0.0.1"), 24),
-            subnet(&new_ip("127.0.1.1"), 24)
-        );
-
-        assert_eq!(
-            subnet(&new_ip("127.0.0.1"), 16),
-            subnet(&new_ip("127.0.0.2"), 16)
-        );
-        assert_eq!(
-            subnet(&new_ip("127.0.0.1"), 16),
-            subnet(&new_ip("127.0.1.1"), 16)
-        );
-        assert_ne!(
-            subnet(&new_ip("127.0.0.1"), 16),
-            subnet(&new_ip("127.1.0.1"), 16)
-        );
-
-        assert_eq!(
-            subnet(&new_ip("127.0.0.1"), 8),
-            subnet(&new_ip("127.0.0.2"), 8)
-        );
-        assert_eq!(
-            subnet(&new_ip("127.0.0.1"), 8),
-            subnet(&new_ip("127.0.1.1"), 8)
-        );
-        assert_eq!(
-            subnet(&new_ip("127.0.0.1"), 8),
-            subnet(&new_ip("127.1.0.1"), 8)
-        );
-        assert_ne!(
-            subnet(&new_ip("127.0.0.1"), 8),
-            subnet(&new_ip("192.0.0.1"), 8)
-        );
     }
 }

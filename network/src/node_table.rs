@@ -180,7 +180,7 @@ impl NodeContact {
 
     pub fn failure() -> NodeContact { NodeContact::Failure(SystemTime::now()) }
 
-    fn time(&self) -> SystemTime {
+    pub fn time(&self) -> SystemTime {
         match *self {
             NodeContact::Success(t) | NodeContact::Failure(t) => t,
         }
@@ -434,7 +434,7 @@ impl NodeTable {
     /// Return a random sample set of nodes inside the table
     pub fn sample_node_ids(
         &self, count: u32, _filter: &IpFilter,
-    ) -> Vec<NodeId> {
+    ) -> HashSet<NodeId> {
         let mut node_id_set: HashSet<NodeId> = HashSet::new();
         let mut rng = rand::thread_rng();
         for _i in 0..count {
@@ -450,12 +450,7 @@ impl NodeTable {
             }
         }
 
-        let mut node_ids: Vec<NodeId> = Vec::new();
-        for n in node_id_set {
-            node_ids.push(n);
-        }
-
-        node_ids
+        node_id_set
     }
 
     // If node exists, update last contact, insert otherwise.
@@ -807,13 +802,8 @@ impl NodeTable {
         }
     }
 
-    pub fn visit<F>(&self, mut visitor: F)
-    where F: FnMut(&H512) -> bool {
-        for key in self.node_index.keys() {
-            if !visitor(key) {
-                break;
-            }
-        }
+    pub fn all(&self) -> Vec<NodeId> {
+        self.node_index.keys().map(|id| id.clone()).collect()
     }
 }
 
