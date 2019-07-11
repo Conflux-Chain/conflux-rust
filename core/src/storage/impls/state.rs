@@ -281,7 +281,7 @@ impl<'a> State<'a> {
         self.delta_trie_root.clone()
     }
 
-    fn get_or_create_root_node(&mut self) -> Result<NodeRefDeltaMpt> {
+    pub fn get_or_create_root_node(&mut self) -> Result<NodeRefDeltaMpt> {
         if self.delta_trie_root.is_none() {
             let allocator =
                 self.delta_trie.get_node_memory_manager().get_allocator();
