@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use primitives::EpochNumber as PrimitiveEpochNumber;
 use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -50,6 +51,25 @@ impl Serialize for EpochNumber {
              * serializer.serialize_str("pending"), */
         }
     }
+}
+
+impl EpochNumber {
+    pub fn into_primitive(self) -> PrimitiveEpochNumber {
+        match self {
+            EpochNumber::Earliest => PrimitiveEpochNumber::Earliest,
+            EpochNumber::LatestMined => PrimitiveEpochNumber::LatestMined,
+            EpochNumber::LatestState => PrimitiveEpochNumber::LatestState,
+            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num.into()),
+        }
+    }
+}
+
+impl Into<PrimitiveEpochNumber> for EpochNumber {
+    fn into(self) -> PrimitiveEpochNumber { self.into_primitive() }
+}
+
+impl Into<EpochNumber> for u64 {
+    fn into(self) -> EpochNumber { EpochNumber::Num(self) }
 }
 
 struct EpochNumberVisitor;

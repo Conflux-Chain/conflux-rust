@@ -7,16 +7,11 @@ from test_framework.util import assert_equal, assert_raises_rpc_error
 
 class TestGetLogs(RpcClient):
     def test_invalid_filter(self):
-        # missing `fromEpoch`
-        filter = Filter("0x0", "0x0"); del filter.fromEpoch
-        assert_raises_rpc_error(None, None, self.get_logs, filter)
-
-        # missing `toEpoch`
-        filter = Filter("0x0", "0x0"); del filter.toEpoch
-        assert_raises_rpc_error(None, None, self.get_logs, filter)
-
         # invalid epoch type
         filter = Filter(0, "0x0")
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
+        filter = Filter(0, "latest") # should be `latest_state` or `latest_mined`
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid epoch hex
@@ -54,7 +49,7 @@ class TestGetLogs(RpcClient):
     def test_valid_filter(self):
         filter = Filter(
             from_epoch="0x0",
-            to_epoch="0x0",
+            to_epoch="latest_state",
             block_hashes=["0x0000000000000000000000000000000000000000000000000000000000000000"],
             address=["0x0000000000000000000000000000000000000000"],
             topics=[["0x0000000000000000000000000000000000000000000000000000000000000000"]],

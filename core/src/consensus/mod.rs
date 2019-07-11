@@ -530,24 +530,30 @@ impl ConsensusGraph {
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         let block_hashes = if filter.block_hashes.is_none() {
-            if filter.from_epoch >= filter.to_epoch {
+            let from_epoch = self
+                .get_height_from_epoch_number(filter.from_epoch.clone())
+                .unwrap_or(self.best_state_epoch_number());
+            let to_epoch = self
+                .get_height_from_epoch_number(filter.to_epoch.clone())
+                .unwrap_or(self.best_state_epoch_number());
+
+            if from_epoch > to_epoch {
                 return Err(FilterError::InvalidEpochNumber {
-                    from_epoch: filter.from_epoch,
-                    to_epoch: filter.to_epoch,
+                    from_epoch,
+                    to_epoch,
                 });
             }
 
             let inner = self.inner.read();
 
-            if filter.from_epoch
+            if from_epoch
                 >= inner.pivot_index_to_height(inner.pivot_chain.len())
             {
                 return Ok(Vec::new());
             }
 
-            let from_epoch = filter.from_epoch;
             let to_epoch = min(
-                filter.to_epoch,
+                to_epoch,
                 inner.pivot_index_to_height(inner.pivot_chain.len()),
             );
 
@@ -559,7 +565,7 @@ impl ConsensusGraph {
             };
 
             let mut blocks = Vec::new();
-            for epoch_number in from_epoch..to_epoch {
+            for epoch_number in from_epoch..(to_epoch + 1) {
                 let epoch_hash = inner.arena
                     [inner.get_pivot_block_arena_index(epoch_number)]
                 .hash;

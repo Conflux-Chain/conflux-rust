@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{H160, H256, U64};
+use crate::rpc::types::{EpochNumber, H160, H256, U64};
 use cfx_types::U64 as CfxU64;
 use primitives::filter::Filter as PrimitiveFilter;
 
@@ -10,10 +10,10 @@ use primitives::filter::Filter as PrimitiveFilter;
 #[serde(rename_all = "camelCase")]
 pub struct Filter {
     /// Search will be applied from this epoch number.
-    pub from_epoch: U64,
+    pub from_epoch: Option<EpochNumber>,
 
     /// Till this epoch number.
-    pub to_epoch: U64,
+    pub to_epoch: Option<EpochNumber>,
 
     /// Search will be applied in these blocks if given.
     /// This will override from/to_epoch fields.
@@ -59,21 +59,10 @@ impl Into<usize> for U64 {
 }
 
 impl Filter {
-    // pub fn new(f: &PrimitiveFilter) -> Self {
-    //     Filter {
-    //         from_epoch: f.from_epoch.into(),
-    //         to_epoch: f.to_epoch.into(),
-    //         block_hashes: maybe_vec_into(&f.block_hashes),
-    //         address: maybe_vec_into(&f.address),
-    //         topics: f.topics.iter().map(maybe_vec_into).collect(),
-    //         limit: f.limit.map(U64::from),
-    //     }
-    // }
-
     pub fn into_primitive(self) -> PrimitiveFilter {
         PrimitiveFilter {
-            from_epoch: self.from_epoch.into(),
-            to_epoch: self.to_epoch.into(),
+            from_epoch: self.from_epoch.unwrap_or(EpochNumber::Earliest).into(),
+            to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestState).into(),
             block_hashes: maybe_vec_into(&self.block_hashes),
             address: maybe_vec_into(&self.address),
             topics: self.topics.iter().map(maybe_vec_into).collect(),
@@ -88,15 +77,18 @@ impl Into<PrimitiveFilter> for Filter {
 
 #[cfg(test)]
 mod tests {
-    use super::Filter;
-    use primitives::filter::Filter as PrimitiveFilter;
+    use super::{EpochNumber, Filter};
+    use primitives::{
+        epoch::EpochNumber as PrimitiveEpochNumber,
+        filter::Filter as PrimitiveFilter,
+    };
     use serde_json;
 
     #[test]
     fn test_serialize_filter() {
         let filter = Filter {
-            from_epoch: 0.into(),
-            to_epoch: 0.into(),
+            from_epoch: None,
+            to_epoch: None,
             block_hashes: None,
             address: None,
             topics: vec![],
@@ -108,8 +100,8 @@ mod tests {
         assert_eq!(
             serialized_filter,
             "{\
-             \"fromEpoch\":\"0x0\",\
-             \"toEpoch\":\"0x0\",\
+             \"fromEpoch\":null,\
+             \"toEpoch\":null,\
              \"blockHashes\":null,\
              \"address\":null,\
              \"topics\":[],\
@@ -118,8 +110,8 @@ mod tests {
         );
 
         let filter = Filter {
-            from_epoch: 1.into(),
-            to_epoch: 1000.into(),
+            from_epoch: Some(1000.into()),
+            to_epoch: Some(EpochNumber::LatestState),
             block_hashes: Some(vec![
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
@@ -140,8 +132,8 @@ mod tests {
         assert_eq!(
             serialized_filter,
             "{\
-             \"fromEpoch\":\"0x1\",\
-             \"toEpoch\":\"0x3e8\",\
+             \"fromEpoch\":\"0x3e8\",\
+             \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
              \"topics\":[[\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"],[]],\
@@ -153,7 +145,24 @@ mod tests {
     #[test]
     fn test_deserialize_filter() {
         let serialized = "{\
-             \"fromEpoch\":\"0x1\",\
+            \"topics\":[]\
+        }";
+
+        let result_filter = Filter {
+            from_epoch: None,
+            to_epoch: None,
+            block_hashes: None,
+            address: None,
+            topics: vec![],
+            limit: None,
+        };
+
+        let deserialized_filter: Filter =
+            serde_json::from_str(serialized).unwrap();
+        assert_eq!(deserialized_filter, result_filter);
+
+        let serialized = "{\
+             \"fromEpoch\":\"earliest\",\
              \"toEpoch\":\"0x3e8\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
@@ -162,8 +171,8 @@ mod tests {
              }";
 
         let result_filter = Filter {
-            from_epoch: 1.into(),
-            to_epoch: 1000.into(),
+            from_epoch: Some(EpochNumber::Earliest),
+            to_epoch: Some(1000.into()),
             block_hashes: Some(vec![
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
@@ -187,8 +196,8 @@ mod tests {
     #[test]
     fn test_convert_filter() {
         let filter = Filter {
-            from_epoch: 1.into(),
-            to_epoch: 1000.into(),
+            from_epoch: None,
+            to_epoch: None,
             block_hashes: Some(vec![
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
@@ -205,8 +214,8 @@ mod tests {
         };
 
         let primitive_filter = PrimitiveFilter {
-            from_epoch: 1 as u64,
-            to_epoch: 1000 as u64,
+            from_epoch: PrimitiveEpochNumber::Earliest,
+            to_epoch: PrimitiveEpochNumber::LatestState,
             block_hashes: Some(vec![
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
