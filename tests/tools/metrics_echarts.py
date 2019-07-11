@@ -86,8 +86,12 @@ class MetricGrouping(Metric):
                 self.values[key].append(value)
 
     def add_yaxis(self, chart:Line):
+        flag=True
+        if len(self.values.items()) >3:
+            flag=False
         for (name, values) in self.values.items():
-            chart.add_yaxis(name, values)
+            chart.add_yaxis(name, values,is_selected=flag)
+        chart.set_global_opts(legend_opts=opts.LegendOpts(type_="scroll", pos_bottom="bottom"))
 
 def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
     assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(metrics_log_file)
@@ -113,8 +117,8 @@ def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
     for (key, metric) in metrics.items():
         chart = (
             Line()
-            .add_xaxis(metric.timestamps)
-            .set_global_opts(title_opts=opts.TitleOpts(title=key))
+                .add_xaxis(metric.timestamps)
+                .set_global_opts(title_opts=opts.TitleOpts(title=key))
         )
 
         metric.add_yaxis(chart)

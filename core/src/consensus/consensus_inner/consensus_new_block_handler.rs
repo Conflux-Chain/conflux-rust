@@ -870,11 +870,9 @@ impl ConsensusNewBlockHandler {
             );
             debug!("Deferred block is {:?}", inner.arena[deferred].hash);
 
-            let correct_receipts_root =
-                self.data_man.get_receipts_root(&inner.arena[deferred].hash);
-            let correct_logs_bloom_hash = self
+            let epoch_exec_commitments = self
                 .data_man
-                .get_logs_bloom_hash(&inner.arena[deferred].hash);
+                .get_epoch_execution_commitments(&inner.arena[deferred].hash);
 
             if self
                 .data_man
@@ -884,8 +882,7 @@ impl ConsensusNewBlockHandler {
                     None,
                 ))
                 .unwrap()
-                && correct_receipts_root.is_some()
-                && correct_logs_bloom_hash.is_some()
+                && epoch_exec_commitments.is_some()
             {
                 let mut valid = true;
                 let correct_state_root = self
@@ -914,8 +911,11 @@ impl ConsensusNewBlockHandler {
                     valid = false;
                 }
 
+                let (correct_receipts_root, correct_logs_bloom_hash) =
+                    epoch_exec_commitments.unwrap();
+
                 if *block.block_header.deferred_receipts_root()
-                    != correct_receipts_root.unwrap()
+                    != correct_receipts_root
                 {
                     warn!(
                         "Invalid receipt root: {:?}, should be {:?}",
@@ -926,7 +926,7 @@ impl ConsensusNewBlockHandler {
                 }
 
                 if *block.block_header.deferred_logs_bloom_hash()
-                    != correct_logs_bloom_hash.unwrap()
+                    != correct_logs_bloom_hash
                 {
                     warn!(
                         "Invalid logs bloom hash: {:?}, should be {:?}",
@@ -1290,13 +1290,9 @@ impl ConsensusNewBlockHandler {
                     .block_header_by_hash(&future_block_hash)
                     .unwrap();
 
-                self.data_man.insert_receipts_root(
+                self.data_man.insert_epoch_execution_commitments(
                     inner.arena[new_pivot_chain[pivot_index]].hash,
                     future_block_header.deferred_receipts_root().clone(),
-                );
-
-                self.data_man.insert_logs_bloom_hash(
-                    inner.arena[new_pivot_chain[pivot_index]].hash,
                     future_block_header.deferred_logs_bloom_hash().clone(),
                 );
             }
@@ -1354,17 +1350,18 @@ impl ConsensusNewBlockHandler {
                 }
             }
             if receipts_correct {
-                self.data_man.insert_receipts_root(
-                    pivot_hash,
+                let pivot_receipts_root =
                     BlockHeaderBuilder::compute_block_receipts_root(
                         &epoch_receipts,
-                    ),
-                );
-                self.data_man.insert_logs_bloom_hash(
-                    pivot_hash,
+                    );
+                let pivot_logs_bloom_hash =
                     BlockHeaderBuilder::compute_block_logs_bloom_hash(
                         &epoch_receipts,
-                    ),
+                    );
+                self.data_man.insert_epoch_execution_commitments(
+                    pivot_hash,
+                    pivot_receipts_root,
+                    pivot_logs_bloom_hash,
                 );
             } else {
                 let reward_execution_info = inner.get_reward_execution_info(

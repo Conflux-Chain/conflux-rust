@@ -319,14 +319,11 @@ impl ConsensusExecutor {
             {
                 match maybe_cached_state {
                     Some(cached_state) => {
-                        if let (Some(receipts_root), Some(logs_bloom_hash)) = (
-                            self.handler
-                                .data_man
-                                .get_receipts_root(&block_hash),
-                            self.handler
-                                .data_man
-                                .get_logs_bloom_hash(&block_hash),
-                        ) {
+                        if let Some((receipts_root, logs_bloom_hash)) = self
+                            .handler
+                            .data_man
+                            .get_epoch_execution_commitments(&block_hash)
+                        {
                             return Ok((
                                 cached_state.get_state_root().unwrap().unwrap(),
                                 receipts_root,
@@ -499,11 +496,10 @@ impl ConsensusExecutionHandler {
             .unwrap()
             .unwrap();
 
-        let receipts_root =
-            self.data_man.get_receipts_root(&task.epoch_hash).unwrap();
-
-        let logs_bloom_hash =
-            self.data_man.get_logs_bloom_hash(&task.epoch_hash).unwrap();
+        let (receipts_root, logs_bloom_hash) = self
+            .data_man
+            .get_epoch_execution_commitments(&task.epoch_hash)
+            .unwrap();
 
         task.sender
             .send((state_root, receipts_root, logs_bloom_hash))
@@ -595,19 +591,13 @@ impl ConsensusExecutionHandler {
         } else {
             state.commit(*epoch_hash).unwrap();
         };
+        let (receipts_root, logs_bloom_hash) = self
+            .data_man
+            .get_epoch_execution_commitments(&epoch_hash)
+            .unwrap();
         debug!(
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
-            on_local_pivot,
-            epoch_hash,
-            state_root,
-            self
-                .data_man
-                .get_receipts_root(&epoch_hash)
-                .unwrap(),
-            self
-                .data_man
-                .get_logs_bloom_hash(&epoch_hash)
-                .unwrap()
+            on_local_pivot, epoch_hash, state_root, receipts_root, logs_bloom_hash,
         );
     }
 
@@ -727,13 +717,9 @@ impl ConsensusExecutionHandler {
             );
         }
 
-        self.data_man.insert_receipts_root(
+        self.data_man.insert_epoch_execution_commitments(
             pivot_block.hash(),
             BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
-        );
-
-        self.data_man.insert_logs_bloom_hash(
-            pivot_block.hash(),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
 
