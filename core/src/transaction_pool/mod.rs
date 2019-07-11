@@ -37,17 +37,13 @@ use transaction_pool_inner::TransactionPoolInner;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "size");
+        GaugeUsize::register_with_group("txpool", "unexecuted_size");
     static ref TX_POOL_READY_GAUGE: Arc<Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "ready_size");
     static ref TX_POOL_INSERT_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
     static ref TX_POOL_RECOVER_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "tx_pool::recover_public");
-    static ref TX_POOL_RECALCULATE: Arc<Meter> =
-        register_meter_with_group("timer", "tx_pool::recalculate");
-    static ref TX_POOL_INNER_INSERT_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "tx_pool::inner_insert");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;

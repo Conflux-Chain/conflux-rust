@@ -14,6 +14,8 @@ pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<Meter> =
         register_meter_with_group("timer", "tx_pool::recalculate");
+    static ref TX_POOL_INNER_INSERT_TIMER: Arc<Meter> =
+        register_meter_with_group("timer", "tx_pool::inner_insert");
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -687,7 +689,7 @@ impl TransactionPoolInner {
             ));
         }
 
-        let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
+        let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let result = self.insert(transaction.clone(), packed, force);
         if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));
