@@ -8,45 +8,59 @@ from test_framework.util import assert_equal, assert_raises_rpc_error
 class TestGetLogs(RpcClient):
     def test_invalid_filter(self):
         # invalid epoch type
-        filter = Filter(0, "0x0")
+        filter = Filter(from_epoch=0)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter(0, "latest") # should be `latest_state` or `latest_mined`
+        filter = Filter(from_epoch="latest") # should be `latest_state` or `latest_mined`
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid epoch hex
-        filter = Filter("0xQQQQ", "0x0")
+        filter = Filter(from_epoch="0xQQQQ")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `blockHashes` type
-        filter = Filter("0x0", "0x0", block_hashes="")
+        filter = Filter(block_hashes="")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter("0x0", "0x0", block_hashes=["0x0"])
+        filter = Filter(block_hashes=["0x0"])
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `address` type
-        filter = Filter("0x0", "0x0", address="")
+        filter = Filter(address="")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter("0x0", "0x0", address=["0x0"])
+        filter = Filter(address=["0x0"])
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `topics` type
-        filter = Filter("0x0", "0x0", topics=None)
+        filter = Filter(topics=None)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter("0x0", "0x0", topics="")
+        filter = Filter(topics="")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter("0x0", "0x0", topics=["0x0"])
+        filter = Filter(topics=["0x0"])
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `limit` type
-        filter = Filter("0x0", "0x0", limit=1)
+        filter = Filter(limit=1)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
     def test_valid_filter(self):
+        # variadic address field
+        filter = Filter(address=None)
+        logs = self.get_logs(filter)
+        assert_equal(logs, [])
+
+        filter = Filter(address="0x0000000000000000000000000000000000000000")
+        logs = self.get_logs(filter)
+        assert_equal(logs, [])
+
+        filter = Filter(address=["0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000"])
+        logs = self.get_logs(filter)
+        assert_equal(logs, [])
+
+        ## all fields
         filter = Filter(
             from_epoch="0x0",
             to_epoch="latest_state",
@@ -55,6 +69,5 @@ class TestGetLogs(RpcClient):
             topics=[["0x0000000000000000000000000000000000000000000000000000000000000000"]],
             limit="0x1"
         )
-
         logs = self.get_logs(filter)
         assert_equal(logs, [])

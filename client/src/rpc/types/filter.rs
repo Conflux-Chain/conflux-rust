@@ -6,6 +6,58 @@ use crate::rpc::types::{EpochNumber, H160, H256, U64};
 use cfx_types::U64 as CfxU64;
 use primitives::filter::Filter as PrimitiveFilter;
 
+use serde::{
+    de::{DeserializeOwned, Error},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use serde_json::{from_value, Value};
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum VariadicValue<T> {
+    /// None
+    Null,
+    /// Single
+    Single(T),
+    /// List
+    Multiple(Vec<T>),
+}
+
+impl<T> Serialize for VariadicValue<T>
+where T: Serialize
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        match &self {
+            &VariadicValue::Null => serializer.serialize_none(),
+            &VariadicValue::Single(x) => x.serialize(serializer),
+            &VariadicValue::Multiple(xs) => xs.serialize(serializer),
+        }
+    }
+}
+
+impl<'a, T> Deserialize<'a> for VariadicValue<T>
+where T: DeserializeOwned
+{
+    fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
+    where D: Deserializer<'a> {
+        let v: Value = Deserialize::deserialize(deserializer)?;
+
+        if v.is_null() {
+            return Ok(VariadicValue::Null);
+        }
+
+        from_value(v.clone())
+            .map(VariadicValue::Single)
+            .or_else(|_| from_value(v).map(VariadicValue::Multiple))
+            .map_err(|err| {
+                D::Error::custom(format!(
+                    "Invalid variadic value type: {}",
+                    err
+                ))
+            })
+    }
+}
+
 #[derive(PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Filter {
@@ -23,7 +75,7 @@ pub struct Filter {
     ///
     /// If None, match all.
     /// If specified, log must be produced by one of these addresses.
-    pub address: Option<Vec<H160>>,
+    pub address: Option<VariadicValue<H160>>,
 
     /// Search topics.
     ///
@@ -60,11 +112,17 @@ impl Into<usize> for U64 {
 
 impl Filter {
     pub fn into_primitive(self) -> PrimitiveFilter {
+        let address = self.address.and_then(|address| match address {
+            VariadicValue::Null => None,
+            VariadicValue::Single(a) => Some(vec![a]),
+            VariadicValue::Multiple(a) => Some(a),
+        });
+
         PrimitiveFilter {
             from_epoch: self.from_epoch.unwrap_or(EpochNumber::Earliest).into(),
             to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestState).into(),
             block_hashes: maybe_vec_into(&self.block_hashes),
-            address: maybe_vec_into(&self.address),
+            address: maybe_vec_into(&address),
             topics: self.topics.iter().map(maybe_vec_into).collect(),
             limit: self.limit.map(Into::into),
         }
@@ -77,12 +135,57 @@ impl Into<PrimitiveFilter> for Filter {
 
 #[cfg(test)]
 mod tests {
-    use super::{EpochNumber, Filter};
+    use super::{EpochNumber, Filter, VariadicValue};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::Filter as PrimitiveFilter,
     };
     use serde_json;
+
+    #[test]
+    fn test_serialize_variadic_value() {
+        let value: VariadicValue<u64> = VariadicValue::Null;
+        let serialized_value = serde_json::to_string(&value).unwrap();
+        assert_eq!(serialized_value, "null");
+
+        let value = VariadicValue::Single(1);
+        let serialized_value = serde_json::to_string(&value).unwrap();
+        assert_eq!(serialized_value, "1");
+
+        let value = VariadicValue::Multiple(vec![1, 2, 3, 4]);
+        let serialized_value = serde_json::to_string(&value).unwrap();
+        assert_eq!(serialized_value, "[1,2,3,4]");
+
+        let value = VariadicValue::Multiple(vec![
+            VariadicValue::Null,
+            VariadicValue::Single(1),
+            VariadicValue::Multiple(vec![2, 3]),
+            VariadicValue::Single(4),
+        ]);
+        let serialized_value = serde_json::to_string(&value).unwrap();
+        assert_eq!(serialized_value, "[null,1,[2,3],4]");
+    }
+
+    #[test]
+    fn test_deserialize_variadic_value() {
+        let serialized = "null";
+        let deserialized_value: VariadicValue<u64> =
+            serde_json::from_str(serialized).unwrap();
+        assert_eq!(deserialized_value, VariadicValue::Null);
+
+        let serialized = "1";
+        let deserialized_value: VariadicValue<u64> =
+            serde_json::from_str(serialized).unwrap();
+        assert_eq!(deserialized_value, VariadicValue::Single(1));
+
+        let serialized = "[1,2,3,4]";
+        let deserialized_value: VariadicValue<u64> =
+            serde_json::from_str(serialized).unwrap();
+        assert_eq!(
+            deserialized_value,
+            VariadicValue::Multiple(vec![1, 2, 3, 4])
+        );
+    }
 
     #[test]
     fn test_serialize_filter() {
@@ -116,10 +219,10 @@ mod tests {
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
             ]),
-            address: Some(vec![
+            address: Some(VariadicValue::Multiple(vec![
                 "0x0000000000000000000000000000000000000000".into(),
                 "0x0000000000000000000000000000000000000001".into()
-            ]),
+            ])),
             topics: vec![
                 Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
                 Some(vec![])
@@ -145,8 +248,8 @@ mod tests {
     #[test]
     fn test_deserialize_filter() {
         let serialized = "{\
-            \"topics\":[]\
-        }";
+                          \"topics\":[]\
+                          }";
 
         let result_filter = Filter {
             from_epoch: None,
@@ -177,10 +280,10 @@ mod tests {
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
             ]),
-            address: Some(vec![
+            address: Some(VariadicValue::Multiple(vec![
                 "0x0000000000000000000000000000000000000000".into(),
                 "0x0000000000000000000000000000000000000001".into()
-            ]),
+            ])),
             topics: vec![
                 Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
                 Some(vec![])
@@ -202,10 +305,10 @@ mod tests {
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
             ]),
-            address: Some(vec![
+            address: Some(VariadicValue::Multiple(vec![
                 "0x0000000000000000000000000000000000000000".into(),
                 "0x0000000000000000000000000000000000000001".into()
-            ]),
+            ])),
             topics: vec![
                 Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
                 Some(vec![])

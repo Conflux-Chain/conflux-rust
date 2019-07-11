@@ -103,6 +103,16 @@ class LogFilteringTest(ConfluxTestFramework):
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS - 1)
 
+        filter = Filter(topics=[[CONSTRUCTED_TOPIC], [CALLED_TOPIC]]) # AND-relation
+        logs = self.rpc.get_logs(filter)
+        self.assert_response_format_correct(logs)
+        assert_equal(len(logs), 0)
+
+        filter = Filter(topics=[[CONSTRUCTED_TOPIC, CALLED_TOPIC]]) # OR-relation
+        logs = self.rpc.get_logs(filter)
+        self.assert_response_format_correct(logs)
+        assert_equal(len(logs), NUM_CALLS)
+
         # apply filter with limit
         filter = Filter(limit=("0x%x" % (NUM_CALLS // 2)))
         logs = self.rpc.get_logs(filter)
