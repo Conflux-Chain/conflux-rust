@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_manager::CacheManager,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
@@ -24,7 +24,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use threadpool::ThreadPool;
-use crate::block_data_manager::DataManagerConfiguration;
 
 fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
