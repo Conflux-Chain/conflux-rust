@@ -34,7 +34,7 @@ use super::{
 use crate::{
     cache_manager::{CacheId, CacheManager},
     pow::WORKER_COMPUTATION_PARALLELISM,
-    verification::VerificationConfig,
+    verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
 };
 use metrics::{Gauge, GaugeUsize};
 use primitives::{
@@ -1383,18 +1383,6 @@ impl SynchronizationProtocolHandler {
         );
     }
 
-    fn validate_header_timestamp(
-        &self, header: &BlockHeader, now: u64,
-    ) -> Result<(), Error> {
-        const ACCEPTABLE_DRIFT: u64 = 60;
-        let invalid_threshold = now + ACCEPTABLE_DRIFT;
-        if header.timestamp() > invalid_threshold {
-            warn!("block {} has incorrect timestamp", header.hash());
-            return Err(ErrorKind::InvalidTimestamp.into());
-        }
-        Ok(())
-    }
-
     fn on_block_headers_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -1423,7 +1411,11 @@ impl SynchronizationProtocolHandler {
                 block_headers
                     .headers
                     .iter()
-                    .map(|h| self.validate_header_timestamp(h, now_timestamp))
+                    .map(|h| {
+                        self.graph
+                            .verification_config
+                            .validate_header_timestamp(h, now_timestamp)
+                    })
                     .find(|result| result.is_err())
                     .unwrap_or(Ok(()))
             } else {
@@ -1441,7 +1433,7 @@ impl SynchronizationProtocolHandler {
 
             // check timestamp drift
             if self.graph.verification_config.verify_timestamp {
-                if header.timestamp() > now_timestamp {
+                if header.timestamp() > now_timestamp + ACCEPTABLE_TIME_DRIFT {
                     self.future_blocks.insert(header.clone());
                     continue;
                 }
