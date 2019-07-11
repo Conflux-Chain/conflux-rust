@@ -299,7 +299,8 @@ impl StateManagerTrait for StateManager {
             ),
         );
 
-        state.get_or_create_root_node();
+        // Root node creation for genesis block must be successful.
+        state.get_or_create_root_node().unwrap();
 
         state
     }
