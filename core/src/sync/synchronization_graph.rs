@@ -488,17 +488,16 @@ impl SynchronizationGraphInner {
             })
     }
 
-    // Get parent (height, timestamp, gas_limit, difficulty, referee_timestamps)
+    // Get parent (height, timestamp, gas_limit, difficulty)
     // This function assumes that the parent and referee information MUST exist
     // in memory or in disk.
     fn get_parent_and_referee_info(
         &self, index: usize,
-    ) -> (u64, u64, U256, U256, Vec<u64>) {
+    ) -> (u64, u64, U256, U256) {
         let parent_height;
         let parent_timestamp;
         let parent_gas_limit;
         let parent_difficulty;
-        let mut referee_timestamps = Vec::new();
         let parent = self.arena[index].parent;
         if parent != NULL {
             parent_height = self.arena[parent].block_header.height();
@@ -518,41 +517,11 @@ impl SynchronizationGraphInner {
             parent_difficulty = *parent_header.difficulty();
         }
 
-        if self.arena[index].referees.len()
-            == self.arena[index].block_header.referee_hashes().len()
-        {
-            for referee in self.arena[index].referees.iter() {
-                referee_timestamps
-                    .push(self.arena[*referee].block_header.timestamp());
-            }
-        } else {
-            let mut referee_hash_in_mem = HashSet::new();
-            for referee in self.arena[index].referees.iter() {
-                referee_timestamps
-                    .push(self.arena[*referee].block_header.timestamp());
-                referee_hash_in_mem
-                    .insert(self.arena[*referee].block_header.hash());
-            }
-
-            for referee_hash in self.arena[index].block_header.referee_hashes()
-            {
-                if !referee_hash_in_mem.contains(referee_hash) {
-                    let referee_header = self
-                        .data_man
-                        .block_header_by_hash(referee_hash)
-                        .unwrap()
-                        .clone();
-                    referee_timestamps.push(referee_header.timestamp());
-                }
-            }
-        }
-
         (
             parent_height,
             parent_timestamp,
             parent_gas_limit,
             parent_difficulty,
-            referee_timestamps,
         )
     }
 
@@ -565,7 +534,6 @@ impl SynchronizationGraphInner {
             parent_timestamp,
             parent_gas_limit,
             parent_difficulty,
-            referee_timestamps,
         ) = self.get_parent_and_referee_info(index);
 
         // Verify the height and epoch numbers are correct
@@ -596,27 +564,6 @@ impl SynchronizationGraphInner {
                     found: my_timestamp,
                 },
             )));
-        }
-
-        for referee_timestamp in referee_timestamps {
-            if referee_timestamp > my_timestamp {
-                let my_timestamp =
-                    UNIX_EPOCH + Duration::from_secs(my_timestamp);
-                let ref_timestamp =
-                    UNIX_EPOCH + Duration::from_secs(referee_timestamp);
-
-                warn!("Invalid timestamp: referee timestamp {:?}, me {:?} timestamp {:?}",
-                      ref_timestamp,
-                      self.arena[index].block_header.hash(),
-                      my_timestamp);
-                return Err(From::from(BlockError::InvalidTimestamp(
-                    OutOfBounds {
-                        max: Some(my_timestamp),
-                        min: Some(ref_timestamp),
-                        found: my_timestamp,
-                    },
-                )));
-            }
         }
 
         // Verify the gas limit is respected
@@ -1038,6 +985,11 @@ impl SynchronizationGraph {
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         self.block_header_by_hash(hash)
             .map(|header| header.height())
+    }
+
+    pub fn block_timestamp_by_hash(&self, hash: &H256) -> Option<u64> {
+        self.block_header_by_hash(hash)
+            .map(|header| header.timestamp())
     }
 
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {

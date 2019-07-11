@@ -15,6 +15,7 @@ use primitives::{
     *,
 };
 use std::{
+    cmp::max,
     sync::{mpsc, Arc},
     thread, time,
 };
@@ -168,6 +169,9 @@ impl BlockGenerator {
         let parent_height =
             self.graph.block_height_by_hash(&parent_hash).unwrap();
 
+        let parent_timestamp =
+            self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
+
         trace!("{} txs packed", transactions.len());
 
         let mut expected_difficulty =
@@ -185,19 +189,20 @@ impl BlockGenerator {
             expected_difficulty = U256::from(difficulty);
         }
 
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let my_timestamp = max(parent_timestamp, now);
+
         let block_header = BlockHeaderBuilder::new()
             .with_transactions_root(Block::compute_transaction_root(
                 &transactions,
             ))
             .with_parent_hash(parent_hash)
             .with_height(parent_height + 1)
-            .with_timestamp(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            )
-            //            .with_timestamp(0)
+            .with_timestamp(my_timestamp)
             .with_author(self.mining_author)
             .with_deferred_state_root(deferred_state_root_with_aux_info)
             .with_deferred_receipts_root(deferred_receipts_root)
