@@ -6,7 +6,6 @@ extern crate tempdir;
 
 use self::tempdir::TempDir;
 use super::super::{BlockGenerator, Client, ClientHandle, Configuration};
-use cfxcore::REFEREE_BOUND;
 use parking_lot::{Condvar, Mutex};
 use std::{
     sync::Arc,
