@@ -33,10 +33,7 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    cmp::Reverse,
-    collections::HashSet,
-    sync::Arc,
-    thread::sleep,
+    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
     time::Duration,
 };
 lazy_static! {
