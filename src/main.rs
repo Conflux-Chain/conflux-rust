@@ -3,14 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 extern crate clap;
-extern crate client;
 extern crate log;
 extern crate log4rs;
 extern crate parking_lot;
 
 use clap::{App, Arg};
-use client::{Client, Configuration};
-use log::LevelFilter;
+use client::{archive::ArchiveClient, configuration::Configuration};
+use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
     config::{Appender, Config as LogConfig, Logger, Root},
@@ -303,13 +302,42 @@ fn main() {
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
 
-    process::exit(match Client::start(conf, exit.clone()) {
-        Ok(client_handle) => Client::run_until_closed(exit, client_handle),
-        Err(err) => {
-            writeln!(&mut stdio::stderr(), "{}", err).unwrap();
-            1
-        }
-    });
+    if matches.is_present("light") {
+        //FIXME: implement light client later
+        info!("Starting light client...");
+        process::exit(match ArchiveClient::start(conf, exit.clone()) {
+            Ok(client_handle) => {
+                ArchiveClient::run_until_closed(exit, client_handle)
+            }
+            Err(err) => {
+                writeln!(&mut stdio::stderr(), "{}", err).unwrap();
+                1
+            }
+        });
+    } else if matches.is_present("archive") {
+        info!("Starting archive client...");
+        process::exit(match ArchiveClient::start(conf, exit.clone()) {
+            Ok(client_handle) => {
+                ArchiveClient::run_until_closed(exit, client_handle)
+            }
+            Err(err) => {
+                writeln!(&mut stdio::stderr(), "{}", err).unwrap();
+                1
+            }
+        });
+    } else {
+        //FIXME: implement full client later
+        info!("Starting full client...");
+        process::exit(match ArchiveClient::start(conf, exit.clone()) {
+            Ok(client_handle) => {
+                ArchiveClient::run_until_closed(exit, client_handle)
+            }
+            Err(err) => {
+                writeln!(&mut stdio::stderr(), "{}", err).unwrap();
+                1
+            }
+        });
+    }
 }
 
 fn from_str_validator<T: FromStr>(arg: String) -> Result<(), String> {

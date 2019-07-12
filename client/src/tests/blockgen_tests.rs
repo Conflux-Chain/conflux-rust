@@ -5,7 +5,8 @@
 extern crate tempdir;
 
 use self::tempdir::TempDir;
-use super::super::{BlockGenerator, Client, ClientHandle, Configuration};
+use crate::archive::{ArchiveClient, ArchiveClientHandle, Configuration};
+use blockgen::BlockGenerator;
 use parking_lot::{Condvar, Mutex};
 use std::{
     sync::Arc,
@@ -13,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn test_mining_10_epochs_inner(handle: &ClientHandle) {
+fn test_mining_10_epochs_inner(handle: &ArchiveClientHandle) {
     let bgen = handle.blockgen.clone();
     //println!("Pow Config: {:?}", bgen.pow_config());
     thread::spawn(move || {
@@ -84,9 +85,9 @@ fn test_mining_10_epochs() {
         Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handle = Client::start(conf, exit.clone()).unwrap();
+    let handle = ArchiveClient::start(conf, exit.clone()).unwrap();
 
     test_mining_10_epochs_inner(&handle);
 
-    Client::close(handle);
+    ArchiveClient::close(handle);
 }
