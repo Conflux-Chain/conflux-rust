@@ -12,7 +12,7 @@ from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
-class P2PTest(DefaultConfluxTestFramework):
+class TransactionTest(DefaultConfluxTestFramework):
     def run_test(self):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}
@@ -130,4 +130,4 @@ class P2PTest(DefaultConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    TransactionTest().main()

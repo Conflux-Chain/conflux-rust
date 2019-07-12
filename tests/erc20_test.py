@@ -30,8 +30,8 @@ class P2PTest(ConfluxTestFramework):
         # erc20_contract = solc.get_contract_instance(source=os.path.dirname(os.path.realpath(__file__)) + "/erc20.sol", contract_name="FixedSupplyToken")
         file_dir = os.path.dirname(os.path.realpath(__file__))
         erc20_contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "erc20_abi.json"),
-            bytecode_file = os.path.join(file_dir, "erc20_bytecode.dat"),
+            abi_file = os.path.join(file_dir, "contracts/erc20_abi.json"),
+            bytecode_file = os.path.join(file_dir, "contracts/erc20_bytecode.dat"),
         )
 
         start_p2p_connection(self.nodes)

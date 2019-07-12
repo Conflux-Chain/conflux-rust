@@ -1,7 +1,7 @@
 use crate::rpc::types::{Bytes, H160, H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
 
-#[derive(Debug, Serialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Log {
     /// Address

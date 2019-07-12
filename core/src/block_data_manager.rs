@@ -142,6 +142,34 @@ impl BlockDataManager {
         Some(block_body)
     }
 
+    pub fn insert_checkpoint_hashes_to_db(
+        &self, checkpoint_prev: &H256, checkpoint_cur: &H256,
+    ) {
+        let mut rlp_stream = RlpStream::new();
+        rlp_stream.begin_list(2);
+        rlp_stream.append(checkpoint_prev);
+        rlp_stream.append(checkpoint_cur);
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_MISC, b"checkpoint", &rlp_stream.drain());
+        self.db.key_value().write(dbops).expect("db error");
+    }
+
+    pub fn checkpoint_hashes_from_db(&self) -> Option<(H256, H256)> {
+        match self.db.key_value().get(COL_MISC, b"checkpoint")
+            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
+            {
+                Some(checkpoint) => {
+                    let rlp = Rlp::new(&checkpoint);
+                    Some((rlp.val_at::<H256>(0).expect("Failed to decode checkpoint hash!"),
+                          rlp.val_at::<H256>(1).expect("Failed to decode checkpoint hash!")))
+                }
+                None => {
+                    info!("No checkpoint got from db");
+                    None
+                }
+            }
+    }
+
     pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
         let mut rlp_stream = RlpStream::new();
         rlp_stream.begin_list(terminals.len());
@@ -721,9 +749,13 @@ impl BlockDataManager {
         });
     }
 
-    pub fn set_cur_consensus_era_genesis_hash(&self, hash: &H256) {
-        let mut cur_era_hash = self.cur_consensus_era_genesis_hash.write();
-        *cur_era_hash = hash.clone();
+    pub fn set_cur_consensus_era_genesis_hash(
+        &self, cur_era_hash: &H256, next_era_hash: &H256,
+    ) {
+        self.insert_checkpoint_hashes_to_db(cur_era_hash, next_era_hash);
+
+        let mut era_hash = self.cur_consensus_era_genesis_hash.write();
+        *era_hash = cur_era_hash.clone();
     }
 
     pub fn get_cur_consensus_era_genesis_hash(&self) -> H256 {
