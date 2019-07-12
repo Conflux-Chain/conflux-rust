@@ -618,9 +618,6 @@ impl TransactionPool {
                         to_prop.insert(tx.hash, tx);
                     }
                 }
-                TX_POOL_GAUGE.update(self.len());
-                TX_POOL_READY_GAUGE
-                    .update(self.inner.read().ready_account_pool.len());
             }
             Err(e) => {
                 for tx in transactions {
@@ -628,6 +625,8 @@ impl TransactionPool {
                 }
             }
         }
+        TX_POOL_GAUGE.update(self.len());
+        TX_POOL_READY_GAUGE.update(self.inner.read().ready_account_pool.len());
 
         (passed_transactions, failure)
     }
@@ -793,10 +792,6 @@ impl TransactionPool {
             transaction.sender
         );
         inner.insert(transaction, packed, force)
-    }
-
-    pub fn remove_to_propagate(&self, tx_hash: &H256) {
-        self.to_propagate_trans.write().remove(tx_hash);
     }
 
     pub fn set_tx_packed(&self, transactions: Vec<Arc<SignedTransaction>>) {
