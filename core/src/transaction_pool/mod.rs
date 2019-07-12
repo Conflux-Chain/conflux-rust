@@ -11,10 +11,8 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    block_data_manager::BlockDataManager, executive, statedb::StateDb,
     block_data_manager::BlockDataManager, consensus::BestInformation,
-    executive, statedb::StateDb,
-    storage::Storage, vm,
+    executive, statedb::StateDb, storage::Storage, vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
 use metrics::{
