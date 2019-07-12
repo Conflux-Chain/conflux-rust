@@ -192,7 +192,7 @@ impl ConsensusGraph {
         graph.update_best_info(&*graph.inner.read());
         graph
             .txpool
-            .notify_new_best_info(graph.best_info.read().clone());
+            .notify_new_best_info(graph.best_info.read_recursive().clone());
         graph
     }
 
@@ -231,10 +231,16 @@ impl ConsensusGraph {
     /// Wait for the generation and the execution completion of a block in the
     /// consensus graph. This API is used mainly for testing purpose
     pub fn wait_for_generation(&self, hash: &H256) {
-        while !self.inner.read().hash_to_arena_indices.contains_key(hash) {
+        while !self
+            .inner
+            .read_recursive()
+            .hash_to_arena_indices
+            .contains_key(hash)
+        {
             sleep(Duration::from_millis(1));
         }
-        let best_state_block = self.inner.read().best_state_block_hash();
+        let best_state_block =
+            self.inner.read_recursive().best_state_block_hash();
         self.executor.wait_for_result(best_state_block);
     }
 
@@ -269,18 +275,20 @@ impl ConsensusGraph {
     }
 
     pub fn best_epoch_number(&self) -> u64 {
-        self.best_info.read().best_epoch_number
+        self.best_info.read_recursive().best_epoch_number
     }
 
     pub fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
-        self.inner.read().get_block_epoch_number(hash)
+        self.inner.read_recursive().get_block_epoch_number(hash)
     }
 
     pub fn get_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
         self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| self.inner.read().block_hashes_by_epoch(height))
+            .and_then(|height| {
+                self.inner.read_recursive().block_hashes_by_epoch(height)
+            })
     }
 
     /// Get the average gas price of the last GAS_PRICE_TRANSACTION_SAMPLE_SIZE
@@ -503,11 +511,11 @@ impl ConsensusGraph {
     }
 
     pub fn best_block_hash(&self) -> H256 {
-        self.best_info.read().best_block_hash
+        self.best_info.read_recursive().best_block_hash
     }
 
     pub fn best_state_epoch_number(&self) -> u64 {
-        self.inner.read().best_state_epoch_number()
+        self.inner.read_recursive().best_state_epoch_number()
     }
 
     pub fn get_hash_from_epoch_number(
@@ -558,7 +566,7 @@ impl ConsensusGraph {
 
     /// Returns the total number of blocks in consensus graph
     pub fn block_count(&self) -> usize {
-        self.inner.read().hash_to_arena_indices.len()
+        self.inner.read_recursive().hash_to_arena_indices.len()
     }
 
     /// Estimate the gas of a transaction
@@ -728,7 +736,7 @@ impl ConsensusGraph {
     /// graph. This API is used by the SynchronizationLayer to trim data
     /// before the checkpoint.
     pub fn current_era_genesis_hash(&self) -> H256 {
-        let inner = self.inner.read();
+        let inner = self.inner.read_recursive();
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .hash
             .clone()
@@ -744,7 +752,7 @@ impl ConsensusGraph {
     /// propagate the ReadGuard up to make the read-lock live longer so that
     /// the whole block packing process can be atomic.
     pub fn get_best_info(&self) -> Arc<BestInformation> {
-        self.best_info.read().clone()
+        self.best_info.read_recursive().clone()
     }
 
     /// Get the set of block hashes inside an epoch
