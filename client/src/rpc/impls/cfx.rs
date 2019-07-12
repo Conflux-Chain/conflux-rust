@@ -26,8 +26,8 @@ use network::{
 };
 use parking_lot::{Condvar, Mutex};
 use primitives::{
-    block::MAX_BLOCK_SIZE_IN_BYTES, Action, SignedTransaction, Transaction,
-    TransactionWithSignature,
+    block::MAX_BLOCK_SIZE_IN_BYTES, filter::FilterError, Action,
+    SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
@@ -558,12 +558,13 @@ impl RpcImpl {
     }
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
-        info!("RPC Request: get_logs({:?})", filter);
+        info!("RPC Request: cfx_getLogs({:?})", filter);
         self.consensus
             .logs(filter.into())
-            .map_err(|e| {
-                warn!("Error during filter execution: {:?}", e);
-                RpcError::internal_error()
+            .map_err(|e| match e {
+                FilterError::InvalidEpochNumber { .. } => {
+                    RpcError::invalid_params(format!("{}", e))
+                }
             })
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
     }

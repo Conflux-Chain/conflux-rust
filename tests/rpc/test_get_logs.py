@@ -14,6 +14,13 @@ class TestGetLogs(RpcClient):
         filter = Filter(from_epoch="latest") # should be `latest_state` or `latest_mined`
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
+        # inconsistent epoch numbers
+        filter = Filter(from_epoch="0x10", to_epoch="0x01")
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
+        filter = Filter(from_epoch="latest_state", to_epoch="earliest")
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
+
         # invalid epoch hex
         filter = Filter(from_epoch="0xQQQQ")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
