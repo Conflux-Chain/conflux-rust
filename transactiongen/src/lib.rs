@@ -270,9 +270,6 @@ impl TransactionGenerator {
             let mut sender_index: usize = random();
             sender_index %= account_count;
             let sender_kp = secret_store.get_keypair(sender_index);
-
-            // Randomly generate the to-be-transferred value
-            // based on the balance of sender
             let sender_address = public_to_address(sender_kp.public());
 
             // Always send value 0
@@ -317,9 +314,8 @@ impl TransactionGenerator {
                 *sender_nonce += U256::one();
                 *balance_map.entry(receiver_address).or_insert(0.into()) +=
                     balance_to_transfer;
-                // Transaction pool is full, do not change local state
+                tx_n += 1;
             }
-            tx_n += 1;
             if tx_n % 100 == 0 {
                 TX_GEN_METER.mark(100);
                 info!("Generated {} transactions", tx_n);
