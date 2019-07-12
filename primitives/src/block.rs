@@ -14,7 +14,6 @@ use rand::Rng;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use siphasher::sip::SipHasher24;
 use std::{
-    collections::HashMap,
     fmt::{Debug, Formatter},
     hash::Hasher,
     sync::Arc,

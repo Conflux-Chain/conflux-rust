@@ -5,7 +5,6 @@
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_config::CacheConfig,
-    cache_manager::CacheManager,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,

@@ -565,53 +565,69 @@ impl TransactionPool {
             .get_nonce_and_balance_from_storage(address, &mut account_cache)
     }
 
+    /// Try to insert `transactions` into transaction pool.
+    ///
+    /// If some tx is already in our tx_cache, it will be ignored and will not
+    /// be added to returned `passed_transactions`. If some tx invalid or
+    /// cannot be inserted to the tx pool, it will be included in the returned
+    /// `failure` and will not be propagated.
     pub fn insert_new_transactions(
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
-        let mut failures = HashMap::new();
-        let signed_trans =
-            self.data_man.recover_unsigned_tx(transactions).unwrap();
-        let mut account_cache = self.get_best_state_account_cache();
         let mut passed_transactions = Vec::new();
-        {
-            let mut inner = self.inner.write();
-            let inner = &mut *inner;
-            for tx in signed_trans {
-                if let Err(e) = self.verify_transaction(tx.as_ref()) {
-                    warn!("Transaction discarded due to failure of passing verification {:?}: {}", tx.hash(), e);
-                    failures.insert(tx.hash(), e);
-                    continue;
+        let mut failure = HashMap::new();
+        match self.data_man.recover_unsigned_tx(transactions) {
+            Ok(signed_trans) => {
+                let mut account_cache = self.get_best_state_account_cache();
+                let mut inner = self.inner.write();
+                let mut to_prop = self.to_propagate_trans.write();
+                for tx in signed_trans {
+                    if let Err(e) = self.verify_transaction(tx.as_ref()) {
+                        debug!(
+                            "tx {:?} fails to pass verification, err={:?}",
+                            &tx.hash, e
+                        );
+                        failure.insert(tx.hash(), e);
+                        continue;
+                    }
+                    if let Err(e) = self
+                        .add_transaction_and_check_readiness_without_lock(
+                            &mut *inner,
+                            &mut account_cache,
+                            tx.clone(),
+                            false,
+                            false,
+                        )
+                    {
+                        debug!(
+                            "tx {:?} fails to be inserted to pool, err={:?}",
+                            &tx.hash, e
+                        );
+                        failure.insert(tx.hash(), e);
+                        continue;
+                    }
+                    passed_transactions.push(tx.clone());
+                    if !to_prop.contains_key(&tx.hash) {
+                        to_prop.insert(tx.hash, tx);
+                    }
                 }
-                let hash = tx.hash();
-                match self.add_transaction_and_check_readiness_without_lock(
-                    inner,
-                    &mut account_cache,
-                    tx.clone(),
-                    false,
-                    false,
-                ) {
-                    Ok(_) => {
-                        let mut to_prop = self.to_propagate_trans.write();
-                        if !to_prop.contains_key(&tx.hash) {
-                            to_prop.insert(tx.hash, tx.clone());
-                        }
-                        passed_transactions.push(tx);
-                    }
-                    Err(e) => {
-                        failures.insert(hash, e);
-                    }
+                TX_POOL_GAUGE.update(self.len());
+                TX_POOL_READY_GAUGE
+                    .update(self.inner.read().ready_account_pool.len());
+            }
+            Err(e) => {
+                for tx in transactions {
+                    failure.insert(tx.hash(), format!("{:?}", e).into());
                 }
             }
         }
-        TX_POOL_GAUGE.update(self.len());
-        TX_POOL_READY_GAUGE.update(self.inner.read().ready_account_pool.len());
 
-        (passed_transactions, failures)
+        (passed_transactions, failure)
     }
 
-    // verify transactions based on the rules that
-    // have nothing to do with readiness
+    /// verify transactions based on the rules that have nothing to do with
+    /// readiness
     pub fn verify_transaction(
         &self, transaction: &SignedTransaction,
     ) -> Result<(), String> {
