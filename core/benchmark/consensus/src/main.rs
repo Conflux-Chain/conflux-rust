@@ -6,6 +6,7 @@
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    cache_config::CacheConfig,
     cache_manager::CacheManager,
     consensus::{
         ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
@@ -117,29 +118,17 @@ fn initialize_consensus_graph_for_test(
         StorageConfiguration::default(),
     ));
 
-    let mb = 1024 * 1024;
-    let max_cache_size = 2048 * mb; // DEFAULT_LEDGER_CACHE_SIZE
-    let pref_cache_size = max_cache_size * 3 / 4;
-
-    let cache_man = Arc::new(Mutex::new(CacheManager::new(
-        pref_cache_size,
-        max_cache_size,
-        3 * mb,
-    )));
-
     let data_man = Arc::new(BlockDataManager::new(
+        CacheConfig::default(),
         Arc::new(genesis_block),
         ledger_db.clone(),
         storage_manager,
-        cache_man,
-        DataManagerConfiguration::new(false, true),
+        worker_thread_pool,
+        DataManagerConfiguration::new(false, true, 250000),
     ));
 
-    let txpool = Arc::new(TransactionPool::with_capacity(
-        500_000,
-        worker_thread_pool.clone(),
-        data_man.clone(),
-    ));
+    let txpool =
+        Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
     let statistics = Arc::new(Statistics::new());
 
     let vm = VmFactory::new(1024 * 32);
