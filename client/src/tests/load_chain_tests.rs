@@ -5,7 +5,7 @@
 extern crate tempdir;
 
 use self::tempdir::TempDir;
-use super::super::{ArchiveClient, Configuration};
+use crate::archive::{ArchiveClient, Configuration};
 use cfx_types::H256;
 use parking_lot::{Condvar, Mutex};
 use serde_json::Value;

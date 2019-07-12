@@ -5,9 +5,10 @@
 extern crate tempdir;
 
 use self::tempdir::TempDir;
-use super::super::{
-    ArchiveClient, ArchiveClientHandle, BlockGenerator, Configuration,
+use crate::archive::{
+    ArchiveClient, ArchiveClientHandle, Configuration,
 };
+use blockgen::BlockGenerator;
 use parking_lot::{Condvar, Mutex};
 use std::{
     sync::Arc,
