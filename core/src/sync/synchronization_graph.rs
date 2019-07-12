@@ -829,13 +829,13 @@ impl SynchronizationGraph {
     pub fn get_to_propagate_trans(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.consensus.get_to_propagate_trans()
+        self.consensus.txpool.get_to_propagate_trans()
     }
 
     pub fn set_to_propagate_trans(
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
-        self.consensus.set_to_propagate_trans(transactions);
+        self.consensus.txpool.set_to_propagate_trans(transactions);
     }
 
     fn recover_graph_from_db(&mut self) {
