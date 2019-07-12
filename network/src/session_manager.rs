@@ -164,7 +164,9 @@ impl SessionManager {
 
         assert!(ip_limit.add(ip));
 
-        self.cur_ingress_sessions.fetch_add(1, Ordering::Relaxed);
+        if id.is_none() {
+            self.cur_ingress_sessions.fetch_add(1, Ordering::Relaxed);
+        }
 
         debug!("SessionManager.create: leave");
 
