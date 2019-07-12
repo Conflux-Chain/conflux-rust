@@ -22,6 +22,16 @@ pub enum VariadicValue<T> {
     Multiple(Vec<T>),
 }
 
+impl<T> Into<Option<Vec<T>>> for VariadicValue<T> {
+    fn into(self) -> Option<Vec<T>> {
+        match self {
+            VariadicValue::Null => None,
+            VariadicValue::Single(x) => Some(vec![x]),
+            VariadicValue::Multiple(xs) => Some(xs),
+        }
+    }
+}
+
 impl<T> Serialize for VariadicValue<T>
 where T: Serialize
 {
@@ -79,9 +89,12 @@ pub struct Filter {
 
     /// Search topics.
     ///
-    /// If None, match all.
-    /// If specified, log must contain one of these topics.
-    pub topics: Vec<Option<Vec<H256>>>,
+    /// Logs can have 4 topics: the function signature and up to 3 indexed
+    /// event arguments. The elements of `topics` match the corresponding
+    /// log topics. Example: ["0xA", null, ["0xB", "0xC"], null] matches
+    /// logs with "0xA" as the 1st topic AND ("0xB" OR "0xC") as the 3rd
+    /// topic. If None, match all.
+    pub topics: Option<Vec<VariadicValue<H256>>>,
 
     /// Logs limit
     ///
@@ -112,18 +125,30 @@ impl Into<usize> for U64 {
 
 impl Filter {
     pub fn into_primitive(self) -> PrimitiveFilter {
-        let address = self.address.and_then(|address| match address {
-            VariadicValue::Null => None,
-            VariadicValue::Single(a) => Some(vec![a]),
-            VariadicValue::Multiple(a) => Some(a),
-        });
+        let address = self.address.and_then(Into::into);
+
+        let topics = {
+            let mut iter = self
+                .topics
+                .map_or_else(Vec::new, |topics| {
+                    topics.into_iter().take(4).map(Into::into).collect()
+                })
+                .into_iter();
+
+            vec![
+                iter.next().unwrap_or(None),
+                iter.next().unwrap_or(None),
+                iter.next().unwrap_or(None),
+                iter.next().unwrap_or(None),
+            ]
+        };
 
         PrimitiveFilter {
             from_epoch: self.from_epoch.unwrap_or(EpochNumber::Earliest).into(),
             to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestState).into(),
             block_hashes: maybe_vec_into(&self.block_hashes),
             address: maybe_vec_into(&address),
-            topics: self.topics.iter().map(maybe_vec_into).collect(),
+            topics: topics.iter().map(maybe_vec_into).collect(),
             limit: self.limit.map(Into::into),
         }
     }
@@ -194,7 +219,7 @@ mod tests {
             to_epoch: None,
             block_hashes: None,
             address: None,
-            topics: vec![],
+            topics: None,
             limit: None,
         };
 
@@ -207,7 +232,7 @@ mod tests {
              \"toEpoch\":null,\
              \"blockHashes\":null,\
              \"address\":null,\
-             \"topics\":[],\
+             \"topics\":null,\
              \"limit\":null\
              }"
         );
@@ -223,10 +248,13 @@ mod tests {
                 "0x0000000000000000000000000000000000000000".into(),
                 "0x0000000000000000000000000000000000000001".into()
             ])),
-            topics: vec![
-                Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
-                Some(vec![])
-            ],
+            topics: Some(vec![
+                VariadicValue::Single("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()),
+                VariadicValue::Multiple(vec![
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                ]),
+            ]),
             limit: Some(2.into()),
         };
 
@@ -239,7 +267,10 @@ mod tests {
              \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
-             \"topics\":[[\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"],[]],\
+             \"topics\":[\
+                \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
+                [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
+             ],\
              \"limit\":\"0x2\"\
              }"
         );
@@ -247,16 +278,14 @@ mod tests {
 
     #[test]
     fn test_deserialize_filter() {
-        let serialized = "{\
-                          \"topics\":[]\
-                          }";
+        let serialized = "{}";
 
         let result_filter = Filter {
             from_epoch: None,
             to_epoch: None,
             block_hashes: None,
             address: None,
-            topics: vec![],
+            topics: None,
             limit: None,
         };
 
@@ -265,17 +294,20 @@ mod tests {
         assert_eq!(deserialized_filter, result_filter);
 
         let serialized = "{\
-             \"fromEpoch\":\"earliest\",\
-             \"toEpoch\":\"0x3e8\",\
+             \"fromEpoch\":\"0x3e8\",\
+             \"toEpoch\":\"latest_state\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"address\":[\"0x0000000000000000000000000000000000000000\",\"0x0000000000000000000000000000000000000001\"],\
-             \"topics\":[[\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"],[]],\
+             \"topics\":[\
+                \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
+                [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
+             ],\
              \"limit\":\"0x2\"\
-             }";
+        }";
 
         let result_filter = Filter {
-            from_epoch: Some(EpochNumber::Earliest),
-            to_epoch: Some(1000.into()),
+            from_epoch: Some(1000.into()),
+            to_epoch: Some(EpochNumber::LatestState),
             block_hashes: Some(vec![
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
@@ -284,10 +316,13 @@ mod tests {
                 "0x0000000000000000000000000000000000000000".into(),
                 "0x0000000000000000000000000000000000000001".into()
             ])),
-            topics: vec![
-                Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
-                Some(vec![])
-            ],
+            topics: Some(vec![
+                VariadicValue::Single("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()),
+                VariadicValue::Multiple(vec![
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                ]),
+            ]),
             limit: Some(2.into()),
         };
 
@@ -309,10 +344,13 @@ mod tests {
                 "0x0000000000000000000000000000000000000000".into(),
                 "0x0000000000000000000000000000000000000001".into()
             ])),
-            topics: vec![
-                Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
-                Some(vec![])
-            ],
+            topics: Some(vec![
+                VariadicValue::Single("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()),
+                VariadicValue::Multiple(vec![
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                ]),
+            ]),
             limit: Some(2.into()),
         };
 
@@ -329,7 +367,12 @@ mod tests {
             ]),
             topics: vec![
                 Some(vec!["0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()]),
-                Some(vec![])
+                Some(vec![
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                ]),
+                None,
+                None,
             ],
             limit: Some(2 as usize),
         };

@@ -93,25 +93,26 @@ class LogFilteringTest(ConfluxTestFramework):
             assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii))
 
         # apply filter for specific topics
-        filter = Filter(topics=[[CONSTRUCTED_TOPIC]])
+        filter = Filter(topics=[CONSTRUCTED_TOPIC])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), 1)
 
-        filter = Filter(topics=[[CALLED_TOPIC]])
+        filter = Filter(topics=[CALLED_TOPIC])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS - 1)
 
-        filter = Filter(topics=[[CONSTRUCTED_TOPIC], [CALLED_TOPIC]]) # AND-relation
-        logs = self.rpc.get_logs(filter)
-        self.assert_response_format_correct(logs)
-        assert_equal(len(logs), 0)
-
-        filter = Filter(topics=[[CONSTRUCTED_TOPIC, CALLED_TOPIC]]) # OR-relation
+        filter = Filter(topics=[None, self.address_to_topic(sender)])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS)
+
+        # find logs with `CALLED_TOPIC` as 1st topic and `3` or `4` as 3rd topic
+        filter = Filter(topics=[CALLED_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]])
+        logs = self.rpc.get_logs(filter)
+        self.assert_response_format_correct(logs)
+        assert_equal(len(logs), 2)
 
         # apply filter with limit
         filter = Filter(limit=("0x%x" % (NUM_CALLS // 2)))

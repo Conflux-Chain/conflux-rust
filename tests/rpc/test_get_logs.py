@@ -33,9 +33,6 @@ class TestGetLogs(RpcClient):
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # invalid `topics` type
-        filter = Filter(topics=None)
-        assert_raises_rpc_error(None, None, self.get_logs, filter)
-
         filter = Filter(topics="")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
@@ -47,7 +44,7 @@ class TestGetLogs(RpcClient):
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
     def test_valid_filter(self):
-        # variadic address field
+        # variadic `address` field
         filter = Filter(address=None)
         logs = self.get_logs(filter)
         assert_equal(logs, [])
@@ -60,13 +57,28 @@ class TestGetLogs(RpcClient):
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
+        # variadic `topics` field
+        filter = Filter(topics=None)
+        logs = self.get_logs(filter)
+        assert_equal(logs, [])
+
+        filter = Filter(topics=["0x0000000000000000000000000000000000000000000000000000000000000000"])
+        logs = self.get_logs(filter)
+        assert_equal(logs, [])
+
+        filter = Filter(topics=["0x0000000000000000000000000000000000000000000000000000000000000000", ["0x0000000000000000000000000000000000000000000000000000000000000000"]])
+        logs = self.get_logs(filter)
+        assert_equal(logs, [])
+
         ## all fields
         filter = Filter(
             from_epoch="0x0",
             to_epoch="latest_state",
             block_hashes=["0x0000000000000000000000000000000000000000000000000000000000000000"],
             address=["0x0000000000000000000000000000000000000000"],
-            topics=[["0x0000000000000000000000000000000000000000000000000000000000000000"]],
+            topics=[
+                "0x0000000000000000000000000000000000000000000000000000000000000000",
+                ["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]],
             limit="0x1"
         )
         logs = self.get_logs(filter)
