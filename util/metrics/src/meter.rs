@@ -22,7 +22,7 @@ pub trait Meter: Send + Sync {
     fn rate5(&self) -> f64 { 0.0 }
     fn rate15(&self) -> f64 { 0.0 }
     fn rate_mean(&self) -> f64 { 0.0 }
-    fn snapshot(&self) -> MeterSnapshot { MeterSnapshot::default() }
+    fn snapshot(&self) -> Arc<Meter> { Arc::new(MeterSnapshot::default()) }
     fn stop(&self) {}
 }
 
@@ -34,11 +34,11 @@ pub fn register_meter(name: &'static str) -> Arc<Meter> {
         return Arc::new(NoopMeter);
     }
 
-    let meter = Arc::new(StandardMeter::new(name));
+    let meter = Arc::new(StandardMeter::new(name.into()));
     DEFAULT_REGISTRY
         .write()
         .register(name.into(), meter.clone());
-    ARBITER.meters.lock().insert(name, meter.clone());
+    ARBITER.meters.lock().insert(name.into(), meter.clone());
 
     meter
 }
@@ -50,19 +50,26 @@ pub fn register_meter_with_group(
         return Arc::new(NoopMeter);
     }
 
-    let meter = Arc::new(StandardMeter::new(name));
+    let mut full_meter_name = String::from(group);
+    full_meter_name.push('_');
+    full_meter_name.push_str(name);
+
+    let meter = Arc::new(StandardMeter::new(full_meter_name.clone()));
     DEFAULT_GROUPING_REGISTRY.write().register(
         group.into(),
         name.into(),
         meter.clone(),
     );
-    ARBITER.meters.lock().insert(name, meter.clone());
+
+    let mut meters = ARBITER.meters.lock();
+    assert_eq!(meters.contains_key(&full_meter_name), false);
+    meters.insert(full_meter_name, meter.clone());
 
     meter
 }
 
 #[derive(Default, Clone)]
-pub struct MeterSnapshot {
+struct MeterSnapshot {
     count: usize,
     rates: [u64; 4], // m1, m5, m15 and mean
 }
@@ -78,11 +85,11 @@ impl Meter for MeterSnapshot {
 
     fn rate_mean(&self) -> f64 { f64::from_bits(self.rates[3]) }
 
-    fn snapshot(&self) -> MeterSnapshot { self.clone() }
+    fn snapshot(&self) -> Arc<Meter> { Arc::new(self.clone()) }
 }
 
 pub struct StandardMeter {
-    name: &'static str,
+    name: String,
     snapshot: RwLock<MeterSnapshot>,
     ewmas: [EWMA; 3],
     start_time: Instant,
@@ -90,7 +97,7 @@ pub struct StandardMeter {
 }
 
 impl StandardMeter {
-    fn new(name: &'static str) -> Self {
+    fn new(name: String) -> Self {
         StandardMeter {
             name,
             snapshot: RwLock::new(MeterSnapshot::default()),
@@ -142,11 +149,11 @@ impl Meter for StandardMeter {
 
     fn rate_mean(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[3]) }
 
-    fn snapshot(&self) -> MeterSnapshot { self.snapshot.read().clone() }
+    fn snapshot(&self) -> Arc<Meter> { Arc::new(self.snapshot.read().clone()) }
 
     fn stop(&self) {
         if !self.stopped.compare_and_swap(false, true, ORDER) {
-            ARBITER.meters.lock().remove(self.name);
+            ARBITER.meters.lock().remove(&self.name);
         }
     }
 }
@@ -166,7 +173,7 @@ lazy_static! {
 /// MeterArbiter ticks meters every 5s from a single thread.
 /// meters are references in a set for future stopping.
 struct MeterArbiter {
-    meters: Arc<Mutex<HashMap<&'static str, Arc<StandardMeter>>>>,
+    meters: Arc<Mutex<HashMap<String, Arc<StandardMeter>>>>,
     timer: Timer,
 }
 
@@ -191,5 +198,30 @@ impl Default for MeterArbiter {
             .ignore();
 
         arbiter
+    }
+}
+
+/// A struct used to measure time in metrics.
+pub struct MeterTimer {
+    meter: &'static Meter,
+    start: Instant,
+}
+
+impl MeterTimer {
+    /// Call this to measure the time to run to the end of the current scope.
+    /// It will add the time from the function called till the returned
+    /// instance is dropped to `meter`.
+    pub fn time_func(meter: &'static Meter) -> Self {
+        Self {
+            meter,
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Drop for MeterTimer {
+    fn drop(&mut self) {
+        self.meter
+            .mark((Instant::now() - self.start).as_micros() as usize)
     }
 }

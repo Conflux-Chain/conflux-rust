@@ -1,27 +1,43 @@
-use crate::Meter;
-use std::time::Instant;
+use crate::{
+    histogram::{Histogram, Sample},
+    meter::{register_meter_with_group, Meter},
+    metrics::is_enabled,
+};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-/// A struct used to measure time in metrics.
-pub struct MeterTimer {
-    meter: &'static Meter,
-    start: Instant,
+pub trait Timer: Send + Sync {
+    fn update(&self, _d: Duration) {}
+    fn update_since(&self, _start: Instant) {}
 }
 
-impl MeterTimer {
-    /// Call this to measure the time to run to the end of the current scope.
-    /// It will add the time from the function called till the returned
-    /// instance is dropped to `meter`.
-    pub fn time_func(meter: &'static Meter) -> Self {
-        Self {
-            meter,
-            start: Instant::now(),
-        }
+pub fn register_timer(name: &'static str) -> Arc<Timer> {
+    if !is_enabled() {
+        Arc::new(NoopTimer)
+    } else {
+        Arc::new(StandardTimer {
+            meter: register_meter_with_group(name, "meter"),
+            histogram: Sample::ExpDecay(0.015)
+                .register_with_group(name, "expdec", 1024),
+        })
     }
 }
 
-impl Drop for MeterTimer {
-    fn drop(&mut self) {
-        self.meter
-            .mark((Instant::now() - self.start).as_micros() as usize)
+struct NoopTimer;
+impl Timer for NoopTimer {}
+
+struct StandardTimer {
+    meter: Arc<Meter>,
+    histogram: Arc<Histogram>,
+}
+
+impl Timer for StandardTimer {
+    fn update(&self, d: Duration) {
+        self.meter.mark(1);
+        self.histogram.update(d.as_millis() as usize);
     }
+
+    fn update_since(&self, start: Instant) { self.update(start.elapsed()); }
 }
