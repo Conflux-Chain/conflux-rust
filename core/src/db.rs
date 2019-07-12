@@ -35,10 +35,12 @@ pub const COL_DELTA_TRIE: Option<u32> = Some(1);
 pub const COL_BLOCKS: Option<u32> = Some(2);
 /// Column for Block Receipts.
 pub const COL_BLOCK_RECEIPTS: Option<u32> = Some(3);
+/// Column for Execution Context.
+pub const COL_EXECUTION_CONTEXT: Option<u32> = Some(4);
 /// Column for Transaction Index
-pub const COL_TX_ADDRESS: Option<u32> = Some(4);
+pub const COL_TX_ADDRESS: Option<u32> = Some(5);
 /// Number of columns in DB
-pub const NUM_COLUMNS: Option<u32> = Some(5);
+pub const NUM_COLUMNS: Option<u32> = Some(6);
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]
