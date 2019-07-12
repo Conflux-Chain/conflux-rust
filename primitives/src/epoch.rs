@@ -7,7 +7,7 @@ use cfx_types::H256;
 pub type EpochId = H256;
 
 /// Uniquely identifies epoch.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EpochNumber {
     /// Epoch number within canon blockchain.
     Number(u64),
@@ -17,4 +17,8 @@ pub enum EpochNumber {
     LatestMined,
     /// Latest block with state.
     LatestState,
+}
+
+impl Into<EpochNumber> for u64 {
+    fn into(self) -> EpochNumber { EpochNumber::Number(self) }
 }

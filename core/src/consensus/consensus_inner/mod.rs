@@ -22,9 +22,7 @@ use cfx_types::{
 };
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::MinLinkCutTree;
-use primitives::{
-    receipt::Receipt, Block, EpochNumber, StateRoot, TransactionAddress,
-};
+use primitives::{receipt::Receipt, Block, StateRoot, TransactionAddress};
 use slab::Slab;
 use std::{
     cmp::{max, min},
@@ -250,11 +248,22 @@ pub struct ConsensusGraphNode {
 }
 
 impl ConsensusGraphInner {
-    pub fn with_genesis_block(
+    pub fn with_era_genesis_block(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
-        inner_conf: ConsensusInnerConfig,
+        inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
+        cur_era_stable_height: u64,
     ) -> Self
     {
+        let genesis_block = data_man
+            .block_by_hash(cur_era_genesis_block_hash, true)
+            .unwrap();
+        let cur_era_genesis_height = genesis_block.block_header.height();
+        assert!(cur_era_stable_height >= cur_era_genesis_height);
+        assert!(
+            cur_era_stable_height == 0
+                || cur_era_stable_height
+                    == cur_era_genesis_height + inner_conf.era_epoch_count
+        );
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
@@ -264,8 +273,8 @@ impl ConsensusGraphInner {
             terminal_hashes: Default::default(),
             legacy_refs: HashMap::new(),
             cur_era_genesis_block_arena_index: NULL,
-            cur_era_genesis_height: 0,
-            cur_era_stable_height: 0,
+            cur_era_genesis_height,
+            cur_era_stable_height,
             genesis_block_state_root: data_man
                 .genesis_block()
                 .block_header
@@ -306,8 +315,7 @@ impl ConsensusGraphInner {
         // and then into synchronization graph. All the other blocks will be
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
-        let (genesis_arena_index, _) =
-            inner.insert(data_man.genesis_block().as_ref());
+        let (genesis_arena_index, _) = inner.insert(genesis_block.as_ref());
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
         inner
             .weight_tree
@@ -1523,40 +1531,20 @@ impl ConsensusGraphInner {
         self.cur_era_genesis_height + self.pivot_chain.len() as u64 - 1
     }
 
-    pub fn get_height_from_epoch_number(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<u64, String> {
-        Ok(match epoch_number {
-            EpochNumber::Earliest => 0,
-            EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.best_state_epoch_number(),
-            EpochNumber::Number(num) => {
-                let epoch_num = num;
-                if epoch_num > self.best_epoch_number() {
-                    return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
-                }
-                epoch_num
-            }
-        })
-    }
-
     fn get_arena_index_from_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: u64,
     ) -> Result<usize, String> {
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                if height >= self.cur_era_genesis_height {
-                    Ok(self.get_pivot_block_arena_index(height))
-                } else {
-                    Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
-                }
-            })
+        if epoch_number >= self.cur_era_genesis_height {
+            Ok(self.get_pivot_block_arena_index(epoch_number))
+        } else {
+            Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
+        }
     }
 
     pub fn get_hash_from_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: u64,
     ) -> Result<H256, String> {
-        let height = self.get_height_from_epoch_number(epoch_number)?;
+        let height = epoch_number;
         if height >= self.cur_era_genesis_height {
             Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
         } else {
@@ -1576,7 +1564,7 @@ impl ConsensusGraphInner {
     }
 
     pub fn block_hashes_by_epoch(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: u64,
     ) -> Result<Vec<H256>, String> {
         debug!(
             "block_hashes_by_epoch epoch_number={:?} pivot_chain.len={:?}",
@@ -1608,10 +1596,10 @@ impl ConsensusGraphInner {
         })
     }
 
-    fn get_balance(
-        &self, address: H160, epoch_number: EpochNumber,
+    pub fn get_balance(
+        &self, address: H160, epoch_number: u64,
     ) -> Result<U256, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number.clone())?;
+        let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let maybe_state = self
             .data_man
             .storage_manager
@@ -1653,36 +1641,14 @@ impl ConsensusGraphInner {
         let mut current_number = 0;
         let mut hashes = Vec::new();
         while current_number <= epoch_number {
-            let epoch_hashes = self
-                .block_hashes_by_epoch(EpochNumber::Number(
-                    current_number.into(),
-                ))
-                .unwrap();
+            let epoch_hashes =
+                self.block_hashes_by_epoch(current_number.into()).unwrap();
             for hash in epoch_hashes {
                 hashes.push(hash);
             }
             current_number += 1;
         }
         hashes
-    }
-
-    pub fn validate_stated_epoch(
-        &self, epoch_number: &EpochNumber,
-    ) -> Result<(), String> {
-        match epoch_number {
-            EpochNumber::LatestMined => {
-                return Err("Latest mined epoch is not executed".into());
-            }
-            EpochNumber::Number(num) => {
-                let latest_state_epoch = self.best_state_epoch_number();
-                if *num > latest_state_epoch {
-                    return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
     }
 
     pub fn block_receipts_by_hash(
@@ -1739,10 +1705,8 @@ impl ConsensusGraphInner {
     }
 
     pub fn transaction_count(
-        &self, address: H160, epoch_number: EpochNumber,
+        &self, address: H160, epoch_number: u64,
     ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let state_db = StateDb::new(
             self.data_man
@@ -1757,21 +1721,11 @@ impl ConsensusGraphInner {
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
-    pub fn get_balance_validated(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        self.get_balance(address, epoch_number)
-    }
-
     pub fn check_block_pivot_assumption(
         &self, pivot_hash: &H256, epoch: u64,
     ) -> Result<(), String> {
-        let last_number = self
-            .get_height_from_epoch_number(EpochNumber::LatestMined)
-            .unwrap();
-        let hash =
-            self.get_hash_from_epoch_number(EpochNumber::Number(epoch.into()))?;
+        let last_number = self.best_epoch_number();
+        let hash = self.get_hash_from_epoch_number(epoch)?;
         if epoch > last_number || hash != *pivot_hash {
             return Err("Error: pivot chain assumption failed".to_owned());
         }

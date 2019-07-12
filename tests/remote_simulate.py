@@ -17,7 +17,7 @@ from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
 from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 
-class P2PTest(ConfluxTestFramework):
+class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.rpc_timewait = 60
@@ -419,4 +419,4 @@ class SimpleGenerateThread(GenerateThread):
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    RemoteSimulate().main()

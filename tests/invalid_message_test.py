@@ -9,7 +9,7 @@ from test_framework.mininode import *
 from test_framework.util import *
 
 
-class MessageTest(ConfluxTestFramework):
+class InvalidMessageTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 4
@@ -130,5 +130,5 @@ class MessageTest(ConfluxTestFramework):
 
 if __name__ == "__main__":
     # FIXME fix this failed test
-    # MessageTest().main()
+    # InvalidMessageTest().main()
     pass

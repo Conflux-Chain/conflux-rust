@@ -2,11 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate client;
-extern crate parking_lot;
-#[macro_use]
-extern crate criterion;
-
 use cfx_bytes::Bytes;
 use cfx_types::U256;
 use cfxcore::{
@@ -18,8 +13,8 @@ use cfxcore::{
     vm::{Env, Spec},
     vm_factory::VmFactory,
 };
-use client::{Client, Configuration};
-use criterion::Criterion;
+use client::{archive::ArchiveClient, configuration::Configuration};
+use criterion::{criterion_group, criterion_main, Criterion};
 use keylib::{Generator, KeyPair, Random};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
@@ -29,7 +24,7 @@ fn txgen_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
     conf.raw_conf.test_mode = true;
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handler = Client::start(conf, exit.clone()).unwrap();
+    let handler = ArchiveClient::start(conf, exit.clone()).unwrap();
     c.bench_function("Randomly generate 1 transaction", move |b| {
         b.iter(|| {
             handler.txgen.generate_transaction();
@@ -41,7 +36,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
     conf.raw_conf.test_mode = true;
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handler = Client::start(conf, exit.clone()).unwrap();
+    let handler = ArchiveClient::start(conf, exit.clone()).unwrap();
     let kp = KeyPair::from_secret(
         "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
             .parse()

@@ -12,7 +12,7 @@ from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
-class P2PTest(DefaultConfluxTestFramework):
+class GenerateSampleChain(DefaultConfluxTestFramework):
     def set_test_params(self):
         self.delay_factor = 1
         self.setup_clean_chain = True
@@ -146,4 +146,4 @@ class P2PTest(DefaultConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    GenerateSampleChain().main()

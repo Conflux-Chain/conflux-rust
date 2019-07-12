@@ -10,6 +10,7 @@ use crate::{
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::{SynchronizationGraph, SynchronizationGraphNode},
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool,
@@ -18,6 +19,7 @@ use cfx_types::{H256, U256};
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{
+    collections::HashMap,
     fs,
     path::Path,
     sync::Arc,
@@ -49,8 +51,8 @@ fn create_simple_block_impl(
 }
 
 fn initialize_synchronization_graph(
-    genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
-    beta: u64, h: u64, era_epoch_count: u64,
+    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
+    era_epoch_count: u64,
 ) -> Arc<SynchronizationGraph>
 {
     let ledger_db = db::open_database(
@@ -75,9 +77,22 @@ fn initialize_synchronization_graph(
         StorageConfiguration::default(),
     ));
 
+    let mut genesis_accounts = HashMap::new();
+    genesis_accounts.insert(
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(0),
+    );
+
+    let genesis_block = Arc::new(storage_manager.initialize(
+        genesis_accounts,
+        DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(10),
+    ));
+
     let data_man = Arc::new(BlockDataManager::new(
         CacheConfig::default(),
-        Arc::new(genesis_block),
+        genesis_block,
         ledger_db.clone(),
         storage_manager,
         worker_thread_pool,
@@ -125,24 +140,7 @@ fn initialize_synchronization_graph(
 
 #[test]
 fn test_remove_expire_blocks() {
-    let (_, genesis_block) = create_simple_block_impl(
-        H256::default(),
-        vec![],
-        0,
-        0,
-        U256::from(10),
-        1,
-    );
-
-    let sync = initialize_synchronization_graph(
-        genesis_block,
-        "./test.db",
-        1,
-        1,
-        1,
-        1,
-        50000,
-    );
+    let sync = initialize_synchronization_graph("./test.db", 1, 1, 1, 1, 50000);
     // test initialization
     {
         let inner = sync.inner.read();
