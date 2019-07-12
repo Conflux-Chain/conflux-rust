@@ -14,11 +14,8 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    block_data_manager::BlockDataManager, executive,
-    pow::WORKER_COMPUTATION_PARALLELISM, vm,
-    consensus::BestInformation,
-    statedb::StateDb,
-    storage::Storage,
+    block_data_manager::BlockDataManager, consensus::BestInformation,
+    executive, pow::WORKER_COMPUTATION_PARALLELISM, vm,
 };
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
