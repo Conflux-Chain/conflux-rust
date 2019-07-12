@@ -220,7 +220,7 @@ impl TransactionPool {
                         continue;
                     }
                     let hash = tx.hash();
-                    match self.add_transaction_and_check_readiness_without_lock(
+                    match self.add_transaction_with_readiness_check(
                         inner,
                         &mut account_cache,
                         tx.clone(),
@@ -303,7 +303,7 @@ impl TransactionPool {
     // Add transaction into deferred pool and maintain its readiness
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
-    pub fn add_transaction_and_check_readiness_without_lock(
+    pub fn add_transaction_with_readiness_check(
         &self, inner: &mut TransactionPoolInner,
         account_cache: &mut AccountCache, transaction: Arc<SignedTransaction>,
         packed: bool, force: bool,
@@ -317,7 +317,7 @@ impl TransactionPool {
         )
     }
 
-    pub fn get_to_propagate_trans(
+    pub fn get_to_be_propagated_transactions(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
         let mut to_prop = self.to_propagate_trans.write();
@@ -326,11 +326,15 @@ impl TransactionPool {
         res
     }
 
-    pub fn set_to_propagate_trans(
+    pub fn set_to_be_propagated_transactions(
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
         let mut to_prop = self.to_propagate_trans.write();
         to_prop.extend(transactions);
+    }
+
+    pub fn remove_to_be_propagated_transactions(&self, tx_hash: &H256) {
+        self.to_propagate_trans.write().remove(tx_hash);
     }
 
     // If a tx is failed executed due to invalid nonce or if its enclosing block
@@ -352,7 +356,7 @@ impl TransactionPool {
                 account nonce = {}, hash = {:?} .",
                 &tx.nonce, &tx.sender,
                 &account_cache.get_account_mut(&tx.sender).map_or(0.into(), |x| x.nonce), tx.hash);
-            self.add_transaction_and_check_readiness_without_lock(
+            self.add_transaction_with_readiness_check(
                 inner,
                 &mut account_cache,
                 tx,
@@ -361,10 +365,6 @@ impl TransactionPool {
             )
             .ok();
         }
-    }
-
-    pub fn remove_to_propagate(&self, tx_hash: &H256) {
-        self.to_propagate_trans.write().remove(tx_hash);
     }
 
     pub fn set_tx_packed(&self, transactions: Vec<Arc<SignedTransaction>>) {
@@ -376,7 +376,7 @@ impl TransactionPool {
         let inner = inner.deref_mut();
         let mut account_cache = self.get_best_state_account_cache();
         for tx in transactions {
-            self.add_transaction_and_check_readiness_without_lock(
+            self.add_transaction_with_readiness_check(
                 inner,
                 &mut account_cache,
                 tx,
@@ -394,9 +394,11 @@ impl TransactionPool {
         inner.pack_transactions(num_txs, block_gas_limit, block_size_limit)
     }
 
-    pub fn notify_state_start(&self, accounts_from_execution: Vec<Account>) {
+    pub fn notify_modified_accounts(
+        &self, accounts_from_execution: Vec<Account>,
+    ) {
         let mut inner = self.inner.write();
-        inner.notify_state_start(accounts_from_execution)
+        inner.notify_modified_accounts(accounts_from_execution)
     }
 
     pub fn clear_tx_pool(&self) {

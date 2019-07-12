@@ -406,6 +406,7 @@ impl TransactionPoolInner {
         }
     }
 
+    // the new inserting will fail if tx_pool is full (even if `force` is true)
     pub fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool,
@@ -584,7 +585,11 @@ impl TransactionPoolInner {
             total_tx_size += tx_size;
 
             packed_transactions.push(tx.clone());
-            self.insert_transaction_without_readiness_check(tx.clone(), true, true);
+            self.insert_transaction_without_readiness_check(
+                tx.clone(),
+                true,
+                true,
+            );
             self.recalculate_readiness_with_local_info(&tx.sender());
 
             if packed_transactions.len() >= num_txs {
@@ -599,7 +604,11 @@ impl TransactionPoolInner {
         // FIXME: to be optimized by only recalculating readiness once for one
         //  sender
         for tx in packed_transactions.iter().rev() {
-            self.insert_transaction_without_readiness_check(tx.clone(), false, true);
+            self.insert_transaction_without_readiness_check(
+                tx.clone(),
+                false,
+                true,
+            );
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
 
@@ -618,7 +627,7 @@ impl TransactionPoolInner {
         packed_transactions
     }
 
-    pub fn notify_state_start(
+    pub fn notify_modified_accounts(
         &mut self, accounts_from_execution: Vec<Account>,
     ) {
         for account in &accounts_from_execution {
@@ -690,7 +699,11 @@ impl TransactionPoolInner {
         }
 
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
-        let result = self.insert_transaction_without_readiness_check(transaction.clone(), packed, force);
+        let result = self.insert_transaction_without_readiness_check(
+            transaction.clone(),
+            packed,
+            force,
+        );
         if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));
         }
