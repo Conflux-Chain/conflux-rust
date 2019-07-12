@@ -29,15 +29,11 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    Block, EpochNumber, SignedTransaction, StateRootWithAuxInfo,
-    TransactionAddress,
+    EpochNumber, SignedTransaction, StateRootWithAuxInfo, TransactionAddress,
 };
 use rayon::prelude::*;
 use std::{
-    cmp::Reverse,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    thread::sleep,
+    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
     time::Duration,
 };
 lazy_static! {
@@ -116,6 +112,8 @@ pub struct BestInformation {
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
+    // terminal_block_hashes will be None if it is same as the
+    // bounded_terminal_block_hashes. This is just to save some space.
     pub terminal_block_hashes: Option<Vec<H256>>,
     pub bounded_terminal_block_hashes: Vec<H256>,
     pub best_state_block_hash: H256,
@@ -154,19 +152,23 @@ impl ConfirmationTrait for ConsensusGraph {
 }
 
 impl ConsensusGraph {
-    /// Build the ConsensusGraph with a genesis block and various other
-    /// components The execution will be skipped if bench_mode sets to true.
-    pub fn with_genesis_block(
+    /// Build the ConsensusGraph with a specific era genesis block and various
+    /// other components. The execution will be skipped if bench_mode sets
+    /// to true. The height of
+    pub fn with_era_genesis_block(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig,
+        pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
+        cur_era_stable_height: u64,
     ) -> Self
     {
         let inner =
-            Arc::new(RwLock::new(ConsensusGraphInner::with_genesis_block(
+            Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis_block(
                 pow_config,
                 data_man.clone(),
                 conf.inner_conf.clone(),
+                era_genesis_block_hash,
+                cur_era_stable_height,
             )));
         let executor = Arc::new(ConsensusExecutor::start(
             txpool.clone(),
@@ -194,6 +196,29 @@ impl ConsensusGraph {
         graph
     }
 
+    /// Build the ConsensusGraph with the original genesis block in the data
+    /// manager and various other components The execution will be skipped
+    /// if bench_mode sets to true.
+    pub fn with_genesis_block(
+        conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
+        statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
+        pow_config: ProofOfWorkConfig,
+    ) -> Self
+    {
+        let genesis_hash = data_man.genesis_block().hash();
+        ConsensusGraph::with_era_genesis_block(
+            conf,
+            vm,
+            txpool,
+            statistics,
+            data_man,
+            pow_config,
+            &genesis_hash,
+            0,
+        )
+    }
+
+    /// Compute the expected difficulty of a new block given its parent
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
         let inner = self.inner.read();
         inner.expected_difficulty(parent_hash)
@@ -201,18 +226,6 @@ impl ConsensusGraph {
 
     pub fn update_total_weight_in_past(&self) {
         self.inner.write().update_total_weight_in_past();
-    }
-
-    pub fn get_to_propagate_trans(
-        &self,
-    ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.txpool.get_to_propagate_trans()
-    }
-
-    pub fn set_to_propagate_trans(
-        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
-    ) {
-        self.txpool.set_to_propagate_trans(transactions);
     }
 
     /// Wait for the generation and the execution completion of a block in the
@@ -237,10 +250,22 @@ impl ConsensusGraph {
         inner.check_mining_adaptive_block(parent_index, *difficulty)
     }
 
+    /// Convert EpochNumber to height based on the current ConsensusGraph
     pub fn get_height_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<u64, String> {
-        self.inner.read().get_height_from_epoch_number(epoch_number)
+        Ok(match epoch_number {
+            EpochNumber::Earliest => 0,
+            EpochNumber::LatestMined => self.best_epoch_number(),
+            EpochNumber::LatestState => self.best_state_epoch_number(),
+            EpochNumber::Number(num) => {
+                let epoch_num = num;
+                if epoch_num > self.best_epoch_number() {
+                    return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
+                }
+                epoch_num
+            }
+        })
     }
 
     pub fn best_epoch_number(&self) -> u64 {
@@ -254,9 +279,12 @@ impl ConsensusGraph {
     pub fn get_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
-        self.inner.read().block_hashes_by_epoch(epoch_number)
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| self.inner.read().block_hashes_by_epoch(height))
     }
 
+    /// Get the average gas price of the last GAS_PRICE_TRANSACTION_SAMPLE_SIZE
+    /// blocks
     pub fn gas_price(&self) -> Option<U256> {
         let inner = self.inner.read();
         let mut last_epoch_number = inner.best_epoch_number();
@@ -272,9 +300,7 @@ impl ConsensusGraph {
                 break;
             }
             let mut hashes = inner
-                .block_hashes_by_epoch(EpochNumber::Number(
-                    last_epoch_number.into(),
-                ))
+                .block_hashes_by_epoch(last_epoch_number.into())
                 .unwrap();
             hashes.reverse();
             last_epoch_number -= 1;
@@ -304,18 +330,32 @@ impl ConsensusGraph {
         }
     }
 
+    fn validate_stated_epoch(
+        &self, epoch_number: &EpochNumber,
+    ) -> Result<(), String> {
+        match epoch_number {
+            EpochNumber::LatestMined => {
+                return Err("Latest mined epoch is not executed".into());
+            }
+            EpochNumber::Number(num) => {
+                let latest_state_epoch = self.best_state_epoch_number();
+                if *num > latest_state_epoch {
+                    return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    /// Get the current balance of an address
     pub fn get_balance(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        self.inner
-            .read()
-            .get_balance_validated(address, epoch_number)
-    }
-
-    pub fn get_epoch_blocks(
-        &self, inner: &ConsensusGraphInner, epoch_arena_index: usize,
-    ) -> Vec<Arc<Block>> {
-        inner.get_executable_epoch_blocks(&self.data_man, epoch_arena_index)
+        self.validate_stated_epoch(&epoch_number)?;
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| self.inner.read().get_balance(address, height))
     }
 
     /// This is a very expensive call to force the engine to recompute the state
@@ -373,6 +413,10 @@ impl ConsensusGraph {
         }
     }
 
+    /// This function is called after a new block appended to the
+    /// ConsensusGraph. Because BestInformation is often queried outside. We
+    /// store a version of best_info outside the inner to prevent keep
+    /// getting inner locks.
     fn update_best_info(&self, inner: &ConsensusGraphInner) {
         let mut best_info = self.best_info.write();
 
@@ -469,7 +513,10 @@ impl ConsensusGraph {
     pub fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<H256, String> {
-        self.inner.read().get_hash_from_epoch_number(epoch_number)
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| {
+                self.inner.read().get_hash_from_epoch_number(height)
+            })
     }
 
     pub fn get_transaction_info_by_hash(
@@ -493,18 +540,11 @@ impl ConsensusGraph {
     pub fn transaction_count(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        self.inner.read().transaction_count(address, epoch_number)
-    }
-
-    pub fn get_ancestor(&self, hash: &H256, height: u64) -> H256 {
-        let inner = self.inner.write();
-        let me = *inner.hash_to_arena_indices.get(hash).unwrap();
-        let idx = inner.ancestor_at(me, height);
-        inner.arena[idx].hash.clone()
-    }
-
-    pub fn try_get_best_state(&self) -> Option<State> {
-        self.inner.read().try_get_best_state(&self.data_man)
+        self.validate_stated_epoch(&epoch_number)?;
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| {
+                self.inner.read().transaction_count(address, height)
+            })
     }
 
     /// Wait until the best state has been executed, and return the state
@@ -521,6 +561,7 @@ impl ConsensusGraph {
         self.inner.read().hash_to_arena_indices.len()
     }
 
+    /// Estimate the gas of a transaction
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
         self.call_virtual(tx, EpochNumber::LatestState)
             .map(|(_, gas_used)| gas_used)
@@ -670,7 +711,7 @@ impl ConsensusGraph {
         &self, tx: &SignedTransaction, epoch: EpochNumber,
     ) -> Result<(Vec<u8>, U256), String> {
         // only allow to call against stated epoch
-        self.inner.read().validate_stated_epoch(&epoch)?;
+        self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
         self.executor.call_virtual(tx, &epoch_id)
     }
@@ -706,12 +747,14 @@ impl ConsensusGraph {
         self.best_info.read().clone()
     }
 
+    /// Get the set of block hashes inside an epoch
     pub fn block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
-        self.inner
-            .read_recursive()
-            .block_hashes_by_epoch(epoch_number)
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| {
+                self.inner.read_recursive().block_hashes_by_epoch(height)
+            })
     }
 }
 

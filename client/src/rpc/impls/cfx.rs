@@ -85,8 +85,12 @@ impl RpcImpl {
     ) -> RpcResult<RpcBlock> {
         let inner = &*self.consensus.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
+        let epoch_height = self
+            .consensus
+            .get_height_from_epoch_number(epoch_num.into())
+            .map_err(|err| RpcError::invalid_params(err))?;
         inner
-            .get_hash_from_epoch_number(epoch_num.into())
+            .get_hash_from_epoch_number(epoch_height)
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|hash| {
                 let block = self
