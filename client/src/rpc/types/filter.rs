@@ -145,7 +145,7 @@ impl Filter {
 
         PrimitiveFilter {
             from_epoch: self.from_epoch.unwrap_or(EpochNumber::Earliest).into(),
-            to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestState).into(),
+            to_epoch: self.to_epoch.unwrap_or(EpochNumber::LatestMined).into(),
             block_hashes: maybe_vec_into(&self.block_hashes),
             address: maybe_vec_into(&address),
             topics: topics.iter().map(maybe_vec_into).collect(),
@@ -356,7 +356,7 @@ mod tests {
 
         let primitive_filter = PrimitiveFilter {
             from_epoch: PrimitiveEpochNumber::Earliest,
-            to_epoch: PrimitiveEpochNumber::LatestState,
+            to_epoch: PrimitiveEpochNumber::LatestMined,
             block_hashes: Some(vec![
                 "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
                 "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()

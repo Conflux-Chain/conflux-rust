@@ -30,7 +30,7 @@ class LogFilteringTest(ConfluxTestFramework):
         self.rpc = RpcClient(self.nodes[0])
 
         # apply filter, we expect no logs
-        filter = Filter(from_epoch="earliest", to_epoch="latest_state")
+        filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
         result = self.rpc.get_logs(filter)
         assert_equal(result, [])
 
@@ -41,7 +41,7 @@ class LogFilteringTest(ConfluxTestFramework):
         _, contractAddr = self.deploy_contract(sender, priv_key, bytecode)
 
         # apply filter, we expect a single log with 2 topics
-        filter = Filter(from_epoch="earliest", to_epoch="latest_state")
+        filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
         logs0 = self.rpc.get_logs(filter)
 
         self.assert_response_format_correct(logs0)
@@ -55,7 +55,7 @@ class LogFilteringTest(ConfluxTestFramework):
         receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
 
         # apply filter, we expect two logs with 2 and 3 topics respectively
-        filter = Filter(from_epoch="earliest", to_epoch="latest_state")
+        filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
         logs1 = self.rpc.get_logs(filter)
 
         self.assert_response_format_correct(logs1)
@@ -80,7 +80,7 @@ class LogFilteringTest(ConfluxTestFramework):
             self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
 
         # apply filter, we expect NUM_CALLS log entries with inreasing uint32 fields
-        filter = Filter(from_epoch="earliest", to_epoch="latest_state")
+        filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
         logs = self.rpc.get_logs(filter)
 
         self.assert_response_format_correct(logs)
@@ -140,9 +140,6 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(result, [])
 
         self.log.info("Pass")
-
-    def latest_epoch_plus_one(self):
-        return "0x%x" % (self.rpc.epoch_number("latest_mined") + 1)
 
     def address_to_topic(self, address):
         return "0x" + address[2:].zfill(64)

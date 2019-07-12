@@ -15,7 +15,7 @@ class TestGetLogs(RpcClient):
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # inconsistent epoch numbers
-        filter = Filter(from_epoch="0x10", to_epoch="0x01")
+        filter = Filter(from_epoch="0x02", to_epoch="0x01")
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         filter = Filter(from_epoch="latest_state", to_epoch="earliest")
@@ -51,6 +51,11 @@ class TestGetLogs(RpcClient):
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
     def test_valid_filter(self):
+        # epoch fields inclusive
+        filter = Filter(from_epoch="0x1", to_epoch="0x1")
+        logs = self.get_logs(filter)
+        assert_equal(logs, [])
+
         # variadic `address` field
         filter = Filter(address=None)
         logs = self.get_logs(filter)
