@@ -510,7 +510,7 @@ impl RpcImpl {
     fn get_status(&self) -> RpcResult<RpcStatus> {
         let best_hash = self.consensus.best_block_hash();
         let block_number = self.consensus.block_count();
-        let tx_count = self.tx_pool.total_unexecuted();
+        let tx_count = self.tx_pool.len();
         if let Some(epoch_number) =
             self.consensus.get_block_epoch_number(&best_hash)
         {
@@ -612,14 +612,11 @@ impl RpcImpl {
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, deferred_len, received_len, unexecuted_len) =
-            self.tx_pool.stats();
+        let (ready_len, deferred_len) = self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
         ret.insert("deferred".into(), deferred_len);
-        ret.insert("received".into(), received_len);
-        ret.insert("unexecuted".into(), unexecuted_len);
 
         Ok(ret)
     }
