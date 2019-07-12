@@ -42,7 +42,7 @@ pub struct BlockDataManager {
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
 
-    pub record_tx_address: bool,
+    config: DataManagerConfiguration,
 
     pub genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
@@ -55,7 +55,8 @@ impl BlockDataManager {
     pub fn new(
         genesis_block: Arc<Block>, db: Arc<SystemDB>,
         storage_manager: Arc<StorageManager>,
-        cache_man: Arc<Mutex<CacheManager<CacheId>>>, record_tx_address: bool,
+        cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+        config: DataManagerConfiguration,
     ) -> Self
     {
         let genesis_hash = genesis_block.block_header.hash();
@@ -72,7 +73,7 @@ impl BlockDataManager {
             db,
             storage_manager,
             cache_man,
-            record_tx_address,
+            config,
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
         };
@@ -139,6 +140,34 @@ impl BlockDataManager {
         let block_body = Block::decode_body_with_tx_public(&rlp)
             .expect("Wrong block rlp format!");
         Some(block_body)
+    }
+
+    pub fn insert_checkpoint_hashes_to_db(
+        &self, checkpoint_prev: &H256, checkpoint_cur: &H256,
+    ) {
+        let mut rlp_stream = RlpStream::new();
+        rlp_stream.begin_list(2);
+        rlp_stream.append(checkpoint_prev);
+        rlp_stream.append(checkpoint_cur);
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_MISC, b"checkpoint", &rlp_stream.drain());
+        self.db.key_value().write(dbops).expect("db error");
+    }
+
+    pub fn checkpoint_hashes_from_db(&self) -> Option<(H256, H256)> {
+        match self.db.key_value().get(COL_MISC, b"checkpoint")
+            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
+            {
+                Some(checkpoint) => {
+                    let rlp = Rlp::new(&checkpoint);
+                    Some((rlp.val_at::<H256>(0).expect("Failed to decode checkpoint hash!"),
+                          rlp.val_at::<H256>(1).expect("Failed to decode checkpoint hash!")))
+                }
+                None => {
+                    info!("No checkpoint got from db");
+                    None
+                }
+            }
     }
 
     pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
@@ -292,6 +321,8 @@ impl BlockDataManager {
         let block_headers = self.block_headers.upgradable_read();
         if let Some(header) = block_headers.get(hash) {
             return Some(header.clone());
+        } else if !self.config.persist_header {
+            return None;
         } else {
             let maybe_header = self.block_header_from_db(hash);
             maybe_header.map(|header| {
@@ -307,9 +338,11 @@ impl BlockDataManager {
     }
 
     pub fn insert_block_header(&self, hash: H256, header: Arc<BlockHeader>) {
-        self.insert_block_header_to_db(&header);
+        if self.config.persist_header {
+            self.insert_block_header_to_db(&header);
+            self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
+        }
         self.block_headers.write().insert(hash, header);
-        self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
     }
 
     pub fn remove_block_header(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
@@ -468,7 +501,7 @@ impl BlockDataManager {
     pub fn insert_transaction_address_to_kv(
         &self, hash: &H256, tx_address: &TransactionAddress,
     ) {
-        if !self.record_tx_address {
+        if !self.config.record_tx_address {
             return;
         }
         self.transaction_addresses
@@ -568,7 +601,7 @@ impl BlockDataManager {
             return false;
         }
 
-        if self.record_tx_address && on_local_pivot {
+        if self.config.record_tx_address && on_local_pivot {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
@@ -716,9 +749,13 @@ impl BlockDataManager {
         });
     }
 
-    pub fn set_cur_consensus_era_genesis_hash(&self, hash: &H256) {
-        let mut cur_era_hash = self.cur_consensus_era_genesis_hash.write();
-        *cur_era_hash = hash.clone();
+    pub fn set_cur_consensus_era_genesis_hash(
+        &self, cur_era_hash: &H256, next_era_hash: &H256,
+    ) {
+        self.insert_checkpoint_hashes_to_db(cur_era_hash, next_era_hash);
+
+        let mut era_hash = self.cur_consensus_era_genesis_hash.write();
+        *era_hash = cur_era_hash.clone();
     }
 
     pub fn get_cur_consensus_era_genesis_hash(&self) -> H256 {
@@ -800,4 +837,18 @@ impl BlockStatus {
     }
 
     fn to_db_status(&self) -> u8 { *self as u8 }
+}
+
+pub struct DataManagerConfiguration {
+    record_tx_address: bool,
+    persist_header: bool,
+}
+
+impl DataManagerConfiguration {
+    pub fn new(record_tx_address: bool, persist_header: bool) -> Self {
+        Self {
+            record_tx_address,
+            persist_header,
+        }
+    }
 }

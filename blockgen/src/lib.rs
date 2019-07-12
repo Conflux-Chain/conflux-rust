@@ -6,7 +6,7 @@ use cfx_types::{Address, H256, U256};
 use cfxcore::{
     consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, SharedSynchronizationGraph,
-    SharedSynchronizationService, SharedTransactionPool, REFEREE_BOUND,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -15,6 +15,7 @@ use primitives::{
     *,
 };
 use std::{
+    cmp::max,
     sync::{mpsc, Arc},
     thread, time,
 };
@@ -168,6 +169,9 @@ impl BlockGenerator {
         let parent_height =
             self.graph.block_height_by_hash(&parent_hash).unwrap();
 
+        let parent_timestamp =
+            self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
+
         trace!("{} txs packed", transactions.len());
 
         let mut expected_difficulty =
@@ -185,19 +189,20 @@ impl BlockGenerator {
             expected_difficulty = U256::from(difficulty);
         }
 
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let my_timestamp = max(parent_timestamp, now);
+
         let block_header = BlockHeaderBuilder::new()
             .with_transactions_root(Block::compute_transaction_root(
                 &transactions,
             ))
             .with_parent_hash(parent_hash)
             .with_height(parent_height + 1)
-            .with_timestamp(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            )
-            //            .with_timestamp(0)
+            .with_timestamp(my_timestamp)
             .with_author(self.mining_author)
             .with_deferred_state_root(deferred_state_root_with_aux_info)
             .with_deferred_receipts_root(deferred_receipts_root)
@@ -254,39 +259,34 @@ impl BlockGenerator {
     ) -> Block
     {
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
-        // NOTE: We need to lock consensus inner during `pack_transactions` to
-        // ensure transaction pool consistency.
-        let (best_info, transactions) = {
-            // get the best block
-            let (_guarded, best_info) = self
-                .graph
-                .consensus
-                .get_best_info(Some(REFEREE_BOUND))
-                .into();
 
-            let transactions_from_pool = self.txpool.pack_transactions(
+        let (best_info, transactions) =
+            self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
-                block_gas_limit,
                 block_size_limit,
+                block_gas_limit,
+                additional_transactions,
             );
-            let transactions = [
-                additional_transactions.as_slice(),
-                transactions_from_pool.as_slice(),
-            ]
-            .concat();
-            (best_info, transactions)
-        };
 
-        let best_block_hash = best_info.best_block_hash;
-        let mut referee = best_info.terminal_block_hashes;
+        let (
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .wait_for_block_state(&best_info.best_state_block_hash);
+
+        let best_block_hash = best_info.best_block_hash.clone();
+        let mut referee = best_info.bounded_terminal_block_hashes.clone();
         referee.retain(|r| *r != best_block_hash);
 
         self.assemble_new_block_impl(
             best_block_hash,
             referee,
-            best_info.deferred_state_root,
-            best_info.deferred_receipts_root,
-            best_info.deferred_logs_bloom_hash,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
             block_gas_limit,
             transactions,
             0,
@@ -306,12 +306,7 @@ impl BlockGenerator {
         }
 
         // 1st Check: if the parent block changed
-        let best_block_hash = self
-            .graph
-            .consensus
-            .get_best_info(Some(REFEREE_BOUND))
-            .as_ref()
-            .best_block_hash;
+        let best_block_hash = self.graph.consensus.best_block_hash();
         if best_block_hash != *block.unwrap().block_header.parent_hash() {
             return true;
         }
@@ -380,23 +375,34 @@ impl BlockGenerator {
     pub fn generate_custom_block(
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) -> H256 {
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
         // get the best block
-        let (_, best_info) = self
+        let (best_info, _) =
+            self.txpool.get_best_info_with_packed_transactions(
+                0,
+                0,
+                block_gas_limit,
+                Vec::new(),
+            );
+        let (
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+        ) = self
             .graph
             .consensus
-            .get_best_info(Some(REFEREE_BOUND))
-            .into();
-        let best_block_hash = best_info.best_block_hash;
-        let mut referee = best_info.terminal_block_hashes;
+            .wait_for_block_state(&best_info.best_state_block_hash);
+
+        let best_block_hash = best_info.best_block_hash.clone();
+        let mut referee = best_info.bounded_terminal_block_hashes.clone();
         referee.retain(|r| *r != best_block_hash);
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
 
         let block = self.assemble_new_block_impl(
             best_block_hash,
             referee,
-            best_info.deferred_state_root,
-            best_info.deferred_receipts_root,
-            best_info.deferred_logs_bloom_hash,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
             block_gas_limit,
             transactions,
             0,

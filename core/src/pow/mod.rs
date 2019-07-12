@@ -12,7 +12,7 @@ use std::collections::HashMap;
 // The new difficulty should be in the range of [(1-1/N)*D, (1+1/N)*D],
 // where D is the old difficulty.
 pub const DIFFICULTY_ADJUSTMENT_FACTOR: usize = 2;
-pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 200;
+pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 2000;
 // Time unit is micro-second (usec)
 pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 5000000;
 pub const INITIAL_DIFFICULTY: u64 = 100_000_000;

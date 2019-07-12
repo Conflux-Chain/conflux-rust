@@ -21,6 +21,8 @@ use cfxcore::{
 };
 use hex::*;
 use keylib::{public_to_address, Generator, KeyPair, Random};
+use lazy_static::lazy_static;
+use metrics::{register_meter_with_group, Meter};
 use network::Error;
 use parking_lot::RwLock;
 use primitives::{
@@ -38,6 +40,11 @@ use std::{
 use time::Duration;
 
 pub mod propagate;
+
+lazy_static! {
+    static ref TX_GEN_METER: Arc<Meter> =
+        register_meter_with_group("tx_pool", "tx_gen");
+}
 
 enum TransGenState {
     Start,
@@ -224,19 +231,20 @@ impl TransactionGenerator {
                 tx_to_insert.push(signed_tx.transaction);
                 txgen.txpool.insert_new_transactions(&tx_to_insert);
                 last_account = Some(receiver_address);
+                TX_GEN_METER.mark(1);
             } else {
                 // Wait for preparation
                 let state = txgen.consensus.get_best_state();
                 let sender_balance = state.balance(&last_account.unwrap()).ok();
-                // Wait for at most 200*0.1=20 seconds
-                if wait_count < 200
+                if wait_count < account_count
                     && (sender_balance.is_none()
                         || sender_balance.clone().unwrap() == 0.into())
                 {
                     wait_count += 1;
-                    thread::sleep(Duration::from_millis(100));
+                    thread::sleep(tx_config.period);
                     continue;
                 } else {
+                    info!("Stop waiting for tx_gen setup");
                     break;
                 }
             }
@@ -327,6 +335,7 @@ impl TransactionGenerator {
             txgen.txpool.insert_new_transactions(&tx_to_insert);
             tx_n += 1;
             if tx_n % 100 == 0 {
+                TX_GEN_METER.mark(100);
                 info!("Generated {} transactions", tx_n);
             }
             let now = Instant::now();

@@ -40,7 +40,6 @@ mod connection;
 mod discovery;
 mod error;
 mod ip;
-mod ip_limit;
 mod ip_utils;
 mod node_database;
 pub mod node_table;
@@ -121,8 +120,8 @@ pub struct NetworkConfiguration {
     /// Connection lifetime threshold for promotion
     pub connection_lifetime_for_promotion: Duration,
     pub test_mode: bool,
-    /// Maximum number of P2P nodes per IP address.
-    pub nodes_per_ip: usize,
+    /// Maximum number of P2P nodes for subnet B (ip/16).
+    pub subnet_quota: usize,
     pub session_ip_limit_config: SessionIpLimitConfig,
 }
 
@@ -155,7 +154,7 @@ impl NetworkConfiguration {
             connection_lifetime_for_promotion:
                 DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
             test_mode: false,
-            nodes_per_ip: 1,
+            subnet_quota: 32,
             session_ip_limit_config: SessionIpLimitConfig::default(),
         }
     }

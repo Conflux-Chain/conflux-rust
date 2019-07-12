@@ -8,6 +8,7 @@ pub type MerkleHash = H256;
 /// when delta grows over threshold, snapshot and delta_0 is merged into new
 /// snapshot, and the delta becomes new delta_0.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StateRoot {
     pub snapshot_root: MerkleHash,
     pub intermediate_delta_root: MerkleHash,
@@ -21,6 +22,7 @@ pub const MERKLE_NULL_NODE: MerkleHash = KECCAK_EMPTY;
 /// and intermediate_delta_epoch_id to help looking up for the intermediate
 /// delta tree.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StateRootAuxInfo {
     pub previous_snapshot_root: MerkleHash,
     pub intermediate_delta_epoch_id: EpochId,
@@ -37,6 +39,7 @@ impl Default for StateRootAuxInfo {
 }
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StateRootWithAuxInfo {
     pub state_root: StateRoot,
     pub aux_info: StateRootAuxInfo,

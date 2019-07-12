@@ -267,10 +267,11 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "storage_cache_start_size": "200000",
                         "storage_node_map_size": "200000",
                         "start_mining":"false",
-                        "p2p_nodes_per_ip": "0",
+                        "subnet_quota": "0",
                         "session_ip_limits": "\"0,0,0,0\"",
                         "enable_discovery": "false",
                         "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
+                        "metrics_enabled": "true",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]

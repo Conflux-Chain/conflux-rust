@@ -132,12 +132,19 @@ log_conf="log.yaml"
 
 # IP/Subnet policy configurations
 
-# `session_ip_limits` is used to limit the maximum number of TCP connections per IP address or subnet for
-# security consideration. Its format is "n1,n2,n3,n4", where n1 is the quota of TCP connections for a single 
-# IP address, and n2/n3/n4 are the quotas for subnet a/b/c. The default value is "1,8,4,2", which means:
+# `session_ip_limits` limits the number of TCP connections per IP address or subnet for security consideration.
+# Its format is "n1,n2,n3,n4", where n1 is the quota of TCP connections for a single IP address, and n2/n3/n4 
+# are the quotas for subnet a/b/c. The default value is "1,8,4,2", which means:
 #   1) Onely 1 TCP connection allowed for a single IP address.
 #   2) 8 TCP connections allowd for subnet a, e.g. 192.xxx.xxx.xxx/8
 #   3) 4 TCP connections allowd for subnet b, e.g. 192.168.xxx.xxx/16
 #   4) 2 TCP connections allowd for subnet c, e.g. 192.169.0.xxx/24
+# Note, 0 represents unlimited.
 # 
 # session_ip_limits="1,8,4,2"
+
+# `subnet_quota` limits the number of nodes for a subnet B (e.g. 192.168.xxx.xxx/16) stored in database.
+# Nodes in database are used to establish outgoing TCP connections for P2P communications.
+# Note, 0 represents unlimited.
+#
+# subnet_quota=32

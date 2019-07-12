@@ -5,7 +5,7 @@
 extern crate tempdir;
 
 use self::tempdir::TempDir;
-use super::super::{Client, Configuration};
+use crate::archive::{ArchiveClient, Configuration};
 use cfx_types::H256;
 use parking_lot::{Condvar, Mutex};
 use serde_json::Value;
@@ -71,7 +71,7 @@ fn test_load_chain() {
     conf.raw_conf.jsonrpc_http_port = Some(18000);
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handle = Client::start(conf, exit.clone()).unwrap();
+    let handle = ArchiveClient::start(conf, exit.clone()).unwrap();
 
     let expected = get_expected_best_hash();
     let best_block_hash: H256 =
@@ -94,5 +94,5 @@ fn test_load_chain() {
 
     assert_eq!(best_block_hash, handle.consensus.best_block_hash());
 
-    Client::close(handle);
+    ArchiveClient::close(handle);
 }

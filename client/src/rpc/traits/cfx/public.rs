@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::super::types::{
-    Block, Bytes, EpochNumber, Transaction, Transaction as RpcTransaction,
-    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Block, Bytes, EpochNumber, Filter as RpcFilter, Log as RpcLog, Transaction,
+    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+    U256 as RpcU256, U64 as RpcU64,
 };
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
@@ -120,6 +121,10 @@ pub trait Cfx {
     fn call(
         &self, tx: RpcTransaction, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<Bytes>;
+
+    /// Returns logs matching the filter provided.
+    #[rpc(name = "cfx_getLogs")]
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
 
     //        /// Estimate gas needed for execution of given contract.
     //        #[rpc(name = "cfx_estimateGas")]
