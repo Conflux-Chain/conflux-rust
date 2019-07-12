@@ -406,7 +406,7 @@ impl TransactionPoolInner {
         }
     }
 
-    pub fn insert(
+    pub fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool,
     ) -> InsertResult
@@ -584,7 +584,7 @@ impl TransactionPoolInner {
             total_tx_size += tx_size;
 
             packed_transactions.push(tx.clone());
-            self.insert(tx.clone(), true, true);
+            self.insert_transaction_without_readiness_check(tx.clone(), true, true);
             self.recalculate_readiness_with_local_info(&tx.sender());
 
             if packed_transactions.len() >= num_txs {
@@ -599,7 +599,7 @@ impl TransactionPoolInner {
         // FIXME: to be optimized by only recalculating readiness once for one
         //  sender
         for tx in packed_transactions.iter().rev() {
-            self.insert(tx.clone(), false, true);
+            self.insert_transaction_without_readiness_check(tx.clone(), false, true);
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
 
@@ -649,7 +649,7 @@ impl TransactionPoolInner {
     // Add transaction into deferred pool and maintain its readiness
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
-    pub fn add_transaction_and_check_readiness_without_lock(
+    pub fn insert_transaction_with_readiness_check(
         &mut self, account_cache: &mut AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
@@ -690,7 +690,7 @@ impl TransactionPoolInner {
         }
 
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
-        let result = self.insert(transaction.clone(), packed, force);
+        let result = self.insert_transaction_without_readiness_check(transaction.clone(), packed, force);
         if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));
         }

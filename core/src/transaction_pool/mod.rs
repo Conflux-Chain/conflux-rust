@@ -309,7 +309,7 @@ impl TransactionPool {
         packed: bool, force: bool,
     ) -> Result<(), String>
     {
-        inner.add_transaction_and_check_readiness_without_lock(
+        inner.insert_transaction_with_readiness_check(
             account_cache,
             transaction,
             packed,
