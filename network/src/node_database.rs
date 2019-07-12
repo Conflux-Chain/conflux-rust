@@ -68,8 +68,8 @@ use std::{collections::HashSet, net::IpAddr, time::Duration};
 /// with new IP address. Otherwise, do not add or update the node.
 ///
 /// ## Eviction rule
-/// If the subnet quota is not enough, the rule to select evictee is as following:
-/// 1. Select untrusted node prior to trusted node.
+/// If the subnet quota is not enough, the rule to select evictee is as
+/// following: 1. Select untrusted node prior to trusted node.
 /// 2. Select node that has been contacted long time ago.
 /// 3. Randomly select one without "fresher" bias.
 pub struct NodeDatabase {
