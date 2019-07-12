@@ -381,7 +381,7 @@ impl ArchiveClient {
         warn!("Shutdown timeout reached, exiting uncleanly.");
     }
 
-    pub fn close(handle: ArchiveClientHandle) -> i32 {
+    pub fn close(handle: ArchiveClientHandle) {
         let (ledger_db, blockgen, to_drop) = handle.into_be_dropped();
         BlockGenerator::stop(&blockgen);
         drop(blockgen);
@@ -390,12 +390,11 @@ impl ArchiveClient {
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
         ArchiveClient::wait_for_drop(ledger_db);
-        0
     }
 
     pub fn run_until_closed(
         exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: ArchiveClientHandle,
-    ) -> i32 {
+    ) {
         CtrlC::set_handler({
             let e = exit.clone();
             move || {
@@ -408,6 +407,7 @@ impl ArchiveClient {
         if !*lock {
             let _ = exit.1.wait(&mut lock);
         }
-        ArchiveClient::close(keep_alive)
+
+        ArchiveClient::close(keep_alive);
     }
 }
