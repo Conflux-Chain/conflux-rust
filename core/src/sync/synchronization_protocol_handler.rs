@@ -547,9 +547,7 @@ impl SynchronizationProtocolHandler {
                             let _timer = MeterTimer::time_func(
                                 CMPCT_BLOCK_RECOVER_TIMER.as_ref(),
                             );
-                            cmpct.build_partial(
-                                &*self.graph.data_man.tx_cache.read(),
-                            )
+                            self.graph.data_man.build_partial(&mut cmpct)
                         };
                         if !missing.is_empty() {
                             debug!(

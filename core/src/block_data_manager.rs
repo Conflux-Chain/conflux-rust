@@ -18,7 +18,7 @@ use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    block::CompactBlock,
+    block::{from_tx_hash, get_shortid_key, CompactBlock},
     receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
@@ -922,6 +922,46 @@ impl BlockDataManager {
             tx_cache_man.note_used(tx.hash());
         }
         Ok(recovered_trans)
+    }
+
+    /// Find tx in tx_cache that matches tx_short_ids to fill in
+    /// reconstruced_txes Return the differentially encoded index of missing
+    /// transactions Now should only called once after CompactBlock is
+    /// decoded
+    pub fn build_partial(
+        &self, compact_block: &mut CompactBlock,
+    ) -> Vec<usize> {
+        compact_block
+            .reconstructed_txes
+            .resize(compact_block.tx_short_ids.len(), None);
+        let mut short_id_to_index =
+            HashMap::with_capacity(compact_block.tx_short_ids.len());
+        for (i, id) in compact_block.tx_short_ids.iter().enumerate() {
+            short_id_to_index.insert(id, i);
+        }
+        let (k0, k1) =
+            get_shortid_key(&compact_block.block_header, &compact_block.nonce);
+        for (tx_hash, tx) in &*self.tx_cache.read() {
+            let short_id = from_tx_hash(tx_hash, k0, k1);
+            match short_id_to_index.remove(&short_id) {
+                Some(index) => {
+                    compact_block.reconstructed_txes[index] = Some(tx.clone());
+                }
+                None => {}
+            }
+        }
+        let mut missing_index = Vec::new();
+        for index in short_id_to_index.values() {
+            missing_index.push(*index);
+        }
+        missing_index.sort();
+        let mut last = 0;
+        let mut missing_encoded = Vec::new();
+        for index in missing_index {
+            missing_encoded.push(index - last);
+            last = index + 1;
+        }
+        missing_encoded
     }
 }
 
