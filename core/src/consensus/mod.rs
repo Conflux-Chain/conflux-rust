@@ -34,7 +34,7 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    cmp::{min, Reverse},
+    cmp::Reverse,
     collections::{HashMap, HashSet},
     sync::Arc,
     thread::sleep,
@@ -530,26 +530,25 @@ impl ConsensusGraph {
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         let block_hashes = if filter.block_hashes.is_none() {
-            if filter.from_epoch >= filter.to_epoch {
+            // at most best_epoch
+            let from_epoch = match self
+                .get_height_from_epoch_number(filter.from_epoch.clone())
+            {
+                Ok(num) => num,
+                Err(_) => return Ok(vec![]),
+            };
+
+            // at most best_epoch
+            let to_epoch = self
+                .get_height_from_epoch_number(filter.to_epoch.clone())
+                .unwrap_or(self.best_epoch_number());
+
+            if from_epoch > to_epoch {
                 return Err(FilterError::InvalidEpochNumber {
-                    from_epoch: filter.from_epoch,
-                    to_epoch: filter.to_epoch,
+                    from_epoch,
+                    to_epoch,
                 });
             }
-
-            let inner = self.inner.read();
-
-            if filter.from_epoch
-                >= inner.pivot_index_to_height(inner.pivot_chain.len())
-            {
-                return Ok(Vec::new());
-            }
-
-            let from_epoch = filter.from_epoch;
-            let to_epoch = min(
-                filter.to_epoch,
-                inner.pivot_index_to_height(inner.pivot_chain.len()),
-            );
 
             let blooms = filter.bloom_possibilities();
             let bloom_match = |block_log_bloom: &Bloom| {
@@ -558,8 +557,10 @@ impl ConsensusGraph {
                     .any(|bloom| block_log_bloom.contains_bloom(bloom))
             };
 
-            let mut blocks = Vec::new();
-            for epoch_number in from_epoch..to_epoch {
+            let inner = self.inner.read();
+
+            let mut blocks = vec![];
+            for epoch_number in from_epoch..(to_epoch + 1) {
                 let epoch_hash = inner.arena
                     [inner.get_pivot_block_arena_index(epoch_number)]
                 .hash;

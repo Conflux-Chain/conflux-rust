@@ -26,9 +26,8 @@ use network::{
 };
 use parking_lot::{Condvar, Mutex};
 use primitives::{
-    block::MAX_BLOCK_SIZE_IN_BYTES, Action,
-    EpochNumber as PrimitiveEpochNumber, SignedTransaction, Transaction,
-    TransactionWithSignature,
+    block::MAX_BLOCK_SIZE_IN_BYTES, filter::FilterError, Action,
+    SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
@@ -57,17 +56,6 @@ impl RpcImpl {
         }
     }
 
-    fn get_primitive_epoch_number(
-        &self, number: EpochNumber,
-    ) -> PrimitiveEpochNumber {
-        match number {
-            EpochNumber::Earliest => PrimitiveEpochNumber::Earliest,
-            EpochNumber::LatestMined => PrimitiveEpochNumber::LatestMined,
-            EpochNumber::LatestState => PrimitiveEpochNumber::LatestState,
-            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num.into()),
-        }
-    }
-
     fn best_block_hash(&self) -> RpcResult<RpcH256> {
         info!("RPC Request: cfx_getBestBlockHash()");
         Ok(self.consensus.best_block_hash().into())
@@ -83,9 +71,10 @@ impl RpcImpl {
     ) -> RpcResult<RpcU256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
-        match self.consensus.get_height_from_epoch_number(
-            self.get_primitive_epoch_number(epoch_num),
-        ) {
+        match self
+            .consensus
+            .get_height_from_epoch_number(epoch_num.into())
+        {
             Ok(height) => Ok(height.into()),
             Err(e) => Err(RpcError::invalid_params(e)),
         }
@@ -97,9 +86,7 @@ impl RpcImpl {
         let inner = &*self.consensus.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
         inner
-            .get_hash_from_epoch_number(
-                self.get_primitive_epoch_number(epoch_num),
-            )
+            .get_hash_from_epoch_number(epoch_num.into())
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|hash| {
                 let block = self
@@ -210,7 +197,7 @@ impl RpcImpl {
         info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
 
         self.consensus
-            .block_hashes_by_epoch(self.get_primitive_epoch_number(num))
+            .block_hashes_by_epoch(num.into())
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
     }
@@ -226,7 +213,7 @@ impl RpcImpl {
         );
 
         self.consensus
-            .get_balance(address, self.get_primitive_epoch_number(num))
+            .get_balance(address, num.into())
             .map(|x| x.into())
             .map_err(|err| RpcError::invalid_params(err))
     }
@@ -249,7 +236,7 @@ impl RpcImpl {
     //            .get_account(
     //                address,
     //                num_txs,
-    //                self.get_primitive_epoch_number(epoch_num),
+    //                epoch_num.into(),
     //            )
     //            .and_then(|(balance, transactions)| {
     //                Ok(Account {
@@ -274,10 +261,7 @@ impl RpcImpl {
         );
 
         self.consensus
-            .transaction_count(
-                address.into(),
-                self.get_primitive_epoch_number(num),
-            )
+            .transaction_count(address.into(), num.into())
             .map_err(|err| RpcError::invalid_params(err))
             .map(|x| x.into())
     }
@@ -549,7 +533,6 @@ impl RpcImpl {
         &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
-        let epoch = self.get_primitive_epoch_number(epoch);
 
         let tx = Transaction {
             nonce: rpc_tx.nonce.into(),
@@ -569,18 +552,19 @@ impl RpcImpl {
         signed_tx.sender = rpc_tx.from.into();
         trace!("call tx {:?}", signed_tx);
         self.consensus
-            .call_virtual(&signed_tx, epoch)
+            .call_virtual(&signed_tx, epoch.into())
             .map(|output| Bytes::new(output.0))
             .map_err(|e| RpcError::invalid_params(e))
     }
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
-        info!("RPC Request: get_logs({:?})", filter);
+        info!("RPC Request: cfx_getLogs({:?})", filter);
         self.consensus
             .logs(filter.into())
-            .map_err(|e| {
-                warn!("Error during filter execution: {:?}", e);
-                RpcError::internal_error()
+            .map_err(|e| match e {
+                FilterError::InvalidEpochNumber { .. } => {
+                    RpcError::invalid_params(format!("{}", e))
+                }
             })
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
     }
