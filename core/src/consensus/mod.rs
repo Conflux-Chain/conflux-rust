@@ -206,13 +206,13 @@ impl ConsensusGraph {
     pub fn get_to_propagate_trans(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.txpool.get_to_propagate_trans()
+        self.txpool.get_to_be_propagated_transactions()
     }
 
     pub fn set_to_propagate_trans(
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
-        self.txpool.set_to_propagate_trans(transactions);
+        self.txpool.set_to_be_propagated_transactions(transactions);
     }
 
     /// Wait for the generation and the execution completion of a block in the
