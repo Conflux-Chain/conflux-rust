@@ -7,7 +7,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
-class P2PTest(ConfluxTestFramework):
+class ReorgTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
@@ -120,4 +120,4 @@ class P2PTest(ConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    ReorgTest().main()

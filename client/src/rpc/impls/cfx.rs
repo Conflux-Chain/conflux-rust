@@ -5,9 +5,10 @@
 use crate::rpc::{
     traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
     types::{
-        Block as RpcBlock, Bytes, EpochNumber, Receipt as RpcReceipt, Receipt,
-        Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+        Block as RpcBlock, Bytes, EpochNumber, Filter as RpcFilter,
+        Log as RpcLog, Receipt as RpcReceipt, Receipt, Status as RpcStatus,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -573,6 +574,17 @@ impl RpcImpl {
             .map_err(|e| RpcError::invalid_params(e))
     }
 
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        info!("RPC Request: get_logs({:?})", filter);
+        self.consensus
+            .logs(filter.into())
+            .map_err(|e| {
+                warn!("Error during filter execution: {:?}", e);
+                RpcError::internal_error()
+            })
+            .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
+    }
+
     fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256> {
         let tx = Transaction {
             nonce: rpc_tx.nonce.into(),
@@ -844,6 +856,10 @@ impl Cfx for CfxHandler {
         &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         self.rpc_impl.call(rpc_tx, epoch)
+    }
+
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        self.rpc_impl.get_logs(filter)
     }
 }
 
