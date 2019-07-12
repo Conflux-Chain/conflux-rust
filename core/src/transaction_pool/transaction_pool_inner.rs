@@ -323,7 +323,7 @@ impl TransactionPoolInner {
         let result = self.deferred_pool.insert(
             TxWithReadyInfo {
                 transaction: transaction.clone(),
-                timestamp: ts,
+                last_packed_ts: ts,
             },
             force,
         );
@@ -637,13 +637,13 @@ mod test_transaction_pool_inner {
 
     fn new_test_tx_with_read_info(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
-        timestamp: u64,
+        last_packed_ts: u64,
     ) -> TxWithReadyInfo
     {
         let transaction = new_test_tx(sender, nonce, gas_price, value);
         TxWithReadyInfo {
             transaction,
-            timestamp,
+            last_packed_ts,
         }
     }
 

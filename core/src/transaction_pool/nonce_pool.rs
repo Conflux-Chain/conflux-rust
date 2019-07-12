@@ -9,19 +9,19 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-/// if the difference between now and `tx.timestamp <
+/// if the difference between now and `tx.last_packed_ts <
 /// TRANSACTION_PACKED_EXPIRE_TIME` we consider this transaction is packed
 pub const TRANSACTION_PACKED_EXPIRE_TIME: u64 = 10 * 60;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
-    pub timestamp: u64,
+    pub last_packed_ts: u64,
 }
 
 impl TxWithReadyInfo {
     pub fn is_already_packed(&self, now: u64) -> bool {
-        now < TRANSACTION_PACKED_EXPIRE_TIME + self.timestamp
+        now < TRANSACTION_PACKED_EXPIRE_TIME + self.last_packed_ts
     }
 
     pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.transaction }
@@ -60,8 +60,8 @@ pub enum InsertResult {
 struct NoncePoolNode {
     /// transaction in current node
     tx: TxWithReadyInfo,
-    /// minimum timestamp in subtree
-    timestamp_min: u64,
+    /// minimum last_packed_ts in subtree
+    ts_min: u64,
     /// sum of cost of transaction in subtree
     subtree_cost: U256,
     // number of transaction in subtree
@@ -76,7 +76,7 @@ impl NoncePoolNode {
     pub fn new(tx: &TxWithReadyInfo, priority: u64) -> Self {
         NoncePoolNode {
             tx: tx.clone(),
-            timestamp_min: tx.timestamp,
+            ts_min: tx.last_packed_ts,
             subtree_cost: tx.value + tx.gas * tx.gas_price,
             subtree_size: 1,
             priority,
@@ -84,10 +84,10 @@ impl NoncePoolNode {
         }
     }
 
-    /// return the leftist node
-    pub fn leftist(&self) -> Option<&TxWithReadyInfo> {
+    /// return the leftmost node
+    pub fn leftmost(&self) -> Option<&TxWithReadyInfo> {
         if self.child[0].as_ref().is_some() {
-            self.child[0].as_ref().unwrap().leftist()
+            self.child[0].as_ref().unwrap().leftmost()
         } else {
             Some(&self.tx)
         }
@@ -229,39 +229,36 @@ impl NoncePoolNode {
         }
     }
 
-    /// find a transaction `tx` where `tx.nonce >= nonce` and `tx.timestamp <=
-    /// timestamp` and `tx.nonce` is minimum
+    /// find a transaction `tx` where `tx.nonce >= nonce` and `tx.last_packed_ts
+    /// <= ts` and `tx.nonce` is minimum
     pub fn query(
-        node: &Option<Box<NoncePoolNode>>, nonce: &U256, timestamp: u64,
+        node: &Option<Box<NoncePoolNode>>, nonce: &U256, ts: u64,
     ) -> Option<Arc<SignedTransaction>> {
         node.as_ref().and_then(|node| {
-            if node.timestamp_min > timestamp {
+            if node.ts_min > ts {
                 return None;
             }
             match nonce.cmp(&node.tx.nonce) {
                 Ordering::Less => {
-                    NoncePoolNode::query(&node.child[0], nonce, timestamp)
-                        .or_else(|| {
-                            if node.tx.timestamp <= timestamp {
+                    NoncePoolNode::query(&node.child[0], nonce, ts).or_else(
+                        || {
+                            if node.tx.last_packed_ts <= ts {
                                 Some(node.tx.transaction.clone())
                             } else {
-                                NoncePoolNode::query(
-                                    &node.child[1],
-                                    nonce,
-                                    timestamp,
-                                )
+                                NoncePoolNode::query(&node.child[1], nonce, ts)
                             }
-                        })
+                        },
+                    )
                 }
                 Ordering::Equal => {
-                    if node.tx.timestamp <= timestamp {
+                    if node.tx.last_packed_ts <= ts {
                         Some(node.tx.transaction.clone())
                     } else {
-                        NoncePoolNode::query(&node.child[1], nonce, timestamp)
+                        NoncePoolNode::query(&node.child[1], nonce, ts)
                     }
                 }
                 Ordering::Greater => {
-                    NoncePoolNode::query(&node.child[1], nonce, timestamp)
+                    NoncePoolNode::query(&node.child[1], nonce, ts)
                 }
             }
         })
@@ -283,16 +280,16 @@ impl NoncePoolNode {
         }
     }
 
-    /// update subtree info: timestamp and cost_sum
+    /// update subtree info: last_packed_ts and cost_sum
     fn update(&mut self) {
-        self.timestamp_min = self.tx.timestamp;
+        self.ts_min = self.tx.last_packed_ts;
         self.subtree_cost = self.tx.value + self.tx.gas * self.tx.gas_price;
         self.subtree_size = 1;
         for i in 0..2 {
             if self.child[i as usize].is_some() {
                 let child = self.child[i as usize].as_ref().unwrap();
-                if child.timestamp_min < self.timestamp_min {
-                    self.timestamp_min = child.timestamp_min;
+                if child.ts_min < self.ts_min {
+                    self.ts_min = child.ts_min;
                 }
                 self.subtree_cost += child.subtree_cost;
                 self.subtree_size += child.subtree_size;
@@ -300,6 +297,7 @@ impl NoncePoolNode {
         }
     }
 
+    /// return the size and the sum of balance of current subtree
     fn size(node: &Option<Box<NoncePoolNode>>) -> (u32, U256) {
         if node.is_none() {
             (0, 0.into())
@@ -351,7 +349,7 @@ impl NoncePool {
     pub fn get_lowest_nonce(&self) -> Option<&U256> {
         self.root
             .as_ref()
-            .and_then(|node| node.leftist().map(|x| &x.transaction.nonce))
+            .and_then(|node| node.leftmost().map(|x| &x.transaction.nonce))
     }
 
     pub fn remove(&mut self, nonce: &U256) -> Option<TxWithReadyInfo> {
@@ -363,13 +361,17 @@ impl NoncePool {
         lowest_nonce.and_then(|nonce| self.remove(&nonce))
     }
 
+    /// find a transaction `tx` such that
+    ///   1. all nonce in `[nouce, tx.nouce]` exists
+    ///   2. now - tx.last_packed_ts >= TRANSACTION_PACKED_EXPIRE_TIME
+    ///   3. tx.nouce is minimum
     pub fn recalculate_readiness_with_local_info(
-        &self, nonce: U256, balance: U256, timestamp: u64,
+        &self, nonce: U256, balance: U256, last_packed_ts: u64,
     ) -> Option<Arc<SignedTransaction>> {
-        let bound = if timestamp < TRANSACTION_PACKED_EXPIRE_TIME {
+        let bound = if last_packed_ts < TRANSACTION_PACKED_EXPIRE_TIME {
             0
         } else {
-            timestamp - TRANSACTION_PACKED_EXPIRE_TIME
+            last_packed_ts - TRANSACTION_PACKED_EXPIRE_TIME
         };
         NoncePoolNode::query(&self.root, &nonce, bound).filter(|x| {
             let a = if nonce == U256::from(0) {
@@ -378,12 +380,18 @@ impl NoncePool {
                 NoncePoolNode::rank(&self.root, &(nonce - 1))
             };
             let b = NoncePoolNode::rank(&self.root, &x.nonce);
+            // 1. b.1 - a.1 means the sum of cost of transactions in `[nouce,
+            // tx.nouce]`
+            // 2, b.0 - a.0 means number of transactions in `[nouce, tx.nouce]`
+            // 3. x.nonce - nonce + 1 means expected number of transactions in
+            // `[nouce, tx.nouce]`
             U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <= balance
         })
     }
 
     pub fn is_empty(&self) -> bool { self.root.is_none() }
 
+    /// return the number of transactions whose nonce >= `nonce`
     pub fn count_from(&self, nonce: &U256) -> usize {
         if *nonce == U256::from(0) {
             NoncePoolNode::size(&self.root).0 as usize
@@ -428,13 +436,13 @@ mod nonce_pool_test {
 
     fn new_test_tx_with_ready_info(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
-        timestamp: u64,
+        last_packed_ts: u64,
     ) -> TxWithReadyInfo
     {
         let transaction = new_test_tx(sender, nonce, gas_price, value);
         TxWithReadyInfo {
             transaction,
-            timestamp,
+            last_packed_ts,
         }
     }
 
