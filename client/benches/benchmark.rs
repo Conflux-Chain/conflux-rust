@@ -2,11 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate client;
-extern crate parking_lot;
-#[macro_use]
-extern crate criterion;
-
 use cfx_bytes::Bytes;
 use cfx_types::U256;
 use cfxcore::{
@@ -18,8 +13,8 @@ use cfxcore::{
     vm::{Env, Spec},
     vm_factory::VmFactory,
 };
-use client::{ArchiveClient, Configuration};
-use criterion::Criterion;
+use client::{archive::ArchiveClient, configuration::Configuration};
+use criterion::{criterion_group, criterion_main, Criterion};
 use keylib::{Generator, KeyPair, Random};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
