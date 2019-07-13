@@ -259,53 +259,21 @@ impl TransactionGenerator {
                 _ => {}
             }
 
-            let (sender_kp, receiver_kp, balance_to_transfer) =
-                if secret_store.count() < account_count {
-                    let mut receiver_kp: KeyPair;
-                    let sender_address = initial_key_pair.address();
-                    let sender_balance =
-                        balance_map.get_mut(&sender_address).unwrap();
-                    let balance_to_transfer = *sender_balance / account_count;
-                    // Create a new receiver account
-                    loop {
-                        receiver_kp = Random.generate()?;
-                        if secret_store.insert(receiver_kp.clone()) {
-                            nonce_map.insert(receiver_kp.address(), 0.into());
-                            break;
-                        }
-                    }
-                    *sender_balance -= balance_to_transfer + 21000;
-                    (initial_key_pair.clone(), receiver_kp, balance_to_transfer)
-                } else {
-                    // Randomly select sender and receiver.
-                    // Sender must exist in the account list.
-                    // Receiver can be not in the account list which
-                    // leads to generate a new account
-                    let account_count = secret_store.count();
-                    let mut receiver_index: usize = random();
-                    receiver_index %= account_count;
-                    let receiver_kp = secret_store.get_keypair(receiver_index);
-                    let mut sender_index: usize = random();
-                    sender_index %= account_count;
-                    let sender_kp = secret_store.get_keypair(sender_index);
+            // Randomly select sender and receiver.
+            // Sender must exist in the account list.
+            // Receiver can be not in the account list which
+            // leads to generate a new account
+            let account_count = secret_store.count();
+            let mut receiver_index: usize = random();
+            receiver_index %= account_count;
+            let receiver_kp = secret_store.get_keypair(receiver_index);
+            let mut sender_index: usize = random();
+            sender_index %= account_count;
+            let sender_kp = secret_store.get_keypair(sender_index);
+            let sender_address = public_to_address(sender_kp.public());
 
-                    // Randomly generate the to-be-transferred value
-                    // based on the balance of sender
-                    let sender_address = public_to_address(sender_kp.public());
-                    let sender_balance =
-                        balance_map.get_mut(&sender_address).unwrap();
-
-                    if *sender_balance < 42000.into() {
-                        secret_store.remove_keypair(sender_index);
-                        if secret_store.count() == 0 {
-                            break;
-                        }
-                        continue;
-                    }
-                    let balance_to_transfer = U256::from(0);
-                    *sender_balance -= balance_to_transfer + 21000;
-                    (sender_kp, receiver_kp, balance_to_transfer)
-                };
+            // Always send value 0
+            let balance_to_transfer = U256::from(0);
             // Generate nonce for the transaction
             let sender_nonce = nonce_map.get_mut(&sender_kp.address()).unwrap();
             let receiver_address = public_to_address(receiver_kp.public());
@@ -315,8 +283,6 @@ impl TransactionGenerator {
                 balance_to_transfer,
                 sender_nonce
             );
-            *balance_map.entry(receiver_address).or_insert(0.into()) +=
-                balance_to_transfer;
             // Generate the transaction, sign it, and push into the transaction
             // pool
             let tx = Transaction {
@@ -327,13 +293,29 @@ impl TransactionGenerator {
                 action: Action::Call(receiver_address),
                 data: Bytes::new(),
             };
-            *sender_nonce += U256::one();
 
             let signed_tx = tx.sign(sender_kp.secret());
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
-            txgen.txpool.insert_new_transactions(&tx_to_insert);
-            tx_n += 1;
+            let (_, fail) = txgen.txpool.insert_new_transactions(&tx_to_insert);
+            if fail.len() == 0 {
+                {
+                    let sender_balance =
+                        balance_map.get_mut(&sender_address).unwrap();
+                    if *sender_balance < 42000.into() {
+                        secret_store.remove_keypair(sender_index);
+                        if secret_store.count() == 0 {
+                            break;
+                        }
+                        continue;
+                    }
+                    *sender_balance -= balance_to_transfer + 21000;
+                }
+                *sender_nonce += U256::one();
+                *balance_map.entry(receiver_address).or_insert(0.into()) +=
+                    balance_to_transfer;
+                tx_n += 1;
+            }
             if tx_n % 100 == 0 {
                 TX_GEN_METER.mark(100);
                 info!("Generated {} transactions", tx_n);

@@ -12,8 +12,7 @@ extern crate rand;
 pub use self::impls::TreapMap;
 use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
-    executive, pow::WORKER_COMPUTATION_PARALLELISM, statedb::StateDb,
-    storage::Storage, vm,
+    executive, statedb::StateDb, storage::Storage, vm,
 };
 use cfx_types::{Address, H256, H512, U256, U512};
 use metrics::{
@@ -28,9 +27,8 @@ use std::{
     collections::{hash_map::HashMap, BTreeMap, VecDeque},
     mem,
     ops::{Deref, DerefMut},
-    sync::{mpsc::channel, Arc},
+    sync::Arc,
 };
-use threadpool::ThreadPool;
 
 lazy_static! {
     static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
@@ -519,7 +517,6 @@ impl TransactionPoolInner {
 
 pub struct TransactionPool {
     inner: RwLock<TransactionPoolInner>,
-    pub worker_pool: Arc<Mutex<ThreadPool>>,
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
     spec: vm::Spec,
@@ -533,14 +530,11 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 
 impl TransactionPool {
     pub fn with_capacity(
-        capacity: usize, worker_pool: Arc<Mutex<ThreadPool>>,
-        data_man: Arc<BlockDataManager>,
-    ) -> Self
-    {
+        capacity: usize, data_man: Arc<BlockDataManager>,
+    ) -> Self {
         let genesis_hash = data_man.genesis_block.hash();
         TransactionPool {
             inner: RwLock::new(TransactionPoolInner::with_capacity(capacity)),
-            worker_pool,
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man,
             spec: vm::Spec::new_spec(),
@@ -577,153 +571,68 @@ impl TransactionPool {
             .get_nonce_and_balance_from_storage(address, &mut account_cache)
     }
 
+    /// Try to insert `transactions` into transaction pool.
+    ///
+    /// If some tx is already in our tx_cache, it will be ignored and will not
+    /// be added to returned `passed_transactions`. If some tx invalid or
+    /// cannot be inserted to the tx pool, it will be included in the returned
+    /// `failure` and will not be propagated.
     pub fn insert_new_transactions(
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
-        let mut failures = HashMap::new();
-        let uncached_trans =
-            self.data_man.get_uncached_transactions(transactions);
-
-        let mut signed_trans = Vec::new();
-        if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
-            let _timer = MeterTimer::time_func(TX_POOL_RECOVER_TIMER.as_ref());
-            let mut signed_txes = Vec::new();
-            for tx in uncached_trans {
-                match tx.recover_public() {
-                    Ok(public) => {
-                        let signed_tx =
-                            Arc::new(SignedTransaction::new(public, tx));
-                        signed_txes.push(signed_tx);
-                    }
-                    Err(e) => {
-                        debug!(
-                            "Unable to recover the public key of transaction {:?}: {:?}",
-                            tx.hash(), e
-                        );
-                        failures.insert(
-                            tx.hash(),
-                            format!(
-                                "failed to recover the public key: {:?}",
-                                e
-                            ),
-                        );
-                    }
-                }
-            }
-            signed_trans.push(signed_txes);
-        } else {
-            let _timer = MeterTimer::time_func(TX_POOL_RECOVER_TIMER.as_ref());
-            let tx_num = uncached_trans.len();
-            let tx_num_per_worker = tx_num / WORKER_COMPUTATION_PARALLELISM;
-            let mut remainder =
-                tx_num - (tx_num_per_worker * WORKER_COMPUTATION_PARALLELISM);
-            let mut start_idx = 0;
-            let mut end_idx = 0;
-            let mut unsigned_trans = Vec::new();
-
-            for tx in uncached_trans {
-                if start_idx == end_idx {
-                    // a new segment of transactions
-                    end_idx = start_idx + tx_num_per_worker;
-                    if remainder > 0 {
-                        end_idx += 1;
-                        remainder -= 1;
-                    }
-                    let unsigned_txes = Vec::new();
-                    unsigned_trans.push(unsigned_txes);
-                }
-
-                unsigned_trans.last_mut().unwrap().push(tx);
-
-                start_idx += 1;
-            }
-
-            signed_trans.resize(unsigned_trans.len(), Vec::new());
-            let (sender, receiver) = channel();
-            let worker_pool = self.worker_pool.lock().clone();
-            let mut idx = 0;
-            for unsigned_txes in unsigned_trans {
-                let sender = sender.clone();
-                worker_pool.execute(move || {
-                    let mut signed_txes = Vec::new();
-                    let mut failed_txes = HashMap::new();
-                    for tx in unsigned_txes {
-                        match tx.recover_public() {
-                            Ok(public) => {
-                                let signed_tx = Arc::new(SignedTransaction::new(public, tx));
-                                signed_txes.push(signed_tx);
-                            }
-                            Err(e) => {
-                                debug!(
-                                    "Unable to recover the public key of transaction {:?}: {:?}",
-                                    tx.hash(), e
-                                );
-                                failed_txes.insert(tx.hash(), format!("failed to recover the public key: {:?}", e));
-                            }
-                        }
-                    }
-                    sender.send((idx, (signed_txes, failed_txes))).unwrap();
-                });
-                idx += 1;
-            }
-            worker_pool.join();
-
-            for (idx, signed_failed_txes) in
-                receiver.iter().take(signed_trans.len())
-            {
-                signed_trans[idx] = signed_failed_txes.0;
-
-                for (tx_hash, error) in signed_failed_txes.1 {
-                    failures.insert(tx_hash, error);
-                }
-            }
-        }
-
-        let mut account_cache = self.get_best_state_account_cache();
         let mut passed_transactions = Vec::new();
-        {
-            let mut inner = self.inner.write();
-            let inner = &mut *inner;
-
-            for txes in signed_trans {
-                for tx in txes {
-                    self.data_man.cache_transaction(&tx.hash(), tx.clone());
+        let mut failure = HashMap::new();
+        match self.data_man.recover_unsigned_tx(transactions) {
+            Ok(signed_trans) => {
+                let mut account_cache = self.get_best_state_account_cache();
+                let mut inner = self.inner.write();
+                let mut to_prop = self.to_propagate_trans.write();
+                for tx in signed_trans {
                     if let Err(e) = self.verify_transaction(tx.as_ref()) {
-                        warn!("Transaction discarded due to failure of passing verification {:?}: {}", tx.hash(), e);
-                        failures.insert(tx.hash(), e);
+                        debug!(
+                            "tx {:?} fails to pass verification, err={:?}",
+                            &tx.hash, e
+                        );
+                        failure.insert(tx.hash(), e);
                         continue;
                     }
-                    let hash = tx.hash();
-                    match self.add_transaction_and_check_readiness_without_lock(
-                        inner,
-                        &mut account_cache,
-                        tx.clone(),
-                        false,
-                        false,
-                    ) {
-                        Ok(_) => {
-                            let mut to_prop = self.to_propagate_trans.write();
-                            if !to_prop.contains_key(&tx.hash) {
-                                to_prop.insert(tx.hash, tx.clone());
-                            }
-                            passed_transactions.push(tx);
-                        }
-                        Err(e) => {
-                            failures.insert(hash, e);
-                        }
+                    if let Err(e) = self
+                        .add_transaction_and_check_readiness_without_lock(
+                            &mut *inner,
+                            &mut account_cache,
+                            tx.clone(),
+                            false,
+                            false,
+                        )
+                    {
+                        debug!(
+                            "tx {:?} fails to be inserted to pool, err={:?}",
+                            &tx.hash, e
+                        );
+                        failure.insert(tx.hash(), e);
+                        continue;
                     }
+                    passed_transactions.push(tx.clone());
+                    if !to_prop.contains_key(&tx.hash) {
+                        to_prop.insert(tx.hash, tx);
+                    }
+                }
+            }
+            Err(e) => {
+                for tx in transactions {
+                    failure.insert(tx.hash(), format!("{:?}", e).into());
                 }
             }
         }
         TX_POOL_GAUGE.update(self.len());
         TX_POOL_READY_GAUGE.update(self.inner.read().ready_account_pool.len());
 
-        (passed_transactions, failures)
+        (passed_transactions, failure)
     }
 
-    // verify transactions based on the rules that
-    // have nothing to do with readiness
+    /// verify transactions based on the rules that have nothing to do with
+    /// readiness
     pub fn verify_transaction(
         &self, transaction: &SignedTransaction,
     ) -> Result<(), String> {
@@ -883,10 +792,6 @@ impl TransactionPool {
             transaction.sender
         );
         inner.insert(transaction, packed, force)
-    }
-
-    pub fn remove_to_propagate(&self, tx_hash: &H256) {
-        self.to_propagate_trans.write().remove(tx_hash);
     }
 
     pub fn set_tx_packed(&self, transactions: Vec<Arc<SignedTransaction>>) {

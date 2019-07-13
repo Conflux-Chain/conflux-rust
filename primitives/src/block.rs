@@ -14,7 +14,6 @@ use rand::Rng;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use siphasher::sip::SipHasher24;
 use std::{
-    collections::HashMap,
     fmt::{Debug, Formatter},
     hash::Hasher,
     sync::Arc,
@@ -264,48 +263,10 @@ impl HeapSizeOf for CompactBlock {
 }
 
 impl CompactBlock {
-    /// Find tx in tx_cache that matches tx_short_ids to fill in
-    /// reconstruced_txes Return the differentially encoded index of missing
-    /// transactions Now should only called once after CompactBlock is
-    /// decoded
-    pub fn build_partial(
-        &mut self, tx_cache: &HashMap<H256, Arc<SignedTransaction>>,
-    ) -> Vec<usize> {
-        self.reconstructed_txes
-            .resize(self.tx_short_ids.len(), None);
-        let mut short_id_to_index =
-            HashMap::with_capacity(self.tx_short_ids.len());
-        for (i, id) in self.tx_short_ids.iter().enumerate() {
-            short_id_to_index.insert(id, i);
-        }
-        let (k0, k1) = get_shortid_key(&self.block_header, &self.nonce);
-        for (tx_hash, tx) in tx_cache {
-            let short_id = from_tx_hash(tx_hash, k0, k1);
-            match short_id_to_index.remove(&short_id) {
-                Some(index) => {
-                    self.reconstructed_txes[index] = Some(tx.clone());
-                }
-                None => {}
-            }
-        }
-        let mut missing_index = Vec::new();
-        for index in short_id_to_index.values() {
-            missing_index.push(*index);
-        }
-        missing_index.sort();
-        let mut last = 0;
-        let mut missing_encoded = Vec::new();
-        for index in missing_index {
-            missing_encoded.push(index - last);
-            last = index + 1;
-        }
-        missing_encoded
-    }
-
     pub fn hash(&self) -> H256 { self.block_header.hash() }
 }
 
-fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
+pub fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
     let mut stream = RlpStream::new();
     stream.begin_list(2).append(header).append(nonce);
     let to_hash = stream.out();
@@ -316,7 +277,7 @@ fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
 }
 
 /// Compute Tx ShortId from hash. The algorithm is from Bitcoin BIP152
-fn from_tx_hash(hash: &H256, k0: u64, k1: u64) -> TxShortId {
+pub fn from_tx_hash(hash: &H256, k0: u64, k1: u64) -> TxShortId {
     let mut hasher = SipHasher24::new_with_keys(k0, k1);
     hasher.write(hash.as_ref());
     hasher.finish() & 0x00ffffff_ffffffff

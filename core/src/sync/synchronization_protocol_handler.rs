@@ -31,26 +31,17 @@ use super::{
     msg_sender::{send_message, send_message_with_throttling},
     request_manager::{RequestManager, RequestMessage},
 };
-use crate::{
-    cache_manager::{CacheId, CacheManager},
-    pow::WORKER_COMPUTATION_PARALLELISM,
-    verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
-};
+use crate::verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use primitives::{
-    Block, BlockHeader, SignedTransaction, TransactionWithSignature,
-    TxPropagateId,
-};
+use primitives::{Block, BlockHeader, SignedTransaction, TxPropagateId};
 use priority_send_queue::SendQueuePriority;
-use rlp::DecoderError;
 use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     iter::FromIterator,
-    sync::{atomic::Ordering as AtomicOrdering, mpsc::channel, Arc},
+    sync::{atomic::Ordering as AtomicOrdering, Arc},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use threadpool::ThreadPool;
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<Meter> =
         register_meter_with_group("tx_pool", "tx_propagate_set_size");
@@ -556,13 +547,7 @@ impl SynchronizationProtocolHandler {
                             let _timer = MeterTimer::time_func(
                                 CMPCT_BLOCK_RECOVER_TIMER.as_ref(),
                             );
-                            cmpct.build_partial(
-                                &*self
-                                    .graph
-                                    .data_man
-                                    .transaction_pubkey_cache
-                                    .read(),
-                            )
+                            self.graph.data_man.build_partial(&mut cmpct)
                         };
                         if !missing.is_empty() {
                             debug!(
@@ -802,15 +787,10 @@ impl SynchronizationProtocolHandler {
                     self.graph.block_header_by_hash(&resp_hash)
                 {
                     debug!("Process blocktxn hash={:?}", resp_hash);
-                    let signed_txes = Self::batch_recover_with_cache(
-                        &resp.block_txn,
-                        &mut *self
-                            .graph
-                            .data_man
-                            .transaction_pubkey_cache
-                            .write(),
-                        &mut *self.graph.data_man.cache_man.lock(),
-                    )?;
+                    let signed_txes = self
+                        .graph
+                        .data_man
+                        .recover_unsigned_tx_with_order(&resp.block_txn)?;
                     match self.graph.data_man.compact_block_by_hash(&resp_hash)
                     {
                         Some(cmpct) => {
@@ -1744,14 +1724,8 @@ impl SynchronizationProtocolHandler {
                 warn!("Response has not requested block {:?}", hash);
                 continue;
             }
-            if Self::recover_public(
-                &mut block,
-                &mut *self.graph.data_man.transaction_pubkey_cache.write(),
-                &mut *self.graph.data_man.cache_man.lock(),
-                &*self.get_transaction_pool().worker_pool.lock(),
-            )
-            .is_err()
-            {
+            if let Err(e) = self.graph.data_man.recover_block(&mut block) {
+                warn!("Recover block {:?} with error {:?}", hash, e);
                 continue;
             }
 
@@ -1851,12 +1825,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let new_block = rlp.as_val::<NewBlock>()?;
         let mut block = new_block.block;
-        Self::recover_public(
-            &mut block,
-            &mut *self.graph.data_man.transaction_pubkey_cache.write(),
-            &mut *self.graph.data_man.cache_man.lock(),
-            &*self.get_transaction_pool().worker_pool.lock(),
-        )?;
+        self.graph.data_man.recover_block(&mut block)?;
         debug!(
             "on_new_block, header={:?} tx_number={}",
             block.block_header,
@@ -2191,191 +2160,7 @@ impl SynchronizationProtocolHandler {
             .resend_waiting_requests(io, self.request_block_need_public());
     }
 
-    pub fn batch_recover_with_cache(
-        transactions: &Vec<TransactionWithSignature>,
-        tx_cache: &mut HashMap<H256, Arc<SignedTransaction>>,
-        cache_man: &mut CacheManager<CacheId>,
-    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError>
-    {
-        let _timer = MeterTimer::time_func(BLOCK_RECOVER_TIMER.as_ref());
-        let mut recovered_transactions = Vec::with_capacity(transactions.len());
-        for transaction in transactions {
-            let tx_hash = transaction.hash();
-            // Sample 1/128 transactions
-            if tx_hash[0] & 254 == 0 {
-                debug!("Sampled transaction {:?} in block", tx_hash);
-            }
-            match tx_cache.get(&tx_hash) {
-                Some(tx) => recovered_transactions.push(tx.clone()),
-                None => match transaction.recover_public() {
-                    Ok(public) => {
-                        let tx = Arc::new(SignedTransaction::new(
-                            public,
-                            transaction.clone(),
-                        ));
-                        recovered_transactions.push(tx.clone());
-                        cache_man
-                            .note_used(CacheId::TransactionPubkey(tx.hash()));
-                        tx_cache.insert(tx.hash(), tx);
-                    }
-                    Err(_) => {
-                        return Err(DecoderError::Custom(
-                            "Cannot recover public key",
-                        ));
-                    }
-                },
-            }
-        }
-        Ok(recovered_transactions)
-    }
-
-    pub fn recover_public(
-        block: &mut Block,
-        tx_cache: &mut HashMap<H256, Arc<SignedTransaction>>,
-        cache_man: &mut CacheManager<CacheId>, worker_pool: &ThreadPool,
-    ) -> Result<(), DecoderError>
-    {
-        let _timer = MeterTimer::time_func(BLOCK_RECOVER_TIMER.as_ref());
-        debug!("recover public for block started.");
-        let mut recovered_transactions =
-            Vec::with_capacity(block.transactions.len());
-        let mut uncached_trans = Vec::with_capacity(block.transactions.len());
-        for (idx, transaction) in block.transactions.iter().enumerate() {
-            let tx_hash = transaction.hash();
-            // Sample 1/128 transactions
-            if tx_hash[0] & 254 == 0 {
-                debug!("Sampled transaction {:?} in block", tx_hash);
-            }
-            match tx_cache.get(&tx_hash) {
-                Some(tx) => recovered_transactions.push(tx.clone()),
-                None => {
-                    uncached_trans.push((idx, transaction.clone()));
-                    recovered_transactions.push(transaction.clone());
-                }
-            }
-        }
-
-        if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
-            for (idx, tx) in uncached_trans {
-                if tx.public.is_none() {
-                    if let Ok(public) = tx.recover_public() {
-                        recovered_transactions[idx] =
-                            Arc::new(SignedTransaction::new(
-                                public,
-                                tx.transaction.clone(),
-                            ));
-                    } else {
-                        info!(
-                            "Unable to recover the public key of transaction {:?}",
-                            tx.hash()
-                        );
-                        return Err(DecoderError::Custom(
-                            "Cannot recover public key",
-                        ));
-                    }
-                } else {
-                    let res = tx.verify_public(true); // skip verification
-                    if res.is_ok() && res.unwrap() {
-                        recovered_transactions[idx] =
-                            Arc::new(SignedTransaction::new(
-                                tx.public.unwrap(),
-                                tx.transaction.clone(),
-                            ));
-                    } else {
-                        info!("Failed to verify the public key of transaction {:?}", tx.hash());
-                        return Err(DecoderError::Custom(
-                            "Cannot recover public key",
-                        ));
-                    }
-                }
-            }
-        } else {
-            let tx_num = uncached_trans.len();
-            let tx_num_per_worker = tx_num / WORKER_COMPUTATION_PARALLELISM;
-            let mut remainder =
-                tx_num - (tx_num_per_worker * WORKER_COMPUTATION_PARALLELISM);
-            let mut start_idx = 0;
-            let mut end_idx = 0;
-            let mut unsigned_trans = Vec::new();
-
-            for tx in uncached_trans {
-                if start_idx == end_idx {
-                    // a new segment of transactions
-                    end_idx = start_idx + tx_num_per_worker;
-                    if remainder > 0 {
-                        end_idx += 1;
-                        remainder -= 1;
-                    }
-                    let unsigned_txes = Vec::new();
-                    unsigned_trans.push(unsigned_txes);
-                }
-
-                unsigned_trans.last_mut().unwrap().push(tx);
-
-                start_idx += 1;
-            }
-
-            let (sender, receiver) = channel();
-            let n_thread = unsigned_trans.len();
-            for unsigned_txes in unsigned_trans {
-                let sender = sender.clone();
-                worker_pool.execute(move || {
-                    let mut signed_txes = Vec::new();
-                    for (idx, tx) in unsigned_txes {
-                        if tx.public.is_none() {
-                            if let Ok(public) = tx.recover_public() {
-                                signed_txes.push((idx, public));
-                            } else {
-                                info!(
-                                    "Unable to recover the public key of transaction {:?}",
-                                    tx.hash()
-                                );
-                                break;
-                            }
-                        } else {
-                            let res = tx.verify_public(true); // skip verification
-                            if res.is_ok() && res.unwrap() {
-                                signed_txes.push((idx, tx.public.clone().unwrap()));
-                            } else {
-                                info!("Failed to verify the public key of transaction {:?}", tx.hash());
-                                break;
-                            }
-                        }
-                    }
-                    sender.send(signed_txes).unwrap();
-                });
-            }
-            worker_pool.join();
-
-            let mut total_recovered_num = 0 as usize;
-            for tx_publics in receiver.iter().take(n_thread) {
-                total_recovered_num += tx_publics.len();
-                for (idx, public) in tx_publics {
-                    let tx = Arc::new(SignedTransaction::new(
-                        public,
-                        recovered_transactions[idx].transaction.clone(),
-                    ));
-                    cache_man.note_used(CacheId::TransactionPubkey(tx.hash()));
-                    tx_cache.insert(tx.hash(), tx.clone());
-                    recovered_transactions[idx] = tx;
-                }
-            }
-
-            if total_recovered_num != tx_num {
-                info!(
-                    "Failed to recover public for block {:?}",
-                    block.block_header.hash()
-                );
-                return Err(DecoderError::Custom("Cannot recover public key"));
-            }
-        }
-
-        block.transactions = recovered_transactions;
-        debug!("recover public for block finished.");
-        Ok(())
-    }
-
-    fn block_cache_gc(&self) { self.graph.data_man.block_cache_gc(); }
+    fn block_cache_gc(&self) { self.graph.data_man.gc_cache() }
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
