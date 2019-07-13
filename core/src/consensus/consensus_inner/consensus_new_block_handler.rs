@@ -1,5 +1,5 @@
 use crate::{
-    block_data_manager::{BlockDataManager, BlockStatus},
+    block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     consensus::{
         consensus_inner::{
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
@@ -1414,14 +1414,25 @@ impl ConsensusNewBlockHandler {
         };
         let (fully_valid, pending) = match self
             .data_man
-            .block_status_from_db(hash)
+            .local_block_info_from_db(hash)
         {
-            Some(BlockStatus::Valid) => (true, false),
-            Some(BlockStatus::Pending) => (true, true),
-            Some(BlockStatus::PartialInvalid) => (false, false),
+            Some(block_info) => {
+                match block_info.get_status() {
+                    BlockStatus::Valid => (true, false),
+                    BlockStatus::Pending => (true, true),
+                    BlockStatus::PartialInvalid => (false, false),
+                    BlockStatus::Invalid => {
+                        // Blocks marked invalid should not exist in database,
+                        // so should not be inserted
+                        // during construction.
+                        unreachable!()
+                    }
+                }
+            }
             None => {
                 // FIXME If the status of a block close to terminals is missing
-                // (likely to happen) and we try to check its validity with the
+                // (unlikely to happen if db cannot guarantee the write order)
+                // and we try to check its validity with the
                 // commented code, we will recompute the whole DAG from genesis
                 // because the pivot chain is empty now, which is not what we
                 // want for fast recovery. A better solution is
@@ -1442,11 +1453,6 @@ impl ConsensusNewBlockHandler {
                 // Now we optimistically hope that they are valid.
                 debug!("Assume block {} is valid/pending", hash);
                 (true, true)
-            }
-            Some(BlockStatus::Invalid) => {
-                // Blocks marked invalid should not exist in database, so should
-                // not be inserted during construction.
-                unreachable!()
             }
         };
 
@@ -1471,6 +1477,10 @@ impl ConsensusNewBlockHandler {
         let parent_hash = block.block_header.parent_hash();
         if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
             self.process_outside_block(inner, block);
+            let sn = inner.get_next_sequence_number();
+            let block_info = LocalBlockInfo::new(BlockStatus::Pending, sn);
+            self.data_man
+                .insert_local_block_info_to_db(hash, block_info);
             return;
         }
 
@@ -1533,16 +1543,21 @@ impl ConsensusNewBlockHandler {
                 inner.arena[me].adaptive = adaptive;
             }
         }
-        self.data_man.insert_block_status_to_db(
-            hash,
-            if pending {
-                BlockStatus::Pending
-            } else if fully_valid {
-                BlockStatus::Valid
-            } else {
-                BlockStatus::PartialInvalid
-            },
+
+        let block_status = if pending {
+            BlockStatus::Pending
+        } else if fully_valid {
+            BlockStatus::Valid
+        } else {
+            BlockStatus::PartialInvalid
+        };
+
+        let block_info = LocalBlockInfo::new(
+            block_status,
+            inner.arena[me].data.sequence_number,
         );
+        self.data_man
+            .insert_local_block_info_to_db(hash, block_info);
 
         if pending {
             inner.arena[me].data.pending = true;

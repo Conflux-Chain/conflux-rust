@@ -23,14 +23,16 @@ use primitives::{
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
-use rlp::{DecoderError, Rlp, RlpStream};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     collections::{HashMap, HashSet},
     sync::{mpsc::channel, Arc},
 };
 use threadpool::ThreadPool;
 
-const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
+const NULLU64: u64 = !0;
+
+const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
 
 pub struct BlockDataManager {
@@ -282,29 +284,29 @@ impl BlockDataManager {
         self.cache_man.lock().note_used(CacheId::Block(hash));
     }
 
-    fn block_status_key(block_hash: &H256) -> Vec<u8> {
+    fn local_block_info_key(block_hash: &H256) -> Vec<u8> {
         let mut key = Vec::with_capacity(block_hash.len() + 1);
         key.extend_from_slice(block_hash);
-        key.push(BLOCK_STATUS_SUFFIX_BYTE);
+        key.push(LOCAL_BLOCK_INFO_SUFFIX_BYTE);
         key
     }
 
-    /// Store block status to db. Now the status means if the block is partial
-    /// invalid.
+    /// Store block info to db. Block info includes block status and
+    /// the sequence number when the block enters consensus graph.
     /// The db key is the block hash plus one extra byte, so we can get better
-    /// data locality if we get both a block and its status from db.
-    /// The status is not a part of the block because the block is inserted
-    /// before we know its status, and we do not want to insert a large chunk
+    /// data locality if we get both a block and its info from db.
+    /// The info is not a part of the block because the block is inserted
+    /// before we know its info, and we do not want to insert a large chunk
     /// again. TODO Maybe we can use in-place modification (operator `merge`
-    /// in rocksdb) to keep the status together with the block.
-    pub fn insert_block_status_to_db(
-        &self, block_hash: &H256, status: BlockStatus,
+    /// in rocksdb) to keep the info together with the block.
+    pub fn insert_local_block_info_to_db(
+        &self, block_hash: &H256, block_info: LocalBlockInfo,
     ) {
         let mut dbops = self.db.key_value().transaction();
         dbops.put(
             COL_BLOCKS,
-            &Self::block_status_key(block_hash),
-            &[status.to_db_status()],
+            &Self::local_block_info_key(block_hash),
+            &rlp::encode(&block_info),
         );
         self.db
             .key_value()
@@ -312,16 +314,18 @@ impl BlockDataManager {
             .expect("crash for db failure");
     }
 
-    /// Get block status from db. Now the status means if the block is partial
-    /// invalid
-    pub fn block_status_from_db(
+    /// Get block info from db.
+    pub fn local_block_info_from_db(
         &self, block_hash: &H256,
-    ) -> Option<BlockStatus> {
+    ) -> Option<LocalBlockInfo> {
         self.db
             .key_value()
-            .get(COL_BLOCKS, &Self::block_status_key(block_hash))
+            .get(COL_BLOCKS, &Self::local_block_info_key(block_hash))
             .expect("crash for db failure")
-            .map(|encoded| BlockStatus::from_db_status(encoded[0]))
+            .map(|encoded| {
+                let rlp = Rlp::new(&encoded);
+                rlp.as_val().expect("Wrong block info rlp format!")
+            })
     }
 
     pub fn remove_block_from_kv(&self, hash: &H256) {
@@ -630,7 +634,10 @@ impl BlockDataManager {
     }
 
     pub fn invalidate_block(&self, block_hash: H256) {
-        self.insert_block_status_to_db(&block_hash, BlockStatus::Invalid);
+        // This block will never enter consensus graph, so
+        // assign it a NULL sequence number.
+        let block_info = LocalBlockInfo::new(BlockStatus::Invalid, NULLU64);
+        self.insert_local_block_info_to_db(&block_hash, block_info);
         self.invalid_block_set.write().insert(block_hash);
     }
 
@@ -640,8 +647,9 @@ impl BlockDataManager {
         if invalid_block_set.contains(block_hash) {
             return true;
         } else {
-            if let Some(status) = self.block_status_from_db(block_hash) {
-                match status {
+            if let Some(block_info) = self.local_block_info_from_db(block_hash)
+            {
+                match block_info.status {
                     BlockStatus::Invalid => {
                         RwLockUpgradableReadGuard::upgrade(invalid_block_set)
                             .insert(*block_hash);
@@ -1048,6 +1056,43 @@ impl BlockReceiptsInfo {
     /// Called after we process rewards, and other fees will not be used w.h.p.
     pub fn retain_epoch(&mut self, epoch: &EpochIndex) {
         self.info_with_epoch.retain(|(e_id, _)| *e_id == *epoch);
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct LocalBlockInfo {
+    status: BlockStatus,
+    enter_consensus_seq_num: u64,
+}
+
+impl LocalBlockInfo {
+    pub fn new(status: BlockStatus, seq_num: u64) -> Self {
+        LocalBlockInfo {
+            status,
+            enter_consensus_seq_num: seq_num,
+        }
+    }
+
+    pub fn get_status(&self) -> BlockStatus { self.status }
+}
+
+impl Encodable for LocalBlockInfo {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        let status = self.status.to_db_status();
+        stream
+            .begin_list(2)
+            .append(&status)
+            .append(&self.enter_consensus_seq_num);
+    }
+}
+
+impl Decodable for LocalBlockInfo {
+    fn decode(rlp: &Rlp) -> Result<LocalBlockInfo, DecoderError> {
+        let status: u8 = rlp.val_at(0)?;
+        Ok(LocalBlockInfo {
+            status: BlockStatus::from_db_status(status),
+            enter_consensus_seq_num: rlp.val_at(1)?,
+        })
     }
 }
 
