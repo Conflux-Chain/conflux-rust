@@ -366,20 +366,11 @@ impl ConsensusGraph {
             .and_then(|height| self.inner.read().get_balance(address, height))
     }
 
-    /// This is a very expensive call to force the engine to recompute the state
-    /// root of a given block
-    #[inline]
-    pub fn compute_state_for_block(
-        &self, block_hash: &H256, inner: &ConsensusGraphInner,
-    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
-        self.executor.compute_state_for_block(block_hash, inner)
-    }
-
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
-    pub fn compute_deferred_state_for_block(
+    pub fn force_compute_blame_and_state_for_block(
         &self, block_hash: &H256, delay: usize,
-    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
         let inner = &mut *self.inner.write();
 
         let idx_opt = inner.hash_to_arena_indices.get(block_hash);
@@ -404,7 +395,19 @@ impl ConsensusGraph {
             idx = inner.arena[idx].parent;
         }
         let hash = inner.arena[idx].hash;
-        self.executor.compute_state_for_block(&hash, inner)
+        self.executor.compute_state_for_block(&hash, inner);
+
+        self.compute_blame_and_state_for_block(block_hash)
+    }
+
+    /// Wait for a block's epoch is computed.
+    /// Return the state_root, receipts_root, and logs_bloom_hash
+    pub fn compute_blame_and_state_for_block(
+        &self, block_hash: &H256,
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+        let (state_root_with_aux, receipts_root, log_bloom) =
+            self.executor.wait_for_result(*block_hash);
+        Ok((0, state_root_with_aux, receipts_root, log_bloom))
     }
 
     /// construct_pivot() should be used after on_new_block_construction_only()
@@ -558,7 +561,8 @@ impl ConsensusGraph {
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
         let inner = self.inner.read();
-        self.wait_for_block_state(&inner.best_state_block_hash());
+        self.executor
+            .wait_for_result(&inner.best_state_block_hash());
         inner
             .try_get_best_state(&self.data_man)
             .expect("Best state has been executed")
@@ -722,14 +726,6 @@ impl ConsensusGraph {
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
         self.executor.call_virtual(tx, &epoch_id)
-    }
-
-    /// Wait for a block's epoch is computed.
-    /// Return the state_root, receipts_root, and logs_bloom_hash
-    pub fn wait_for_block_state(
-        &self, block_hash: &H256,
-    ) -> (StateRootWithAuxInfo, H256, H256) {
-        self.executor.wait_for_result(*block_hash)
     }
 
     /// Return the current era genesis block (checkpoint block) in the consesus
