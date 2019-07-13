@@ -35,6 +35,11 @@ pub struct BlockHeaderRlpPart {
     deferred_receipts_root: H256,
     /// Deferred block logs bloom hash.
     deferred_logs_bloom_hash: H256,
+    /// Blame indicates the number of ancestors whose
+    /// state_root/receipts_root/logs_bloom_hash/blame are not correct.
+    /// It acts as a vote to help light client determining the
+    /// state_root/receipts_root/logs_bloom_hash are correct or not.
+    blame: u32,
     /// Block difficulty.
     difficulty: U256,
     /// Whether it is an adaptive block (from GHAST algorithm)
@@ -57,6 +62,7 @@ impl PartialEq for BlockHeaderRlpPart {
             && self.deferred_state_root == o.deferred_state_root
             && self.deferred_receipts_root == o.deferred_receipts_root
             && self.deferred_logs_bloom_hash == o.deferred_logs_bloom_hash
+            && self.blame == o.blame
             && self.difficulty == o.difficulty
             && self.adaptive == o.adaptive
             && self.gas_limit == o.gas_limit
@@ -141,6 +147,9 @@ impl BlockHeader {
         &self.deferred_logs_bloom_hash
     }
 
+    /// Get the blame field of the header
+    pub fn blame(&self) -> u32 { self.blame }
+
     /// Get the difficulty field of the header.
     pub fn difficulty(&self) -> &U256 { &self.difficulty }
 
@@ -192,7 +201,7 @@ impl BlockHeader {
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
-            .begin_list(12)
+            .begin_list(13)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -201,6 +210,7 @@ impl BlockHeader {
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
             .append(&self.deferred_logs_bloom_hash)
+            .append(&self.blame)
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
@@ -211,7 +221,7 @@ impl BlockHeader {
     fn stream_rlp(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
-            .begin_list(13)
+            .begin_list(14)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -220,6 +230,7 @@ impl BlockHeader {
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
             .append(&self.deferred_logs_bloom_hash)
+            .append(&self.blame)
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
@@ -233,7 +244,7 @@ impl BlockHeader {
     fn stream_wire_rlp(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         stream
-            .begin_list(14)
+            .begin_list(15)
             .append(&self.parent_hash)
             .append(&self.height)
             .append(&self.timestamp)
@@ -242,6 +253,7 @@ impl BlockHeader {
             .append(&self.deferred_state_root)
             .append(&self.deferred_receipts_root)
             .append(&self.deferred_logs_bloom_hash)
+            .append(&self.blame)
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
@@ -267,6 +279,7 @@ pub struct BlockHeaderBuilder {
     deferred_state_root_aux_info: StateRootAuxInfo,
     deferred_receipts_root: H256,
     deferred_logs_bloom_hash: H256,
+    blame: u32,
     difficulty: U256,
     adaptive: bool,
     gas_limit: U256,
@@ -286,6 +299,7 @@ impl BlockHeaderBuilder {
             deferred_state_root_aux_info: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
             deferred_logs_bloom_hash: KECCAK_EMPTY_BLOOM,
+            blame: 0,
             difficulty: U256::default(),
             adaptive: false,
             gas_limit: U256::zero(),
@@ -345,6 +359,11 @@ impl BlockHeaderBuilder {
         self
     }
 
+    pub fn with_blame(&mut self, blame: u32) -> &mut Self {
+        self.blame = blame;
+        self
+    }
+
     pub fn with_difficulty(&mut self, difficulty: U256) -> &mut Self {
         self.difficulty = difficulty;
         self
@@ -383,6 +402,7 @@ impl BlockHeaderBuilder {
                 deferred_state_root: self.deferred_state_root.clone(),
                 deferred_receipts_root: self.deferred_receipts_root,
                 deferred_logs_bloom_hash: self.deferred_logs_bloom_hash,
+                blame: self.blame,
                 difficulty: self.difficulty,
                 adaptive: self.adaptive,
                 gas_limit: self.gas_limit,
@@ -447,16 +467,17 @@ impl Decodable for BlockHeader {
                 deferred_state_root: r.val_at(5)?,
                 deferred_receipts_root: r.val_at(6)?,
                 deferred_logs_bloom_hash: r.val_at(7)?,
-                difficulty: r.val_at(8)?,
-                adaptive: r.val_at::<u8>(9)? == 1,
-                gas_limit: r.val_at(10)?,
-                referee_hashes: r.list_at(11)?,
-                nonce: r.val_at(12)?,
+                blame: r.val_at(8)?,
+                difficulty: r.val_at(9)?,
+                adaptive: r.val_at::<u8>(10)? == 1,
+                gas_limit: r.val_at(11)?,
+                referee_hashes: r.list_at(12)?,
+                nonce: r.val_at(13)?,
             },
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: rlp_size,
-            state_root_aux_info: r.val_at(13)?,
+            state_root_aux_info: r.val_at(14)?,
         };
         header.compute_hash();
 
