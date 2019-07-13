@@ -299,22 +299,29 @@ impl TransactionGenerator {
             tx_to_insert.push(signed_tx.transaction);
             let (_, fail) = txgen.txpool.insert_new_transactions(&tx_to_insert);
             if fail.len() == 0 {
+                // tx successfully inserted into tx pool, so we can update our
+                // state about nonce and balance
                 {
                     let sender_balance =
                         balance_map.get_mut(&sender_address).unwrap();
+                    *sender_balance -= balance_to_transfer + 21000;
                     if *sender_balance < 42000.into() {
                         secret_store.remove_keypair(sender_index);
                         if secret_store.count() == 0 {
                             break;
                         }
-                        continue;
                     }
-                    *sender_balance -= balance_to_transfer + 21000;
                 }
                 *sender_nonce += U256::one();
                 *balance_map.entry(receiver_address).or_insert(0.into()) +=
                     balance_to_transfer;
                 tx_n += 1;
+            } else {
+                // The transaction pool is full and the tx is discarded, so the
+                // state should not updated. We add unconditional
+                // sleep to avoid busy spin if the tx pool cannot support the
+                // expected throughput.
+                thread::sleep(tx_config.period);
             }
             if tx_n % 100 == 0 {
                 TX_GEN_METER.mark(100);
