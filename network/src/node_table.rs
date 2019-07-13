@@ -89,9 +89,12 @@ impl NodeEndpoint {
                 ),
                 tcp_port,
             ))),
-            16 => unsafe {
-                let o: *const u16 = addr_bytes.as_ptr() as *const u16;
-                let o = slice::from_raw_parts(o, 8);
+            16 => {
+                let mut o: [u16; 8] = [0; 8];
+                for i in 0..8 {
+                    o[i] = ((addr_bytes[2 * i + 1] as u16) << 8)
+                        | (addr_bytes[2 * i] as u16);
+                }
                 Ok(SocketAddr::V6(SocketAddrV6::new(
                     Ipv6Addr::new(
                         o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7],
@@ -100,7 +103,7 @@ impl NodeEndpoint {
                     0,
                     0,
                 )))
-            },
+            }
             _ => Err(DecoderError::RlpInconsistentLengthAndData),
         }?;
         Ok(NodeEndpoint { address, udp_port })
