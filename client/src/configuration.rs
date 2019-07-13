@@ -113,6 +113,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (txgen_account_count, (usize), 10)
         (persist_header, (bool), true)
+        (tx_cache_count, (usize), 250000)
     }
     {
         (
@@ -349,6 +350,7 @@ impl Configuration {
         DataManagerConfiguration::new(
             self.raw_conf.record_tx_address,
             self.raw_conf.persist_header,
+            self.raw_conf.tx_cache_count,
         )
     }
 }

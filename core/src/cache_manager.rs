@@ -32,7 +32,6 @@ pub enum CacheId {
     BlockHeader(H256),
     BlockReceipts(H256),
     TransactionAddress(H256),
-    TransactionPubkey(H256),
     CompactBlock(H256),
 }
 
@@ -127,8 +126,6 @@ pub struct CacheSize {
     pub transaction_addresses: usize,
     /// Compact blocks cache size.
     pub compact_blocks: usize,
-    /// SignedTransaction cache size in tx pubkey cache
-    pub transaction_pubkey: usize,
 }
 
 impl CacheSize {
