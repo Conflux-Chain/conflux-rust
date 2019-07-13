@@ -48,6 +48,8 @@ lazy_static! {
             "timer",
             "consensus::compute_state_for_block"
         );
+    static ref GOOD_TPS_METER: Arc<Meter> =
+        register_meter_with_group("tx_pool", "good_tps");
 }
 
 /// The RewardExecutionInfo struct includes most information to compute rewards
@@ -688,6 +690,7 @@ impl ConsensusExecutionHandler {
                         env.gas_used = executed.cumulative_gas_used;
                         cumulative_gas_used = executed.cumulative_gas_used;
                         n_ok += 1;
+                        GOOD_TPS_METER.mark(1);
                         trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                         accumulated_fee += executed.fee;
                         transaction_logs = executed.logs;
