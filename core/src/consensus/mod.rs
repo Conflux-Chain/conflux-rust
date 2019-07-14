@@ -370,26 +370,26 @@ impl ConsensusGraph {
     pub fn force_compute_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
     ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
-        let inner = &mut *self.inner.write();
-        let hash = inner.get_state_block_with_delay(
-            parent_block_hash,
-            DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-        )?;
-        self.executor.compute_state_for_block(&hash, inner)?;
-
+        {
+            let inner = &*self.inner.read();
+            let hash = inner.get_state_block_with_delay(
+                parent_block_hash,
+                DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+            )?;
+            self.executor.compute_state_for_block(&hash, inner)?;
+        }
         self.executor.get_blame_and_deferred_state_for_generation(
             parent_block_hash,
-            inner,
+            &self.inner,
         )
     }
 
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
     ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
-        let inner = &mut *self.inner.write();
         self.executor.get_blame_and_deferred_state_for_generation(
             parent_block_hash,
-            inner,
+            &self.inner,
         )
     }
 
