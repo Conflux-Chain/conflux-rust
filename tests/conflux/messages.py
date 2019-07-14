@@ -267,14 +267,14 @@ class BlockHeader(rlp.Serializable):
 class BlockHeaderRlpPart(rlp.Serializable):
     fields = [
         (field, sedes) for field, sedes in BlockHeader._meta.fields if
-        field not in ["state_root_aux_info"]
+        field not in ["state_root_with_aux_info"]
     ]
 
 
 class BlockHeaderWithoutNonce(rlp.Serializable):
     fields = [
         (field, sedes) for field, sedes in BlockHeader._meta.fields if
-        field not in ["state_root_aux_info", "nonce"]
+        field not in ["state_root_with_aux_info", "nonce"]
     ]
 
 
