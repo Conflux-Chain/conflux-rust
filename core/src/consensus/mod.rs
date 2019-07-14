@@ -79,6 +79,10 @@ const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
 // FIXME: We should use finality to determine the checkpoint moment instead.
 const ERA_CHECKPOINT_GAP: u64 = 50000;
 
+// A block can blame up to BLAME_BOUND ancestors that their states are
+// incorrect.
+const BLAME_BOUND: u32 = 1000;
+
 #[derive(Clone)]
 pub struct ConsensusConfig {
     // If we hit invalid state root, we will dump the information into a
@@ -370,7 +374,7 @@ impl ConsensusGraph {
     /// block given a delay.
     pub fn force_compute_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
         {
             let inner = &*self.inner.read();
             let hash = inner.get_state_block_with_delay(
@@ -387,7 +391,7 @@ impl ConsensusGraph {
 
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
         self.executor.get_blame_and_deferred_state_for_generation(
             parent_block_hash,
             &self.inner,
