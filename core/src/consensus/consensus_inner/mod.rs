@@ -22,7 +22,7 @@ use cfx_types::{
 };
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::MinLinkCutTree;
-use primitives::{receipt::Receipt, Block, StateRoot, TransactionAddress};
+use primitives::{receipt::Receipt, Block, TransactionAddress};
 use slab::Slab;
 use std::{
     cmp::{max, min},
@@ -190,7 +190,7 @@ pub struct ConsensusGraphInner {
     // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
     // The ``original'' genesis state root, receipts root, and logs bloom hash.
-    genesis_block_state_root: StateRoot,
+    genesis_block_state_root: H256,
     genesis_block_receipts_root: H256,
     genesis_block_logs_bloom_hash: H256,
     // weight_tree maintains the subtree weight of each node in the TreeGraph

@@ -202,7 +202,7 @@ impl Block {
             deferred_state_root: b
                 .block_header
                 .deferred_state_root_with_aux_info()
-                .into(),
+                .clone(),
             deferred_receipts_root: H256::from(
                 b.block_header.deferred_receipts_root().clone(),
             ),

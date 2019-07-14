@@ -30,7 +30,7 @@ pub struct BlockHeaderRlpPart {
     /// Transactions root.
     transactions_root: H256,
     /// Deferred state root.
-    deferred_state_root: StateRoot,
+    deferred_state_root: H256,
     /// Deferred block receipts root.
     deferred_receipts_root: H256,
     /// Deferred block logs bloom hash.
@@ -84,7 +84,7 @@ pub struct BlockHeader {
     // TODO: consensus graph and should be moved out from p2p messages,
     // TODO: however to reduce complexity of the code we keep it
     // TODO: temporarily.
-    pub state_root_aux_info: StateRootAuxInfo,
+    pub state_root_with_aux_info: StateRootWithAuxInfo,
 }
 
 impl Deref for BlockHeader {
@@ -127,14 +127,10 @@ impl BlockHeader {
     pub fn transactions_root(&self) -> &H256 { &self.transactions_root }
 
     /// Get the deferred state root field of the header.
-    pub fn deferred_state_root(&self) -> &StateRoot {
-        &self.deferred_state_root
-    }
+    pub fn deferred_state_root(&self) -> &H256 { &self.deferred_state_root }
 
-    pub fn deferred_state_root_with_aux_info(
-        &self,
-    ) -> (&StateRoot, &StateRootAuxInfo) {
-        (&self.deferred_state_root, &self.state_root_aux_info)
+    pub fn deferred_state_root_with_aux_info(&self) -> &StateRootWithAuxInfo {
+        &self.state_root_with_aux_info
     }
 
     /// Get the deferred block receipts root field of the header.
@@ -259,7 +255,7 @@ impl BlockHeader {
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
             .append(&self.nonce)
-            .append(&self.state_root_aux_info);
+            .append(&self.state_root_with_aux_info);
     }
 
     pub fn size(&self) -> usize {
@@ -275,8 +271,8 @@ pub struct BlockHeaderBuilder {
     timestamp: u64,
     author: Address,
     transactions_root: H256,
-    deferred_state_root: StateRoot,
-    deferred_state_root_aux_info: StateRootAuxInfo,
+    deferred_state_root: H256,
+    deferred_state_root_with_aux_info: StateRootWithAuxInfo,
     deferred_receipts_root: H256,
     deferred_logs_bloom_hash: H256,
     blame: u32,
@@ -296,7 +292,7 @@ impl BlockHeaderBuilder {
             author: Address::default(),
             transactions_root: KECCAK_EMPTY_LIST_RLP,
             deferred_state_root: Default::default(),
-            deferred_state_root_aux_info: Default::default(),
+            deferred_state_root_with_aux_info: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
             deferred_logs_bloom_hash: KECCAK_EMPTY_BLOOM,
             blame: 0,
@@ -338,9 +334,11 @@ impl BlockHeaderBuilder {
     pub fn with_deferred_state_root(
         &mut self, deferred_state_root_with_aux_info: StateRootWithAuxInfo,
     ) -> &mut Self {
-        self.deferred_state_root = deferred_state_root_with_aux_info.state_root;
-        self.deferred_state_root_aux_info =
-            deferred_state_root_with_aux_info.aux_info;
+        self.deferred_state_root = deferred_state_root_with_aux_info
+            .state_root
+            .compute_state_root_hash();
+        self.deferred_state_root_with_aux_info =
+            deferred_state_root_with_aux_info;
 
         self
     }
@@ -399,7 +397,7 @@ impl BlockHeaderBuilder {
                 timestamp: self.timestamp,
                 author: self.author,
                 transactions_root: self.transactions_root,
-                deferred_state_root: self.deferred_state_root.clone(),
+                deferred_state_root: self.deferred_state_root,
                 deferred_receipts_root: self.deferred_receipts_root,
                 deferred_logs_bloom_hash: self.deferred_logs_bloom_hash,
                 blame: self.blame,
@@ -412,7 +410,9 @@ impl BlockHeaderBuilder {
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: 0,
-            state_root_aux_info: self.deferred_state_root_aux_info.clone(),
+            state_root_with_aux_info: self
+                .deferred_state_root_with_aux_info
+                .clone(),
         };
 
         block_header.approximated_rlp_size =
@@ -477,7 +477,7 @@ impl Decodable for BlockHeader {
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: rlp_size,
-            state_root_aux_info: r.val_at(14)?,
+            state_root_with_aux_info: r.val_at(14)?,
         };
         header.compute_hash();
 
