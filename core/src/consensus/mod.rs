@@ -116,7 +116,6 @@ pub struct BestInformation {
     // bounded_terminal_block_hashes. This is just to save some space.
     pub terminal_block_hashes: Option<Vec<H256>>,
     pub bounded_terminal_block_hashes: Vec<H256>,
-    pub best_state_block_hash: H256,
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -366,45 +365,32 @@ impl ConsensusGraph {
             .and_then(|height| self.inner.read().get_balance(address, height))
     }
 
-    /// This is a very expensive call to force the engine to recompute the state
-    /// root of a given block
-    #[inline]
-    pub fn compute_state_for_block(
-        &self, block_hash: &H256, inner: &ConsensusGraphInner,
-    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
-        self.executor.compute_state_for_block(block_hash, inner)
-    }
-
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
-    pub fn compute_deferred_state_for_block(
-        &self, block_hash: &H256, delay: usize,
-    ) -> Result<(StateRootWithAuxInfo, H256, H256), String> {
-        let inner = &mut *self.inner.write();
+    pub fn force_compute_blame_and_deferred_state_for_generation(
+        &self, parent_block_hash: &H256,
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+        {
+            let inner = &*self.inner.read();
+            let hash = inner.get_state_block_with_delay(
+                parent_block_hash,
+                DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+            )?;
+            self.executor.compute_state_for_block(&hash, inner)?;
+        }
+        self.executor.get_blame_and_deferred_state_for_generation(
+            parent_block_hash,
+            &self.inner,
+        )
+    }
 
-        let idx_opt = inner.hash_to_arena_indices.get(block_hash);
-        if idx_opt == None {
-            return Err(
-                "Parent hash is too old for computing the deferred state"
-                    .to_owned(),
-            );
-        }
-        let mut idx = *idx_opt.unwrap();
-        for _i in 0..delay {
-            if idx == inner.cur_era_genesis_block_arena_index {
-                // If it is the original genesis, we just break
-                if inner.arena[inner.cur_era_genesis_block_arena_index].height
-                    == 0
-                {
-                    break;
-                } else {
-                    return Err("Parent hash is too old for computing the deferred state".to_owned());
-                }
-            }
-            idx = inner.arena[idx].parent;
-        }
-        let hash = inner.arena[idx].hash;
-        self.executor.compute_state_for_block(&hash, inner)
+    pub fn get_blame_and_deferred_state_for_generation(
+        &self, parent_block_hash: &H256,
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+        self.executor.get_blame_and_deferred_state_for_generation(
+            parent_block_hash,
+            &self.inner,
+        )
     }
 
     /// construct_pivot() should be used after on_new_block_construction_only()
@@ -455,7 +441,6 @@ impl ConsensusGraph {
             current_difficulty: inner.current_difficulty,
             terminal_block_hashes,
             bounded_terminal_block_hashes,
-            best_state_block_hash: inner.best_state_block_hash(),
         });
     }
 
@@ -558,7 +543,7 @@ impl ConsensusGraph {
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
         let inner = self.inner.read();
-        self.wait_for_block_state(&inner.best_state_block_hash());
+        self.executor.wait_for_result(inner.best_state_block_hash());
         inner
             .try_get_best_state(&self.data_man)
             .expect("Best state has been executed")
@@ -722,14 +707,6 @@ impl ConsensusGraph {
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
         self.executor.call_virtual(tx, &epoch_id)
-    }
-
-    /// Wait for a block's epoch is computed.
-    /// Return the state_root, receipts_root, and logs_bloom_hash
-    pub fn wait_for_block_state(
-        &self, block_hash: &H256,
-    ) -> (StateRootWithAuxInfo, H256, H256) {
-        self.executor.wait_for_result(*block_hash)
     }
 
     /// Return the current era genesis block (checkpoint block) in the consesus
