@@ -1509,6 +1509,33 @@ impl ConsensusGraphInner {
         self.arena[self.best_state_arena_index()].hash
     }
 
+    pub fn get_state_block_with_delay(
+        &self, block_hash: &H256, delay: usize,
+    ) -> Result<&H256, String> {
+        let idx_opt = self.hash_to_arena_indices.get(block_hash);
+        if idx_opt == None {
+            return Err(
+                "Parent hash is too old for computing the deferred state"
+                    .to_owned(),
+            );
+        }
+        let mut idx = *idx_opt.unwrap();
+        for _i in 0..delay {
+            if idx == self.cur_era_genesis_block_arena_index {
+                // If it is the original genesis, we just break
+                if self.arena[self.cur_era_genesis_block_arena_index].height
+                    == 0
+                {
+                    break;
+                } else {
+                    return Err("Parent hash is too old for computing the deferred state".to_owned());
+                }
+            }
+            idx = self.arena[idx].parent;
+        }
+        Ok(&self.arena[idx].hash)
+    }
+
     /// Return None if the best state is not executed or the db returned error
     // TODO check if we can ignore the db error
     pub fn try_get_best_state<'a>(

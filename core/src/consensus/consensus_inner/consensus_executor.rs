@@ -240,6 +240,14 @@ impl ConsensusExecutor {
         }
     }
 
+    pub fn get_blame_and_deferred_state_for_generation(
+        &self, parent_block_hash: &H256, _inner: &mut ConsensusGraphInner,
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+        let (state_root_with_aux, receipts_root, log_bloom) =
+            self.wait_for_result(parent_block_hash.clone());
+        Ok((0, state_root_with_aux, receipts_root, log_bloom))
+    }
+
     /// Enqueue the epoch to be executed by the background execution thread
     /// The parameters are needed for the thread to execute this epoch without
     /// holding inner lock.

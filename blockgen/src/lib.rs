@@ -4,9 +4,9 @@
 
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    consensus::DEFERRED_STATE_EPOCH_COUNT, pow::*,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, SharedSynchronizationGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    SharedSynchronizationGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -228,9 +228,8 @@ impl BlockGenerator {
         let (blame, state_root, receipts_root, logs_bloom_hash) = self
             .graph
             .consensus
-            .force_compute_blame_and_state_for_block(
+            .force_compute_blame_and_deferred_state_for_generation(
                 &parent_hash,
-                DEFERRED_STATE_EPOCH_COUNT as usize - 1,
             )?;
 
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
@@ -280,7 +279,9 @@ impl BlockGenerator {
         ) = self
             .graph
             .consensus
-            .compute_blame_and_state_for_block(&best_info.best_state_block_hash)
+            .get_blame_and_deferred_state_for_generation(
+                &best_info.best_block_hash,
+            )
             .unwrap();
 
         let best_block_hash = best_info.best_block_hash.clone();
@@ -399,7 +400,9 @@ impl BlockGenerator {
         ) = self
             .graph
             .consensus
-            .compute_blame_and_state_for_block(&best_info.best_state_block_hash)
+            .get_blame_and_deferred_state_for_generation(
+                &best_info.best_block_hash,
+            )
             .unwrap();
 
         let best_block_hash = best_info.best_block_hash.clone();
@@ -430,9 +433,8 @@ impl BlockGenerator {
         let (blame, state_root, receipts_root, logs_bloom_hash) = self
             .graph
             .consensus
-            .force_compute_blame_and_state_for_block(
+            .force_compute_blame_and_deferred_state_for_generation(
                 &parent_hash,
-                DEFERRED_STATE_EPOCH_COUNT as usize - 1,
             )?;
 
         let block = self.assemble_new_block_impl(

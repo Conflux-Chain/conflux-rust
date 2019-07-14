@@ -116,7 +116,6 @@ pub struct BestInformation {
     // bounded_terminal_block_hashes. This is just to save some space.
     pub terminal_block_hashes: Option<Vec<H256>>,
     pub bounded_terminal_block_hashes: Vec<H256>,
-    pub best_state_block_hash: H256,
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -368,46 +367,30 @@ impl ConsensusGraph {
 
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
-    pub fn force_compute_blame_and_state_for_block(
-        &self, block_hash: &H256, delay: usize,
+    pub fn force_compute_blame_and_deferred_state_for_generation(
+        &self, parent_block_hash: &H256,
     ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
         let inner = &mut *self.inner.write();
+        let hash = inner.get_state_block_with_delay(
+            parent_block_hash,
+            DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+        )?;
+        self.executor.compute_state_for_block(&hash, inner)?;
 
-        let idx_opt = inner.hash_to_arena_indices.get(block_hash);
-        if idx_opt == None {
-            return Err(
-                "Parent hash is too old for computing the deferred state"
-                    .to_owned(),
-            );
-        }
-        let mut idx = *idx_opt.unwrap();
-        for _i in 0..delay {
-            if idx == inner.cur_era_genesis_block_arena_index {
-                // If it is the original genesis, we just break
-                if inner.arena[inner.cur_era_genesis_block_arena_index].height
-                    == 0
-                {
-                    break;
-                } else {
-                    return Err("Parent hash is too old for computing the deferred state".to_owned());
-                }
-            }
-            idx = inner.arena[idx].parent;
-        }
-        let hash = inner.arena[idx].hash;
-        self.executor.compute_state_for_block(&hash, inner);
-
-        self.compute_blame_and_state_for_block(block_hash)
+        self.executor.get_blame_and_deferred_state_for_generation(
+            parent_block_hash,
+            inner,
+        )
     }
 
-    /// Wait for a block's epoch is computed.
-    /// Return the state_root, receipts_root, and logs_bloom_hash
-    pub fn compute_blame_and_state_for_block(
-        &self, block_hash: &H256,
+    pub fn get_blame_and_deferred_state_for_generation(
+        &self, parent_block_hash: &H256,
     ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
-        let (state_root_with_aux, receipts_root, log_bloom) =
-            self.executor.wait_for_result(*block_hash);
-        Ok((0, state_root_with_aux, receipts_root, log_bloom))
+        let inner = &mut *self.inner.write();
+        self.executor.get_blame_and_deferred_state_for_generation(
+            parent_block_hash,
+            inner,
+        )
     }
 
     /// construct_pivot() should be used after on_new_block_construction_only()
@@ -458,7 +441,6 @@ impl ConsensusGraph {
             current_difficulty: inner.current_difficulty,
             terminal_block_hashes,
             bounded_terminal_block_hashes,
-            best_state_block_hash: inner.best_state_block_hash(),
         });
     }
 
@@ -561,8 +543,7 @@ impl ConsensusGraph {
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
         let inner = self.inner.read();
-        self.executor
-            .wait_for_result(&inner.best_state_block_hash());
+        self.executor.wait_for_result(inner.best_state_block_hash());
         inner
             .try_get_best_state(&self.data_man)
             .expect("Best state has been executed")
