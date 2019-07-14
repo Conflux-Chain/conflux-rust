@@ -5,7 +5,10 @@
 use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
-    db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_MISC, COL_TX_ADDRESS},
+    db::{
+        COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_EPOCH_SET_HASHES, COL_MISC,
+        COL_TX_ADDRESS,
+    },
     ext_db::SystemDB,
     pow::{TargetDifficultyManager, WORKER_COMPUTATION_PARALLELISM},
     storage::{
@@ -14,6 +17,7 @@ use crate::{
     },
     verification::VerificationConfig,
 };
+use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
@@ -186,6 +190,38 @@ impl BlockDataManager {
                 }
                 None => {
                     info!("No checkpoint got from db");
+                    None
+                }
+            }
+    }
+
+    pub fn insert_epoch_set_hashes_to_db(
+        &self, epoch: u64, hashes: &Vec<H256>,
+    ) {
+        let mut rlp_stream = RlpStream::new();
+        rlp_stream.begin_list(hashes.len());
+        for hash in hashes {
+            rlp_stream.append(hash);
+        }
+        let mut epoch_key = [0; 8];
+        LittleEndian::write_u64(&mut epoch_key[0..8], epoch);
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_EPOCH_SET_HASHES, &epoch_key[0..8], &rlp_stream.drain());
+        self.db.key_value().write(dbops).expect("db error");
+    }
+
+    pub fn epoch_set_hashes_from_db(&self, epoch: u64) -> Option<Vec<H256>> {
+        let mut epoch_key = [0; 8];
+        LittleEndian::write_u64(&mut epoch_key[0..8], epoch);
+        match self.db.key_value().get(COL_EPOCH_SET_HASHES, &epoch_key[0..8])
+            .expect("Low-level database error when fetching 'epoch set hashes'. Some issue with disk?")
+            {
+                Some(hashes) => {
+                    let rlp = Rlp::new(&hashes);
+                    Some(rlp.as_list::<H256>().expect("Failed to decode epoch set hashes!"))
+                }
+                None => {
+                    info!("No epoch set hashes got from db");
                     None
                 }
             }

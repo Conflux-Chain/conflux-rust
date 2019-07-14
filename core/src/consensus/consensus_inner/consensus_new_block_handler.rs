@@ -7,8 +7,9 @@ use crate::{
         },
         debug::ComputeEpochDebugRecord,
         ConsensusConfig, ANTICONE_BARRIER_CAP, DEFERRED_STATE_EPOCH_COUNT,
-        ERA_CHECKPOINT_GAP, ERA_RECYCLE_TRANSACTION_DELAY,
-        MAX_NUM_MAINTAINED_RISK, MIN_MAINTAINED_RISK,
+        EPOCH_SET_PERSISTENCE_DELAY, ERA_CHECKPOINT_GAP,
+        ERA_RECYCLE_TRANSACTION_DELAY, MAX_NUM_MAINTAINED_RISK,
+        MIN_MAINTAINED_RISK,
     },
     rlp::Encodable,
     statistics::SharedStatistics,
@@ -1700,6 +1701,18 @@ impl ConsensusNewBlockHandler {
         // Now we can safely return
         if !fully_valid || pending {
             return;
+        }
+
+        if pivot_changed {
+            if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
+                let fork_at_pivot_index = inner.height_to_pivot_index(fork_at);
+                let to_persist_pivot_index = inner.pivot_chain.len()
+                    - EPOCH_SET_PERSISTENCE_DELAY as usize;
+                inner.persist_epoch_set_hashes(to_persist_pivot_index);
+                for pivot_index in fork_at_pivot_index..to_persist_pivot_index {
+                    inner.persist_epoch_set_hashes(pivot_index);
+                }
+            }
         }
 
         let new_pivot_era_block = inner

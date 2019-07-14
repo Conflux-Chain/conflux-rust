@@ -45,6 +45,7 @@ const MIN_MAINTAINED_RISK: f64 = 0.000001;
 const MAX_NUM_MAINTAINED_RISK: usize = 10;
 
 pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
+pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
 
 /// `REWARD_EPOCH_COUNT` needs to be larger than
 /// `ANTICONE_PENALTY_UPPER_EPOCH_COUNT`. If we cannot cache receipts of recent
@@ -472,7 +473,7 @@ impl ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    pub fn on_new_block(&self, hash: &H256) {
+    pub fn on_new_block(&self, hash: &H256, _ignore_body: bool) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         let block = self.data_man.block_by_hash(hash, true).unwrap();

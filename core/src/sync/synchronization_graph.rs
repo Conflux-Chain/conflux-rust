@@ -799,7 +799,7 @@ impl SynchronizationGraph {
             .name("Consensus Worker".into())
             .spawn(move || loop {
                 match consensus_receiver.recv() {
-                    Ok(hash) => consensus.on_new_block(&hash),
+                    Ok(hash) => consensus.on_new_block(&hash, false),
                     Err(_) => break,
                 }
             })
