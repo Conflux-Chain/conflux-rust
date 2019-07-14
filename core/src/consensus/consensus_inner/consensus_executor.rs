@@ -241,10 +241,14 @@ impl ConsensusExecutor {
     }
 
     pub fn get_blame_and_deferred_state_for_generation(
-        &self, parent_block_hash: &H256, _inner: &mut ConsensusGraphInner,
+        &self, parent_block_hash: &H256, inner: &mut ConsensusGraphInner,
     ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+        let hash = inner.get_state_block_with_delay(
+            parent_block_hash,
+            DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+        )?;
         let (state_root_with_aux, receipts_root, log_bloom) =
-            self.wait_for_result(parent_block_hash.clone());
+            self.wait_for_result(hash.clone());
         Ok((0, state_root_with_aux, receipts_root, log_bloom))
     }
 
