@@ -382,6 +382,19 @@ impl ConsensusGraphInner {
         inner
     }
 
+    pub fn persist_epoch_set_hashes(&self, pivot_index: usize) {
+        let height = self.pivot_index_to_height(pivot_index);
+        let arena_index = self.pivot_chain[pivot_index];
+        let epoch_set_hashes = self.arena[arena_index]
+            .data
+            .ordered_executable_epoch_blocks
+            .iter()
+            .map(|arena_index| self.arena[*arena_index].hash)
+            .collect();
+        self.data_man
+            .insert_epoch_set_hashes_to_db(height, &epoch_set_hashes);
+    }
+
     #[inline]
     pub fn get_pivot_block_arena_index(&self, height: u64) -> usize {
         let pivot_index = (height - self.cur_era_genesis_height) as usize;
