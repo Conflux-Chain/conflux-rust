@@ -681,7 +681,7 @@ impl SynchronizationProtocolHandler {
                 && (peer_info.notified_mode.unwrap() == true)
             {
                 peer_info.received_transaction_count +=
-                    transaction_digests.trans_short_ids.len();
+                    transaction_digests.get_len();
                 if peer_info.received_transaction_count
                     > self.protocol_config.max_trans_count_received_in_catch_up
                         as usize
@@ -700,8 +700,7 @@ impl SynchronizationProtocolHandler {
         self.request_manager.request_transactions(
             io,
             peer,
-            transaction_digests.window_index,
-            &transaction_digests.trans_short_ids,
+            transaction_digests,
         );
         Ok(())
     }
@@ -2032,11 +2031,17 @@ impl SynchronizationProtocolHandler {
         if lucky_peers.is_empty() {
             return;
         }
-        let mut tx_msg = Box::new(TransactionDigests {
-            window_index: 0,
-            trans_short_ids: Vec::new(),
-        });
 
+        let mut ordered_positions: Vec<u8> =
+            (0..(lucky_peers.len() as u8)).collect();
+        for element in ordered_positions.iter_mut() {
+            *element = *element % 29;
+        }
+
+        let mut messages: Vec<Vec<u8>> = Vec::new();
+        for _i in 0..lucky_peers.len() {
+            messages.push(Vec::new());
+        }
         let sent_transactions = {
             let mut transactions = self.get_to_propagate_trans();
             if transactions.is_empty() {
@@ -2052,7 +2057,15 @@ impl SynchronizationProtocolHandler {
                     break;
                 }
                 sent_transactions.push(tx.clone());
-                tx_msg.trans_short_ids.push(TxPropagateId::from(*h));
+
+                for i in 0..lucky_peers.len() {
+                    //consist of [one random position byte, and last three
+                    // bytes]
+                    messages[i].push(h[ordered_positions[i] as usize]);
+                    messages[i].push(h[29]);
+                    messages[i].push(h[30]);
+                    messages[i].push(h[31]);
+                }
             }
 
             if sent_transactions.len() != transactions.len() {
@@ -2065,21 +2078,29 @@ impl SynchronizationProtocolHandler {
             sent_transactions
         };
 
-        tx_msg.window_index = self
-            .request_manager
-            .append_sent_transactions(sent_transactions);
-        TX_PROPAGATE_METER.mark(tx_msg.trans_short_ids.len());
+        TX_PROPAGATE_METER.mark(sent_transactions.len());
 
-        if tx_msg.trans_short_ids.is_empty() {
+        if sent_transactions.is_empty() {
             return;
         }
 
         debug!(
             "Sent {} transaction ids to {} peers.",
-            tx_msg.trans_short_ids.len(),
+            sent_transactions.len(),
             lucky_peers.len()
         );
-        for peer_id in lucky_peers {
+
+        let window_index = self
+            .request_manager
+            .append_sent_transactions(sent_transactions);
+
+        for i in 0..lucky_peers.len() {
+            let peer_id = lucky_peers[i];
+            let tx_msg = Box::new(TransactionDigests::new(
+                window_index,
+                ordered_positions[i],
+                messages[i].clone(),
+            ));
             match send_message(
                 io,
                 peer_id,
@@ -2090,7 +2111,7 @@ impl SynchronizationProtocolHandler {
                     trace!(
                         "{:02} <- Transactions ({} entries)",
                         peer_id,
-                        tx_msg.trans_short_ids.len()
+                        tx_msg.get_len()
                     );
                 }
                 Err(e) => {
