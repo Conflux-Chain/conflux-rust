@@ -22,10 +22,7 @@ use crate::{
 use cfx_types::{into_i128, H256};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::RwLock;
-use primitives::{
-    Block, BlockHeaderBuilder, StateRoot, StateRootAuxInfo,
-    StateRootWithAuxInfo,
-};
+use primitives::{Block, BlockHeaderBuilder, StateRootWithAuxInfo};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
@@ -763,7 +760,7 @@ impl ConsensusNewBlockHandler {
 
     fn log_invalid_state_root(
         &self, expected_state_root: &StateRootWithAuxInfo,
-        got_state_root: (&StateRoot, &StateRootAuxInfo), deferred: usize,
+        got_state_root: &StateRootWithAuxInfo, deferred: usize,
         inner: &ConsensusGraphInner,
     ) -> std::io::Result<()>
     {
@@ -907,7 +904,9 @@ impl ConsensusNewBlockHandler {
                         .unwrap()
                         .unwrap();
                     if *block.block_header.deferred_state_root()
-                        != correct_state_root.state_root
+                        != correct_state_root
+                            .state_root
+                            .compute_state_root_hash()
                     {
                         self.log_invalid_state_root(
                             &correct_state_root,
@@ -955,7 +954,7 @@ impl ConsensusNewBlockHandler {
                         .compute_state_for_block(&deferred_hash, inner)
                         .unwrap();
 
-                    if state_root.state_root
+                    if state_root.state_root.compute_state_root_hash()
                         != *block.block_header.deferred_state_root()
                     {
                         self.log_invalid_state_root(
@@ -970,7 +969,7 @@ impl ConsensusNewBlockHandler {
                     }
 
                     *block.block_header.deferred_state_root()
-                        == state_root.state_root
+                        == state_root.state_root.compute_state_root_hash()
                         && *block.block_header.deferred_receipts_root()
                             == receipts_root
                         && *block.block_header.deferred_logs_bloom_hash()

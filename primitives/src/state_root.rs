@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::hash::keccak;
+
 pub type MerkleHash = H256;
 
 /// The deferred state root consists of 3 parts: snapshot, delta_0, delta.
@@ -13,6 +15,16 @@ pub struct StateRoot {
     pub snapshot_root: MerkleHash,
     pub intermediate_delta_root: MerkleHash,
     pub delta_root: MerkleHash,
+}
+
+impl StateRoot {
+    pub fn compute_state_root_hash(&self) -> H256 {
+        let mut rlp_stream = RlpStream::new_list(3);
+        rlp_stream.append_list(&self.snapshot_root);
+        rlp_stream.append_list(&self.intermediate_delta_root);
+        rlp_stream.append_list(&self.delta_root);
+        keccak(rlp_stream.out())
+    }
 }
 
 /// The Merkle Hash for an empty MPT (either as a subtree or as a whole tree).
@@ -86,6 +98,23 @@ impl Decodable for StateRootAuxInfo {
         Ok(Self {
             previous_snapshot_root: rlp.val_at(0)?,
             intermediate_delta_epoch_id: rlp.val_at(1)?,
+        })
+    }
+}
+
+impl Encodable for StateRootWithAuxInfo {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(2)
+            .append(&self.state_root)
+            .append(&self.aux_info);
+    }
+}
+
+impl Decodable for StateRootWithAuxInfo {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Self {
+            state_root: rlp.val_at(0)?,
+            aux_info: rlp.val_at(1)?,
         })
     }
 }
