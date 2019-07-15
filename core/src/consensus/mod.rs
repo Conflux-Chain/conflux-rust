@@ -467,8 +467,11 @@ impl ConsensusGraph {
         self.statistics.inc_consensus_graph_processed_block_count();
         {
             let inner = &mut *self.inner.write();
-            self.new_block_handler
-                .on_new_block_construction_only(inner, hash, block);
+            self.new_block_handler.on_new_block_construction_only(
+                inner,
+                hash,
+                &block.block_header,
+            );
             self.update_best_info(inner);
         }
         self.txpool
@@ -477,27 +480,33 @@ impl ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    pub fn on_new_block(&self, hash: &H256, _ignore_body: bool) {
+    pub fn on_new_block(&self, hash: &H256, ignore_body: bool) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
-        let block = self.data_man.block_by_hash(hash, true).unwrap();
-
-        debug!(
-            "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-            block.block_header,
-            block.transactions.len(),
-            block.size(),
-        );
-
         self.statistics.inc_consensus_graph_processed_block_count();
-        {
-            let inner = &mut *self.inner.write();
-            self.new_block_handler.on_new_block(inner, hash, block);
 
-            self.update_best_info(inner);
+        if !ignore_body {
+            let block = self.data_man.block_by_hash(hash, true).unwrap();
+            debug!(
+                "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
+                block.block_header,
+                block.transactions.len(),
+                block.size(),
+            );
+
+            {
+                let inner = &mut *self.inner.write();
+                self.new_block_handler.on_new_block(
+                    inner,
+                    hash,
+                    &block.block_header,
+                    Some(block.transactions.clone()),
+                );
+                self.update_best_info(inner);
+            }
+            self.txpool
+                .notify_new_best_info(self.best_info.read().clone());
         }
-        self.txpool
-            .notify_new_best_info(self.best_info.read().clone());
     }
 
     pub fn best_block_hash(&self) -> H256 {

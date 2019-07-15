@@ -22,7 +22,9 @@ use crate::{
 use cfx_types::{into_i128, H256};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::RwLock;
-use primitives::{Block, BlockHeaderBuilder, StateRootWithAuxInfo};
+use primitives::{
+    BlockHeader, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
+};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
@@ -800,8 +802,9 @@ impl ConsensusNewBlockHandler {
     }
 
     fn check_block_full_validity(
-        &self, new: usize, block: &Block, inner: &mut ConsensusGraphInner,
-        adaptive: bool, anticone_barrier: &BitSet,
+        &self, new: usize, block_header: &BlockHeader,
+        inner: &mut ConsensusGraphInner, adaptive: bool,
+        anticone_barrier: &BitSet,
         weight_tuple: Option<&(Vec<i128>, Vec<i128>, Vec<i128>)>,
     ) -> bool
     {
@@ -809,7 +812,7 @@ impl ConsensusNewBlockHandler {
         if inner.arena[parent].data.partial_invalid {
             warn!(
                 "Partially invalid due to partially invalid parent. {:?}",
-                block.block_header.clone()
+                block_header.clone()
             );
             return false;
         }
@@ -823,7 +826,7 @@ impl ConsensusNewBlockHandler {
         ) {
             warn!(
                 "Partially invalid due to picking incorrect parent. {:?}",
-                block.block_header.clone()
+                block_header.clone()
             );
             return false;
         }
@@ -834,7 +837,7 @@ impl ConsensusNewBlockHandler {
         {
             warn!(
                 "Partially invalid due to wrong difficulty. {:?}",
-                block.block_header.clone()
+                block_header.clone()
             );
             return false;
         }
@@ -846,7 +849,7 @@ impl ConsensusNewBlockHandler {
             if inner.arena[new].adaptive != adaptive {
                 warn!(
                     "Partially invalid due to invalid adaptive field. {:?}",
-                    block.block_header.clone()
+                    block_header.clone()
                 );
                 return false;
             }
@@ -856,14 +859,14 @@ impl ConsensusNewBlockHandler {
             // Check if the state root is correct or not
             // TODO: We may want to optimize this because now on the chain
             // switch we are going to compute state twice
-            let state_root_valid = if block.block_header.height()
+            let state_root_valid = if block_header.height()
                 < DEFERRED_STATE_EPOCH_COUNT
             {
-                *block.block_header.deferred_state_root()
+                *block_header.deferred_state_root()
                     == inner.genesis_block_state_root
-                    && *block.block_header.deferred_receipts_root()
+                    && *block_header.deferred_receipts_root()
                         == inner.genesis_block_receipts_root
-                    && *block.block_header.deferred_logs_bloom_hash()
+                    && *block_header.deferred_logs_bloom_hash()
                         == inner.genesis_block_logs_bloom_hash
             } else {
                 let mut deferred = new;
@@ -871,7 +874,7 @@ impl ConsensusNewBlockHandler {
                     deferred = inner.arena[deferred].parent;
                 }
                 debug_assert!(
-                    block.block_header.height() - DEFERRED_STATE_EPOCH_COUNT
+                    block_header.height() - DEFERRED_STATE_EPOCH_COUNT
                         == inner.arena[deferred].height
                 );
                 debug!("Deferred block is {:?}", inner.arena[deferred].hash);
@@ -905,16 +908,14 @@ impl ConsensusNewBlockHandler {
                         .get_state_root()
                         .unwrap()
                         .unwrap();
-                    if *block.block_header.deferred_state_root()
+                    if *block_header.deferred_state_root()
                         != correct_state_root
                             .state_root
                             .compute_state_root_hash()
                     {
                         self.log_invalid_state_root(
                             &correct_state_root,
-                            block
-                                .block_header
-                                .deferred_state_root_with_aux_info(),
+                            block_header.deferred_state_root_with_aux_info(),
                             deferred,
                             inner,
                         )
@@ -925,23 +926,23 @@ impl ConsensusNewBlockHandler {
                     let (correct_receipts_root, correct_logs_bloom_hash) =
                         epoch_exec_commitments.unwrap();
 
-                    if *block.block_header.deferred_receipts_root()
+                    if *block_header.deferred_receipts_root()
                         != correct_receipts_root
                     {
                         warn!(
                             "Invalid receipt root: {:?}, should be {:?}",
-                            *block.block_header.deferred_receipts_root(),
+                            *block_header.deferred_receipts_root(),
                             correct_receipts_root
                         );
                         valid = false;
                     }
 
-                    if *block.block_header.deferred_logs_bloom_hash()
+                    if *block_header.deferred_logs_bloom_hash()
                         != correct_logs_bloom_hash
                     {
                         warn!(
                             "Invalid logs bloom hash: {:?}, should be {:?}",
-                            *block.block_header.deferred_logs_bloom_hash(),
+                            *block_header.deferred_logs_bloom_hash(),
                             correct_logs_bloom_hash
                         );
                         valid = false;
@@ -957,24 +958,22 @@ impl ConsensusNewBlockHandler {
                         .unwrap();
 
                     if state_root.state_root.compute_state_root_hash()
-                        != *block.block_header.deferred_state_root()
+                        != *block_header.deferred_state_root()
                     {
                         self.log_invalid_state_root(
                             &state_root,
-                            block
-                                .block_header
-                                .deferred_state_root_with_aux_info(),
+                            block_header.deferred_state_root_with_aux_info(),
                             deferred,
                             inner,
                         )
                         .ok();
                     }
 
-                    *block.block_header.deferred_state_root()
+                    *block_header.deferred_state_root()
                         == state_root.state_root.compute_state_root_hash()
-                        && *block.block_header.deferred_receipts_root()
+                        && *block_header.deferred_receipts_root()
                             == receipts_root
-                        && *block.block_header.deferred_logs_bloom_hash()
+                        && *block_header.deferred_logs_bloom_hash()
                             == logs_bloom_hash
                 }
             };
@@ -982,7 +981,7 @@ impl ConsensusNewBlockHandler {
             if !state_root_valid {
                 warn!(
                     "Partially invalid in fork due to deferred block. me={:?}",
-                    block.block_header.clone()
+                    block_header.clone()
                 );
                 return false;
             }
@@ -1051,9 +1050,9 @@ impl ConsensusNewBlockHandler {
 
     /// Subroutine called by on_new_block() and on_new_block_construction_only()
     fn insert_block_initial(
-        &self, inner: &mut ConsensusGraphInner, block: Arc<Block>,
+        &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
     ) -> usize {
-        let (me, indices_len) = inner.insert(block.as_ref());
+        let (me, indices_len) = inner.insert(&block_header);
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
         me
@@ -1147,10 +1146,10 @@ impl ConsensusNewBlockHandler {
     }
 
     fn process_outside_block(
-        &self, inner: &mut ConsensusGraphInner, block: Arc<Block>,
+        &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
     ) {
         let mut referees = Vec::new();
-        for hash in block.block_header.referee_hashes().iter() {
+        for hash in block_header.referee_hashes().iter() {
             if let Some(x) = inner.hash_to_arena_indices.get(hash) {
                 inner.insert_referee_if_not_duplicate(&mut referees, *x);
             } else if let Some(r) = inner.legacy_refs.get(hash) {
@@ -1162,9 +1161,7 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
-        inner
-            .legacy_refs
-            .insert(block.block_header.hash(), referees);
+        inner.legacy_refs.insert(block_header.hash(), referees);
     }
 
     fn recycle_tx_in_block(
@@ -1401,15 +1398,17 @@ impl ConsensusNewBlockHandler {
     }
 
     pub fn on_new_block_construction_only(
-        &self, inner: &mut ConsensusGraphInner, hash: &H256, block: Arc<Block>,
-    ) {
-        let parent_hash = block.block_header.parent_hash();
+        &self, inner: &mut ConsensusGraphInner, hash: &H256,
+        block_header: &BlockHeader,
+    )
+    {
+        let parent_hash = block_header.parent_hash();
         if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
-            self.process_outside_block(inner, block);
+            self.process_outside_block(inner, block_header);
             return;
         }
 
-        let me = self.insert_block_initial(inner, block.clone());
+        let me = self.insert_block_initial(inner, block_header);
 
         let anticone_barrier =
             ConsensusNewBlockHandler::compute_anticone(inner, me);
@@ -1478,11 +1477,14 @@ impl ConsensusNewBlockHandler {
     }
 
     pub fn on_new_block(
-        &self, inner: &mut ConsensusGraphInner, hash: &H256, block: Arc<Block>,
-    ) {
-        let parent_hash = block.block_header.parent_hash();
+        &self, inner: &mut ConsensusGraphInner, hash: &H256,
+        block_header: &BlockHeader,
+        transactions: Option<Vec<Arc<SignedTransaction>>>,
+    )
+    {
+        let parent_hash = block_header.parent_hash();
         if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
-            self.process_outside_block(inner, block);
+            self.process_outside_block(inner, &block_header);
             let sn = inner.get_next_sequence_number();
             let block_info = LocalBlockInfo::new(BlockStatus::Pending, sn);
             self.data_man
@@ -1490,7 +1492,7 @@ impl ConsensusNewBlockHandler {
             return;
         }
 
-        let me = self.insert_block_initial(inner, block.clone());
+        let me = self.insert_block_initial(inner, &block_header);
         let parent = inner.arena[me].parent;
         let era_height = inner.get_era_height(inner.arena[parent].height, 0);
         let mut fully_valid = true;
@@ -1508,8 +1510,8 @@ impl ConsensusNewBlockHandler {
         // terminal for mining.
         // Note that we conservatively only mark those blocks inside the current
         // pivot era
-        if era_block == cur_pivot_era_block {
-            self.txpool.set_tx_packed(block.transactions.clone());
+        if era_block == cur_pivot_era_block && transactions.is_some() {
+            self.txpool.set_tx_packed(transactions.clone().unwrap());
         }
 
         let pending = inner.ancestor_at(parent, inner.cur_era_stable_height)
@@ -1537,7 +1539,7 @@ impl ConsensusNewBlockHandler {
 
             fully_valid = self.check_block_full_validity(
                 me,
-                block.as_ref(),
+                &block_header,
                 inner,
                 adaptive,
                 &anticone_barrier,
