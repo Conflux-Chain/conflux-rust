@@ -4,11 +4,7 @@ pub mod consensus_new_block_handler;
 use crate::{
     block_data_manager::{BlockDataManager, EpochExecutionContext},
     consensus::{
-        anticone_cache::AnticoneCache,
-        consensus_inner::consensus_executor::{
-            EpochExecutionTask, RewardExecutionInfo,
-        },
-        ANTICONE_PENALTY_RATIO, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
+        anticone_cache::AnticoneCache, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
         BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
     },
     hash::KECCAK_EMPTY_LIST_RLP,
@@ -76,6 +72,12 @@ pub struct ConsensusGraphNodeData {
     min_epoch_in_other_views: u64,
     max_epoch_in_other_views: u64,
     sequence_number: u64,
+    /// exec_info_lca_height indicates the fork_at height that the vote_valid
+    /// field corresponds to.
+    exec_info_lca_height: u64,
+    /// It indicates whether the blame voting information of this block is
+    /// correct or not.
+    vote_valid: bool,
 }
 
 impl ConsensusGraphNodeData {
@@ -90,6 +92,8 @@ impl ConsensusGraphNodeData {
             min_epoch_in_other_views: height,
             max_epoch_in_other_views: height,
             sequence_number,
+            exec_info_lca_height: NULLU64,
+            vote_valid: true,
         }
     }
 }
@@ -507,37 +511,6 @@ impl ConsensusGraphInner {
     fn get_total_weight_in_past(&self) -> i128 {
         let total_weight = &self.total_weight_in_past_2d;
         into_i128(&total_weight.delta)
-    }
-
-    fn get_optimistic_execution_task(
-        &mut self, data_man: &BlockDataManager,
-    ) -> Option<EpochExecutionTask> {
-        if !self.inner_conf.enable_optimistic_execution {
-            return None;
-        }
-
-        let opt_height = self.optimistic_executed_height?;
-        let epoch_arena_index = self.get_pivot_block_arena_index(opt_height);
-
-        // `on_local_pivot` is set to `true` because when we later skip its
-        // execution on pivot chain, we will not notify tx pool, so we
-        // will also notify in advance.
-        let execution_task = EpochExecutionTask::new(
-            self.arena[epoch_arena_index].hash,
-            self.get_epoch_block_hashes(epoch_arena_index),
-            self.get_epoch_start_block_number(epoch_arena_index),
-            self.get_reward_execution_info(data_man, epoch_arena_index),
-            true,
-            false,
-        );
-        let next_opt_height = opt_height + 1;
-        if next_opt_height >= self.pivot_index_to_height(self.pivot_chain.len())
-        {
-            self.optimistic_executed_height = None;
-        } else {
-            self.optimistic_executed_height = Some(next_opt_height);
-        }
-        Some(execution_task)
     }
 
     #[inline]
@@ -1380,118 +1353,6 @@ impl ConsensusGraphInner {
         total_weight
     }
 
-    fn get_reward_execution_info_from_index(
-        &self, data_man: &BlockDataManager,
-        reward_index: Option<(usize, usize)>,
-    ) -> Option<RewardExecutionInfo>
-    {
-        reward_index.map(
-            |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
-                let epoch_blocks = self
-                    .get_executable_epoch_blocks(data_man, pivot_arena_index);
-
-                let mut epoch_block_no_reward =
-                    Vec::with_capacity(epoch_blocks.len());
-                let mut epoch_block_anticone_difficulties =
-                    Vec::with_capacity(epoch_blocks.len());
-
-                let epoch_difficulty = self.arena[pivot_arena_index].difficulty;
-                let anticone_cutoff_epoch_anticone_set_opt = self
-                    .anticone_cache
-                    .get(anticone_penalty_cutoff_epoch_arena_index);
-                for index in &self.arena[pivot_arena_index]
-                    .data
-                    .ordered_executable_epoch_blocks
-                {
-                    let block_consensus_node = &self.arena[*index];
-
-                    let mut anticone_overlimited =
-                        block_consensus_node.data.partial_invalid;
-                    // If a block is partial_invalid, it won't have reward and
-                    // anticone_difficulty will not be used, so it's okay to set
-                    // it to 0.
-                    let mut anticone_difficulty: U512 = 0.into();
-                    if !anticone_overlimited {
-                        let block_consensus_node_anticone_opt =
-                            self.anticone_cache.get(*index);
-                        if block_consensus_node_anticone_opt.is_none()
-                            || anticone_cutoff_epoch_anticone_set_opt.is_none()
-                        {
-                            anticone_difficulty = U512::from(into_u256(
-                                self.recompute_anticone_weight(
-                                    *index,
-                                    anticone_penalty_cutoff_epoch_arena_index,
-                                ),
-                            ));
-                        } else {
-                            let block_consensus_node_anticone: HashSet<usize> =
-                                block_consensus_node_anticone_opt
-                                    .unwrap()
-                                    .iter()
-                                    .filter(|idx| {
-                                        self.is_same_era(
-                                            **idx,
-                                            pivot_arena_index,
-                                        )
-                                    })
-                                    .map(|idx| *idx)
-                                    .collect();
-                            let anticone_cutoff_epoch_anticone_set: HashSet<
-                                usize,
-                            > = anticone_cutoff_epoch_anticone_set_opt
-                                .unwrap()
-                                .iter()
-                                .filter(|idx| {
-                                    self.is_same_era(**idx, pivot_arena_index)
-                                })
-                                .map(|idx| *idx)
-                                .collect();
-                            let anticone_set = block_consensus_node_anticone
-                                .difference(&anticone_cutoff_epoch_anticone_set)
-                                .cloned()
-                                .collect::<HashSet<_>>();
-                            for a_index in anticone_set {
-                                // TODO: Maybe consider to use base difficulty
-                                // Check with the spec!
-                                anticone_difficulty += U512::from(into_u256(
-                                    self.block_weight(a_index, false),
-                                ));
-                            }
-                        };
-
-                        // TODO: check the clear definition of anticone penalty,
-                        // normally and around the time of difficulty
-                        // adjustment.
-                        // LINT.IfChange(ANTICONE_PENALTY_1)
-                        if anticone_difficulty / U512::from(epoch_difficulty)
-                            >= U512::from(ANTICONE_PENALTY_RATIO)
-                        {
-                            anticone_overlimited = true;
-                        }
-                        // LINT.ThenChange(consensus/consensus_executor.
-                        // rs#ANTICONE_PENALTY_2)
-                    }
-                    epoch_block_no_reward.push(anticone_overlimited);
-                    epoch_block_anticone_difficulties.push(anticone_difficulty);
-                }
-                RewardExecutionInfo {
-                    epoch_blocks,
-                    epoch_block_no_reward,
-                    epoch_block_anticone_difficulties,
-                }
-            },
-        )
-    }
-
-    fn get_reward_execution_info(
-        &self, data_man: &BlockDataManager, epoch_arena_index: usize,
-    ) -> Option<RewardExecutionInfo> {
-        self.get_reward_execution_info_from_index(
-            data_man,
-            self.get_pivot_reward_index(epoch_arena_index),
-        )
-    }
-
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
         let parent_arena_index =
             *self.hash_to_arena_indices.get(parent_hash).unwrap();
@@ -1969,6 +1830,76 @@ impl ConsensusGraphInner {
         );
 
         Ok(())
+    }
+
+    fn compute_vote_valid_for_pivot_block(
+        &mut self, data_man: &BlockDataManager, me: usize,
+        pivot_arena_index: usize,
+    ) -> bool
+    {
+        let lca = self.lca(me, pivot_arena_index);
+        let lca_height = self.arena[lca].height;
+        let mut stack = Vec::new();
+        stack.push((0, me, 0));
+        while stack.is_empty() {
+            let (stage, index, a) = stack.pop().unwrap();
+            if stage == 0 {
+                if self.arena[index].data.exec_info_lca_height != lca_height {
+                    let header = data_man
+                        .block_header_by_hash(&self.arena[index].hash)
+                        .unwrap();
+                    let blame = header.blame();
+                    if self.arena[index].height > lca_height + 1 + blame as u64
+                    {
+                        let ancestor = self.ancestor_at(
+                            index,
+                            self.arena[index].height - blame as u64 - 1,
+                        );
+                        stack.push((1, index, ancestor));
+                        stack.push((0, ancestor, 0));
+                    } else {
+                        // We need to make sure the ancestor at height
+                        // self.arena[index].height - blame - 1 is state valid,
+                        // and the remainings are not
+                        let start_height =
+                            self.arena[index].height - blame as u64 - 1;
+                        let mut cur_height = lca_height;
+                        let mut cur = lca;
+                        let mut vote_valid = true;
+                        while cur_height > start_height {
+                            if self
+                                .execution_info_cache
+                                .get(&cur)
+                                .unwrap()
+                                .state_valid
+                            {
+                                vote_valid = false;
+                                break;
+                            }
+                            cur_height -= 1;
+                            cur = self.arena[cur].parent;
+                        }
+                        if vote_valid
+                            && !self
+                                .execution_info_cache
+                                .get(&cur)
+                                .unwrap()
+                                .state_valid
+                        {
+                            vote_valid = false;
+                        }
+                        self.arena[index].data.exec_info_lca_height =
+                            lca_height;
+                        self.arena[index].data.vote_valid = vote_valid;
+                    }
+                }
+            } else {
+                self.arena[index].data.exec_info_lca_height = lca_height;
+                self.arena[index].data.vote_valid =
+                    self.arena[a].data.vote_valid;
+            }
+        }
+        self.arena[me].data.vote_valid
     }
 
     /// Compute the total weight in the epoch represented by the block of
