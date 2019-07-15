@@ -709,6 +709,7 @@ impl ConsensusNewBlockHandler {
         let task = EpochExecutionTask::new(
             epoch_block_hash,
             epoch_block_hashes.clone(),
+            inner.get_epoch_start_block_number(epoch_arena_index),
             reward_execution_info,
             false,
             true,
@@ -857,141 +858,144 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-//        if !self.conf.bench_mode {
-//            // Check if the state root is correct or not
-//            // TODO: We may want to optimize this because now on the chain
-//            // switch we are going to compute state twice
-//            let state_root_valid = if block.block_header.height()
-//                < DEFERRED_STATE_EPOCH_COUNT
-//            {
-//                *block.block_header.deferred_state_root()
-//                    == inner.genesis_block_state_root
-//                    && *block.block_header.deferred_receipts_root()
-//                        == inner.genesis_block_receipts_root
-//                    && *block.block_header.deferred_logs_bloom_hash()
-//                        == inner.genesis_block_logs_bloom_hash
-//            } else {
-//                let mut deferred = new;
-//                for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
-//                    deferred = inner.arena[deferred].parent;
-//                }
-//                debug_assert!(
-//                    block.block_header.height() - DEFERRED_STATE_EPOCH_COUNT
-//                        == inner.arena[deferred].height
-//                );
-//                debug!("Deferred block is {:?}", inner.arena[deferred].hash);
-//
-//                let epoch_exec_commitments =
-//                    self.data_man.get_epoch_execution_commitments(
-//                        &inner.arena[deferred].hash,
-//                    );
-//
-//                if self
-//                    .data_man
-//                    .storage_manager
-//                    .contains_state(SnapshotAndEpochIdRef::new(
-//                        &inner.arena[deferred].hash,
-//                        None,
-//                    ))
-//                    .unwrap()
-//                    && epoch_exec_commitments.is_some()
-//                {
-//                    let mut valid = true;
-//                    let correct_state_root = self
-//                        .data_man
-//                        .storage_manager
-//                        .get_state_no_commit(SnapshotAndEpochIdRef::new(
-//                            &inner.arena[deferred].hash,
-//                            None,
-//                        ))
-//                        .unwrap()
-//                        // Unwrapping is safe because the state exists.
-//                        .unwrap()
-//                        .get_state_root()
-//                        .unwrap()
-//                        .unwrap();
-//                    if *block.block_header.deferred_state_root()
-//                        != correct_state_root
-//                            .state_root
-//                            .compute_state_root_hash()
-//                    {
-//                        self.log_invalid_state_root(
-//                            &correct_state_root,
-//                            block
-//                                .block_header
-//                                .deferred_state_root_with_aux_info(),
-//                            deferred,
-//                            inner,
-//                        )
-//                        .ok();
-//                        valid = false;
-//                    }
-//
-//                    let (correct_receipts_root, correct_logs_bloom_hash) =
-//                        epoch_exec_commitments.unwrap();
-//
-//                    if *block.block_header.deferred_receipts_root()
-//                        != correct_receipts_root
-//                    {
-//                        warn!(
-//                            "Invalid receipt root: {:?}, should be {:?}",
-//                            *block.block_header.deferred_receipts_root(),
-//                            correct_receipts_root
-//                        );
-//                        valid = false;
-//                    }
-//
-//                    if *block.block_header.deferred_logs_bloom_hash()
-//                        != correct_logs_bloom_hash
-//                    {
-//                        warn!(
-//                            "Invalid logs bloom hash: {:?}, should be {:?}",
-//                            *block.block_header.deferred_logs_bloom_hash(),
-//                            correct_logs_bloom_hash
-//                        );
-//                        valid = false;
-//                    }
-//
-//                    valid
-//                } else {
-//                    // Call the expensive function to check this state root
-//                    let deferred_hash = inner.arena[deferred].hash;
-//                    let (state_root, receipts_root, logs_bloom_hash) = self
-//                        .executor
-//                        .compute_state_for_block(&deferred_hash, inner)
-//                        .unwrap();
-//
-//                    if state_root.state_root.compute_state_root_hash()
-//                        != *block.block_header.deferred_state_root()
-//                    {
-//                        self.log_invalid_state_root(
-//                            &state_root,
-//                            block
-//                                .block_header
-//                                .deferred_state_root_with_aux_info(),
-//                            deferred,
-//                            inner,
-//                        )
-//                        .ok();
-//                    }
-//
-//                    *block.block_header.deferred_state_root()
-//                        == state_root.state_root.compute_state_root_hash()
-//                        && *block.block_header.deferred_receipts_root()
-//                            == receipts_root
-//                        && *block.block_header.deferred_logs_bloom_hash()
-//                            == logs_bloom_hash
-//                }
-//            };
-//
-//            if !state_root_valid {
-//                warn!(
-//                    "Partially invalid in fork due to deferred block. me={:?}",
-//                    block.block_header.clone()
-//                );
-//                return false;
-//            }
-//        }
+        //        if !self.conf.bench_mode {
+        //            // Check if the state root is correct or not
+        //            // TODO: We may want to optimize this because now on the
+        // chain            // switch we are going to compute state
+        // twice            let state_root_valid = if
+        // block.block_header.height()                <
+        // DEFERRED_STATE_EPOCH_COUNT            {
+        //                *block.block_header.deferred_state_root()
+        //                    == inner.genesis_block_state_root
+        //                    && *block.block_header.deferred_receipts_root()
+        //                        == inner.genesis_block_receipts_root
+        //                    && *block.block_header.deferred_logs_bloom_hash()
+        //                        == inner.genesis_block_logs_bloom_hash
+        //            } else {
+        //                let mut deferred = new;
+        //                for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+        //                    deferred = inner.arena[deferred].parent;
+        //                }
+        //                debug_assert!(
+        //                    block.block_header.height() -
+        // DEFERRED_STATE_EPOCH_COUNT                        ==
+        // inner.arena[deferred].height                );
+        //                debug!("Deferred block is {:?}",
+        // inner.arena[deferred].hash);
+        //
+        //                let epoch_exec_commitments =
+        //                    self.data_man.get_epoch_execution_commitments(
+        //                        &inner.arena[deferred].hash,
+        //                    );
+        //
+        //                if self
+        //                    .data_man
+        //                    .storage_manager
+        //                    .contains_state(SnapshotAndEpochIdRef::new(
+        //                        &inner.arena[deferred].hash,
+        //                        None,
+        //                    ))
+        //                    .unwrap()
+        //                    && epoch_exec_commitments.is_some()
+        //                {
+        //                    let mut valid = true;
+        //                    let correct_state_root = self
+        //                        .data_man
+        //                        .storage_manager
+        //
+        // .get_state_no_commit(SnapshotAndEpochIdRef::new(
+        // &inner.arena[deferred].hash,                            None,
+        //                        ))
+        //                        .unwrap()
+        //                        // Unwrapping is safe because the state
+        // exists.                        .unwrap()
+        //                        .get_state_root()
+        //                        .unwrap()
+        //                        .unwrap();
+        //                    if *block.block_header.deferred_state_root()
+        //                        != correct_state_root
+        //                            .state_root
+        //                            .compute_state_root_hash()
+        //                    {
+        //                        self.log_invalid_state_root(
+        //                            &correct_state_root,
+        //                            block
+        //                                .block_header
+        //                                .deferred_state_root_with_aux_info(),
+        //                            deferred,
+        //                            inner,
+        //                        )
+        //                        .ok();
+        //                        valid = false;
+        //                    }
+        //
+        //                    let (correct_receipts_root,
+        // correct_logs_bloom_hash) =
+        // epoch_exec_commitments.unwrap();
+        //
+        //                    if *block.block_header.deferred_receipts_root()
+        //                        != correct_receipts_root
+        //                    {
+        //                        warn!(
+        //                            "Invalid receipt root: {:?}, should be
+        // {:?}",
+        // *block.block_header.deferred_receipts_root(),
+        // correct_receipts_root                        );
+        //                        valid = false;
+        //                    }
+        //
+        //                    if *block.block_header.deferred_logs_bloom_hash()
+        //                        != correct_logs_bloom_hash
+        //                    {
+        //                        warn!(
+        //                            "Invalid logs bloom hash: {:?}, should be
+        // {:?}",
+        // *block.block_header.deferred_logs_bloom_hash(),
+        // correct_logs_bloom_hash                        );
+        //                        valid = false;
+        //                    }
+        //
+        //                    valid
+        //                } else {
+        //                    // Call the expensive function to check this state
+        // root                    let deferred_hash =
+        // inner.arena[deferred].hash;                    let
+        // (state_root, receipts_root, logs_bloom_hash) = self
+        //                        .executor
+        //                        .compute_state_for_block(&deferred_hash,
+        // inner)                        .unwrap();
+        //
+        //                    if state_root.state_root.compute_state_root_hash()
+        //                        != *block.block_header.deferred_state_root()
+        //                    {
+        //                        self.log_invalid_state_root(
+        //                            &state_root,
+        //                            block
+        //                                .block_header
+        //                                .deferred_state_root_with_aux_info(),
+        //                            deferred,
+        //                            inner,
+        //                        )
+        //                        .ok();
+        //                    }
+        //
+        //                    *block.block_header.deferred_state_root()
+        //                        ==
+        // state_root.state_root.compute_state_root_hash()
+        // && *block.block_header.deferred_receipts_root()
+        // == receipts_root                        &&
+        // *block.block_header.deferred_logs_bloom_hash()
+        // == logs_bloom_hash                }
+        //            };
+        //
+        //            if !state_root_valid {
+        //                warn!(
+        //                    "Partially invalid in fork due to deferred block.
+        // me={:?}",                    block.block_header.clone()
+        //                );
+        //                return false;
+        //            }
+        //        }
         return true;
     }
 
@@ -1383,18 +1387,22 @@ impl ConsensusNewBlockHandler {
                     pivot_logs_bloom_hash,
                 );
             } else {
+                let epoch_arena_index =
+                    inner.get_pivot_block_arena_index(state_height);
                 let reward_execution_info =
                     self.executor.get_reward_execution_info(
                         &self.data_man,
                         inner,
-                        inner.get_pivot_block_arena_index(state_height),
+                        epoch_arena_index,
                     );
-                let epoch_block_hashes = inner.get_epoch_block_hashes(
-                    inner.get_pivot_block_arena_index(state_height),
-                );
+                let epoch_block_hashes =
+                    inner.get_epoch_block_hashes(epoch_arena_index);
+                let start_block_number =
+                    inner.get_epoch_start_block_number(epoch_arena_index);
                 self.executor.compute_epoch(EpochExecutionTask::new(
                     pivot_hash,
                     epoch_block_hashes,
+                    start_block_number,
                     reward_execution_info,
                     true,
                     false,
@@ -1772,6 +1780,7 @@ impl ConsensusNewBlockHandler {
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_arena_index].hash,
                 inner.get_epoch_block_hashes(epoch_arena_index),
+                inner.get_epoch_start_block_number(epoch_arena_index),
                 reward_execution_info,
                 true,
                 false,

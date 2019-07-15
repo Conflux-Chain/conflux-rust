@@ -13,6 +13,7 @@ use cfxcore::{
         ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
         ADAPTIVE_WEIGHT_DEFAULT_BETA,
     },
+    db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -103,7 +104,7 @@ fn initialize_consensus_graph_for_test(
             Path::new(db_dir),
             Some(128),
             db::DatabaseCompactionProfile::default(),
-            Some(5),
+            NUM_COLUMNS,
         ),
     )
     .map_err(|e| format!("Failed to open database {:?}", e))
@@ -149,7 +150,7 @@ fn initialize_consensus_graph_for_test(
 
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
-    let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+    let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),
