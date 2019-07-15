@@ -35,7 +35,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::consensus::DEFERRED_STATE_EPOCH_COUNT;
+use crate::consensus::{BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT};
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::fmt::{Debug, Formatter};
@@ -245,21 +245,91 @@ impl ConsensusExecutor {
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
         inner_lock: &RwLock<ConsensusGraphInner>,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String>
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String>
     {
-        let hash;
+        let parent;
+        let mut waiting_blocks = Vec::new();
         {
             let inner = inner_lock.read();
-            hash = inner
-                .get_state_block_with_delay(
-                    parent_block_hash,
-                    DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-                )?
-                .clone();
+            let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
+            if parent_opt.is_none() {
+                return Err(
+                    "Too old parent to prepare for generation".to_owned()
+                );
+            }
+            parent = *parent_opt.unwrap();
+            // We go up and find all states whose execution_infos are missing
+            let mut missing_block_cnt = 0;
+            let mut cur = parent;
+            waiting_blocks.push((
+                None,
+                inner
+                    .get_state_block_with_delay(
+                        parent_block_hash,
+                        DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+                    )?
+                    .clone(),
+            ));
+            while !inner.execution_info_cache.contains_key(&cur) {
+                missing_block_cnt += 1;
+                if missing_block_cnt >= BLAME_BOUND {
+                    break;
+                }
+                let cur_hash = inner.arena[cur].hash.clone();
+                let state_hash = inner
+                    .get_state_block_with_delay(
+                        &cur_hash,
+                        DEFERRED_STATE_EPOCH_COUNT as usize,
+                    )?
+                    .clone();
+                waiting_blocks.push((Some(cur_hash), state_hash));
+                if missing_block_cnt >= BLAME_BOUND
+                    || cur == inner.cur_era_genesis_block_arena_index
+                {
+                    break;
+                }
+                cur = inner.arena[cur].parent;
+            }
         }
-        let (state_root_with_aux, receipts_root, log_bloom) =
-            self.wait_for_result(hash);
-        Ok((0, state_root_with_aux, receipts_root, log_bloom))
+        // Now we wait without holding the inner lock
+        // Note that we must use hash instead of index because once we release
+        // the lock, there might be a checkpoint coming in to break
+        // index FIXME: There could be situations that in the
+        // data_manager, the result is removed due to checkpoint, FIXME:
+        // for this rare case, we should make wait_for_result to pop up errors!
+        waiting_blocks.reverse();
+        let mut waiting_result = Vec::new();
+        for (cur_hash_opt, state_block_hash) in waiting_blocks {
+            let res = self.wait_for_result(state_block_hash);
+            waiting_result.push((cur_hash_opt, res));
+        }
+        // Now we need to wait for the execution information of all missing
+        // blocks to come back
+        {
+            let inner = &mut *inner_lock.write();
+            let (_, last_result) = waiting_result.pop().unwrap();
+            for (cur_hash_opt, result) in waiting_result {
+                let cur_hash = cur_hash_opt.unwrap();
+                let index_opt = inner.hash_to_arena_indices.get(&cur_hash);
+                if index_opt.is_none() {
+                    return Err(
+                        "Too old parent/subtree to prepare for generation"
+                            .to_owned(),
+                    );
+                }
+                let index = *index_opt.unwrap();
+                inner.compute_execution_info_with_result(index, result)?;
+            }
+            if inner.arena[parent].hash == *parent_block_hash {
+                Ok(inner.compute_blame_and_state_with_execution_result(
+                    parent,
+                    last_result,
+                )?)
+            } else {
+                Err("Too old parent/subtree to prepare for generation"
+                    .to_owned())
+            }
+        }
     }
 
     /// Enqueue the epoch to be executed by the background execution thread

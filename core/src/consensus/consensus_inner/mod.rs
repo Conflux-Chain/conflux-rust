@@ -9,7 +9,7 @@ use crate::{
             EpochExecutionTask, RewardExecutionInfo,
         },
         ANTICONE_PENALTY_RATIO, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
-        DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
+        BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
     },
     hash::KECCAK_EMPTY_LIST_RLP,
     pow::{target_difficulty, ProofOfWorkConfig},
@@ -22,7 +22,10 @@ use cfx_types::{
 };
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::MinLinkCutTree;
-use primitives::{receipt::Receipt, Block, TransactionAddress};
+use primitives::{
+    receipt::Receipt, Block, BlockHeaderBuilder, StateRootWithAuxInfo,
+    TransactionAddress,
+};
 use slab::Slab;
 use std::{
     cmp::{max, min},
@@ -104,6 +107,58 @@ impl Default for ConsensusGraphPivotData {
         }
     }
 }
+
+struct ConsensusGraphExecutionInfo {
+    state_valid: bool,
+    //    blame: u32,
+    //    deferred_state_root: Option<H256>,
+    //    deferred_receipt_root: Option<H256>,
+    //    deferred_logs_bloom_hash: Option<H256>,
+    original_deferred_state_root: H256,
+    original_deferred_receipt_root: H256,
+    original_deferred_logs_bloom_hash: H256,
+}
+
+impl Default for ConsensusGraphExecutionInfo {
+    fn default() -> Self {
+        ConsensusGraphExecutionInfo {
+            state_valid: true,
+            //            blame: 0,
+            //            deferred_state_root: None,
+            //            deferred_receipt_root: None,
+            //            deferred_logs_bloom_hash: None,
+            original_deferred_state_root: Default::default(),
+            original_deferred_receipt_root: Default::default(),
+            original_deferred_logs_bloom_hash: Default::default(),
+        }
+    }
+}
+
+//impl ConsensusGraphExecutionInfo {
+//    pub fn deferred_state_root(&self) -> &H256 {
+//        if let Some(x) = self.deferred_state_root.as_ref() {
+//            x
+//        } else {
+//            &self.original_deferred_state_root
+//        }
+//    }
+//
+//    pub fn deferred_receipt_root(&self) -> &H256 {
+//        if let Some(x) = self.deferred_receipt_root.as_ref() {
+//            x
+//        } else {
+//            &self.original_deferred_receipt_root
+//        }
+//    }
+//
+//    pub fn deferred_logs_bloom_hash(&self) -> &H256 {
+//        if let Some(x) = self.deferred_logs_bloom_hash.as_ref() {
+//            x
+//        } else {
+//            &self.original_deferred_logs_bloom_hash
+//        }
+//    }
+//}
 
 pub struct TotalWeightInPast {
     pub old: U256,
@@ -219,6 +274,8 @@ pub struct ConsensusGraphInner {
     // The cache to store Anticone information of each node. This could be very
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
+    // The cache to store execution information of nodes in the consensus graph
+    execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     total_weight_in_past_2d: TotalWeightInPast,
@@ -301,6 +358,7 @@ impl ConsensusGraphInner {
             data_man: data_man.clone(),
             inner_conf,
             anticone_cache: AnticoneCache::new(),
+            execution_info_cache: HashMap::new(),
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
@@ -1793,6 +1851,144 @@ impl ConsensusGraphInner {
         } else {
             into_i128(&self.arena[me].difficulty)
         }
+    }
+
+    fn compute_blame_and_state_with_execution_result(
+        &self, parent: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
+        let mut cur = parent;
+        let mut blame: u32 = 0;
+        let mut state_blame_vec = Vec::new();
+        let mut receipt_blame_vec = Vec::new();
+        let mut bloom_blame_vec = Vec::new();
+        state_blame_vec
+            .push(exec_result.0.state_root.compute_state_root_hash());
+        receipt_blame_vec.push(exec_result.1.clone());
+        bloom_blame_vec.push(exec_result.2.clone());
+        while blame < BLAME_BOUND {
+            let exec_info_opt = self.execution_info_cache.get(&cur);
+            if exec_info_opt.is_none() {
+                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
+            }
+            let exec_info = exec_info_opt.unwrap();
+            if exec_info.state_valid {
+                break;
+            }
+            blame += 1;
+            if cur == self.cur_era_genesis_block_arena_index
+                && blame < BLAME_BOUND
+            {
+                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
+            }
+            state_blame_vec
+                .push(exec_info.original_deferred_state_root.clone());
+            receipt_blame_vec
+                .push(exec_info.original_deferred_receipt_root.clone());
+            bloom_blame_vec
+                .push(exec_info.original_deferred_logs_bloom_hash.clone());
+            cur = self.arena[cur].parent;
+        }
+        if blame > 0 {
+            Ok((
+                blame,
+                exec_result.0,
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    state_blame_vec,
+                ),
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    receipt_blame_vec,
+                ),
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    bloom_blame_vec,
+                ),
+            ))
+        } else {
+            Ok((
+                0,
+                exec_result.0,
+                state_blame_vec.pop().unwrap(),
+                receipt_blame_vec.pop().unwrap(),
+                bloom_blame_vec.pop().unwrap(),
+            ))
+        }
+    }
+
+    fn compute_execution_info_with_result(
+        &mut self, me: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
+    ) -> Result<(), String> {
+        // For the original genesis, it is always correct
+        if self.arena[me].height == 0 {
+            self.execution_info_cache.insert(
+                me,
+                ConsensusGraphExecutionInfo {
+                    state_valid: true,
+                    original_deferred_state_root: self.genesis_block_state_root,
+                    original_deferred_receipt_root: self
+                        .genesis_block_receipts_root,
+                    original_deferred_logs_bloom_hash: self
+                        .genesis_block_logs_bloom_hash,
+                },
+            );
+            return Ok(());
+        }
+        let parent = self.arena[me].parent;
+        let original_deferred_state_root =
+            exec_result.0.state_root.compute_state_root_hash();
+        let original_deferred_receipt_root = exec_result.1.clone();
+        let original_deferred_logs_bloom_hash = exec_result.2.clone();
+        let (
+            blame,
+            _,
+            deferred_state_root,
+            deferred_receipt_root,
+            deferred_logs_bloom_hash,
+        ) = self.compute_blame_and_state_with_execution_result(
+            parent,
+            exec_result,
+        )?;
+        let block_header = self
+            .data_man
+            .block_header_by_hash(&self.arena[me].hash)
+            .unwrap();
+        let state_valid = block_header.blame() == blame
+            && *block_header.deferred_state_root() == deferred_state_root
+            && *block_header.deferred_receipts_root() == deferred_receipt_root
+            && *block_header.deferred_logs_bloom_hash()
+                == deferred_logs_bloom_hash;
+
+        self.execution_info_cache.insert(
+            me,
+            ConsensusGraphExecutionInfo {
+                state_valid,
+                //                blame,
+                //                deferred_state_root: if
+                // original_deferred_state_root
+                // == deferred_state_root                {
+                //                    None
+                //                } else {
+                //                    Some(deferred_state_root)
+                //                },
+                //                deferred_receipt_root: if
+                // original_deferred_receipt_root
+                // == deferred_receipt_root                {
+                //                    None
+                //                } else {
+                //                    Some(deferred_receipt_root)
+                //                },
+                //                deferred_logs_bloom_hash: if
+                // original_deferred_logs_bloom_hash
+                // == deferred_logs_bloom_hash                {
+                //                    None
+                //                } else {
+                //                    Some(deferred_logs_bloom_hash)
+                //                },
+                original_deferred_state_root,
+                original_deferred_receipt_root,
+                original_deferred_logs_bloom_hash,
+            },
+        );
+
+        Ok(())
     }
 
     /// Compute the total weight in the epoch represented by the block of

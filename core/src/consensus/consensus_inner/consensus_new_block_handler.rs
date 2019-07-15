@@ -183,6 +183,7 @@ impl ConsensusNewBlockHandler {
             inner.hash_to_arena_indices.remove(&hash);
             inner.terminal_hashes.remove(&hash);
             inner.arena.remove(index);
+            inner.execution_info_cache.remove(&index);
         }
         assert!(new_era_pivot_index < inner.pivot_chain.len());
         inner.pivot_chain = inner.pivot_chain.split_off(new_era_pivot_index);
