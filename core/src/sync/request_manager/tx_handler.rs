@@ -1,11 +1,11 @@
 use message::{TransIndex, TransactionDigests};
+use metrics::{register_meter_with_group, Meter};
 use primitives::{SignedTransaction, TxFullId, TxPropagateId};
 use std::{
     collections::HashMap,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
-use metrics::{register_meter_with_group, Meter};
 lazy_static! {
     static ref TX_FIRST_MISS_METER: Arc<Meter> =
         register_meter_with_group("tx_pool", "tx_first_miss_size");
