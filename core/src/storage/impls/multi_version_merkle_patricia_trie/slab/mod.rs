@@ -109,7 +109,8 @@
 #![doc(html_root_url = "https://docs.rs/slab/0.4.1")]
 
 use super::super::errors::*;
-use parking_lot::Mutex;
+use crate::storage::GuardedValue;
+use parking_lot::{Mutex, MutexGuard};
 use std::{
     cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, mem, ops,
     ptr, slice,
@@ -159,6 +160,9 @@ struct AllocRelatedFields {
     // capacity when the slab is full.
     next: usize,
 }
+
+/// A guarded index type to prevent overwriting another element.
+type GuardedIndex<'c> = GuardedValue<MutexGuard<'c, AllocRelatedFields>, usize>;
 
 /// Methods which check if the entry holds a value and return reference to the
 /// value. The methods should ont panic.
@@ -752,12 +756,12 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab[key], "hello");
     /// ```
     pub fn insert<U: Into<T>>(&self, val: U) -> Result<usize> {
-        let key = self.allocate()?;
+        let (_guard, key) = self.allocate()?.into();
         self.insert_at(key, val);
         Ok(key)
     }
 
-    pub fn allocate(&self) -> Result<usize> {
+    pub fn allocate(&self) -> Result<GuardedIndex> {
         let mut alloc_fields = self.alloc_fields.lock();
         let key = alloc_fields.next;
         if key == self.entries.capacity() {
@@ -770,15 +774,12 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
             } else {
                 alloc_fields.next = self.entry_at(key).get_next_vacant_index();
             }
-            Ok(key)
+            Ok(GuardedValue::new(alloc_fields, key))
         }
     }
 
     fn insert_at<U: Into<T>>(&self, key: usize, val: U) {
         // key is guaranteed to exist
-        // FIXME: race condition: A inserts key (vacant entry taken), B removes
-        // key, C completes insertion, A writes data, C data lost
-        // forever
         unsafe { *self.entry_at_mut(key) = E::from(val) }
     }
 
@@ -807,8 +808,9 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!("hello", slab[hello].1);
     /// ```
     pub fn vacant_entry(&self) -> Result<VacantEntry<T, E>> {
+        let (_guard, key) = self.allocate()?.into();
         Ok(VacantEntry {
-            key: self.allocate()?,
+            key,
             slab: self,
             inserted: false,
         })
