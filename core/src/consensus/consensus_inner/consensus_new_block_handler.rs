@@ -1754,78 +1754,76 @@ impl ConsensusNewBlockHandler {
             );
         }
 
-        if transactions.is_none() {
-            // If we are inserting header only, we will skip execution and
-            // tx_pool-related operations
-            return;
-        }
-
-        // It's only correct to set tx stale after the block is considered
-        // terminal for mining.
-        // Note that we conservatively only mark those blocks inside the current
-        // pivot era
-        if era_block == cur_pivot_era_block {
-            self.txpool
-                .set_tx_packed(transactions.clone().expect("Already checked"));
-        }
-        if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
-            < inner.pivot_index_to_height(inner.pivot_chain.len())
-            && inner.last_recycled_era_block != new_pivot_era_block
-        {
-            self.recycle_tx_outside_era(inner, new_pivot_era_block);
-            inner.last_recycled_era_block = new_pivot_era_block;
-        }
-
-        let to_state_pos = if inner
-            .pivot_index_to_height(inner.pivot_chain.len())
-            < DEFERRED_STATE_EPOCH_COUNT
-        {
-            0
-        } else {
-            inner.pivot_index_to_height(inner.pivot_chain.len())
-                - DEFERRED_STATE_EPOCH_COUNT
-                + 1
-        };
-        inner.optimistic_executed_height = if to_state_pos > 0 {
-            Some(to_state_pos)
-        } else {
-            None
-        };
-        let mut state_at = fork_at;
-        if fork_at + DEFERRED_STATE_EPOCH_COUNT
-            > inner.pivot_index_to_height(old_pivot_chain_len)
-        {
-            if inner.pivot_index_to_height(old_pivot_chain_len)
-                > DEFERRED_STATE_EPOCH_COUNT
-            {
-                state_at = inner.pivot_index_to_height(old_pivot_chain_len)
-                    - DEFERRED_STATE_EPOCH_COUNT
-                    + 1;
-            } else {
-                state_at = 1;
+        // If we are inserting header only, we will skip execution and
+        // tx_pool-related operations
+        if transactions.is_some() {
+            // It's only correct to set tx stale after the block is considered
+            // terminal for mining.
+            // Note that we conservatively only mark those blocks inside the current
+            // pivot era
+            if era_block == cur_pivot_era_block {
+                self.txpool
+                    .set_tx_packed(transactions.clone().expect("Already checked"));
             }
-        }
+            if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
+                < inner.pivot_index_to_height(inner.pivot_chain.len())
+                && inner.last_recycled_era_block != new_pivot_era_block
+            {
+                self.recycle_tx_outside_era(inner, new_pivot_era_block);
+                inner.last_recycled_era_block = new_pivot_era_block;
+            }
 
-        // Apply transactions in the determined total order
-        while state_at < to_state_pos {
-            let epoch_arena_index = inner.get_pivot_block_arena_index(state_at);
-            let reward_execution_info =
-                self.executor.get_reward_execution_info(
-                    &self.data_man,
-                    inner,
-                    epoch_arena_index,
-                );
-            self.executor.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_arena_index].hash,
-                inner.get_epoch_block_hashes(epoch_arena_index),
-                inner.get_epoch_start_block_number(epoch_arena_index),
-                reward_execution_info,
-                true,
-                false,
-            ));
-            state_at += 1;
+            let to_state_pos = if inner
+                .pivot_index_to_height(inner.pivot_chain.len())
+                < DEFERRED_STATE_EPOCH_COUNT
+            {
+                0
+            } else {
+                inner.pivot_index_to_height(inner.pivot_chain.len())
+                    - DEFERRED_STATE_EPOCH_COUNT
+                    + 1
+            };
+            inner.optimistic_executed_height = if to_state_pos > 0 {
+                Some(to_state_pos)
+            } else {
+                None
+            };
+            let mut state_at = fork_at;
+            if fork_at + DEFERRED_STATE_EPOCH_COUNT
+                > inner.pivot_index_to_height(old_pivot_chain_len)
+            {
+                if inner.pivot_index_to_height(old_pivot_chain_len)
+                    > DEFERRED_STATE_EPOCH_COUNT
+                {
+                    state_at = inner.pivot_index_to_height(old_pivot_chain_len)
+                        - DEFERRED_STATE_EPOCH_COUNT
+                        + 1;
+                } else {
+                    state_at = 1;
+                }
+            }
+
+            // Apply transactions in the determined total order
+            while state_at < to_state_pos {
+                let epoch_arena_index = inner.get_pivot_block_arena_index(state_at);
+                let reward_execution_info =
+                    self.executor.get_reward_execution_info(
+                        &self.data_man,
+                        inner,
+                        epoch_arena_index,
+                    );
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                    inner.arena[epoch_arena_index].hash,
+                    inner.get_epoch_block_hashes(epoch_arena_index),
+                    inner.get_epoch_start_block_number(epoch_arena_index),
+                    reward_execution_info,
+                    true,
+                    false,
+                ));
+                state_at += 1;
+            }
+            self.persist_terminals(inner);
         }
-        self.persist_terminals(inner);
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 }
