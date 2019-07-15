@@ -149,8 +149,8 @@ pub struct Slab<T, E: EntryTrait<T> = Entry<T>> {
 /// Slab can be shared safely because getting `&mut` out of it is unsafe.
 unsafe impl<T, E> Sync for Slab<T, E> where E: EntryTrait<T> {}
 
-#[derive(Default)]
-struct AllocRelatedFields {
+#[derive(Default, Debug)]
+pub struct AllocRelatedFields {
     // Number of Filled elements currently in the slab
     used: usize,
     // Size of the memory where it's initialized with data or offset to next
