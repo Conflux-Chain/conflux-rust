@@ -5,6 +5,7 @@
 use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
     db::{
         COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_EPOCH_SET_HASHES, COL_MISC,
         COL_TX_ADDRESS,
@@ -83,7 +84,8 @@ impl BlockDataManager {
             config.tx_cache_count,
             10000,
         )));
-        let data_man = Self {
+
+        let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
             compact_blocks: Default::default(),
@@ -92,7 +94,7 @@ impl BlockDataManager {
             epoch_execution_commitments: Default::default(),
             tx_cache: Default::default(),
             invalid_block_set: Default::default(),
-            genesis_block,
+            genesis_block: genesis_block.clone(),
             db,
             storage_manager,
             cache_man,
@@ -102,6 +104,61 @@ impl BlockDataManager {
             worker_pool,
             tx_cache_man,
         };
+
+        if let Some((checkpoint_hash, _)) = data_man.checkpoint_hashes_from_db()
+        {
+            if checkpoint_hash != genesis_block.block_header.hash() {
+                if let Some(checkpoint_block) =
+                    data_man.block_by_hash(&checkpoint_hash, false)
+                {
+                    if data_man
+                        .storage_manager
+                        .contains_state(SnapshotAndEpochIdRef::new(
+                            &checkpoint_hash,
+                            None,
+                        ))
+                        .unwrap()
+                    {
+                        let mut success = true;
+                        let mut cur_hash =
+                            *checkpoint_block.block_header.parent_hash();
+                        for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
+                            assert_ne!(cur_hash, H256::default());
+                            let cur_block =
+                                data_man.block_by_hash(&cur_hash, false);
+                            if cur_block.is_some()
+                                && data_man
+                                    .storage_manager
+                                    .contains_state(SnapshotAndEpochIdRef::new(
+                                        &cur_hash, None,
+                                    ))
+                                    .unwrap()
+                            {
+                                let cur_block = cur_block.unwrap();
+                                data_man.insert_epoch_execution_commitments(
+                                    cur_block.hash(),
+                                    *cur_block
+                                        .block_header
+                                        .deferred_receipts_root(),
+                                    *cur_block
+                                        .block_header
+                                        .deferred_logs_bloom_hash(),
+                                );
+                                cur_hash =
+                                    *cur_block.block_header.parent_hash();
+                            } else {
+                                success = false;
+                                break;
+                            }
+                        }
+
+                        if success {
+                            data_man.genesis_block = checkpoint_block;
+                        }
+                    }
+                }
+            }
+        }
 
         data_man.insert_epoch_execution_commitments(
             data_man.genesis_block.hash(),

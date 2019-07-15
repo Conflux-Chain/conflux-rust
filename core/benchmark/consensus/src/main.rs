@@ -149,7 +149,7 @@ fn initialize_consensus_graph_for_test(
 
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
-    let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+    let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),

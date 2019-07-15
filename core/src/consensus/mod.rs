@@ -200,10 +200,10 @@ impl ConsensusGraph {
         graph
     }
 
-    /// Build the ConsensusGraph with the original genesis block in the data
-    /// manager and various other components The execution will be skipped
-    /// if bench_mode sets to true.
-    pub fn with_genesis_block(
+    /// Build the ConsensusGraph with the initial (checkpointed) genesis block
+    /// in the data manager and various other components. The execution will
+    /// be skipped if bench_mode sets to true.
+    pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig,
