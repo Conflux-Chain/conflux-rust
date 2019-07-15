@@ -2401,7 +2401,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 for peer in timeout_peers {
                     io.disconnect_peer(
                         peer,
-                        Some(UpdateNodeOperation::Demotion),
+                        Some(UpdateNodeOperation::Failure),
                     );
                 }
             }
