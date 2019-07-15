@@ -1061,7 +1061,7 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    /// Subroutine called by on_new_block()
     fn insert_block_initial(
         &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
     ) -> usize {
@@ -1071,7 +1071,7 @@ impl ConsensusNewBlockHandler {
         me
     }
 
-    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    /// Subroutine called by on_new_block()
     fn update_lcts_initial(&self, inner: &mut ConsensusGraphInner, me: usize) {
         let parent = inner.arena[me].parent;
 
@@ -1115,7 +1115,7 @@ impl ConsensusNewBlockHandler {
         );
     }
 
-    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    /// Subroutine called by on_new_block()
     fn update_lcts_finalize(
         &self, inner: &mut ConsensusGraphInner, me: usize, stable: bool,
     ) -> i128 {
@@ -1412,85 +1412,6 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    pub fn on_new_block_construction_only(
-        &self, inner: &mut ConsensusGraphInner, hash: &H256,
-        block_header: &BlockHeader,
-    )
-    {
-        let parent_hash = block_header.parent_hash();
-        if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
-            self.process_outside_block(inner, block_header);
-            return;
-        }
-
-        let me = self.insert_block_initial(inner, block_header);
-
-        let anticone_barrier =
-            ConsensusNewBlockHandler::compute_anticone(inner, me);
-        let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP {
-            Some(inner.compute_subtree_weights(me, &anticone_barrier))
-        } else {
-            None
-        };
-        let (fully_valid, pending) = match self
-            .data_man
-            .local_block_info_from_db(hash)
-        {
-            Some(block_info) => {
-                match block_info.get_status() {
-                    BlockStatus::Valid => (true, false),
-                    BlockStatus::Pending => (true, true),
-                    BlockStatus::PartialInvalid => (false, false),
-                    BlockStatus::Invalid => {
-                        // Blocks marked invalid should not exist in database,
-                        // so should not be inserted
-                        // during construction.
-                        unreachable!()
-                    }
-                }
-            }
-            None => {
-                // FIXME If the status of a block close to terminals is missing
-                // (unlikely to happen if db cannot guarantee the write order)
-                // and we try to check its validity with the
-                // commented code, we will recompute the whole DAG from genesis
-                // because the pivot chain is empty now, which is not what we
-                // want for fast recovery. A better solution is
-                // to assume it's partial invalid, construct the pivot chain and
-                // other data like block_receipts_root first, and then check its
-                // full validity. The pivot chain might need to be updated
-                // depending on the validity result.
-
-                // The correct logic here should be as follows, but this
-                // solution is very costly
-                // ```
-                // let valid = self.check_block_full_validity(me, &block, inner, sync_inner);
-                // self.insert_block_status_to_db(hash, !valid);
-                // valid
-                // ```
-
-                // The assumed value should be false after we fix this issue.
-                // Now we optimistically hope that they are valid.
-                debug!("Assume block {} is valid/pending", hash);
-                (true, true)
-            }
-        };
-
-        inner.arena[me].data.partial_invalid = !fully_valid;
-        inner.arena[me].data.pending = pending;
-
-        self.update_lcts_initial(inner, me);
-
-        let (stable, adaptive) =
-            inner.adaptive_weight(me, &anticone_barrier, weight_tuple.as_ref());
-        inner.arena[me].stable = stable;
-        if self.conf.bench_mode && fully_valid {
-            inner.arena[me].adaptive = adaptive;
-        }
-
-        self.update_lcts_finalize(inner, me, stable);
-    }
-
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, hash: &H256,
         block_header: &BlockHeader,
@@ -1759,11 +1680,12 @@ impl ConsensusNewBlockHandler {
         if transactions.is_some() {
             // It's only correct to set tx stale after the block is considered
             // terminal for mining.
-            // Note that we conservatively only mark those blocks inside the current
-            // pivot era
+            // Note that we conservatively only mark those blocks inside the
+            // current pivot era
             if era_block == cur_pivot_era_block {
-                self.txpool
-                    .set_tx_packed(transactions.clone().expect("Already checked"));
+                self.txpool.set_tx_packed(
+                    transactions.clone().expect("Already checked"),
+                );
             }
             if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
                 < inner.pivot_index_to_height(inner.pivot_chain.len())
@@ -1805,7 +1727,8 @@ impl ConsensusNewBlockHandler {
 
             // Apply transactions in the determined total order
             while state_at < to_state_pos {
-                let epoch_arena_index = inner.get_pivot_block_arena_index(state_at);
+                let epoch_arena_index =
+                    inner.get_pivot_block_arena_index(state_at);
                 let reward_execution_info =
                     self.executor.get_reward_execution_info(
                         &self.data_man,

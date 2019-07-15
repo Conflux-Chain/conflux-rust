@@ -400,9 +400,9 @@ impl ConsensusGraph {
         )
     }
 
-    /// construct_pivot() should be used after on_new_block_construction_only()
-    /// calls. It builds the pivot chain and ists state at once, avoiding
-    /// intermediate redundant computation triggered by on_new_block().
+    /// construct_pivot() builds the pivot chain and ists state at once,
+    /// avoiding intermediate redundant computation triggered by
+    /// on_new_block().
     pub fn construct_pivot(&self) {
         let inner = &mut *self.inner.write();
         self.new_block_handler.construct_pivot_info(inner);
@@ -444,35 +444,6 @@ impl ConsensusGraph {
             terminal_block_hashes,
             bounded_terminal_block_hashes,
         });
-    }
-
-    /// This is the function to insert a new block into the consensus graph
-    /// during construction. We by pass many verifications because those
-    /// blocks are from our own database so we trust them. After inserting
-    /// all blocks with this function, we need to call construct_pivot() to
-    /// finish the building from db!
-    pub fn on_new_block_construction_only(&self, hash: &H256) {
-        let block = self.data_man.block_by_hash(hash, true).unwrap();
-
-        debug!(
-            "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-            block.block_header,
-            block.transactions.len(),
-            block.size(),
-        );
-
-        self.statistics.inc_consensus_graph_processed_block_count();
-        {
-            let inner = &mut *self.inner.write();
-            self.new_block_handler.on_new_block_construction_only(
-                inner,
-                hash,
-                &block.block_header,
-            );
-            self.update_best_info(inner);
-        }
-        self.txpool
-            .notify_new_best_info(self.best_info.read().clone());
     }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
@@ -740,7 +711,7 @@ impl ConsensusGraph {
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
-    /// on_new_block() and on_new_block_construction_only())
+    /// on_new_block()
     pub fn get_processed_block_count(&self) -> usize {
         self.statistics.get_consensus_graph_processed_block_count()
     }

@@ -1243,7 +1243,7 @@ impl SynchronizationGraph {
                 .send((h, false))
                 .expect("Cannot fail");
         } else {
-            self.consensus.on_new_block_construction_only(&h);
+            self.consensus.on_new_block(&h, true);
         }
     }
 
