@@ -405,7 +405,6 @@ impl ConsensusGraph {
     /// on_new_block().
     pub fn construct_pivot(&self) {
         let inner = &mut *self.inner.write();
-        self.new_block_handler.construct_pivot_info(inner);
         self.new_block_handler.construct_state_info(inner);
     }
 
