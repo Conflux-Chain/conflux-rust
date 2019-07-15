@@ -6,7 +6,7 @@ use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
 use crate::sync::{random, Error, ErrorKind};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rand::Rng;
 use std::{
     collections::{HashMap, HashSet},
@@ -36,16 +36,18 @@ pub type SynchronizationPeers =
     HashMap<PeerId, Arc<RwLock<SynchronizationPeerState>>>;
 
 pub struct SynchronizationState {
-    pub catch_up_mode: AtomicBool,
+    is_full_node: bool,
+    pub sync_phase: Mutex<SyncPhase>,
     pub peers: RwLock<SynchronizationPeers>,
     pub handshaking_peers: RwLock<HashMap<PeerId, Instant>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
 }
 
 impl SynchronizationState {
-    pub fn new(catch_up_mode: bool) -> Self {
+    pub fn new(is_full_node: bool) -> Self {
         SynchronizationState {
-            catch_up_mode: AtomicBool::new(catch_up_mode),
+            is_full_node,
+            sync_phase: Mutex::new(SyncPhase::Init),
             peers: Default::default(),
             handshaking_peers: Default::default(),
             last_sent_transaction_hashes: Default::default(),
@@ -147,5 +149,67 @@ impl SynchronizationState {
         }
 
         timeout_peers
+    }
+
+    pub fn is_full_node(&self) -> bool { self.is_full_node }
+
+    pub fn get_middle_epoch(&self) -> Option<u64> {
+        let mut peer_best_epoches = {
+            let peers = self.peers.read();
+            peers
+                .iter()
+                .map(|(_, state)| state.read().best_epoch)
+                .collect::<Vec<_>>()
+        };
+
+        if peer_best_epoches.is_empty() {
+            return None;
+        }
+
+        peer_best_epoches.sort();
+        Some(peer_best_epoches[peer_best_epoches.len() / 2])
+    }
+}
+
+/// The phases are used to control the catch-up logic.
+/// Archive nodes do not have phases `SyncHeaders` and `SyncCheckpoints`.
+#[derive(Debug)]
+pub enum SyncPhase {
+    /// Setup for synchronization. When enough peers are connected and status
+    /// received, we can enter `SyncHeaders`.
+    Init,
+
+    /// The first phase to sync all headers after the latest known checkpoint
+    /// and handle these headers in Consensus without handling any
+    /// state-related work. After enough headers are received, we can find
+    /// a new checkpoint and enter `SyncCheckPoints`.
+    SyncHeaders,
+
+    /// The second phase to sync the states of the new checkpoint. The hash
+    /// inside is the hash of the checkpoint block. After the
+    /// state is retrieved, we'll be able to execute and verify blocks
+    /// after it, so we can enter `SyncBlocks`.
+    SyncCheckpoints(H256),
+
+    /// The third phase to sync all blocks since the latest checkpoint.
+    SyncBlocks,
+
+    /// We have catch up with most peers, so we can follow normal logic.
+    Latest,
+}
+
+impl SyncPhase {
+    pub fn catch_up_mode(&self) -> bool {
+        match self {
+            SyncPhase::Latest => false,
+            _ => true,
+        }
+    }
+
+    pub fn need_requesting_blocks(&self) -> bool {
+        match self {
+            SyncPhase::SyncBlocks|SyncPhase::Latest => true,
+            _ => false,
+        }
     }
 }

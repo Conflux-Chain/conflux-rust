@@ -394,7 +394,7 @@ fn main() {
             block_weight,
         );
         hashes.push(new_hash);
-        sync.insert_block_header(&mut new_block.block_header, false, true);
+        sync.insert_block_header(&mut new_block.block_header, false, true, false);
         sync.insert_block(new_block, false, false, false);
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =

@@ -31,7 +31,10 @@ use super::{
     msg_sender::{send_message, send_message_with_throttling},
     request_manager::{RequestManager, RequestMessage},
 };
-use crate::verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT};
+use crate::{
+    sync::synchronization_state::SyncPhase::{self, SyncBlocks},
+    verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
+};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{Block, BlockHeader, SignedTransaction, TxPropagateId};
 use priority_send_queue::SendQueuePriority;
@@ -227,6 +230,7 @@ pub struct ProtocolConfiguration {
     pub min_peers_propagation: usize,
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
+    pub is_full_node: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -239,7 +243,10 @@ impl SynchronizationProtocolHandler {
     {
         let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
 
-        let syn = Arc::new(SynchronizationState::new(start_as_catch_up_mode));
+        let syn = Arc::new(SynchronizationState::new(
+            protocol_config.is_full_node,
+            start_as_catch_up_mode,
+        ));
 
         let request_manager =
             Arc::new(RequestManager::new(&protocol_config, syn.clone()));
@@ -275,8 +282,12 @@ impl SynchronizationProtocolHandler {
         self.graph.set_to_propagate_trans(transactions);
     }
 
-    pub fn catch_up_mode(&self) -> bool {
-        self.syn.catch_up_mode.load(AtomicOrdering::Relaxed)
+    fn catch_up_mode(&self) -> bool {
+        self.syn.sync_phase.lock().catch_up_mode()
+    }
+
+    fn need_requesting_blocks(&self) -> bool {
+        self.syn.sync_phase.lock().need_requesting_blocks()
     }
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
@@ -1527,16 +1538,27 @@ impl SynchronizationProtocolHandler {
             dependent_hashes,
         );
 
-        // request missing blocks
-        self.request_missing_blocks(
-            io,
-            chosen_peer,
-            hashes.into_iter().collect(),
-        );
+        if self.need_requesting_blocks() {
+            // request missing blocks
+            self.request_missing_blocks(
+                io,
+                chosen_peer,
+                hashes.into_iter().collect(),
+            );
 
-        // relay if necessary
-        self.relay_blocks(io, need_to_relay.into_iter().collect())
-            .ok();
+            // relay if necessary
+            self.relay_blocks(io, need_to_relay.into_iter().collect())
+                .ok();
+        } else {
+            // Headers in `need_to_relay` are all `new_to_be_header_graph_ready`.
+            // A full node in catch_up_mode should handle them in consensus so
+            // the pivot chain can be determined later with only headers
+            for block_hash in need_to_relay {
+                self.graph
+                    .consensus
+                    .on_new_block_construction_only(&block_hash);
+            }
+        }
 
         timestamp_validation_result
     }
@@ -2168,28 +2190,52 @@ impl SynchronizationProtocolHandler {
         self.graph.update_total_weight_in_past();
     }
 
-    fn update_catch_up_mode(&self, io: &NetworkContext) {
-        let mut peer_best_epoches = {
-            let peers = self.syn.peers.read();
-            peers
-                .iter()
-                .map(|(_, state)| state.read().best_epoch)
-                .collect::<Vec<_>>()
-        };
-
-        if peer_best_epoches.is_empty() {
-            return;
+    fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
+        let sync_phase = &mut *self.syn.sync_phase.lock();
+        // TODO handle the case where we need to switch back phase
+        // TODO Do not acquire any consensus inner lock
+        match sync_phase {
+            SyncPhase::Init => {
+                *sync_phase = if self.syn.is_full_node() {
+                    SyncPhase::SyncHeaders
+                } else {
+                    SyncPhase::SyncBlocks
+                }
+            }
+            SyncPhase::SyncHeaders => {
+                let middle_epoch = self.syn.get_middle_epoch()?;
+                if self.graph.consensus.best_epoch_number()
+                    + CATCH_UP_EPOCH_LAG_THRESHOLD
+                    < middle_epoch
+                {
+                    let checkpoint =
+                        self.graph.consensus.current_era_genesis_hash();
+                    *sync_phase = SyncPhase::SyncCheckpoints(checkpoint);
+                }
+            }
+            SyncPhase::SyncCheckpoints(_) => {
+                // TODO handle the case where the checkpoint changes before we retrieve the state
+                // TODO handle checkpoint timeout to try to retrieve the
+                // checkpoint before this one FIXME We should
+                // advance `SyncCheckpoints` to `SyncBlocks` in the handler of
+                // the checkpoint state message
+                *sync_phase = SyncPhase::SyncBlocks;
+            }
+            SyncPhase::SyncBlocks => {
+                let middle_epoch = self.syn.get_middle_epoch()?;
+                if self.graph.consensus.best_epoch_number()
+                    + CATCH_UP_EPOCH_LAG_THRESHOLD
+                    < middle_epoch
+                {
+                    *sync_phase = SyncPhase::Latest;
+                }
+            }
+            SyncPhase::Latest => {
+                // TODO handle the case where we need to switch back phase
+            }
         }
 
-        peer_best_epoches.sort();
-        let middle_epoch = peer_best_epoches[peer_best_epoches.len() / 2];
-        let catch_up_mode = self.graph.consensus.best_epoch_number()
-            + CATCH_UP_EPOCH_LAG_THRESHOLD
-            < middle_epoch;
-        self.syn
-            .catch_up_mode
-            .store(catch_up_mode, AtomicOrdering::Relaxed);
-
+        let catch_up_mode = sync_phase.catch_up_mode();
         let mut need_notify = Vec::new();
         for (peer, state) in self.syn.peers.read().iter() {
             let mut state = state.write();
@@ -2225,6 +2271,7 @@ impl SynchronizationProtocolHandler {
                 );
             }
         }
+        Some(())
     }
 
     fn dispatch_recover_public_task(
@@ -2385,7 +2432,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.block_cache_gc();
             }
             CHECK_CATCH_UP_MODE_TIMER => {
-                self.update_catch_up_mode(io);
+                self.update_sync_phase(io);
                 self.start_sync(io);
             }
             LOG_STATISTIC_TIMER => {
