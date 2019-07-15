@@ -110,7 +110,10 @@
 
 use super::super::errors::*;
 use parking_lot::Mutex;
-use std::{fmt, iter::IntoIterator, marker::PhantomData, mem, ops, ptr, slice};
+use std::{
+    cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, mem, ops,
+    ptr, slice,
+};
 
 /// Pre-allocated storage for a uniform data type.
 /// The modified slab offers internal mutability which mimics the behavior of
@@ -132,13 +135,18 @@ pub struct Slab<T, E: EntryTrait<T> = Entry<T>> {
     // when allocating space for new element. We would like to keep the size of
     // initialized entry in AllocRelatedFields#size_initialized instead of
     // vector.
-    entries: Vec<E>,
+    // UnsafeCell is used because we want to insert/remove from different
+    // threads simultaneously.
+    entries: Vec<UnsafeCell<E>>,
 
     /// Fields which are modified when allocate / delete an entry.
     alloc_fields: Mutex<AllocRelatedFields>,
 
     value_type: PhantomData<T>,
 }
+
+/// Slab can be shared safely because getting `&mut` out of it is unsafe.
+unsafe impl<T, E> Sync for Slab<T, E> where E: EntryTrait<T> {}
 
 #[derive(Default)]
 struct AllocRelatedFields {
@@ -272,14 +280,14 @@ impl<'a, T: 'a, E: 'a + EntryTrait<T>> Drop for VacantEntry<'a, T, E> {
 
 /// An iterator over the values stored in the `Slab`
 pub struct Iter<'a, T: 'a, E: 'a + EntryTrait<T>> {
-    entries: slice::Iter<'a, E>,
+    entries: slice::Iter<'a, UnsafeCell<E>>,
     curr: usize,
     value_type: PhantomData<T>,
 }
 
 /// A mutable iterator over the values stored in the `Slab`
 pub struct IterMut<'a, T: 'a, E: 'a + EntryTrait<T>> {
-    entries: slice::IterMut<'a, E>,
+    entries: slice::IterMut<'a, UnsafeCell<E>>,
     curr: usize,
     value_type: PhantomData<T>,
 }
@@ -305,6 +313,14 @@ impl<T, E: EntryTrait<T>> Default for Slab<T, E> {
 }
 
 impl<T, E: EntryTrait<T>> Slab<T, E> {
+    fn entry_at(&self, key: usize) -> &E {
+        unsafe { &*self.entries.get_unchecked(key).get() }
+    }
+
+    unsafe fn entry_at_mut(&self, key: usize) -> &mut E {
+        &mut *self.entries.get_unchecked(key).get()
+    }
+
     /// Construct a new, empty `Slab` with the specified capacity.
     ///
     /// The returned slab will be able to store exactly `capacity` without
@@ -438,7 +454,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     // TODO(yz): resize_default is nightly only.
     fn resize_up(&mut self, capacity: usize, new_capacity: usize) {
         for _i in capacity..new_capacity {
-            self.entries.push(E::default());
+            self.entries.push(UnsafeCell::new(E::default()));
         }
     }
 
@@ -634,8 +650,10 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab.get(123), None);
     /// ```
     pub fn get(&self, key: usize) -> Option<&T> {
+        // self is shared, and it can generate as many shared refs as possible
         self.entries
             .get(key)
+            .map(|cell| unsafe { &*cell.get() })
             .and_then(|entry| entry.into_option_ref())
     }
 
@@ -643,6 +661,9 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     ///
     /// If the given key is not associated with a value, then `None` is
     /// returned.
+    ///
+    /// This function is unsafe because it can generate more than one `&mut`,
+    /// and can co-exist with shared references. It must be used with care.
     ///
     /// # Examples
     ///
@@ -657,12 +678,12 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab[key], "world");
     /// assert_eq!(slab.get_mut(123), None);
     /// ```
-    // This method is unsafe because user may pass the same key to get_mut at
-    // the same time.
-    pub unsafe fn get_mut(&self, key: usize) -> Option<&mut T> {
-        self.entries.get(key).and_then(|entry| {
-            Self::cast_element_ref_mut(entry).into_option_mut()
-        })
+    pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
+        // getting &mut out of &mut is safe
+        self.entries
+            .get_mut(key)
+            .map(|cell| unsafe { &mut *cell.get() })
+            .and_then(|entry| entry.into_option_mut())
     }
 
     /// Return a reference to the value associated with the given key without
@@ -683,7 +704,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// }
     /// ```
     pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-        self.get_element_at(key).get_occupied_ref()
+        self.entry_at_mut(key).get_occupied_ref()
     }
 
     /// Return a mutable reference to the value associated with the given key
@@ -707,15 +728,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab[key], 13);
     /// ```
     pub unsafe fn get_unchecked_mut(&self, key: usize) -> &mut T {
-        self.get_element_at(key).get_occupied_mut()
-    }
-
-    fn cast_element_ref_mut(r: &E) -> &mut E {
-        unsafe { &mut *((r as *const E) as *mut E) }
-    }
-
-    fn get_element_at(&self, key: usize) -> &mut E {
-        unsafe { Self::cast_element_ref_mut(self.entries.get_unchecked(key)) }
+        self.entry_at_mut(key).get_occupied_mut()
     }
 
     /// Insert a value in the slab, returning key assigned to the value.
@@ -755,14 +768,18 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
                 alloc_fields.next = key + 1;
                 alloc_fields.size_initialized = alloc_fields.next;
             } else {
-                alloc_fields.next = self.entries[key].get_next_vacant_index();
+                alloc_fields.next = self.entry_at(key).get_next_vacant_index();
             }
             Ok(key)
         }
     }
 
     fn insert_at<U: Into<T>>(&self, key: usize, val: U) {
-        *self.get_element_at(key) = E::from(val);
+        // key is guaranteed to exist
+        // FIXME: race condition: A inserts key (vacant entry taken), B removes
+        // key, C completes insertion, A writes data, C data lost
+        // forever
+        unsafe { *self.entry_at_mut(key) = E::from(val) }
     }
 
     /// Return a handle to a vacant entry allowing for further manipulation.
@@ -822,11 +839,13 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         let mut alloc_fields = self.alloc_fields.lock();
         let next = alloc_fields.next;
         let old_value = match self.entries.get(key) {
-            Some(ref val) => {
+            Some(val) => {
+                // alloc_fields effectively lock the whole struct so this is
+                // okay.
+                let entry = unsafe { &mut *val.get() };
                 alloc_fields.used -= 1;
                 alloc_fields.next = key;
-                Self::cast_element_ref_mut(val)
-                    .take_occupied_and_replace(E::from_vacant_index(next))
+                entry.take_occupied_and_replace(E::from_vacant_index(next))
             }
             None => {
                 // Index out of range.
@@ -883,7 +902,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     pub fn retain<F>(&mut self, mut f: F)
     where F: FnMut(usize, &mut T) -> bool {
         for i in 0..self.entries.len() {
-            let keep = unsafe { self.get_mut(i).map_or(true, |v| f(i, v)) };
+            let keep = self.get_mut(i).map_or(true, |v| f(i, v));
 
             if !keep {
                 self.remove(i).unwrap();
@@ -895,7 +914,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
 impl<T, E: EntryTrait<T>> ops::Index<usize> for Slab<T, E> {
     type Output = T;
 
-    fn index(&self, key: usize) -> &T { self.entries[key].get_occupied_ref() }
+    fn index(&self, key: usize) -> &T { self.entry_at(key).get_occupied_ref() }
 }
 
 impl<'a, T, E: EntryTrait<T>> IntoIterator for &'a Slab<T, E> {
@@ -1012,6 +1031,7 @@ impl<'a, T, E: EntryTrait<T>> Iterator for Iter<'a, T, E> {
 
     fn next(&mut self) -> Option<(usize, &'a T)> {
         while let Some(entry) = self.entries.next() {
+            let entry = unsafe { &*entry.get() };
             let curr = self.curr;
             self.curr += 1;
 
@@ -1031,6 +1051,7 @@ impl<'a, T, E: EntryTrait<T>> Iterator for IterMut<'a, T, E> {
 
     fn next(&mut self) -> Option<(usize, &'a mut T)> {
         while let Some(entry) = self.entries.next() {
+            let entry = unsafe { &mut *entry.get() };
             let curr = self.curr;
             self.curr += 1;
 

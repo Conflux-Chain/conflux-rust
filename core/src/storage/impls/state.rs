@@ -244,7 +244,7 @@ impl<'a> State<'a> {
                 self.owned_node_set.as_mut().unwrap(),
             )?;
             // Insert empty node.
-            entry.insert(Default::default());
+            entry.insert(UnsafeCell::new(Default::default()));
 
             self.delta_trie_root =
                 root_cow.into_child().map(|maybe_node| maybe_node.into());
@@ -320,6 +320,7 @@ impl<'a> State<'a> {
                                 &allocator,
                                 &mut cow_root.node_ref,
                             )
+                            .get_ref_mut()
                     };
                     let result = cow_root.commit_dirty_recursively(
                         &self.delta_trie,
@@ -416,7 +417,9 @@ use super::{
         super::db::COL_DELTA_TRIE, state::*, state_manager::*, storage_db::*,
     },
     errors::*,
-    multi_version_merkle_patricia_trie::{merkle_patricia_trie::*, DeltaMpt},
+    multi_version_merkle_patricia_trie::{
+        merkle_patricia_trie::*, node_memory_manager::UnsafeCellTrait, DeltaMpt,
+    },
     state_manager::*,
 };
 use crate::statedb::KeyPadding;
@@ -424,6 +427,7 @@ use primitives::{
     EpochId, MerkleHash, StateRoot, StateRootWithAuxInfo, MERKLE_NULL_NODE,
 };
 use std::{
+    cell::UnsafeCell,
     collections::BTreeSet,
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},

@@ -16,7 +16,7 @@ pub struct CowNodeRef {
 }
 
 pub struct MaybeOwnedTrieNode<'a> {
-    trie_node: &'a TrieNodeDeltaMpt,
+    trie_node: &'a TrieNodeDeltaMptCell,
 }
 
 type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
@@ -26,7 +26,7 @@ type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
 
 /// This class can only be meaningfully used internally by CowNodeRef.
 pub struct MaybeOwnedTrieNodeAsCowCallParam {
-    trie_node: *const TrieNodeDeltaMpt,
+    trie_node: *mut TrieNodeDeltaMpt,
 }
 
 impl MaybeOwnedTrieNodeAsCowCallParam {
@@ -35,7 +35,7 @@ impl MaybeOwnedTrieNodeAsCowCallParam {
     unsafe fn owned_as_mut_unchecked<'a>(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *(self.trie_node as *mut TrieNodeDeltaMpt)
+        &mut *self.trie_node
     }
 
     /// Do not implement in a trait to keep the call private.
@@ -50,13 +50,13 @@ impl<'a, GuardType> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
         GuardedValue::new(
             guard,
             MaybeOwnedTrieNodeAsCowCallParam {
-                trie_node: value.trie_node,
+                trie_node: value.trie_node.get(),
             },
         )
     }
 }
 
-impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMpt> {
+impl<'a, GuardType> GuardedValue<GuardType, &'a UnsafeCell<TrieNodeDeltaMpt>> {
     pub fn into_wrapped(
         x: Self,
     ) -> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
@@ -68,7 +68,7 @@ impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMpt> {
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub fn take(x: Self) -> MaybeOwnedTrieNodeAsCowCallParam {
         MaybeOwnedTrieNodeAsCowCallParam {
-            trie_node: x.trie_node,
+            trie_node: x.trie_node.get(),
         }
     }
 }
@@ -76,15 +76,14 @@ impl<'a> MaybeOwnedTrieNode<'a> {
 impl<'a> Deref for MaybeOwnedTrieNode<'a> {
     type Target = TrieNodeDeltaMpt;
 
-    fn deref(&self) -> &Self::Target { self.trie_node }
+    fn deref(&self) -> &Self::Target { unsafe { &*self.trie_node.get() } }
 }
 
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub unsafe fn owned_as_mut_unchecked(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *(self.trie_node as *const TrieNodeDeltaMpt
-            as *mut TrieNodeDeltaMpt)
+        self.trie_node.get_ref_mut()
     }
 }
 
@@ -288,10 +287,12 @@ impl CowNodeRef {
             let mut cow_child_node = Self::new(node_ref.into(), owned_node_set);
             if cow_child_node.is_owned() {
                 let trie_node = unsafe {
-                    trie.get_node_memory_manager().dirty_node_as_mut_unchecked(
-                        allocator_ref,
-                        &mut cow_child_node.node_ref,
-                    )
+                    trie.get_node_memory_manager()
+                        .dirty_node_as_mut_unchecked(
+                            allocator_ref,
+                            &mut cow_child_node.node_ref,
+                        )
+                        .get_ref_mut()
                 };
                 let commit_result = cow_child_node.commit_dirty_recursively(
                     trie,
@@ -338,10 +339,12 @@ impl CowNodeRef {
     {
         if self.owned {
             let trie_node = unsafe {
-                trie.get_node_memory_manager().dirty_node_as_mut_unchecked(
-                    allocator_ref,
-                    &mut self.node_ref,
-                )
+                trie.get_node_memory_manager()
+                    .dirty_node_as_mut_unchecked(
+                        allocator_ref,
+                        &mut self.node_ref,
+                    )
+                    .get_ref_mut()
             };
             let children_merkles = self.get_or_compute_children_merkles(
                 trie,
@@ -368,7 +371,7 @@ impl CowNodeRef {
                     .compute_merkle_db_loads
                     .fetch_add(1, Ordering::Relaxed);
             }
-            Ok(trie_node.merkle_hash)
+            Ok(trie_node.get_ref().merkle_hash)
         }
     }
 
@@ -715,7 +718,8 @@ impl CowNodeRef {
                 new_entry.insert(new_trie_node);
                 Ok(NodeMemoryManagerDeltaMpt::get_in_memory_node_mut(
                     allocator, key,
-                ))
+                )
+                .get_ref_mut())
             },
         }
     }
@@ -730,7 +734,7 @@ use super::{
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
-        DeltaMpt,
+        DeltaMpt, UnsafeCellTrait,
     },
     merkle::*,
     mpt_value::MptValue,
@@ -740,5 +744,8 @@ use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
-    cell::Cell, hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
+    cell::{Cell, UnsafeCell},
+    hint::unreachable_unchecked,
+    ops::Deref,
+    sync::atomic::Ordering,
 };
