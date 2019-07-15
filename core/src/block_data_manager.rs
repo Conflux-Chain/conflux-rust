@@ -83,7 +83,8 @@ impl BlockDataManager {
             config.tx_cache_count,
             10000,
         )));
-        let data_man = Self {
+
+        let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
             compact_blocks: Default::default(),
@@ -102,6 +103,24 @@ impl BlockDataManager {
             worker_pool,
             tx_cache_man,
         };
+
+        if let Some((checkpoint_hash, _)) = data_man.checkpoint_hashes_from_db()
+        {
+            if let Some(checkpoint_block) =
+                data_man.block_by_hash(&checkpoint_hash, false)
+            {
+                if data_man
+                    .storage_manager
+                    .contains_state(SnapshotAndEpochIdRef::new(
+                        &checkpoint_hash,
+                        None,
+                    ))
+                    .unwrap()
+                {
+                    data_man.genesis_block = checkpoint_block;
+                }
+            }
+        }
 
         data_man.insert_epoch_execution_commitments(
             data_man.genesis_block.hash(),

@@ -177,7 +177,7 @@ impl ArchiveClient {
 
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
-        let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+        let consensus = Arc::new(ConsensusGraph::new(
             conf.consensus_config(),
             vm.clone(),
             txpool.clone(),
