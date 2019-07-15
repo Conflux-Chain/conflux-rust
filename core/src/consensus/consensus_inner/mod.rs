@@ -2,7 +2,7 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, EpochExecutionContext},
     consensus::{
         anticone_cache::AnticoneCache,
         consensus_inner::consensus_executor::{
@@ -234,6 +234,7 @@ pub struct ConsensusGraphNode {
     // We should review the finality computation and check whether we
     // still need this field!
     past_weight: i128,
+    past_num_blocks: u64,
     /// The total weight of its past set in its own era
     past_era_weight: i128,
     stable: bool,
@@ -376,6 +377,13 @@ impl ConsensusGraphInner {
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
         assert!(inner.genesis_block_logs_bloom_hash == KECCAK_EMPTY_BLOOM);
 
+        inner.data_man.insert_epoch_execution_context(
+            data_man.genesis_block().hash(),
+            EpochExecutionContext {
+                start_block_number: 0,
+            },
+        );
+
         inner
             .anticone_cache
             .update(inner.cur_era_genesis_block_arena_index, &BitSet::new());
@@ -493,6 +501,7 @@ impl ConsensusGraphInner {
         let execution_task = EpochExecutionTask::new(
             self.arena[epoch_arena_index].hash,
             self.get_epoch_block_hashes(epoch_arena_index),
+            self.get_epoch_start_block_number(epoch_arena_index),
             self.get_reward_execution_info(data_man, epoch_arena_index),
             true,
             false,
@@ -515,6 +524,13 @@ impl ConsensusGraphInner {
             .iter()
             .map(|idx| self.arena[*idx].hash)
             .collect()
+    }
+
+    #[inline]
+    fn get_epoch_start_block_number(&self, epoch_arena_index: usize) -> u64 {
+        let parent = self.arena[epoch_arena_index].parent;
+
+        return self.arena[parent].past_num_blocks + 1;
     }
 
     pub fn check_mining_adaptive_block(
@@ -1067,7 +1083,8 @@ impl ConsensusGraphInner {
             height: my_height,
             is_heavy,
             difficulty: *block.block_header.difficulty(),
-            past_weight: 0,     // will be updated later below
+            past_weight: 0, // will be updated later below
+            past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
             stable: true,
             // Block header contains an adaptive field, we will verify with our
@@ -1111,6 +1128,10 @@ impl ConsensusGraphInner {
             let past_weight = self.arena[parent].past_weight
                 + self.block_weight(parent, false)
                 + weight_in_my_epoch;
+            let past_num_blocks = self.arena[parent].past_num_blocks
+                + 1
+                + (self.arena[index].data.blockset_in_own_view_of_epoch.len()
+                    as u64);
             let past_era_weight = if parent != era_genesis {
                 self.arena[parent].past_era_weight
                     + self.block_weight(parent, false)
@@ -1119,7 +1140,16 @@ impl ConsensusGraphInner {
                 self.block_weight(parent, false) + weight_era_in_my_epoch
             };
 
+            self.data_man.insert_epoch_execution_context(
+                block.hash(),
+                EpochExecutionContext {
+                    start_block_number: self
+                        .get_epoch_start_block_number(index),
+                },
+            );
+
             self.arena[index].past_weight = past_weight;
+            self.arena[index].past_num_blocks = past_num_blocks;
             self.arena[index].past_era_weight = past_era_weight;
         }
 
