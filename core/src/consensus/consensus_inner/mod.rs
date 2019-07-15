@@ -110,10 +110,6 @@ impl Default for ConsensusGraphPivotData {
 
 struct ConsensusGraphExecutionInfo {
     state_valid: bool,
-    //    blame: u32,
-    //    deferred_state_root: Option<H256>,
-    //    deferred_receipt_root: Option<H256>,
-    //    deferred_logs_bloom_hash: Option<H256>,
     original_deferred_state_root: H256,
     original_deferred_receipt_root: H256,
     original_deferred_logs_bloom_hash: H256,
@@ -123,42 +119,12 @@ impl Default for ConsensusGraphExecutionInfo {
     fn default() -> Self {
         ConsensusGraphExecutionInfo {
             state_valid: true,
-            //            blame: 0,
-            //            deferred_state_root: None,
-            //            deferred_receipt_root: None,
-            //            deferred_logs_bloom_hash: None,
             original_deferred_state_root: Default::default(),
             original_deferred_receipt_root: Default::default(),
             original_deferred_logs_bloom_hash: Default::default(),
         }
     }
 }
-
-//impl ConsensusGraphExecutionInfo {
-//    pub fn deferred_state_root(&self) -> &H256 {
-//        if let Some(x) = self.deferred_state_root.as_ref() {
-//            x
-//        } else {
-//            &self.original_deferred_state_root
-//        }
-//    }
-//
-//    pub fn deferred_receipt_root(&self) -> &H256 {
-//        if let Some(x) = self.deferred_receipt_root.as_ref() {
-//            x
-//        } else {
-//            &self.original_deferred_receipt_root
-//        }
-//    }
-//
-//    pub fn deferred_logs_bloom_hash(&self) -> &H256 {
-//        if let Some(x) = self.deferred_logs_bloom_hash.as_ref() {
-//            x
-//        } else {
-//            &self.original_deferred_logs_bloom_hash
-//        }
-//    }
-//}
 
 pub struct TotalWeightInPast {
     pub old: U256,
@@ -1394,7 +1360,7 @@ impl ConsensusGraphInner {
                 let epoch_blocks = self
                     .get_executable_epoch_blocks(data_man, pivot_arena_index);
 
-                let mut epoch_block_anticone_overlimited =
+                let mut epoch_block_no_reward =
                     Vec::with_capacity(epoch_blocks.len());
                 let mut epoch_block_anticone_difficulties =
                     Vec::with_capacity(epoch_blocks.len());
@@ -1475,12 +1441,12 @@ impl ConsensusGraphInner {
                         // LINT.ThenChange(consensus/consensus_executor.
                         // rs#ANTICONE_PENALTY_2)
                     }
-                    epoch_block_anticone_overlimited.push(anticone_overlimited);
+                    epoch_block_no_reward.push(anticone_overlimited);
                     epoch_block_anticone_difficulties.push(anticone_difficulty);
                 }
                 RewardExecutionInfo {
                     epoch_blocks,
-                    epoch_block_anticone_overlimited,
+                    epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
                 }
             },
@@ -1956,32 +1922,16 @@ impl ConsensusGraphInner {
             && *block_header.deferred_logs_bloom_hash()
                 == deferred_logs_bloom_hash;
 
+        if state_valid {
+            debug!("compute_execution_info_with_result(): Block {} state/blame is valid.", self.arena[me].hash);
+        } else {
+            debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
+        }
+
         self.execution_info_cache.insert(
             me,
             ConsensusGraphExecutionInfo {
                 state_valid,
-                //                blame,
-                //                deferred_state_root: if
-                // original_deferred_state_root
-                // == deferred_state_root                {
-                //                    None
-                //                } else {
-                //                    Some(deferred_state_root)
-                //                },
-                //                deferred_receipt_root: if
-                // original_deferred_receipt_root
-                // == deferred_receipt_root                {
-                //                    None
-                //                } else {
-                //                    Some(deferred_receipt_root)
-                //                },
-                //                deferred_logs_bloom_hash: if
-                // original_deferred_logs_bloom_hash
-                // == deferred_logs_bloom_hash                {
-                //                    None
-                //                } else {
-                //                    Some(deferred_logs_bloom_hash)
-                //                },
                 original_deferred_state_root,
                 original_deferred_receipt_root,
                 original_deferred_logs_bloom_hash,

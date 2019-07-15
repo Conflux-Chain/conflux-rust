@@ -56,7 +56,7 @@ lazy_static! {
 /// for old epochs
 pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
-    pub epoch_block_anticone_overlimited: Vec<bool>,
+    pub epoch_block_no_reward: Vec<bool>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
 }
 
@@ -65,13 +65,13 @@ impl Debug for RewardExecutionInfo {
         write!(
             f,
             "RewardExecutionInfo{{ epoch_blocks: {:?} \
-             epoch_block_anticone_overlimited: {:?} \
+             epoch_block_no_reward: {:?} \
              epoch_block_anticone_difficulties: {:?}}}",
             self.epoch_blocks
                 .iter()
                 .map(|b| b.hash())
                 .collect::<Vec<H256>>(),
-            self.epoch_block_anticone_overlimited,
+            self.epoch_block_no_reward,
             self.epoch_block_anticone_difficulties
         )
     }
@@ -242,54 +242,61 @@ impl ConsensusExecutor {
         }
     }
 
-    pub fn get_blame_and_deferred_state_for_generation(
-        &self, parent_block_hash: &H256,
-        inner_lock: &RwLock<ConsensusGraphInner>,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String>
-    {
-        let parent;
+    fn collect_blocks_missing_execution_info(
+        &self, me: usize, inner: &ConsensusGraphInner,
+    ) -> Result<Vec<(H256, H256)>, String> {
+        let mut missing_block_cnt = 0;
+        let mut cur = me;
         let mut waiting_blocks = Vec::new();
+        while !inner.execution_info_cache.contains_key(&cur) {
+            missing_block_cnt += 1;
+            if missing_block_cnt >= BLAME_BOUND {
+                break;
+            }
+            let cur_hash = inner.arena[cur].hash.clone();
+            let state_hash = inner
+                .get_state_block_with_delay(
+                    &cur_hash,
+                    DEFERRED_STATE_EPOCH_COUNT as usize,
+                )?
+                .clone();
+            waiting_blocks.push((cur_hash, state_hash));
+            if missing_block_cnt >= BLAME_BOUND
+                || cur == inner.cur_era_genesis_block_arena_index
+            {
+                break;
+            }
+            cur = inner.arena[cur].parent;
+        }
+        Ok(waiting_blocks)
+    }
+
+    fn compute_execution_info_for_blocks(
+        &self, waiting_result: Vec<(H256, (StateRootWithAuxInfo, H256, H256))>,
+        inner: &mut ConsensusGraphInner,
+    ) -> Result<(), String>
+    {
+        for (cur_hash, result) in waiting_result {
+            let index_opt = inner.hash_to_arena_indices.get(&cur_hash);
+            if index_opt.is_none() {
+                return Err("Too old parent/subtree to prepare for generation"
+                    .to_owned());
+            }
+            let index = *index_opt.unwrap();
+            inner.compute_execution_info_with_result(index, result)?;
+        }
+        Ok(())
+    }
+
+    fn wait_and_compute_execution_info(
+        &self, me: usize, inner_lock: &RwLock<ConsensusGraphInner>,
+    ) -> Result<(), String> {
+        let mut waiting_blocks;
         {
-            let inner = inner_lock.read();
-            let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
-            if parent_opt.is_none() {
-                return Err(
-                    "Too old parent to prepare for generation".to_owned()
-                );
-            }
-            parent = *parent_opt.unwrap();
+            let inner = &*inner_lock.read();
             // We go up and find all states whose execution_infos are missing
-            let mut missing_block_cnt = 0;
-            let mut cur = parent;
-            waiting_blocks.push((
-                None,
-                inner
-                    .get_state_block_with_delay(
-                        parent_block_hash,
-                        DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-                    )?
-                    .clone(),
-            ));
-            while !inner.execution_info_cache.contains_key(&cur) {
-                missing_block_cnt += 1;
-                if missing_block_cnt >= BLAME_BOUND {
-                    break;
-                }
-                let cur_hash = inner.arena[cur].hash.clone();
-                let state_hash = inner
-                    .get_state_block_with_delay(
-                        &cur_hash,
-                        DEFERRED_STATE_EPOCH_COUNT as usize,
-                    )?
-                    .clone();
-                waiting_blocks.push((Some(cur_hash), state_hash));
-                if missing_block_cnt >= BLAME_BOUND
-                    || cur == inner.cur_era_genesis_block_arena_index
-                {
-                    break;
-                }
-                cur = inner.arena[cur].parent;
-            }
+            waiting_blocks =
+                self.collect_blocks_missing_execution_info(me, inner)?;
         }
         // Now we wait without holding the inner lock
         // Note that we must use hash instead of index because once we release
@@ -307,19 +314,38 @@ impl ConsensusExecutor {
         // blocks to come back
         {
             let inner = &mut *inner_lock.write();
-            let (_, last_result) = waiting_result.pop().unwrap();
-            for (cur_hash_opt, result) in waiting_result {
-                let cur_hash = cur_hash_opt.unwrap();
-                let index_opt = inner.hash_to_arena_indices.get(&cur_hash);
-                if index_opt.is_none() {
-                    return Err(
-                        "Too old parent/subtree to prepare for generation"
-                            .to_owned(),
-                    );
-                }
-                let index = *index_opt.unwrap();
-                inner.compute_execution_info_with_result(index, result)?;
+            self.compute_execution_info_for_blocks(waiting_result, inner)?;
+            Ok(())
+        }
+    }
+
+    pub fn get_blame_and_deferred_state_for_generation(
+        &self, parent_block_hash: &H256,
+        inner_lock: &RwLock<ConsensusGraphInner>,
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String>
+    {
+        let parent;
+        let last_state_block;
+        {
+            let inner = inner_lock.read();
+            let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
+            if parent_opt.is_none() {
+                return Err(
+                    "Too old parent to prepare for generation".to_owned()
+                );
             }
+            parent = *parent_opt.unwrap();
+            last_state_block = inner
+                .get_state_block_with_delay(
+                    parent_block_hash,
+                    DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+                )?
+                .clone();
+        }
+        let last_result = self.wait_for_result(last_state_block);
+        self.wait_and_compute_execution_info(parent, inner_lock)?;
+        {
+            let inner = &mut *inner_lock.write();
             if inner.arena[parent].hash == *parent_block_hash {
                 Ok(inner.compute_blame_and_state_with_execution_result(
                     parent,
@@ -861,14 +887,13 @@ impl ConsensusExecutionHandler {
 
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
-            let anticone_overlimited =
-                reward_info.epoch_block_anticone_overlimited[enum_idx];
+            let no_reward = reward_info.epoch_block_no_reward[enum_idx];
 
-            if anticone_overlimited {
+            if no_reward {
                 epoch_block_total_rewards.push(U256::from(0));
                 if debug_record.is_some() {
                     let debug_out = debug_record.as_mut().unwrap();
-                    debug_out.anticone_overlimit_blocks.push(block.hash());
+                    debug_out.no_reward_blocks.push(block.hash());
                 }
             } else {
                 let mut reward = if block.block_header.pow_quality
@@ -976,9 +1001,7 @@ impl ConsensusExecutionHandler {
                 );
                 // `false` means the block is fully valid
                 // Partial invalid blocks will not share the tx fee
-                if reward_info.epoch_block_anticone_overlimited[enum_idx]
-                    == false
-                {
+                if reward_info.epoch_block_no_reward[enum_idx] == false {
                     info.1.insert(block_hash);
                 }
                 if !fee.is_zero() && info.0.is_zero() {
