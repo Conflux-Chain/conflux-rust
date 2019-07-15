@@ -861,7 +861,8 @@ mod json {
         pub fn into_node(self) -> Option<super::Node> {
             match super::Node::from_str(&self.url) {
                 Ok(mut node) => {
-                    node.last_contact = Some(self.last_contact?.into_node_contact());
+                    node.last_contact =
+                        self.last_contact.map(NodeContact::into_node_contact);
                     Some(node)
                 }
                 _ => None,
