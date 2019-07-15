@@ -146,7 +146,8 @@ pub struct Slab<T, E: EntryTrait<T> = Entry<T>> {
     value_type: PhantomData<T>,
 }
 
-/// Slab can be shared safely because getting `&mut` out of it is unsafe.
+/// Slab can be shared safely because insertion and deletion are guarded by
+/// `alloc_fields`. Other operations do not require special treatment.
 unsafe impl<T, E> Sync for Slab<T, E> where E: EntryTrait<T> {}
 
 #[derive(Default, Debug)]
@@ -665,9 +666,6 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     ///
     /// If the given key is not associated with a value, then `None` is
     /// returned.
-    ///
-    /// This function is unsafe because it can generate more than one `&mut`,
-    /// and can co-exist with shared references. It must be used with care.
     ///
     /// # Examples
     ///
