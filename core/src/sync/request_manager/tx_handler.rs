@@ -69,6 +69,7 @@ impl ReceivedTransactionContainer {
             if let Some(vector) = inner.txid_container.get(&fixed_bytes) {
                 for value in vector {
                     if value[random_position as usize] == random_byte {
+                        TX_RANDOM_BYTE_METER.mark(1);
                         return true;
                     }
                 }
