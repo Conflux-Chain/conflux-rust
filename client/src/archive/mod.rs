@@ -9,10 +9,10 @@ pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 
 use cfxcore::{
-    cache_manager::CacheManager, genesis, pow::WORKER_COMPUTATION_PARALLELISM,
-    statistics::Statistics, storage::StorageManager,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
-    ConsensusGraph, SynchronizationService, TransactionPool,
+    genesis, pow::WORKER_COMPUTATION_PARALLELISM, statistics::Statistics,
+    storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    vm_factory::VmFactory, ConsensusGraph, SynchronizationService,
+    TransactionPool,
 };
 
 use crate::rpc::{
@@ -159,27 +159,17 @@ impl ArchiveClient {
         );
         debug!("Initialize genesis_block={:?}", genesis_block);
 
-        let mb = 1024 * 1024;
-        let max_cache_size = cache_config.ledger_mb() * mb;
-        let pref_cache_size = max_cache_size * 3 / 4;
-        // 400 is the average size of the key. TODO(ming): make sure this again.
-        let cache_man = Arc::new(Mutex::new(CacheManager::new(
-            pref_cache_size,
-            max_cache_size,
-            3 * mb,
-        )));
-
         let data_man = Arc::new(BlockDataManager::new(
+            cache_config,
             Arc::new(genesis_block),
             ledger_db.clone(),
             storage_manager,
-            cache_man,
+            worker_thread_pool,
             conf.data_mananger_config(),
         ));
 
         let txpool = Arc::new(TransactionPool::with_capacity(
             conf.raw_conf.tx_pool_size,
-            worker_thread_pool.clone(),
             data_man.clone(),
         ));
 
@@ -381,7 +371,7 @@ impl ArchiveClient {
         warn!("Shutdown timeout reached, exiting uncleanly.");
     }
 
-    pub fn close(handle: ArchiveClientHandle) -> i32 {
+    pub fn close(handle: ArchiveClientHandle) {
         let (ledger_db, blockgen, to_drop) = handle.into_be_dropped();
         BlockGenerator::stop(&blockgen);
         drop(blockgen);
@@ -390,12 +380,11 @@ impl ArchiveClient {
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
         ArchiveClient::wait_for_drop(ledger_db);
-        0
     }
 
     pub fn run_until_closed(
         exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: ArchiveClientHandle,
-    ) -> i32 {
+    ) {
         CtrlC::set_handler({
             let e = exit.clone();
             move || {
@@ -408,6 +397,7 @@ impl ArchiveClient {
         if !*lock {
             let _ = exit.1.wait(&mut lock);
         }
-        ArchiveClient::close(keep_alive)
+
+        ArchiveClient::close(keep_alive);
     }
 }

@@ -9,7 +9,7 @@ use crate::{
             EpochExecutionTask, RewardExecutionInfo,
         },
         ANTICONE_PENALTY_RATIO, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
-        DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
+        BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
     },
     hash::KECCAK_EMPTY_LIST_RLP,
     pow::{target_difficulty, ProofOfWorkConfig},
@@ -23,7 +23,8 @@ use cfx_types::{
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::MinLinkCutTree;
 use primitives::{
-    receipt::Receipt, Block, EpochNumber, StateRoot, TransactionAddress,
+    receipt::Receipt, Block, BlockHeaderBuilder, StateRootWithAuxInfo,
+    TransactionAddress,
 };
 use slab::Slab;
 use std::{
@@ -106,6 +107,58 @@ impl Default for ConsensusGraphPivotData {
         }
     }
 }
+
+struct ConsensusGraphExecutionInfo {
+    state_valid: bool,
+    //    blame: u32,
+    //    deferred_state_root: Option<H256>,
+    //    deferred_receipt_root: Option<H256>,
+    //    deferred_logs_bloom_hash: Option<H256>,
+    original_deferred_state_root: H256,
+    original_deferred_receipt_root: H256,
+    original_deferred_logs_bloom_hash: H256,
+}
+
+impl Default for ConsensusGraphExecutionInfo {
+    fn default() -> Self {
+        ConsensusGraphExecutionInfo {
+            state_valid: true,
+            //            blame: 0,
+            //            deferred_state_root: None,
+            //            deferred_receipt_root: None,
+            //            deferred_logs_bloom_hash: None,
+            original_deferred_state_root: Default::default(),
+            original_deferred_receipt_root: Default::default(),
+            original_deferred_logs_bloom_hash: Default::default(),
+        }
+    }
+}
+
+//impl ConsensusGraphExecutionInfo {
+//    pub fn deferred_state_root(&self) -> &H256 {
+//        if let Some(x) = self.deferred_state_root.as_ref() {
+//            x
+//        } else {
+//            &self.original_deferred_state_root
+//        }
+//    }
+//
+//    pub fn deferred_receipt_root(&self) -> &H256 {
+//        if let Some(x) = self.deferred_receipt_root.as_ref() {
+//            x
+//        } else {
+//            &self.original_deferred_receipt_root
+//        }
+//    }
+//
+//    pub fn deferred_logs_bloom_hash(&self) -> &H256 {
+//        if let Some(x) = self.deferred_logs_bloom_hash.as_ref() {
+//            x
+//        } else {
+//            &self.original_deferred_logs_bloom_hash
+//        }
+//    }
+//}
 
 pub struct TotalWeightInPast {
     pub old: U256,
@@ -192,7 +245,7 @@ pub struct ConsensusGraphInner {
     // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
     // The ``original'' genesis state root, receipts root, and logs bloom hash.
-    genesis_block_state_root: StateRoot,
+    genesis_block_state_root: H256,
     genesis_block_receipts_root: H256,
     genesis_block_logs_bloom_hash: H256,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
@@ -221,6 +274,8 @@ pub struct ConsensusGraphInner {
     // The cache to store Anticone information of each node. This could be very
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
+    // The cache to store execution information of nodes in the consensus graph
+    execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     total_weight_in_past_2d: TotalWeightInPast,
@@ -250,11 +305,22 @@ pub struct ConsensusGraphNode {
 }
 
 impl ConsensusGraphInner {
-    pub fn with_genesis_block(
+    pub fn with_era_genesis_block(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
-        inner_conf: ConsensusInnerConfig,
+        inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
+        cur_era_stable_height: u64,
     ) -> Self
     {
+        let genesis_block = data_man
+            .block_by_hash(cur_era_genesis_block_hash, true)
+            .unwrap();
+        let cur_era_genesis_height = genesis_block.block_header.height();
+        assert!(cur_era_stable_height >= cur_era_genesis_height);
+        assert!(
+            cur_era_stable_height == 0
+                || cur_era_stable_height
+                    == cur_era_genesis_height + inner_conf.era_epoch_count
+        );
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
@@ -264,8 +330,8 @@ impl ConsensusGraphInner {
             terminal_hashes: Default::default(),
             legacy_refs: HashMap::new(),
             cur_era_genesis_block_arena_index: NULL,
-            cur_era_genesis_height: 0,
-            cur_era_stable_height: 0,
+            cur_era_genesis_height,
+            cur_era_stable_height,
             genesis_block_state_root: data_man
                 .genesis_block()
                 .block_header
@@ -292,6 +358,7 @@ impl ConsensusGraphInner {
             data_man: data_man.clone(),
             inner_conf,
             anticone_cache: AnticoneCache::new(),
+            execution_info_cache: HashMap::new(),
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
@@ -306,8 +373,7 @@ impl ConsensusGraphInner {
         // and then into synchronization graph. All the other blocks will be
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
-        let (genesis_arena_index, _) =
-            inner.insert(data_man.genesis_block().as_ref());
+        let (genesis_arena_index, _) = inner.insert(genesis_block.as_ref());
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
         inner
             .weight_tree
@@ -372,6 +438,19 @@ impl ConsensusGraphInner {
             .anticone_cache
             .update(inner.cur_era_genesis_block_arena_index, &BitSet::new());
         inner
+    }
+
+    pub fn persist_epoch_set_hashes(&self, pivot_index: usize) {
+        let height = self.pivot_index_to_height(pivot_index);
+        let arena_index = self.pivot_chain[pivot_index];
+        let epoch_set_hashes = self.arena[arena_index]
+            .data
+            .ordered_executable_epoch_blocks
+            .iter()
+            .map(|arena_index| self.arena[*arena_index].hash)
+            .collect();
+        self.data_man
+            .insert_epoch_set_hashes_to_db(height, &epoch_set_hashes);
     }
 
     #[inline]
@@ -1501,6 +1580,33 @@ impl ConsensusGraphInner {
         self.arena[self.best_state_arena_index()].hash
     }
 
+    pub fn get_state_block_with_delay(
+        &self, block_hash: &H256, delay: usize,
+    ) -> Result<&H256, String> {
+        let idx_opt = self.hash_to_arena_indices.get(block_hash);
+        if idx_opt == None {
+            return Err(
+                "Parent hash is too old for computing the deferred state"
+                    .to_owned(),
+            );
+        }
+        let mut idx = *idx_opt.unwrap();
+        for _i in 0..delay {
+            if idx == self.cur_era_genesis_block_arena_index {
+                // If it is the original genesis, we just break
+                if self.arena[self.cur_era_genesis_block_arena_index].height
+                    == 0
+                {
+                    break;
+                } else {
+                    return Err("Parent hash is too old for computing the deferred state".to_owned());
+                }
+            }
+            idx = self.arena[idx].parent;
+        }
+        Ok(&self.arena[idx].hash)
+    }
+
     /// Return None if the best state is not executed or the db returned error
     // TODO check if we can ignore the db error
     pub fn try_get_best_state<'a>(
@@ -1523,40 +1629,20 @@ impl ConsensusGraphInner {
         self.cur_era_genesis_height + self.pivot_chain.len() as u64 - 1
     }
 
-    pub fn get_height_from_epoch_number(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<u64, String> {
-        Ok(match epoch_number {
-            EpochNumber::Earliest => 0,
-            EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.best_state_epoch_number(),
-            EpochNumber::Number(num) => {
-                let epoch_num = num;
-                if epoch_num > self.best_epoch_number() {
-                    return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
-                }
-                epoch_num
-            }
-        })
-    }
-
     fn get_arena_index_from_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: u64,
     ) -> Result<usize, String> {
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                if height >= self.cur_era_genesis_height {
-                    Ok(self.get_pivot_block_arena_index(height))
-                } else {
-                    Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
-                }
-            })
+        if epoch_number >= self.cur_era_genesis_height {
+            Ok(self.get_pivot_block_arena_index(epoch_number))
+        } else {
+            Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
+        }
     }
 
     pub fn get_hash_from_epoch_number(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: u64,
     ) -> Result<H256, String> {
-        let height = self.get_height_from_epoch_number(epoch_number)?;
+        let height = epoch_number;
         if height >= self.cur_era_genesis_height {
             Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
         } else {
@@ -1576,7 +1662,7 @@ impl ConsensusGraphInner {
     }
 
     pub fn block_hashes_by_epoch(
-        &self, epoch_number: EpochNumber,
+        &self, epoch_number: u64,
     ) -> Result<Vec<H256>, String> {
         debug!(
             "block_hashes_by_epoch epoch_number={:?} pivot_chain.len={:?}",
@@ -1608,10 +1694,10 @@ impl ConsensusGraphInner {
         })
     }
 
-    fn get_balance(
-        &self, address: H160, epoch_number: EpochNumber,
+    pub fn get_balance(
+        &self, address: H160, epoch_number: u64,
     ) -> Result<U256, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number.clone())?;
+        let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let maybe_state = self
             .data_man
             .storage_manager
@@ -1653,36 +1739,14 @@ impl ConsensusGraphInner {
         let mut current_number = 0;
         let mut hashes = Vec::new();
         while current_number <= epoch_number {
-            let epoch_hashes = self
-                .block_hashes_by_epoch(EpochNumber::Number(
-                    current_number.into(),
-                ))
-                .unwrap();
+            let epoch_hashes =
+                self.block_hashes_by_epoch(current_number.into()).unwrap();
             for hash in epoch_hashes {
                 hashes.push(hash);
             }
             current_number += 1;
         }
         hashes
-    }
-
-    pub fn validate_stated_epoch(
-        &self, epoch_number: &EpochNumber,
-    ) -> Result<(), String> {
-        match epoch_number {
-            EpochNumber::LatestMined => {
-                return Err("Latest mined epoch is not executed".into());
-            }
-            EpochNumber::Number(num) => {
-                let latest_state_epoch = self.best_state_epoch_number();
-                if *num > latest_state_epoch {
-                    return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
     }
 
     pub fn block_receipts_by_hash(
@@ -1739,10 +1803,8 @@ impl ConsensusGraphInner {
     }
 
     pub fn transaction_count(
-        &self, address: H160, epoch_number: EpochNumber,
+        &self, address: H160, epoch_number: u64,
     ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-
         let hash = self.get_hash_from_epoch_number(epoch_number)?;
         let state_db = StateDb::new(
             self.data_man
@@ -1757,21 +1819,11 @@ impl ConsensusGraphInner {
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
-    pub fn get_balance_validated(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        self.get_balance(address, epoch_number)
-    }
-
     pub fn check_block_pivot_assumption(
         &self, pivot_hash: &H256, epoch: u64,
     ) -> Result<(), String> {
-        let last_number = self
-            .get_height_from_epoch_number(EpochNumber::LatestMined)
-            .unwrap();
-        let hash =
-            self.get_hash_from_epoch_number(EpochNumber::Number(epoch.into()))?;
+        let last_number = self.best_epoch_number();
+        let hash = self.get_hash_from_epoch_number(epoch)?;
         if epoch > last_number || hash != *pivot_hash {
             return Err("Error: pivot chain assumption failed".to_owned());
         }
@@ -1799,6 +1851,144 @@ impl ConsensusGraphInner {
         } else {
             into_i128(&self.arena[me].difficulty)
         }
+    }
+
+    fn compute_blame_and_state_with_execution_result(
+        &self, parent: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
+        let mut cur = parent;
+        let mut blame: u32 = 0;
+        let mut state_blame_vec = Vec::new();
+        let mut receipt_blame_vec = Vec::new();
+        let mut bloom_blame_vec = Vec::new();
+        state_blame_vec
+            .push(exec_result.0.state_root.compute_state_root_hash());
+        receipt_blame_vec.push(exec_result.1.clone());
+        bloom_blame_vec.push(exec_result.2.clone());
+        while blame < BLAME_BOUND {
+            let exec_info_opt = self.execution_info_cache.get(&cur);
+            if exec_info_opt.is_none() {
+                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
+            }
+            let exec_info = exec_info_opt.unwrap();
+            if exec_info.state_valid {
+                break;
+            }
+            blame += 1;
+            if cur == self.cur_era_genesis_block_arena_index
+                && blame < BLAME_BOUND
+            {
+                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
+            }
+            state_blame_vec
+                .push(exec_info.original_deferred_state_root.clone());
+            receipt_blame_vec
+                .push(exec_info.original_deferred_receipt_root.clone());
+            bloom_blame_vec
+                .push(exec_info.original_deferred_logs_bloom_hash.clone());
+            cur = self.arena[cur].parent;
+        }
+        if blame > 0 {
+            Ok((
+                blame,
+                exec_result.0,
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    state_blame_vec,
+                ),
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    receipt_blame_vec,
+                ),
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    bloom_blame_vec,
+                ),
+            ))
+        } else {
+            Ok((
+                0,
+                exec_result.0,
+                state_blame_vec.pop().unwrap(),
+                receipt_blame_vec.pop().unwrap(),
+                bloom_blame_vec.pop().unwrap(),
+            ))
+        }
+    }
+
+    fn compute_execution_info_with_result(
+        &mut self, me: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
+    ) -> Result<(), String> {
+        // For the original genesis, it is always correct
+        if self.arena[me].height == 0 {
+            self.execution_info_cache.insert(
+                me,
+                ConsensusGraphExecutionInfo {
+                    state_valid: true,
+                    original_deferred_state_root: self.genesis_block_state_root,
+                    original_deferred_receipt_root: self
+                        .genesis_block_receipts_root,
+                    original_deferred_logs_bloom_hash: self
+                        .genesis_block_logs_bloom_hash,
+                },
+            );
+            return Ok(());
+        }
+        let parent = self.arena[me].parent;
+        let original_deferred_state_root =
+            exec_result.0.state_root.compute_state_root_hash();
+        let original_deferred_receipt_root = exec_result.1.clone();
+        let original_deferred_logs_bloom_hash = exec_result.2.clone();
+        let (
+            blame,
+            _,
+            deferred_state_root,
+            deferred_receipt_root,
+            deferred_logs_bloom_hash,
+        ) = self.compute_blame_and_state_with_execution_result(
+            parent,
+            exec_result,
+        )?;
+        let block_header = self
+            .data_man
+            .block_header_by_hash(&self.arena[me].hash)
+            .unwrap();
+        let state_valid = block_header.blame() == blame
+            && *block_header.deferred_state_root() == deferred_state_root
+            && *block_header.deferred_receipts_root() == deferred_receipt_root
+            && *block_header.deferred_logs_bloom_hash()
+                == deferred_logs_bloom_hash;
+
+        self.execution_info_cache.insert(
+            me,
+            ConsensusGraphExecutionInfo {
+                state_valid,
+                //                blame,
+                //                deferred_state_root: if
+                // original_deferred_state_root
+                // == deferred_state_root                {
+                //                    None
+                //                } else {
+                //                    Some(deferred_state_root)
+                //                },
+                //                deferred_receipt_root: if
+                // original_deferred_receipt_root
+                // == deferred_receipt_root                {
+                //                    None
+                //                } else {
+                //                    Some(deferred_receipt_root)
+                //                },
+                //                deferred_logs_bloom_hash: if
+                // original_deferred_logs_bloom_hash
+                // == deferred_logs_bloom_hash                {
+                //                    None
+                //                } else {
+                //                    Some(deferred_logs_bloom_hash)
+                //                },
+                original_deferred_state_root,
+                original_deferred_receipt_root,
+                original_deferred_logs_bloom_hash,
+            },
+        );
+
+        Ok(())
     }
 
     /// Compute the total weight in the epoch represented by the block of

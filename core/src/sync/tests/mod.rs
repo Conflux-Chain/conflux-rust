@@ -4,7 +4,7 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
-    cache_manager::CacheManager,
+    cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
@@ -90,29 +90,17 @@ fn initialize_synchronization_graph(
         U256::from(10),
     ));
 
-    let mb = 1024 * 1024;
-    let max_cache_size = 2048 * mb; // DEFAULT_LEDGER_CACHE_SIZE
-    let pref_cache_size = max_cache_size * 3 / 4;
-
-    let cache_man = Arc::new(Mutex::new(CacheManager::new(
-        pref_cache_size,
-        max_cache_size,
-        3 * mb,
-    )));
-
     let data_man = Arc::new(BlockDataManager::new(
+        CacheConfig::default(),
         genesis_block,
         ledger_db.clone(),
         storage_manager,
-        cache_man,
-        DataManagerConfiguration::new(false, true),
+        worker_thread_pool,
+        DataManagerConfiguration::new(false, true, 250000),
     ));
 
-    let txpool = Arc::new(TransactionPool::with_capacity(
-        500_000,
-        worker_thread_pool.clone(),
-        data_man.clone(),
-    ));
+    let txpool =
+        Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
     let statistics = Arc::new(Statistics::new());
 
     let vm = VmFactory::new(1024 * 32);

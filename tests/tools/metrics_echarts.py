@@ -19,10 +19,8 @@ class Metric:
 
     @staticmethod
     def create_metric(metric_type:str, name:str):
-        if metric_type == "Group":
+        if metric_type in ["Group", "Meter", "Histogram"]:
             return MetricGrouping(name)
-        elif metric_type == "Meter":
-            return MetricMeter(name)
         elif metric_type in ["Gauge", "Counter"]:
             return MetricGauge(name)
         else:
@@ -46,27 +44,6 @@ class MetricGauge(Metric):
     def add_yaxis(self, chart:Line):
         chart.add_yaxis(None, self.values)
 
-class MetricMeter(Metric):
-    def __init__(self, name:str):
-        Metric.__init__(self, name)
-        self.m1 = []
-        self.m5 = []
-        self.m15 = []
-        self.mean = []
-
-    def append(self, timestamp, metric):
-        self.timestamps.append(timestamp)
-        self.m1.append(parse_value(metric, "m1: ", ","))
-        self.m5.append(parse_value(metric, "m5: ", ","))
-        self.m15.append(parse_value(metric, "m15: ", ","))
-        self.mean.append(parse_value(metric, "mean: ", "}"))
-
-    def add_yaxis(self, chart:Line):
-        chart.add_yaxis("m1", self.m1)
-        chart.add_yaxis("m5", self.m5)
-        chart.add_yaxis("m15", self.m15)
-        chart.add_yaxis("mean", self.mean)
-
 class MetricGrouping(Metric):
     def __init__(self, name:str):
         Metric.__init__(self, name)
@@ -86,12 +63,23 @@ class MetricGrouping(Metric):
                 self.values[key].append(value)
 
     def add_yaxis(self, chart:Line):
-        flag=True
-        if len(self.values.items()) >3:
-            flag=False
-        for (name, values) in self.values.items():
-            chart.add_yaxis(name, values, is_selected=flag)
-        chart.set_global_opts(legend_opts=opts.LegendOpts(type_="scroll", pos_bottom="bottom"))
+        selected = len(self.values) < 10
+        names = list(self.values.keys())
+        names.sort()
+        for name in names:
+            chart.add_yaxis(name, self.values[name], is_selected=selected)
+
+        chart.set_global_opts(
+            title_opts=opts.TitleOpts(title=self.name),
+            legend_opts={
+                "padding": 10,
+                "bottom": 10,
+            }
+        )
+
+        chart.options["grid"] = {
+            "bottom": 100 + (len(self.values) // 20) * 50,
+        }
 
 def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
     assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(metrics_log_file)
@@ -116,7 +104,11 @@ def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
 
     for (key, metric) in metrics.items():
         chart = (
-            Line()
+            Line(init_opts=opts.InitOpts(
+                width="1400px",
+                height="700px",
+                page_title=key,
+            ))
             .add_xaxis(metric.timestamps)
             .set_global_opts(title_opts=opts.TitleOpts(title=key))
         )

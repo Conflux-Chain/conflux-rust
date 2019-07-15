@@ -17,9 +17,9 @@ use log4rs::{
 };
 use network::throttling::THROTTLING_SERVICE;
 use parking_lot::{Condvar, Mutex};
-use std::{io as stdio, io::Write, process, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 
-fn main() {
+fn main() -> Result<(), String> {
     #[cfg(feature = "deadlock_detection")]
     {
         // only for #[cfg]
@@ -242,7 +242,7 @@ fn main() {
         )
         .get_matches_from(std::env::args().collect::<Vec<_>>());
 
-    let conf = Configuration::parse(&matches).unwrap();
+    let conf = Configuration::parse(&matches)?;
 
     THROTTLING_SERVICE.write().initialize(
         conf.raw_conf.egress_queue_capacity,
@@ -255,7 +255,9 @@ fn main() {
     // all our crate log to log_level.
     let log_config = match conf.raw_conf.log_conf {
         Some(ref log_conf) => {
-            log4rs::load_config_file(log_conf, Default::default()).unwrap()
+            log4rs::load_config_file(log_conf, Default::default()).map_err(
+                |e| format!("failed to load log configuration file: {:?}", e),
+            )?
         }
         None => {
             let mut conf_builder =
@@ -269,7 +271,7 @@ fn main() {
                     conf_builder.appender(Appender::builder().build(
                         "logfile",
                         Box::new(
-                            FileAppender::builder().encoder(Box::new(PatternEncoder::new("{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"))).build(log_file).unwrap(),
+                            FileAppender::builder().encoder(Box::new(PatternEncoder::new("{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"))).build(log_file).map_err(|e|format!("failed to build log pattern: {:?}", e))?,
                         ),
                     ));
                 root_builder = root_builder.appender("logfile");
@@ -295,49 +297,36 @@ fn main() {
             }
             conf_builder
                 .build(root_builder.build(LevelFilter::Info))
-                .unwrap()
+                .map_err(|e| format!("failed to build log config: {:?}", e))?
         }
     };
-    log4rs::init_config(log_config).unwrap();
+
+    log4rs::init_config(log_config).map_err(|e| {
+        format!("failed to initialize log with config: {:?}", e)
+    })?;
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
 
     if matches.is_present("light") {
         //FIXME: implement light client later
         info!("Starting light client...");
-        process::exit(match ArchiveClient::start(conf, exit.clone()) {
-            Ok(client_handle) => {
-                ArchiveClient::run_until_closed(exit, client_handle)
-            }
-            Err(err) => {
-                writeln!(&mut stdio::stderr(), "{}", err).unwrap();
-                1
-            }
-        });
+        let client_handle = ArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start light client: {:?}", e))?;
+        ArchiveClient::run_until_closed(exit, client_handle);
     } else if matches.is_present("archive") {
         info!("Starting archive client...");
-        process::exit(match ArchiveClient::start(conf, exit.clone()) {
-            Ok(client_handle) => {
-                ArchiveClient::run_until_closed(exit, client_handle)
-            }
-            Err(err) => {
-                writeln!(&mut stdio::stderr(), "{}", err).unwrap();
-                1
-            }
-        });
+        let client_handle = ArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start archive client: {:?}", e))?;
+        ArchiveClient::run_until_closed(exit, client_handle);
     } else {
         //FIXME: implement full client later
         info!("Starting full client...");
-        process::exit(match ArchiveClient::start(conf, exit.clone()) {
-            Ok(client_handle) => {
-                ArchiveClient::run_until_closed(exit, client_handle)
-            }
-            Err(err) => {
-                writeln!(&mut stdio::stderr(), "{}", err).unwrap();
-                1
-            }
-        });
+        let client_handle = ArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start full client: {:?}", e))?;
+        ArchiveClient::run_until_closed(exit, client_handle);
     }
+
+    Ok(())
 }
 
 fn from_str_validator<T: FromStr>(arg: String) -> Result<(), String> {

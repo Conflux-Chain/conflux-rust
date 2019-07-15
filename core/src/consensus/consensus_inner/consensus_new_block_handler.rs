@@ -1,5 +1,5 @@
 use crate::{
-    block_data_manager::{BlockDataManager, BlockStatus},
+    block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     consensus::{
         consensus_inner::{
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
@@ -7,8 +7,9 @@ use crate::{
         },
         debug::ComputeEpochDebugRecord,
         ConsensusConfig, ANTICONE_BARRIER_CAP, DEFERRED_STATE_EPOCH_COUNT,
-        ERA_CHECKPOINT_GAP, ERA_RECYCLE_TRANSACTION_DELAY,
-        MAX_NUM_MAINTAINED_RISK, MIN_MAINTAINED_RISK,
+        EPOCH_SET_PERSISTENCE_DELAY, ERA_CHECKPOINT_GAP,
+        ERA_RECYCLE_TRANSACTION_DELAY, MAX_NUM_MAINTAINED_RISK,
+        MIN_MAINTAINED_RISK,
     },
     rlp::Encodable,
     statistics::SharedStatistics,
@@ -21,10 +22,7 @@ use crate::{
 use cfx_types::{into_i128, H256};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::RwLock;
-use primitives::{
-    Block, BlockHeaderBuilder, StateRoot, StateRootAuxInfo,
-    StateRootWithAuxInfo,
-};
+use primitives::{Block, BlockHeaderBuilder, StateRootWithAuxInfo};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
@@ -185,6 +183,7 @@ impl ConsensusNewBlockHandler {
             inner.hash_to_arena_indices.remove(&hash);
             inner.terminal_hashes.remove(&hash);
             inner.arena.remove(index);
+            inner.execution_info_cache.remove(&index);
         }
         assert!(new_era_pivot_index < inner.pivot_chain.len());
         inner.pivot_chain = inner.pivot_chain.split_off(new_era_pivot_index);
@@ -762,7 +761,7 @@ impl ConsensusNewBlockHandler {
 
     fn log_invalid_state_root(
         &self, expected_state_root: &StateRootWithAuxInfo,
-        got_state_root: (&StateRoot, &StateRootAuxInfo), deferred: usize,
+        got_state_root: &StateRootWithAuxInfo, deferred: usize,
         inner: &ConsensusGraphInner,
     ) -> std::io::Result<()>
     {
@@ -906,7 +905,9 @@ impl ConsensusNewBlockHandler {
                         .unwrap()
                         .unwrap();
                     if *block.block_header.deferred_state_root()
-                        != correct_state_root.state_root
+                        != correct_state_root
+                            .state_root
+                            .compute_state_root_hash()
                     {
                         self.log_invalid_state_root(
                             &correct_state_root,
@@ -954,7 +955,7 @@ impl ConsensusNewBlockHandler {
                         .compute_state_for_block(&deferred_hash, inner)
                         .unwrap();
 
-                    if state_root.state_root
+                    if state_root.state_root.compute_state_root_hash()
                         != *block.block_header.deferred_state_root()
                     {
                         self.log_invalid_state_root(
@@ -969,7 +970,7 @@ impl ConsensusNewBlockHandler {
                     }
 
                     *block.block_header.deferred_state_root()
-                        == state_root.state_root
+                        == state_root.state_root.compute_state_root_hash()
                         && *block.block_header.deferred_receipts_root()
                             == receipts_root
                         && *block.block_header.deferred_logs_bloom_hash()
@@ -1414,14 +1415,25 @@ impl ConsensusNewBlockHandler {
         };
         let (fully_valid, pending) = match self
             .data_man
-            .block_status_from_db(hash)
+            .local_block_info_from_db(hash)
         {
-            Some(BlockStatus::Valid) => (true, false),
-            Some(BlockStatus::Pending) => (true, true),
-            Some(BlockStatus::PartialInvalid) => (false, false),
+            Some(block_info) => {
+                match block_info.get_status() {
+                    BlockStatus::Valid => (true, false),
+                    BlockStatus::Pending => (true, true),
+                    BlockStatus::PartialInvalid => (false, false),
+                    BlockStatus::Invalid => {
+                        // Blocks marked invalid should not exist in database,
+                        // so should not be inserted
+                        // during construction.
+                        unreachable!()
+                    }
+                }
+            }
             None => {
                 // FIXME If the status of a block close to terminals is missing
-                // (likely to happen) and we try to check its validity with the
+                // (unlikely to happen if db cannot guarantee the write order)
+                // and we try to check its validity with the
                 // commented code, we will recompute the whole DAG from genesis
                 // because the pivot chain is empty now, which is not what we
                 // want for fast recovery. A better solution is
@@ -1442,11 +1454,6 @@ impl ConsensusNewBlockHandler {
                 // Now we optimistically hope that they are valid.
                 debug!("Assume block {} is valid/pending", hash);
                 (true, true)
-            }
-            Some(BlockStatus::Invalid) => {
-                // Blocks marked invalid should not exist in database, so should
-                // not be inserted during construction.
-                unreachable!()
             }
         };
 
@@ -1471,6 +1478,10 @@ impl ConsensusNewBlockHandler {
         let parent_hash = block.block_header.parent_hash();
         if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
             self.process_outside_block(inner, block);
+            let sn = inner.get_next_sequence_number();
+            let block_info = LocalBlockInfo::new(BlockStatus::Pending, sn);
+            self.data_man
+                .insert_local_block_info_to_db(hash, block_info);
             return;
         }
 
@@ -1533,16 +1544,21 @@ impl ConsensusNewBlockHandler {
                 inner.arena[me].adaptive = adaptive;
             }
         }
-        self.data_man.insert_block_status_to_db(
-            hash,
-            if pending {
-                BlockStatus::Pending
-            } else if fully_valid {
-                BlockStatus::Valid
-            } else {
-                BlockStatus::PartialInvalid
-            },
+
+        let block_status = if pending {
+            BlockStatus::Pending
+        } else if fully_valid {
+            BlockStatus::Valid
+        } else {
+            BlockStatus::PartialInvalid
+        };
+
+        let block_info = LocalBlockInfo::new(
+            block_status,
+            inner.arena[me].data.sequence_number,
         );
+        self.data_man
+            .insert_local_block_info_to_db(hash, block_info);
 
         if pending {
             inner.arena[me].data.pending = true;
@@ -1685,6 +1701,18 @@ impl ConsensusNewBlockHandler {
         // Now we can safely return
         if !fully_valid || pending {
             return;
+        }
+
+        if pivot_changed {
+            if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
+                let fork_at_pivot_index = inner.height_to_pivot_index(fork_at);
+                let to_persist_pivot_index = inner.pivot_chain.len()
+                    - EPOCH_SET_PERSISTENCE_DELAY as usize;
+                inner.persist_epoch_set_hashes(to_persist_pivot_index);
+                for pivot_index in fork_at_pivot_index..to_persist_pivot_index {
+                    inner.persist_epoch_set_hashes(pivot_index);
+                }
+            }
         }
 
         let new_pivot_era_block = inner
