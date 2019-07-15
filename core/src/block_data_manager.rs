@@ -7,8 +7,8 @@ use crate::{
     cache_manager::{CacheId, CacheManager, CacheSize},
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     db::{
-        COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_EPOCH_SET_HASHES, COL_MISC,
-        COL_TX_ADDRESS,
+        COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_EPOCH_SET_HASHES,
+        COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
     },
     ext_db::SystemDB,
     pow::{TargetDifficultyManager, WORKER_COMPUTATION_PARALLELISM},
@@ -40,6 +40,29 @@ const NULLU64: u64 = !0;
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
 
+#[derive(Clone)]
+pub struct EpochExecutionContext {
+    pub start_block_number: u64,
+}
+
+impl Encodable for EpochExecutionContext {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.begin_list(1).append(&self.start_block_number);
+    }
+}
+
+impl Decodable for EpochExecutionContext {
+    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
+        Ok(EpochExecutionContext {
+            start_block_number: r.val_at(0)?,
+        })
+    }
+}
+
+impl HeapSizeOf for EpochExecutionContext {
+    fn heap_size_of_children(&self) -> usize { std::mem::size_of::<u64>() }
+}
+
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
@@ -48,6 +71,7 @@ pub struct BlockDataManager {
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     tx_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     epoch_execution_commitments: RwLock<HashMap<H256, (H256, H256)>>,
+    epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
 
@@ -93,6 +117,7 @@ impl BlockDataManager {
             transaction_addresses: Default::default(),
             epoch_execution_commitments: Default::default(),
             tx_cache: Default::default(),
+            epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
             genesis_block: genesis_block.clone(),
             db,
@@ -167,6 +192,13 @@ impl BlockDataManager {
                 .genesis_block
                 .block_header
                 .deferred_logs_bloom_hash(),
+        );
+
+        data_man.insert_epoch_execution_context(
+            data_man.genesis_block.hash(),
+            EpochExecutionContext {
+                start_block_number: 0,
+            },
         );
 
         data_man.insert_block_header(
@@ -421,6 +453,31 @@ impl BlockDataManager {
             })
     }
 
+    fn insert_epoch_execution_context_to_db(
+        &self, hash: &H256, ctx: &EpochExecutionContext,
+    ) {
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_EXECUTION_CONTEXT, hash, &rlp::encode(ctx));
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
+    /// Get epoch context from db.
+    pub fn epoch_execution_context_from_db(
+        &self, hash: &H256,
+    ) -> Option<EpochExecutionContext> {
+        let rlp_bytes = self
+            .db
+            .key_value()
+            .get(COL_EXECUTION_CONTEXT, hash)
+            .expect("crash for db failure")?;
+        let rlp = Rlp::new(&rlp_bytes);
+
+        Some(rlp.as_val().expect("Wrong block rlp format!"))
+    }
+
     pub fn remove_block_from_kv(&self, hash: &H256) {
         self.blocks.write().remove(hash);
         let mut dbops = self.db.key_value().transaction();
@@ -658,6 +715,18 @@ impl BlockDataManager {
             .insert(block_hash, (receipts_root, logs_bloom_hash))
     }
 
+    pub fn insert_epoch_execution_context(
+        &self, hash: H256, ctx: EpochExecutionContext,
+    ) {
+        self.insert_epoch_execution_context_to_db(&hash, &ctx);
+        self.epoch_execution_contexts
+            .write()
+            .insert(hash.clone(), ctx);
+        self.cache_man
+            .lock()
+            .note_used(CacheId::ExecutionContext(hash))
+    }
+
     pub fn get_epoch_execution_commitments(
         &self, block_hash: &H256,
     ) -> Option<(H256, H256)> {
@@ -665,6 +734,16 @@ impl BlockDataManager {
             .read()
             .get(block_hash)
             .map(Clone::clone)
+    }
+
+    pub fn get_epoch_execution_context(
+        &self, hash: &H256,
+    ) -> Option<EpochExecutionContext> {
+        self.epoch_execution_contexts
+            .read()
+            .get(hash)
+            .map(Clone::clone)
+            .or_else(|| self.epoch_execution_context_from_db(hash))
     }
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
@@ -783,6 +862,7 @@ impl BlockDataManager {
         let mut compact_blocks = self.compact_blocks.write();
         let mut executed_results = self.block_receipts.write();
         let mut tx_address = self.transaction_addresses.write();
+        let mut exeuction_contexts = self.epoch_execution_contexts.write();
         let mut cache_man = self.cache_man.lock();
         info!(
             "Before gc cache_size={} {} {} {} {}",
@@ -811,6 +891,9 @@ impl BlockDataManager {
                     CacheId::BlockHeader(ref h) => {
                         block_headers.remove(h);
                     }
+                    CacheId::ExecutionContext(ref h) => {
+                        exeuction_contexts.remove(h);
+                    }
                 }
             }
 
@@ -819,6 +902,7 @@ impl BlockDataManager {
                 + executed_results.heap_size_of_children()
                 + tx_address.heap_size_of_children()
                 + compact_blocks.heap_size_of_children()
+                + exeuction_contexts.heap_size_of_children()
         });
 
         block_headers.shrink_to_fit();
@@ -826,6 +910,7 @@ impl BlockDataManager {
         executed_results.shrink_to_fit();
         tx_address.shrink_to_fit();
         compact_blocks.shrink_to_fit();
+        exeuction_contexts.shrink_to_fit();
     }
 
     fn tx_cache_gc(&self) {

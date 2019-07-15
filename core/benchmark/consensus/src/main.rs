@@ -13,6 +13,7 @@ use cfxcore::{
         ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
         ADAPTIVE_WEIGHT_DEFAULT_BETA,
     },
+    db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -103,7 +104,7 @@ fn initialize_consensus_graph_for_test(
             Path::new(db_dir),
             Some(128),
             db::DatabaseCompactionProfile::default(),
-            Some(5),
+            NUM_COLUMNS,
         ),
     )
     .map_err(|e| format!("Failed to open database {:?}", e))

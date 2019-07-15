@@ -704,6 +704,7 @@ impl ConsensusNewBlockHandler {
         let task = EpochExecutionTask::new(
             epoch_block_hash,
             epoch_block_hashes.clone(),
+            inner.get_epoch_start_block_number(epoch_arena_index),
             reward_execution_info,
             false,
             true,
@@ -1377,16 +1378,20 @@ impl ConsensusNewBlockHandler {
                     pivot_logs_bloom_hash,
                 );
             } else {
+                let epoch_arena_index =
+                    inner.get_pivot_block_arena_index(state_height);
                 let reward_execution_info = inner.get_reward_execution_info(
                     &self.data_man,
-                    inner.get_pivot_block_arena_index(state_height),
+                    epoch_arena_index,
                 );
-                let epoch_block_hashes = inner.get_epoch_block_hashes(
-                    inner.get_pivot_block_arena_index(state_height),
-                );
+                let epoch_block_hashes =
+                    inner.get_epoch_block_hashes(epoch_arena_index);
+                let start_block_number =
+                    inner.get_epoch_start_block_number(epoch_arena_index);
                 self.executor.compute_epoch(EpochExecutionTask::new(
                     pivot_hash,
                     epoch_block_hashes,
+                    start_block_number,
                     reward_execution_info,
                     true,
                     false,
@@ -1760,6 +1765,7 @@ impl ConsensusNewBlockHandler {
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_arena_index].hash,
                 inner.get_epoch_block_hashes(epoch_arena_index),
+                inner.get_epoch_start_block_number(epoch_arena_index),
                 reward_execution_info,
                 true,
                 false,

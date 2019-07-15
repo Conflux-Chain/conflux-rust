@@ -6,6 +6,7 @@ use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
+    db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -61,7 +62,7 @@ fn initialize_synchronization_graph(
             Path::new(db_dir),
             Some(128),
             db::DatabaseCompactionProfile::default(),
-            Some(5),
+            NUM_COLUMNS,
         ),
     )
     .map_err(|e| format!("Failed to open database {:?}", e))
