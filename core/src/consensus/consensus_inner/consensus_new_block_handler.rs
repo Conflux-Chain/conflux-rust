@@ -1521,14 +1521,6 @@ impl ConsensusNewBlockHandler {
         };
         let era_block = inner.get_era_block_with_parent(parent, 0);
 
-        // It's only correct to set tx stale after the block is considered
-        // terminal for mining.
-        // Note that we conservatively only mark those blocks inside the current
-        // pivot era
-        if era_block == cur_pivot_era_block && transactions.is_some() {
-            self.txpool.set_tx_packed(transactions.clone().unwrap());
-        }
-
         let pending = inner.ancestor_at(parent, inner.cur_era_stable_height)
             != inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
 
@@ -1737,9 +1729,45 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
+        self.update_confirmation_risks(inner, inner.get_total_weight_in_past());
+
         let new_pivot_era_block = inner
             .get_era_block_with_parent(*inner.pivot_chain.last().unwrap(), 0);
         let new_era_height = inner.arena[new_pivot_era_block].height;
+        let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
+        if new_checkpoint_era_genesis != inner.cur_era_genesis_block_arena_index
+        {
+            info!(
+                "Working on the checkpoint for block {} height {}",
+                &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
+                inner.cur_era_genesis_height
+            );
+            ConsensusNewBlockHandler::checkpoint_at(
+                inner,
+                new_checkpoint_era_genesis,
+            );
+            info!(
+                "New checkpoint formed at block {} height {}",
+                &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
+                inner.cur_era_genesis_height
+            );
+        }
+
+        if transactions.is_none() {
+            // If we are inserting header only, we will skip execution and
+            // tx_pool-related operations
+            return;
+        }
+
+        // It's only correct to set tx stale after the block is considered
+        // terminal for mining.
+        // Note that we conservatively only mark those blocks inside the current
+        // pivot era
+        if era_block == cur_pivot_era_block {
+            self.txpool
+                .set_tx_packed(transactions.clone().expect("Already checked"));
+        }
         if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
             < inner.pivot_index_to_height(inner.pivot_chain.len())
             && inner.last_recycled_era_block != new_pivot_era_block
@@ -1758,7 +1786,11 @@ impl ConsensusNewBlockHandler {
                 - DEFERRED_STATE_EPOCH_COUNT
                 + 1
         };
-
+        inner.optimistic_executed_height = if to_state_pos > 0 {
+            Some(to_state_pos)
+        } else {
+            None
+        };
         let mut state_at = fork_at;
         if fork_at + DEFERRED_STATE_EPOCH_COUNT
             > inner.pivot_index_to_height(old_pivot_chain_len)
@@ -1793,34 +1825,7 @@ impl ConsensusNewBlockHandler {
             ));
             state_at += 1;
         }
-
-        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
-
-        self.update_confirmation_risks(inner, inner.get_total_weight_in_past());
-        inner.optimistic_executed_height = if to_state_pos > 0 {
-            Some(to_state_pos)
-        } else {
-            None
-        };
         self.persist_terminals(inner);
-        let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
-        if new_checkpoint_era_genesis != inner.cur_era_genesis_block_arena_index
-        {
-            info!(
-                "Working on the checkpoint for block {} height {}",
-                &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
-                inner.cur_era_genesis_height
-            );
-            ConsensusNewBlockHandler::checkpoint_at(
-                inner,
-                new_checkpoint_era_genesis,
-            );
-            info!(
-                "New checkpoint formed at block {} height {}",
-                &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
-                inner.cur_era_genesis_height
-            );
-        }
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 }

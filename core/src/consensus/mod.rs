@@ -503,6 +503,15 @@ impl ConsensusGraph {
             }
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone());
+        } else {
+            let inner = &mut *self.inner.write();
+            self.new_block_handler.on_new_block(
+                inner,
+                hash,
+                self.data_man.block_header_by_hash(hash).unwrap().as_ref(),
+                None,
+            );
+            self.update_best_info(inner);
         }
     }
 
