@@ -350,10 +350,11 @@ impl TransactionPoolInner {
                 failed = true;
             }
 
-            if !self.deferred_pool.check_tx_packed(addr, lowest_nonce) {
-                warn!("an unpacked tx is trying to be garbage-collected and stopped");
-                failed = true;
-            }
+            //            if !self.deferred_pool.check_tx_packed(addr,
+            // lowest_nonce) {                warn!("an unpacked tx
+            // is trying to be garbage-collected and stopped");
+            //                failed = true;
+            //            }
 
             if failed {
                 self.garbage_collection_queue.push_back(addr.clone());
