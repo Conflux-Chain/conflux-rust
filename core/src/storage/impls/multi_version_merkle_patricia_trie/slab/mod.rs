@@ -110,10 +110,7 @@
 
 use super::super::errors::*;
 use parking_lot::Mutex;
-use std::{
-    cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, mem, ops,
-    ptr, slice,
-};
+use std::{fmt, iter::IntoIterator, marker::PhantomData, mem, ops, ptr, slice};
 
 /// Pre-allocated storage for a uniform data type.
 /// The modified slab offers internal mutability which mimics the behavior of
@@ -135,9 +132,7 @@ pub struct Slab<T, E: EntryTrait<T> = Entry<T>> {
     // when allocating space for new element. We would like to keep the size of
     // initialized entry in AllocRelatedFields#size_initialized instead of
     // vector.
-    // UnsafeCell is used because we want to insert/remove from different
-    // threads simultaneously.
-    entries: PartialSync<Vec<E>>,
+    entries: Vec<E>,
 
     /// Fields which are modified when allocate / delete an entry.
     alloc_fields: Mutex<AllocRelatedFields>,
@@ -145,12 +140,8 @@ pub struct Slab<T, E: EntryTrait<T> = Entry<T>> {
     value_type: PhantomData<T>,
 }
 
-/// Slab can be shared safely because insertion and deletion are guarded by
-/// `alloc_fields`. Other operations do not require special treatment.
-unsafe impl<T, E> Sync for Slab<T, E> where E: EntryTrait<T> {}
-
-#[derive(Default, Debug)]
-pub struct AllocRelatedFields {
+#[derive(Default)]
+struct AllocRelatedFields {
     // Number of Filled elements currently in the slab
     used: usize,
     // Size of the memory where it's initialized with data or offset to next
@@ -666,10 +657,12 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab[key], "world");
     /// assert_eq!(slab.get_mut(123), None);
     /// ```
-    pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-        self.entries
-            .get_mut(key)
-            .and_then(|entry| entry.into_option_mut())
+    // This method is unsafe because user may pass the same key to get_mut at
+    // the same time.
+    pub unsafe fn get_mut(&self, key: usize) -> Option<&mut T> {
+        self.entries.get(key).and_then(|entry| {
+            Self::cast_element_ref_mut(entry).into_option_mut()
+        })
     }
 
     /// Return a reference to the value associated with the given key without
@@ -690,7 +683,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// }
     /// ```
     pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-        self.entries.get_unchecked(key).get_occupied_ref()
+        self.get_element_at(key).get_occupied_ref()
     }
 
     /// Return a mutable reference to the value associated with the given key
@@ -713,12 +706,16 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     ///
     /// assert_eq!(slab[key], 13);
     /// ```
-    pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
-        self.entries.get_unchecked_mut(key).get_occupied_mut()
+    pub unsafe fn get_unchecked_mut(&self, key: usize) -> &mut T {
+        self.get_element_at(key).get_occupied_mut()
     }
 
-    pub unsafe fn get_unchecked_cast_mut(&self, key: usize) -> &mut T {
-        self.entries.assume_exclusive().get_unchecked_mut(key).get_occupied_mut()
+    fn cast_element_ref_mut(r: &E) -> &mut E {
+        unsafe { &mut *((r as *const E) as *mut E) }
+    }
+
+    fn get_element_at(&self, key: usize) -> &mut E {
+        unsafe { Self::cast_element_ref_mut(self.entries.get_unchecked(key)) }
     }
 
     /// Insert a value in the slab, returning key assigned to the value.
@@ -743,13 +740,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// ```
     pub fn insert<U: Into<T>>(&self, val: U) -> Result<usize> {
         let key = self.allocate()?;
-        unsafe { self.insert_at(key, val.into()); }
+        self.insert_at(key, val);
         Ok(key)
-    }
-
-    // unsafe because key must be valid and exclusively accessible
-    unsafe fn insert_at(&self, key: usize, val: T) {
-        *self.entries.assume_exclusive().get_unchecked_mut(key) = E::from(val)
     }
 
     pub fn allocate(&self) -> Result<usize> {
@@ -767,6 +759,10 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
             }
             Ok(key)
         }
+    }
+
+    fn insert_at<U: Into<T>>(&self, key: usize, val: U) {
+        *self.get_element_at(key) = E::from(val);
     }
 
     /// Return a handle to a vacant entry allowing for further manipulation.
@@ -794,9 +790,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!("hello", slab[hello].1);
     /// ```
     pub fn vacant_entry(&self) -> Result<VacantEntry<T, E>> {
-        let key = self.allocate()?;
         Ok(VacantEntry {
-            key,
+            key: self.allocate()?,
             slab: self,
             inserted: false,
         })
@@ -825,16 +820,13 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// ```
     pub fn remove(&self, key: usize) -> Result<T> {
         let mut alloc_fields = self.alloc_fields.lock();
-        // `entries` is guarded by alloc_fields
-        let entries = unsafe { self.entries.assume_exclusive() };
         let next = alloc_fields.next;
-        let old_value = match entries.get_mut(key) {
-            Some(val) => {
-                // alloc_fields effectively lock the whole struct so this is
-                // okay.
+        let old_value = match self.entries.get(key) {
+            Some(ref val) => {
                 alloc_fields.used -= 1;
                 alloc_fields.next = key;
-                val.take_occupied_and_replace(E::from_vacant_index(next))
+                Self::cast_element_ref_mut(val)
+                    .take_occupied_and_replace(E::from_vacant_index(next))
             }
             None => {
                 // Index out of range.
@@ -891,7 +883,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     pub fn retain<F>(&mut self, mut f: F)
     where F: FnMut(usize, &mut T) -> bool {
         for i in 0..self.entries.len() {
-            let keep = self.get_mut(i).map_or(true, |v| f(i, v));
+            let keep = unsafe { self.get_mut(i).map_or(true, |v| f(i, v)) };
 
             if !keep {
                 self.remove(i).unwrap();
@@ -903,9 +895,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
 impl<T, E: EntryTrait<T>> ops::Index<usize> for Slab<T, E> {
     type Output = T;
 
-    fn index(&self, key: usize) -> &T {
-        unsafe { self.entries.get_unchecked(key).get_occupied_ref() }
-    }
+    fn index(&self, key: usize) -> &T { self.entries[key].get_occupied_ref() }
 }
 
 impl<'a, T, E: EntryTrait<T>> IntoIterator for &'a Slab<T, E> {
@@ -986,10 +976,8 @@ impl<'a, T, E: EntryTrait<T>> VacantEntry<'a, T, E> {
     pub fn insert<U>(mut self, val: U) -> &'a mut T
     where T: From<U> {
         self.inserted = true;
-        unsafe {
-            self.slab.insert_at(self.key, val.into());
-            self.slab.get_unchecked_cast_mut(self.key)
-        }
+        self.slab.insert_at(self.key, val);
+        unsafe { self.slab.get_unchecked_mut(self.key) }
     }
 
     /// Return the key associated with this entry.
@@ -1053,39 +1041,4 @@ impl<'a, T, E: EntryTrait<T>> Iterator for IterMut<'a, T, E> {
 
         None
     }
-}
-
-// ===== PartialSync =====
-
-use std::ops::{Deref, DerefMut};
-
-/// A marker for partial-Sync data: some operations are thread-safe, while
-/// others are not.
-#[derive(Default)]
-struct PartialSync<T> {
-    inner: UnsafeCell<T>,
-}
-
-impl<T> PartialSync<T> {
-    /// Assume this object is only accessible from one single thread for next
-    /// operation.
-    unsafe fn assume_exclusive(&self) -> &mut T { &mut *self.inner.get() }
-}
-
-impl<T> From<T> for PartialSync<T> {
-    fn from(t: T) -> Self {
-        PartialSync {
-            inner: UnsafeCell::new(t),
-        }
-    }
-}
-
-impl<T> Deref for PartialSync<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T { unsafe { &*self.inner.get() } }
-}
-
-impl<T> DerefMut for PartialSync<T> {
-    fn deref_mut(&mut self) -> &mut T { unsafe { &mut *self.inner.get() } }
 }
