@@ -99,6 +99,120 @@ impl<'trie> SubTrieVisitor<'trie> {
         }
     }
 
+    fn retrieve_children_hashes<'a>(
+        &self, children_table: ChildrenTableDeltaMpt,
+        allocator_ref: AllocatorRefRefDeltaMpt<'a>, db_load_count: &mut i32,
+    ) -> Result<MaybeMerkleTable>
+    {
+        let node_memory_manager = self.node_memory_manager();
+        let cache_manager = node_memory_manager.get_cache_manager();
+
+        if children_table.get_children_count() == 0 {
+            return Ok(None);
+        }
+
+        let mut merkles = ChildrenMerkleTable::default();
+        for (i, maybe_node_ref_mut) in children_table.iter_non_skip() {
+            match maybe_node_ref_mut {
+                None => merkles[i as usize] = MERKLE_NULL_NODE,
+                Some(node_ref_mut) => {
+                    let mut is_loaded_from_db = false;
+                    merkles[i as usize] = node_memory_manager
+                        .node_as_ref_with_cache_manager(
+                            allocator_ref,
+                            (*node_ref_mut).into(),
+                            cache_manager,
+                            &mut is_loaded_from_db,
+                        )?
+                        .merkle_hash;
+                    if is_loaded_from_db {
+                        *db_load_count += 1;
+                    }
+                }
+            }
+        }
+
+        return Ok(Some(merkles));
+    }
+
+    fn get_trie_node_with_proof<'a>(
+        &self, key: KeyPart, allocator_ref: AllocatorRefRefDeltaMpt<'a>,
+        proof_nodes: &mut Vec<TrieProofNode>,
+    ) -> Result<
+        Option<
+            GuardedValue<
+                Option<MutexGuard<'a, CacheManagerDeltaMpt>>,
+                &'a TrieNodeDeltaMpt,
+            >,
+        >,
+    >
+    where
+        'trie: 'a,
+    {
+        let node_memory_manager = self.node_memory_manager();
+        let cache_manager = node_memory_manager.get_cache_manager();
+        let mut node_ref = self.root.node_ref.clone();
+        let mut key = key;
+
+        let mut db_load_count = 0;
+        loop {
+            // retrieve current node
+            let mut is_loaded_from_db = false;
+            let trie_node = node_memory_manager
+                .node_as_ref_with_cache_manager(
+                    allocator_ref,
+                    node_ref.clone(),
+                    cache_manager,
+                    &mut is_loaded_from_db,
+                )?;
+            if is_loaded_from_db {
+                db_load_count += 1;
+            }
+
+            // calculate children hashes
+            let children_table = trie_node.children_table.clone();
+            let mut proof_node = trie_node.create_proof_node();
+            drop(trie_node); // need to release so that we can retrieve its children
+            proof_node.children_table = self.retrieve_children_hashes(
+                children_table,
+                allocator_ref,
+                &mut db_load_count,
+            )?;
+            proof_nodes.push(proof_node);
+
+            // retrieve current node again
+            let mut is_loaded_from_db = false;
+            let trie_node = node_memory_manager
+                .node_as_ref_with_cache_manager(
+                    allocator_ref,
+                    node_ref,
+                    cache_manager,
+                    &mut is_loaded_from_db,
+                )?;
+            if is_loaded_from_db {
+                db_load_count += 1;
+            }
+
+            match trie_node.walk::<Read>(key) {
+                WalkStop::Arrived => {
+                    node_memory_manager.log_uncached_key_access(db_load_count);
+                    return Ok(Some(trie_node));
+                }
+                WalkStop::Descent {
+                    key_remaining,
+                    child_index: _,
+                    child_node,
+                } => {
+                    node_ref = child_node;
+                    key = key_remaining;
+                }
+                _ => {
+                    return Ok(None);
+                }
+            }
+        }
+    }
+
     pub fn get(&self, key: KeyPart) -> Result<Option<Box<[u8]>>> {
         let allocator = self.node_memory_manager().get_allocator();
         let maybe_trie_node = self.get_trie_node(key, &allocator)?;
@@ -106,6 +220,24 @@ impl<'trie> SubTrieVisitor<'trie> {
         Ok(match maybe_trie_node {
             None => None,
             Some(trie_node) => trie_node.value_clone().into_option(),
+        })
+    }
+
+    pub fn get_with_proof(
+        &self, key: KeyPart,
+    ) -> Result<(Option<Box<[u8]>>, TrieProof)> {
+        let mut proof_nodes = vec![];
+
+        let allocator = self.node_memory_manager().get_allocator();
+        let maybe_trie_node =
+            self.get_trie_node_with_proof(key, &allocator, &mut proof_nodes)?;
+
+        Ok(match maybe_trie_node {
+            None => (None, TrieProof::new(proof_nodes)),
+            Some(trie_node) => {
+                let value = trie_node.value_clone().into_option();
+                (value, TrieProof::new(proof_nodes))
+            }
         })
     }
 
@@ -682,8 +814,11 @@ use super::{
         return_after_use::ReturnAfterUse,
         DeltaMpt,
     },
+    children_table::ChildrenTableDeltaMpt,
     merkle::*,
-    trie_node::{access_mode::*, *},
+    trie_node::TrieNodeAction,
+    trie_proof::{TrieProof, TrieProofNode},
+    walk::{access_mode::*, KeyPart, WalkStop},
     *,
 };
 use parking_lot::MutexGuard;

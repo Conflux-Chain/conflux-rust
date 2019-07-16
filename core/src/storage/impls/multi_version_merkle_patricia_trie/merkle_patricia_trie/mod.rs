@@ -11,6 +11,8 @@ pub mod mpt_value;
 pub mod node_ref;
 pub mod subtrie_visitor;
 pub mod trie_node;
+pub mod trie_proof;
+pub(self) mod walk;
 
 #[cfg(test)]
 mod tests;

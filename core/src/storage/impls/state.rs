@@ -47,6 +47,24 @@ impl<'a> State<'a> {
         }
     }
 
+    pub fn get_from_delta_with_proof(
+        &self, mpt: &'a DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
+        access_key: &[u8],
+    ) -> Result<(Option<Box<[u8]>>, TrieProof)>
+    {
+        // Get won't create any new nodes so it's fine to pass an empty
+        // owned_node_set.
+        let mut empty_owned_node_set: Option<OwnedNodeSet> =
+            Some(Default::default());
+        match maybe_root_node {
+            None => Ok((None, TrieProof::default())),
+            Some(root_node) => {
+                SubTrieVisitor::new(mpt, root_node, &mut empty_owned_node_set)
+                    .get_with_proof(access_key)
+            }
+        }
+    }
+
     pub fn get_from_snapshot(
         &self, access_key: &[u8],
     ) -> Result<Option<Box<[u8]>>> {
@@ -111,6 +129,55 @@ impl<'a> StateTrait for State<'a> {
         }
         //let maybe_intermediate_value = self.get_from_delta();
         self.get_from_snapshot(access_key)
+    }
+
+    fn get_with_proof(
+        &self, access_key: &[u8],
+    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        let (delta_maybe_val, delta_proof) = self.get_from_delta_with_proof(
+            &self.delta_trie,
+            self.delta_trie_root.clone(),
+            access_key,
+        )?;
+
+        if let Some(value) = delta_maybe_val {
+            let proof = StateProof::for_delta(delta_proof);
+            return Ok((Some(value), proof));
+        }
+
+        let maybe_intermediate_proof = match self.intermediate_trie {
+            None => None,
+            Some(_) => {
+                let (intermediate_maybe_val, intermediate_proof) = self
+                    .get_from_delta_with_proof(
+                        self.intermediate_trie.as_ref().unwrap(),
+                        self.intermediate_trie_root.clone(),
+                        access_key,
+                    )?;
+
+                if let Some(value) = intermediate_maybe_val {
+                    let proof = StateProof::for_intermediate(
+                        delta_proof,
+                        intermediate_proof,
+                    );
+                    return Ok((Some(value), proof));
+                }
+
+                Some(intermediate_proof)
+            }
+        };
+
+        // TODO: get from snapshot
+        // self.get_from_snapshot(access_key)
+
+        Ok((
+            None,
+            StateProof {
+                delta_proof: Some(delta_proof),
+                intermediate_proof: maybe_intermediate_proof,
+                snapshot_proof: None,
+            },
+        ))
     }
 
     // FIXME: re-implement all other methods.
@@ -411,8 +478,11 @@ use super::{
         super::db::COL_DELTA_TRIE, state::*, state_manager::*, storage_db::*,
     },
     errors::*,
-    multi_version_merkle_patricia_trie::{merkle_patricia_trie::*, DeltaMpt},
+    multi_version_merkle_patricia_trie::{
+        merkle_patricia_trie::*, DeltaMpt, TrieProof,
+    },
     state_manager::*,
+    state_proof::StateProof,
 };
 use crate::statedb::KeyPadding;
 use primitives::{
