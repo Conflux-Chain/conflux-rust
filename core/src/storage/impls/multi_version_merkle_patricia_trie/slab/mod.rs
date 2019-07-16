@@ -268,14 +268,11 @@ impl<T> FromInto<T> for Entry<T> {
 /// ```
 #[derive(Debug)]
 pub struct VacantEntry<'a, T: 'a, E: 'a + EntryTrait<T>> {
-    entry: *mut E, // lifetime = self.lifetime
+    slab: &'a Slab<T, E>,
     key: usize,
     // Panic if insert is not called at all because the allocated slot must be
     // initialized.
     inserted: bool,
-
-    value_type: PhantomData<T>,
-    lifetime: PhantomData<&'a Slab<T, E>>,
 }
 
 impl<'a, T: 'a, E: 'a + EntryTrait<T>> Drop for VacantEntry<'a, T, E> {
@@ -720,6 +717,10 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         self.entries.get_unchecked_mut(key).get_occupied_mut()
     }
 
+    pub unsafe fn get_unchecked_cast_mut(&self, key: usize) -> &mut T {
+        self.entries.assume_exclusive().get_unchecked_mut(key).get_occupied_mut()
+    }
+
     /// Insert a value in the slab, returning key assigned to the value.
     ///
     /// The returned key can later be used to retrieve or remove the value using
@@ -742,14 +743,13 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// ```
     pub fn insert<U: Into<T>>(&self, val: U) -> Result<usize> {
         let key = self.allocate()?;
-
-        // The key is guaranteed to exist, and is exclusive to us.
-        unsafe {
-            *self.entries.assume_exclusive().get_unchecked_mut(key) =
-                E::from(val.into());
-        }
-
+        unsafe { self.insert_at(key, val.into()); }
         Ok(key)
+    }
+
+    // unsafe because key must be valid and exclusively accessible
+    unsafe fn insert_at(&self, key: usize, val: T) {
+        *self.entries.assume_exclusive().get_unchecked_mut(key) = E::from(val)
     }
 
     pub fn allocate(&self) -> Result<usize> {
@@ -795,19 +795,10 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// ```
     pub fn vacant_entry(&self) -> Result<VacantEntry<T, E>> {
         let key = self.allocate()?;
-
-        // The key is guaranteed to exist, and nobody else can access this piece
-        // of memory.
-        let entry = unsafe {
-            self.entries.assume_exclusive().get_unchecked_mut(key) as *mut E
-        };
-
         Ok(VacantEntry {
             key,
-            entry,
+            slab: self,
             inserted: false,
-            value_type: PhantomData,
-            lifetime: PhantomData,
         })
     }
 
@@ -996,8 +987,8 @@ impl<'a, T, E: EntryTrait<T>> VacantEntry<'a, T, E> {
     where T: From<U> {
         self.inserted = true;
         unsafe {
-            *self.entry = E::from(val);
-            (&mut *self.entry).get_occupied_mut()
+            self.slab.insert_at(self.key, val.into());
+            self.slab.get_unchecked_cast_mut(self.key)
         }
     }
 
