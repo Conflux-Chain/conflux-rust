@@ -15,25 +15,23 @@ use std::{collections::HashSet, net::IpAddr, time::Duration};
 ///
 /// # Insert a node
 ///
-/// There are 4 scenarios to insert a node into database:
+/// There are 3 scenarios to insert a node into database:
 /// 1. Receive the "hello" handshaking message from ingress TCP connection,
 /// and add the node with `StreamToken` as untrusted if not exists in database.
 /// Otherwise, overwrite the existing node in trusted or untrusted table,
 /// including endpoint, last contact and connection information.
-/// 2. Receive a "ping" message from UDP discovery, and add the node as
-/// untrusted if not exists in database. Otherwise, overwrite the existing
-/// node in trusted or untrusted table.
-/// 3. Receive the "pong" message from UDP discovery, and add the node as
-/// untrusted if not exists in database. Otherwise, overwrite the existing
-/// node in trusted or untrusted table.
-/// 4. RPC explicitly add a trusted node. If the node is an existing
+/// 2. Receive the "pong" message from UDP discovery, and add the node as
+/// trusted if not exists, or promote it to trusted if it is untrusted.
+/// Otherwise, just update the last contact information in trusted table.
+/// 3. RPC explicitly add a trusted node. If the node is an existing
 /// untrusted one, promote it to trusted.
 ///
 /// # Update node information
 ///
 /// ## note_success
 /// When actively connect to a sampled trusted node, updates the node last
-/// contact time.
+/// contact time. On the other hand, when received "ping" message from "UDP"
+/// message, update the node last contact time.
 ///
 /// ## note_failure
 /// Mark the node's last contact to failure for any error, e.g.
@@ -50,32 +48,30 @@ use std::{collections::HashSet, net::IpAddr, time::Duration};
 /// ## Demote
 /// Demote a node to untrusted when failed to handle protocol messages.
 ///
-/// # IP limitation
+/// # Subnet limitation
 ///
 /// Attacker could easily simulate a large amount of malicious nodes of
-/// different node IDs and same IP address. To avoid such kind of attack, user
-/// could limits the number of nodes for one IP address. By default, only 1 node
-/// allowed for a IP address, and has to replace an existing old node in
-/// following 2 scenarios.
+/// different node IDs with same IP address or IPs from same subnet. To
+/// avoid such kind of attack, user could limits the number of nodes for
+/// one IP address and subnet. By default, only 1 node allowed for a
+/// single IP address and 32 nodes for a subnet C (ip/24), and will evict
+/// an existing old node in following 2 scenarios:
 ///
-/// ## Scenario 1: add new node with existing IP address
+/// ## Scenario 1: add or update node with existing IP address
 /// For example, "node_1" with "IP_1" already in database, and to add a new node
-/// "node_2" with the same address "IP_1". Due to default IP limitation (1 node
-/// per IP), "node_1" will be removed, and then add "node_2" with "IP_1".
+/// "node_2" with the same address "IP_1". "node_1" will be evicted, and then
+/// add "node_2" with "IP_1".
 ///
-/// ## Scenario 2: update node with existing IP address
-/// For example, "node_1" with "IP_1" and "node_2" with "IP_2" already in
-/// database, and to update "node_2" with existing address "IP_1". Due to
-/// default IP limitation (1 node per IP), "node_1" will be removed, and then
-/// update "node_2" with "IP_1". Besides, "IP_2" never exists in database
-/// anymore.
+/// ## Scenario 2: add or update node with new IP address
+/// If the subnet quota of the IP address is not enough, some node in the
+/// same subnet may be evicted. If evict one, then add or update the node
+/// with new IP address. Otherwise, do not add or update the node.
 ///
-/// ## Remove node with priority
-/// If multiple nodes allowed for 1 IP address, the node with minimum priority
-/// will be removed in above 2 scenarios. The priority is defined as below:
-/// 1. untrusted node < trusted node
-/// 2. Node last contact status: unknown < failure < success
-/// 3. Node last contact time: the earlier the smaller
+/// ## Eviction rule
+/// If the subnet quota is not enough, the rule to select evictee is as
+/// following: 1. Select untrusted node prior to trusted node.
+/// 2. Select node that has been contacted long time ago.
+/// 3. Randomly select one without "fresher" bias.
 pub struct NodeDatabase {
     trusted_nodes: NodeTable,
     untrusted_nodes: NodeTable,
@@ -139,24 +135,6 @@ impl NodeDatabase {
         }
 
         self.ip_limit.insert(id, ip, trusted, evictee)
-    }
-
-    /// Add a new untrusted node if not exists. Otherwise, update the existing
-    /// node with the specified `entry`. If node exists, it will update its
-    /// last contact information.
-    pub fn insert(&mut self, entry: NodeEntry) {
-        let mut node = Node::new(entry.id, entry.endpoint);
-        node.last_contact = Some(NodeContact::success());
-
-        let ip = node.endpoint.address.ip();
-
-        if self.trusted_nodes.contains(&node.id) {
-            if self.insert_ip_limit(node.id.clone(), ip, true) {
-                self.trusted_nodes.update_last_contact(node);
-            }
-        } else if self.insert_ip_limit(node.id.clone(), ip, false) {
-            self.untrusted_nodes.update_last_contact(node);
-        }
     }
 
     /// Add a new trusted node if not exists. Otherwise, update the existing

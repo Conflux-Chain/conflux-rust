@@ -4,8 +4,9 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
-    cache_manager::CacheManager,
+    cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
+    db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -61,7 +62,7 @@ fn initialize_synchronization_graph(
             Path::new(db_dir),
             Some(128),
             db::DatabaseCompactionProfile::default(),
-            Some(5),
+            NUM_COLUMNS,
         ),
     )
     .map_err(|e| format!("Failed to open database {:?}", e))
@@ -90,34 +91,22 @@ fn initialize_synchronization_graph(
         U256::from(10),
     ));
 
-    let mb = 1024 * 1024;
-    let max_cache_size = 2048 * mb; // DEFAULT_LEDGER_CACHE_SIZE
-    let pref_cache_size = max_cache_size * 3 / 4;
-
-    let cache_man = Arc::new(Mutex::new(CacheManager::new(
-        pref_cache_size,
-        max_cache_size,
-        3 * mb,
-    )));
-
     let data_man = Arc::new(BlockDataManager::new(
+        CacheConfig::default(),
         genesis_block,
         ledger_db.clone(),
         storage_manager,
-        cache_man,
-        DataManagerConfiguration::new(false, true),
+        worker_thread_pool,
+        DataManagerConfiguration::new(false, true, 250000),
     ));
 
-    let txpool = Arc::new(TransactionPool::with_capacity(
-        500_000,
-        worker_thread_pool.clone(),
-        data_man.clone(),
-    ));
+    let txpool =
+        Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
     let statistics = Arc::new(Statistics::new());
 
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
-    let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+    let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),

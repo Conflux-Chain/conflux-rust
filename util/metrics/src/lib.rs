@@ -1,6 +1,7 @@
 mod counter;
 mod ewma;
 mod gauge;
+mod histogram;
 mod meter;
 mod metrics;
 mod registry;
@@ -10,8 +11,9 @@ mod timer;
 pub use self::{
     counter::{Counter, CounterUsize},
     gauge::{Gauge, GaugeUsize},
-    meter::{register_meter, register_meter_with_group, Meter},
+    histogram::{Histogram, Sample},
+    meter::{register_meter, register_meter_with_group, Meter, MeterTimer},
     metrics::enable,
     report::{report_async, FileReporter},
-    timer::MeterTimer,
+    timer::{register_timer, Timer},
 };

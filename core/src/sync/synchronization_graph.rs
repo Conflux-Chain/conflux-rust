@@ -799,7 +799,7 @@ impl SynchronizationGraph {
             .name("Consensus Worker".into())
             .spawn(move || loop {
                 match consensus_receiver.recv() {
-                    Ok(hash) => consensus.on_new_block(&hash),
+                    Ok(hash) => consensus.on_new_block(&hash, false),
                     Err(_) => break,
                 }
             })
@@ -829,13 +829,15 @@ impl SynchronizationGraph {
     pub fn get_to_propagate_trans(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.consensus.get_to_propagate_trans()
+        self.consensus.txpool.get_to_be_propagated_transactions()
     }
 
     pub fn set_to_propagate_trans(
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
-        self.consensus.set_to_propagate_trans(transactions);
+        self.consensus
+            .txpool
+            .set_to_be_propagated_transactions(transactions);
     }
 
     fn recover_graph_from_db(&mut self) {

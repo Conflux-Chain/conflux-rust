@@ -3,33 +3,65 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
-    db::{COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_MISC, COL_TX_ADDRESS},
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    db::{
+        COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_EPOCH_SET_HASHES,
+        COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
+    },
     ext_db::SystemDB,
-    pow::TargetDifficultyManager,
+    pow::{TargetDifficultyManager, WORKER_COMPUTATION_PARALLELISM},
     storage::{
         state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
         StorageManager,
     },
     verification::VerificationConfig,
 };
+use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    block::CompactBlock,
+    block::{from_tx_hash, get_shortid_key, CompactBlock},
     receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
-use rlp::{Rlp, RlpStream};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{mpsc::channel, Arc},
 };
+use threadpool::ThreadPool;
 
-const BLOCK_STATUS_SUFFIX_BYTE: u8 = 1;
+const NULLU64: u64 = !0;
+
+const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
+
+#[derive(Clone)]
+pub struct EpochExecutionContext {
+    pub start_block_number: u64,
+}
+
+impl Encodable for EpochExecutionContext {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.begin_list(1).append(&self.start_block_number);
+    }
+}
+
+impl Decodable for EpochExecutionContext {
+    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
+        Ok(EpochExecutionContext {
+            start_block_number: r.val_at(0)?,
+        })
+    }
+}
+
+impl HeapSizeOf for EpochExecutionContext {
+    fn heap_size_of_children(&self) -> usize { std::mem::size_of::<u64>() }
+}
 
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
@@ -37,8 +69,9 @@ pub struct BlockDataManager {
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
-    pub transaction_pubkey_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
+    tx_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     epoch_execution_commitments: RwLock<HashMap<H256, (H256, H256)>>,
+    epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
 
@@ -47,36 +80,110 @@ pub struct BlockDataManager {
     pub genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
     pub storage_manager: Arc<StorageManager>,
-    pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
+    cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
+    worker_pool: Arc<Mutex<ThreadPool>>,
+    tx_cache_man: Arc<Mutex<CacheManager<H256>>>,
 }
 
 impl BlockDataManager {
     pub fn new(
-        genesis_block: Arc<Block>, db: Arc<SystemDB>,
+        cache_conf: CacheConfig, genesis_block: Arc<Block>, db: Arc<SystemDB>,
         storage_manager: Arc<StorageManager>,
-        cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-        config: DataManagerConfiguration,
+        worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
     ) -> Self
     {
         let genesis_hash = genesis_block.block_header.hash();
-        let data_man = Self {
+        let mb = 1024 * 1024;
+        let max_cache_size = cache_conf.ledger_mb() * mb;
+        let pref_cache_size = max_cache_size * 3 / 4;
+        let cache_man = Arc::new(Mutex::new(CacheManager::new(
+            pref_cache_size,
+            max_cache_size,
+            3 * mb,
+        )));
+        // TODO Bound both the size and the count of tx
+        let tx_cache_man = Arc::new(Mutex::new(CacheManager::new(
+            config.tx_cache_count * 3 / 4,
+            config.tx_cache_count,
+            10000,
+        )));
+
+        let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
             compact_blocks: Default::default(),
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
             epoch_execution_commitments: Default::default(),
-            transaction_pubkey_cache: Default::default(),
+            tx_cache: Default::default(),
+            epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
-            genesis_block,
+            genesis_block: genesis_block.clone(),
             db,
             storage_manager,
             cache_man,
             config,
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
+            worker_pool,
+            tx_cache_man,
         };
+
+        if let Some((checkpoint_hash, _)) = data_man.checkpoint_hashes_from_db()
+        {
+            if checkpoint_hash != genesis_block.block_header.hash() {
+                if let Some(checkpoint_block) =
+                    data_man.block_by_hash(&checkpoint_hash, false)
+                {
+                    if data_man
+                        .storage_manager
+                        .contains_state(SnapshotAndEpochIdRef::new(
+                            &checkpoint_hash,
+                            None,
+                        ))
+                        .unwrap()
+                    {
+                        let mut success = true;
+                        let mut cur_hash =
+                            *checkpoint_block.block_header.parent_hash();
+                        for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
+                            assert_ne!(cur_hash, H256::default());
+                            let cur_block =
+                                data_man.block_by_hash(&cur_hash, false);
+                            if cur_block.is_some()
+                                && data_man
+                                    .storage_manager
+                                    .contains_state(SnapshotAndEpochIdRef::new(
+                                        &cur_hash, None,
+                                    ))
+                                    .unwrap()
+                            {
+                                let cur_block = cur_block.unwrap();
+                                data_man.insert_epoch_execution_commitments(
+                                    cur_block.hash(),
+                                    *cur_block
+                                        .block_header
+                                        .deferred_receipts_root(),
+                                    *cur_block
+                                        .block_header
+                                        .deferred_logs_bloom_hash(),
+                                );
+                                cur_hash =
+                                    *cur_block.block_header.parent_hash();
+                            } else {
+                                success = false;
+                                break;
+                            }
+                        }
+
+                        if success {
+                            data_man.genesis_block = checkpoint_block;
+                        }
+                    }
+                }
+            }
+        }
 
         data_man.insert_epoch_execution_commitments(
             data_man.genesis_block.hash(),
@@ -85,6 +192,13 @@ impl BlockDataManager {
                 .genesis_block
                 .block_header
                 .deferred_logs_bloom_hash(),
+        );
+
+        data_man.insert_epoch_execution_context(
+            data_man.genesis_block.hash(),
+            EpochExecutionContext {
+                start_block_number: 0,
+            },
         );
 
         data_man.insert_block_header(
@@ -165,6 +279,38 @@ impl BlockDataManager {
                 }
                 None => {
                     info!("No checkpoint got from db");
+                    None
+                }
+            }
+    }
+
+    pub fn insert_epoch_set_hashes_to_db(
+        &self, epoch: u64, hashes: &Vec<H256>,
+    ) {
+        let mut rlp_stream = RlpStream::new();
+        rlp_stream.begin_list(hashes.len());
+        for hash in hashes {
+            rlp_stream.append(hash);
+        }
+        let mut epoch_key = [0; 8];
+        LittleEndian::write_u64(&mut epoch_key[0..8], epoch);
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_EPOCH_SET_HASHES, &epoch_key[0..8], &rlp_stream.drain());
+        self.db.key_value().write(dbops).expect("db error");
+    }
+
+    pub fn epoch_set_hashes_from_db(&self, epoch: u64) -> Option<Vec<H256>> {
+        let mut epoch_key = [0; 8];
+        LittleEndian::write_u64(&mut epoch_key[0..8], epoch);
+        match self.db.key_value().get(COL_EPOCH_SET_HASHES, &epoch_key[0..8])
+            .expect("Low-level database error when fetching 'epoch set hashes'. Some issue with disk?")
+            {
+                Some(hashes) => {
+                    let rlp = Rlp::new(&hashes);
+                    Some(rlp.as_list::<H256>().expect("Failed to decode epoch set hashes!"))
+                }
+                None => {
+                    info!("No epoch set hashes got from db");
                     None
                 }
             }
@@ -263,29 +409,29 @@ impl BlockDataManager {
         self.cache_man.lock().note_used(CacheId::Block(hash));
     }
 
-    fn block_status_key(block_hash: &H256) -> Vec<u8> {
+    fn local_block_info_key(block_hash: &H256) -> Vec<u8> {
         let mut key = Vec::with_capacity(block_hash.len() + 1);
         key.extend_from_slice(block_hash);
-        key.push(BLOCK_STATUS_SUFFIX_BYTE);
+        key.push(LOCAL_BLOCK_INFO_SUFFIX_BYTE);
         key
     }
 
-    /// Store block status to db. Now the status means if the block is partial
-    /// invalid.
+    /// Store block info to db. Block info includes block status and
+    /// the sequence number when the block enters consensus graph.
     /// The db key is the block hash plus one extra byte, so we can get better
-    /// data locality if we get both a block and its status from db.
-    /// The status is not a part of the block because the block is inserted
-    /// before we know its status, and we do not want to insert a large chunk
+    /// data locality if we get both a block and its info from db.
+    /// The info is not a part of the block because the block is inserted
+    /// before we know its info, and we do not want to insert a large chunk
     /// again. TODO Maybe we can use in-place modification (operator `merge`
-    /// in rocksdb) to keep the status together with the block.
-    pub fn insert_block_status_to_db(
-        &self, block_hash: &H256, status: BlockStatus,
+    /// in rocksdb) to keep the info together with the block.
+    pub fn insert_local_block_info_to_db(
+        &self, block_hash: &H256, block_info: LocalBlockInfo,
     ) {
         let mut dbops = self.db.key_value().transaction();
         dbops.put(
             COL_BLOCKS,
-            &Self::block_status_key(block_hash),
-            &[status.to_db_status()],
+            &Self::local_block_info_key(block_hash),
+            &rlp::encode(&block_info),
         );
         self.db
             .key_value()
@@ -293,16 +439,43 @@ impl BlockDataManager {
             .expect("crash for db failure");
     }
 
-    /// Get block status from db. Now the status means if the block is partial
-    /// invalid
-    pub fn block_status_from_db(
+    /// Get block info from db.
+    pub fn local_block_info_from_db(
         &self, block_hash: &H256,
-    ) -> Option<BlockStatus> {
+    ) -> Option<LocalBlockInfo> {
         self.db
             .key_value()
-            .get(COL_BLOCKS, &Self::block_status_key(block_hash))
+            .get(COL_BLOCKS, &Self::local_block_info_key(block_hash))
             .expect("crash for db failure")
-            .map(|encoded| BlockStatus::from_db_status(encoded[0]))
+            .map(|encoded| {
+                let rlp = Rlp::new(&encoded);
+                rlp.as_val().expect("Wrong block info rlp format!")
+            })
+    }
+
+    fn insert_epoch_execution_context_to_db(
+        &self, hash: &H256, ctx: &EpochExecutionContext,
+    ) {
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_EXECUTION_CONTEXT, hash, &rlp::encode(ctx));
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
+    /// Get epoch context from db.
+    pub fn epoch_execution_context_from_db(
+        &self, hash: &H256,
+    ) -> Option<EpochExecutionContext> {
+        let rlp_bytes = self
+            .db
+            .key_value()
+            .get(COL_EXECUTION_CONTEXT, hash)
+            .expect("crash for db failure")?;
+        let rlp = Rlp::new(&rlp_bytes);
+
+        Some(rlp.as_val().expect("Wrong block rlp format!"))
     }
 
     pub fn remove_block_from_kv(&self, hash: &H256) {
@@ -542,6 +715,18 @@ impl BlockDataManager {
             .insert(block_hash, (receipts_root, logs_bloom_hash))
     }
 
+    pub fn insert_epoch_execution_context(
+        &self, hash: H256, ctx: EpochExecutionContext,
+    ) {
+        self.insert_epoch_execution_context_to_db(&hash, &ctx);
+        self.epoch_execution_contexts
+            .write()
+            .insert(hash.clone(), ctx);
+        self.cache_man
+            .lock()
+            .note_used(CacheId::ExecutionContext(hash))
+    }
+
     pub fn get_epoch_execution_commitments(
         &self, block_hash: &H256,
     ) -> Option<(H256, H256)> {
@@ -551,33 +736,14 @@ impl BlockDataManager {
             .map(Clone::clone)
     }
 
-    pub fn cache_transaction(
-        &self, tx_hash: &H256, tx: Arc<SignedTransaction>,
-    ) {
-        let mut transactions = self.transaction_pubkey_cache.write();
-        let mut cache_man = self.cache_man.lock();
-        transactions.insert(*tx_hash, tx);
-        cache_man.note_used(CacheId::TransactionPubkey(*tx_hash))
-    }
-
-    pub fn get_uncached_transactions(
-        &self, transactions: &Vec<TransactionWithSignature>,
-    ) -> Vec<TransactionWithSignature> {
-        let tx_cache = self.transaction_pubkey_cache.read();
-        transactions
-            .iter()
-            .filter(|tx| {
-                let tx_hash = tx.hash();
-                let inserted = tx_cache.contains_key(&tx_hash);
-                // Sample 1/128 transactions
-                if tx_hash[0] & 254 == 0 {
-                    debug!("Sampled transaction {:?} in tx pool", tx_hash);
-                }
-
-                !inserted
-            })
-            .map(|tx| tx.clone())
-            .collect()
+    pub fn get_epoch_execution_context(
+        &self, hash: &H256,
+    ) -> Option<EpochExecutionContext> {
+        self.epoch_execution_contexts
+            .read()
+            .get(hash)
+            .map(Clone::clone)
+            .or_else(|| self.epoch_execution_context_from_db(hash))
     }
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
@@ -640,7 +806,10 @@ impl BlockDataManager {
     }
 
     pub fn invalidate_block(&self, block_hash: H256) {
-        self.insert_block_status_to_db(&block_hash, BlockStatus::Invalid);
+        // This block will never enter consensus graph, so
+        // assign it a NULL sequence number.
+        let block_info = LocalBlockInfo::new(BlockStatus::Invalid, NULLU64);
+        self.insert_local_block_info_to_db(&block_hash, block_info);
         self.invalid_block_set.write().insert(block_hash);
     }
 
@@ -650,8 +819,9 @@ impl BlockDataManager {
         if invalid_block_set.contains(block_hash) {
             return true;
         } else {
-            if let Some(status) = self.block_status_from_db(block_hash) {
-                match status {
+            if let Some(block_info) = self.local_block_info_from_db(block_hash)
+            {
+                match block_info.status {
                     BlockStatus::Invalid => {
                         RwLockUpgradableReadGuard::upgrade(invalid_block_set)
                             .insert(*block_hash);
@@ -676,37 +846,31 @@ impl BlockDataManager {
         let block_receipts = self.block_receipts.read().heap_size_of_children();
         let transaction_addresses =
             self.transaction_addresses.read().heap_size_of_children();
-        let transaction_pubkey = SignedTransaction::heap_size_of_iter(
-            self.transaction_pubkey_cache.read().values(),
-        );
         CacheSize {
             block_headers,
             blocks,
             block_receipts,
             transaction_addresses,
             compact_blocks,
-            transaction_pubkey,
         }
     }
 
-    pub fn block_cache_gc(&self) {
+    fn block_cache_gc(&self) {
         let current_size = self.cache_size().total();
         let mut block_headers = self.block_headers.write();
         let mut blocks = self.blocks.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut executed_results = self.block_receipts.write();
-        let mut transaction_pubkey_cache =
-            self.transaction_pubkey_cache.write();
         let mut tx_address = self.transaction_addresses.write();
+        let mut exeuction_contexts = self.epoch_execution_contexts.write();
         let mut cache_man = self.cache_man.lock();
         info!(
-            "Before gc cache_size={} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {}",
             current_size,
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
             tx_address.len(),
-            transaction_pubkey_cache.len(),
         );
 
         cache_man.collect_garbage(current_size, |ids| {
@@ -724,29 +888,46 @@ impl BlockDataManager {
                     CacheId::CompactBlock(ref h) => {
                         compact_blocks.remove(h);
                     }
-                    CacheId::TransactionPubkey(ref h) => {
-                        transaction_pubkey_cache.remove(h);
-                    }
                     CacheId::BlockHeader(ref h) => {
                         block_headers.remove(h);
                     }
+                    CacheId::ExecutionContext(ref h) => {
+                        exeuction_contexts.remove(h);
+                    }
                 }
             }
-
-            block_headers.shrink_to_fit();
-            blocks.shrink_to_fit();
-            executed_results.shrink_to_fit();
-            tx_address.shrink_to_fit();
-            transaction_pubkey_cache.shrink_to_fit();
-            compact_blocks.shrink_to_fit();
 
             block_headers.heap_size_of_children()
                 + blocks.heap_size_of_children()
                 + executed_results.heap_size_of_children()
                 + tx_address.heap_size_of_children()
-                + transaction_pubkey_cache.heap_size_of_children()
                 + compact_blocks.heap_size_of_children()
+                + exeuction_contexts.heap_size_of_children()
         });
+
+        block_headers.shrink_to_fit();
+        blocks.shrink_to_fit();
+        executed_results.shrink_to_fit();
+        tx_address.shrink_to_fit();
+        compact_blocks.shrink_to_fit();
+        exeuction_contexts.shrink_to_fit();
+    }
+
+    fn tx_cache_gc(&self) {
+        let mut tx_cache = self.tx_cache.write();
+        let mut tx_cache_man = self.tx_cache_man.lock();
+        tx_cache_man.collect_garbage(tx_cache.len(), |ids| {
+            for id in ids {
+                tx_cache.remove(&id);
+            }
+            tx_cache.len()
+        });
+        tx_cache.shrink_to_fit();
+    }
+
+    pub fn gc_cache(&self) {
+        self.block_cache_gc();
+        self.tx_cache_gc();
     }
 
     pub fn set_cur_consensus_era_genesis_hash(
@@ -760,6 +941,245 @@ impl BlockDataManager {
 
     pub fn get_cur_consensus_era_genesis_hash(&self) -> H256 {
         self.cur_consensus_era_genesis_hash.read().clone()
+    }
+
+    /// Recover the public keys for uncached transactions in `transactions`.
+    /// If a tx is already in the cache, it will be ignored and not included in
+    /// the output vec.
+    pub fn recover_unsigned_tx(
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        let uncached_trans = {
+            let tx_cache = self.tx_cache.read();
+            transactions
+                .iter()
+                .filter(|tx| {
+                    let tx_hash = tx.hash();
+                    let inserted = tx_cache.contains_key(&tx_hash);
+                    // Sample 1/128 transactions
+                    if tx_hash[0] & 254 == 0 {
+                        debug!("Sampled transaction {:?} in tx pool", tx_hash);
+                    }
+                    !inserted
+                })
+                .map(|tx| (0, tx.clone())) // idx not used
+                .collect()
+        };
+        // Ignore the index and return the recovered tx list
+        self.recover_uncached_tx(uncached_trans)
+            .map(|tx_vec| tx_vec.into_iter().map(|(_, tx)| tx).collect())
+    }
+
+    /// Recover public keys for the transactions in `block`.
+    ///
+    /// The public keys already in input transactions will be used directly
+    /// without verification. `block` will not be updated if any error is
+    /// thrown.
+    pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {
+        let (uncached_trans, mut recovered_trans) = {
+            let tx_cache = self.tx_cache.read();
+            let mut uncached_trans = Vec::new();
+            let mut recovered_trans = Vec::new();
+            for (idx, transaction) in block.transactions.iter().enumerate() {
+                if transaction.public.is_some() {
+                    // This may only happen for `GetBlocksWithPublicResponse`
+                    // for now.
+                    recovered_trans.push(Some(transaction.clone()));
+                    continue;
+                }
+                let tx_hash = transaction.hash();
+                // Sample 1/128 transactions
+                if tx_hash[0] & 254 == 0 {
+                    debug!("Sampled transaction {:?} in block", tx_hash);
+                }
+                match tx_cache.get(&tx_hash) {
+                    Some(tx) => recovered_trans.push(Some(tx.clone())),
+                    None => {
+                        uncached_trans
+                            .push((idx, transaction.transaction.clone()));
+                        recovered_trans.push(None);
+                    }
+                }
+            }
+            (uncached_trans, recovered_trans)
+        };
+        for (idx, tx) in self.recover_uncached_tx(uncached_trans)? {
+            recovered_trans[idx] = Some(tx);
+        }
+        block.transactions = recovered_trans
+            .into_iter()
+            .map(|e| e.expect("All tx recovered"))
+            .collect();
+        Ok(())
+    }
+
+    pub fn recover_unsigned_tx_with_order(
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        let (uncached_trans, mut recovered_trans) = {
+            let tx_cache = self.tx_cache.read();
+            let mut uncached_trans = Vec::new();
+            let mut recovered_trans = Vec::new();
+            for (idx, transaction) in transactions.iter().enumerate() {
+                let tx_hash = transaction.hash();
+                // Sample 1/128 transactions
+                if tx_hash[0] & 254 == 0 {
+                    debug!("Sampled transaction {:?} in block", tx_hash);
+                }
+                match tx_cache.get(&tx_hash) {
+                    Some(tx) => recovered_trans.push(Some(tx.clone())),
+                    None => {
+                        uncached_trans.push((idx, transaction.clone()));
+                        recovered_trans.push(None);
+                    }
+                }
+            }
+            (uncached_trans, recovered_trans)
+        };
+        for (idx, tx) in self.recover_uncached_tx(uncached_trans)? {
+            recovered_trans[idx] = Some(tx);
+        }
+        Ok(recovered_trans
+            .into_iter()
+            .map(|e| e.expect("All tx recovered"))
+            .collect())
+    }
+
+    /// Recover public key for `uncached_trans` and keep the corresponding index
+    /// unchanged.
+    ///
+    /// Note that we release `tx_cache` lock during pubkey recovery to allow
+    /// more parallelism, but we may recover a tx twice if it is received
+    /// again before the recovery finishes.
+    fn recover_uncached_tx(
+        &self, uncached_trans: Vec<(usize, TransactionWithSignature)>,
+    ) -> Result<Vec<(usize, Arc<SignedTransaction>)>, DecoderError> {
+        let mut recovered_trans = Vec::new();
+        if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
+            for (idx, tx) in uncached_trans {
+                if let Ok(public) = tx.recover_public() {
+                    recovered_trans.push((
+                        idx,
+                        Arc::new(SignedTransaction::new(public, tx.clone())),
+                    ));
+                } else {
+                    info!(
+                        "Unable to recover the public key of transaction {:?}",
+                        tx.hash()
+                    );
+                    return Err(DecoderError::Custom(
+                        "Cannot recover public key",
+                    ));
+                }
+            }
+        } else {
+            let tx_num = uncached_trans.len();
+            let tx_num_per_worker = tx_num / WORKER_COMPUTATION_PARALLELISM;
+            let mut remainder =
+                tx_num - (tx_num_per_worker * WORKER_COMPUTATION_PARALLELISM);
+            let mut start_idx = 0;
+            let mut end_idx = 0;
+            let mut unsigned_trans = Vec::new();
+
+            for tx in uncached_trans {
+                if start_idx == end_idx {
+                    // a new segment of transactions
+                    end_idx = start_idx + tx_num_per_worker;
+                    if remainder > 0 {
+                        end_idx += 1;
+                        remainder -= 1;
+                    }
+                    let unsigned_txes = Vec::new();
+                    unsigned_trans.push(unsigned_txes);
+                }
+
+                unsigned_trans.last_mut().unwrap().push(tx);
+
+                start_idx += 1;
+            }
+
+            let (sender, receiver) = channel();
+            let n_thread = unsigned_trans.len();
+            for unsigned_txes in unsigned_trans {
+                let sender = sender.clone();
+                self.worker_pool.lock().execute(move || {
+                    let mut signed_txes = Vec::new();
+                    for (idx, tx) in unsigned_txes {
+                        if let Ok(public) = tx.recover_public() {
+                            signed_txes.push((idx, Arc::new(SignedTransaction::new(
+                                public,
+                                tx.clone(),
+                            ))));
+                        } else {
+                            info!(
+                                "Unable to recover the public key of transaction {:?}",
+                                tx.hash()
+                            );
+                            break;
+                        }
+                    }
+                    sender.send(signed_txes).unwrap();
+                });
+            }
+
+            let mut total_recovered_num = 0 as usize;
+            for tx_publics in receiver.iter().take(n_thread) {
+                total_recovered_num += tx_publics.len();
+                for (idx, tx) in tx_publics {
+                    recovered_trans.push((idx, tx));
+                }
+            }
+            if total_recovered_num != tx_num {
+                return Err(DecoderError::Custom("Cannot recover public key"));
+            }
+        }
+        let mut tx_cache = self.tx_cache.write();
+        let mut tx_cache_man = self.tx_cache_man.lock();
+        for (_, tx) in &recovered_trans {
+            tx_cache.insert(tx.hash(), tx.clone());
+            tx_cache_man.note_used(tx.hash());
+        }
+        Ok(recovered_trans)
+    }
+
+    /// Find tx in tx_cache that matches tx_short_ids to fill in
+    /// reconstruced_txes Return the differentially encoded index of missing
+    /// transactions Now should only called once after CompactBlock is
+    /// decoded
+    pub fn build_partial(
+        &self, compact_block: &mut CompactBlock,
+    ) -> Vec<usize> {
+        compact_block
+            .reconstructed_txes
+            .resize(compact_block.tx_short_ids.len(), None);
+        let mut short_id_to_index =
+            HashMap::with_capacity(compact_block.tx_short_ids.len());
+        for (i, id) in compact_block.tx_short_ids.iter().enumerate() {
+            short_id_to_index.insert(id, i);
+        }
+        let (k0, k1) =
+            get_shortid_key(&compact_block.block_header, &compact_block.nonce);
+        for (tx_hash, tx) in &*self.tx_cache.read() {
+            let short_id = from_tx_hash(tx_hash, k0, k1);
+            match short_id_to_index.remove(&short_id) {
+                Some(index) => {
+                    compact_block.reconstructed_txes[index] = Some(tx.clone());
+                }
+                None => {}
+            }
+        }
+        let mut missing_index = Vec::new();
+        for index in short_id_to_index.values() {
+            missing_index.push(*index);
+        }
+        missing_index.sort();
+        let mut last = 0;
+        let mut missing_encoded = Vec::new();
+        for index in missing_index {
+            missing_encoded.push(index - last);
+            last = index + 1;
+        }
+        missing_encoded
     }
 }
 
@@ -818,6 +1238,43 @@ impl BlockReceiptsInfo {
 }
 
 #[derive(Copy, Clone)]
+pub struct LocalBlockInfo {
+    status: BlockStatus,
+    enter_consensus_seq_num: u64,
+}
+
+impl LocalBlockInfo {
+    pub fn new(status: BlockStatus, seq_num: u64) -> Self {
+        LocalBlockInfo {
+            status,
+            enter_consensus_seq_num: seq_num,
+        }
+    }
+
+    pub fn get_status(&self) -> BlockStatus { self.status }
+}
+
+impl Encodable for LocalBlockInfo {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        let status = self.status.to_db_status();
+        stream
+            .begin_list(2)
+            .append(&status)
+            .append(&self.enter_consensus_seq_num);
+    }
+}
+
+impl Decodable for LocalBlockInfo {
+    fn decode(rlp: &Rlp) -> Result<LocalBlockInfo, DecoderError> {
+        let status: u8 = rlp.val_at(0)?;
+        Ok(LocalBlockInfo {
+            status: BlockStatus::from_db_status(status),
+            enter_consensus_seq_num: rlp.val_at(1)?,
+        })
+    }
+}
+
+#[derive(Copy, Clone)]
 pub enum BlockStatus {
     Valid = 0,
     Invalid = 1,
@@ -842,13 +1299,17 @@ impl BlockStatus {
 pub struct DataManagerConfiguration {
     record_tx_address: bool,
     persist_header: bool,
+    tx_cache_count: usize,
 }
 
 impl DataManagerConfiguration {
-    pub fn new(record_tx_address: bool, persist_header: bool) -> Self {
+    pub fn new(
+        record_tx_address: bool, persist_header: bool, tx_cache_count: usize,
+    ) -> Self {
         Self {
             record_tx_address,
             persist_header,
+            tx_cache_count,
         }
     }
 }

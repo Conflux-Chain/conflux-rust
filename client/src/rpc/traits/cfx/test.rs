@@ -23,6 +23,9 @@ pub trait TestRpc {
     #[rpc(name = "getblockcount")]
     fn get_block_count(&self) -> RpcResult<usize>;
 
+    #[rpc(name = "getgoodput")]
+    fn get_goodput(&self) -> RpcResult<isize>;
+
     #[rpc(name = "generate")]
     fn generate(
         &self, num_blocks: usize, num_txs: usize,
