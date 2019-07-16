@@ -332,7 +332,7 @@ impl RpcImpl {
                 self.consensus.data_man.block_by_hash(key, false)
             {
                 let timestamp = block.block_header.timestamp();
-                if timestamp < min {
+                if timestamp < min  && timstamp >0{
                     min = timestamp;
                 }
                 if timestamp > max {
