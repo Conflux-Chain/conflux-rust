@@ -19,8 +19,8 @@ use cfx_types::{
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::MinLinkCutTree;
 use primitives::{
-    receipt::Receipt, Block, BlockHeaderBuilder, StateRootWithAuxInfo,
-    TransactionAddress,
+    receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder,
+    StateRootWithAuxInfo, TransactionAddress,
 };
 use slab::Slab;
 use std::{
@@ -344,7 +344,8 @@ impl ConsensusGraphInner {
         // and then into synchronization graph. All the other blocks will be
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
-        let (genesis_arena_index, _) = inner.insert(genesis_block.as_ref());
+        let (genesis_arena_index, _) =
+            inner.insert(&genesis_block.block_header);
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
         inner
             .weight_tree
@@ -1043,16 +1044,16 @@ impl ConsensusGraphInner {
         }
     }
 
-    fn insert(&mut self, block: &Block) -> (usize, usize) {
-        let hash = block.hash();
+    fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
+        let hash = block_header.hash();
 
-        let is_heavy = U512::from(block.block_header.pow_quality)
+        let is_heavy = U512::from(block_header.pow_quality)
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
-                * U512::from(block.block_header.difficulty());
+                * U512::from(block_header.difficulty());
 
-        let parent = if *block.block_header.parent_hash() != H256::default() {
+        let parent = if *block_header.parent_hash() != H256::default() {
             self.hash_to_arena_indices
-                .get(block.block_header.parent_hash())
+                .get(block_header.parent_hash())
                 .cloned()
                 .unwrap()
         } else {
@@ -1060,7 +1061,7 @@ impl ConsensusGraphInner {
         };
 
         let mut referees: Vec<usize> = Vec::new();
-        for hash in block.block_header.referee_hashes().iter() {
+        for hash in block_header.referee_hashes().iter() {
             if let Some(x) = self.hash_to_arena_indices.get(hash) {
                 self.insert_referee_if_not_duplicate(&mut referees, *x);
             } else if let Some(r) = self.legacy_refs.get(hash) {
@@ -1073,20 +1074,20 @@ impl ConsensusGraphInner {
         for referee in &referees {
             self.terminal_hashes.remove(&self.arena[*referee].hash);
         }
-        let my_height = block.block_header.height();
+        let my_height = block_header.height();
         let sn = self.get_next_sequence_number();
         let index = self.arena.insert(ConsensusGraphNode {
             hash,
             height: my_height,
             is_heavy,
-            difficulty: *block.block_header.difficulty(),
+            difficulty: *block_header.difficulty(),
             past_weight: 0, // will be updated later below
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
             stable: true,
             // Block header contains an adaptive field, we will verify with our
             // own computation
-            adaptive: block.block_header.adaptive(),
+            adaptive: block_header.adaptive(),
             parent,
             last_pivot_in_past: 0,
             era_block: self.get_era_block_with_parent(parent, 0),
@@ -1138,7 +1139,7 @@ impl ConsensusGraphInner {
             };
 
             self.data_man.insert_epoch_execution_context(
-                block.hash(),
+                hash.clone(),
                 EpochExecutionContext {
                     start_block_number: self
                         .get_epoch_start_block_number(index),
