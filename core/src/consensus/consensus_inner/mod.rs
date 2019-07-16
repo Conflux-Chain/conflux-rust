@@ -2,14 +2,10 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, EpochExecutionContext},
     consensus::{
-        anticone_cache::AnticoneCache,
-        consensus_inner::consensus_executor::{
-            EpochExecutionTask, RewardExecutionInfo,
-        },
-        ANTICONE_PENALTY_RATIO, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
-        DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
+        anticone_cache::AnticoneCache, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
+        BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
     },
     hash::KECCAK_EMPTY_LIST_RLP,
     pow::{target_difficulty, ProofOfWorkConfig},
@@ -22,7 +18,10 @@ use cfx_types::{
 };
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::MinLinkCutTree;
-use primitives::{receipt::Receipt, Block, TransactionAddress};
+use primitives::{
+    receipt::Receipt, Block, BlockHeaderBuilder, StateRootWithAuxInfo,
+    TransactionAddress,
+};
 use slab::Slab;
 use std::{
     cmp::{max, min},
@@ -73,6 +72,12 @@ pub struct ConsensusGraphNodeData {
     min_epoch_in_other_views: u64,
     max_epoch_in_other_views: u64,
     sequence_number: u64,
+    /// exec_info_lca_height indicates the fork_at height that the vote_valid
+    /// field corresponds to.
+    exec_info_lca_height: u64,
+    /// It indicates whether the blame voting information of this block is
+    /// correct or not.
+    vote_valid: bool,
 }
 
 impl ConsensusGraphNodeData {
@@ -87,6 +92,8 @@ impl ConsensusGraphNodeData {
             min_epoch_in_other_views: height,
             max_epoch_in_other_views: height,
             sequence_number,
+            exec_info_lca_height: NULLU64,
+            vote_valid: true,
         }
     }
 }
@@ -101,6 +108,24 @@ impl Default for ConsensusGraphPivotData {
     fn default() -> Self {
         ConsensusGraphPivotData {
             last_pivot_in_past_blocks: HashSet::new(),
+        }
+    }
+}
+
+struct ConsensusGraphExecutionInfo {
+    state_valid: bool,
+    original_deferred_state_root: H256,
+    original_deferred_receipt_root: H256,
+    original_deferred_logs_bloom_hash: H256,
+}
+
+impl Default for ConsensusGraphExecutionInfo {
+    fn default() -> Self {
+        ConsensusGraphExecutionInfo {
+            state_valid: true,
+            original_deferred_state_root: Default::default(),
+            original_deferred_receipt_root: Default::default(),
+            original_deferred_logs_bloom_hash: Default::default(),
         }
     }
 }
@@ -219,6 +244,8 @@ pub struct ConsensusGraphInner {
     // The cache to store Anticone information of each node. This could be very
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
+    // The cache to store execution information of nodes in the consensus graph
+    execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     total_weight_in_past_2d: TotalWeightInPast,
@@ -234,6 +261,7 @@ pub struct ConsensusGraphNode {
     // We should review the finality computation and check whether we
     // still need this field!
     past_weight: i128,
+    past_num_blocks: u64,
     /// The total weight of its past set in its own era
     past_era_weight: i128,
     stable: bool,
@@ -301,6 +329,7 @@ impl ConsensusGraphInner {
             data_man: data_man.clone(),
             inner_conf,
             anticone_cache: AnticoneCache::new(),
+            execution_info_cache: HashMap::new(),
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
@@ -375,6 +404,13 @@ impl ConsensusGraphInner {
         });
         assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
         assert!(inner.genesis_block_logs_bloom_hash == KECCAK_EMPTY_BLOOM);
+
+        inner.data_man.insert_epoch_execution_context(
+            data_man.genesis_block().hash(),
+            EpochExecutionContext {
+                start_block_number: 0,
+            },
+        );
 
         inner
             .anticone_cache
@@ -477,36 +513,6 @@ impl ConsensusGraphInner {
         into_i128(&total_weight.delta)
     }
 
-    fn get_optimistic_execution_task(
-        &mut self, data_man: &BlockDataManager,
-    ) -> Option<EpochExecutionTask> {
-        if !self.inner_conf.enable_optimistic_execution {
-            return None;
-        }
-
-        let opt_height = self.optimistic_executed_height?;
-        let epoch_arena_index = self.get_pivot_block_arena_index(opt_height);
-
-        // `on_local_pivot` is set to `true` because when we later skip its
-        // execution on pivot chain, we will not notify tx pool, so we
-        // will also notify in advance.
-        let execution_task = EpochExecutionTask::new(
-            self.arena[epoch_arena_index].hash,
-            self.get_epoch_block_hashes(epoch_arena_index),
-            self.get_reward_execution_info(data_man, epoch_arena_index),
-            true,
-            false,
-        );
-        let next_opt_height = opt_height + 1;
-        if next_opt_height >= self.pivot_index_to_height(self.pivot_chain.len())
-        {
-            self.optimistic_executed_height = None;
-        } else {
-            self.optimistic_executed_height = Some(next_opt_height);
-        }
-        Some(execution_task)
-    }
-
     #[inline]
     fn get_epoch_block_hashes(&self, epoch_arena_index: usize) -> Vec<H256> {
         self.arena[epoch_arena_index]
@@ -515,6 +521,13 @@ impl ConsensusGraphInner {
             .iter()
             .map(|idx| self.arena[*idx].hash)
             .collect()
+    }
+
+    #[inline]
+    fn get_epoch_start_block_number(&self, epoch_arena_index: usize) -> u64 {
+        let parent = self.arena[epoch_arena_index].parent;
+
+        return self.arena[parent].past_num_blocks + 1;
     }
 
     pub fn check_mining_adaptive_block(
@@ -1067,7 +1080,8 @@ impl ConsensusGraphInner {
             height: my_height,
             is_heavy,
             difficulty: *block.block_header.difficulty(),
-            past_weight: 0,     // will be updated later below
+            past_weight: 0, // will be updated later below
+            past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
             stable: true,
             // Block header contains an adaptive field, we will verify with our
@@ -1111,6 +1125,10 @@ impl ConsensusGraphInner {
             let past_weight = self.arena[parent].past_weight
                 + self.block_weight(parent, false)
                 + weight_in_my_epoch;
+            let past_num_blocks = self.arena[parent].past_num_blocks
+                + 1
+                + (self.arena[index].data.blockset_in_own_view_of_epoch.len()
+                    as u64);
             let past_era_weight = if parent != era_genesis {
                 self.arena[parent].past_era_weight
                     + self.block_weight(parent, false)
@@ -1119,7 +1137,16 @@ impl ConsensusGraphInner {
                 self.block_weight(parent, false) + weight_era_in_my_epoch
             };
 
+            self.data_man.insert_epoch_execution_context(
+                block.hash(),
+                EpochExecutionContext {
+                    start_block_number: self
+                        .get_epoch_start_block_number(index),
+                },
+            );
+
             self.arena[index].past_weight = past_weight;
+            self.arena[index].past_num_blocks = past_num_blocks;
             self.arena[index].past_era_weight = past_era_weight;
         }
 
@@ -1324,118 +1351,6 @@ impl ConsensusGraphInner {
             }
         }
         total_weight
-    }
-
-    fn get_reward_execution_info_from_index(
-        &self, data_man: &BlockDataManager,
-        reward_index: Option<(usize, usize)>,
-    ) -> Option<RewardExecutionInfo>
-    {
-        reward_index.map(
-            |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
-                let epoch_blocks = self
-                    .get_executable_epoch_blocks(data_man, pivot_arena_index);
-
-                let mut epoch_block_anticone_overlimited =
-                    Vec::with_capacity(epoch_blocks.len());
-                let mut epoch_block_anticone_difficulties =
-                    Vec::with_capacity(epoch_blocks.len());
-
-                let epoch_difficulty = self.arena[pivot_arena_index].difficulty;
-                let anticone_cutoff_epoch_anticone_set_opt = self
-                    .anticone_cache
-                    .get(anticone_penalty_cutoff_epoch_arena_index);
-                for index in &self.arena[pivot_arena_index]
-                    .data
-                    .ordered_executable_epoch_blocks
-                {
-                    let block_consensus_node = &self.arena[*index];
-
-                    let mut anticone_overlimited =
-                        block_consensus_node.data.partial_invalid;
-                    // If a block is partial_invalid, it won't have reward and
-                    // anticone_difficulty will not be used, so it's okay to set
-                    // it to 0.
-                    let mut anticone_difficulty: U512 = 0.into();
-                    if !anticone_overlimited {
-                        let block_consensus_node_anticone_opt =
-                            self.anticone_cache.get(*index);
-                        if block_consensus_node_anticone_opt.is_none()
-                            || anticone_cutoff_epoch_anticone_set_opt.is_none()
-                        {
-                            anticone_difficulty = U512::from(into_u256(
-                                self.recompute_anticone_weight(
-                                    *index,
-                                    anticone_penalty_cutoff_epoch_arena_index,
-                                ),
-                            ));
-                        } else {
-                            let block_consensus_node_anticone: HashSet<usize> =
-                                block_consensus_node_anticone_opt
-                                    .unwrap()
-                                    .iter()
-                                    .filter(|idx| {
-                                        self.is_same_era(
-                                            **idx,
-                                            pivot_arena_index,
-                                        )
-                                    })
-                                    .map(|idx| *idx)
-                                    .collect();
-                            let anticone_cutoff_epoch_anticone_set: HashSet<
-                                usize,
-                            > = anticone_cutoff_epoch_anticone_set_opt
-                                .unwrap()
-                                .iter()
-                                .filter(|idx| {
-                                    self.is_same_era(**idx, pivot_arena_index)
-                                })
-                                .map(|idx| *idx)
-                                .collect();
-                            let anticone_set = block_consensus_node_anticone
-                                .difference(&anticone_cutoff_epoch_anticone_set)
-                                .cloned()
-                                .collect::<HashSet<_>>();
-                            for a_index in anticone_set {
-                                // TODO: Maybe consider to use base difficulty
-                                // Check with the spec!
-                                anticone_difficulty += U512::from(into_u256(
-                                    self.block_weight(a_index, false),
-                                ));
-                            }
-                        };
-
-                        // TODO: check the clear definition of anticone penalty,
-                        // normally and around the time of difficulty
-                        // adjustment.
-                        // LINT.IfChange(ANTICONE_PENALTY_1)
-                        if anticone_difficulty / U512::from(epoch_difficulty)
-                            >= U512::from(ANTICONE_PENALTY_RATIO)
-                        {
-                            anticone_overlimited = true;
-                        }
-                        // LINT.ThenChange(consensus/consensus_executor.
-                        // rs#ANTICONE_PENALTY_2)
-                    }
-                    epoch_block_anticone_overlimited.push(anticone_overlimited);
-                    epoch_block_anticone_difficulties.push(anticone_difficulty);
-                }
-                RewardExecutionInfo {
-                    epoch_blocks,
-                    epoch_block_anticone_overlimited,
-                    epoch_block_anticone_difficulties,
-                }
-            },
-        )
-    }
-
-    fn get_reward_execution_info(
-        &self, data_man: &BlockDataManager, epoch_arena_index: usize,
-    ) -> Option<RewardExecutionInfo> {
-        self.get_reward_execution_info_from_index(
-            data_man,
-            self.get_pivot_reward_index(epoch_arena_index),
-        )
     }
 
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
@@ -1793,6 +1708,198 @@ impl ConsensusGraphInner {
         } else {
             into_i128(&self.arena[me].difficulty)
         }
+    }
+
+    fn compute_blame_and_state_with_execution_result(
+        &self, parent: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
+        let mut cur = parent;
+        let mut blame: u32 = 0;
+        let mut state_blame_vec = Vec::new();
+        let mut receipt_blame_vec = Vec::new();
+        let mut bloom_blame_vec = Vec::new();
+        state_blame_vec
+            .push(exec_result.0.state_root.compute_state_root_hash());
+        receipt_blame_vec.push(exec_result.1.clone());
+        bloom_blame_vec.push(exec_result.2.clone());
+        while blame < BLAME_BOUND {
+            let exec_info_opt = self.execution_info_cache.get(&cur);
+            if exec_info_opt.is_none() {
+                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
+            }
+            let exec_info = exec_info_opt.unwrap();
+            if exec_info.state_valid {
+                break;
+            }
+            blame += 1;
+            if cur == self.cur_era_genesis_block_arena_index
+                && blame < BLAME_BOUND
+            {
+                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
+            }
+            state_blame_vec
+                .push(exec_info.original_deferred_state_root.clone());
+            receipt_blame_vec
+                .push(exec_info.original_deferred_receipt_root.clone());
+            bloom_blame_vec
+                .push(exec_info.original_deferred_logs_bloom_hash.clone());
+            cur = self.arena[cur].parent;
+        }
+        if blame > 0 {
+            Ok((
+                blame,
+                exec_result.0,
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    state_blame_vec,
+                ),
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    receipt_blame_vec,
+                ),
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    bloom_blame_vec,
+                ),
+            ))
+        } else {
+            Ok((
+                0,
+                exec_result.0,
+                state_blame_vec.pop().unwrap(),
+                receipt_blame_vec.pop().unwrap(),
+                bloom_blame_vec.pop().unwrap(),
+            ))
+        }
+    }
+
+    fn compute_execution_info_with_result(
+        &mut self, me: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
+    ) -> Result<(), String> {
+        // For the original genesis, it is always correct
+        if self.arena[me].height == 0 {
+            self.execution_info_cache.insert(
+                me,
+                ConsensusGraphExecutionInfo {
+                    state_valid: true,
+                    original_deferred_state_root: self.genesis_block_state_root,
+                    original_deferred_receipt_root: self
+                        .genesis_block_receipts_root,
+                    original_deferred_logs_bloom_hash: self
+                        .genesis_block_logs_bloom_hash,
+                },
+            );
+            return Ok(());
+        }
+        let parent = self.arena[me].parent;
+        let original_deferred_state_root =
+            exec_result.0.state_root.compute_state_root_hash();
+        let original_deferred_receipt_root = exec_result.1.clone();
+        let original_deferred_logs_bloom_hash = exec_result.2.clone();
+        let (
+            blame,
+            _,
+            deferred_state_root,
+            deferred_receipt_root,
+            deferred_logs_bloom_hash,
+        ) = self.compute_blame_and_state_with_execution_result(
+            parent,
+            exec_result,
+        )?;
+        let block_header = self
+            .data_man
+            .block_header_by_hash(&self.arena[me].hash)
+            .unwrap();
+        let state_valid = block_header.blame() == blame
+            && *block_header.deferred_state_root() == deferred_state_root
+            && *block_header.deferred_receipts_root() == deferred_receipt_root
+            && *block_header.deferred_logs_bloom_hash()
+                == deferred_logs_bloom_hash;
+
+        if state_valid {
+            debug!("compute_execution_info_with_result(): Block {} state/blame is valid.", self.arena[me].hash);
+        } else {
+            debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
+        }
+
+        self.execution_info_cache.insert(
+            me,
+            ConsensusGraphExecutionInfo {
+                state_valid,
+                original_deferred_state_root,
+                original_deferred_receipt_root,
+                original_deferred_logs_bloom_hash,
+            },
+        );
+
+        Ok(())
+    }
+
+    fn compute_vote_valid_for_pivot_block(
+        &mut self, data_man: &BlockDataManager, me: usize,
+        pivot_arena_index: usize,
+    ) -> bool
+    {
+        let lca = self.lca(me, pivot_arena_index);
+        let lca_height = self.arena[lca].height;
+        let mut stack = Vec::new();
+        stack.push((0, me, 0));
+        while stack.is_empty() {
+            let (stage, index, a) = stack.pop().unwrap();
+            if stage == 0 {
+                if self.arena[index].data.exec_info_lca_height != lca_height {
+                    let header = data_man
+                        .block_header_by_hash(&self.arena[index].hash)
+                        .unwrap();
+                    let blame = header.blame();
+                    if self.arena[index].height > lca_height + 1 + blame as u64
+                    {
+                        let ancestor = self.ancestor_at(
+                            index,
+                            self.arena[index].height - blame as u64 - 1,
+                        );
+                        stack.push((1, index, ancestor));
+                        stack.push((0, ancestor, 0));
+                    } else {
+                        // We need to make sure the ancestor at height
+                        // self.arena[index].height - blame - 1 is state valid,
+                        // and the remainings are not
+                        let start_height =
+                            self.arena[index].height - blame as u64 - 1;
+                        let mut cur_height = lca_height;
+                        let mut cur = lca;
+                        let mut vote_valid = true;
+                        while cur_height > start_height {
+                            if self
+                                .execution_info_cache
+                                .get(&cur)
+                                .unwrap()
+                                .state_valid
+                            {
+                                vote_valid = false;
+                                break;
+                            }
+                            cur_height -= 1;
+                            cur = self.arena[cur].parent;
+                        }
+                        if vote_valid
+                            && !self
+                                .execution_info_cache
+                                .get(&cur)
+                                .unwrap()
+                                .state_valid
+                        {
+                            vote_valid = false;
+                        }
+                        self.arena[index].data.exec_info_lca_height =
+                            lca_height;
+                        self.arena[index].data.vote_valid = vote_valid;
+                    }
+                }
+            } else {
+                self.arena[index].data.exec_info_lca_height = lca_height;
+                self.arena[index].data.vote_valid =
+                    self.arena[a].data.vote_valid;
+            }
+        }
+        self.arena[me].data.vote_valid
     }
 
     /// Compute the total weight in the epoch represented by the block of

@@ -33,6 +33,7 @@ pub enum CacheId {
     BlockReceipts(H256),
     TransactionAddress(H256),
     CompactBlock(H256),
+    ExecutionContext(H256),
 }
 
 pub struct CacheManager<T> {

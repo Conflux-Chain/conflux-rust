@@ -862,7 +862,7 @@ mod json {
             match super::Node::from_str(&self.url) {
                 Ok(mut node) => {
                     node.last_contact =
-                        self.last_contact.map(|c| c.into_node_contact());
+                        self.last_contact.map(NodeContact::into_node_contact);
                     Some(node)
                 }
                 _ => None,

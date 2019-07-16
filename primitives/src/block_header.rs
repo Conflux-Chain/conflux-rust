@@ -331,15 +331,19 @@ impl BlockHeaderBuilder {
         self
     }
 
-    pub fn with_deferred_state_root(
+    pub fn with_deferred_state_root_with_aux_info(
         &mut self, deferred_state_root_with_aux_info: StateRootWithAuxInfo,
     ) -> &mut Self {
-        self.deferred_state_root = deferred_state_root_with_aux_info
-            .state_root
-            .compute_state_root_hash();
         self.deferred_state_root_with_aux_info =
             deferred_state_root_with_aux_info;
 
+        self
+    }
+
+    pub fn with_deferred_state_root(
+        &mut self, deferred_state_root: H256,
+    ) -> &mut Self {
+        self.deferred_state_root = deferred_state_root;
         self
     }
 
@@ -445,6 +449,14 @@ impl BlockHeaderBuilder {
         );
 
         keccak(bloom)
+    }
+
+    pub fn compute_blame_state_root_vec_root(roots: Vec<H256>) -> H256 {
+        let mut rlp_stream = RlpStream::new_list(roots.len());
+        for root in roots {
+            rlp_stream.append_list(root.as_ref());
+        }
+        keccak(rlp_stream.out())
     }
 }
 

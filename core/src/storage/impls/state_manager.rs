@@ -165,7 +165,10 @@ impl StateManager {
         let state_root = state.compute_state_root().unwrap();
         let mut genesis = Block::new(
             BlockHeaderBuilder::new()
-                .with_deferred_state_root(state_root)
+                .with_deferred_state_root(
+                    state_root.state_root.compute_state_root_hash(),
+                )
+                .with_deferred_state_root_with_aux_info(state_root)
                 .with_gas_limit(genesis_gas_limit)
                 .with_author(test_net_version)
                 .with_difficulty(initial_difficulty)

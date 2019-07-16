@@ -79,6 +79,10 @@ const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
 // FIXME: We should use finality to determine the checkpoint moment instead.
 const ERA_CHECKPOINT_GAP: u64 = 50000;
 
+// A block can blame up to BLAME_BOUND ancestors that their states are
+// incorrect.
+const BLAME_BOUND: u32 = 1000;
+
 #[derive(Clone)]
 pub struct ConsensusConfig {
     // If we hit invalid state root, we will dump the information into a
@@ -170,13 +174,13 @@ impl ConsensusGraph {
                 era_genesis_block_hash,
                 cur_era_stable_height,
             )));
-        let executor = Arc::new(ConsensusExecutor::start(
+        let executor = ConsensusExecutor::start(
             txpool.clone(),
             data_man.clone(),
             vm,
             inner.clone(),
             conf.bench_mode,
-        ));
+        );
 
         let graph = ConsensusGraph {
             inner,
@@ -196,10 +200,10 @@ impl ConsensusGraph {
         graph
     }
 
-    /// Build the ConsensusGraph with the original genesis block in the data
-    /// manager and various other components The execution will be skipped
-    /// if bench_mode sets to true.
-    pub fn with_genesis_block(
+    /// Build the ConsensusGraph with the initial (checkpointed) genesis block
+    /// in the data manager and various other components. The execution will
+    /// be skipped if bench_mode sets to true.
+    pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig,
@@ -370,13 +374,15 @@ impl ConsensusGraph {
     /// block given a delay.
     pub fn force_compute_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
         {
-            let inner = &*self.inner.read();
-            let hash = inner.get_state_block_with_delay(
-                parent_block_hash,
-                DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-            )?;
+            let inner = &mut *self.inner.write();
+            let hash = inner
+                .get_state_block_with_delay(
+                    parent_block_hash,
+                    DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+                )?
+                .clone();
             self.executor.compute_state_for_block(&hash, inner)?;
         }
         self.executor.get_blame_and_deferred_state_for_generation(
@@ -387,7 +393,7 @@ impl ConsensusGraph {
 
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256), String> {
+    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
         self.executor.get_blame_and_deferred_state_for_generation(
             parent_block_hash,
             &self.inner,
@@ -398,14 +404,9 @@ impl ConsensusGraph {
     /// calls. It builds the pivot chain and ists state at once, avoiding
     /// intermediate redundant computation triggered by on_new_block().
     pub fn construct_pivot(&self) {
-        {
-            let inner = &mut *self.inner.write();
-            self.new_block_handler.construct_pivot_info(inner);
-        }
-        {
-            let inner = &*self.inner.read();
-            self.new_block_handler.construct_state_info(inner);
-        }
+        let inner = &mut *self.inner.write();
+        self.new_block_handler.construct_pivot_info(inner);
+        self.new_block_handler.construct_state_info(inner);
     }
 
     /// This function is called after a new block appended to the

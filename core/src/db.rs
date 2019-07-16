@@ -39,8 +39,10 @@ pub const COL_BLOCK_RECEIPTS: Option<u32> = Some(3);
 pub const COL_TX_ADDRESS: Option<u32> = Some(4);
 /// Column for epoch set hashes.
 pub const COL_EPOCH_SET_HASHES: Option<u32> = Some(5);
+/// Column for Execution Context.
+pub const COL_EXECUTION_CONTEXT: Option<u32> = Some(6);
 /// Number of columns in DB
-pub const NUM_COLUMNS: Option<u32> = Some(6);
+pub const NUM_COLUMNS: Option<u32> = Some(7);
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]
