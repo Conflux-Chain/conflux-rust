@@ -343,7 +343,11 @@ impl RpcImpl {
                 }
             }
         }
-        Ok(set.len() as isize / (max - min) as isize)
+        if max != min {
+            Ok(set.len() as isize / (max - min) as isize)
+        } else {
+            Ok(-1)
+        }
     }
 
     fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
