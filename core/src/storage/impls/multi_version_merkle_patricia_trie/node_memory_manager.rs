@@ -12,9 +12,9 @@ pub type VacantEntry<'a, TrieNode> = super::slab::VacantEntry<
 >;
 
 // It contains UnsafeCell because an element might be changed when shared.
-pub type TrieNodeCell<CacheAlgoT> = UnsafeCell<TrieNode<CacheAlgoT>>;
+pub type TrieNodeCell<CacheAlgoDataT> = UnsafeCell<TrieNode<CacheAlgoDataT>>;
 type Allocator<CacheAlgoDataT> = Slab<
-    UnsafeCell<TrieNode<CacheAlgoDataT>>,
+    TrieNodeCell<CacheAlgoDataT>,
     super::slab::Entry<TrieNodeCell<CacheAlgoDataT>>,
 >;
 pub type AllocatorRef<'a, CacheAlgoDataT> =
@@ -176,9 +176,10 @@ impl<
         Self {
             size_limit,
             idle_size,
-            allocator: RwLock::new(Slab::with_capacity(
-                (cache_start_size + idle_size) as usize,
-            )),
+            allocator: RwLock::new(
+                Slab::with_capacity((cache_start_size + idle_size) as usize)
+                    .into(),
+            ),
             cache: Mutex::new(CacheManager {
                 node_ref_map: NodeRefMapDeltaMpt::new(node_map_size),
                 cache_algorithm,
@@ -232,10 +233,16 @@ impl<
         }
     }
 
+    pub unsafe fn get_in_memory_cell<'a>(
+        allocator: AllocatorRefRef<'a, CacheAlgoDataT>, cache_slot: usize,
+    ) -> &'a TrieNodeCell<CacheAlgoDataT> {
+        allocator.get_unchecked(cache_slot)
+    }
+
     pub unsafe fn get_in_memory_node_mut<'a>(
         allocator: AllocatorRefRef<'a, CacheAlgoDataT>, cache_slot: usize,
-    ) -> &'a mut TrieNodeCell<CacheAlgoDataT> {
-        allocator.get_unchecked_mut(cache_slot)
+    ) -> &'a mut TrieNode<CacheAlgoDataT> {
+        allocator.get_unchecked(cache_slot).get_ref_mut()
     }
 
     fn load_from_db<'c: 'a, 'a>(
@@ -256,7 +263,7 @@ impl<
         let mut trie_node = TrieNode::decode(&rlp)?;
 
         let mut cache_manager_locked = cache_manager.lock();
-        let trie_node_ref: &TrieNodeCell<CacheAlgoDataT>;
+        let trie_cell_ref: &TrieNodeCell<CacheAlgoDataT>;
 
         let cache_mut = &mut *cache_manager_locked;
 
@@ -277,7 +284,7 @@ impl<
         }
         // Insert into slab as temporary, then insert into node_ref_map.
         let slot = allocator.insert(trie_node)?;
-        trie_node_ref = unsafe { allocator.get_unchecked(slot) };
+        trie_cell_ref = unsafe { allocator.get_unchecked(slot) };
         let cache_insertion_result = cache_mut
             .node_ref_map
             .insert(db_key, slot as ActualSlabIndex);
@@ -288,7 +295,7 @@ impl<
             cache_insertion_result?;
         }
 
-        Ok(GuardedValue::new(cache_manager_locked, trie_node_ref))
+        Ok(GuardedValue::new(cache_manager_locked, trie_cell_ref))
     }
 
     /// This method is currently unused but kept for future use and for the sake
@@ -402,7 +409,7 @@ impl<
     pub unsafe fn dirty_node_as_mut_unchecked<'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: &mut NodeRefDeltaMpt,
-    ) -> &'a mut TrieNodeCell<CacheAlgoDataT>
+    ) -> &'a mut TrieNode<CacheAlgoDataT>
     {
         match node {
             NodeRefDeltaMpt::Committed { db_key: _ } => {
@@ -419,7 +426,7 @@ impl<
     }
 
     /// Unsafe because node is assumed to be committed.
-    unsafe fn load_unowned_node_internal_unchecked<'c: 'a, 'a>(
+    unsafe fn load_unowned_node_cell_internal_unchecked<'c: 'a, 'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
@@ -463,9 +470,8 @@ impl<
                         trie_node = NodeMemoryManager::<
                             CacheAlgoDataT,
                             CacheAlgorithmT,
-                        >::get_in_memory_node_mut(
-                            &allocator,
-                            *cache_slot as usize,
+                        >::get_in_memory_cell(
+                            &allocator, *cache_slot as usize
                         );
                     }
                 }
@@ -514,7 +520,7 @@ impl<
                             trie_node = NodeMemoryManager::<
                                 CacheAlgoDataT,
                                 CacheAlgorithmT,
-                            >::get_in_memory_node_mut(
+                            >::get_in_memory_cell(
                                 &allocator,
                                 *cache_slot as usize,
                             );
@@ -537,7 +543,7 @@ impl<
     unsafe fn get_cached_node_mut_unchecked<'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         slot: DeltaMptDbKey,
-    ) -> &'a mut TrieNodeCell<CacheAlgoDataT>
+    ) -> &'a mut TrieNode<CacheAlgoDataT>
     {
         NodeMemoryManager::<CacheAlgoDataT, CacheAlgorithmT>::get_in_memory_node_mut(
             &allocator,
@@ -547,7 +553,7 @@ impl<
 
     /// cache_manager is assigned a different lifetime because the
     /// RwLockWriteGuard returned can be used independently.
-    pub fn node_as_ref_with_cache_manager<'c: 'a, 'a>(
+    pub fn node_cell_with_cache_manager<'c: 'a, 'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
@@ -563,7 +569,7 @@ impl<
     {
         match node {
             NodeRefDeltaMpt::Committed { db_key: _ } => unsafe {
-                self.load_unowned_node_internal_unchecked(
+                self.load_unowned_node_cell_internal_unchecked(
                     allocator,
                     node,
                     cache_manager,
@@ -572,14 +578,42 @@ impl<
             },
             NodeRefDeltaMpt::Dirty { ref index } => unsafe {
                 Ok(GuardedValue::new(None, NodeMemoryManager::<
-                CacheAlgoDataT,
-                CacheAlgorithmT,
-            >::get_in_memory_node_mut(
-                &allocator,
-                *index as usize,
-            )))
+                    CacheAlgoDataT,
+                    CacheAlgorithmT,
+                >::get_in_memory_cell(
+                    &allocator,
+                    *index as usize,
+                )))
             },
         }
+    }
+
+    /// cache_manager is assigned a different lifetime because the
+    /// RwLockWriteGuard returned can be used independently.
+    pub fn node_as_ref_with_cache_manager<'c: 'a, 'a>(
+        &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
+        node: NodeRefDeltaMpt,
+        cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
+        is_loaded_from_db: &mut bool,
+    ) -> Result<
+        GuardedValue<
+            Option<
+                MutexGuard<'c, CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
+            >,
+            &'a TrieNode<CacheAlgoDataT>,
+        >,
+    >
+    {
+        self.node_cell_with_cache_manager(
+            allocator,
+            node,
+            cache_manager,
+            is_loaded_from_db,
+        )
+        .map(|gv| {
+            let (g, v) = gv.into();
+            GuardedValue::new(g, v.get_ref())
+        })
     }
 
     pub fn new_node<'a>(
@@ -705,7 +739,6 @@ impl<
                 unsafe {
                     self.node_memory_manager
                         .get_cached_node_mut_unchecked(&allocator, *slot)
-                        .get_ref()
                         .cache_algo_data
                 }
             }
@@ -722,7 +755,6 @@ impl<
                 unsafe {
                     self.node_memory_manager
                         .get_cached_node_mut_unchecked(&allocator, *slot)
-                        .get_ref_mut()
                         .cache_algo_data = *algo_data;
                 }
             }

@@ -78,11 +78,11 @@ impl<'trie> SubTrieVisitor<'trie> {
             if is_loaded_from_db {
                 db_load_count += 1;
             }
-            match trie_node.get_ref().walk::<Read>(key) {
+            match trie_node.walk::<Read>(key) {
                 WalkStop::Arrived => {
                     node_memory_manager.log_uncached_key_access(db_load_count);
                     let (guard, trie_node) = trie_node.into();
-                    let trie_node = trie_node.get_ref();
+                    let trie_node = trie_node;
                     return Ok(Some(GuardedValue::new(guard, trie_node)));
                 }
                 WalkStop::Descent {
@@ -681,7 +681,7 @@ use super::{
         guarded_value::GuardedValue,
         node_memory_manager::*,
         return_after_use::ReturnAfterUse,
-        DeltaMpt, UnsafeCellTrait,
+        DeltaMpt,
     },
     merkle::*,
     trie_node::{access_mode::*, *},

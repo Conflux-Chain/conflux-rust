@@ -56,7 +56,7 @@ impl<'a, GuardType> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
     }
 }
 
-impl<'a, GuardType> GuardedValue<GuardType, &'a UnsafeCell<TrieNodeDeltaMpt>> {
+impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMptCell> {
     pub fn into_wrapped(
         x: Self,
     ) -> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
@@ -176,7 +176,7 @@ impl CowNodeRef {
     >
     {
         Ok(GuardedValue::into_wrapped(
-            node_memory_manager.node_as_ref_with_cache_manager(
+            node_memory_manager.node_cell_with_cache_manager(
                 &allocator,
                 self.node_ref.clone(),
                 node_memory_manager.get_cache_manager(),
@@ -287,12 +287,10 @@ impl CowNodeRef {
             let mut cow_child_node = Self::new(node_ref.into(), owned_node_set);
             if cow_child_node.is_owned() {
                 let trie_node = unsafe {
-                    trie.get_node_memory_manager()
-                        .dirty_node_as_mut_unchecked(
-                            allocator_ref,
-                            &mut cow_child_node.node_ref,
-                        )
-                        .get_ref_mut()
+                    trie.get_node_memory_manager().dirty_node_as_mut_unchecked(
+                        allocator_ref,
+                        &mut cow_child_node.node_ref,
+                    )
                 };
                 let commit_result = cow_child_node.commit_dirty_recursively(
                     trie,
@@ -339,12 +337,10 @@ impl CowNodeRef {
     {
         if self.owned {
             let trie_node = unsafe {
-                trie.get_node_memory_manager()
-                    .dirty_node_as_mut_unchecked(
-                        allocator_ref,
-                        &mut self.node_ref,
-                    )
-                    .get_ref_mut()
+                trie.get_node_memory_manager().dirty_node_as_mut_unchecked(
+                    allocator_ref,
+                    &mut self.node_ref,
+                )
             };
             let children_merkles = self.get_or_compute_children_merkles(
                 trie,
@@ -371,7 +367,7 @@ impl CowNodeRef {
                     .compute_merkle_db_loads
                     .fetch_add(1, Ordering::Relaxed);
             }
-            Ok(trie_node.get_ref().merkle_hash)
+            Ok(trie_node.merkle_hash)
         }
     }
 
@@ -718,8 +714,7 @@ impl CowNodeRef {
                 new_entry.insert(new_trie_node);
                 Ok(NodeMemoryManagerDeltaMpt::get_in_memory_node_mut(
                     allocator, key,
-                )
-                .get_ref_mut())
+                ))
             },
         }
     }
@@ -744,8 +739,5 @@ use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
-    cell::{Cell, UnsafeCell},
-    hint::unreachable_unchecked,
-    ops::Deref,
-    sync::atomic::Ordering,
+    cell::Cell, hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
 };
