@@ -8,7 +8,6 @@ mod impls;
 mod test_treap;
 
 mod account_cache;
-mod nonce_pool;
 mod transaction_pool_inner;
 
 extern crate rand;
