@@ -16,6 +16,8 @@ lazy_static! {
         register_meter_with_group("timer", "tx_pool::recalculate");
     static ref TX_POOL_INNER_INSERT_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "tx_pool::inner_insert");
+    static ref TX_POOL_INNER_FAILED_GARBAGE_COLLECTED: Arc<Meter> =
+        register_meter_with_group("txpool", "failed_garbage_collected");
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -127,17 +129,6 @@ impl NoncePool {
 
     fn is_empty(&self) -> bool { self.inner.is_empty() }
 
-    fn count_from(&self, nonce: &U256) -> usize {
-        let mut ret = self.inner.len();
-        for (key, _) in self.inner.iter() {
-            if key >= nonce {
-                break;
-            }
-            ret -= 1;
-        }
-        ret
-    }
-
     fn check_nonce_exists(&self, nonce: &U256) -> bool {
         self.inner.contains_key(nonce)
     }
@@ -189,16 +180,6 @@ impl DeferredPool {
                 }
                 ret
             }
-        }
-    }
-
-    fn count_unexecuted_transaction(
-        &self, addr: &Address, nonce: &U256,
-    ) -> usize {
-        if let Some(bucket) = self.buckets.get(&addr) {
-            bucket.count_from(nonce)
-        } else {
-            0
         }
     }
 
@@ -299,7 +280,7 @@ impl ReadyAccountPool {
 pub struct TransactionPoolInner {
     capacity: usize,
     total_received_count: usize,
-    unexecuted_transaction_count: usize,
+    unpacked_transaction_count: usize,
     deferred_pool: DeferredPool,
     ready_account_pool: ReadyAccountPool,
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
@@ -312,7 +293,7 @@ impl TransactionPoolInner {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
-            unexecuted_transaction_count: 0,
+            unpacked_transaction_count: 0,
             deferred_pool: DeferredPool::new(),
             ready_account_pool: ReadyAccountPool::new(),
             ready_nonces_and_balances: HashMap::new(),
@@ -328,7 +309,7 @@ impl TransactionPoolInner {
         self.garbage_collection_queue.clear();
         self.txs.clear();
         self.total_received_count = 0;
-        self.unexecuted_transaction_count = 0;
+        self.unpacked_transaction_count = 0;
     }
 
     pub fn total_deferred(&self) -> usize { self.txs.len() }
@@ -339,9 +320,7 @@ impl TransactionPoolInner {
 
     pub fn total_received(&self) -> usize { self.total_received_count }
 
-    pub fn total_unexecuted(&self) -> usize {
-        self.unexecuted_transaction_count
-    }
+    pub fn total_unpacked(&self) -> usize { self.unpacked_transaction_count }
 
     pub fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
         self.txs.get(tx_hash).map(|x| x.clone())
@@ -352,6 +331,7 @@ impl TransactionPoolInner {
     }
 
     fn collect_garbage(&mut self) {
+        let mut failed_try = 0;
         while self.is_full() {
             let addr = self.garbage_collection_queue.pop_front().unwrap();
 
@@ -363,17 +343,28 @@ impl TransactionPoolInner {
             let lowest_nonce =
                 *self.deferred_pool.get_lowest_nonce(&addr).unwrap();
 
+            let mut failed = false;
+
             if lowest_nonce >= ready_nonce {
-                warn!("a unexecuted tx is trying to be garbage-collected and stopped");
-                self.garbage_collection_queue.push_front(addr);
-                break;
+                warn!("an unexecuted tx is trying to be garbage-collected and stopped");
+                failed = true;
             }
 
-            self.unexecuted_transaction_count -=
-                self.deferred_pool.count_unexecuted_transaction(
-                    &addr,
-                    self.get_local_nonce(&addr).unwrap_or(&U256::zero()),
-                );
+            //            if !self.deferred_pool.check_tx_packed(addr,
+            // lowest_nonce) {                warn!("an unpacked tx
+            // is trying to be garbage-collected and stopped");
+            //                failed = true;
+            //            }
+
+            if failed {
+                self.garbage_collection_queue.push_back(addr.clone());
+                failed_try += 1;
+                TX_POOL_INNER_FAILED_GARBAGE_COLLECTED.mark(1);
+                if failed_try >= 10 {
+                    break;
+                }
+                continue;
+            }
 
             let removed_tx = self
                 .deferred_pool
@@ -389,12 +380,6 @@ impl TransactionPoolInner {
                     self.ready_account_pool.remove(&addr);
                 }
             }
-
-            self.unexecuted_transaction_count +=
-                self.deferred_pool.count_unexecuted_transaction(
-                    &addr,
-                    self.get_local_nonce(&addr).unwrap_or(&U256::zero()),
-                );
 
             // maintain ready info
             if !self.deferred_pool.contain_address(&addr) {
@@ -422,13 +407,6 @@ impl TransactionPoolInner {
             }
         }
 
-        let addr = transaction.sender();
-        self.unexecuted_transaction_count -=
-            self.deferred_pool.count_unexecuted_transaction(
-                &addr,
-                self.get_local_nonce(&addr).unwrap_or(&U256::zero()),
-            );
-
         let result = self.deferred_pool.insert(
             TxWithReadyInfo {
                 transaction: transaction.clone(),
@@ -442,22 +420,27 @@ impl TransactionPoolInner {
                 self.garbage_collection_queue
                     .push_back(transaction.sender());
                 self.txs.insert(transaction.hash(), transaction.clone());
+                if !packed {
+                    self.unpacked_transaction_count += 1;
+                }
             }
             InsertResult::Failed(_) => {}
             InsertResult::Updated(replaced_tx) => {
+                if !replaced_tx.is_already_packed() {
+                    self.unpacked_transaction_count -= 1;
+                }
                 self.txs.remove(&replaced_tx.hash());
                 self.txs.insert(transaction.hash(), transaction.clone());
+                if !packed {
+                    self.unpacked_transaction_count += 1;
+                }
             }
         }
-        self.unexecuted_transaction_count +=
-            self.deferred_pool.count_unexecuted_transaction(
-                &addr,
-                self.get_local_nonce(&addr).unwrap_or(&U256::zero()),
-            );
 
         result
     }
 
+    #[allow(dead_code)]
     fn get_local_nonce(&self, address: &Address) -> Option<&U256> {
         self.ready_nonces_and_balances.get(address).map(|(x, _)| x)
     }

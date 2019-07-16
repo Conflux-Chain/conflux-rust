@@ -150,7 +150,7 @@ impl TransactionPool {
                 }
             }
         }
-        TX_POOL_GAUGE.update(self.total_unexecuted());
+        TX_POOL_GAUGE.update(self.total_unpacked());
         TX_POOL_READY_GAUGE.update(self.inner.read().total_ready_accounts());
 
         (passed_transactions, failure)
@@ -308,9 +308,9 @@ impl TransactionPool {
         inner.total_received()
     }
 
-    pub fn total_unexecuted(&self) -> usize {
+    pub fn total_unpacked(&self) -> usize {
         let inner = self.inner.read();
-        inner.total_unexecuted()
+        inner.total_unpacked()
     }
 
     /// stats retrieves the length of ready and deferred pool.
@@ -320,7 +320,7 @@ impl TransactionPool {
             inner.total_ready_accounts(),
             inner.total_deferred(),
             inner.total_received(),
-            inner.total_unexecuted(),
+            inner.total_unpacked(),
         )
     }
 

@@ -530,7 +530,7 @@ impl RpcImpl {
     fn get_status(&self) -> RpcResult<RpcStatus> {
         let best_hash = self.consensus.best_block_hash();
         let block_number = self.consensus.block_count();
-        let tx_count = self.tx_pool.total_unexecuted();
+        let tx_count = self.tx_pool.total_unpacked();
         if let Some(epoch_number) =
             self.consensus.get_block_epoch_number(&best_hash)
         {
