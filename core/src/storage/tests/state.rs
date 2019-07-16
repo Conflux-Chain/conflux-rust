@@ -31,6 +31,24 @@ fn generate_keys(number_of_keys: usize) -> Vec<[u8; 4]> {
 fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
 
 #[test]
+fn test_empty_genesis_block() {
+    let state_manager = new_state_manager_for_testing();
+
+    let mut genesis_epoch_id = H256::default();
+    genesis_epoch_id[0] = 1;
+    {
+        let mut genesis_state = state_manager.get_state_for_genesis_write();
+        genesis_state.compute_state_root().unwrap();
+
+        genesis_state.commit(genesis_epoch_id).unwrap();
+    }
+
+    state_manager
+        .get_state_trees(&SnapshotAndEpochIdRef::new(&genesis_epoch_id, None))
+        .unwrap();
+}
+
+#[test]
 fn test_set_get() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
