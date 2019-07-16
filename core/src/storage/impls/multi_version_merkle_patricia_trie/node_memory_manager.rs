@@ -792,19 +792,19 @@ impl<
     }
 }
 
-pub trait UnsafeCellTrait {
-    type Output;
-
-    fn get_ref(&self) -> &Self::Output;
-    unsafe fn get_ref_mut(&self) -> &mut Self::Output;
+pub trait TrieNodeCellTrait<CacheAlgoDataT: CacheAlgoDataTrait> {
+    fn get_ref(&self) -> &TrieNode<CacheAlgoDataT>;
+    unsafe fn get_ref_mut(&self) -> &mut TrieNode<CacheAlgoDataT>;
 }
 
-impl<T> UnsafeCellTrait for UnsafeCell<T> {
-    type Output = T;
+impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeCellTrait<CacheAlgoDataT>
+    for TrieNodeCell<CacheAlgoDataT>
+{
+    fn get_ref(&self) -> &TrieNode<CacheAlgoDataT> { unsafe { &*self.get() } }
 
-    fn get_ref(&self) -> &T { unsafe { &*self.get() } }
-
-    unsafe fn get_ref_mut(&self) -> &mut T { &mut *self.get() }
+    unsafe fn get_ref_mut(&self) -> &mut TrieNode<CacheAlgoDataT> {
+        &mut *self.get()
+    }
 }
 
 use super::{

@@ -729,7 +729,7 @@ use super::{
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
-        DeltaMpt, UnsafeCellTrait,
+        DeltaMpt, TrieNodeCellTrait,
     },
     merkle::*,
     mpt_value::MptValue,

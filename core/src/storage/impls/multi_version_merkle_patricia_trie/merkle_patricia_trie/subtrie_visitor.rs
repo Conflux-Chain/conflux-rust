@@ -82,7 +82,6 @@ impl<'trie> SubTrieVisitor<'trie> {
                 WalkStop::Arrived => {
                     node_memory_manager.log_uncached_key_access(db_load_count);
                     let (guard, trie_node) = trie_node.into();
-                    let trie_node = trie_node;
                     return Ok(Some(GuardedValue::new(guard, trie_node)));
                 }
                 WalkStop::Descent {

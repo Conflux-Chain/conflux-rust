@@ -646,7 +646,6 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab.get(123), None);
     /// ```
     pub fn get(&self, key: usize) -> Option<&T> {
-        // self is shared, and it can generate as many shared refs as possible
         self.entries
             .get(key)
             .and_then(|entry| entry.into_option_ref())
@@ -671,7 +670,6 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab.get_mut(123), None);
     /// ```
     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
-        // getting &mut out of &mut is safe
         self.entries
             .get_mut(key)
             .and_then(|entry| entry.into_option_mut())
