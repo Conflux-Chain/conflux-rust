@@ -349,7 +349,7 @@ class RemoteSimulate(ConfluxTestFramework):
                 break
 
             time.sleep(5)
-
+        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         executor.shutdown()
 
     def monitor(self, cur_block_count:int, retry_max:int):

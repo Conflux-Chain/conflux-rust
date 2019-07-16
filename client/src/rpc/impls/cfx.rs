@@ -30,7 +30,11 @@ use primitives::{
     SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
@@ -316,6 +320,34 @@ impl RpcImpl {
     fn get_block_count(&self) -> RpcResult<usize> {
         info!("RPC Request: get_block_count()");
         Ok(self.consensus.block_count())
+    }
+
+    fn get_goodput(&self) -> RpcResult<isize> {
+        info!("RPC Request: get_goodput");
+        let mut set = HashSet::new();
+        let mut min = std::u64::MAX;
+        let mut max: u64 = 0;
+        for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
+            if let Some(block) =
+                self.consensus.data_man.block_by_hash(key, false)
+            {
+                let timestamp = block.block_header.timestamp();
+                if timestamp < min && timestamp > 0 {
+                    min = timestamp;
+                }
+                if timestamp > max {
+                    max = timestamp;
+                }
+                for transaction in &block.transactions {
+                    set.insert(transaction.hash());
+                }
+            }
+        }
+        if max != min {
+            Ok(set.len() as isize / (max - min) as isize)
+        } else {
+            Ok(-1)
+        }
     }
 
     fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
@@ -869,6 +901,8 @@ impl TestRpc for TestRpcImpl {
     fn get_block_count(&self) -> RpcResult<usize> {
         self.rpc_impl.get_block_count()
     }
+
+    fn get_goodput(&self) -> RpcResult<isize> { self.rpc_impl.get_goodput() }
 
     fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
         self.rpc_impl.add_peer(node_id, address)
