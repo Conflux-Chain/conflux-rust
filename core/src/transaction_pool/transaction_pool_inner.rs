@@ -440,7 +440,8 @@ impl TransactionPoolInner {
         result
     }
 
-    fn _get_local_nonce(&self, address: &Address) -> Option<&U256> {
+    #[allow(dead_code)]
+    fn get_local_nonce(&self, address: &Address) -> Option<&U256> {
         self.ready_nonces_and_balances.get(address).map(|(x, _)| x)
     }
 
