@@ -47,6 +47,8 @@ pub struct MultiVersionMerklePatriciaTrie {
     delta_mpts_releaser: DeltaDbReleaser,
 }
 
+unsafe impl Sync for MultiVersionMerklePatriciaTrie {}
+
 impl MultiVersionMerklePatriciaTrie {
     pub fn padding(
         snapshot_root: &MerkleHash, intermediate_delta_root: &MerkleHash,

@@ -43,7 +43,7 @@ pub mod propagate;
 
 lazy_static! {
     static ref TX_GEN_METER: Arc<Meter> =
-        register_meter_with_group("tx_pool", "tx_gen");
+        register_meter_with_group("system_metrics", "tx_gen");
 }
 
 enum TransGenState {

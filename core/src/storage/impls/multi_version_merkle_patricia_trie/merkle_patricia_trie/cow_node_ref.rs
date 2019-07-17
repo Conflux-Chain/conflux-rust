@@ -16,7 +16,7 @@ pub struct CowNodeRef {
 }
 
 pub struct MaybeOwnedTrieNode<'a> {
-    trie_node: &'a TrieNodeDeltaMpt,
+    trie_node: &'a TrieNodeDeltaMptCell,
 }
 
 type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
@@ -26,7 +26,7 @@ type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
 
 /// This class can only be meaningfully used internally by CowNodeRef.
 pub struct MaybeOwnedTrieNodeAsCowCallParam {
-    trie_node: *const TrieNodeDeltaMpt,
+    trie_node: *mut TrieNodeDeltaMpt,
 }
 
 impl MaybeOwnedTrieNodeAsCowCallParam {
@@ -35,7 +35,7 @@ impl MaybeOwnedTrieNodeAsCowCallParam {
     unsafe fn owned_as_mut_unchecked<'a>(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *(self.trie_node as *mut TrieNodeDeltaMpt)
+        &mut *self.trie_node
     }
 
     /// Do not implement in a trait to keep the call private.
@@ -50,13 +50,13 @@ impl<'a, GuardType> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
         GuardedValue::new(
             guard,
             MaybeOwnedTrieNodeAsCowCallParam {
-                trie_node: value.trie_node,
+                trie_node: value.trie_node.get(),
             },
         )
     }
 }
 
-impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMpt> {
+impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMptCell> {
     pub fn into_wrapped(
         x: Self,
     ) -> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
@@ -68,7 +68,7 @@ impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMpt> {
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub fn take(x: Self) -> MaybeOwnedTrieNodeAsCowCallParam {
         MaybeOwnedTrieNodeAsCowCallParam {
-            trie_node: x.trie_node,
+            trie_node: x.trie_node.get(),
         }
     }
 }
@@ -76,15 +76,14 @@ impl<'a> MaybeOwnedTrieNode<'a> {
 impl<'a> Deref for MaybeOwnedTrieNode<'a> {
     type Target = TrieNodeDeltaMpt;
 
-    fn deref(&self) -> &Self::Target { self.trie_node }
+    fn deref(&self) -> &Self::Target { unsafe { &*self.trie_node.get() } }
 }
 
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub unsafe fn owned_as_mut_unchecked(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *(self.trie_node as *const TrieNodeDeltaMpt
-            as *mut TrieNodeDeltaMpt)
+        self.trie_node.get_ref_mut()
     }
 }
 
@@ -177,7 +176,7 @@ impl CowNodeRef {
     >
     {
         Ok(GuardedValue::into_wrapped(
-            node_memory_manager.node_as_ref_with_cache_manager(
+            node_memory_manager.node_cell_with_cache_manager(
                 &allocator,
                 self.node_ref.clone(),
                 node_memory_manager.get_cache_manager(),
@@ -730,7 +729,7 @@ use super::{
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
-        DeltaMpt,
+        DeltaMpt, TrieNodeCellTrait,
     },
     merkle::*,
     mpt_value::MptValue,

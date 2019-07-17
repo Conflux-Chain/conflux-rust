@@ -52,7 +52,7 @@ lazy_static! {
             "consensus::compute_state_for_block"
         );
     static ref GOOD_TPS_METER: Arc<Meter> =
-        register_meter_with_group("tx_pool", "good_tps");
+        register_meter_with_group("system_metrics", "good_tps");
 }
 
 /// The RewardExecutionInfo struct includes most information to compute rewards

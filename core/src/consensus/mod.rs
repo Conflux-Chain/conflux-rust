@@ -469,7 +469,7 @@ impl ConsensusGraph {
                     inner,
                     hash,
                     &block.block_header,
-                    Some(block.transactions.clone()),
+                    Some(&block.transactions),
                 );
                 self.update_best_info(inner);
             }

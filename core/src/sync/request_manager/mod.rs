@@ -31,11 +31,15 @@ pub mod tx_handler;
 
 lazy_static! {
     static ref TX_REQUEST_METER: Arc<Meter> =
-        register_meter_with_group("tx_pool", "tx_diff_set_size");
+        register_meter_with_group("system_metrics", "tx_diff_set_size");
     static ref REQUEST_MANAGER_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "request_manager::request_not_tx");
     static ref REQUEST_MANAGER_TX_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "request_manager::request_tx");
+    static ref TX_RECEIVED_POOL_METER: Arc<Meter> =
+        register_meter_with_group("system_metrics", "tx_received_pool_size");
+    static ref INFLIGHT_TX_POOL_METER: Arc<Meter> =
+        register_meter_with_group("system_metrics", "inflight_tx_pool_size");
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -468,6 +472,9 @@ impl RequestManager {
         let mut inflight_transactions =
             self.inflight_requested_transactions.lock();
         let received_transactions = self.received_transactions.read();
+
+        INFLIGHT_TX_POOL_METER.mark(inflight_transactions.len());
+        TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
         let (indices, tx_ids) = {
             let mut tx_ids = HashSet::new();
