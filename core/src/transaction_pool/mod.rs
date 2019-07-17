@@ -794,14 +794,14 @@ impl TransactionPool {
         inner.insert(transaction, packed, force)
     }
 
-    pub fn set_tx_packed(&self, transactions: Vec<Arc<SignedTransaction>>) {
+    pub fn set_tx_packed(&self, transactions: &Vec<Arc<SignedTransaction>>) {
         if transactions.is_empty() {
             // Fast return. Also used to for bench mode.
             return;
         }
         let mut tx_req_buffer = self.set_tx_requests.lock();
         for tx in transactions {
-            tx_req_buffer.push(tx);
+            tx_req_buffer.push(tx.clone());
         }
     }
 

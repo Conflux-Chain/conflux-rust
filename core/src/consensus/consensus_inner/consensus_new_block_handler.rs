@@ -1326,7 +1326,7 @@ impl ConsensusNewBlockHandler {
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, hash: &H256,
         block_header: &BlockHeader,
-        transactions: Option<Vec<Arc<SignedTransaction>>>,
+        transactions: Option<&Vec<Arc<SignedTransaction>>>,
     )
     {
         let parent_hash = block_header.parent_hash();
@@ -1594,9 +1594,8 @@ impl ConsensusNewBlockHandler {
             // Note that we conservatively only mark those blocks inside the
             // current pivot era
             if era_block == cur_pivot_era_block {
-                self.txpool.set_tx_packed(
-                    transactions.clone().expect("Already checked"),
-                );
+                self.txpool
+                    .set_tx_packed(transactions.expect("Already checked"));
             }
             if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
                 < inner.pivot_index_to_height(inner.pivot_chain.len())
