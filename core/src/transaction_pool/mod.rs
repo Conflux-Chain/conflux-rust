@@ -152,6 +152,7 @@ impl TransactionPool {
         TX_POOL_GAUGE.mark(self.total_unpacked());
         TX_POOL_READY_GAUGE.mark(self.inner.read().total_ready_accounts());
 
+        assert_eq!(failure.len(), 0);
         (passed_transactions, failure)
     }
 
@@ -181,10 +182,10 @@ impl TransactionPool {
             &self.spec,
         );
         if transaction.gas < (tx_intrinsic_gas as usize).into() {
-            debug!(
-                "Transaction discarded due to gas less than required: {} < {}",
-                transaction.gas, tx_intrinsic_gas
-            );
+            //            debug!(
+            //                "Transaction discarded due to gas less than
+            // required: {} < {}",                transaction.gas,
+            // tx_intrinsic_gas            );
             // FIXME: in test only check min tx gas.
             // FIXME: how to make our environment execute the transaction to the
             // FIXME: same degree as in ethereum?
