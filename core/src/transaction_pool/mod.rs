@@ -199,13 +199,15 @@ impl TransactionPool {
         }
 
         // check transaction gas price
-        if transaction.gas_price < DEFAULT_MIN_TRANSACTION_GAS_PRICE.into() {
-            warn!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price);
-            return Err(format!(
-                "transaction gas price {} less than the minimum value {}",
-                transaction.gas_price, DEFAULT_MIN_TRANSACTION_GAS_PRICE
-            ));
-        }
+        //        if transaction.gas_price <
+        // DEFAULT_MIN_TRANSACTION_GAS_PRICE.into() {            
+        // warn!("Transaction {} discarded due to below minimal gas price: price
+        // {}", transaction.hash(), transaction.gas_price);            
+        // return Err(format!(                "transaction gas price {}
+        // less than the minimum value {}",                
+        // transaction.gas_price, DEFAULT_MIN_TRANSACTION_GAS_PRICE
+        //            ));
+        //        }
 
         if let Err(e) = transaction.transaction.verify_basic() {
             warn!("Transaction {:?} discarded due to not pass basic verification.", transaction.hash());

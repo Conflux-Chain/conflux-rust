@@ -377,7 +377,7 @@ impl TransactionWithSignature {
     /// Checks whether the signature has a low 's' value.
     pub fn check_low_s(&self) -> Result<(), keylib::Error> {
         if !self.signature().is_low_s() {
-            debug!("check_low_s failed.");
+            // debug!("check_low_s failed.");
             Ok(())
         //Err(keylib::Error::InvalidSignature.into())
         } else {
