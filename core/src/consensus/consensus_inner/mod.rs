@@ -71,7 +71,7 @@ pub struct ConsensusGraphNodeData {
     /// blocks including itself.
     min_epoch_in_other_views: u64,
     max_epoch_in_other_views: u64,
-    sequence_number: u64,
+    pub sequence_number: u64,
     /// exec_info_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
     exec_info_lca_height: u64,
@@ -230,7 +230,7 @@ pub struct ConsensusGraphInner {
     // inclusive_adaptive_tree maintains d * SubInclusiveTW(B, x) - n *
     // SubInclusiveTW(B, P(x))
     inclusive_adaptive_tree: MinLinkCutTree,
-    pow_config: ProofOfWorkConfig,
+    pub pow_config: ProofOfWorkConfig,
     // It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
     // data_man is the handle to access raw block data
@@ -240,7 +240,7 @@ pub struct ConsensusGraphInner {
     // execution and the block packaging and verification.
     // optimistic_executed_height is the number of step to go ahead
     optimistic_executed_height: Option<u64>,
-    inner_conf: ConsensusInnerConfig,
+    pub inner_conf: ConsensusInnerConfig,
     // The cache to store Anticone information of each node. This could be very
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
@@ -279,19 +279,17 @@ impl ConsensusGraphInner {
     pub fn with_era_genesis_block(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
-        cur_era_stable_height: u64,
     ) -> Self
     {
         let genesis_block = data_man
             .block_by_hash(cur_era_genesis_block_hash, true)
             .unwrap();
         let cur_era_genesis_height = genesis_block.block_header.height();
-        assert!(cur_era_stable_height >= cur_era_genesis_height);
-        assert!(
-            cur_era_stable_height == 0
-                || cur_era_stable_height
-                    == cur_era_genesis_height + inner_conf.era_epoch_count
-        );
+        let cur_era_stable_height = if cur_era_genesis_height == 0 {
+            0
+        } else {
+            cur_era_genesis_height + inner_conf.era_epoch_count
+        };
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),

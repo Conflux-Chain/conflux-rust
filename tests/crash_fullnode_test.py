@@ -17,7 +17,7 @@ class CrashTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
-        self.conf_parameters = {"persist_terminal_period_ms": "500"}
+        self.conf_parameters = {"persist_terminal_period_ms": "500", "is_full_node": "true"}
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

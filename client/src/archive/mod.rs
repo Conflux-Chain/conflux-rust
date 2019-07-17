@@ -195,7 +195,6 @@ impl ArchiveClient {
             protocol_config,
             verification_config,
             pow_config.clone(),
-            conf.fast_recover(),
         );
         sync.start().unwrap();
 

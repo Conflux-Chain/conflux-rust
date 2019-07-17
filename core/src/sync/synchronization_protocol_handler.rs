@@ -32,7 +32,9 @@ use super::{
     request_manager::{RequestManager, RequestMessage},
 };
 use crate::{
-    sync::synchronization_state::SyncPhase::{self, SyncBlocks},
+    block_data_manager::BlockStatus,
+    consensus::ConsensusGraphInner,
+    sync::{synchronization_state::SyncPhase, SynchronizationGraphInner},
     verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -42,7 +44,7 @@ use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     iter::FromIterator,
-    sync::{atomic::Ordering as AtomicOrdering, Arc},
+    sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 lazy_static! {
@@ -72,8 +74,6 @@ pub const MAX_HEADERS_TO_SEND: u64 = 512;
 pub const MAX_BLOCKS_TO_SEND: u64 = 256;
 pub const MAX_EPOCHS_TO_SEND: u64 = 128;
 const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
-const DEFAULT_GET_HEADERS_NUM: u64 = 1;
-const DEFAULT_GET_PARENT_HEADERS_NUM: u64 = 30;
 lazy_static! {
     pub static ref REQUEST_START_WAITING_TIME: Duration =
         Duration::from_secs(1);
@@ -238,14 +238,13 @@ impl SynchronizationProtocolHandler {
         protocol_config: ProtocolConfiguration,
         consensus_graph: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        fast_recover: bool,
     ) -> Self
     {
-        let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
-
         let syn = Arc::new(SynchronizationState::new(
             protocol_config.is_full_node,
-            start_as_catch_up_mode,
+            consensus_graph
+                .data_man
+                .get_cur_consensus_era_genesis_hash(),
         ));
 
         let request_manager =
@@ -260,7 +259,6 @@ impl SynchronizationProtocolHandler {
                 consensus_graph.clone(),
                 verification_config,
                 pow_config,
-                fast_recover,
             )),
             syn,
             request_manager,
@@ -282,7 +280,7 @@ impl SynchronizationProtocolHandler {
         self.graph.set_to_propagate_trans(transactions);
     }
 
-    fn catch_up_mode(&self) -> bool {
+    pub fn catch_up_mode(&self) -> bool {
         self.syn.sync_phase.lock().catch_up_mode()
     }
 
@@ -338,6 +336,14 @@ impl SynchronizationProtocolHandler {
         } else {
             self.syn.update_heartbeat(&peer);
         }
+        self.syn.validate_msg_id(&msg_id);
+        //        if !self.syn.validate_msg_id(&msg_id) {
+        //            debug!(
+        //                "Message {:?} from peer {:?} is not needed in current
+        // phase",                msg_id, peer
+        //            );
+        //            return;
+        //        }
 
         match msg_id {
             MsgId::STATUS => self.on_status(io, peer, &rlp),
@@ -1138,11 +1144,7 @@ impl SynchronizationProtocolHandler {
 
         for hash in &terminal_block_hashes.hashes {
             if !self.graph.contains_block_header(&hash) {
-                self.request_manager.request_block_headers(
-                    io,
-                    Some(peer),
-                    vec![hash.clone()],
-                );
+                self.request_block_headers(io, Some(peer), vec![hash.clone()]);
             }
         }
         Ok(())
@@ -1207,9 +1209,9 @@ impl SynchronizationProtocolHandler {
         let missing_headers = resp
             .hashes
             .iter()
-            .filter(|h| !self.graph.contains_block_header(&h));
-        // .cloned()
-        // .collect();
+            .filter(|h| !self.graph.contains_block_header(&h))
+            .cloned()
+            .collect();
 
         // NOTE: this is to make sure no section of the DAG is skipped
         // e.g. if the request for epoch 4 is lost or the reply is in-
@@ -1222,14 +1224,7 @@ impl SynchronizationProtocolHandler {
         //     missing_headers,
         // );
 
-        for h in missing_headers {
-            self.request_manager.request_block_header_chain(
-                io,
-                Some(peer),
-                h,
-                1,
-            );
-        }
+        self.request_block_headers(io, Some(peer), missing_headers);
 
         // TODO: handle empty response
 
@@ -1324,14 +1319,7 @@ impl SynchronizationProtocolHandler {
                 //     to_request.clone(),
                 // );
 
-                for hash in to_request.clone() {
-                    self.request_manager.request_block_header_chain(
-                        io,
-                        Some(peer),
-                        &hash,
-                        1,
-                    )
-                }
+                self.request_block_headers(io, Some(peer), to_request.clone());
 
                 requested.extend(to_request);
             }
@@ -1350,10 +1338,43 @@ impl SynchronizationProtocolHandler {
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
-            && *latest_requested < best_peer_epoch
+            && (*latest_requested < best_peer_epoch || best_peer_epoch == 0)
         {
             let from = cmp::max(my_best_epoch, *latest_requested) + 1;
+            // Check epochs from db
+            if let Some(epoch_hashes) =
+                self.graph.data_man.epoch_set_hashes_from_db(from)
+            {
+                debug!("Recovered epoch {} from db", from);
+                // FIXME better handle this in our event loop separately
+                if self.need_requesting_blocks() {
+                    self.request_blocks(io, None, epoch_hashes);
+                } else {
+                    self.request_block_headers(io, None, epoch_hashes);
+                }
+                *latest_requested += 1;
+                continue;
+            } else if best_peer_epoch == 0 {
+                // We have recovered all epochs from db, and there is no peer to
+                // request new epochs, so we should enter `Latest` phase
+                if self.syn.is_full_node() {
+                    // FIXME Consensus may have not finished processing all
+                    // blocks
+                    *self.syn.sync_phase.lock() = SyncPhase::SyncBlocks(
+                        self.graph
+                            .data_man
+                            .get_cur_consensus_era_genesis_hash(),
+                    );
+                } else {
+                    // As a archive node, blocks have already been requested
+                    // while requesting headers
+                    *self.syn.sync_phase.lock() = SyncPhase::Latest;
+                }
+                return;
+            }
 
+            // Epoch hashes are not in db, so should be requested from another
+            // peer
             let peer = self.syn.get_random_peer_satisfying(|peer| {
                 match self.syn.get_peer_info(&peer) {
                     Err(_) => false,
@@ -1401,53 +1422,78 @@ impl SynchronizationProtocolHandler {
         );
     }
 
-    fn on_block_headers_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
-        let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
-        debug!("on_block_headers_response, msg=:{:?}", block_headers);
-        let id = block_headers.request_id();
-        let req = self.request_manager.match_request(io, peer, id)?;
+    // FIXME This is actually a recursive DFS to traverse all block headers in
+    // the db
+    fn request_block_headers(
+        &self, io: &NetworkContext, peer: Option<usize>,
+        mut header_hashes: Vec<H256>,
+    )
+    {
+        header_hashes.retain(|hash| !self.try_request_header_from_db(io, hash));
+        // Headers may have been inserted into sync graph before as dependent
+        // blocks
+        header_hashes.retain(|h| !self.graph.contains_block_header(h));
+        self.request_manager
+            .request_block_headers(io, peer, header_hashes);
+    }
 
-        self.validate_block_headers_response(io, &req, &block_headers)?;
+    /// Try to get the block header from db. Return `true` if the block header
+    /// exists in db or is inserted before. Handle the block header if its
+    /// seq_num is less than that of the current era genesis.
+    fn try_request_header_from_db(
+        &self, io: &NetworkContext, hash: &H256,
+    ) -> bool {
+        if self.graph.contains_block_header(hash) {
+            return true;
+        }
+        if let Some(header) = self.graph.data_man.block_header_by_hash(hash) {
+            debug!("Recovered header {:?} from db", hash);
+            // Process headers from db
+            if let Some(info) =
+                self.graph.data_man.local_block_info_from_db(hash)
+            {
+                debug_assert!(match info.get_status() {
+                    BlockStatus::Invalid => true,
+                    _ => false,
+                });
+                if info.get_seq_num()
+                    < self.graph.consensus.current_era_genesis_seq_num()
+                {
+                    debug!("Ignore header in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
+                    // The block is ordered before current era genesis, so we do
+                    // not need to process it
+                    return true;
+                }
+            }
+            self.handle_block_headers(
+                io,
+                &vec![header.as_ref().clone()],
+                Vec::new(),
+                None,
+            );
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-        // process request
+    // FIXME Remove recursive call if block headers exist db
+    fn handle_block_headers(
+        &self, io: &NetworkContext, block_headers: &Vec<BlockHeader>,
+        requested: Vec<H256>, chosen_peer: Option<usize>,
+    )
+    {
         let mut hashes = HashSet::new();
         let mut dependent_hashes = HashSet::new();
         let mut need_to_relay = HashSet::new();
         let mut returned_headers = HashSet::new();
-
-        // keep first time drift validation error to return later
-        let mut now_timestamp = SystemTime::now()
+        let now_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-
-        let timestamp_validation_result =
-            if self.graph.verification_config.verify_timestamp {
-                block_headers
-                    .headers
-                    .iter()
-                    .map(|h| {
-                        self.graph
-                            .verification_config
-                            .validate_header_timestamp(h, now_timestamp)
-                    })
-                    .find(|result| result.is_err())
-                    .unwrap_or(Ok(()))
-            } else {
-                Ok(())
-            };
-        now_timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        for header in &block_headers.headers {
+        for header in block_headers {
             let hash = header.hash();
             returned_headers.insert(hash);
-
             // check timestamp drift
             if self.graph.verification_config.verify_timestamp {
                 if header.timestamp() > now_timestamp + ACCEPTABLE_TIME_DRIFT {
@@ -1467,29 +1513,29 @@ impl SynchronizationProtocolHandler {
                 assert!(true);
             }
 
+            // check missing dependencies
+            let parent = header.parent_hash();
+            if !self.graph.contains_block_header(parent) {
+                dependent_hashes.insert(*parent);
+            }
+
+            for referee in header.referee_hashes() {
+                if !self.graph.contains_block_header(referee) {
+                    dependent_hashes.insert(*referee);
+                }
+            }
+
             // insert into sync graph
             let (valid, to_relay) = self.graph.insert_block_header(
                 &mut header.clone(),
                 true,
                 false,
+                self.insert_header_to_consensus(),
             );
             if !valid {
                 continue;
             }
-
             need_to_relay.extend(to_relay);
-
-            // check missing dependencies
-            let parent = header.parent_hash();
-            if !self.graph.contains_block_header(parent) {
-                dependent_hashes.insert(parent);
-            }
-
-            for referee in header.referee_hashes() {
-                if !self.graph.contains_block_header(referee) {
-                    dependent_hashes.insert(referee);
-                }
-            }
 
             // check block body
             if !self.graph.contains_block(&hash) {
@@ -1508,34 +1554,18 @@ impl SynchronizationProtocolHandler {
             returned_headers, hashes
         );
 
-        // re-request headers requested but not received
-        let requested = match &req {
-            RequestMessage::Headers(h) => h.hashes.clone(),
-            RequestMessage::HeaderChain(h) => vec![h.hash],
-            _ => return Err(ErrorKind::UnexpectedResponse.into()),
-        };
-
         self.request_manager.headers_received(
             io,
             requested.into_iter().collect(),
             returned_headers,
         );
 
-        let chosen_peer = if timestamp_validation_result.is_ok() {
-            Some(peer)
-        } else {
-            let mut exclude = HashSet::new();
-            exclude.insert(peer);
-            self.syn.get_random_peer(&exclude)
-        };
-
-        // request missing headers
-        self.request_dependent_headers(
+        // request missing headers. We do not need to request more headers on
+        // the pivot chain after the request_epoch mechanism is applied.
+        self.request_block_headers(
             io,
             chosen_peer,
-            &req,
-            &block_headers,
-            dependent_hashes,
+            dependent_hashes.into_iter().collect(),
         );
 
         if self.need_requesting_blocks() {
@@ -1549,16 +1579,62 @@ impl SynchronizationProtocolHandler {
             // relay if necessary
             self.relay_blocks(io, need_to_relay.into_iter().collect())
                 .ok();
-        } else {
-            // Headers in `need_to_relay` are all `new_to_be_header_graph_ready`.
-            // A full node in catch_up_mode should handle them in consensus so
-            // the pivot chain can be determined later with only headers
-            for block_hash in need_to_relay {
-                self.graph
-                    .consensus
-                    .on_new_block_construction_only(&block_hash);
-            }
         }
+    }
+
+    fn on_block_headers_response(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
+        let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
+        debug!("on_block_headers_response, msg=:{:?}", block_headers);
+        let id = block_headers.request_id();
+        let req = self.request_manager.match_request(io, peer, id)?;
+
+        self.validate_block_headers_response(io, &req, &block_headers)?;
+
+        // keep first time drift validation error to return later
+        let now_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let timestamp_validation_result =
+            if self.graph.verification_config.verify_timestamp {
+                block_headers
+                    .headers
+                    .iter()
+                    .map(|h| {
+                        self.graph
+                            .verification_config
+                            .validate_header_timestamp(h, now_timestamp)
+                    })
+                    .find(|result| result.is_err())
+                    .unwrap_or(Ok(()))
+            } else {
+                Ok(())
+            };
+
+        let chosen_peer = if timestamp_validation_result.is_ok() {
+            Some(peer)
+        } else {
+            let mut exclude = HashSet::new();
+            exclude.insert(peer);
+            self.syn.get_random_peer(&exclude)
+        };
+
+        // re-request headers requested but not received
+        let requested = match &req {
+            RequestMessage::Headers(h) => h.hashes.clone(),
+            RequestMessage::HeaderChain(h) => vec![h.hash],
+            _ => return Err(ErrorKind::UnexpectedResponse.into()),
+        };
+        self.handle_block_headers(
+            io,
+            &block_headers.headers,
+            requested,
+            chosen_peer,
+        );
 
         timestamp_validation_result
     }
@@ -1601,59 +1677,6 @@ impl SynchronizationProtocolHandler {
                 self.request_manager.remove_mismatch_request(io, &req);
                 return Err(ErrorKind::UnexpectedResponse.into());
             }
-        };
-    }
-
-    fn request_dependent_headers(
-        &self, io: &NetworkContext, peer: Option<PeerId>, req: &RequestMessage,
-        resp: &GetBlockHeadersResponse, hashes: HashSet<&H256>,
-    )
-    {
-        match &req {
-            // For normal header requests, we simply
-            // request all dependent headers in a single
-            // request.
-            RequestMessage::Headers(_) => {
-                let hashes = hashes.into_iter().cloned().collect();
-                self.request_manager.request_block_headers(io, peer, hashes);
-            }
-
-            // For chained header requests, we request
-            // more chains recursively.
-            RequestMessage::HeaderChain(_) => {
-                if resp.headers.is_empty() {
-                    debug_assert!(hashes.is_empty());
-                    // No dependent headers if the response is empty
-                    return;
-                }
-                let last = resp.headers.last().expect("headers is not empty");
-                let parent_hash = last.parent_hash();
-                let parent_height = last.height();
-
-                let current_height =
-                    self.graph.consensus.best_epoch_number() as u64;
-
-                for h in hashes {
-                    let num = if *h == *parent_hash {
-                        // Without fork, we only need to request missing blocks
-                        // since current_height
-                        if parent_height > current_height {
-                            cmp::min(
-                                DEFAULT_GET_PARENT_HEADERS_NUM,
-                                parent_height - current_height,
-                            )
-                        } else {
-                            DEFAULT_GET_HEADERS_NUM
-                        }
-                    } else {
-                        DEFAULT_GET_HEADERS_NUM
-                    };
-                    self.request_manager
-                        .request_block_header_chain(io, peer, h, num);
-                }
-            }
-
-            _ => (),
         };
     }
 
@@ -1754,9 +1777,19 @@ impl SynchronizationProtocolHandler {
             match self.graph.block_header_by_hash(&hash) {
                 Some(header) => block.block_header = header,
                 None => {
-                    // This should not happen for correct peer
-                    warn!("Received blocks with header not received {}", hash);
-                    continue;
+                    // Blocks may be synced directly without inserting headers
+                    // before. We can only enter this case
+                    // if we are catching up, so we do not need to relay.
+                    let (valid, _) = self.graph.insert_block_header(
+                        &mut block.block_header,
+                        true,
+                        false,
+                        false,
+                    );
+                    if !valid {
+                        received_blocks.insert(hash);
+                        continue;
+                    }
                 }
             }
 
@@ -1801,6 +1834,7 @@ impl SynchronizationProtocolHandler {
             &mut block.block_header,
             false,
             false,
+            false,
         );
         assert!(success);
         assert!(!self.graph.contains_block(&hash));
@@ -1821,6 +1855,7 @@ impl SynchronizationProtocolHandler {
                 let res = self.graph.insert_block_header(
                     &mut block.block_header,
                     need_to_verify,
+                    false,
                     false,
                 );
                 if res.0 {
@@ -1861,11 +1896,7 @@ impl SynchronizationProtocolHandler {
             .filter(|h| !self.graph.contains_block_header(&h))
             .collect();
 
-        self.request_manager.request_block_headers(
-            io,
-            Some(peer),
-            headers_to_request,
-        );
+        self.request_block_headers(io, Some(peer), headers_to_request);
 
         let need_to_relay = self.on_new_decoded_block(block, true, true)?;
 
@@ -1902,14 +1933,7 @@ impl SynchronizationProtocolHandler {
         //     headers_to_request,
         // );
 
-        for hash in headers_to_request {
-            self.request_manager.request_block_header_chain(
-                io,
-                Some(peer),
-                &hash,
-                1,
-            )
-        }
+        self.request_block_headers(io, Some(peer), headers_to_request);
 
         Ok(())
     }
@@ -2141,8 +2165,12 @@ impl SynchronizationProtocolHandler {
 
         for mut header in headers {
             let hash = header.hash();
-            let (valid, to_relay) =
-                self.graph.insert_block_header(&mut header, true, false);
+            let (valid, to_relay) = self.graph.insert_block_header(
+                &mut header,
+                true,
+                false,
+                self.insert_header_to_consensus(),
+            );
             if valid {
                 need_to_relay.extend(to_relay);
 
@@ -2165,6 +2193,15 @@ impl SynchronizationProtocolHandler {
         // relay if necessary
         self.relay_blocks(io, need_to_relay.into_iter().collect())
             .ok();
+    }
+
+    /// If we are in `SyncHeaders` phase, we should insert graph-ready block
+    /// headers to sync graph directly
+    fn insert_header_to_consensus(&self) -> bool {
+        match &*self.syn.sync_phase.lock() {
+            SyncPhase::SyncHeaders(_) => true,
+            _ => false,
+        }
     }
 
     pub fn propagate_new_transactions(&self, io: &NetworkContext) {
@@ -2190,42 +2227,73 @@ impl SynchronizationProtocolHandler {
         self.graph.update_total_weight_in_past();
     }
 
-    fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
+    pub fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
         let sync_phase = &mut *self.syn.sync_phase.lock();
         // TODO handle the case where we need to switch back phase
         // TODO Do not acquire any consensus inner lock
         match sync_phase {
-            SyncPhase::Init => {
-                *sync_phase = if self.syn.is_full_node() {
-                    SyncPhase::SyncHeaders
-                } else {
-                    SyncPhase::SyncBlocks
-                }
-            }
-            SyncPhase::SyncHeaders => {
+            SyncPhase::SyncHeaders(h) => {
                 let middle_epoch = self.syn.get_middle_epoch()?;
                 if self.graph.consensus.best_epoch_number()
                     + CATCH_UP_EPOCH_LAG_THRESHOLD
-                    < middle_epoch
+                    >= middle_epoch
                 {
-                    let checkpoint =
-                        self.graph.consensus.current_era_genesis_hash();
-                    *sync_phase = SyncPhase::SyncCheckpoints(checkpoint);
+                    let _checkpoint = self
+                        .graph
+                        .data_man
+                        .get_cur_consensus_era_genesis_hash();
+                    // FIXME We should set it to `checkpoint` once we can
+                    // retrieve checkpoint states
+                    *sync_phase = SyncPhase::SyncCheckpoints(*h);
+                    //                    *sync_phase =
+                    // SyncPhase::SyncCheckpoints(checkpoint);
                 }
             }
-            SyncPhase::SyncCheckpoints(_) => {
-                // TODO handle the case where the checkpoint changes before we retrieve the state
-                // TODO handle checkpoint timeout to try to retrieve the
-                // checkpoint before this one FIXME We should
+            SyncPhase::SyncCheckpoints(h) => {
+                // TODO handle the case where the checkpoint changes before we
+                // retrieve the state TODO handle checkpoint
+                // timeout to try to retrieve the checkpoint
+                // before this one FIXME We should
                 // advance `SyncCheckpoints` to `SyncBlocks` in the handler of
                 // the checkpoint state message
-                *sync_phase = SyncPhase::SyncBlocks;
+                *sync_phase = SyncPhase::SyncBlocks(h.clone());
+                // Reset our states to sync blocks and insert them into
+                // consensus again.
+                let (cur_era_genesis_hash, cur_era_genesis_height) =
+                    self.graph.get_genesis_hash_and_height_in_current_era();
+                *self.latest_epoch_requested.lock() = cur_era_genesis_height;
+                {
+                    let old_consensus_inner =
+                        &mut *self.graph.consensus.inner.write();
+                    let new_consensus_inner =
+                        ConsensusGraphInner::with_era_genesis_block(
+                            old_consensus_inner.pow_config.clone(),
+                            self.graph.data_man.clone(),
+                            old_consensus_inner.inner_conf.clone(),
+                            &cur_era_genesis_hash,
+                        );
+                    self.graph.consensus.update_best_info(&new_consensus_inner);
+                    *old_consensus_inner = new_consensus_inner;
+                }
+                {
+                    let old_sync_inner = &mut *self.graph.inner.write();
+                    let new_sync_inner =
+                        SynchronizationGraphInner::with_genesis_block(
+                            self.graph
+                                .data_man
+                                .block_header_by_hash(&cur_era_genesis_hash)
+                                .expect("era genesis exists"),
+                            old_sync_inner.pow_config.clone(),
+                            old_sync_inner.data_man.clone(),
+                        );
+                    *old_sync_inner = new_sync_inner;
+                }
             }
-            SyncPhase::SyncBlocks => {
+            SyncPhase::SyncBlocks(_) => {
                 let middle_epoch = self.syn.get_middle_epoch()?;
                 if self.graph.consensus.best_epoch_number()
                     + CATCH_UP_EPOCH_LAG_THRESHOLD
-                    < middle_epoch
+                    >= middle_epoch
                 {
                     *sync_phase = SyncPhase::Latest;
                 }
@@ -2306,14 +2374,63 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn request_blocks(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
-    ) {
+        &self, io: &NetworkContext, peer_id: Option<PeerId>,
+        mut hashes: Vec<H256>,
+    )
+    {
+        hashes.retain(|hash| !self.try_request_block_from_db(io, hash));
+        // Blocks may have been inserted into sync graph before as dependent
+        // blocks
+        hashes.retain(|h| !self.graph.contains_block(h));
         self.request_manager.request_blocks(
             io,
             peer_id,
             hashes,
             self.request_block_need_public(),
         );
+    }
+
+    /// Try to get the block from db. Return `true` if the block exists in db or
+    /// is inserted before. Handle the block if its seq_num is less
+    /// than that of the current era genesis.
+    fn try_request_block_from_db(
+        &self, io: &NetworkContext, hash: &H256,
+    ) -> bool {
+        if self.graph.contains_block(hash) {
+            return true;
+        }
+        if let Some(block) = self.graph.data_man.block_by_hash(hash, false) {
+            debug!("Recovered block {:?} from db", hash);
+            // Process blocks from db
+            if let Some(info) =
+                self.graph.data_man.local_block_info_from_db(hash)
+            {
+                if info.get_seq_num()
+                    < self.graph.consensus.current_era_genesis_seq_num()
+                {
+                    debug!("Ignore block in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
+                    // The block is ordered before current era genesis, so we do
+                    // not need to process it
+                    return true;
+                }
+            }
+            // The parameter `failed_peer` is only used when there exist some
+            // blocks in `requested` but not in `blocks`.
+            // Here `requested` and `blocks` have the same block, so it's okay
+            // to set `failed_peer` to 0 since it will not be used.
+            let mut requested = HashSet::new();
+            requested.insert(block.hash());
+            self.dispatch_recover_public_task(
+                io,
+                vec![block.as_ref().clone()],
+                requested,
+                0,
+                false,
+            );
+            return true;
+        } else {
+            return false;
+        }
     }
 
     pub fn blocks_received(
@@ -2359,7 +2476,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering block_cache_gc timer");
         io.register_timer(
             CHECK_CATCH_UP_MODE_TIMER,
-            Duration::from_millis(5000),
+            Duration::from_millis(1000),
         )
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))

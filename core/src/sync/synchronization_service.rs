@@ -31,7 +31,6 @@ impl SynchronizationService {
         network: NetworkService, consensus_graph: SharedConsensusGraph,
         protocol_config: ProtocolConfiguration,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        fast_recover: bool,
     ) -> Self
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
@@ -39,7 +38,6 @@ impl SynchronizationService {
             consensus_graph,
             verification_config,
             pow_config,
-            fast_recover,
         ));
 
         SynchronizationService {

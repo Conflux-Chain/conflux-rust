@@ -1331,6 +1331,10 @@ impl ConsensusNewBlockHandler {
     {
         let parent_hash = block_header.parent_hash();
         if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
+            debug!(
+                "parent={:?} not in consensus graph, set header to pending",
+                parent_hash
+            );
             self.process_outside_block(inner, &block_header);
             let sn = inner.get_next_sequence_number();
             let block_info = LocalBlockInfo::new(BlockStatus::Pending, sn);

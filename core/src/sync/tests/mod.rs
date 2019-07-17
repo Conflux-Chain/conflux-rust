@@ -133,7 +133,6 @@ fn initialize_synchronization_graph(
         consensus.clone(),
         verification_config,
         pow_config,
-        true,
     ));
 
     sync
