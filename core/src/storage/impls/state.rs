@@ -244,7 +244,7 @@ impl<'a> State<'a> {
                 self.owned_node_set.as_mut().unwrap(),
             )?;
             // Insert empty node.
-            entry.insert(Default::default());
+            entry.insert(UnsafeCell::new(Default::default()));
 
             self.delta_trie_root =
                 root_cow.into_child().map(|maybe_node| maybe_node.into());
@@ -419,6 +419,7 @@ use primitives::{
     EpochId, MerkleHash, StateRoot, StateRootWithAuxInfo, MERKLE_NULL_NODE,
 };
 use std::{
+    cell::UnsafeCell,
     collections::BTreeSet,
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
