@@ -10,7 +10,6 @@ use rlp::*;
 use std::{
     collections::{hash_map::HashMap, VecDeque},
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
@@ -82,12 +81,8 @@ impl DeferredPool {
     fn recalculate_readiness_with_local_info(
         &mut self, addr: &Address, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
         if let Some(bucket) = self.buckets.get(addr) {
-            bucket.recalculate_readiness_with_local_info(nonce, balance, now)
+            bucket.recalculate_readiness_with_local_info(nonce, balance)
         } else {
             None
         }
@@ -95,12 +90,8 @@ impl DeferredPool {
 
     fn check_tx_packed(&self, addr: Address, nonce: U256) -> bool {
         if let Some(bucket) = self.buckets.get(&addr) {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs();
             if let Some(tx_with_ready_info) = bucket.get_tx_by_nonce(nonce) {
-                tx_with_ready_info.is_already_packed(now)
+                tx_with_ready_info.is_already_packed()
             } else {
                 false
             }
@@ -304,14 +295,10 @@ impl TransactionPoolInner {
                 return InsertResult::Failed("Transaction Pool is full".into());
             }
         }
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
         let result = self.deferred_pool.insert(
             TxWithReadyInfo {
                 transaction: transaction.clone(),
-                last_packed_ts: if packed { now } else { 0 },
+                packed,
             },
             force,
         );
@@ -327,7 +314,7 @@ impl TransactionPoolInner {
             }
             InsertResult::Failed(_) => {}
             InsertResult::Updated(replaced_tx) => {
-                if !replaced_tx.is_already_packed(now) {
+                if !replaced_tx.is_already_packed() {
                     self.unpacked_transaction_count -= 1;
                 }
                 self.txs.remove(&replaced_tx.hash());
@@ -607,10 +594,7 @@ mod test_transaction_pool_inner {
     use cfx_types::{Address, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
-    use std::{
-        sync::Arc,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::sync::Arc;
 
     fn new_test_tx(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
@@ -630,13 +614,13 @@ mod test_transaction_pool_inner {
 
     fn new_test_tx_with_read_info(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
-        last_packed_ts: u64,
+        packed: bool,
     ) -> TxWithReadyInfo
     {
         let transaction = new_test_tx(sender, nonce, gas_price, value);
         TxWithReadyInfo {
             transaction,
-            last_packed_ts,
+            packed,
         }
     }
 
@@ -649,11 +633,11 @@ mod test_transaction_pool_inner {
         let bob = Random.generate().unwrap();
         let eva = Random.generate().unwrap();
 
-        let alice_tx1 = new_test_tx_with_read_info(&alice, 5, 10, 100, 0);
-        let alice_tx2 = new_test_tx_with_read_info(&alice, 6, 10, 100, 0);
-        let bob_tx1 = new_test_tx_with_read_info(&bob, 1, 10, 100, 0);
-        let bob_tx2 = new_test_tx_with_read_info(&bob, 2, 10, 100, 0);
-        let bob_tx2_new = new_test_tx_with_read_info(&bob, 2, 11, 100, 0);
+        let alice_tx1 = new_test_tx_with_read_info(&alice, 5, 10, 100, false);
+        let alice_tx2 = new_test_tx_with_read_info(&alice, 6, 10, 100, false);
+        let bob_tx1 = new_test_tx_with_read_info(&bob, 1, 10, 100, false);
+        let bob_tx2 = new_test_tx_with_read_info(&bob, 2, 10, 100, false);
+        let bob_tx2_new = new_test_tx_with_read_info(&bob, 2, 11, 100, false);
 
         assert_eq!(
             deferred_pool.insert(alice_tx1.clone(), false),
@@ -727,19 +711,15 @@ mod test_transaction_pool_inner {
     #[test]
     fn test_deferred_pool_recalculate_readiness() {
         let mut deferred_pool = super::DeferredPool::new();
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
 
         let alice = Random.generate().unwrap();
 
         let gas = 50000;
-        let tx1 = new_test_tx_with_read_info(&alice, 5, 10, 10000, now);
-        let tx2 = new_test_tx_with_read_info(&alice, 6, 10, 10000, now);
-        let tx3 = new_test_tx_with_read_info(&alice, 7, 10, 10000, now);
-        let tx4 = new_test_tx_with_read_info(&alice, 8, 10, 10000, now - 600);
-        let tx5 = new_test_tx_with_read_info(&alice, 9, 10, 10000, now - 600);
+        let tx1 = new_test_tx_with_read_info(&alice, 5, 10, 10000, true);
+        let tx2 = new_test_tx_with_read_info(&alice, 6, 10, 10000, true);
+        let tx3 = new_test_tx_with_read_info(&alice, 7, 10, 10000, true);
+        let tx4 = new_test_tx_with_read_info(&alice, 8, 10, 10000, false);
+        let tx5 = new_test_tx_with_read_info(&alice, 9, 10, 10000, false);
         let exact_cost = 4 * (gas * 10 + 10000);
 
         deferred_pool.insert(tx1.clone(), false);
