@@ -12,7 +12,7 @@ use std::{
     sync::Arc,
 };
 
-pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000000000;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<Meter> =

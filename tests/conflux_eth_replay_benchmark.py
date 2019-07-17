@@ -314,9 +314,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     self.log.info("Conflux full node is slow by %s at receiving txs, slow down by 1s.",
                                   tx_count - txpool_received)
                 txpool_unpacked = txpool_status["unpacked"]
-                if txpool_unpacked > 300000:
-                    # should_sleep = elapsed_time * txpool_ready / tx_count
-                    should_sleep = 1
+                unpacked_limit = 300000
+                if txpool_unpacked > unpacked_limit:
+                    should_sleep = elapsed_time * (txpool_unpacked - unpacked_limit) / tx_count + 1
+                    # should_sleep = 1
                     tx_received_slowdown += should_sleep
                     self.log.info("Conflux full node has too many unpacked txs %s. sleep %s", txpool_unpacked,
                                   should_sleep)

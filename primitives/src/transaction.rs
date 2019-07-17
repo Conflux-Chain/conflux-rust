@@ -379,7 +379,7 @@ impl TransactionWithSignature {
         if !self.signature().is_low_s() {
             debug!("check_low_s failed.");
             Ok(())
-            //Err(keylib::Error::InvalidSignature.into())
+        //Err(keylib::Error::InvalidSignature.into())
         } else {
             Ok(())
         }
