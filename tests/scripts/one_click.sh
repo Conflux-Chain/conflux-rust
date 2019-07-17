@@ -55,10 +55,10 @@ run_latency_exp () {
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000,250:1:150000:1000,250:1:150000:1000,250:1:150000:1000"
-exp_config="250:1:500000:100"
+exp_config="250:1:300000:4000"
 
 # For experiments with --enable-tx-propagation , <txs_per_block> * <tx_size> will be used as block size 
-tps=4000
+tps=6000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps
 

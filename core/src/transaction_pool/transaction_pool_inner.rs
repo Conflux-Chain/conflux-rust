@@ -21,6 +21,8 @@ lazy_static! {
         register_meter_with_group("timer", "tx_pool::inner_insert");
     static ref TX_POOL_INNER_FAILED_GARBAGE_COLLECTED: Arc<Meter> =
         register_meter_with_group("txpool", "failed_garbage_collected");
+    static ref DEFERRED_POOL_INNER_INSERT: Arc<Meter> =
+        register_meter_with_group("timer", "deferred_pool::inner_insert");
 }
 
 struct DeferredPool {
@@ -295,13 +297,17 @@ impl TransactionPoolInner {
                 return InsertResult::Failed("Transaction Pool is full".into());
             }
         }
-        let result = self.deferred_pool.insert(
-            TxWithReadyInfo {
-                transaction: transaction.clone(),
-                packed,
-            },
-            force,
-        );
+        let result = {
+            let _timer =
+                MeterTimer::time_func(DEFERRED_POOL_INNER_INSERT.as_ref());
+            self.deferred_pool.insert(
+                TxWithReadyInfo {
+                    transaction: transaction.clone(),
+                    packed,
+                },
+                force,
+            )
+        };
 
         match &result {
             InsertResult::NewAdded => {
