@@ -8,7 +8,6 @@ use heapsize::HeapSizeOf;
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
-use log::*;
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{error, fmt, mem, ops::Deref, sync::Arc};
 use unexpected::OutOfBounds;

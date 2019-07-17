@@ -156,7 +156,7 @@ impl TransactionPool {
             for (_, msg) in failure {
                 warn!("Failed insert tx due to: {}", msg);
             }
-            assert_eq!(failure.len(), 0);
+            panic!()
         }
         (passed_transactions, failure)
     }
