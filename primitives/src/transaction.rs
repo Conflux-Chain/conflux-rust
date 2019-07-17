@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, H160, H256, H64, U256};
+use cfx_types::{Address, H160, H256, U256};
 use heapsize::HeapSizeOf;
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
@@ -19,7 +19,9 @@ pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
 // TODO should be u48
 pub type TxShortId = u64;
 
-pub type TxPropagateId = H64;
+pub type TxPropagateId = u32;
+
+pub type TxFullId = H256;
 
 #[derive(Debug, PartialEq, Clone)]
 /// Errors concerning transaction processing.
@@ -248,7 +250,7 @@ pub struct TransactionWithSignature {
     /// The S field of the signature; helps describe the point on the curve.
     pub s: U256,
     /// Hash of the transaction
-    pub hash: H256,
+    pub hash: TxFullId,
     /// The transaction size when serialized in rlp
     pub rlp_size: Option<usize>,
 }
@@ -341,7 +343,7 @@ impl TransactionWithSignature {
         }
     }
 
-    pub fn hash(&self) -> H256 { self.hash }
+    pub fn hash(&self) -> TxFullId { self.hash }
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
@@ -448,7 +450,7 @@ impl SignedTransaction {
     /// Checks if signature is empty.
     pub fn is_unsigned(&self) -> bool { self.transaction.is_unsigned() }
 
-    pub fn hash(&self) -> H256 { self.transaction.hash() }
+    pub fn hash(&self) -> TxFullId { self.transaction.hash() }
 
     pub fn gas(&self) -> &U256 { &self.transaction.gas }
 
