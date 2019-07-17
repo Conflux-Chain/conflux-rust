@@ -762,7 +762,8 @@ pub struct SynchronizationGraph {
     pub statistics: SharedStatistics,
 
     /// Channel used to send work to `ConsensusGraph`
-    consensus_sender: Mutex<Sender<H256>>,
+    /// Each element is <block_hash, ignore_body>
+    consensus_sender: Mutex<Sender<(H256, bool)>>,
 }
 
 pub type SharedSynchronizationGraph = Arc<SynchronizationGraph>;
@@ -799,7 +800,9 @@ impl SynchronizationGraph {
             .name("Consensus Worker".into())
             .spawn(move || loop {
                 match consensus_receiver.recv() {
-                    Ok(hash) => consensus.on_new_block(&hash, false),
+                    Ok((hash, ignore_body)) => {
+                        consensus.on_new_block(&hash, ignore_body)
+                    }
                     Err(_) => break,
                 }
             })
@@ -1237,9 +1240,12 @@ impl SynchronizationGraph {
         if !sync_graph_only {
             // Make Consensus Worker handle the block in order
             // asynchronously
-            self.consensus_sender.lock().send(h).expect("Cannot fail");
+            self.consensus_sender
+                .lock()
+                .send((h, false))
+                .expect("Cannot fail");
         } else {
-            self.consensus.on_new_block_construction_only(&h);
+            self.consensus.on_new_block(&h, true);
         }
     }
 

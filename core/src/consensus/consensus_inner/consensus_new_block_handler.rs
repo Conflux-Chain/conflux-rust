@@ -22,7 +22,9 @@ use crate::{
 use cfx_types::{into_i128, H256};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::RwLock;
-use primitives::{Block, BlockHeaderBuilder, StateRootWithAuxInfo};
+use primitives::{
+    BlockHeader, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
+};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
@@ -806,8 +808,9 @@ impl ConsensusNewBlockHandler {
     }
 
     fn check_block_full_validity(
-        &self, new: usize, block: &Block, inner: &mut ConsensusGraphInner,
-        adaptive: bool, anticone_barrier: &BitSet,
+        &self, new: usize, block_header: &BlockHeader,
+        inner: &mut ConsensusGraphInner, adaptive: bool,
+        anticone_barrier: &BitSet,
         weight_tuple: Option<&(Vec<i128>, Vec<i128>, Vec<i128>)>,
     ) -> bool
     {
@@ -815,7 +818,7 @@ impl ConsensusNewBlockHandler {
         if inner.arena[parent].data.partial_invalid {
             warn!(
                 "Partially invalid due to partially invalid parent. {:?}",
-                block.block_header.clone()
+                block_header.clone()
             );
             return false;
         }
@@ -829,7 +832,7 @@ impl ConsensusNewBlockHandler {
         ) {
             warn!(
                 "Partially invalid due to picking incorrect parent. {:?}",
-                block.block_header.clone()
+                block_header.clone()
             );
             return false;
         }
@@ -840,7 +843,7 @@ impl ConsensusNewBlockHandler {
         {
             warn!(
                 "Partially invalid due to wrong difficulty. {:?}",
-                block.block_header.clone()
+                block_header.clone()
             );
             return false;
         }
@@ -852,7 +855,7 @@ impl ConsensusNewBlockHandler {
             if inner.arena[new].adaptive != adaptive {
                 warn!(
                     "Partially invalid due to invalid adaptive field. {:?}",
-                    block.block_header.clone()
+                    block_header.clone()
                 );
                 return false;
             }
@@ -1058,17 +1061,17 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    /// Subroutine called by on_new_block()
     fn insert_block_initial(
-        &self, inner: &mut ConsensusGraphInner, block: Arc<Block>,
+        &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
     ) -> usize {
-        let (me, indices_len) = inner.insert(block.as_ref());
+        let (me, indices_len) = inner.insert(&block_header);
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
         me
     }
 
-    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    /// Subroutine called by on_new_block()
     fn update_lcts_initial(&self, inner: &mut ConsensusGraphInner, me: usize) {
         let parent = inner.arena[me].parent;
 
@@ -1112,7 +1115,7 @@ impl ConsensusNewBlockHandler {
         );
     }
 
-    /// Subroutine called by on_new_block() and on_new_block_construction_only()
+    /// Subroutine called by on_new_block()
     fn update_lcts_finalize(
         &self, inner: &mut ConsensusGraphInner, me: usize, stable: bool,
     ) -> i128 {
@@ -1156,10 +1159,10 @@ impl ConsensusNewBlockHandler {
     }
 
     fn process_outside_block(
-        &self, inner: &mut ConsensusGraphInner, block: Arc<Block>,
+        &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
     ) {
         let mut referees = Vec::new();
-        for hash in block.block_header.referee_hashes().iter() {
+        for hash in block_header.referee_hashes().iter() {
             if let Some(x) = inner.hash_to_arena_indices.get(hash) {
                 inner.insert_referee_if_not_duplicate(&mut referees, *x);
             } else if let Some(r) = inner.legacy_refs.get(hash) {
@@ -1171,9 +1174,7 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
-        inner
-            .legacy_refs
-            .insert(block.block_header.hash(), referees);
+        inner.legacy_refs.insert(block_header.hash(), referees);
     }
 
     fn recycle_tx_in_block(
@@ -1249,95 +1250,6 @@ impl ConsensusNewBlockHandler {
         self.data_man.insert_terminals_to_db(&terminals);
     }
 
-    pub fn construct_pivot_info(&self, inner: &mut ConsensusGraphInner) {
-        assert_eq!(inner.pivot_chain.len(), 1);
-        assert_eq!(
-            inner.pivot_chain[0],
-            inner.cur_era_genesis_block_arena_index
-        );
-
-        let mut new_pivot_chain = Vec::new();
-        let mut u = inner.cur_era_genesis_block_arena_index;
-        loop {
-            new_pivot_chain.push(u);
-            let mut heaviest = NULL;
-            let mut heaviest_weight = 0;
-            for index in &inner.arena[u].children {
-                let weight = inner.weight_tree.get(*index);
-                if heaviest == NULL
-                    || ConsensusGraphInner::is_heavier(
-                        (weight, &inner.arena[*index].hash),
-                        (heaviest_weight, &inner.arena[heaviest].hash),
-                    )
-                {
-                    heaviest = *index;
-                    heaviest_weight = weight;
-                }
-            }
-            if heaviest == NULL {
-                break;
-            }
-            u = heaviest;
-        }
-
-        // Construct epochs
-        let mut height = inner.cur_era_genesis_height + 1;
-        while inner.height_to_pivot_index(height) < new_pivot_chain.len() {
-            let pivot_index = inner.height_to_pivot_index(height);
-            // First, identify all the blocks in the current epoch
-            ConsensusNewBlockHandler::set_epoch_number_in_epoch(
-                inner,
-                new_pivot_chain[pivot_index],
-                height,
-            );
-
-            // Construct in-memory receipts root
-            if inner.pivot_index_to_height(new_pivot_chain.len())
-                >= DEFERRED_STATE_EPOCH_COUNT
-                && height
-                    < inner.pivot_index_to_height(new_pivot_chain.len())
-                        - DEFERRED_STATE_EPOCH_COUNT
-            {
-                // This block's deferred block is pivot_index, so the
-                // deferred_receipts_root in its header is the
-                // receipts_root of pivot_index
-                let future_block_hash = inner.arena[new_pivot_chain[inner
-                    .height_to_pivot_index(
-                        height + DEFERRED_STATE_EPOCH_COUNT,
-                    )]]
-                .hash
-                .clone();
-
-                let future_block_header = self
-                    .data_man
-                    .block_header_by_hash(&future_block_hash)
-                    .unwrap();
-
-                self.data_man.insert_epoch_execution_commitments(
-                    inner.arena[new_pivot_chain[pivot_index]].hash,
-                    future_block_header.deferred_receipts_root().clone(),
-                    future_block_header.deferred_logs_bloom_hash().clone(),
-                );
-            }
-            height += 1;
-        }
-
-        // If the db is not corrupted, all unwrap in the following should
-        // pass.
-        // TODO Verify db state in case of data missing
-        // TODO Recompute missing data if needed
-        inner.adjust_difficulty(*new_pivot_chain.last().expect("not empty"));
-        inner.pivot_chain = new_pivot_chain;
-
-        // Now we construct pivot_chain_metadata and compute
-        // last_pivot_in_past
-        let mut metadata_to_update = HashSet::new();
-        for (i, _) in inner.arena.iter() {
-            metadata_to_update.insert(i);
-        }
-        self.recompute_metadata(inner, 0, metadata_to_update);
-    }
-
     pub fn construct_state_info(&self, inner: &mut ConsensusGraphInner) {
         // Compute receipts root for the deferred block of the mining block,
         // which is not in the db
@@ -1411,89 +1323,15 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    pub fn on_new_block_construction_only(
-        &self, inner: &mut ConsensusGraphInner, hash: &H256, block: Arc<Block>,
-    ) {
-        let parent_hash = block.block_header.parent_hash();
-        if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
-            self.process_outside_block(inner, block);
-            return;
-        }
-
-        let me = self.insert_block_initial(inner, block.clone());
-
-        let anticone_barrier =
-            ConsensusNewBlockHandler::compute_anticone(inner, me);
-        let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP {
-            Some(inner.compute_subtree_weights(me, &anticone_barrier))
-        } else {
-            None
-        };
-        let (fully_valid, pending) = match self
-            .data_man
-            .local_block_info_from_db(hash)
-        {
-            Some(block_info) => {
-                match block_info.get_status() {
-                    BlockStatus::Valid => (true, false),
-                    BlockStatus::Pending => (true, true),
-                    BlockStatus::PartialInvalid => (false, false),
-                    BlockStatus::Invalid => {
-                        // Blocks marked invalid should not exist in database,
-                        // so should not be inserted
-                        // during construction.
-                        unreachable!()
-                    }
-                }
-            }
-            None => {
-                // FIXME If the status of a block close to terminals is missing
-                // (unlikely to happen if db cannot guarantee the write order)
-                // and we try to check its validity with the
-                // commented code, we will recompute the whole DAG from genesis
-                // because the pivot chain is empty now, which is not what we
-                // want for fast recovery. A better solution is
-                // to assume it's partial invalid, construct the pivot chain and
-                // other data like block_receipts_root first, and then check its
-                // full validity. The pivot chain might need to be updated
-                // depending on the validity result.
-
-                // The correct logic here should be as follows, but this
-                // solution is very costly
-                // ```
-                // let valid = self.check_block_full_validity(me, &block, inner, sync_inner);
-                // self.insert_block_status_to_db(hash, !valid);
-                // valid
-                // ```
-
-                // The assumed value should be false after we fix this issue.
-                // Now we optimistically hope that they are valid.
-                debug!("Assume block {} is valid/pending", hash);
-                (true, true)
-            }
-        };
-
-        inner.arena[me].data.partial_invalid = !fully_valid;
-        inner.arena[me].data.pending = pending;
-
-        self.update_lcts_initial(inner, me);
-
-        let (stable, adaptive) =
-            inner.adaptive_weight(me, &anticone_barrier, weight_tuple.as_ref());
-        inner.arena[me].stable = stable;
-        if self.conf.bench_mode && fully_valid {
-            inner.arena[me].adaptive = adaptive;
-        }
-
-        self.update_lcts_finalize(inner, me, stable);
-    }
-
     pub fn on_new_block(
-        &self, inner: &mut ConsensusGraphInner, hash: &H256, block: Arc<Block>,
-    ) {
-        let parent_hash = block.block_header.parent_hash();
+        &self, inner: &mut ConsensusGraphInner, hash: &H256,
+        block_header: &BlockHeader,
+        transactions: Option<&Vec<Arc<SignedTransaction>>>,
+    )
+    {
+        let parent_hash = block_header.parent_hash();
         if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
-            self.process_outside_block(inner, block);
+            self.process_outside_block(inner, &block_header);
             let sn = inner.get_next_sequence_number();
             let block_info = LocalBlockInfo::new(BlockStatus::Pending, sn);
             self.data_man
@@ -1501,7 +1339,7 @@ impl ConsensusNewBlockHandler {
             return;
         }
 
-        let me = self.insert_block_initial(inner, block.clone());
+        let me = self.insert_block_initial(inner, &block_header);
         let parent = inner.arena[me].parent;
         let era_height = inner.get_era_height(inner.arena[parent].height, 0);
         let mut fully_valid = true;
@@ -1514,14 +1352,6 @@ impl ConsensusNewBlockHandler {
             NULL
         };
         let era_block = inner.get_era_block_with_parent(parent, 0);
-
-        // It's only correct to set tx stale after the block is considered
-        // terminal for mining.
-        // Note that we conservatively only mark those blocks inside the current
-        // pivot era
-        if era_block == cur_pivot_era_block {
-            self.txpool.set_tx_packed(block.transactions.clone());
-        }
 
         let pending = inner.ancestor_at(parent, inner.cur_era_stable_height)
             != inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
@@ -1548,7 +1378,7 @@ impl ConsensusNewBlockHandler {
 
             fully_valid = self.check_block_full_validity(
                 me,
-                block.as_ref(),
+                &block_header,
                 inner,
                 adaptive,
                 &anticone_barrier,
@@ -1731,72 +1561,12 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
+        self.update_confirmation_risks(inner, inner.get_total_weight_in_past());
+
         let new_pivot_era_block = inner
             .get_era_block_with_parent(*inner.pivot_chain.last().unwrap(), 0);
         let new_era_height = inner.arena[new_pivot_era_block].height;
-        if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
-            < inner.pivot_index_to_height(inner.pivot_chain.len())
-            && inner.last_recycled_era_block != new_pivot_era_block
-        {
-            self.recycle_tx_outside_era(inner, new_pivot_era_block);
-            inner.last_recycled_era_block = new_pivot_era_block;
-        }
-
-        let to_state_pos = if inner
-            .pivot_index_to_height(inner.pivot_chain.len())
-            < DEFERRED_STATE_EPOCH_COUNT
-        {
-            0
-        } else {
-            inner.pivot_index_to_height(inner.pivot_chain.len())
-                - DEFERRED_STATE_EPOCH_COUNT
-                + 1
-        };
-
-        let mut state_at = fork_at;
-        if fork_at + DEFERRED_STATE_EPOCH_COUNT
-            > inner.pivot_index_to_height(old_pivot_chain_len)
-        {
-            if inner.pivot_index_to_height(old_pivot_chain_len)
-                > DEFERRED_STATE_EPOCH_COUNT
-            {
-                state_at = inner.pivot_index_to_height(old_pivot_chain_len)
-                    - DEFERRED_STATE_EPOCH_COUNT
-                    + 1;
-            } else {
-                state_at = 1;
-            }
-        }
-
-        // Apply transactions in the determined total order
-        while state_at < to_state_pos {
-            let epoch_arena_index = inner.get_pivot_block_arena_index(state_at);
-            let reward_execution_info =
-                self.executor.get_reward_execution_info(
-                    &self.data_man,
-                    inner,
-                    epoch_arena_index,
-                );
-            self.executor.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_arena_index].hash,
-                inner.get_epoch_block_hashes(epoch_arena_index),
-                inner.get_epoch_start_block_number(epoch_arena_index),
-                reward_execution_info,
-                true,
-                false,
-            ));
-            state_at += 1;
-        }
-
-        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
-
-        self.update_confirmation_risks(inner, inner.get_total_weight_in_past());
-        inner.optimistic_executed_height = if to_state_pos > 0 {
-            Some(to_state_pos)
-        } else {
-            None
-        };
-        self.persist_terminals(inner);
         let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
         if new_checkpoint_era_genesis != inner.cur_era_genesis_block_arena_index
         {
@@ -1814,6 +1584,78 @@ impl ConsensusNewBlockHandler {
                 &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
                 inner.cur_era_genesis_height
             );
+        }
+
+        // If we are inserting header only, we will skip execution and
+        // tx_pool-related operations
+        if transactions.is_some() {
+            // It's only correct to set tx stale after the block is considered
+            // terminal for mining.
+            // Note that we conservatively only mark those blocks inside the
+            // current pivot era
+            if era_block == cur_pivot_era_block {
+                self.txpool
+                    .set_tx_packed(transactions.expect("Already checked"));
+            }
+            if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
+                < inner.pivot_index_to_height(inner.pivot_chain.len())
+                && inner.last_recycled_era_block != new_pivot_era_block
+            {
+                self.recycle_tx_outside_era(inner, new_pivot_era_block);
+                inner.last_recycled_era_block = new_pivot_era_block;
+            }
+
+            let to_state_pos = if inner
+                .pivot_index_to_height(inner.pivot_chain.len())
+                < DEFERRED_STATE_EPOCH_COUNT
+            {
+                0
+            } else {
+                inner.pivot_index_to_height(inner.pivot_chain.len())
+                    - DEFERRED_STATE_EPOCH_COUNT
+                    + 1
+            };
+            inner.optimistic_executed_height = if to_state_pos > 0 {
+                Some(to_state_pos)
+            } else {
+                None
+            };
+            let mut state_at = fork_at;
+            if fork_at + DEFERRED_STATE_EPOCH_COUNT
+                > inner.pivot_index_to_height(old_pivot_chain_len)
+            {
+                if inner.pivot_index_to_height(old_pivot_chain_len)
+                    > DEFERRED_STATE_EPOCH_COUNT
+                {
+                    state_at = inner.pivot_index_to_height(old_pivot_chain_len)
+                        - DEFERRED_STATE_EPOCH_COUNT
+                        + 1;
+                } else {
+                    state_at = 1;
+                }
+            }
+
+            // Apply transactions in the determined total order
+            while state_at < to_state_pos {
+                let epoch_arena_index =
+                    inner.get_pivot_block_arena_index(state_at);
+                let reward_execution_info =
+                    self.executor.get_reward_execution_info(
+                        &self.data_man,
+                        inner,
+                        epoch_arena_index,
+                    );
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                    inner.arena[epoch_arena_index].hash,
+                    inner.get_epoch_block_hashes(epoch_arena_index),
+                    inner.get_epoch_start_block_number(epoch_arena_index),
+                    reward_execution_info,
+                    true,
+                    false,
+                ));
+                state_at += 1;
+            }
+            self.persist_terminals(inner);
         }
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
