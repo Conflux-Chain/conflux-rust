@@ -152,7 +152,12 @@ impl TransactionPool {
         TX_POOL_GAUGE.mark(self.total_unpacked());
         TX_POOL_READY_GAUGE.mark(self.inner.read().total_ready_accounts());
 
-        assert_eq!(failure.len(), 0);
+        if failure.len() != 0 {
+            for (_, msg) in failure {
+                warn!("Failed insert tx due to: {}", msg);
+            }
+            assert_eq!(failure.len(), 0);
+        }
         (passed_transactions, failure)
     }
 
@@ -200,11 +205,11 @@ impl TransactionPool {
 
         // check transaction gas price
         //        if transaction.gas_price <
-        // DEFAULT_MIN_TRANSACTION_GAS_PRICE.into() {            
+        // DEFAULT_MIN_TRANSACTION_GAS_PRICE.into() {
         // warn!("Transaction {} discarded due to below minimal gas price: price
-        // {}", transaction.hash(), transaction.gas_price);            
+        // {}", transaction.hash(), transaction.gas_price);
         // return Err(format!(                "transaction gas price {}
-        // less than the minimum value {}",                
+        // less than the minimum value {}",
         // transaction.gas_price, DEFAULT_MIN_TRANSACTION_GAS_PRICE
         //            ));
         //        }
