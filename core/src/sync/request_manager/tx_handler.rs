@@ -56,6 +56,11 @@ impl ReceivedTransactionContainer {
         inner.txid_container.contains(key)
     }
 
+    pub fn get_length(&self) -> usize {
+        let inner = &self.inner;
+        inner.txid_container.len()
+    }
+
     pub fn append_transactions(
         &mut self, transactions: Vec<Arc<SignedTransaction>>,
     ) {

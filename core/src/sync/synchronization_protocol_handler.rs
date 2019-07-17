@@ -44,7 +44,7 @@ use std::{
 };
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<Meter> =
-        register_meter_with_group("tx_pool", "tx_propagate_set_size");
+        register_meter_with_group("system_metrics", "tx_propagate_set_size");
     static ref BLOCK_HEADER_HANDLE_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "sync::on_block_headers");
     static ref BLOCK_HANDLE_TIMER: Arc<Meter> =

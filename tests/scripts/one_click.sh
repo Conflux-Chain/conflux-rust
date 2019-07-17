@@ -28,7 +28,7 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;cargo build --release --features \"deadlock_detection\";parallel-scp -O \"StrictHostKeyChecking no\" -h ips -l ubuntu -p 1000 ../../target/release/conflux ~ |grep FAILURE|wc -l;"
 
     #4) Run experiments
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation"
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --min_peers_propagation 8 --tx-pool-size 500000"
 
     #5) Terminate slave instances
     rm -rf tmp_data
