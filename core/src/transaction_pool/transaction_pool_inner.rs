@@ -144,8 +144,12 @@ impl ReadyAccountPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        self.treap
-            .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
+        if tx.gas_price == 0.into() {
+            self.treap.insert(tx.sender(), tx.clone(), U512::from(1))
+        } else {
+            self.treap
+                .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
+        }
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
