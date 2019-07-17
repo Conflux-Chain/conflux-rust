@@ -10,15 +10,6 @@
 /// optional value attached, and the Merkle hash for subtree.
 #[derive(Default)]
 pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
-    /// The number of children plus one if there is value attached.
-    /// After a delete operation, when there is no value attached to this
-    /// path, and if there is only one child left, path compression
-    /// should apply. Path compression can only happen when
-    /// number_of_children_plus_value drop from 2 to 1.
-    // TODO(yz): refactor out this value. Move the number_of_children counter
-    // to children_table.
-    number_of_children_plus_value: u8,
-
     /// CompactPath section. The CompactPath if defined as separate struct
     /// would consume 16B, while the current layout plus the
     /// previous u8 field consumes 16B in total and keep integers
@@ -78,7 +69,6 @@ unsafe impl<CacheAlgoDataT: CacheAlgoDataTrait> Sync
 /// Key length should be multiple of 8.
 // TODO(yz): align key @8B with mask.
 pub type KeyPart<'a> = &'a [u8];
-const EMPTY_KEY_PART: KeyPart = &[];
 
 impl<CacheAlgoDataT: CacheAlgoDataTrait> Drop for TrieNode<CacheAlgoDataT> {
     fn drop(&mut self) {

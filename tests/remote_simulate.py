@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 
-import tarfile
 from argparse import ArgumentParser
 from collections import Counter
+from eth_utils import decode_hex
+from rlp.sedes import Binary, BigEndianInt
+import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
+from conflux import utils
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex
-from scripts.exp_latency import pscp, pssh, kill_remote_conflux
-from scripts.stat_latency_map_reduce import Statistics
-from test_framework.mininode import *
+from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int, pubtoaddr
+from test_framework.blocktools import create_block, create_transaction
 from test_framework.test_framework import ConfluxTestFramework
+from test_framework.mininode import *
 from test_framework.util import *
+from scripts.stat_latency_map_reduce import Statistics
+from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 
-
-class P2PTest(ConfluxTestFramework):
+class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.rpc_timewait = 60
@@ -24,7 +27,7 @@ class P2PTest(ConfluxTestFramework):
             "fast_recover": "true",
         }
 
-    def add_options(self, parser: ArgumentParser):
+    def add_options(self, parser:ArgumentParser):
         parser.add_argument(
             "--nodes-per-host",
             dest="nodes_per_host",
@@ -141,6 +144,18 @@ class P2PTest(ConfluxTestFramework):
             default=1300,
             type=int,
         )
+        parser.add_argument(
+            "--txgen-account-count",
+            dest="txgen_account_count",
+            default=1000,
+            type=int,
+        )
+        parser.add_argument(
+            "--tx-pool-size",
+            dest="tx_pool_size",
+            default=500000,
+            type=int,
+        )
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
@@ -166,19 +181,16 @@ class P2PTest(ConfluxTestFramework):
         target_memory = 16
 
         # storage
-        # FIXME ledger_cache_size is set to 8G because duplicated transactions in blocks will be counted multiple times,
-        # But as Arc they will not actually take that much space
-        self.conf_parameters["ledger_cache_size"] = str(8000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_cache_start_size"] = str(
-            1000000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["storage_cache_start_size"] = str(1000000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
         # self.conf_parameters["storage_cache_size"] = "200000"
         self.conf_parameters["storage_idle_size"] = str(200000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_node_map_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
 
         # txpool
-        self.conf_parameters["tx_pool_size"] = str(500000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["tx_pool_size"] = str(self.options.tx_pool_size // target_memory * self.options.storage_memory_mb)
 
         # data propagation
         self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
@@ -190,9 +202,9 @@ class P2PTest(ConfluxTestFramework):
         if self.tx_propagation_enabled:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
-            self.conf_parameters["txgen_account_count"] = str(10000)
+            self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
         else:
-            self.conf_parameters["send_tx_period_ms"] = "31536000000"  # one year to disable txs propagation
+            self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
 
         # tx propagation setting
         self.conf_parameters["min_peers_propagation"] = str(self.options.min_peers_propagation)
@@ -250,8 +262,7 @@ class P2PTest(ConfluxTestFramework):
                 pub_key = self.nodes[i].key
                 addr = self.nodes[i].addr
                 self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-                tx = client.new_tx(value=int(default_config["TOTAL_COIN"] / (num_nodes + 1)) - 21000,
-                                   receiver=encode_hex(addr), nonce=i)
+                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/(num_nodes + 1)) - 21000, receiver=encode_hex(addr), nonce=i)
                 client.send_tx(tx)
 
         # setup monitor to report the current block count periodically
@@ -266,7 +277,7 @@ class P2PTest(ConfluxTestFramework):
         for i in range(1, self.options.num_blocks + 1):
             wait_sec = random.expovariate(1000 / self.options.generation_period_ms)
             start = time.time()
-
+            
             # find an idle node to generate block
             p = random.randint(0, num_nodes - 1)
             retry = 0
@@ -275,6 +286,7 @@ class P2PTest(ConfluxTestFramework):
                 if pre_thread is not None and pre_thread.is_alive():
                     p = random.randint(0, num_nodes - 1)
                     retry += 1
+                    time.sleep(0.01)
                 else:
                     break
 
@@ -284,12 +296,10 @@ class P2PTest(ConfluxTestFramework):
 
             if self.tx_propagation_enabled:
                 # Generate a block with the transactions in the node's local tx pool
-                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block,
-                                              self.options.generate_tx_data_len, self.log, rpc_times)
+                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
             else:
                 # Generate a fixed-size block with fake tx
-                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len,
-                                        self.log, rpc_times)
+                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
             thread.start()
             threads[p] = thread
 
@@ -330,6 +340,10 @@ class P2PTest(ConfluxTestFramework):
             for f in block_count_futures:
                 assert f.exception() is None, "failed to get block count: {}".format(f.exception())
                 block_counts.append(f.result())
+            max_count = max(block_counts)
+            for i in range(len(block_counts)):
+                if block_counts[i] < max_count - 50:
+                    self.log.info("Slow: {}: {}".format(i, block_counts[i]))
 
             for f in best_block_futures:
                 assert f.exception() is None, "failed to get best block: {}".format(f.exception())
@@ -337,15 +351,14 @@ class P2PTest(ConfluxTestFramework):
 
             self.log.info("blocks: {}".format(Counter(block_counts)))
 
-            if block_counts.count(block_counts[0]) == len(self.nodes) and best_blocks.count(best_blocks[0]) == len(
-                    self.nodes):
+            if block_counts.count(block_counts[0]) == len(self.nodes) and best_blocks.count(best_blocks[0]) == len(self.nodes):
                 break
 
             time.sleep(5)
-
+        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         executor.shutdown()
 
-    def monitor(self, cur_block_count: int, retry_max: int):
+    def monitor(self, cur_block_count:int, retry_max:int):
         pre_block_count = 0
 
         retry = 0
@@ -368,7 +381,7 @@ class P2PTest(ConfluxTestFramework):
 
 
 class GenerateThread(threading.Thread):
-    def __init__(self, nodes, i, tx_n, tx_data_len, log, rpc_times: list):
+    def __init__(self, nodes, i, tx_n, tx_data_len, log, rpc_times:list):
         threading.Thread.__init__(self, daemon=True)
         self.nodes = nodes
         self.i = i
@@ -384,7 +397,7 @@ class GenerateThread(threading.Thread):
             for i in range(self.tx_n):
                 addr = client.rand_addr()
                 tx_gas = client.DEFAULT_TX_GAS + 4 * self.tx_data_len
-                tx = client.new_tx(receiver=addr, nonce=10000 + i, value=0, gas=tx_gas, data=b'\x00' * self.tx_data_len)
+                tx = client.new_tx(receiver=addr, nonce=10000+i, value=0, gas=tx_gas, data=b'\x00' * self.tx_data_len)
                 # remove big data field and assemble on full node to reduce network load.
                 tx.__dict__["data"] = b''
                 txs.append(tx)
@@ -412,4 +425,4 @@ class SimpleGenerateThread(GenerateThread):
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    RemoteSimulate().main()

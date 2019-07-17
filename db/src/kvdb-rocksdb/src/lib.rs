@@ -350,7 +350,7 @@ impl Database {
 		}
 
 		let mut write_opts = WriteOptions::new();
-		write_opts.disable_wal(false);
+		write_opts.disable_wal(true);
 		let read_opts = ReadOptions::default();
 		//TODO: removed read_opts.set_verify_checksums(false);
 
@@ -367,7 +367,7 @@ impl Database {
 					Err(_) => {
 						// retry and create CFs
 						match DB::open_cf(&opts, path, &[]) {
-							Ok(mut db) => {
+							Ok(db) => {
 								cfs = cfnames.iter()
 									.enumerate()
 									.map(|(i, n)| db.create_cf(n, &cf_options[i]))

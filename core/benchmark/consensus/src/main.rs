@@ -5,13 +5,15 @@
 #![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    cache_config::CacheConfig,
     cache_manager::CacheManager,
     consensus::{
         ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
         ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
         ADAPTIVE_WEIGHT_DEFAULT_BETA,
     },
+    db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
@@ -19,6 +21,7 @@ use cfxcore::{
         request_manager::tx_handler::ReceivedTransactionContainer,
         SynchronizationGraph,
     },
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool,
@@ -91,9 +94,9 @@ fn create_simple_block(
 }
 
 fn initialize_consensus_graph_for_test(
-    genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
-    beta: u64, h: u64,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
+    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
+    era_epoch_count: u64,
+) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
 {
     let ledger_db = db::open_database(
         db_dir,
@@ -101,7 +104,7 @@ fn initialize_consensus_graph_for_test(
             Path::new(db_dir),
             Some(128),
             db::DatabaseCompactionProfile::default(),
-            Some(5),
+            NUM_COLUMNS,
         ),
     )
     .map_err(|e| format!("Failed to open database {:?}", e))
@@ -117,34 +120,37 @@ fn initialize_consensus_graph_for_test(
         StorageConfiguration::default(),
     ));
 
-    let mb = 1024 * 1024;
-    let max_cache_size = 2048 * mb; // DEFAULT_LEDGER_CACHE_SIZE
-    let pref_cache_size = max_cache_size * 3 / 4;
+    let mut genesis_accounts = HashMap::new();
+    genesis_accounts.insert(
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(0),
+    );
 
-    let cache_man = Arc::new(Mutex::new(CacheManager::new(
-        pref_cache_size,
-        max_cache_size,
-        3 * mb,
-    )));
+    let genesis_block = Arc::new(storage_manager.initialize(
+        genesis_accounts,
+        DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(10),
+    ));
+
+    let genesis_hash = genesis_block.hash();
 
     let data_man = Arc::new(BlockDataManager::new(
-        Arc::new(genesis_block),
+        CacheConfig::default(),
+        genesis_block.clone(),
         ledger_db.clone(),
         storage_manager,
-        cache_man,
-        false,
+        worker_thread_pool,
+        DataManagerConfiguration::new(false, true, 250000),
     ));
 
-    let txpool = Arc::new(TransactionPool::with_capacity(
-        500_000,
-        worker_thread_pool.clone(),
-        data_man.clone(),
-    ));
+    let txpool =
+        Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
     let statistics = Arc::new(Statistics::new());
 
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
-    let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+    let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),
@@ -153,6 +159,7 @@ fn initialize_consensus_graph_for_test(
                 adaptive_weight_alpha_den: alpha_den,
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
+                era_epoch_count,
                 enable_optimistic_execution: false,
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
@@ -173,7 +180,7 @@ fn initialize_consensus_graph_for_test(
         true,
     ));
 
-    (sync, consensus)
+    (sync, consensus, genesis_block)
 }
 
 fn initialize_logger(log_file: &str, log_level: LevelFilter) {
@@ -220,6 +227,60 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
     log4rs::init_config(log_config).unwrap();
 }
 
+fn check_results(
+    start: usize, end: usize, consensus: Arc<ConsensusGraph>,
+    hashes: &Vec<H256>, valid_indices: &HashMap<usize, i32>,
+    stable_indices: &HashMap<usize, i32>,
+    adaptive_indices: &HashMap<usize, i32>,
+)
+{
+    for i in start..end {
+        let pending = consensus.inner.read().is_pending(&hashes[i]);
+        if pending == None {
+            //println!("Block {} is skipped!", i);
+            continue;
+        }
+        if let Some(true) = pending {
+            println!("Block {} is pending, skip the checking!", i);
+            continue;
+        }
+        let partial_invalid = consensus
+            .inner
+            .read()
+            .is_partial_invalid(&hashes[i])
+            .unwrap();
+        let valid = *valid_indices.get(&i).unwrap();
+        let invalid = (valid == 0);
+        if valid != -1 {
+            assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
+        }
+        let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
+        let stable_v = *stable_indices.get(&i).unwrap();
+        if !invalid && stable_v != -1 {
+            let stable1 = (stable_v == 1);
+            assert!(
+                stable0 == stable1,
+                "Block {} stable status: Consensus graph {} != actual {}",
+                i,
+                stable0,
+                stable1
+            );
+        }
+        let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
+        let adaptive_v = *adaptive_indices.get(&i).unwrap();
+        if !invalid && adaptive_v != -1 {
+            let adaptive1 = (adaptive_v == 1);
+            assert!(
+                adaptive0 == adaptive1,
+                "Block {} adaptive status: Consensus graph {} != actual {}",
+                i,
+                adaptive0,
+                adaptive1
+            );
+        }
+    }
+}
+
 fn main() {
     // initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
 
@@ -244,27 +305,29 @@ fn main() {
         .expect("Cannot parse the input file!");
     let h_ratio = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
+    let era_epoch_count = u64::from_str(tokens.next().unwrap())
+        .expect("Cannot parse the input file!");
     println!(
-        "alpha = {}/{} beta = {} h = {}",
-        alpha_num, alpha_den, beta, h_ratio
+        "alpha = {}/{} beta = {} h = {} era_epoch_count = {}",
+        alpha_num, alpha_den, beta, h_ratio, era_epoch_count
     );
 
-    let (genesis_hash, genesis_block) = create_simple_block_impl(
-        H256::default(),
-        vec![],
-        0,
-        0,
-        U256::from(10),
-        1,
-    );
+    //    let (genesis_hash, genesis_block) = create_simple_block_impl(
+    //        H256::default(),
+    //        vec![],
+    //        0,
+    //        0,
+    //        U256::from(10),
+    //        1,
+    //    );
 
-    let (sync, consensus) = initialize_consensus_graph_for_test(
-        genesis_block.clone(),
+    let (sync, consensus, genesis_block) = initialize_consensus_graph_for_test(
         db_dir,
         alpha_den,
         alpha_num,
         beta,
         h_ratio,
+        era_epoch_count,
     );
 
     let mut hashes = Vec::new();
@@ -272,11 +335,13 @@ fn main() {
 
     let start_time = time::SystemTime::now();
     let mut last_check_time = start_time;
-    let mut last_sync_block_cnt = sync.block_count();
     let mut last_consensus_block_cnt = consensus.block_count();
     let mut valid_indices = HashMap::new();
     let mut stable_indices = HashMap::new();
     let mut adaptive_indices = HashMap::new();
+    let mut check_batch_size = era_epoch_count as usize;
+    let mut last_checked = 1;
+
     for s in lines {
         if s.starts_with("//") {
             continue;
@@ -336,24 +401,44 @@ fn main() {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
             last_check_time = time::SystemTime::now();
-            let sync_block_cnt = sync.block_count();
-            let consensus_block_cnt = consensus.block_count();
-            println!("Sync count {}, Consensus count {}, Sync block {}/s, Consensus block {}/s, Elapsed {}",
-                     sync_block_cnt, consensus_block_cnt,
-                     (sync_block_cnt - last_sync_block_cnt) as f64 / last_time_elapsed,
-                     (consensus_block_cnt - last_consensus_block_cnt) as f64 / last_time_elapsed,
-                     start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0);
-            last_sync_block_cnt = sync_block_cnt;
+            let consensus_block_cnt = hashes.len();
+            println!(
+                "Consensus count {}, Consensus block {}/s, Elapsed {}",
+                consensus_block_cnt,
+                (consensus_block_cnt - last_consensus_block_cnt) as f64
+                    / last_time_elapsed,
+                start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0
+            );
             last_consensus_block_cnt = consensus_block_cnt;
+        }
+
+        let n = hashes.len();
+        if (n != 0) && (n % check_batch_size == 0) {
+            let last_hash = hashes[n - 1];
+            while consensus.get_processed_block_count() != n - 1 {
+                thread::sleep(time::Duration::from_millis(100));
+            }
+            check_results(
+                last_checked,
+                n,
+                consensus.clone(),
+                &hashes,
+                &valid_indices,
+                &stable_indices,
+                &adaptive_indices,
+            );
+            last_checked = n;
         }
     }
 
-    while sync.block_count() != consensus.block_count() {
+    let n = hashes.len();
+    let last_hash = hashes[n - 1];
+    while consensus.get_processed_block_count() != n - 1 {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
             last_check_time = time::SystemTime::now();
-            let consensus_block_cnt = consensus.block_count();
+            let consensus_block_cnt = hashes.len();
             println!(
                 "Consensus count {}, Consensus block {}/s, Elapsed {}",
                 consensus_block_cnt,
@@ -365,50 +450,22 @@ fn main() {
         }
         thread::sleep(time::Duration::from_millis(100));
     }
+    check_results(
+        last_checked,
+        n,
+        consensus.clone(),
+        &hashes,
+        &valid_indices,
+        &stable_indices,
+        &adaptive_indices,
+    );
 
-    println!("Block count: {}", consensus.block_count());
+    println!("Total Block count: {}", n);
+    println!("Final Consensus Block count: {}", consensus.block_count());
     println!("Pivot chain hash: {}", consensus.best_block_hash());
     println!("Last block hash: {}", hashes[hashes.len() - 1]);
     println!(
         "Elapsed {}",
         start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0
     );
-
-    let n = hashes.len();
-    for i in 1..n {
-        let partial_invalid = consensus
-            .inner
-            .read()
-            .is_partial_invalid(&hashes[i])
-            .unwrap();
-        let valid = *valid_indices.get(&i).unwrap();
-        let invalid = (valid == 0);
-        if valid != -1 {
-            assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
-        }
-        let stable0 = consensus.inner.read().is_stable(&hashes[i]).unwrap();
-        let stable_v = *stable_indices.get(&i).unwrap();
-        if !invalid && stable_v != -1 {
-            let stable1 = (stable_v == 1);
-            assert!(
-                stable0 == stable1,
-                "Block {} stable status: Consensus graph {} != actual {}",
-                i,
-                stable0,
-                stable1
-            );
-        }
-        let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
-        let adaptive_v = *adaptive_indices.get(&i).unwrap();
-        if !invalid && adaptive_v != -1 {
-            let adaptive1 = (adaptive_v == 1);
-            assert!(
-                adaptive0 == adaptive1,
-                "Block {} adaptive status: Consensus graph {} != actual {}",
-                i,
-                adaptive0,
-                adaptive1
-            );
-        }
-    }
 }

@@ -8,7 +8,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
 
-class P2PTest(ConfluxTestFramework):
+class CrashTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
@@ -74,7 +74,8 @@ class P2PTest(ConfluxTestFramework):
         sender_addr = eth_utils.encode_hex(privtoaddr(sender_key))
         receiver_addr = eth_utils.encode_hex(privtoaddr(receiver_sk))
         sender_balance = default_config["TOTAL_COIN"] - value - gas_price * 21000
-        self.nodes[0].generate(5, 0)
+        # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
+        self.nodes[0].generate(2000, 0)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)), value)
         time.sleep(1)
@@ -86,4 +87,4 @@ class P2PTest(ConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    CrashTest().main()

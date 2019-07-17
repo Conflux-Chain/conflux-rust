@@ -5,9 +5,10 @@
 use crate::rpc::{
     traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
     types::{
-        Block as RpcBlock, Bytes, EpochNumber, Receipt as RpcReceipt, Receipt,
-        Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+        Block as RpcBlock, Bytes, EpochNumber, Filter as RpcFilter,
+        Log as RpcLog, Receipt as RpcReceipt, Receipt, Status as RpcStatus,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -25,12 +26,15 @@ use network::{
 };
 use parking_lot::{Condvar, Mutex};
 use primitives::{
-    block::MAX_BLOCK_SIZE_IN_BYTES, Action,
-    EpochNumber as PrimitiveEpochNumber, SignedTransaction, Transaction,
-    TransactionWithSignature,
+    block::MAX_BLOCK_SIZE_IN_BYTES, filter::FilterError, Action,
+    SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
@@ -56,17 +60,6 @@ impl RpcImpl {
         }
     }
 
-    fn get_primitive_epoch_number(
-        &self, number: EpochNumber,
-    ) -> PrimitiveEpochNumber {
-        match number {
-            EpochNumber::Earliest => PrimitiveEpochNumber::Earliest,
-            EpochNumber::LatestMined => PrimitiveEpochNumber::LatestMined,
-            EpochNumber::LatestState => PrimitiveEpochNumber::LatestState,
-            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num.into()),
-        }
-    }
-
     fn best_block_hash(&self) -> RpcResult<RpcH256> {
         info!("RPC Request: cfx_getBestBlockHash()");
         Ok(self.consensus.best_block_hash().into())
@@ -82,9 +75,10 @@ impl RpcImpl {
     ) -> RpcResult<RpcU256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
-        match self.consensus.get_height_from_epoch_number(
-            self.get_primitive_epoch_number(epoch_num),
-        ) {
+        match self
+            .consensus
+            .get_height_from_epoch_number(epoch_num.into())
+        {
             Ok(height) => Ok(height.into()),
             Err(e) => Err(RpcError::invalid_params(e)),
         }
@@ -93,12 +87,14 @@ impl RpcImpl {
     fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<RpcBlock> {
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
+        let epoch_height = self
+            .consensus
+            .get_height_from_epoch_number(epoch_num.into())
+            .map_err(|err| RpcError::invalid_params(err))?;
         inner
-            .get_hash_from_epoch_number(
-                self.get_primitive_epoch_number(epoch_num),
-            )
+            .get_hash_from_epoch_number(epoch_height)
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|hash| {
                 let block = self
@@ -118,7 +114,7 @@ impl RpcImpl {
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
 
         if let Some(block) = self.consensus.data_man.block_by_hash(&hash, false)
         {
@@ -132,11 +128,11 @@ impl RpcImpl {
     fn block_by_hash_with_pivot_assumption(
         &self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64,
     ) -> RpcResult<RpcBlock> {
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
 
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
-        let epoch_number: usize = epoch_number.as_usize();
+        let epoch_number = epoch_number.as_usize() as u64;
         info!(
             "RPC Request: cfx_getBlockByHashWithPivotAssumption block_hash={:?} pivot_hash={:?} epoch_number={:?}",
             block_hash, pivot_hash, epoch_number
@@ -162,7 +158,7 @@ impl RpcImpl {
 
     fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
-        let inner = &mut *self.consensus.inner.write();
+        let inner = &*self.consensus.inner.read();
         Ok(inner
             .all_blocks_with_topo_order()
             .iter()
@@ -209,9 +205,7 @@ impl RpcImpl {
         info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
 
         self.consensus
-            .inner
-            .read_recursive()
-            .block_hashes_by_epoch(self.get_primitive_epoch_number(num))
+            .block_hashes_by_epoch(num.into())
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
     }
@@ -227,7 +221,7 @@ impl RpcImpl {
         );
 
         self.consensus
-            .get_balance(address, self.get_primitive_epoch_number(num))
+            .get_balance(address, num.into())
             .map(|x| x.into())
             .map_err(|err| RpcError::invalid_params(err))
     }
@@ -250,7 +244,7 @@ impl RpcImpl {
     //            .get_account(
     //                address,
     //                num_txs,
-    //                self.get_primitive_epoch_number(epoch_num),
+    //                epoch_num.into(),
     //            )
     //            .and_then(|(balance, transactions)| {
     //                Ok(Account {
@@ -275,10 +269,7 @@ impl RpcImpl {
         );
 
         self.consensus
-            .transaction_count(
-                address.into(),
-                self.get_primitive_epoch_number(num),
-            )
+            .transaction_count(address.into(), num.into())
             .map_err(|err| RpcError::invalid_params(err))
             .map(|x| x.into())
     }
@@ -329,6 +320,34 @@ impl RpcImpl {
     fn get_block_count(&self) -> RpcResult<usize> {
         info!("RPC Request: get_block_count()");
         Ok(self.consensus.block_count())
+    }
+
+    fn get_goodput(&self) -> RpcResult<isize> {
+        info!("RPC Request: get_goodput");
+        let mut set = HashSet::new();
+        let mut min = std::u64::MAX;
+        let mut max: u64 = 0;
+        for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
+            if let Some(block) =
+                self.consensus.data_man.block_by_hash(key, false)
+            {
+                let timestamp = block.block_header.timestamp();
+                if timestamp < min && timestamp > 0 {
+                    min = timestamp;
+                }
+                if timestamp > max {
+                    max = timestamp;
+                }
+                for transaction in &block.transactions {
+                    set.insert(transaction.hash());
+                }
+            }
+        }
+        if max != min {
+            Ok(set.len() as isize / (max - min) as isize)
+        } else {
+            Ok(-1)
+        }
     }
 
     fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
@@ -384,14 +403,16 @@ impl RpcImpl {
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty
         );
-        let hash = self.block_gen.generate_fixed_block(
+        match self.block_gen.generate_fixed_block(
             parent_hash,
             referee,
             num_txs,
             difficulty,
             adaptive,
-        );
-        Ok(hash)
+        ) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(RpcError::invalid_params(e)),
+        }
     }
 
     fn generate_one_block(
@@ -436,14 +457,15 @@ impl RpcImpl {
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
 
-        let hash = self.block_gen.generate_custom_block_with_parent(
+        match self.block_gen.generate_custom_block_with_parent(
             parent_hash,
             referee,
             transactions,
             adaptive,
-        );
-
-        Ok(hash)
+        ) {
+            Ok(hash) => Ok(hash),
+            Err(e) => Err(RpcError::invalid_params(e)),
+        }
     }
 
     fn decode_raw_txs(
@@ -508,7 +530,7 @@ impl RpcImpl {
     fn get_status(&self) -> RpcResult<RpcStatus> {
         let best_hash = self.consensus.best_block_hash();
         let block_number = self.consensus.block_count();
-        let tx_count = self.tx_pool.len();
+        let tx_count = self.tx_pool.total_unpacked();
         if let Some(epoch_number) =
             self.consensus.get_block_epoch_number(&best_hash)
         {
@@ -547,7 +569,6 @@ impl RpcImpl {
         &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
-        let epoch = self.get_primitive_epoch_number(epoch);
 
         let tx = Transaction {
             nonce: rpc_tx.nonce.into(),
@@ -567,9 +588,21 @@ impl RpcImpl {
         signed_tx.sender = rpc_tx.from.into();
         trace!("call tx {:?}", signed_tx);
         self.consensus
-            .call_virtual(&signed_tx, epoch)
+            .call_virtual(&signed_tx, epoch.into())
             .map(|output| Bytes::new(output.0))
             .map_err(|e| RpcError::invalid_params(e))
+    }
+
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        info!("RPC Request: cfx_getLogs({:?})", filter);
+        self.consensus
+            .logs(filter.into())
+            .map_err(|e| match e {
+                FilterError::InvalidEpochNumber { .. } => {
+                    RpcError::invalid_params(format!("{}", e))
+                }
+            })
+            .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
     }
 
     fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256> {
@@ -599,12 +632,14 @@ impl RpcImpl {
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, deferred_len, total_received) = self.tx_pool.stats();
+        let (ready_len, deferred_len, received_len, unexecuted_len) =
+            self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
         ret.insert("deferred".into(), deferred_len);
-        ret.insert("received".into(), total_received);
+        ret.insert("received".into(), received_len);
+        ret.insert("unexecuted".into(), unexecuted_len);
 
         Ok(ret)
     }
@@ -845,6 +880,10 @@ impl Cfx for CfxHandler {
     ) -> RpcResult<Bytes> {
         self.rpc_impl.call(rpc_tx, epoch)
     }
+
+    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+        self.rpc_impl.get_logs(filter)
+    }
 }
 
 pub struct TestRpcImpl {
@@ -865,6 +904,8 @@ impl TestRpc for TestRpcImpl {
     fn get_block_count(&self) -> RpcResult<usize> {
         self.rpc_impl.get_block_count()
     }
+
+    fn get_goodput(&self) -> RpcResult<isize> { self.rpc_impl.get_goodput() }
 
     fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
         self.rpc_impl.add_peer(node_id, address)
@@ -887,13 +928,13 @@ impl TestRpc for TestRpcImpl {
         adaptive: bool, difficulty: Option<u64>,
     ) -> RpcResult<H256>
     {
-        self.rpc_impl.generate_fixed_block(
+        Ok(self.rpc_impl.generate_fixed_block(
             parent_hash,
             referee,
             num_txs,
             difficulty.unwrap_or(0),
             adaptive,
-        )
+        )?)
     }
 
     fn generate_one_block(

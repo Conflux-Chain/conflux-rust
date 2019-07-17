@@ -5,11 +5,18 @@
 use crate::{
     error::{BlockError, Error},
     pow,
+    sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
 use cfx_types::H256;
 use primitives::{Block, BlockHeader};
 use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
+
+// The maximum number of referees allowed for each block
+pub const REFEREE_BOUND: usize = 200;
+
+const VALID_TIME_DRIFT: u64 = 10 * 60;
+pub const ACCEPTABLE_TIME_DRIFT: u64 = 5 * 60;
 
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {
@@ -62,6 +69,17 @@ impl VerificationConfig {
         Ok(())
     }
 
+    pub fn validate_header_timestamp(
+        &self, header: &BlockHeader, now: u64,
+    ) -> Result<(), SyncError> {
+        let invalid_threshold = now + VALID_TIME_DRIFT;
+        if header.timestamp() > invalid_threshold {
+            warn!("block {} has incorrect timestamp", header.hash());
+            return Err(SyncErrorKind::InvalidTimestamp.into());
+        }
+        Ok(())
+    }
+
     /// Check basic header parameters.
     /// This does not require header to be graph or parental tree ready.
     pub fn verify_header_params(
@@ -69,6 +87,15 @@ impl VerificationConfig {
     ) -> Result<(), Error> {
         // verify POW
         self.verify_pow(header)?;
+
+        // A block will be invalid if it has more than REFEREE_BOUND referees
+        if header.referee_hashes().len() > REFEREE_BOUND {
+            return Err(From::from(BlockError::TooManyReferees(OutOfBounds {
+                min: Some(0),
+                max: Some(REFEREE_BOUND),
+                found: header.referee_hashes().len(),
+            })));
+        }
 
         // verify non-duplicated parent and referee hashes
         let mut direct_ancestor_hashes = HashSet::new();

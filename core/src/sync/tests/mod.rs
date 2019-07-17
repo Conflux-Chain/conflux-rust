@@ -3,13 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockDataManager,
-    cache_manager::CacheManager,
+    block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
+    db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::{SynchronizationGraph, SynchronizationGraphNode},
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool,
@@ -18,6 +20,7 @@ use cfx_types::{H256, U256};
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{
+    collections::HashMap,
     fs,
     path::Path,
     sync::Arc,
@@ -49,8 +52,8 @@ fn create_simple_block_impl(
 }
 
 fn initialize_synchronization_graph(
-    genesis_block: Block, db_dir: &str, alpha_den: u64, alpha_num: u64,
-    beta: u64, h: u64,
+    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
+    era_epoch_count: u64,
 ) -> Arc<SynchronizationGraph>
 {
     let ledger_db = db::open_database(
@@ -59,7 +62,7 @@ fn initialize_synchronization_graph(
             Path::new(db_dir),
             Some(128),
             db::DatabaseCompactionProfile::default(),
-            Some(5),
+            NUM_COLUMNS,
         ),
     )
     .map_err(|e| format!("Failed to open database {:?}", e))
@@ -75,34 +78,35 @@ fn initialize_synchronization_graph(
         StorageConfiguration::default(),
     ));
 
-    let mb = 1024 * 1024;
-    let max_cache_size = 2048 * mb; // DEFAULT_LEDGER_CACHE_SIZE
-    let pref_cache_size = max_cache_size * 3 / 4;
+    let mut genesis_accounts = HashMap::new();
+    genesis_accounts.insert(
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(0),
+    );
 
-    let cache_man = Arc::new(Mutex::new(CacheManager::new(
-        pref_cache_size,
-        max_cache_size,
-        3 * mb,
-    )));
+    let genesis_block = Arc::new(storage_manager.initialize(
+        genesis_accounts,
+        DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+        "0000000000000000000000000000000000000008".into(),
+        U256::from(10),
+    ));
 
     let data_man = Arc::new(BlockDataManager::new(
-        Arc::new(genesis_block),
+        CacheConfig::default(),
+        genesis_block,
         ledger_db.clone(),
         storage_manager,
-        cache_man,
-        false,
+        worker_thread_pool,
+        DataManagerConfiguration::new(false, true, 250000),
     ));
 
-    let txpool = Arc::new(TransactionPool::with_capacity(
-        500_000,
-        worker_thread_pool.clone(),
-        data_man.clone(),
-    ));
+    let txpool =
+        Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
     let statistics = Arc::new(Statistics::new());
 
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
-    let consensus = Arc::new(ConsensusGraph::with_genesis_block(
+    let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),
@@ -111,6 +115,7 @@ fn initialize_synchronization_graph(
                 adaptive_weight_alpha_den: alpha_den,
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
+                era_epoch_count,
                 enable_optimistic_execution: false,
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
@@ -136,30 +141,15 @@ fn initialize_synchronization_graph(
 
 #[test]
 fn test_remove_expire_blocks() {
-    let (_, genesis_block) = create_simple_block_impl(
-        H256::default(),
-        vec![],
-        0,
-        0,
-        U256::from(10),
-        1,
-    );
-
-    let sync = initialize_synchronization_graph(
-        genesis_block,
-        "./test.db",
-        1,
-        1,
-        1,
-        1,
-    );
+    let sync = initialize_synchronization_graph("./test.db", 1, 1, 1, 1, 50000);
     // test initialization
     {
         let inner = sync.inner.read();
         assert!(inner.genesis_block_index == 0);
         assert!(inner.arena.len() == 1);
-        assert!(inner.indices.len() == 1);
-        assert!(inner.not_ready_block_indices.len() == 0);
+        assert!(inner.hash_to_arena_indices.len() == 1);
+        assert!(inner.not_ready_blocks_count == 0);
+        assert!(inner.not_ready_blocks_frontier.len() == 0);
     }
 
     // prepare graph data
@@ -241,74 +231,110 @@ fn test_remove_expire_blocks() {
             let me = inner.arena.insert(SynchronizationGraphNode {
                 graph_status: graph_status[i as usize],
                 block_ready: false,
-                parent_referees_too_old: false,
+                parent_reclaimed: false,
                 parent: parent_index,
                 children: childrens[i as usize].clone(),
                 referees: referee[i as usize].clone(),
                 pending_referee_count: 0,
                 referrers: referrers[i as usize].clone(),
                 block_header: Arc::new(blocks[i].block_header.clone()),
-                timestamp: SystemTime::now()
+                last_update_timestamp: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs()
                     - 100,
             });
             assert_eq!(me, i);
-            inner.indices.insert(blocks[i as usize].hash(), me);
-            if graph_status[i as usize] != 4 {
-                inner.not_ready_block_indices.insert(me);
+            inner
+                .hash_to_arena_indices
+                .insert(blocks[i as usize].hash(), me);
+            if graph_status[i as usize] != 4
+                && (parent_index > 12 || graph_status[parent_index] == 4)
+            {
+                let status = {
+                    if parent_index > 12 {
+                        5
+                    } else {
+                        graph_status[parent_index]
+                    }
+                };
+                println!(
+                    "insert {} parent {} parent_status {}",
+                    i, parent_index, status
+                );
+                inner.not_ready_blocks_frontier.insert(me);
             }
         }
+        inner.not_ready_blocks_count = 8;
 
-        println!("{:?}", inner.indices);
+        println!("{:?}", inner.not_ready_blocks_frontier);
         assert!(inner.arena.len() == 12);
-        assert!(inner.indices.len() == 12);
-        assert!(inner.not_ready_block_indices.len() == 8);
+        assert!(inner.hash_to_arena_indices.len() == 12);
+        assert!(inner.not_ready_blocks_count == 8);
+        assert!(inner.not_ready_blocks_frontier.len() == 6);
+        assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(9 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(11 as usize)));
     }
 
     // not expire any blocks
     {
-        sync.remove_expire_blocks(1000);
+        sync.remove_expire_blocks(1000, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 12);
-        assert!(inner.indices.len() == 12);
-        assert!(inner.not_ready_block_indices.len() == 8);
+        assert!(inner.hash_to_arena_indices.len() == 12);
+        assert!(inner.not_ready_blocks_count == 8);
+        assert!(inner.not_ready_blocks_frontier.len() == 6);
+        assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(9 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(11 as usize)));
     }
 
     // expire [9, 10, 14]
     {
         let mut inner = sync.inner.write();
-        inner.arena[9].timestamp = SystemTime::now()
+        inner.arena[9].last_update_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
             - 1000;
     }
     {
-        sync.remove_expire_blocks(500);
+        sync.remove_expire_blocks(500, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 9);
-        assert!(inner.indices.len() == 9);
-        assert!(inner.not_ready_block_indices.len() == 5);
+        assert!(inner.hash_to_arena_indices.len() == 9);
+        assert!(inner.not_ready_blocks_count == 5);
+        assert!(inner.not_ready_blocks_frontier.len() == 4);
+        assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
+        assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
     }
 
     // expire [7]
     {
         let mut inner = sync.inner.write();
-        inner.arena[7].timestamp = SystemTime::now()
+        inner.arena[7].last_update_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
             - 1000;
     }
     {
-        sync.remove_expire_blocks(500);
+        sync.remove_expire_blocks(500, false);
         let inner = sync.inner.read();
         assert!(inner.arena.len() == 5);
-        assert!(inner.indices.len() == 5);
-        assert!(inner.not_ready_block_indices.len() == 1);
-        assert!(inner.not_ready_block_indices.contains(&(5 as usize)));
+        assert!(inner.hash_to_arena_indices.len() == 5);
+        assert!(inner.not_ready_blocks_count == 1);
+        assert!(inner.not_ready_blocks_frontier.len() == 1);
+        assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
     }
 
     fs::remove_dir_all("./test.db")

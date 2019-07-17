@@ -39,7 +39,7 @@ pub type PeerId = usize;
 mod connection;
 mod discovery;
 mod error;
-mod ip_limit;
+mod ip;
 mod ip_utils;
 mod node_database;
 pub mod node_table;
@@ -51,6 +51,7 @@ pub mod throttling;
 pub use crate::{
     connection::get_high_priority_packets,
     error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
+    ip::SessionIpLimitConfig,
     node_table::Node,
     service::NetworkService,
     session::SessionDetails,
@@ -97,7 +98,7 @@ pub struct NetworkConfiguration {
     /// Maximum number of outgoing peers
     pub max_outgoing_peers: u32,
     /// Maximum number of incoming peers
-    pub max_incoming_peers: u32,
+    pub max_incoming_peers: usize,
     /// Maximum number of ongoing handshakes
     pub max_handshakes: u32,
     /// List of reserved node addresses.
@@ -119,8 +120,9 @@ pub struct NetworkConfiguration {
     /// Connection lifetime threshold for promotion
     pub connection_lifetime_for_promotion: Duration,
     pub test_mode: bool,
-    /// Maximum number of P2P nodes per IP address.
-    pub nodes_per_ip: usize,
+    /// Maximum number of P2P nodes for subnet B (ip/16).
+    pub subnet_quota: usize,
+    pub session_ip_limit_config: SessionIpLimitConfig,
 }
 
 impl Default for NetworkConfiguration {
@@ -152,7 +154,8 @@ impl NetworkConfiguration {
             connection_lifetime_for_promotion:
                 DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
             test_mode: false,
-            nodes_per_ip: 1,
+            subnet_quota: 32,
+            session_ip_limit_config: SessionIpLimitConfig::default(),
         }
     }
 

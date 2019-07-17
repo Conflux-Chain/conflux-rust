@@ -25,8 +25,8 @@ use std::{
 
 use super::{
     error::TrapKind, CallType, Context, ContractCreateResult,
-    CreateContractAddress, EnvInfo, GasLeft, MessageCallResult, Result,
-    ReturnData, Spec,
+    CreateContractAddress, Env, GasLeft, MessageCallResult, Result, ReturnData,
+    Spec,
 };
 use crate::{bytes::Bytes, hash::keccak};
 use cfx_types::{Address, H256, U256};
@@ -67,7 +67,7 @@ pub struct MockContext {
     pub blockhashes: HashMap<U256, H256>,
     pub codes: HashMap<Address, Arc<Bytes>>,
     pub logs: Vec<MockLogEntry>,
-    pub info: EnvInfo,
+    pub env: Env,
     pub spec: Spec,
     pub balances: HashMap<Address, U256>,
     pub tracing: bool,
@@ -210,7 +210,7 @@ impl Context for MockContext {
 
     fn spec(&self) -> &Spec { &self.spec }
 
-    fn env_info(&self) -> &EnvInfo { &self.info }
+    fn env(&self) -> &Env { &self.env }
 
     fn depth(&self) -> usize { self.depth }
 

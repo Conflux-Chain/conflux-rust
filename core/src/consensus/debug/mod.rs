@@ -26,7 +26,7 @@ pub struct ComputeEpochDebugRecord {
 
     // Rewards. Rewards for anticone overlimit blocks may be skipped.
     pub block_authors: Vec<Address>,
-    pub anticone_overlimit_blocks: Vec<H256>,
+    pub no_reward_blocks: Vec<H256>,
     pub block_rewards: Vec<BlockHashAuthorValue<U256>>,
     pub anticone_penalties: Vec<BlockHashAuthorValue<U256>>,
     //pub anticone_set_size: Vec<BlockHashValue<usize>>,
@@ -116,8 +116,8 @@ impl Encodable for ComputeEpochDebugRecord {
                 &self.transactions,
             );
 
-        s.append(&"anticone_overlimit_blocks")
-            .append_list(&self.anticone_overlimit_blocks);
+        s.append(&"no_reward_blocks")
+            .append_list(&self.no_reward_blocks);
         s.append(&"block_authors").append_list(&self.block_authors);
         s.append(&"block_rewards").append_list(&self.block_rewards);
         s.append(&"anticone_penalties")

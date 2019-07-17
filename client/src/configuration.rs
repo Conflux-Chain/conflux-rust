@@ -4,15 +4,19 @@
 
 use blockgen::BlockGeneratorConfig;
 use cfxcore::{
+    block_data_manager::DataManagerConfiguration,
     consensus::{
         ConsensusConfig, ConsensusInnerConfig,
         ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-        ADAPTIVE_WEIGHT_DEFAULT_BETA, HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO,
+        ADAPTIVE_WEIGHT_DEFAULT_BETA, ERA_DEFAULT_EPOCH_COUNT,
+        HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO,
     },
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
+use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
+
 // usage:
 // ```
 // build_config! {
@@ -87,7 +91,8 @@ build_config! {
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
-        (p2p_nodes_per_ip, (usize), 1)
+        (subnet_quota, (usize), 32)
+        (session_ip_limits, (String), "1,8,4,2".into())
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
@@ -98,6 +103,7 @@ build_config! {
         (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
         (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 5000)
@@ -106,6 +112,8 @@ build_config! {
         (max_peers_propagation, (usize), 128)
         (future_block_buffer_capacity, (usize), 32768)
         (txgen_account_count, (usize), 10)
+        (persist_header, (bool), true)
+        (tx_cache_count, (usize), 250000)
     }
     {
         (
@@ -143,7 +151,7 @@ impl Configuration {
         Ok(config)
     }
 
-    pub fn net_config(&self) -> NetworkConfiguration {
+    pub fn net_config(&self) -> Result<NetworkConfiguration, String> {
         let mut network_config = match self.raw_conf.port {
             Some(port) => NetworkConfiguration::new_with_port(port),
             None => NetworkConfiguration::default(),
@@ -151,7 +159,7 @@ impl Configuration {
 
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
-            .expect("Error parsing bootnodes!");
+            .map_err(|e| format!("failed to parse bootnodes: {}", e))?;
         if self.raw_conf.netconf_dir.is_some() {
             network_config.config_path = self.raw_conf.netconf_dir.clone();
         }
@@ -183,7 +191,11 @@ impl Configuration {
                 Duration::from_secs(nt_promotion_timeout);
         }
         network_config.test_mode = self.raw_conf.test_mode;
-        network_config.nodes_per_ip = self.raw_conf.p2p_nodes_per_ip;
+        network_config.subnet_quota = self.raw_conf.subnet_quota;
+        network_config.session_ip_limit_config =
+            self.raw_conf.session_ip_limits.clone().try_into().map_err(
+                |e| format!("failed to parse session ip limit config: {}", e),
+            )?;
         network_config.fast_discovery_refresh_timeout = Duration::from_millis(
             self.raw_conf.discovery_fast_refresh_timeout_ms,
         );
@@ -192,7 +204,7 @@ impl Configuration {
         network_config.housekeeping_timeout = Duration::from_millis(
             self.raw_conf.discovery_housekeeping_timeout_ms,
         );
-        network_config
+        Ok(network_config)
     }
 
     pub fn fast_recover(&self) -> bool { self.raw_conf.fast_recover }
@@ -245,6 +257,7 @@ impl Configuration {
                 heavy_block_difficulty_ratio: self
                     .raw_conf
                     .heavy_block_difficulty_ratio,
+                era_epoch_count: self.raw_conf.era_epoch_count,
                 enable_optimistic_execution: self
                     .raw_conf
                     .enable_optimistic_execution,
@@ -331,6 +344,14 @@ impl Configuration {
         BlockGeneratorConfig {
             test_chain_path: self.raw_conf.load_test_chain.clone(),
         }
+    }
+
+    pub fn data_mananger_config(&self) -> DataManagerConfiguration {
+        DataManagerConfiguration::new(
+            self.raw_conf.record_tx_address,
+            self.raw_conf.persist_header,
+            self.raw_conf.tx_cache_count,
+        )
     }
 }
 

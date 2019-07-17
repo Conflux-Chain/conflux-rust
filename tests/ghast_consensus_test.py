@@ -33,7 +33,10 @@ TEST_INPUT = [
     "adaptive-case1.in",
     "adaptive-case2.in",
     "adaptive-case3.in",
-    "adaptive-case4.in"]
+    "adaptive-case4.in",
+    "era-case1.in",
+    "era-case2.in",
+    "era-case3.in"]
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
 cur_dir = os.getcwd()
@@ -43,7 +46,7 @@ test_input_dir = test_dir + "/../core/benchmark/consensus/test/"
 
 failed = set()
 for inp in TEST_INPUT:
-    os.system("rm -rf __consensus*")
+    os.system("rm -rf " + test_dir + "/__consensus*")
     print("Run Sub-testcase: " + inp)
     color = BLUE
     glyph = TICK
@@ -57,7 +60,7 @@ for inp in TEST_INPUT:
         failed.add(inp)
     print(color[1] + glyph + " Sub-testcase " + inp + color[0])
 
-os.system("rm -rf __consensus*")
+os.system("rm -rf " + test_dir + "/__consensus*")
 
 if len(failed) > 0:
     print("The following sub-test cases fail: ")

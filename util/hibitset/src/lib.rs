@@ -81,7 +81,7 @@ impl BitSet {
     /// Creates an empty `BitSet`.
     pub fn new() -> BitSet { Default::default() }
 
-    #[inline]
+    #[inline(always)]
     fn valid_range(max: Index) {
         if (MAX_EID as u32) < max {
             panic!("Expected index to be less then {}, found {}", MAX_EID, max);
@@ -124,7 +124,7 @@ impl BitSet {
 
     /// Adds `id` to the `BitSet`. Returns `true` if the value was
     /// already in the set.
-    #[inline]
+    #[inline(always)]
     pub fn add(&mut self, id: Index) -> bool {
         let (p0, mask) = (id.offset(SHIFT1), id.mask(SHIFT0));
 
@@ -171,7 +171,7 @@ impl BitSet {
     /// Removes `id` from the set, returns `true` if the value
     /// was removed, and `false` if the value was not set
     /// to begin with.
-    #[inline]
+    #[inline(always)]
     pub fn remove(&mut self, id: Index) -> bool {
         let (p0, p1, p2) = offsets(id);
 
@@ -211,14 +211,14 @@ impl BitSet {
     }
 
     /// Returns `true` if `id` is in the set.
-    #[inline]
+    #[inline(always)]
     pub fn contains(&self, id: Index) -> bool {
         let p0 = id.offset(SHIFT1);
         p0 < self.layer0.len() && (self.layer0[p0] & id.mask(SHIFT0)) != 0
     }
 
     /// Returns `true` if all ids in `other` are contained in this set
-    #[inline]
+    #[inline(always)]
     pub fn contains_set(&self, other: &BitSet) -> bool {
         for id in other.iter() {
             if !self.contains(id) {
@@ -238,6 +238,7 @@ impl BitSet {
     }
 
     /// Return the number of elements
+    #[inline(always)]
     pub fn len(&self) -> usize { self.num }
 }
 
@@ -326,78 +327,78 @@ pub trait DrainableBitSet: BitSetLike {
 impl<'a, T> BitSetLike for &'a T
 where T: BitSetLike + ?Sized
 {
-    #[inline]
+    #[inline(always)]
     fn layer3(&self) -> usize { (*self).layer3() }
 
-    #[inline]
+    #[inline(always)]
     fn layer2(&self, i: usize) -> usize { (*self).layer2(i) }
 
-    #[inline]
+    #[inline(always)]
     fn layer1(&self, i: usize) -> usize { (*self).layer1(i) }
 
-    #[inline]
+    #[inline(always)]
     fn layer0(&self, i: usize) -> usize { (*self).layer0(i) }
 
-    #[inline]
+    #[inline(always)]
     fn contains(&self, i: Index) -> bool { (*self).contains(i) }
 }
 
 impl<'a, T> BitSetLike for &'a mut T
 where T: BitSetLike + ?Sized
 {
-    #[inline]
+    #[inline(always)]
     fn layer3(&self) -> usize { (**self).layer3() }
 
-    #[inline]
+    #[inline(always)]
     fn layer2(&self, i: usize) -> usize { (**self).layer2(i) }
 
-    #[inline]
+    #[inline(always)]
     fn layer1(&self, i: usize) -> usize { (**self).layer1(i) }
 
-    #[inline]
+    #[inline(always)]
     fn layer0(&self, i: usize) -> usize { (**self).layer0(i) }
 
-    #[inline]
+    #[inline(always)]
     fn contains(&self, i: Index) -> bool { (**self).contains(i) }
 }
 
 impl<'a, T> DrainableBitSet for &'a mut T
 where T: DrainableBitSet
 {
-    #[inline]
+    #[inline(always)]
     fn remove(&mut self, i: Index) -> bool { (**self).remove(i) }
 }
 
 impl BitSetLike for BitSet {
-    #[inline]
+    #[inline(always)]
     fn layer3(&self) -> usize { self.layer3 }
 
-    #[inline]
+    #[inline(always)]
     fn layer2(&self, i: usize) -> usize {
         self.layer2.get(i).map(|&x| x).unwrap_or(0)
     }
 
-    #[inline]
+    #[inline(always)]
     fn layer1(&self, i: usize) -> usize {
         self.layer1.get(i).map(|&x| x).unwrap_or(0)
     }
 
-    #[inline]
+    #[inline(always)]
     fn layer0(&self, i: usize) -> usize {
         self.layer0.get(i).map(|&x| x).unwrap_or(0)
     }
 
-    #[inline]
+    #[inline(always)]
     fn contains(&self, i: Index) -> bool { self.contains(i) }
 }
 
 impl DrainableBitSet for BitSet {
-    #[inline]
+    #[inline(always)]
     fn remove(&mut self, i: Index) -> bool { self.remove(i) }
 }
 
 impl PartialEq for BitSet {
-    #[inline]
+    #[inline(always)]
     fn eq(&self, rhv: &BitSet) -> bool {
         if self.layer3 != rhv.layer3 {
             return false;

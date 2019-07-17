@@ -35,9 +35,19 @@ impl Statistics {
         inner.sync_graph.inserted_block_count += 1;
     }
 
+    pub fn inc_consensus_graph_processed_block_count(&self) {
+        let mut inner = self.inner.write();
+        inner.consensus_graph.processed_block_count += 1;
+    }
+
     pub fn set_consensus_graph_inserted_block_count(&self, count: usize) {
         let mut inner = self.inner.write();
         inner.consensus_graph.inserted_block_count = count;
+    }
+
+    pub fn get_consensus_graph_processed_block_count(&self) -> usize {
+        let inner = self.inner.read();
+        inner.consensus_graph.processed_block_count
     }
 
     pub fn log_statistics(&self) {

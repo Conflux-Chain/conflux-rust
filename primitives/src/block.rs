@@ -14,7 +14,6 @@ use rand::Rng;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use siphasher::sip::SipHasher24;
 use std::{
-    collections::HashMap,
     fmt::{Debug, Formatter},
     hash::Hasher,
     sync::Arc,
@@ -40,9 +39,8 @@ pub struct Block {
 
 impl HeapSizeOf for Block {
     fn heap_size_of_children(&self) -> usize {
-        // Ignores the size of Arc<SignedTransaction>
         self.block_header.heap_size_of_children()
-            + self.transactions.heap_size_of_children()
+            + SignedTransaction::heap_size_of_iter(self.transactions.iter())
     }
 }
 
@@ -142,13 +140,37 @@ impl Block {
         keccak(rlp_stream.out())
     }
 
-    pub fn encode_with_tx_public(&self) -> Vec<u8> {
+    pub fn encode_body_with_tx_public(&self) -> Vec<u8> {
         let mut stream = RlpStream::new();
-        stream.begin_list(2).append(&self.block_header);
         stream.begin_list(self.transactions.len());
         for tx in &self.transactions {
             stream.append(tx.as_ref());
         }
+        stream.drain()
+    }
+
+    pub fn decode_body_with_tx_public(
+        rlp: &Rlp,
+    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        if rlp.as_raw().len() != rlp.payload_info()?.total() {
+            return Err(DecoderError::RlpIsTooBig);
+        }
+
+        let signed_transactions = rlp.as_list()?;
+        let mut transactions = Vec::with_capacity(signed_transactions.len());
+        for tx in signed_transactions {
+            transactions.push(Arc::new(tx));
+        }
+
+        Ok(transactions)
+    }
+
+    pub fn encode_with_tx_public(&self) -> Vec<u8> {
+        let mut stream = RlpStream::new();
+        stream
+            .begin_list(2)
+            .append(&self.block_header)
+            .append_raw(&*self.encode_body_with_tx_public(), 1);
         stream.drain()
     }
 
@@ -160,15 +182,9 @@ impl Block {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let signed_transactions = rlp.list_at::<SignedTransaction>(1)?;
-        let mut transactions = Vec::with_capacity(signed_transactions.len());
-        for tx in signed_transactions {
-            transactions.push(Arc::new(tx));
-        }
-
         Ok(Block::new_with_rlp_size(
             rlp.val_at(0)?,
-            transactions,
+            Self::decode_body_with_tx_public(&rlp.at(1)?)?,
             None,
             Some(rlp.as_raw().len()),
         ))
@@ -247,48 +263,10 @@ impl HeapSizeOf for CompactBlock {
 }
 
 impl CompactBlock {
-    /// Find tx in tx_cache that matches tx_short_ids to fill in
-    /// reconstruced_txes Return the differentially encoded index of missing
-    /// transactions Now should only called once after CompactBlock is
-    /// decoded
-    pub fn build_partial(
-        &mut self, tx_cache: &HashMap<H256, Arc<SignedTransaction>>,
-    ) -> Vec<usize> {
-        self.reconstructed_txes
-            .resize(self.tx_short_ids.len(), None);
-        let mut short_id_to_index =
-            HashMap::with_capacity(self.tx_short_ids.len());
-        for (i, id) in self.tx_short_ids.iter().enumerate() {
-            short_id_to_index.insert(id, i);
-        }
-        let (k0, k1) = get_shortid_key(&self.block_header, &self.nonce);
-        for (tx_hash, tx) in tx_cache {
-            let short_id = from_tx_hash(tx_hash, k0, k1);
-            match short_id_to_index.remove(&short_id) {
-                Some(index) => {
-                    self.reconstructed_txes[index] = Some(tx.clone());
-                }
-                None => {}
-            }
-        }
-        let mut missing_index = Vec::new();
-        for index in short_id_to_index.values() {
-            missing_index.push(*index);
-        }
-        missing_index.sort();
-        let mut last = 0;
-        let mut missing_encoded = Vec::new();
-        for index in missing_index {
-            missing_encoded.push(index - last);
-            last = index + 1;
-        }
-        missing_encoded
-    }
-
     pub fn hash(&self) -> H256 { self.block_header.hash() }
 }
 
-fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
+pub fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
     let mut stream = RlpStream::new();
     stream.begin_list(2).append(header).append(nonce);
     let to_hash = stream.out();
@@ -299,7 +277,7 @@ fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
 }
 
 /// Compute Tx ShortId from hash. The algorithm is from Bitcoin BIP152
-fn from_tx_hash(hash: &H256, k0: u64, k1: u64) -> TxShortId {
+pub fn from_tx_hash(hash: &H256, k0: u64, k1: u64) -> TxShortId {
     let mut hasher = SipHasher24::new_with_keys(k0, k1);
     hasher.write(hash.as_ref());
     hasher.finish() & 0x00ffffff_ffffffff

@@ -29,10 +29,11 @@ const COLLECTION_QUEUE_SIZE: usize = 8;
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum CacheId {
     Block(H256),
+    BlockHeader(H256),
     BlockReceipts(H256),
     TransactionAddress(H256),
-    TransactionPubkey(H256),
     CompactBlock(H256),
+    ExecutionContext(H256),
 }
 
 pub struct CacheManager<T> {
@@ -116,6 +117,8 @@ where T: Eq + Hash
 
 #[derive(Debug)]
 pub struct CacheSize {
+    /// Blocks header cache size.
+    pub block_headers: usize,
     /// Blocks cache size.
     pub blocks: usize,
     /// Block Receipts cache size.
@@ -124,8 +127,6 @@ pub struct CacheSize {
     pub transaction_addresses: usize,
     /// Compact blocks cache size.
     pub compact_blocks: usize,
-    /// SignedTransaction cache size in tx pubkey cache
-    pub transaction_pubkey: usize,
 }
 
 impl CacheSize {

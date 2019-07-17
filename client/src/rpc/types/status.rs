@@ -11,7 +11,7 @@ pub struct Status {
     /// Hash of the block
     pub best_hash: H256,
     /// The number of epochs
-    pub epoch_number: usize,
+    pub epoch_number: u64,
     /// The number of blocks
     pub block_number: usize,
     /// The number of pending transactions

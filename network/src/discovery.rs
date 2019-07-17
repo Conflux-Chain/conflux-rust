@@ -256,7 +256,7 @@ impl Discovery {
         } else if !self.is_allowed(&entry) {
             debug!("Address not allowed: {:?}", entry);
         } else {
-            uio.node_db.write().insert(entry);
+            uio.node_db.write().note_success(node_id, None, false);
         }
         Ok(())
     }

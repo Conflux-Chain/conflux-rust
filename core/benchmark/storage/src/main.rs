@@ -1664,7 +1664,7 @@ impl TxReplayer {
     {
         if let Some(sender) = tx.sender {
             let maybe_account =
-                latest_state.get_account(&sender, false).unwrap();
+                latest_state.get_account(&sender).unwrap();
             self.ops_counts.set(self.ops_counts.get() + 2);
             match maybe_account {
                 Some(mut account) => {
@@ -1687,7 +1687,7 @@ impl TxReplayer {
         }
         if let Some(receiver) = tx.receiver {
             let maybe_account =
-                latest_state.get_account(&receiver, false).unwrap();
+                latest_state.get_account(&receiver).unwrap();
             let mut account;
             match maybe_account {
                 Some(account_) => {

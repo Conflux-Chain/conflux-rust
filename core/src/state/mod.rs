@@ -317,7 +317,7 @@ impl<'a> State<'a> {
             std::thread::Builder::new()
                 .name("txpool_update_state".into())
                 .spawn(move || {
-                    txpool_clone.notify_state_start(accounts_for_txpool);
+                    txpool_clone.notify_modified_accounts(accounts_for_txpool);
                 })
                 .expect("can not notify tx pool to start state");
         }
@@ -535,7 +535,7 @@ impl<'a> State<'a> {
 
         let mut maybe_acc = self
             .db
-            .get_account(address, false)?
+            .get_account(address)?
             .map(|acc| OverlayAccount::new(address, acc));
         if let Some(ref mut account) = maybe_acc.as_mut() {
             if !Self::update_account_cache(require, account, &self.db) {
@@ -580,7 +580,7 @@ impl<'a> State<'a> {
         if !contains_key {
             let account = self
                 .db
-                .get_account(address, false)?
+                .get_account(address)?
                 .map(|acc| OverlayAccount::new(address, acc));
             self.insert_cache(address, AccountEntry::new_clean(account));
         }
@@ -624,8 +624,8 @@ impl<'a> State<'a> {
 mod tests {
     use super::*;
     use crate::storage::{
-        tests::new_state_manager_for_testing, StorageManager,
-        StorageManagerTrait,
+        tests::new_state_manager_for_testing, SnapshotAndEpochIdRef,
+        StorageManager, StorageManagerTrait,
     };
     use cfx_types::{Address, H256, U256};
 
@@ -633,7 +633,10 @@ mod tests {
         State::new(
             StateDb::new(
                 storage_manager
-                    .get_state_for_next_epoch(epoch_id)
+                    // FIXME: None?
+                    .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+                        &epoch_id, None,
+                    ))
                     .unwrap()
                     .unwrap(),
             ),

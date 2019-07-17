@@ -21,8 +21,8 @@ use std::{cmp, sync::Arc};
 use crate::{
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
-        CreateContractAddress, EnvInfo, ResumeCall, ResumeCreate, ReturnData,
-        Spec, TrapError,
+        CreateContractAddress, Env, ResumeCall, ResumeCreate, ReturnData, Spec,
+        TrapError,
     },
     vm_factory::VmFactory,
 };
@@ -114,7 +114,7 @@ enum CallCreateExecutiveKind {
 }
 
 pub struct CallCreateExecutive<'a> {
-    env: &'a EnvInfo,
+    env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
     factory: &'a VmFactory,
@@ -129,7 +129,7 @@ pub struct CallCreateExecutive<'a> {
 impl<'a> CallCreateExecutive<'a> {
     /// Create a  new call executive using raw data.
     pub fn new_call_raw(
-        params: ActionParams, env: &'a EnvInfo, machine: &'a Machine,
+        params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
     ) -> Self
@@ -180,7 +180,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     /// Create a new create executive using raw data.
     pub fn new_create_raw(
-        params: ActionParams, env: &'a EnvInfo, machine: &'a Machine,
+        params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
     ) -> Self
@@ -317,7 +317,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     /// Creates `Context` from `Executive`.
     fn as_context<'any, 'b: 'any>(
-        state: &'any mut State<'b>, env: &'any EnvInfo, machine: &'any Machine,
+        state: &'any mut State<'b>, env: &'any Env, machine: &'any Machine,
         spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
         origin: &'any OriginInfo, substate: &'any mut Substate,
         output: OutputPolicy,
@@ -850,7 +850,7 @@ pub type ExecutiveTrapResult<'a, T> =
 /// Transaction executor.
 pub struct Executive<'a, 'b: 'a> {
     pub state: &'a mut State<'b>,
-    env: &'a mut EnvInfo,
+    env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
     depth: usize,
@@ -860,7 +860,7 @@ pub struct Executive<'a, 'b: 'a> {
 impl<'a, 'b> Executive<'a, 'b> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a mut EnvInfo, machine: &'a Machine,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec,
     ) -> Self
     {
@@ -875,9 +875,8 @@ impl<'a, 'b> Executive<'a, 'b> {
     }
 
     /// Populates executive from parent properties. Increments executive depth.
-    #[allow(dead_code)]
     pub fn from_parent(
-        state: &'a mut State<'b>, env: &'a mut EnvInfo, machine: &'a Machine,
+        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
     ) -> Self
     {
@@ -1140,7 +1139,6 @@ impl<'a, 'b> Executive<'a, 'b> {
         let gas_left = gas_left_prerefund + refunded;
 
         let gas_used = tx.gas - gas_left;
-        self.env.gas_used += tx.gas;
         let refund_value = U256::zero();
         let fees_value = tx.gas * tx.gas_price;
 
@@ -1162,11 +1160,11 @@ impl<'a, 'b> Executive<'a, 'b> {
             fees_value,
             &self.env.author
         );
-        //self.state.add_balance(
-        //    &self.env.author,
-        //    &fees_value,
-        //    substate.to_cleanup_mode(&spec),
-        //)?;
+        //        self.state.add_balance(
+        //            &self.env.author,
+        //            &fees_value,
+        //            substate.to_cleanup_mode(&spec),
+        //        )?;
 
         // perform suicides
         for address in &substate.suicides {
@@ -1198,7 +1196,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 gas_used: tx.gas,
                 refunded: U256::zero(),
                 fee: fees_value,
-                cumulative_gas_used: self.env.gas_used,
+                cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
                 output,
@@ -1213,7 +1211,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                 gas_used,
                 refunded,
                 fee: fees_value,
-                cumulative_gas_used: self.env.gas_used,
+                cumulative_gas_used: self.env.gas_used + gas_used,
                 logs: substate.logs,
                 contracts_created: substate.contracts_created,
                 output,
@@ -1223,6 +1221,7 @@ impl<'a, 'b> Executive<'a, 'b> {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use crate::{
@@ -1233,6 +1232,10 @@ mod tests {
         storage::{
             tests::new_state_manager_for_testing, StorageManager,
             StorageManagerTrait,
+        },
+        test_helpers::{
+            get_state_for_genesis_write,
+            get_state_for_genesis_write_with_factory,
         },
     };
     use cfx_types::{Address, H256, U256, U512};
@@ -1247,24 +1250,6 @@ mod tests {
             s.max_depth = max_depth
         }));
         machine
-    }
-
-    fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
-        State::new(
-            StateDb::new(storage_manager.get_state_for_genesis_write()),
-            U256::from(0),
-            VmFactory::default(),
-        )
-    }
-
-    fn get_state_for_genesis_write_with_factory(
-        storage_manager: &StorageManager, factory: Factory,
-    ) -> State {
-        State::new(
-            StateDb::new(storage_manager.get_state_for_genesis_write()),
-            U256::from(0),
-            factory.into(),
-        )
     }
 
     #[test]
@@ -1312,13 +1297,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.create(params, &mut substate).unwrap()
         };
 
@@ -1385,13 +1370,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.create(params, &mut substate).unwrap()
         };
 
@@ -1453,13 +1438,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(5);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.call(params, &mut substate).unwrap()
         };
 
@@ -1501,9 +1486,9 @@ mod tests {
         params.gas = U256::from(20025);
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::zero());
-        let mut info = EnvInfo::default();
+        let env = Env::default();
         let machine = crate::machine::new_machine();
-        let spec = machine.spec(info.number);
+        let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let mut output = [0u8; 14];
@@ -1512,7 +1497,7 @@ mod tests {
             return_data,
             ..
         } = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.call(params, &mut substate).unwrap()
         };
         (&mut output)
@@ -1565,13 +1550,13 @@ mod tests {
                 CleanupMode::NoEmpty,
             )
             .unwrap();
-        let mut info = EnvInfo::default();
+        let env = Env::default();
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
         let result = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.create(params, &mut substate)
         };
 
@@ -1603,13 +1588,13 @@ mod tests {
         state
             .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
             .unwrap();
-        let mut info = EnvInfo::default();
-        info.gas_limit = U256::from(100_000);
+        let mut env = Env::default();
+        env.gas_limit = U256::from(100_000);
         let machine = make_byzantium_machine(0);
-        let spec = machine.spec(info.number);
+        let spec = machine.spec(env.number);
 
         let res = {
-            let mut ex = Executive::new(&mut state, &mut info, &machine, &spec);
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             ex.transact(&t)
         };
 
