@@ -33,10 +33,7 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    cmp::Reverse,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    thread::sleep,
+    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
     time::Duration,
 };
 lazy_static! {
@@ -233,18 +230,6 @@ impl ConsensusGraph {
 
     pub fn update_total_weight_in_past(&self) {
         self.inner.write().update_total_weight_in_past();
-    }
-
-    pub fn get_to_propagate_trans(
-        &self,
-    ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.txpool.get_to_be_propagated_transactions()
-    }
-
-    pub fn set_to_propagate_trans(
-        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
-    ) {
-        self.txpool.set_to_be_propagated_transactions(transactions);
     }
 
     /// Wait for the generation and the execution completion of a block in the

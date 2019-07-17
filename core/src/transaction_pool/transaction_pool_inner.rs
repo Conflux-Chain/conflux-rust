@@ -1,11 +1,14 @@
-use super::{account_cache::AccountCache, impls::TreapMap};
+use super::{
+    account_cache::AccountCache,
+    impls::TreapMap,
+    nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
+};
 use cfx_types::{Address, H256, H512, U256, U512};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use rlp::*;
 use std::{
-    collections::{hash_map::HashMap, BTreeMap, VecDeque},
-    ops::Deref,
+    collections::{hash_map::HashMap, VecDeque},
     sync::Arc,
 };
 
@@ -18,120 +21,8 @@ lazy_static! {
         register_meter_with_group("timer", "tx_pool::inner_insert");
     static ref TX_POOL_INNER_FAILED_GARBAGE_COLLECTED: Arc<Meter> =
         register_meter_with_group("txpool", "failed_garbage_collected");
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct TxWithReadyInfo {
-    transaction: Arc<SignedTransaction>,
-    packed: bool,
-}
-
-impl TxWithReadyInfo {
-    pub fn is_already_packed(&self) -> bool { self.packed }
-
-    pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.transaction }
-
-    pub fn should_replace(&self, x: &Self, force: bool) -> bool {
-        if force {
-            return true;
-        }
-        if x.is_already_packed() {
-            return false;
-        }
-        if self.is_already_packed() {
-            return true;
-        }
-        self.gas_price > x.gas_price
-    }
-}
-
-impl Deref for TxWithReadyInfo {
-    type Target = SignedTransaction;
-
-    fn deref(&self) -> &Self::Target { &self.transaction }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum InsertResult {
-    /// new item added
-    NewAdded,
-    /// failed to update with lower gas price tx
-    Failed(String),
-    /// succeeded to update with higher gas price tx
-    Updated(TxWithReadyInfo),
-}
-
-struct NoncePool {
-    inner: BTreeMap<U256, TxWithReadyInfo>,
-}
-
-impl NoncePool {
-    fn new() -> Self {
-        NoncePool {
-            inner: Default::default(),
-        }
-    }
-
-    // FIXME: later we should limit the number of txs from one sender.
-    //  the FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET roughly doing this job
-    fn insert(&mut self, tx: &TxWithReadyInfo, force: bool) -> InsertResult {
-        let mut ret = if self.inner.contains_key(&tx.nonce) {
-            InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
-        } else {
-            InsertResult::NewAdded
-        };
-
-        let tx_in_pool = self.inner.entry(tx.nonce).or_insert(tx.clone());
-        if tx.should_replace(tx_in_pool, force) {
-            // replace with higher gas price transaction
-            ret = InsertResult::Updated(tx_in_pool.clone());
-            *tx_in_pool = tx.clone();
-        }
-        ret
-    }
-
-    fn get_tx_by_nonce(&self, nonce: U256) -> Option<TxWithReadyInfo> {
-        self.inner.get(&nonce).map(|x| x.clone())
-    }
-
-    fn get_lowest_nonce(&self) -> Option<&U256> {
-        self.inner.iter().next().map(|(k, _)| k)
-    }
-
-    fn remove(&mut self, nonce: &U256) -> Option<TxWithReadyInfo> {
-        self.inner.remove(nonce)
-    }
-
-    fn remove_lowest_nonce(&mut self) -> Option<TxWithReadyInfo> {
-        let lowest_nonce = self.get_lowest_nonce().map(|x| x.clone());
-        lowest_nonce.and_then(|nonce| self.remove(&nonce))
-    }
-
-    fn recalculate_readiness_with_local_info(
-        &self, nonce: U256, balance: U256,
-    ) -> Option<Arc<SignedTransaction>> {
-        let mut next_nonce = nonce;
-        let mut balance_left = balance;
-        while let Some(tx) = self.inner.get(&next_nonce) {
-            let cost = tx.value + tx.gas_price * tx.gas;
-            if balance_left < cost {
-                return None;
-            }
-
-            if !tx.packed {
-                return Some(tx.transaction.clone());
-            }
-            balance_left -= cost;
-            next_nonce += 1.into();
-        }
-        None
-    }
-
-    fn is_empty(&self) -> bool { self.inner.is_empty() }
-
-    fn check_nonce_exists(&self, nonce: &U256) -> bool {
-        self.inner.contains_key(nonce)
-    }
+    static ref DEFERRED_POOL_INNER_INSERT: Arc<Meter> =
+        register_meter_with_group("timer", "deferred_pool::inner_insert");
 }
 
 struct DeferredPool {
@@ -406,14 +297,17 @@ impl TransactionPoolInner {
                 return InsertResult::Failed("Transaction Pool is full".into());
             }
         }
-
-        let result = self.deferred_pool.insert(
-            TxWithReadyInfo {
-                transaction: transaction.clone(),
-                packed,
-            },
-            force,
-        );
+        let result = {
+            let _timer =
+                MeterTimer::time_func(DEFERRED_POOL_INNER_INSERT.as_ref());
+            self.deferred_pool.insert(
+                TxWithReadyInfo {
+                    transaction: transaction.clone(),
+                    packed,
+                },
+                force,
+            )
+        };
 
         match &result {
             InsertResult::NewAdded => {
