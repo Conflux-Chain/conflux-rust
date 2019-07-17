@@ -19,9 +19,7 @@ use crate::{
 };
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
-use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
-};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     Account, Action, EpochId, SignedTransaction, TransactionWithSignature,
@@ -30,10 +28,10 @@ use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
 
 lazy_static! {
-    static ref TX_POOL_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "unexecuted_size");
-    static ref TX_POOL_READY_GAUGE: Arc<Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "ready_size");
+    static ref TX_POOL_GAUGE: Arc<Meter> =
+        register_meter_with_group("txpool", "unexecuted_size");
+    static ref TX_POOL_READY_GAUGE: Arc<Meter> =
+        register_meter_with_group("txpool", "ready_size");
     static ref TX_POOL_INSERT_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
     static ref TX_POOL_RECOVER_TIMER: Arc<Meter> =
@@ -150,8 +148,8 @@ impl TransactionPool {
                 }
             }
         }
-        TX_POOL_GAUGE.update(self.total_unpacked());
-        TX_POOL_READY_GAUGE.update(self.inner.read().total_ready_accounts());
+        TX_POOL_GAUGE.mark(self.total_unpacked());
+        TX_POOL_READY_GAUGE.mark(self.inner.read().total_ready_accounts());
 
         (passed_transactions, failure)
     }
