@@ -400,12 +400,11 @@ impl ConsensusGraph {
         )
     }
 
-    /// construct_pivot() should be used after on_new_block_construction_only()
-    /// calls. It builds the pivot chain and ists state at once, avoiding
-    /// intermediate redundant computation triggered by on_new_block().
+    /// construct_pivot() builds the pivot chain and ists state at once,
+    /// avoiding intermediate redundant computation triggered by
+    /// on_new_block().
     pub fn construct_pivot(&self) {
         let inner = &mut *self.inner.write();
-        self.new_block_handler.construct_pivot_info(inner);
         self.new_block_handler.construct_state_info(inner);
     }
 
@@ -446,55 +445,44 @@ impl ConsensusGraph {
         });
     }
 
-    /// This is the function to insert a new block into the consensus graph
-    /// during construction. We by pass many verifications because those
-    /// blocks are from our own database so we trust them. After inserting
-    /// all blocks with this function, we need to call construct_pivot() to
-    /// finish the building from db!
-    pub fn on_new_block_construction_only(&self, hash: &H256) {
-        let block = self.data_man.block_by_hash(hash, true).unwrap();
-
-        debug!(
-            "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-            block.block_header,
-            block.transactions.len(),
-            block.size(),
-        );
-
-        self.statistics.inc_consensus_graph_processed_block_count();
-        {
-            let inner = &mut *self.inner.write();
-            self.new_block_handler
-                .on_new_block_construction_only(inner, hash, block);
-            self.update_best_info(inner);
-        }
-        self.txpool
-            .notify_new_best_info(self.best_info.read().clone());
-    }
-
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    pub fn on_new_block(&self, hash: &H256, _ignore_body: bool) {
+    pub fn on_new_block(&self, hash: &H256, ignore_body: bool) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
-        let block = self.data_man.block_by_hash(hash, true).unwrap();
-
-        debug!(
-            "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-            block.block_header,
-            block.transactions.len(),
-            block.size(),
-        );
-
         self.statistics.inc_consensus_graph_processed_block_count();
-        {
-            let inner = &mut *self.inner.write();
-            self.new_block_handler.on_new_block(inner, hash, block);
 
+        if !ignore_body {
+            let block = self.data_man.block_by_hash(hash, true).unwrap();
+            debug!(
+                "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
+                block.block_header,
+                block.transactions.len(),
+                block.size(),
+            );
+
+            {
+                let inner = &mut *self.inner.write();
+                self.new_block_handler.on_new_block(
+                    inner,
+                    hash,
+                    &block.block_header,
+                    Some(&block.transactions),
+                );
+                self.update_best_info(inner);
+            }
+            self.txpool
+                .notify_new_best_info(self.best_info.read().clone());
+        } else {
+            let inner = &mut *self.inner.write();
+            self.new_block_handler.on_new_block(
+                inner,
+                hash,
+                self.data_man.block_header_by_hash(hash).unwrap().as_ref(),
+                None,
+            );
             self.update_best_info(inner);
         }
-        self.txpool
-            .notify_new_best_info(self.best_info.read().clone());
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -722,7 +710,7 @@ impl ConsensusGraph {
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
-    /// on_new_block() and on_new_block_construction_only())
+    /// on_new_block()
     pub fn get_processed_block_count(&self) -> usize {
         self.statistics.get_consensus_graph_processed_block_count()
     }
