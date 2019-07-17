@@ -223,6 +223,7 @@ impl TransactionPoolInner {
 
     fn collect_garbage(&mut self) {
         let mut failed_try = 0;
+        let limit = self.garbage_collection_queue.len();
         while self.is_full() {
             let addr = self.garbage_collection_queue.pop_front().unwrap();
 
@@ -251,7 +252,7 @@ impl TransactionPoolInner {
                 self.garbage_collection_queue.push_back(addr.clone());
                 failed_try += 1;
                 TX_POOL_INNER_FAILED_GARBAGE_COLLECTED.mark(1);
-                if failed_try >= 10 {
+                if failed_try >= limit {
                     break;
                 }
                 continue;
