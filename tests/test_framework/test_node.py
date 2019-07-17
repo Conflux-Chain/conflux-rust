@@ -122,7 +122,8 @@ class TestNode:
                 self.datadir, self.user, self.ip, ssh_args)
             self.args[0] = "~/conflux"
             cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
-                ssh_args, self.user, self.ip, "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir) + " ".join(self.args))
+                ssh_args, self.user, self.ip,
+                "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir) + " ".join(self.args))
             print(cli_mkdir + cli_conf + cli_exe)
             self.process = subprocess.Popen(cli_mkdir + cli_conf + cli_exe,
                                             stdout=stdout, stderr=stderr, cwd=self.datadir, shell=True, **kwargs)

@@ -5,13 +5,11 @@
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
 import asyncore
-import logging
 import socket
 import struct
 import threading
 from collections import defaultdict
 
-import rlp
 from eth_utils import big_endian_to_int
 
 from conflux import utils

@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
-from base64 import b64encode
-from binascii import hexlify, unhexlify
-from decimal import Decimal, ROUND_DOWN
-import hashlib
 import inspect
 import json
 import logging
 import os
 import random
 import re
-from subprocess import CalledProcessError
-import time
 import socket
 import threading
+import time
+from decimal import Decimal, ROUND_DOWN
+from subprocess import CalledProcessError
 
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
@@ -260,20 +257,20 @@ def initialize_datadir(dirname, n, conf_parameters):
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
         local_conf = {"port": str(p2p_port(n)),
-                        "jsonrpc_local_http_port": str(rpc_port(n)),
-                        "jsonrpc_http_port": str(remote_rpc_port(n)),
-                        "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
-                        "test_mode": "true",
-                        "log_level": "\"trace\"",
-                        "storage_cache_size": "200000",
-                        "storage_cache_start_size": "200000",
-                        "storage_node_map_size": "200000",
-                        "start_mining":"false",
-                        "subnet_quota": "0",
-                        "session_ip_limits": "\"0,0,0,0\"",
-                        "enable_discovery": "false",
-                        "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
-                        "metrics_enabled": "true",
+                      "jsonrpc_local_http_port": str(rpc_port(n)),
+                      "jsonrpc_http_port": str(remote_rpc_port(n)),
+                      "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
+                      "test_mode": "true",
+                      "log_level": "\"trace\"",
+                      "storage_cache_size": "200000",
+                      "storage_cache_start_size": "200000",
+                      "storage_node_map_size": "200000",
+                      "start_mining": "false",
+                      "subnet_quota": "0",
+                      "session_ip_limits": "\"0,0,0,0\"",
+                      "enable_discovery": "false",
+                      "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
+                      "metrics_enabled": "true",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]

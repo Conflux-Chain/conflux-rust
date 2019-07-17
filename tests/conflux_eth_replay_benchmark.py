@@ -3,12 +3,8 @@ import datetime
 import math
 
 import numpy
-from easysolc import Solc
-from eth_utils import decode_hex, encode_hex as encode_hex_0x
-from web3 import Web3
+from eth_utils import decode_hex
 
-from conflux.utils import privtoaddr, encode_hex
-from test_framework.blocktools import create_transaction
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
@@ -22,7 +18,7 @@ class RlpIter:
         self.bytes = bytearray()
         self.eof = False
         self.offset = 0
-        self.batch_size = batch_size 
+        self.batch_size = batch_size
 
     def __iter__(self):
         return self
@@ -125,8 +121,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             self.setup_nodes(binary=[os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 "../target/release/conflux")]
-                * self.num_nodes)
-
+                                    * self.num_nodes)
 
     def run_test(self):
         # Start mininode connection
@@ -323,7 +318,8 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     # should_sleep = elapsed_time * txpool_ready / tx_count
                     should_sleep = 1
                     tx_received_slowdown += should_sleep
-                    self.log.info("Conflux full node has too many unpacked txs %s. sleep %s", txpool_unpacked, should_sleep)
+                    self.log.info("Conflux full node has too many unpacked txs %s. sleep %s", txpool_unpacked,
+                                  should_sleep)
             if speed_diff >= 1:
                 time.sleep(speed_diff)
 

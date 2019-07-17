@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
 
-from conflux import utils
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
-from test_framework.blocktools import create_block
-from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+
 
 class ForkBench(ConfluxTestFramework):
     def set_test_params(self):

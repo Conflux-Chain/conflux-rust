@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
+
 import eth_utils
 
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak, privtoaddr
-from test_framework.blocktools import create_transaction, encode_hex_0x
+from test_framework.blocktools import encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, assert_is_hex_string, assert_is_hash_string
 
@@ -14,6 +15,7 @@ CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
 CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address)"))
 CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
 NUM_CALLS = 20
+
 
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -36,7 +38,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
         # deploy contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
-        assert(os.path.isfile(bytecode_file))
+        assert (os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read()
         _, contractAddr = self.deploy_contract(sender, priv_key, bytecode)
 
@@ -89,7 +91,7 @@ class LogFilteringTest(ConfluxTestFramework):
         for ii in range(2, NUM_CALLS):
             assert_equal(len(logs[ii]["topics"]), 3)
             assert_equal(logs[ii]["topics"][0], CALLED_TOPIC)
-            assert(logs[ii]["topics"][1] == self.address_to_topic(sender))
+            assert (logs[ii]["topics"][1] == self.address_to_topic(sender))
             assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii))
 
         # apply filter for specific topics
@@ -177,6 +179,7 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_is_hash_string(log["transactionHash"])
 
         assert_equal(type(log["topics"]), list)
+
 
 if __name__ == "__main__":
     LogFilteringTest().main()
