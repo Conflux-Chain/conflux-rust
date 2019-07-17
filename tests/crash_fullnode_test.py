@@ -13,7 +13,8 @@ from test_framework.mininode import *
 from test_framework.util import *
 
 
-class CrashTest(ConfluxTestFramework):
+# This test is the same as `crash_test.py` except that nodes are launched as full nodes instead of archive nodes
+class CrashFullNodeTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
@@ -89,4 +90,4 @@ class CrashTest(ConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    CrashTest().main()
+    CrashFullNodeTest().main()

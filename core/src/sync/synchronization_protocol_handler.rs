@@ -2262,32 +2262,29 @@ impl SynchronizationProtocolHandler {
                 let (cur_era_genesis_hash, cur_era_genesis_height) =
                     self.graph.get_genesis_hash_and_height_in_current_era();
                 *self.latest_epoch_requested.lock() = cur_era_genesis_height;
-                {
-                    let old_consensus_inner =
-                        &mut *self.graph.consensus.inner.write();
-                    let new_consensus_inner =
-                        ConsensusGraphInner::with_era_genesis_block(
-                            old_consensus_inner.pow_config.clone(),
-                            self.graph.data_man.clone(),
-                            old_consensus_inner.inner_conf.clone(),
-                            &cur_era_genesis_hash,
-                        );
-                    self.graph.consensus.update_best_info(&new_consensus_inner);
-                    *old_consensus_inner = new_consensus_inner;
-                }
-                {
-                    let old_sync_inner = &mut *self.graph.inner.write();
-                    let new_sync_inner =
-                        SynchronizationGraphInner::with_genesis_block(
-                            self.graph
-                                .data_man
-                                .block_header_by_hash(&cur_era_genesis_hash)
-                                .expect("era genesis exists"),
-                            old_sync_inner.pow_config.clone(),
-                            old_sync_inner.data_man.clone(),
-                        );
-                    *old_sync_inner = new_sync_inner;
-                }
+                // Acquire both lock first to ensure consistency
+                let old_consensus_inner =
+                    &mut *self.graph.consensus.inner.write();
+                let old_sync_inner = &mut *self.graph.inner.write();
+                let new_consensus_inner =
+                    ConsensusGraphInner::with_era_genesis_block(
+                        old_consensus_inner.pow_config.clone(),
+                        self.graph.data_man.clone(),
+                        old_consensus_inner.inner_conf.clone(),
+                        &cur_era_genesis_hash,
+                    );
+                self.graph.consensus.update_best_info(&new_consensus_inner);
+                *old_consensus_inner = new_consensus_inner;
+                let new_sync_inner =
+                    SynchronizationGraphInner::with_genesis_block(
+                        self.graph
+                            .data_man
+                            .block_header_by_hash(&cur_era_genesis_hash)
+                            .expect("era genesis exists"),
+                        old_sync_inner.pow_config.clone(),
+                        old_sync_inner.data_man.clone(),
+                    );
+                *old_sync_inner = new_sync_inner;
             }
             SyncPhase::SyncBlocks(_) => {
                 let middle_epoch = self.syn.get_middle_epoch()?;

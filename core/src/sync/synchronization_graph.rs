@@ -1191,7 +1191,8 @@ impl SynchronizationGraph {
             if let Some(index) = inner.hash_to_arena_indices.get(&hash) {
                 inner.arena[*index].block_ready
             } else {
-                false
+                // Sync graph is cleaned after inserting the header, so we can ignore the block body
+                return (true, false);
             };
 
         if contains_block {
