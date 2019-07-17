@@ -153,10 +153,10 @@ impl TransactionPool {
         TX_POOL_READY_GAUGE.mark(self.inner.read().total_ready_accounts());
 
         if failure.len() != 0 {
-            for (_, msg) in failure {
+            for (_, msg) in failure.clone() {
                 warn!("Failed insert tx due to: {}", msg);
+                panic!(msg);
             }
-            panic!()
         }
         (passed_transactions, failure)
     }
