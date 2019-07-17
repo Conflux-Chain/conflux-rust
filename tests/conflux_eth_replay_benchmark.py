@@ -150,34 +150,35 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         tx_batch_size = 1000
         tx_bytes = 0
         tx_received_slowdown = 0
+
         # Construct balance distribution transactions and erc20 contract transactions.
         init_txs = []
-        solc = Solc()
-        erc20_contract = solc.get_contract_instance(source=os.path.dirname(os.path.realpath(__file__)) + "/erc20.sol",
-                                                    contract_name="FixedSupplyToken")
+        # solc = Solc()
+        # erc20_contract = solc.get_contract_instance(source=os.path.dirname(os.path.realpath(__file__)) + "/erc20.sol",
+        #                                             contract_name="FixedSupplyToken")
 
-        nonce = 0
-        genesis_key = ConfluxEthReplayTest.GENESIS_KEY
-        genesis_addr = privtoaddr(ConfluxEthReplayTest.GENESIS_KEY)
-        gas_price = 1
-        gas = 50000000
-        tx_conf = {"from": Web3.toChecksumAddress(encode_hex(genesis_addr)),
-                   "nonce": int_to_hex(nonce),
-                   "gas": int_to_hex(gas),
-                   "gasPrice": int_to_hex(gas_price)}
-        raw_create = erc20_contract.constructor().buildTransaction(tx_conf)
-        tx_data = decode_hex(raw_create["data"])
-        tx_create = create_transaction(pri_key=genesis_key,
-                                       receiver=b'',
-                                       nonce=nonce,
-                                       gas_price=gas_price,
-                                       data=tx_data,
-                                       gas=gas,
-                                       value=0)
-        init_txs.append(tx_create)
+        # nonce = 0
+        # genesis_key = ConfluxEthReplayTest.GENESIS_KEY
+        # genesis_addr = privtoaddr(ConfluxEthReplayTest.GENESIS_KEY)
+        # gas_price = 1
+        # gas = 50000000
+        # tx_conf = {"from": Web3.toChecksumAddress(encode_hex(genesis_addr)),
+        #            "nonce": int_to_hex(nonce),
+        #            "gas": int_to_hex(gas),
+        #            "gasPrice": int_to_hex(gas_price)}
+        # raw_create = erc20_contract.constructor().buildTransaction(tx_conf)
+        # tx_data = decode_hex(raw_create["data"])
+        # tx_create = create_transaction(pri_key=genesis_key,
+        #                                receiver=b'',
+        #                                nonce=nonce,
+        #                                gas_price=gas_price,
+        #                                data=tx_data,
+        #                                gas=gas,
+        #                                value=0)
+        # init_txs.append(tx_create)
 
-        erc20_address = Web3.toChecksumAddress(encode_hex(sha3_256(rlp.encode([genesis_addr, nonce]))[-20:]))
-        self.log.debug("erc20_address = %s", erc20_address)
+        # erc20_address = Web3.toChecksumAddress(encode_hex(sha3_256(rlp.encode([genesis_addr, nonce]))[-20:]))
+        # self.log.debug("erc20_address = %s", erc20_address)
 
         """Debug only code
         self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
@@ -200,39 +201,39 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         self.log.debug("address=%s, balance=%s", genesis_addr, balance)
         """
 
-        for nonce in range(1, self.num_nodes + 1):
-            i = nonce - 1
-            addr = self.nodes[i].addr
-            init_tx = create_transaction(
-                pri_key=ConfluxEthReplayTest.GENESIS_KEY,
-                value=10000000000000000, receiver=addr, nonce=nonce)
-            init_txs.append(init_tx)
+        # for nonce in range(1, self.num_nodes + 1):
+        #     i = nonce - 1
+        #     addr = self.nodes[i].addr
+        #     init_tx = create_transaction(
+        #         pri_key=ConfluxEthReplayTest.GENESIS_KEY,
+        #         value=10000000000000000, receiver=addr, nonce=nonce)
+        #     init_txs.append(init_tx)
 
-        for nonce in range(self.num_nodes + 1, 2 * self.num_nodes + 1):
-            i = nonce - self.num_nodes - 1
-            receiver_addr = self.nodes[i].addr
-
-            genesis_key = ConfluxEthReplayTest.GENESIS_KEY
-            genesis_addr = privtoaddr(ConfluxEthReplayTest.GENESIS_KEY)
-            value = 10000000000000000
-
-            gas_price = 1
-            gas = 100000
-
-            to_address = Web3.toChecksumAddress(encode_hex(receiver_addr))
-            tx_data_hex = erc20_contract.functions.transfer(to_address, value).buildTransaction({
-                "gas": int_to_hex(gas),
-                "gasPrice": int_to_hex(gas_price),
-                "to": to_address})["data"]
-            self.log.info("sender %s, receiver %s, value %s, transaction data hex %s",
-                          encode_hex_0x(genesis_addr), encode_hex_0x(receiver_addr), hex(value), tx_data_hex)
-            tx_data = decode_hex(tx_data_hex)
-            tx = create_transaction(pri_key=genesis_key, receiver=decode_hex(erc20_address), value=0, nonce=nonce,
-                                    gas=gas, gas_price=gas_price, data=tx_data)
-            init_txs.append(tx)
-
-        print(self.nodes)
-        self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
+        # for nonce in range(self.num_nodes + 1, 2 * self.num_nodes + 1):
+        #     i = nonce - self.num_nodes - 1
+        #     receiver_addr = self.nodes[i].addr
+        #
+        #     genesis_key = ConfluxEthReplayTest.GENESIS_KEY
+        #     genesis_addr = privtoaddr(ConfluxEthReplayTest.GENESIS_KEY)
+        #     value = 10000000000000000
+        #
+        #     gas_price = 1
+        #     gas = 100000
+        #
+        #     to_address = Web3.toChecksumAddress(encode_hex(receiver_addr))
+        #     tx_data_hex = erc20_contract.functions.transfer(to_address, value).buildTransaction({
+        #         "gas": int_to_hex(gas),
+        #         "gasPrice": int_to_hex(gas_price),
+        #         "to": to_address})["data"]
+        #     self.log.info("sender %s, receiver %s, value %s, transaction data hex %s",
+        #                   encode_hex_0x(genesis_addr), encode_hex_0x(receiver_addr), hex(value), tx_data_hex)
+        #     tx_data = decode_hex(tx_data_hex)
+        #     tx = create_transaction(pri_key=genesis_key, receiver=decode_hex(erc20_address), value=0, nonce=nonce,
+        #                             gas=gas, gas_price=gas_price, data=tx_data)
+        #     init_txs.append(tx)
+        #
+        # print(self.nodes)
+        # self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
 
         tx_count = len(init_txs)
 
@@ -286,13 +287,8 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         """
 
         for txs, count in RlpIter(f, tx_batch_size):
-            # FIXME: generate some random transaction similar to reorg_test.py, then see if
-            # FIXME: packing them result in conflicting state root.
-            # FIXME: but maybe first write an executor.
-
-            # FIXME: test if mixing packing of initialize txs and simple payments result into conflicting state root.
-            if tx_count > 4000000:
-                time.sleep(500000)
+            # if tx_count > 4000000:
+            #     time.sleep(500000)
 
             peers_to_send = range(0, self.num_nodes)
 
@@ -322,11 +318,12 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     tx_received_slowdown += 1
                     self.log.info("Conflux full node is slow by %s at receiving txs, slow down by 1s.",
                                   tx_count - txpool_received)
-                txpool_ready = txpool_status["ready"]
-                if txpool_ready > 60000:
-                    should_sleep = elapsed_time * txpool_ready / tx_count
+                txpool_unpacked = txpool_status["unpacked"]
+                if txpool_unpacked > 300000:
+                    # should_sleep = elapsed_time * txpool_ready / tx_count
+                    should_sleep = 1
                     tx_received_slowdown += should_sleep
-                    self.log.info("Conflux full node has too many ready txs %s. sleep %s", txpool_ready, should_sleep)
+                    self.log.info("Conflux full node has too many unpacked txs %s. sleep %s", txpool_unpacked, should_sleep)
             if speed_diff >= 1:
                 time.sleep(speed_diff)
 
@@ -348,9 +345,11 @@ class BlockGenThread(threading.Thread):
     BLOCK_TX_LIMIT = 3000
     BLOCK_SIZE_LIMIT = 300000
     # Seems to be 90bytes + artificial 128b
-    SIMPLE_TX_PER_BLOCK = 700
+    # SIMPLE_TX_PER_BLOCK = 700
+    SIMPLE_TX_PER_BLOCK = 0
     # Seems to be 90 + 64 bytes.
-    ERC20_TX_PER_BLOCK = 50
+    # ERC20_TX_PER_BLOCK = 50
+    ERC20_TX_PER_BLOCK = 0
 
     def __init__(self, node_id, node, log, seed, hashpower):
         threading.Thread.__init__(self, daemon=True)

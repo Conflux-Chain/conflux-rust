@@ -317,6 +317,7 @@ impl TransactionPoolInner {
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
+                self.total_received_count += 1;
             }
             InsertResult::Failed(_) => {}
             InsertResult::Updated(replaced_tx) => {
