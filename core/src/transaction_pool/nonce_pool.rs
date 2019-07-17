@@ -352,7 +352,8 @@ impl NoncePool {
             // 2, b.0 - a.0 means number of transactions in `[nouce, tx.nouce]`
             // 3. x.nonce - nonce + 1 means expected number of transactions in
             // `[nouce, tx.nouce]`
-            U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <= balance
+            // U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <= balance
+            U256::from(b.0 - a.0 - 1) == x.nonce - nonce
         })
     }
 
