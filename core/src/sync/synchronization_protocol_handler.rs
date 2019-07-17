@@ -1453,8 +1453,8 @@ impl SynchronizationProtocolHandler {
                 self.graph.data_man.local_block_info_from_db(hash)
             {
                 debug_assert!(match info.get_status() {
-                    BlockStatus::Invalid => true,
-                    _ => false,
+                    BlockStatus::Invalid => false,
+                    _ => true,
                 });
                 if info.get_seq_num()
                     < self.graph.consensus.current_era_genesis_seq_num()
@@ -1513,6 +1513,17 @@ impl SynchronizationProtocolHandler {
                 assert!(true);
             }
 
+            // insert into sync graph
+            let (valid, to_relay) = self.graph.insert_block_header(
+                &mut header.clone(),
+                true,
+                false,
+                self.insert_header_to_consensus(),
+            );
+            if !valid {
+                continue;
+            }
+
             // check missing dependencies
             let parent = header.parent_hash();
             if !self.graph.contains_block_header(parent) {
@@ -1523,17 +1534,6 @@ impl SynchronizationProtocolHandler {
                 if !self.graph.contains_block_header(referee) {
                     dependent_hashes.insert(*referee);
                 }
-            }
-
-            // insert into sync graph
-            let (valid, to_relay) = self.graph.insert_block_header(
-                &mut header.clone(),
-                true,
-                false,
-                self.insert_header_to_consensus(),
-            );
-            if !valid {
-                continue;
             }
             need_to_relay.extend(to_relay);
 
