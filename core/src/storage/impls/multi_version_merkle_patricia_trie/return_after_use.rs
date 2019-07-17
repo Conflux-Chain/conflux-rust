@@ -47,9 +47,6 @@ impl<'a, T> ReturnAfterUse<'a, T> {
         Self::new(&mut origin.current)
     }
 
-    // FIXME: use deref instead of re-impl methods for Option.
-    pub fn is_none(&self) -> bool { self.current.is_none() }
-
     pub fn get_ref(&self) -> &T { return self.current.as_ref().unwrap(); }
 
     pub fn get_mut(&mut self) -> &mut T {
