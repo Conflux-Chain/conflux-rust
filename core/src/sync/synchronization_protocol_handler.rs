@@ -230,18 +230,17 @@ pub struct ProtocolConfiguration {
     pub min_peers_propagation: usize,
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
-    pub is_full_node: bool,
 }
 
 impl SynchronizationProtocolHandler {
     pub fn new(
-        protocol_config: ProtocolConfiguration,
+        is_full_node: bool, protocol_config: ProtocolConfiguration,
         consensus_graph: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
     ) -> Self
     {
         let syn = Arc::new(SynchronizationState::new(
-            protocol_config.is_full_node,
+            is_full_node,
             consensus_graph
                 .data_man
                 .get_cur_consensus_era_genesis_hash(),

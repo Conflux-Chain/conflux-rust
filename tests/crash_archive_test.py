@@ -13,20 +13,21 @@ from test_framework.mininode import *
 from test_framework.util import *
 
 
-# This test is the same as `crash_test.py` except that nodes are launched as full nodes instead of archive nodes
+# This test is the same as `crash_test.py` except that nodes are launched as archive nodes instead of full nodes
 class CrashFullNodeTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
-        self.conf_parameters = {"persist_terminal_period_ms": "500", "is_full_node": "true"}
+        self.conf_parameters = {"persist_terminal_period_ms": "500"}
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
         bootnode = self.nodes[0]
-        extra_args0 = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
+        extra_args0 = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1",
+                       "--archive"]
         self.start_node(0, extra_args = extra_args0)
         bootnode_id = "cfxnode://{}@{}:{}".format(bootnode.key[2:], bootnode.ip, bootnode.port)
-        self.node_extra_args = ["--bootnodes", bootnode_id, "--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
+        self.node_extra_args = ["--bootnodes", bootnode_id] + extra_args0
         for i in range(1, self.num_nodes):
             self.start_node(i, extra_args=self.node_extra_args)
         for i in range(self.num_nodes):

@@ -114,7 +114,6 @@ build_config! {
         (txgen_account_count, (usize), 10)
         (persist_header, (bool), true)
         (tx_cache_count, (usize), 250000)
-        (is_full_node, (bool), false)
     }
     {
         (
@@ -338,7 +337,6 @@ impl Configuration {
             future_block_buffer_capacity: self
                 .raw_conf
                 .future_block_buffer_capacity,
-            is_full_node: self.raw_conf.is_full_node,
         }
     }
 

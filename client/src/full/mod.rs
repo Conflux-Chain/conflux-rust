@@ -43,7 +43,7 @@ use txgen::{
     TransactionGenerator,
 };
 
-pub struct ArchiveClientHandle {
+pub struct FullClientHandle {
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_http_server: Option<HttpServer>,
@@ -57,7 +57,7 @@ pub struct ArchiveClientHandle {
     pub ledger_db: Weak<SystemDB>,
 }
 
-impl ArchiveClientHandle {
+impl FullClientHandle {
     pub fn into_be_dropped(
         self,
     ) -> (Weak<SystemDB>, Arc<BlockGenerator>, Box<Any>) {
@@ -79,13 +79,13 @@ impl ArchiveClientHandle {
     }
 }
 
-pub struct ArchiveClient {}
+pub struct FullClient {}
 
-impl ArchiveClient {
+impl FullClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
         conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
-    ) -> Result<ArchiveClientHandle, String> {
+    ) -> Result<FullClientHandle, String> {
         info!("Working directory: {:?}", std::env::current_dir());
 
         if conf.raw_conf.metrics_enabled {
@@ -190,7 +190,7 @@ impl ArchiveClient {
         let verification_config = conf.verification_config();
 
         let mut sync = cfxcore::SynchronizationService::new(
-            false,
+            true,
             NetworkService::new(network_config),
             consensus.clone(),
             protocol_config,
@@ -336,7 +336,7 @@ impl ArchiveClient {
             },
         )?;
 
-        Ok(ArchiveClientHandle {
+        Ok(FullClientHandle {
             ledger_db: Arc::downgrade(&ledger_db),
             debug_rpc_http_server,
             rpc_http_server,
@@ -371,7 +371,7 @@ impl ArchiveClient {
         warn!("Shutdown timeout reached, exiting uncleanly.");
     }
 
-    pub fn close(handle: ArchiveClientHandle) {
+    pub fn close(handle: FullClientHandle) {
         let (ledger_db, blockgen, to_drop) = handle.into_be_dropped();
         BlockGenerator::stop(&blockgen);
         drop(blockgen);
@@ -379,11 +379,11 @@ impl ArchiveClient {
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
-        ArchiveClient::wait_for_drop(ledger_db);
+        FullClient::wait_for_drop(ledger_db);
     }
 
     pub fn run_until_closed(
-        exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: ArchiveClientHandle,
+        exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: FullClientHandle,
     ) {
         CtrlC::set_handler({
             let e = exit.clone();
@@ -398,6 +398,6 @@ impl ArchiveClient {
             let _ = exit.1.wait(&mut lock);
         }
 
-        ArchiveClient::close(keep_alive);
+        FullClient::close(keep_alive);
     }
 }
