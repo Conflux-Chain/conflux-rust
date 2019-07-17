@@ -30,7 +30,11 @@ use primitives::{
     SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
@@ -318,6 +322,34 @@ impl RpcImpl {
         Ok(self.consensus.block_count())
     }
 
+    fn get_goodput(&self) -> RpcResult<isize> {
+        info!("RPC Request: get_goodput");
+        let mut set = HashSet::new();
+        let mut min = std::u64::MAX;
+        let mut max: u64 = 0;
+        for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
+            if let Some(block) =
+                self.consensus.data_man.block_by_hash(key, false)
+            {
+                let timestamp = block.block_header.timestamp();
+                if timestamp < min && timestamp > 0 {
+                    min = timestamp;
+                }
+                if timestamp > max {
+                    max = timestamp;
+                }
+                for transaction in &block.transactions {
+                    set.insert(transaction.hash());
+                }
+            }
+        }
+        if max != min {
+            Ok(set.len() as isize / (max - min) as isize)
+        } else {
+            Ok(-1)
+        }
+    }
+
     fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
         let node = NodeEntry {
             id: node_id,
@@ -498,7 +530,7 @@ impl RpcImpl {
     fn get_status(&self) -> RpcResult<RpcStatus> {
         let best_hash = self.consensus.best_block_hash();
         let block_number = self.consensus.block_count();
-        let tx_count = self.tx_pool.len();
+        let tx_count = self.tx_pool.total_unpacked();
         if let Some(epoch_number) =
             self.consensus.get_block_epoch_number(&best_hash)
         {
@@ -600,11 +632,14 @@ impl RpcImpl {
     }
 
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>> {
-        let (ready_len, deferred_len) = self.tx_pool.stats();
+        let (ready_len, deferred_len, received_len, unexecuted_len) =
+            self.tx_pool.stats();
 
         let mut ret: BTreeMap<String, usize> = BTreeMap::new();
         ret.insert("ready".into(), ready_len);
         ret.insert("deferred".into(), deferred_len);
+        ret.insert("received".into(), received_len);
+        ret.insert("unexecuted".into(), unexecuted_len);
 
         Ok(ret)
     }
@@ -869,6 +904,8 @@ impl TestRpc for TestRpcImpl {
     fn get_block_count(&self) -> RpcResult<usize> {
         self.rpc_impl.get_block_count()
     }
+
+    fn get_goodput(&self) -> RpcResult<isize> { self.rpc_impl.get_goodput() }
 
     fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()> {
         self.rpc_impl.add_peer(node_id, address)

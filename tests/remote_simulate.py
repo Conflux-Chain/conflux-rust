@@ -150,6 +150,12 @@ class RemoteSimulate(ConfluxTestFramework):
             default=1000,
             type=int,
         )
+        parser.add_argument(
+            "--tx-pool-size",
+            dest="tx_pool_size",
+            default=500000,
+            type=int,
+        )
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
@@ -184,7 +190,7 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["storage_node_map_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
 
         # txpool
-        self.conf_parameters["tx_pool_size"] = str(500000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["tx_pool_size"] = str(self.options.tx_pool_size // target_memory * self.options.storage_memory_mb)
 
         # data propagation
         self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
@@ -349,7 +355,7 @@ class RemoteSimulate(ConfluxTestFramework):
                 break
 
             time.sleep(5)
-
+        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         executor.shutdown()
 
     def monitor(self, cur_block_count:int, retry_max:int):

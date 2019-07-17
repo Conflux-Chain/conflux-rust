@@ -244,7 +244,7 @@ impl<'a> State<'a> {
                 self.owned_node_set.as_mut().unwrap(),
             )?;
             // Insert empty node.
-            entry.insert(Default::default());
+            entry.insert(UnsafeCell::new(Default::default()));
 
             self.delta_trie_root =
                 root_cow.into_child().map(|maybe_node| maybe_node.into());
@@ -290,10 +290,7 @@ impl<'a> State<'a> {
 
         let maybe_root_node = self.delta_trie_root.clone();
         match maybe_root_node {
-            None => {
-                // Don't commit empty state. Empty state shouldn't exists after
-                // genesis block.
-            }
+            None => {}
             Some(root_node) => {
                 // Use coarse lock to prevent row number from interleaving,
                 // which makes it cleaner to restart from db failure. It also
@@ -383,13 +380,11 @@ impl<'a> State<'a> {
                         - start_row_number) as usize,
                     Ordering::Relaxed,
                 );
-
-                self.manager.mpt_commit_state_root(
-                    epoch_id,
-                    self.delta_trie_root.clone(),
-                );
             }
         }
+
+        self.manager
+            .mpt_commit_state_root(epoch_id, self.delta_trie_root.clone());
 
         Ok(())
     }
@@ -424,6 +419,7 @@ use primitives::{
     EpochId, MerkleHash, StateRoot, StateRootWithAuxInfo, MERKLE_NULL_NODE,
 };
 use std::{
+    cell::UnsafeCell,
     collections::BTreeSet,
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},

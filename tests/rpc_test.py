@@ -74,6 +74,10 @@ class RpcTest(ConfluxTestFramework):
         self.log.info("Test getblockcount")
         # TODO test in the future
 
+    def _test_getgoodput(self):
+        self.log.info("Test getgoodput")
+        # TODO test in the future
+
     def _test_getbestblockhash(self):
         self.log.info("Test getbestblockhash")
         res = self.nodes[0].getbestblockhash()

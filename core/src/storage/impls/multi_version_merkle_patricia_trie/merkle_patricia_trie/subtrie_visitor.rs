@@ -81,7 +81,8 @@ impl<'trie> SubTrieVisitor<'trie> {
             match trie_node.walk::<Read>(key) {
                 WalkStop::Arrived => {
                     node_memory_manager.log_uncached_key_access(db_load_count);
-                    return Ok(Some(trie_node));
+                    let (guard, trie_node) = trie_node.into();
+                    return Ok(Some(GuardedValue::new(guard, trie_node)));
                 }
                 WalkStop::Descent {
                     key_remaining,
