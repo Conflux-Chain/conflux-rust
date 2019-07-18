@@ -309,7 +309,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                 txpool_received = txpool_status["received"]
 
                 last_log_elapsed_time = elapsed_time
-                self.log.info("elapsed time %s, sent tx_count %s, %s%% completed", elapsed_time, tx_count, tx_count * 100.0 / total)
+                self.log.info("elapsed time %s,\t sent tx_count %s,\t %s%% completed", elapsed_time, tx_count, tx_count * 100.0 / total)
 
                 if txpool_received + 50000 < tx_count:
                     tx_received_slowdown += 1
