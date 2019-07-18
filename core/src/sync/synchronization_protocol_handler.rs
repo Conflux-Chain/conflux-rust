@@ -866,6 +866,7 @@ impl SynchronizationProtocolHandler {
     fn on_transactions(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
         let transactions = rlp.as_val::<Transactions>()?;
         let transactions = transactions.transactions;
+        info!("got transaction is {:?}", transactions);
         debug!(
             "Received {:?} transactions from Peer {:?}",
             transactions.len(),
