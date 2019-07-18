@@ -281,8 +281,9 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         time.sleep(2000)
         """
 
+        total = 4000000;
         for txs, count in RlpIter(f, tx_batch_size):
-            if tx_count > 4000000:
+            if tx_count > total:
                 break
 
             peers_to_send = range(0, self.num_nodes)
@@ -308,7 +309,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                 txpool_received = txpool_status["received"]
 
                 last_log_elapsed_time = elapsed_time
-                self.log.info("elapsed time %s, sent tx_count %s, sent tx_bytes %s, received tx_count %s", elapsed_time, tx_count, tx_bytes, txpool_received)
+                self.log.info("elapsed time %s, sent tx_count %s, %s%% completed, received tx_count %s", elapsed_time, tx_count, tx_count * 100.0 / total, txpool_received)
 
                 if txpool_received + 50000 < tx_count:
                     tx_received_slowdown += 1
@@ -334,8 +335,8 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         for block_gen_thread in block_gen_threads:
             block_gen_thread.stop()
             block_gen_thread.join()
-        self.log.info("Time used: %f seconds", time_used)
-        self.log.info("Tx per second: %f", tx_count / time_used)
+        self.log.info("100%% Ethereum Transactions completely replayed. Time used: %f seconds", time_used)
+        self.log.info("Transaction per second: %f", tx_count / time_used)
 
 
 class BlockGenThread(threading.Thread):
