@@ -939,6 +939,19 @@ impl SynchronizationGraph {
                         );
                         continue;
                     }
+
+                    // Note that when called by `insert_block_header` we have to
+                    // insert header here immediately instead of
+                    // after the loop because its children may
+                    // become ready and being processed in the loop later. It
+                    // requires this block already being inserted
+                    // into the BlockDataManager!
+                    if index == header_index_to_insert {
+                        self.data_man.insert_block_header(
+                            inner.arena[index].block_header.hash(),
+                            inner.arena[index].block_header.clone(),
+                        );
+                    }
                     if insert_to_consensus {
                         self.consensus_sender
                             .lock()
@@ -970,6 +983,12 @@ impl SynchronizationGraph {
                         }
                     }
                 } else if inner.new_to_be_header_parental_tree_ready(index) {
+                    if index == header_index_to_insert {
+                        self.data_man.insert_block_header(
+                            inner.arena[index].block_header.hash(),
+                            inner.arena[index].block_header.clone(),
+                        );
+                    }
                     inner.arena[index].graph_status =
                         BLOCK_HEADER_PARENTAL_TREE_READY;
                     inner.arena[index].last_update_timestamp = now;
@@ -980,18 +999,6 @@ impl SynchronizationGraph {
                         );
                         queue.push_back(*child);
                     }
-                }
-                // Note that when called by `insert_block_header` we have to
-                // insert header here immediately instead of
-                // after the loop because its children may
-                // become ready and being processed in the loop later. It
-                // requires this block already being inserted
-                // into the BlockDataManager!
-                if index == header_index_to_insert {
-                    self.data_man.insert_block_header(
-                        inner.arena[index].block_header.hash(),
-                        inner.arena[index].block_header.clone(),
-                    );
                 }
             }
         }
