@@ -279,6 +279,7 @@ impl MinLinkCutTreeInner {
         self.splay(v);
         assert_eq!(self.tree[v].path_parent, parent);
         self.tree[v].path_parent = NULL;
+        self.tree[v].value += self.tree[parent].catepillar_value;
     }
 
     #[allow(dead_code)]
@@ -303,8 +304,10 @@ impl MinLinkCutTreeInner {
             return;
         }
 
+        self.access(v);
         self.access(w);
         self.tree[w].path_parent = v;
+        self.tree[w].value -= self.tree[v].catepillar_value;
     }
 
     fn lca(&mut self, v: usize, w: usize) -> usize {
@@ -602,5 +605,50 @@ mod tests {
         tree.path_apply(0, -2);
         assert_eq!(tree.path_aggregate(2), 2);
         //        assert_eq!(tree.path_aggregate_idx(2), 0);
+    }
+
+    #[test]
+    fn test_link_and_split_root() {
+        let mut tree = MinLinkCutTree::new();
+        tree.make_tree(5);
+        tree.link(0, 1);
+        tree.link(1, 2);
+        tree.link(1, 3);
+        tree.link(0, 4);
+
+        tree.catepillar_apply(3, 1);
+
+        assert_eq!(tree.get(0), 1);
+        assert_eq!(tree.get(1), 1);
+        assert_eq!(tree.get(2), 1);
+        assert_eq!(tree.get(3), 1);
+        assert_eq!(tree.get(4), 1);
+        assert_eq!(tree.get(5), 0);
+
+        tree.link(3, 5);
+
+        assert_eq!(tree.get(0), 1);
+        assert_eq!(tree.get(1), 1);
+        assert_eq!(tree.get(2), 1);
+        assert_eq!(tree.get(3), 1);
+        assert_eq!(tree.get(4), 1);
+        assert_eq!(tree.get(5), 0);
+
+        tree.catepillar_apply(2, 2);
+        assert_eq!(tree.get(0), 3);
+        assert_eq!(tree.get(1), 3);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 3);
+        assert_eq!(tree.get(4), 3);
+        assert_eq!(tree.get(5), 0);
+
+        tree.split_root(1, 3);
+
+        assert_eq!(tree.get(0), 3);
+        assert_eq!(tree.get(1), 3);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 3);
+        assert_eq!(tree.get(4), 3);
+        assert_eq!(tree.get(5), 0);
     }
 }
