@@ -1842,7 +1842,7 @@ impl ConsensusGraphInner {
         let lca_height = self.arena[lca].height;
         let mut stack = Vec::new();
         stack.push((0, me, 0));
-        while stack.is_empty() {
+        while !stack.is_empty() {
             let (stage, index, a) = stack.pop().unwrap();
             if stage == 0 {
                 if self.arena[index].data.exec_info_lca_height != lca_height {
