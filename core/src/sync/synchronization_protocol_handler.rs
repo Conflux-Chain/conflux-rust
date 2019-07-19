@@ -29,9 +29,15 @@ use rlp::Rlp;
 //use slab::Slab;
 use super::{
     msg_sender::{send_message, send_message_with_throttling},
-    request_manager::{RequestManager, RequestMessage},
+    request_manager::{Request, RequestManager, RequestMessage},
 };
-use crate::verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT};
+use crate::{
+    sync::fast_sync::{
+        FastSync, SnapshotChunkRequest, SnapshotChunkResponse,
+        SnapshotChunkSync, SnapshotManifestRequest, SnapshotManifestResponse,
+    },
+    verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
+};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{Block, BlockHeader, SignedTransaction, TxPropagateId};
 use priority_send_queue::SendQueuePriority;
@@ -207,6 +213,9 @@ pub struct SynchronizationProtocolHandler {
 
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
+
+    // fast sync state with given checkpoint
+    fast_sync: Mutex<SnapshotChunkSync>,
 }
 
 #[derive(Clone)]
@@ -221,6 +230,7 @@ pub struct ProtocolConfiguration {
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub start_as_catch_up_mode: bool,
+    pub fast_sync_enabled: bool,
     pub received_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
@@ -237,9 +247,10 @@ impl SynchronizationProtocolHandler {
         fast_recover: bool,
     ) -> Self
     {
-        let start_as_catch_up_mode = protocol_config.start_as_catch_up_mode;
-
-        let syn = Arc::new(SynchronizationState::new(start_as_catch_up_mode));
+        let syn = Arc::new(SynchronizationState::new(
+            protocol_config.start_as_catch_up_mode,
+            protocol_config.fast_sync_enabled,
+        ));
 
         let request_manager =
             Arc::new(RequestManager::new(&protocol_config, syn.clone()));
@@ -255,13 +266,14 @@ impl SynchronizationProtocolHandler {
                 pow_config,
                 fast_recover,
             )),
-            syn,
+            syn: syn.clone(),
             request_manager,
             latest_epoch_requested: Mutex::new(0),
             future_blocks: FutureBlockContainer::new(
                 future_block_buffer_capacity,
             ),
             recover_public_queue: Mutex::new(VecDeque::new()),
+            fast_sync: Mutex::new(SnapshotChunkSync::new(syn)),
         }
     }
 
@@ -308,7 +320,7 @@ impl SynchronizationProtocolHandler {
 
     fn dispatch_message(
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
-    ) {
+    ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         if !self.syn.contains_peer(&peer) {
             debug!(
@@ -322,7 +334,7 @@ impl SynchronizationProtocolHandler {
                 || msg_id != MsgId::STATUS
             {
                 warn!("Message from unknown peer {:?}", msg_id);
-                return;
+                return Ok(());
             }
         } else {
             self.syn.update_heartbeat(&peer);
@@ -379,13 +391,36 @@ impl SynchronizationProtocolHandler {
             MsgId::GET_BLOCK_HASHES_RESPONSE => {
                 self.on_block_hashes_response(io, peer, &rlp)
             }
+            MsgId::GET_SNAPSHOT_MANIFEST => {
+                rlp.as_val::<SnapshotManifestRequest>()?.handle(io, peer)
+            }
+            MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE => {
+                let resp = rlp.as_val::<SnapshotManifestResponse>()?;
+                self.fast_sync.lock().handle_snapshot_manifest_response(
+                    io,
+                    peer,
+                    resp,
+                    &self.request_manager,
+                )
+            }
+            MsgId::GET_SNAPSHOT_CHUNK => {
+                rlp.as_val::<SnapshotChunkRequest>()?.handle(io, peer)
+            }
+            MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => {
+                let resp = rlp.as_val::<SnapshotChunkResponse>()?;
+                self.fast_sync.lock().handle_snapshot_chunk_response(
+                    io,
+                    peer,
+                    resp,
+                    &self.request_manager,
+                )
+            }
             _ => {
                 warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
                 io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
                 Ok(())
             }
         }
-        .unwrap_or_else(|e| self.handle_error(io, peer, msg_id, e));
     }
 
     /// Error handling for dispatched messages.
@@ -1275,7 +1310,11 @@ impl SynchronizationProtocolHandler {
     }
 
     fn start_sync(&self, io: &NetworkContext) {
-        if self.catch_up_mode() {
+        if let Some(checkpoint) = self.syn.get_fast_sync_checkpoint() {
+            self.fast_sync
+                .lock()
+                .start(checkpoint, io, &self.request_manager);
+        } else if self.catch_up_mode() {
             self.request_epochs(io);
         } else {
             self.request_missing_terminals(io);
@@ -2334,7 +2373,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
-        self.dispatch_message(io, peer, msg_id.into(), rlp);
+        self.dispatch_message(io, peer, msg_id.into(), rlp)
+            .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }
 
     fn on_work_dispatch(

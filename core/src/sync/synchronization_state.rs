@@ -40,15 +40,20 @@ pub struct SynchronizationState {
     pub peers: RwLock<SynchronizationPeers>,
     pub handshaking_peers: RwLock<HashMap<PeerId, Instant>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
+
+    fast_sync_enabled: bool,
+    fast_sync_checkpoint: RwLock<Option<H256>>,
 }
 
 impl SynchronizationState {
-    pub fn new(catch_up_mode: bool) -> Self {
+    pub fn new(catch_up_mode: bool, fast_sync_enabled: bool) -> Self {
         SynchronizationState {
             catch_up_mode: AtomicBool::new(catch_up_mode),
             peers: Default::default(),
             handshaking_peers: Default::default(),
             last_sent_transaction_hashes: Default::default(),
+            fast_sync_enabled,
+            fast_sync_checkpoint: Default::default(),
         }
     }
 
@@ -147,5 +152,16 @@ impl SynchronizationState {
         }
 
         timeout_peers
+    }
+
+    pub fn set_fast_sync_checkpoint(&self, checkpoint: Option<H256>) {
+        if self.fast_sync_enabled {
+            let mut fast_sync_checkpoint = self.fast_sync_checkpoint.write();
+            *fast_sync_checkpoint = checkpoint;
+        }
+    }
+
+    pub fn get_fast_sync_checkpoint(&self) -> Option<H256> {
+        *self.fast_sync_checkpoint.read()
     }
 }
