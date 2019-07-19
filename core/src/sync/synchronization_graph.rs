@@ -999,6 +999,13 @@ impl SynchronizationGraph {
                         );
                         queue.push_back(*child);
                     }
+                } else {
+                    if index == header_index_to_insert {
+                        self.data_man.insert_block_header(
+                            inner.arena[index].block_header.hash(),
+                            inner.arena[index].block_header.clone(),
+                        );
+                    }
                 }
             }
         }
