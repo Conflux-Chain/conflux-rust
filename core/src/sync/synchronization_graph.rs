@@ -783,7 +783,7 @@ impl SynchronizationGraph {
                 data_man.clone(),
             ),
         ));
-        let sync_graph = SynchronizationGraph {
+        let mut sync_graph = SynchronizationGraph {
             inner: inner.clone(),
             data_man: data_man.clone(),
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
@@ -806,6 +806,8 @@ impl SynchronizationGraph {
                 }
             })
             .expect("Cannot fail");
+
+        sync_graph.recover_graph_from_db();
 
         sync_graph
     }
@@ -834,6 +836,95 @@ impl SynchronizationGraph {
         self.consensus
             .txpool
             .set_to_be_propagated_transactions(transactions);
+    }
+
+    fn recover_graph_from_db(&mut self) {
+        info!("Start fast recovery of the block DAG from database");
+        let terminals_opt = self.data_man.terminals_from_db();
+        if terminals_opt.is_none() {
+            return;
+        }
+        let terminals = terminals_opt.unwrap();
+        debug!("Get terminals {:?}", terminals);
+
+        let checkpoint_hashes_opt = self.data_man.checkpoint_hashes_from_db();
+        if checkpoint_hashes_opt.is_none() {
+            return;
+        }
+        let current_checkpoint_hash = checkpoint_hashes_opt.unwrap().0;
+        if current_checkpoint_hash != self.data_man.genesis_block().hash() {
+            warn!("terminals too far from genesis_block, give up recover");
+            return;
+        }
+        debug!("Get current checkpoint hash {:?}", current_checkpoint_hash);
+        
+        let genesis_local_info = self.data_man.local_block_info_from_db(&current_checkpoint_hash);
+        if genesis_local_info.is_none() {
+            warn!("failed to get local block info from db for genesis[{}]", &current_checkpoint_hash);
+            return;
+        }
+        let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
+
+        let mut queue = VecDeque::new();
+        let mut visited_blocks: HashSet<H256> = HashSet::new();
+        for terminal in terminals {
+            queue.push_back(terminal);
+            visited_blocks.insert(terminal);
+        }
+
+        let mut missed_hashes = self.initial_missed_block_hashes.lock();
+        while let Some(hash) = queue.pop_front() {
+            if hash == self.data_man.genesis_block().hash() {
+                continue;
+            }
+
+            // ignore blocks beyond current checkpoint
+            // if block_local_info is missing, consider it is in current checkpoint
+            if let Some(block_local_info) = self.data_man.local_block_info_from_db(&hash) {
+                if block_local_info.get_seq_num() < genesis_seq_num {
+                    continue;
+                }
+            }
+
+            if let Some(mut block) = self.data_man.block_from_db(&hash) {
+                // This is for constructing synchronization graph.
+                let (success, _) = self.insert_block_header(
+                    &mut block.block_header,
+                    true,
+                    false,
+                );
+                assert!(success);
+
+                let parent = block.block_header.parent_hash().clone();
+                let referees = block.block_header.referee_hashes().clone();
+
+                // TODO Avoid reading blocks from db twice,
+                // TODO possible by inserting blocks in topological order
+                // TODO Read only headers from db
+                // This is necessary to construct consensus graph.
+                let (success, _) = self.insert_block(block, true, false, true);
+                assert!(success);
+
+                if !visited_blocks.contains(&parent) {
+                    queue.push_back(parent);
+                    visited_blocks.insert(parent);
+                }
+
+                for referee in referees {
+                    if !visited_blocks.contains(&referee) {
+                        queue.push_back(referee);
+                        visited_blocks.insert(referee);
+                    }
+                }
+            } else {
+                missed_hashes.insert(hash);
+            }
+        }
+
+        debug!("Initial missed blocks {:?}", *missed_hashes);
+        info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
+        self.consensus.construct_pivot();
+        info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
     pub fn check_mining_adaptive_block(
