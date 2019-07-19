@@ -16,7 +16,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature, TxPropagateId};
 use priority_send_queue::SendQueuePriority;
 pub use request_handler::{
-    RequestHandler, RequestMessage, SynchronizationPeerRequest,
+    Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
 };
 use std::{
     cmp::Ordering,
@@ -42,12 +42,15 @@ lazy_static! {
         register_meter_with_group("system_metrics", "inflight_tx_pool_size");
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug)]
 enum WaitingRequest {
     Header(H256),
     HeaderChain(H256),
     Block(H256),
     Epoch(u64),
+    // todo change other kind of waiting requests to such general one to
+    // support batch request
+    General(Box<Request>),
 }
 
 /// When a header or block is requested by the `RequestManager`, it is ensured
@@ -636,6 +639,7 @@ impl RequestManager {
                 hashes.push(blocktxn.block_hash);
                 self.request_blocks(io, chosen_peer, hashes, true);
             }
+            RequestMessage::Transactions(_) => {}
             RequestMessage::Epochs(get_epoch_hashes) => {
                 self.request_epoch_hashes(
                     io,
@@ -643,7 +647,30 @@ impl RequestManager {
                     get_epoch_hashes.epochs.clone(),
                 );
             }
-            _ => {}
+            RequestMessage::General(request) => {
+                self.send_general_request(
+                    io,
+                    chosen_peer,
+                    request.preprocess(),
+                );
+            }
+        }
+    }
+
+    /// Send the request to specified peer. If no peer available or send request
+    /// failed, add the request into waiting queue to resend in a short
+    /// time.
+    pub fn send_general_request(
+        &self, io: &NetworkContext, peer: Option<PeerId>, request: Box<Request>,
+    ) {
+        if let Err(e) =
+            self.request_handler.send_general_request(io, peer, request)
+        {
+            self.waiting_requests.lock().push(TimedWaitingRequest::new(
+                Instant::now() + *REQUEST_START_WAITING_TIME,
+                WaitingRequest::General(e),
+                None,
+            ));
         }
     }
 
@@ -688,6 +715,7 @@ impl RequestManager {
                     epochs_in_flight.remove(epoch_number);
                 }
             }
+            RequestMessage::General(request) => request.on_removed(),
         }
         self.send_request_again(io, req);
     }
@@ -1050,6 +1078,13 @@ impl RequestManager {
                             }
                         }
                     }
+                    WaitingRequest::General(request) => {
+                        self.send_general_request(
+                            io,
+                            Some(chosen_peer),
+                            request.preprocess(),
+                        );
+                    }
                 }
             }
         }
@@ -1108,6 +1143,9 @@ impl RequestManager {
                             for epoch_number in &get_epoch_hashes.epochs {
                                 epochs_in_flight.remove(epoch_number);
                             }
+                        }
+                        RequestMessage::General(request) => {
+                            request.on_removed()
                         }
                     }
                 }
