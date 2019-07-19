@@ -263,7 +263,7 @@ impl OverlayAccount {
             let address_key = db.storage_key(&self.address, k.as_ref());
 
             match v.is_zero() {
-                true => db.delete(&db.account_key(&self.address))?,
+                true => db.delete(&address_key)?,
                 false => {
                     db.set::<H256>(&address_key, &H256::from(U256::from(v)))?
                 }
