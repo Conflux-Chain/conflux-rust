@@ -270,7 +270,7 @@ impl BlockDataManager {
 
     pub fn checkpoint_hashes_from_db(&self) -> Option<(H256, H256)> {
         match self.db.key_value().get(COL_MISC, b"checkpoint")
-            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
+            .expect("Low-level database error when fetching 'checkpoint' block. Some issue with disk?")
             {
                 Some(checkpoint) => {
                     let rlp = Rlp::new(&checkpoint);
@@ -287,6 +287,10 @@ impl BlockDataManager {
     pub fn insert_epoch_set_hashes_to_db(
         &self, epoch: u64, hashes: &Vec<H256>,
     ) {
+        debug!(
+            "insert_epoch_set_hashes_to_db: epoch={}, hashes={:?}",
+            epoch, hashes
+        );
         let mut rlp_stream = RlpStream::new();
         rlp_stream.begin_list(hashes.len());
         for hash in hashes {
@@ -310,7 +314,7 @@ impl BlockDataManager {
                     Some(rlp.as_list::<H256>().expect("Failed to decode epoch set hashes!"))
                 }
                 None => {
-                    info!("No epoch set hashes got from db");
+                    info!("No epoch set hashes got from db, epoch={}", epoch);
                     None
                 }
             }
@@ -1252,6 +1256,8 @@ impl LocalBlockInfo {
     }
 
     pub fn get_status(&self) -> BlockStatus { self.status }
+
+    pub fn get_seq_num(&self) -> u64 { self.enter_consensus_seq_num }
 }
 
 impl Encodable for LocalBlockInfo {

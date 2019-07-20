@@ -21,7 +21,7 @@ pub trait TestRpc {
     fn get_best_block_hash(&self) -> RpcResult<H256>;
 
     #[rpc(name = "getblockcount")]
-    fn get_block_count(&self) -> RpcResult<usize>;
+    fn get_block_count(&self) -> RpcResult<u64>;
 
     #[rpc(name = "getgoodput")]
     fn get_goodput(&self) -> RpcResult<isize>;
