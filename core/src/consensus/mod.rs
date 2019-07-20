@@ -24,7 +24,7 @@ pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -143,6 +143,9 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
+
+    /// The number of full blocks inserted
+    block_count: Mutex<u64>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -163,7 +166,6 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
-        cur_era_stable_height: u64,
     ) -> Self
     {
         let inner =
@@ -172,7 +174,6 @@ impl ConsensusGraph {
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
-                cur_era_stable_height,
             )));
         let executor = ConsensusExecutor::start(
             txpool.clone(),
@@ -192,6 +193,7 @@ impl ConsensusGraph {
                 conf, txpool, data_man, executor, statistics,
             ),
             best_info: RwLock::new(Arc::new(Default::default())),
+            block_count: Mutex::new(1),
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -209,7 +211,7 @@ impl ConsensusGraph {
         pow_config: ProofOfWorkConfig,
     ) -> Self
     {
-        let genesis_hash = data_man.genesis_block().hash();
+        let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         ConsensusGraph::with_era_genesis_block(
             conf,
             vm,
@@ -218,7 +220,6 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
-            0,
         )
     }
 
@@ -412,7 +413,7 @@ impl ConsensusGraph {
     /// ConsensusGraph. Because BestInformation is often queried outside. We
     /// store a version of best_info outside the inner to prevent keep
     /// getting inner locks.
-    fn update_best_info(&self, inner: &ConsensusGraphInner) {
+    pub fn update_best_info(&self, inner: &ConsensusGraphInner) {
         let mut best_info = self.best_info.write();
 
         let terminal_hashes = inner.terminal_hashes();
@@ -453,6 +454,7 @@ impl ConsensusGraph {
         self.statistics.inc_consensus_graph_processed_block_count();
 
         if !ignore_body {
+            *self.block_count.lock() += 1;
             let block = self.data_man.block_by_hash(hash, true).unwrap();
             debug!(
                 "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
@@ -474,11 +476,16 @@ impl ConsensusGraph {
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone());
         } else {
+            let header = self.data_man.block_header_by_hash(hash).unwrap();
+            debug!(
+                "insert new block_header into consensus: block_header={:?}",
+                header
+            );
             let inner = &mut *self.inner.write();
             self.new_block_handler.on_new_block(
                 inner,
                 hash,
-                self.data_man.block_header_by_hash(hash).unwrap().as_ref(),
+                header.as_ref(),
                 None,
             );
             self.update_best_info(inner);
@@ -540,9 +547,7 @@ impl ConsensusGraph {
     }
 
     /// Returns the total number of blocks in consensus graph
-    pub fn block_count(&self) -> usize {
-        self.inner.read_recursive().hash_to_arena_indices.len()
-    }
+    pub fn block_count(&self) -> u64 { *self.block_count.lock() }
 
     /// Estimate the gas of a transaction
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
@@ -699,14 +704,13 @@ impl ConsensusGraph {
         self.executor.call_virtual(tx, &epoch_id)
     }
 
-    /// Return the current era genesis block (checkpoint block) in the consesus
-    /// graph. This API is used by the SynchronizationLayer to trim data
-    /// before the checkpoint.
-    pub fn current_era_genesis_hash(&self) -> H256 {
+    // FIXME store this in BlockDataManager
+    /// Return the sequence number of the current era genesis hash.
+    pub fn current_era_genesis_seq_num(&self) -> u64 {
         let inner = self.inner.read_recursive();
         inner.arena[inner.cur_era_genesis_block_arena_index]
-            .hash
-            .clone()
+            .data
+            .sequence_number
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to

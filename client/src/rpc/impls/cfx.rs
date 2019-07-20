@@ -317,7 +317,7 @@ impl RpcImpl {
         Ok(self.consensus.best_block_hash())
     }
 
-    fn get_block_count(&self) -> RpcResult<usize> {
+    fn get_block_count(&self) -> RpcResult<u64> {
         info!("RPC Request: get_block_count()");
         Ok(self.consensus.block_count())
     }
@@ -901,7 +901,7 @@ impl TestRpc for TestRpcImpl {
         self.rpc_impl.get_best_block_hash()
     }
 
-    fn get_block_count(&self) -> RpcResult<usize> {
+    fn get_block_count(&self) -> RpcResult<u64> {
         self.rpc_impl.get_block_count()
     }
 

@@ -13,7 +13,7 @@ pub struct Status {
     /// The number of epochs
     pub epoch_number: u64,
     /// The number of blocks
-    pub block_number: usize,
+    pub block_number: u64,
     /// The number of pending transactions
     pub pending_tx_number: usize,
 }
