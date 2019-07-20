@@ -74,6 +74,7 @@ pub struct BlockDataManager {
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
+    instance_id: u64,
 
     config: DataManagerConfiguration,
 
@@ -123,12 +124,15 @@ impl BlockDataManager {
             db,
             storage_manager,
             cache_man,
+            instance_id: 0,
             config,
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
             worker_pool,
             tx_cache_man,
         };
+
+        data_man.initialize_instance_id();
 
         if let Some((checkpoint_hash, _)) = data_man.checkpoint_hashes_from_db()
         {
@@ -207,6 +211,38 @@ impl BlockDataManager {
         );
         data_man.insert_block_to_kv(data_man.genesis_block(), true);
         data_man
+    }
+
+    pub fn get_instance_id(&self) -> u64 { self.instance_id }
+
+    fn initialize_instance_id(&mut self) {
+        // load last instance id
+        let instance_id = match self.db.key_value().get(COL_MISC, b"instance")
+            .expect("Low-level database error when fetching instance id. Some issue with disk?")
+            {
+                Some(instance) => {
+                    let rlp = Rlp::new(&instance);
+                    Some(rlp.val_at::<u64>(0).expect("Failed to decode checkpoint hash!"))
+                }
+                None => {
+                    info!("No instance id got from db");
+                    None
+                }
+            };
+
+        assert_eq!(self.instance_id, 0);
+        // set new instance id
+        if let Some(instance_id) = instance_id {
+            self.instance_id = instance_id + 1;
+        }
+
+        // persist new instance id
+        let mut rlp_stream = RlpStream::new();
+        rlp_stream.begin_list(1);
+        rlp_stream.append(&self.instance_id);
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(COL_MISC, b"instance", &rlp_stream.drain());
+        self.db.key_value().write(dbops).expect("db error");
     }
 
     pub fn genesis_block(&self) -> Arc<Block> { self.genesis_block.clone() }
@@ -812,7 +848,8 @@ impl BlockDataManager {
     pub fn invalidate_block(&self, block_hash: H256) {
         // This block will never enter consensus graph, so
         // assign it a NULL sequence number.
-        let block_info = LocalBlockInfo::new(BlockStatus::Invalid, NULLU64);
+        let block_info =
+            LocalBlockInfo::new(BlockStatus::Invalid, NULLU64, NULLU64);
         self.insert_local_block_info_to_db(&block_hash, block_info);
         self.invalid_block_set.write().insert(block_hash);
     }
@@ -1245,28 +1282,33 @@ impl BlockReceiptsInfo {
 pub struct LocalBlockInfo {
     status: BlockStatus,
     enter_consensus_seq_num: u64,
+    instance_id: u64,
 }
 
 impl LocalBlockInfo {
-    pub fn new(status: BlockStatus, seq_num: u64) -> Self {
+    pub fn new(status: BlockStatus, seq_num: u64, instance_id: u64) -> Self {
         LocalBlockInfo {
             status,
             enter_consensus_seq_num: seq_num,
+            instance_id,
         }
     }
 
     pub fn get_status(&self) -> BlockStatus { self.status }
 
     pub fn get_seq_num(&self) -> u64 { self.enter_consensus_seq_num }
+
+    pub fn get_instance_id(&self) -> u64 { self.instance_id }
 }
 
 impl Encodable for LocalBlockInfo {
     fn rlp_append(&self, stream: &mut RlpStream) {
         let status = self.status.to_db_status();
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&status)
-            .append(&self.enter_consensus_seq_num);
+            .append(&self.enter_consensus_seq_num)
+            .append(&self.instance_id);
     }
 }
 
@@ -1276,6 +1318,7 @@ impl Decodable for LocalBlockInfo {
         Ok(LocalBlockInfo {
             status: BlockStatus::from_db_status(status),
             enter_consensus_seq_num: rlp.val_at(1)?,
+            instance_id: rlp.val_at(2)?,
         })
     }
 }
