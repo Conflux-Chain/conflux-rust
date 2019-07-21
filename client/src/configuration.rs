@@ -240,7 +240,7 @@ impl Configuration {
         )
     }
 
-    pub fn consensus_config(&self) -> ConsensusConfig {
+    pub fn consensus_config(&self, instance_id: u64) -> ConsensusConfig {
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: self
                 .raw_conf
@@ -263,6 +263,7 @@ impl Configuration {
                     .enable_optimistic_execution,
             },
             bench_mode: false,
+            instance_id,
         }
     }
 
