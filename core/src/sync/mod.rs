@@ -11,6 +11,7 @@ mod synchronization_graph;
 mod synchronization_protocol_handler;
 mod synchronization_service;
 mod synchronization_state;
+pub mod utils;
 
 pub use self::{
     error::{Error, ErrorKind},
