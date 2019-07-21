@@ -8,9 +8,7 @@ extern crate log4rs;
 extern crate parking_lot;
 
 use clap::{App, Arg};
-use client::{
-    archive::ArchiveClient, configuration::Configuration,
-};
+use client::{archive::ArchiveClient, configuration::Configuration};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
