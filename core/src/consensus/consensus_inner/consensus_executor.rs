@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use super::super::debug::*;
 use crate::{
     block_data_manager::BlockDataManager,
@@ -290,11 +294,13 @@ impl ConsensusExecutor {
             |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
                 // Wait for the execution info populated for all blocks before
                 // pivot_arena_index
-                self.wait_and_compute_execution_info_locked(
-                    pivot_arena_index,
-                    inner,
-                )
-                .unwrap();
+                if !self.bench_mode {
+                    self.wait_and_compute_execution_info_locked(
+                        pivot_arena_index,
+                        inner,
+                    )
+                    .unwrap();
+                }
 
                 let epoch_blocks = inner
                     .get_executable_epoch_blocks(data_man, pivot_arena_index);
@@ -322,21 +328,27 @@ impl ConsensusExecutor {
                 for index in ordered_epoch_blocks.iter() {
                     let block_consensus_node = &inner.arena[*index];
 
-                    let mut no_reward;
-                    if *index == pivot_arena_index {
-                        no_reward = block_consensus_node.data.partial_invalid
-                            || !inner
-                                .execution_info_cache
-                                .get(&pivot_arena_index)
-                                .unwrap()
-                                .state_valid;
-                    } else {
-                        no_reward = block_consensus_node.data.partial_invalid
-                            || !inner.compute_vote_valid_for_pivot_block(
-                                data_man,
-                                *index,
-                                pivot_arena_index,
-                            );
+                    let mut no_reward =
+                        block_consensus_node.data.partial_invalid;
+                    if !self.bench_mode {
+                        if *index == pivot_arena_index {
+                            no_reward =
+                                block_consensus_node.data.partial_invalid
+                                    || !inner
+                                        .execution_info_cache
+                                        .get(&pivot_arena_index)
+                                        .unwrap()
+                                        .state_valid;
+                        } else {
+                            no_reward = block_consensus_node
+                                .data
+                                .partial_invalid
+                                || !inner.compute_vote_valid_for_pivot_block(
+                                    data_man,
+                                    *index,
+                                    pivot_arena_index,
+                                );
+                        }
                     }
                     // If a block is partial_invalid, it won't have reward and
                     // anticone_difficulty will not be used, so it's okay to set
