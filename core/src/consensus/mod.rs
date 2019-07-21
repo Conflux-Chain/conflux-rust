@@ -95,6 +95,8 @@ pub struct ConsensusConfig {
     pub bench_mode: bool,
     // The configuration used by inner data
     pub inner_conf: ConsensusInnerConfig,
+    // The instance id of this run.
+    pub instance_id: u64,
 }
 
 #[derive(Debug)]

@@ -164,6 +164,7 @@ fn initialize_consensus_graph_for_test(
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */
+            instance_id: 0,
         },
         vm.clone(),
         txpool.clone(),

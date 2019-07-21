@@ -1337,7 +1337,11 @@ impl ConsensusNewBlockHandler {
             );
             self.process_outside_block(inner, &block_header);
             let sn = inner.get_next_sequence_number();
-            let block_info = LocalBlockInfo::new(BlockStatus::Pending, sn);
+            let block_info = LocalBlockInfo::new(
+                BlockStatus::Pending,
+                sn,
+                self.conf.instance_id,
+            );
             self.data_man
                 .insert_local_block_info_to_db(hash, block_info);
             return;
@@ -1402,13 +1406,6 @@ impl ConsensusNewBlockHandler {
         } else {
             BlockStatus::PartialInvalid
         };
-
-        let block_info = LocalBlockInfo::new(
-            block_status,
-            inner.arena[me].data.sequence_number,
-        );
-        self.data_man
-            .insert_local_block_info_to_db(hash, block_info);
 
         if pending {
             inner.arena[me].data.pending = true;
@@ -1550,6 +1547,12 @@ impl ConsensusNewBlockHandler {
 
         // Now we can safely return
         if !fully_valid || pending {
+            self.persist_terminal_and_block_info(
+                inner,
+                me,
+                block_status,
+                transactions.is_some(),
+            );
             return;
         }
 
@@ -1659,8 +1662,35 @@ impl ConsensusNewBlockHandler {
                 ));
                 state_at += 1;
             }
-            self.persist_terminals(inner);
         }
+
+        self.persist_terminal_and_block_info(
+            inner,
+            me,
+            block_status,
+            transactions.is_some(),
+        );
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
+    }
+
+    fn persist_terminal_and_block_info(
+        &self, inner: &mut ConsensusGraphInner, me: usize,
+        block_status: BlockStatus, persist_terminal: bool,
+    )
+    {
+        let instance_id = if persist_terminal {
+            self.persist_terminals(inner);
+            NULLU64
+        } else {
+            self.conf.instance_id
+        };
+
+        let block_info = LocalBlockInfo::new(
+            block_status,
+            inner.arena[me].data.sequence_number,
+            instance_id,
+        );
+        self.data_man
+            .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
     }
 }
