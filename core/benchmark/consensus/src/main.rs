@@ -19,6 +19,10 @@ use cfxcore::{
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::{
         request_manager::tx_handler::ReceivedTransactionContainer,
+        utils::{
+            create_simple_block, create_simple_block_impl,
+            initialize_synchronization_graph,
+        },
         SynchronizationGraph,
     },
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
@@ -43,145 +47,6 @@ use std::{
     thread, time,
 };
 use threadpool::ThreadPool;
-
-fn create_simple_block_impl(
-    parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
-    diff: U256, block_weight: u32,
-) -> (H256, Block)
-{
-    let mut b = BlockHeaderBuilder::new();
-    let mut header = b
-        .with_parent_hash(parent_hash)
-        .with_height(height)
-        .with_referee_hashes(ref_hashes)
-        .with_nonce(nonce)
-        .with_difficulty(diff)
-        .build();
-    header.compute_hash();
-    header.pow_quality = if block_weight > 1 {
-        diff * block_weight
-    } else {
-        diff
-    };
-    let block = Block::new(header, vec![]);
-    (block.hash(), block)
-}
-
-fn create_simple_block(
-    sync: Arc<SynchronizationGraph>, parent_hash: H256, ref_hashes: Vec<H256>,
-    block_weight: u32,
-) -> (H256, Block)
-{
-    //    sync.consensus.wait_for_generation(&parent_hash);
-    let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
-    //    let exp_diff = sync.expected_difficulty(&parent_hash);
-    //    assert!(
-    //        exp_diff == U256::from(10),
-    //        "Difficulty hike in bench is not supported yet!"
-    //    );
-    // Note that because we do not fill the timestamp, it should keep at the
-    // minimum difficulty of 10.
-    let exp_diff = U256::from(10);
-    let nonce = sync.block_count() as u64 + 1;
-    create_simple_block_impl(
-        parent_hash,
-        ref_hashes,
-        parent_header.height() + 1,
-        nonce,
-        exp_diff,
-        block_weight,
-    )
-}
-
-fn initialize_consensus_graph_for_test(
-    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
-    era_epoch_count: u64,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
-{
-    let ledger_db = db::open_database(
-        db_dir,
-        &db::db_config(
-            Path::new(db_dir),
-            Some(128),
-            db::DatabaseCompactionProfile::default(),
-            NUM_COLUMNS,
-        ),
-    )
-    .map_err(|e| format!("Failed to open database {:?}", e))
-    .unwrap();
-
-    let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
-        "Tx Recover".into(),
-        WORKER_COMPUTATION_PARALLELISM,
-    )));
-
-    let storage_manager = Arc::new(StorageManager::new(
-        ledger_db.clone(),
-        StorageConfiguration::default(),
-    ));
-
-    let mut genesis_accounts = HashMap::new();
-    genesis_accounts.insert(
-        "0000000000000000000000000000000000000008".into(),
-        U256::from(0),
-    );
-
-    let genesis_block = Arc::new(storage_manager.initialize(
-        genesis_accounts,
-        DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
-        "0000000000000000000000000000000000000008".into(),
-        U256::from(10),
-    ));
-
-    let genesis_hash = genesis_block.hash();
-
-    let data_man = Arc::new(BlockDataManager::new(
-        CacheConfig::default(),
-        genesis_block.clone(),
-        ledger_db.clone(),
-        storage_manager,
-        worker_thread_pool,
-        DataManagerConfiguration::new(false, true, 250000),
-    ));
-
-    let txpool =
-        Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
-    let statistics = Arc::new(Statistics::new());
-
-    let vm = VmFactory::new(1024 * 32);
-    let pow_config = ProofOfWorkConfig::new(true, Some(10));
-    let consensus = Arc::new(ConsensusGraph::new(
-        ConsensusConfig {
-            debug_dump_dir_invalid_state_root: "./invalid_state_root/"
-                .to_string(),
-            inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: alpha_num,
-                adaptive_weight_alpha_den: alpha_den,
-                adaptive_weight_beta: beta,
-                heavy_block_difficulty_ratio: h,
-                era_epoch_count,
-                enable_optimistic_execution: false,
-            },
-            bench_mode: true, /* Set bench_mode to true so that we skip
-                               * execution */
-            instance_id: 0,
-        },
-        vm.clone(),
-        txpool.clone(),
-        statistics.clone(),
-        data_man.clone(),
-        pow_config.clone(),
-    ));
-
-    let verification_config = VerificationConfig::new(true);
-    let sync = Arc::new(SynchronizationGraph::new(
-        consensus.clone(),
-        verification_config,
-        pow_config,
-    ));
-
-    (sync, consensus, genesis_block)
-}
 
 fn initialize_logger(log_file: &str, log_level: LevelFilter) {
     let log_config = {
@@ -312,16 +177,7 @@ fn main() {
         alpha_num, alpha_den, beta, h_ratio, era_epoch_count
     );
 
-    //    let (genesis_hash, genesis_block) = create_simple_block_impl(
-    //        H256::default(),
-    //        vec![],
-    //        0,
-    //        0,
-    //        U256::from(10),
-    //        1,
-    //    );
-
-    let (sync, consensus, genesis_block) = initialize_consensus_graph_for_test(
+    let (sync, consensus, genesis_block) = initialize_synchronization_graph(
         db_dir,
         alpha_den,
         alpha_num,
@@ -406,7 +262,8 @@ fn main() {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
             last_check_time = time::SystemTime::now();
-            let consensus_block_cnt = hashes.len() as u64;
+            let consensus_block_cnt =
+                consensus.get_processed_block_count() as u64;
             println!(
                 "Consensus count {}, Consensus block {}/s, Elapsed {}",
                 consensus_block_cnt,
@@ -443,7 +300,8 @@ fn main() {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
             last_check_time = time::SystemTime::now();
-            let consensus_block_cnt = hashes.len() as u64;
+            let consensus_block_cnt =
+                consensus.get_processed_block_count() as u64;
             println!(
                 "Consensus count {}, Consensus block {}/s, Elapsed {}",
                 consensus_block_cnt,
