@@ -9,7 +9,7 @@ extern crate parking_lot;
 
 use clap::{App, Arg};
 use client::{
-    archive::ArchiveClient, configuration::Configuration, full::FullClient,
+    archive::ArchiveClient, configuration::Configuration,
 };
 use log::{info, LevelFilter};
 use log4rs::{
@@ -324,9 +324,9 @@ fn main() -> Result<(), String> {
         ArchiveClient::run_until_closed(exit, client_handle);
     } else {
         info!("Starting full client...");
-        let client_handle = FullClient::start(conf, exit.clone())
+        let client_handle = ArchiveClient::start(conf, exit.clone())
             .map_err(|e| format!("failed to start full client: {:?}", e))?;
-        FullClient::run_until_closed(exit, client_handle);
+        ArchiveClient::run_until_closed(exit, client_handle);
     }
 
     Ok(())
