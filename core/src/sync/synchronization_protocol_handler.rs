@@ -1314,14 +1314,12 @@ impl SynchronizationProtocolHandler {
     }
 
     fn start_sync(&self, io: &NetworkContext) {
-        if let SyncPhase::SyncCheckpoints(checkpoint) =
-            &*self.syn.sync_phase.lock()
-        {
-            self.state_sync.lock().start(
-                checkpoint.clone(),
-                io,
-                &self.request_manager,
-            );
+        let checkpoint = self.syn.sync_phase.lock().get_sync_checkpoint();
+
+        if let Some(checkpoint) = checkpoint {
+            self.state_sync
+                .lock()
+                .start(checkpoint, io, &self.request_manager);
         } else if self.catch_up_mode() {
             self.request_epochs(io);
         } else {

@@ -256,4 +256,11 @@ impl SyncPhase {
             _ => false,
         }
     }
+
+    pub fn get_sync_checkpoint(&self) -> Option<H256> {
+        match self {
+            SyncPhase::SyncCheckpoints(checkpoint) => Some(checkpoint.clone()),
+            _ => None,
+        }
+    }
 }
