@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 mod error;
 pub mod request_manager;
+mod state;
 
 #[cfg(test)]
 pub mod tests;

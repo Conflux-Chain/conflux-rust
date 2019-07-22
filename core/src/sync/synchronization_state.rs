@@ -226,9 +226,11 @@ impl SyncPhase {
                 | MsgId::GET_BLOCK_HEADERS_RESPONSE => true,
                 _ => false,
             },
-            // FIXME enable checkpoint-related messages
             SyncPhase::SyncCheckpoints(_) => match *msg_id {
-                MsgId::STATUS | MsgId::TRANSACTION_PROPAGATION_CONTROL => true,
+                MsgId::STATUS
+                | MsgId::TRANSACTION_PROPAGATION_CONTROL
+                | MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE
+                | MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => true,
                 _ => false,
             },
             SyncPhase::SyncBlocks(_) => match *msg_id {
@@ -254,6 +256,13 @@ impl SyncPhase {
         match self {
             SyncPhase::SyncBlocks(_) | SyncPhase::Latest => true,
             _ => false,
+        }
+    }
+
+    pub fn get_sync_checkpoint(&self) -> Option<H256> {
+        match self {
+            SyncPhase::SyncCheckpoints(checkpoint) => Some(checkpoint.clone()),
+            _ => None,
         }
     }
 }
