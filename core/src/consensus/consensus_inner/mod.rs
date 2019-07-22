@@ -21,7 +21,9 @@ use cfx_types::{
     into_i128, into_u256, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use hibitset::{BitSet, BitSetLike};
-use link_cut_tree::MinLinkCutTree;
+use link_cut_tree::{
+    CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
+};
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder,
     StateRootWithAuxInfo, TransactionAddress,
@@ -226,17 +228,17 @@ pub struct ConsensusGraphInner {
     genesis_block_receipts_root: H256,
     genesis_block_logs_bloom_hash: H256,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
-    weight_tree: MinLinkCutTree,
-    inclusive_weight_tree: MinLinkCutTree,
-    stable_weight_tree: MinLinkCutTree,
+    weight_tree: DefaultMinLinkCutTree,
+    inclusive_weight_tree: SizeMinLinkCutTree,
+    stable_weight_tree: DefaultMinLinkCutTree,
     // stable_tree maintains d * SubTW(B, x) + n * x.parent.weight + n *
     // PastW(x.parent)
-    stable_tree: MinLinkCutTree,
+    stable_tree: DefaultMinLinkCutTree,
     // adaptive_tree maintains d * SubStableTW(B, x) - n * SubTW(B, P(x))
-    adaptive_tree: MinLinkCutTree,
+    adaptive_tree: CaterpillarMinLinkCutTree,
     // inclusive_adaptive_tree maintains d * SubInclusiveTW(B, x) - n *
     // SubInclusiveTW(B, P(x))
-    inclusive_adaptive_tree: MinLinkCutTree,
+    inclusive_adaptive_tree: CaterpillarMinLinkCutTree,
     pub pow_config: ProofOfWorkConfig,
     // It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
@@ -323,12 +325,12 @@ impl ConsensusGraphInner {
                 .block_header
                 .deferred_logs_bloom_hash()
                 .clone(),
-            weight_tree: MinLinkCutTree::new(),
-            inclusive_weight_tree: MinLinkCutTree::new(),
-            stable_weight_tree: MinLinkCutTree::new(),
-            stable_tree: MinLinkCutTree::new(),
-            adaptive_tree: MinLinkCutTree::new(),
-            inclusive_adaptive_tree: MinLinkCutTree::new(),
+            weight_tree: DefaultMinLinkCutTree::new(),
+            inclusive_weight_tree: SizeMinLinkCutTree::new(),
+            stable_weight_tree: DefaultMinLinkCutTree::new(),
+            stable_tree: DefaultMinLinkCutTree::new(),
+            adaptive_tree: CaterpillarMinLinkCutTree::new(),
+            inclusive_adaptive_tree: CaterpillarMinLinkCutTree::new(),
             pow_config,
             current_difficulty: pow_config.initial_difficulty.into(),
             data_man: data_man.clone(),
@@ -790,7 +792,7 @@ impl ConsensusGraphInner {
                 -delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
             );
             let parent = self.arena[*index].parent;
-            self.adaptive_tree.catepillar_apply(
+            self.adaptive_tree.caterpillar_apply(
                 parent,
                 delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
             );
@@ -798,7 +800,7 @@ impl ConsensusGraphInner {
         for (index, delta) in &inclusive_weight_delta {
             let parent = self.arena[*index].parent;
             self.inclusive_weight_tree.path_apply(*index, -delta);
-            self.inclusive_adaptive_tree.catepillar_apply(
+            self.inclusive_adaptive_tree.caterpillar_apply(
                 parent,
                 delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
             );
@@ -942,7 +944,7 @@ impl ConsensusGraphInner {
                 delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
             );
             let parent = self.arena[*index].parent;
-            self.adaptive_tree.catepillar_apply(
+            self.adaptive_tree.caterpillar_apply(
                 parent,
                 -delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
             );
@@ -950,7 +952,7 @@ impl ConsensusGraphInner {
         for (index, delta) in &inclusive_weight_delta {
             let parent = self.arena[*index].parent;
             self.inclusive_weight_tree.path_apply(*index, *delta);
-            self.inclusive_adaptive_tree.catepillar_apply(
+            self.inclusive_adaptive_tree.caterpillar_apply(
                 parent,
                 -delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
             );
