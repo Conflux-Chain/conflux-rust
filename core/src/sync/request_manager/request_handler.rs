@@ -1,5 +1,5 @@
 use crate::sync::{
-    msg_sender::send_message,
+    msg_sender::send_message, request_manager::RequestManager,
     synchronization_protocol_handler::ProtocolConfiguration, Error, ErrorKind,
 };
 use message::{
@@ -10,8 +10,10 @@ use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;
 use priority_send_queue::SendQueuePriority;
 use std::{
+    any::Any,
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, VecDeque},
+    fmt::Debug,
     mem,
     sync::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
@@ -109,6 +111,56 @@ impl RequestHandler {
         } else {
             Err(ErrorKind::UnknownPeer.into())
         }
+    }
+
+    /// Send request to the specified peer. If peer is `None` or send request
+    /// failed, return the request back to caller to handle in advance.
+    pub fn send_general_request(
+        &self, io: &NetworkContext, peer: Option<PeerId>,
+        mut request: Box<Request>,
+    ) -> Result<(), Box<Request>>
+    {
+        let peer = match peer {
+            Some(peer) => peer,
+            None => return Err(request),
+        };
+
+        let mut peers = self.peers.lock();
+        let mut requests_queue = self.requests_queue.lock();
+
+        let peer_info = match peers.get_mut(&peer) {
+            Some(peer) => peer,
+            None => return Err(request),
+        };
+
+        let request_id = match peer_info.get_next_request_id() {
+            Some(id) => id,
+            None => {
+                return Ok(peer_info.append_pending_request(Box::new(
+                    RequestMessage::General(request),
+                )))
+            }
+        };
+
+        request.set_request_id(request_id);
+        if let Err(_) =
+            send_message(io, peer, request.as_message(), request.priority())
+        {
+            return Err(request);
+        }
+
+        let msg = Box::new(RequestMessage::General(request));
+
+        let timed_req = Arc::new(TimedSyncRequests::from_request(
+            peer,
+            request_id,
+            &msg,
+            &self.protocol_config,
+        ));
+        peer_info.append_inflight_request(request_id, msg, timed_req.clone());
+        requests_queue.push(timed_req);
+
+        Ok(())
     }
 
     fn get_timeout_sync_requests(&self) -> Vec<Arc<TimedSyncRequests>> {
@@ -333,6 +385,23 @@ pub struct SynchronizationPeerRequest {
     pub timed_req: Arc<TimedSyncRequests>,
 }
 
+/// Trait of request message
+pub trait Request: Send + Debug {
+    fn set_request_id(&mut self, request_id: u64);
+    fn as_message(&self) -> &Message;
+    fn as_any(&self) -> &Any; // to support downcast trait to struct
+    fn timeout(&self) -> Duration; // request timeout for resend purpose
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
+
+    fn handle(self, io: &NetworkContext, peer: PeerId) -> Result<(), Error>;
+
+    // occurs when peer disconnected or invalid message received
+    fn on_removed(&self);
+
+    // preprocess request before sending out, e.g. update inflight queue
+    fn preprocess(&self) -> Box<Request>;
+}
+
 #[derive(Debug)]
 pub enum RequestMessage {
     Headers(GetBlockHeaders),
@@ -342,6 +411,7 @@ pub enum RequestMessage {
     BlockTxn(GetBlockTxn),
     Transactions(GetTransactions),
     Epochs(GetBlockHashesByEpoch),
+    General(Box<Request>),
 }
 
 impl RequestMessage {
@@ -368,6 +438,9 @@ impl RequestMessage {
             RequestMessage::Epochs(ref mut msg) => {
                 msg.set_request_id(request_id)
             }
+            RequestMessage::General(ref mut request) => {
+                request.set_request_id(request_id);
+            }
         }
     }
 
@@ -380,6 +453,32 @@ impl RequestMessage {
             RequestMessage::BlockTxn(ref msg) => msg,
             RequestMessage::Transactions(ref msg) => msg,
             RequestMessage::Epochs(ref msg) => msg,
+            RequestMessage::General(ref request) => request.as_message(),
+        }
+    }
+
+    /// Download cast general request to specified request type.
+    /// If downcast failed, resend the request again and return
+    /// `UnexpectedResponse` error.
+    pub fn downcast_general<T: Request + Any>(
+        &self, io: &NetworkContext, request_manager: &RequestManager,
+    ) -> Result<&T, Error> {
+        let request = match *self {
+            RequestMessage::General(ref request) => request,
+            _ => {
+                warn!("failed to downcast message to RequestMessage::General(Request), message = {:?}", self);
+                request_manager.remove_mismatch_request(io, self);
+                return Err(ErrorKind::UnexpectedResponse.into());
+            }
+        };
+
+        match request.as_any().downcast_ref::<T>() {
+            Some(req) => Ok(req),
+            None => {
+                warn!("failed to downcast general request to concrete request type, message = {:?}", self);
+                request_manager.remove_mismatch_request(io, self);
+                Err(ErrorKind::UnexpectedResponse.into())
+            }
         }
     }
 }
@@ -417,6 +516,7 @@ impl TimedSyncRequests {
             | RequestMessage::Compact(_)
             | RequestMessage::BlockTxn(_) => conf.blocks_request_timeout,
             RequestMessage::Transactions(_) => conf.transaction_request_timeout,
+            RequestMessage::General(ref request) => request.timeout(),
         };
         TimedSyncRequests::new(peer_id, timeout, request_id)
     }

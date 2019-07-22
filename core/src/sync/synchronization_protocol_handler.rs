@@ -29,12 +29,19 @@ use rlp::Rlp;
 //use slab::Slab;
 use super::{
     msg_sender::{send_message, send_message_with_throttling},
-    request_manager::{RequestManager, RequestMessage},
+    request_manager::{Request, RequestManager, RequestMessage},
 };
 use crate::{
     block_data_manager::BlockStatus,
     consensus::ConsensusGraphInner,
-    sync::{synchronization_state::SyncPhase, SynchronizationGraphInner},
+    sync::{
+        state::{
+            SnapshotChunkRequest, SnapshotChunkResponse, SnapshotChunkSync,
+            SnapshotManifestRequest, SnapshotManifestResponse, StateSync,
+        },
+        synchronization_state::SyncPhase,
+        SynchronizationGraphInner,
+    },
     verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -210,6 +217,9 @@ pub struct SynchronizationProtocolHandler {
 
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
+
+    // state sync for any checkpoint
+    state_sync: Mutex<SnapshotChunkSync>,
 }
 
 #[derive(Clone)]
@@ -259,13 +269,14 @@ impl SynchronizationProtocolHandler {
                 verification_config,
                 pow_config,
             )),
-            syn,
+            syn: syn.clone(),
             request_manager,
             latest_epoch_requested: Mutex::new(0),
             future_blocks: FutureBlockContainer::new(
                 future_block_buffer_capacity,
             ),
             recover_public_queue: Mutex::new(VecDeque::new()),
+            state_sync: Mutex::new(SnapshotChunkSync::new(syn)),
         }
     }
 
@@ -316,7 +327,7 @@ impl SynchronizationProtocolHandler {
 
     fn dispatch_message(
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
-    ) {
+    ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         if !self.syn.contains_peer(&peer) {
             debug!(
@@ -330,7 +341,7 @@ impl SynchronizationProtocolHandler {
                 || msg_id != MsgId::STATUS
             {
                 warn!("Message from unknown peer {:?}", msg_id);
-                return;
+                return Ok(());
             }
         } else {
             self.syn.update_heartbeat(&peer);
@@ -395,13 +406,36 @@ impl SynchronizationProtocolHandler {
             MsgId::GET_BLOCK_HASHES_RESPONSE => {
                 self.on_block_hashes_response(io, peer, &rlp)
             }
+            MsgId::GET_SNAPSHOT_MANIFEST => {
+                rlp.as_val::<SnapshotManifestRequest>()?.handle(io, peer)
+            }
+            MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE => {
+                let resp = rlp.as_val::<SnapshotManifestResponse>()?;
+                self.state_sync.lock().handle_snapshot_manifest_response(
+                    io,
+                    peer,
+                    resp,
+                    &self.request_manager,
+                )
+            }
+            MsgId::GET_SNAPSHOT_CHUNK => {
+                rlp.as_val::<SnapshotChunkRequest>()?.handle(io, peer)
+            }
+            MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => {
+                let resp = rlp.as_val::<SnapshotChunkResponse>()?;
+                self.state_sync.lock().handle_snapshot_chunk_response(
+                    io,
+                    peer,
+                    resp,
+                    &self.request_manager,
+                )
+            }
             _ => {
                 warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
                 io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
                 Ok(())
             }
         }
-        .unwrap_or_else(|e| self.handle_error(io, peer, msg_id, e));
     }
 
     /// Error handling for dispatched messages.
@@ -1280,7 +1314,13 @@ impl SynchronizationProtocolHandler {
     }
 
     fn start_sync(&self, io: &NetworkContext) {
-        if self.catch_up_mode() {
+        let checkpoint = self.syn.sync_phase.lock().get_sync_checkpoint();
+
+        if let Some(checkpoint) = checkpoint {
+            self.state_sync
+                .lock()
+                .start(checkpoint, io, &self.request_manager);
+        } else if self.catch_up_mode() {
             self.request_epochs(io);
         } else {
             self.request_missing_terminals(io);
@@ -2494,7 +2534,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
-        self.dispatch_message(io, peer, msg_id.into(), rlp);
+        self.dispatch_message(io, peer, msg_id.into(), rlp)
+            .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }
 
     fn on_work_dispatch(
