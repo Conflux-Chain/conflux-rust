@@ -526,11 +526,12 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
 
     for i in range(num_nodes):
         # make sure all nodes are reachable
-        next = (i + 1) % num_nodes
-        peer[i].append(next)
-        lat = random.randint(latency_min, latency_max)
-        latencies[i][next] = lat
-        latencies[next][i] = lat
+        if num_nodes > 1:
+            next = (i + 1) % num_nodes
+            peer[i].append(next)
+            lat = random.randint(latency_min, latency_max)
+            latencies[i][next] = lat
+            latencies[next][i] = lat
 
         for _ in range(sample - 1):
             while True:
@@ -572,6 +573,7 @@ class ConnectThread(threading.Thread):
                     connect_nodes(self.nodes, self.a, p)
                 for p in self.latencies[self.a]:
                     self.nodes[self.a].addlatency(self.nodes[p].key, self.latencies[self.a][p])
+                print("{} vs {}".format(len(self.nodes[self.a].getpeerinfo()), self.min_peers))
                 if len(self.nodes[self.a].getpeerinfo()) >= self.min_peers:
                     break
                 else:
