@@ -546,8 +546,43 @@ impl ConsensusGraphInner {
         block_header.blame()
     }
 
+    fn get_blame_with_pivot_index(&self, pivot_index: usize) -> u32 {
+        let arena_index = self.pivot_chain[pivot_index];
+        self.get_blame(arena_index)
+    }
+
     #[allow(dead_code)]
-    fn find_the_first_trusted_blame(
+    fn find_the_first_with_correct_state_of(
+        &self, pivot_index: usize,
+    ) -> Option<usize> {
+        let trusted_blame_pivot_index =
+            self.find_the_first_trusted_blame_after(pivot_index);
+        if trusted_blame_pivot_index.is_none() {
+            return None;
+        }
+
+        let mut trusted_blame_pivot_index = trusted_blame_pivot_index.unwrap();
+        if trusted_blame_pivot_index != pivot_index {
+            loop {
+                let blame =
+                    self.get_blame_with_pivot_index(trusted_blame_pivot_index);
+                let prev_trusted_pivot_index =
+                    trusted_blame_pivot_index - blame as usize - 1;
+                if prev_trusted_pivot_index == pivot_index {
+                    trusted_blame_pivot_index = pivot_index;
+                    break;
+                } else if prev_trusted_pivot_index < pivot_index {
+                    break;
+                } else {
+                    trusted_blame_pivot_index = prev_trusted_pivot_index;
+                }
+            }
+        }
+
+        Some(trusted_blame_pivot_index)
+    }
+
+    fn find_the_first_trusted_blame_after(
         &self, pivot_index: usize,
     ) -> Option<usize> {
         let mut cur_pivot_index = pivot_index;
