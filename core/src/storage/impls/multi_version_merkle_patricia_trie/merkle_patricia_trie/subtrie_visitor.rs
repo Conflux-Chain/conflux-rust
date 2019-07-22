@@ -101,35 +101,20 @@ impl<'trie> SubTrieVisitor<'trie> {
 
     fn retrieve_children_hashes<'a>(
         &self, children_table: ChildrenTableDeltaMpt,
-        allocator_ref: AllocatorRefRefDeltaMpt<'a>, db_load_count: &mut i32,
-    ) -> Result<MaybeMerkleTable>
-    {
-        let node_memory_manager = self.node_memory_manager();
-        let cache_manager = node_memory_manager.get_cache_manager();
-
+    ) -> Result<MaybeMerkleTable> {
         if children_table.get_children_count() == 0 {
             return Ok(None);
         }
 
         let mut merkles = ChildrenMerkleTable::default();
-        for (i, maybe_node_ref_mut) in children_table.iter_non_skip() {
-            match maybe_node_ref_mut {
-                None => merkles[i as usize] = MERKLE_NULL_NODE,
-                Some(node_ref_mut) => {
-                    let mut is_loaded_from_db = false;
-                    merkles[i as usize] = node_memory_manager
-                        .node_as_ref_with_cache_manager(
-                            allocator_ref,
-                            (*node_ref_mut).into(),
-                            cache_manager,
-                            &mut is_loaded_from_db,
-                        )?
-                        .merkle_hash;
-                    if is_loaded_from_db {
-                        *db_load_count += 1;
-                    }
+
+        for (i, maybe_node_ref) in children_table.iter_non_skip() {
+            merkles[i as usize] = match maybe_node_ref {
+                None => MERKLE_NULL_NODE,
+                Some(node_ref) => {
+                    self.trie_ref.get_merkle(Some((*node_ref).into()))?.unwrap()
                 }
-            }
+            };
         }
 
         return Ok(Some(merkles));
@@ -137,68 +122,53 @@ impl<'trie> SubTrieVisitor<'trie> {
 
     pub fn get_proof<'a>(&self, key: KeyPart) -> Result<TrieProof> {
         let allocator_ref = &self.node_memory_manager().get_allocator();
-        let mut proof_nodes = vec![];
-
         let node_memory_manager = self.node_memory_manager();
         let cache_manager = node_memory_manager.get_cache_manager();
+
+        let mut proof_nodes = vec![];
+        let mut finished = false;
         let mut node_ref = self.root.node_ref.clone();
         let mut key = key;
 
-        let mut db_load_count = 0;
-        loop {
-            // retrieve current node
-            let mut is_loaded_from_db = false;
+        while !finished {
+            // retrieve current trie node
             let trie_node = node_memory_manager
                 .node_as_ref_with_cache_manager(
                     allocator_ref,
                     node_ref.clone(),
                     cache_manager,
-                    &mut is_loaded_from_db,
+                    &mut false,
                 )?;
-            if is_loaded_from_db {
-                db_load_count += 1;
-            }
 
-            // calculate children hashes
-            let children_table = trie_node.children_table.clone();
-            let mut proof_node = trie_node.create_proof_node();
-            drop(trie_node); // need to release so that we can retrieve its children
-            proof_node.children_table = self.retrieve_children_hashes(
-                children_table,
-                allocator_ref,
-                &mut db_load_count,
-            )?;
-            proof_nodes.push(proof_node);
-
-            // retrieve current node again
-            let mut is_loaded_from_db = false;
-            let trie_node = node_memory_manager
-                .node_as_ref_with_cache_manager(
-                    allocator_ref,
-                    node_ref,
-                    cache_manager,
-                    &mut is_loaded_from_db,
-                )?;
-            if is_loaded_from_db {
-                db_load_count += 1;
-            }
-
+            // update variables for subsequent traversal
             match trie_node.walk::<Read>(key) {
                 WalkStop::Arrived => {
-                    node_memory_manager.log_uncached_key_access(db_load_count);
-                    return Ok(TrieProof::new(proof_nodes));
+                    finished = true;
                 }
                 WalkStop::Descent {
                     key_remaining,
-                    child_index: _,
                     child_node,
+                    ..
                 } => {
                     node_ref = child_node;
                     key = key_remaining;
                 }
-                _ => return Ok(TrieProof::new(proof_nodes)),
-            }
+                _ => {
+                    finished = true;
+                }
+            };
+
+            // create proof node
+            proof_nodes.push({
+                let mut n = trie_node.create_proof_node();
+                let children = trie_node.children_table.clone();
+                drop(trie_node);
+                n.children_table = self.retrieve_children_hashes(children)?;
+                n
+            });
         }
+
+        Ok(TrieProof::new(proof_nodes))
     }
 
     pub fn get(&self, key: KeyPart) -> Result<Option<Box<[u8]>>> {
@@ -221,40 +191,21 @@ impl<'trie> SubTrieVisitor<'trie> {
             None => Ok(None),
             Some(trie_node) => {
                 if trie_node.get_compressed_path_size() == 0 {
-                    Ok(Some(trie_node.merkle_hash))
-                } else {
-                    let maybe_value = trie_node.value_clone().into_option();
-                    let merkles = match trie_node
-                        .children_table
-                        .get_children_count()
-                    {
-                        0 => None,
-                        _ => {
-                            let mut merkles = ChildrenMerkleTable::default();
-                            let children_table =
-                                trie_node.children_table.clone();
-                            drop(trie_node);
-                            for (i, maybe_node_ref) in
-                                children_table.iter_non_skip()
-                            {
-                                merkles[i as usize] = match maybe_node_ref {
-                                    None => MERKLE_NULL_NODE,
-                                    Some(node_ref) => self
-                                        .trie_ref
-                                        .get_merkle(Some((*node_ref).into()))?
-                                        .unwrap(),
-                                };
-                            }
-
-                            Some(merkles)
-                        }
-                    };
-
-                    Ok(Some(compute_node_merkle(
-                        merkles.as_ref(),
-                        maybe_value.as_ref().map(|value| value.as_ref()),
-                    )))
+                    return Ok(Some(trie_node.merkle_hash));
                 }
+
+                let maybe_value = trie_node.value_clone().into_option();
+
+                let merkles = {
+                    let children_table = trie_node.children_table.clone();
+                    drop(trie_node);
+                    self.retrieve_children_hashes(children_table)?
+                };
+
+                Ok(Some(compute_node_merkle(
+                    merkles.as_ref(),
+                    maybe_value.as_ref().map(|value| value.as_ref()),
+                )))
             }
         }
     }
