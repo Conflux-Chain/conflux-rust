@@ -32,16 +32,17 @@ use super::{
     request_manager::{Request, RequestManager, RequestMessage},
 };
 use crate::{
-    sync::fast_sync::{
-        FastSync, SnapshotChunkRequest, SnapshotChunkResponse,
-        SnapshotChunkSync, SnapshotManifestRequest, SnapshotManifestResponse,
-    },
-    verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
-};
-use crate::{
     block_data_manager::BlockStatus,
     consensus::ConsensusGraphInner,
-    sync::{synchronization_state::SyncPhase, SynchronizationGraphInner},
+    sync::{
+        fast_sync::{
+            FastSync, SnapshotChunkRequest, SnapshotChunkResponse,
+            SnapshotChunkSync, SnapshotManifestRequest,
+            SnapshotManifestResponse,
+        },
+        synchronization_state::SyncPhase,
+        SynchronizationGraphInner,
+    },
     verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -234,7 +235,6 @@ pub struct ProtocolConfiguration {
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub start_as_catch_up_mode: bool,
-    pub fast_sync_enabled: bool,
     pub received_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
@@ -1315,10 +1315,14 @@ impl SynchronizationProtocolHandler {
     }
 
     fn start_sync(&self, io: &NetworkContext) {
-        if let Some(checkpoint) = self.syn.get_fast_sync_checkpoint() {
-            self.fast_sync
-                .lock()
-                .start(checkpoint, io, &self.request_manager);
+        if let SyncPhase::SyncCheckpoints(checkpoint) =
+            &*self.syn.sync_phase.lock()
+        {
+            self.fast_sync.lock().start(
+                checkpoint.clone(),
+                io,
+                &self.request_manager,
+            );
         } else if self.catch_up_mode() {
             self.request_epochs(io);
         } else {

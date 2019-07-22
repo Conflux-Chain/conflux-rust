@@ -76,7 +76,8 @@ impl SnapshotChunkSync {
             request_manager.match_request(io, peer, response.request_id)?;
 
         // validate the responded manifest
-        let request = message.downcast_general::<SnapshotManifestRequest>()?;
+        let request = message
+            .downcast_general::<SnapshotManifestRequest>(io, request_manager)?;
         if request.checkpoint != response.checkpoint {
             return Err(ErrorKind::Invalid.into());
         }
@@ -132,7 +133,8 @@ impl SnapshotChunkSync {
             request_manager.match_request(io, peer, response.request_id)?;
 
         // validate the responded chunk hash
-        let request = message.downcast_general::<SnapshotChunkRequest>()?;
+        let request = message
+            .downcast_general::<SnapshotChunkRequest>(io, request_manager)?;
         let responded_chunk_hash = keccak(response.chunk);
         if responded_chunk_hash != request.chunk_hash {
             return Err(ErrorKind::Invalid.into());

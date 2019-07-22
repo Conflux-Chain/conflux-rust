@@ -1,5 +1,5 @@
 use crate::sync::{
-    msg_sender::send_message,
+    msg_sender::send_message, request_manager::RequestManager,
     synchronization_protocol_handler::ProtocolConfiguration, Error, ErrorKind,
 };
 use message::{
@@ -458,12 +458,16 @@ impl RequestMessage {
     }
 
     /// Download cast general request to specified request type.
-    /// If failed, return `UnexpectedResponse` error.
-    pub fn downcast_general<T: Request + Any>(&self) -> Result<&T, Error> {
+    /// If downcast failed, resend the request again and return
+    /// `UnexpectedResponse` error.
+    pub fn downcast_general<T: Request + Any>(
+        &self, io: &NetworkContext, request_manager: &RequestManager,
+    ) -> Result<&T, Error> {
         let request = match *self {
             RequestMessage::General(ref request) => request,
             _ => {
                 warn!("failed to downcast message to RequestMessage::General(Request), message = {:?}", self);
+                request_manager.remove_mismatch_request(io, self);
                 return Err(ErrorKind::UnexpectedResponse.into());
             }
         };
@@ -472,6 +476,7 @@ impl RequestMessage {
             Some(req) => Ok(req),
             None => {
                 warn!("failed to downcast general request to concrete request type, message = {:?}", self);
+                request_manager.remove_mismatch_request(io, self);
                 Err(ErrorKind::UnexpectedResponse.into())
             }
         }
