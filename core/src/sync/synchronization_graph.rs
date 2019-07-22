@@ -807,7 +807,8 @@ impl SynchronizationGraph {
             })
             .expect("Cannot fail");
 
-        sync_graph.recover_graph_from_db();
+        // TODO: determine the parameter by sync phase
+        sync_graph.recover_graph_from_db(false);
 
         sync_graph
     }
@@ -838,7 +839,7 @@ impl SynchronizationGraph {
             .set_to_be_propagated_transactions(transactions);
     }
 
-    fn recover_graph_from_db(&mut self) {
+    fn recover_graph_from_db(&mut self, header_only: bool) {
         info!("Start fast recovery of the block DAG from database");
         let terminals_opt = self.data_man.terminals_from_db();
         if terminals_opt.is_none() {
@@ -857,10 +858,15 @@ impl SynchronizationGraph {
             return;
         }
         debug!("Get current checkpoint hash {:?}", current_checkpoint_hash);
-        
-        let genesis_local_info = self.data_man.local_block_info_from_db(&current_checkpoint_hash);
+
+        let genesis_local_info = self
+            .data_man
+            .local_block_info_from_db(&current_checkpoint_hash);
         if genesis_local_info.is_none() {
-            warn!("failed to get local block info from db for genesis[{}]", &current_checkpoint_hash);
+            warn!(
+                "failed to get local block info from db for genesis[{}]",
+                &current_checkpoint_hash
+            );
             return;
         }
         let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
@@ -879,8 +885,11 @@ impl SynchronizationGraph {
             }
 
             // ignore blocks beyond current checkpoint
-            // if block_local_info is missing, consider it is in current checkpoint
-            if let Some(block_local_info) = self.data_man.local_block_info_from_db(&hash) {
+            // if block_local_info is missing, consider it is in current
+            // checkpoint
+            if let Some(block_local_info) =
+                self.data_man.local_block_info_from_db(&hash)
+            {
                 if block_local_info.get_seq_num() < genesis_seq_num {
                     continue;
                 }
@@ -892,6 +901,7 @@ impl SynchronizationGraph {
                     &mut block.block_header,
                     true,
                     false,
+                    header_only,
                 );
                 assert!(success);
 
@@ -902,8 +912,11 @@ impl SynchronizationGraph {
                 // TODO possible by inserting blocks in topological order
                 // TODO Read only headers from db
                 // This is necessary to construct consensus graph.
-                let (success, _) = self.insert_block(block, true, false, true);
-                assert!(success);
+                if !header_only {
+                    let (success, _) =
+                        self.insert_block(block, true, false, true);
+                    assert!(success);
+                }
 
                 if !visited_blocks.contains(&parent) {
                     queue.push_back(parent);
