@@ -1,6 +1,6 @@
 use crate::sync::{
-    fast_sync::snapshot_manifest_response::SnapshotManifestResponse,
-    msg_sender::send_message, request_manager::Request, Error,
+    msg_sender::send_message, request_manager::Request,
+    state::snapshot_manifest_response::SnapshotManifestResponse, Error,
 };
 use cfx_types::H256;
 use message::{Message, MsgId};

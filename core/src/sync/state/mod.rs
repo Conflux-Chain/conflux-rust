@@ -8,15 +8,15 @@ use crate::sync::request_manager::RequestManager;
 use cfx_types::H256;
 use network::NetworkContext;
 
-/// Trait of fast sync state with given checkpoint. Generally, there're 2 ways
-/// to fast sync state:
+/// Trait of sync state with given checkpoint. Generally, there're 2 ways
+/// to sync state:
 /// 1. Recursively sync the state MPT from root node to leaf node without
 /// accurate progress.
 /// 2. Divide the state MPT into different chunks, and sync up all chunks
 /// with accurate progress.
-pub trait FastSync {
-    /// Start to fast sync state for the specified checkpoint.
-    /// - If fast sync is inactive, then start to sync.
+pub trait StateSync {
+    /// Start to sync state for the specified checkpoint.
+    /// - If sync is inactive, then start to sync state.
     /// - Otherwise if checkpoint not changed, then no-op happen.
     /// - Otherwise, cleanup the previous sync and start new sync.
     fn start(

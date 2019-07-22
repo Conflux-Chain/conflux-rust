@@ -1,11 +1,11 @@
 use crate::sync::{
-    fast_sync::{
+    request_manager::RequestManager,
+    state::{
         snapshot_chunk_request::SnapshotChunkRequest,
         snapshot_chunk_response::SnapshotChunkResponse,
         snapshot_manifest_request::SnapshotManifestRequest,
-        snapshot_manifest_response::SnapshotManifestResponse, FastSync,
+        snapshot_manifest_response::SnapshotManifestResponse, StateSync,
     },
-    request_manager::RequestManager,
     Error, ErrorKind, SynchronizationState,
 };
 use cfx_types::H256;
@@ -32,7 +32,7 @@ pub struct SnapshotChunkSync {
     pending_chunks: VecDeque<H256>, // chunks waiting for download
 }
 
-impl FastSync for SnapshotChunkSync {
+impl StateSync for SnapshotChunkSync {
     fn start(
         &mut self, checkpoint: H256, io: &NetworkContext,
         request_manager: &RequestManager,

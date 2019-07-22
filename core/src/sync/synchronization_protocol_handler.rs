@@ -35,10 +35,9 @@ use crate::{
     block_data_manager::BlockStatus,
     consensus::ConsensusGraphInner,
     sync::{
-        fast_sync::{
-            FastSync, SnapshotChunkRequest, SnapshotChunkResponse,
-            SnapshotChunkSync, SnapshotManifestRequest,
-            SnapshotManifestResponse,
+        state::{
+            SnapshotChunkRequest, SnapshotChunkResponse, SnapshotChunkSync,
+            SnapshotManifestRequest, SnapshotManifestResponse, StateSync,
         },
         synchronization_state::SyncPhase,
         SynchronizationGraphInner,
@@ -219,8 +218,8 @@ pub struct SynchronizationProtocolHandler {
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
 
-    // fast sync state with given checkpoint
-    fast_sync: Mutex<SnapshotChunkSync>,
+    // state sync for any checkpoint
+    state_sync: Mutex<SnapshotChunkSync>,
 }
 
 #[derive(Clone)]
@@ -277,7 +276,7 @@ impl SynchronizationProtocolHandler {
                 future_block_buffer_capacity,
             ),
             recover_public_queue: Mutex::new(VecDeque::new()),
-            fast_sync: Mutex::new(SnapshotChunkSync::new(syn)),
+            state_sync: Mutex::new(SnapshotChunkSync::new(syn)),
         }
     }
 
@@ -412,7 +411,7 @@ impl SynchronizationProtocolHandler {
             }
             MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE => {
                 let resp = rlp.as_val::<SnapshotManifestResponse>()?;
-                self.fast_sync.lock().handle_snapshot_manifest_response(
+                self.state_sync.lock().handle_snapshot_manifest_response(
                     io,
                     peer,
                     resp,
@@ -424,7 +423,7 @@ impl SynchronizationProtocolHandler {
             }
             MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => {
                 let resp = rlp.as_val::<SnapshotChunkResponse>()?;
-                self.fast_sync.lock().handle_snapshot_chunk_response(
+                self.state_sync.lock().handle_snapshot_chunk_response(
                     io,
                     peer,
                     resp,
@@ -1318,7 +1317,7 @@ impl SynchronizationProtocolHandler {
         if let SyncPhase::SyncCheckpoints(checkpoint) =
             &*self.syn.sync_phase.lock()
         {
-            self.fast_sync.lock().start(
+            self.state_sync.lock().start(
                 checkpoint.clone(),
                 io,
                 &self.request_manager,
