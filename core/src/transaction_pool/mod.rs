@@ -154,8 +154,10 @@ impl TransactionPool {
 
         if failure.len() != 0 {
             for (_, msg) in failure.clone() {
-                warn!("Failed insert tx due to: {}", msg);
-                panic!(msg);
+                if msg != format!("Failed imported to deferred pool: Tx with same nonce already inserted, try to replace it with a higher gas price") {
+                    warn!("Failed insert tx due to: {}", msg);
+                    panic!(msg);
+                }
             }
         }
         (passed_transactions, failure)
