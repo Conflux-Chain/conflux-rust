@@ -584,7 +584,7 @@ impl SynchronizationProtocolHandler {
                                 Block::new(header, trans),
                                 true,  // need_to_verify
                                 true,  // persistent
-                                false, // sync_graph_only
+                                false, // recover_from_db
                             );
                             // May fail due to transactions hash collision
                             if !success {
@@ -827,9 +827,9 @@ impl SynchronizationProtocolHandler {
 
                             let (success, to_relay) = self.graph.insert_block(
                                 Block::new(header, trans),
-                                true,
-                                true,
-                                false,
+                                true,  // need_to_verify
+                                true,  // persistent
+                                false, // recover_from_db
                             );
 
                             let mut blocks = Vec::new();
@@ -1518,6 +1518,7 @@ impl SynchronizationProtocolHandler {
                 true,
                 false,
                 self.insert_header_to_consensus(),
+                true,
             );
             if !valid {
                 continue;
@@ -1781,9 +1782,10 @@ impl SynchronizationProtocolHandler {
                     // if we are catching up, so we do not need to relay.
                     let (valid, _) = self.graph.insert_block_header(
                         &mut block.block_header,
-                        true,
-                        false,
-                        false,
+                        true,  // need_to_verify
+                        false, // bench_mode
+                        false, // insert_into_consensus
+                        true,  // persistent
                     );
                     if !valid {
                         received_blocks.insert(hash);
@@ -1834,6 +1836,7 @@ impl SynchronizationProtocolHandler {
             false,
             false,
             false,
+            true,
         );
         assert!(success);
         assert!(!self.graph.contains_block(&hash));
@@ -1856,6 +1859,7 @@ impl SynchronizationProtocolHandler {
                     need_to_verify,
                     false,
                     false,
+                    true,
                 );
                 if res.0 {
                     need_to_relay.extend(res.1);
@@ -2169,6 +2173,7 @@ impl SynchronizationProtocolHandler {
                 true,
                 false,
                 self.insert_header_to_consensus(),
+                true,
             );
             if valid {
                 need_to_relay.extend(to_relay);

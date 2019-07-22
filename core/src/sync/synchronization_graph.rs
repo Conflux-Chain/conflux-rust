@@ -848,26 +848,16 @@ impl SynchronizationGraph {
         let terminals = terminals_opt.unwrap();
         debug!("Get terminals {:?}", terminals);
 
-        let checkpoint_hashes_opt = self.data_man.checkpoint_hashes_from_db();
-        if checkpoint_hashes_opt.is_none() {
-            return;
-        }
-        let current_checkpoint_hash = checkpoint_hashes_opt.unwrap().0;
-        if current_checkpoint_hash != self.data_man.genesis_block().hash() {
-            warn!("terminals too far from genesis_block, give up recover");
-            return;
-        }
-        debug!("Get current checkpoint hash {:?}", current_checkpoint_hash);
+        let genesis_hash = self.data_man.genesis_block().hash();
+        debug!("Get current genesis_block hash {:?}", genesis_hash);
 
-        let genesis_local_info = self
-            .data_man
-            .local_block_info_from_db(&current_checkpoint_hash);
+        let genesis_local_info =
+            self.data_man.local_block_info_from_db(&genesis_hash);
         if genesis_local_info.is_none() {
-            warn!(
+            panic!(
                 "failed to get local block info from db for genesis[{}]",
-                &current_checkpoint_hash
+                &genesis_hash
             );
-            return;
         }
         let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
 
@@ -880,7 +870,7 @@ impl SynchronizationGraph {
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
         while let Some(hash) = queue.pop_front() {
-            if hash == self.data_man.genesis_block().hash() {
+            if hash == genesis_hash {
                 continue;
             }
 
@@ -902,15 +892,13 @@ impl SynchronizationGraph {
                     true,
                     false,
                     header_only,
+                    false,
                 );
                 assert!(success);
 
                 let parent = block.block_header.parent_hash().clone();
                 let referees = block.block_header.referee_hashes().clone();
 
-                // TODO Avoid reading blocks from db twice,
-                // TODO possible by inserting blocks in topological order
-                // TODO Read only headers from db
                 // This is necessary to construct consensus graph.
                 if !header_only {
                     let (success, _) =
@@ -936,7 +924,6 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        self.consensus.construct_pivot();
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -995,6 +982,7 @@ impl SynchronizationGraph {
         &self, inner: &mut SynchronizationGraphInner,
         frontier_index_list: Vec<usize>, need_to_verify: bool,
         header_index_to_insert: usize, insert_to_consensus: bool,
+        persistent: bool,
     ) -> (HashSet<usize>, Vec<H256>)
     {
         let now = SystemTime::now()
@@ -1054,6 +1042,7 @@ impl SynchronizationGraph {
                         self.data_man.insert_block_header(
                             inner.arena[index].block_header.hash(),
                             inner.arena[index].block_header.clone(),
+                            persistent,
                         );
                     }
                     if insert_to_consensus {
@@ -1091,6 +1080,7 @@ impl SynchronizationGraph {
                         self.data_man.insert_block_header(
                             inner.arena[index].block_header.hash(),
                             inner.arena[index].block_header.clone(),
+                            persistent,
                         );
                     }
                     inner.arena[index].graph_status =
@@ -1108,6 +1098,7 @@ impl SynchronizationGraph {
                         self.data_man.insert_block_header(
                             inner.arena[index].block_header.hash(),
                             inner.arena[index].block_header.clone(),
+                            persistent,
                         );
                     }
                 }
@@ -1118,7 +1109,7 @@ impl SynchronizationGraph {
 
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool,
-        bench_mode: bool, insert_to_consensus: bool,
+        bench_mode: bool, insert_to_consensus: bool, persistent: bool,
     ) -> (bool, Vec<H256>)
     {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
@@ -1189,6 +1180,7 @@ impl SynchronizationGraph {
             need_to_verify,
             me,
             insert_to_consensus,
+            persistent,
         );
 
         let me_invalid = invalid_set.contains(&me);
@@ -1216,7 +1208,7 @@ impl SynchronizationGraph {
 
     fn set_graph_ready(
         &self, inner: &mut SynchronizationGraphInner, index: usize,
-        sync_graph_only: bool,
+        recover_from_db: bool,
     )
     {
         inner.arena[index].graph_status = BLOCK_GRAPH_READY;
@@ -1234,22 +1226,19 @@ impl SynchronizationGraph {
 
         let h = inner.arena[index].block_header.hash();
         debug!("Block {:?} is graph ready", h);
-        if !sync_graph_only {
-            // Make Consensus Worker handle the block in order
-            // asynchronously
-            self.consensus_sender
-                .lock()
-                .send((h, false))
-                .expect("Cannot fail");
-        } else {
-            self.consensus.on_new_block(&h, true);
-        }
+        // Make Consensus Worker handle the block in order
+        // asynchronously
+        // if recover_from_db = true, we can simply ignore body
+        self.consensus_sender
+            .lock()
+            .send((h, recover_from_db))
+            .expect("Cannot fail");
     }
 
     /// subroutine called by `insert_block` and `remove_expire_blocks`
     fn propagate_graph_status(
         &self, inner: &mut SynchronizationGraphInner,
-        frontier_index_list: Vec<usize>, sync_graph_only: bool,
+        frontier_index_list: Vec<usize>, recover_from_db: bool,
     ) -> HashSet<usize>
     {
         let mut queue = VecDeque::new();
@@ -1269,7 +1258,7 @@ impl SynchronizationGraph {
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
-                self.set_graph_ready(inner, index, sync_graph_only);
+                self.set_graph_ready(inner, index, recover_from_db);
                 for child in &inner.arena[index].children {
                     debug_assert!(
                         inner.arena[*child].graph_status < BLOCK_GRAPH_READY
@@ -1290,7 +1279,7 @@ impl SynchronizationGraph {
 
     pub fn insert_block(
         &self, block: Block, need_to_verify: bool, persistent: bool,
-        sync_graph_only: bool,
+        recover_from_db: bool,
     ) -> (bool, bool)
     {
         let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
@@ -1354,7 +1343,7 @@ impl SynchronizationGraph {
         if inner.arena[me].graph_status != BLOCK_INVALID {
             // If we are rebuilding the graph from db, we do not insert all
             // blocks into memory
-            if !sync_graph_only {
+            if !recover_from_db {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
                 self.data_man.insert_compact_block(block.to_compact());
@@ -1365,7 +1354,7 @@ impl SynchronizationGraph {
         }
 
         let invalid_set =
-            self.propagate_graph_status(inner, vec![me], sync_graph_only);
+            self.propagate_graph_status(inner, vec![me], recover_from_db);
 
         if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
             need_to_relay = true;
@@ -1449,6 +1438,7 @@ impl SynchronizationGraph {
                     true,
                     NULL,
                     false,
+                    true,
                 );
             inner.process_invalid_blocks(&invalid_set);
             for hash in need_to_relay {

@@ -253,9 +253,10 @@ fn main() {
         hashes.push(new_hash);
         sync.insert_block_header(
             &mut new_block.block_header,
-            false,
-            true,
-            false,
+            false, // need_to_verify
+            true,  // bench_mode
+            false, // insert_to_consensus
+            true,  // persistent
         );
         sync.insert_block(new_block, false, false, false);
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
