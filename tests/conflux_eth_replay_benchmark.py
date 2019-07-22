@@ -313,9 +313,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                               tx_count * 100.0 / total)
 
                 if txpool_received + 50000 < tx_count:
-                    tx_received_slowdown += 1
-                    self.log.info("Conflux full node is slow by %s at receiving txs, slow down by 1s.",
-                                  tx_count - txpool_received)
+                    should_sleep = elapsed_time * (tx_count - txpool_received) / txpool_received + 1
+                    tx_received_slowdown += should_sleep
+                    self.log.info("Conflux full node is slow by %s at receiving txs, slow down by %s.",
+                                  tx_count - txpool_received, should_sleep)
                 txpool_unpacked = txpool_status["unpacked"]
                 unpacked_limit = 300000
                 if txpool_unpacked > unpacked_limit:
@@ -364,7 +365,7 @@ class BlockGenThread(threading.Thread):
         self.hashpower_percent = hashpower
 
     def run(self):
-        # self.log.info("block gen thread started to run")
+        self.log.info("block gen thread started to run")
         start_time = datetime.datetime.now()
         pre_generated_blocks = math.ceil(1.0 * ConfluxEthReplayTest.INITIALIZE_TXS / BlockGenThread.BLOCK_TX_LIMIT)
         for i in range(0, pre_generated_blocks):
@@ -372,12 +373,12 @@ class BlockGenThread(threading.Thread):
                 return
             sleep_sec = 1.0 * i * ConfluxEthReplayTest.INITIALIZE_SLEEP / 2 / pre_generated_blocks + 1.0 * i - (
                     datetime.datetime.now() - start_time).total_seconds()
-            # self.log.info("%s sleep %s at test startup", self.node_id, sleep_sec)
+            self.log.info("%s sleep %s at test startup", self.node_id, sleep_sec)
             if sleep_sec > 0:
                 time.sleep(sleep_sec)
             if self.node_id == 0:
                 h = self.node.generateoneblock(BlockGenThread.BLOCK_TX_LIMIT, BlockGenThread.BLOCK_SIZE_LIMIT * 10)
-                # self.log.info("node %s generated block at test start %s", self.node_id, h)
+                self.log.info("node %s generated block at test start %s", self.node_id, h)
         # for blocks to propogate.
         time.sleep(ConfluxEthReplayTest.INITIALIZE_SLEEP / 2)
 
@@ -390,8 +391,8 @@ class BlockGenThread(threading.Thread):
                 total_mining_sec += mining
                 elapsed_sec = (datetime.datetime.now() - start_time).total_seconds()
                 sleep_sec = total_mining_sec - elapsed_sec
-                # self.log.info("%s elapsed time %s, total mining time %s sec, actually sleep %s sec",
-                #               self.node_id, elapsed_sec, total_mining_sec, sleep_sec)
+                self.log.info("%s elapsed time %s, total mining time %s sec, actually sleep %s sec",
+                              self.node_id, elapsed_sec, total_mining_sec, sleep_sec)
                 if sleep_sec > 0:
                     time.sleep(sleep_sec)
                 # TODO: open the flag
@@ -416,8 +417,8 @@ class BlockGenThread(threading.Thread):
                 erc20_tx_count = math.ceil(BlockGenThread.ERC20_TX_PER_BLOCK * generate_factor)
                 self.node.generateoneblockspecial(BlockGenThread.BLOCK_TX_LIMIT,
                                                   BlockGenThread.BLOCK_SIZE_LIMIT, simple_tx_count, erc20_tx_count)
-                # self.log.info("%s generated block with %s simple tx and %s erc20 tx",
-                #               self.node_id, simple_tx_count, erc20_tx_count)
+                self.log.info("%s generated block with %s simple tx and %s erc20 tx",
+                              self.node_id, simple_tx_count, erc20_tx_count)
             except Exception as e:
                 self.log.info("%s Fails to generate blocks", self.node_id)
                 self.log.info("%s %s", self.node_id, e)
