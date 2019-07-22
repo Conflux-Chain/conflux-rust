@@ -854,8 +854,7 @@ impl SynchronizationGraph {
         }
         let current_checkpoint_hash = checkpoint_hashes_opt.unwrap().0;
         if current_checkpoint_hash != self.data_man.genesis_block().hash() {
-            warn!("terminals too far from genesis_block, give up recover");
-            return;
+            panic!("terminals too far from genesis_block, give up recover");
         }
         debug!("Get current checkpoint hash {:?}", current_checkpoint_hash);
 
@@ -863,11 +862,10 @@ impl SynchronizationGraph {
             .data_man
             .local_block_info_from_db(&current_checkpoint_hash);
         if genesis_local_info.is_none() {
-            warn!(
+            panic!(
                 "failed to get local block info from db for genesis[{}]",
                 &current_checkpoint_hash
             );
-            return;
         }
         let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
 
@@ -902,6 +900,7 @@ impl SynchronizationGraph {
                     true,
                     false,
                     header_only,
+                    true,
                 );
                 assert!(success);
 
@@ -936,7 +935,6 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        self.consensus.construct_pivot();
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -1118,7 +1116,7 @@ impl SynchronizationGraph {
 
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool,
-        bench_mode: bool, insert_to_consensus: bool,
+        bench_mode: bool, insert_to_consensus: bool, sync_graph_only: bool,
     ) -> (bool, Vec<H256>)
     {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
@@ -1187,7 +1185,7 @@ impl SynchronizationGraph {
             inner,
             vec![me],
             need_to_verify,
-            me,
+            if sync_graph_only { NULL } else { me },
             insert_to_consensus,
         );
 

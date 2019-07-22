@@ -403,14 +403,6 @@ impl ConsensusGraph {
         )
     }
 
-    /// construct_pivot() builds the pivot chain and ists state at once,
-    /// avoiding intermediate redundant computation triggered by
-    /// on_new_block().
-    pub fn construct_pivot(&self) {
-        let inner = &mut *self.inner.write();
-        self.new_block_handler.construct_state_info(inner);
-    }
-
     /// This function is called after a new block appended to the
     /// ConsensusGraph. Because BestInformation is often queried outside. We
     /// store a version of best_info outside the inner to prevent keep

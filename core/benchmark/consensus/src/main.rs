@@ -256,6 +256,7 @@ fn main() {
             false,
             true,
             false,
+            false,
         );
         sync.insert_block(new_block, false, false, false);
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {

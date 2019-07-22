@@ -26,9 +26,7 @@ use crate::{
 use cfx_types::{into_i128, H256};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::RwLock;
-use primitives::{
-    BlockHeader, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
-};
+use primitives::{BlockHeader, SignedTransaction, StateRootWithAuxInfo};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
@@ -1252,79 +1250,6 @@ impl ConsensusNewBlockHandler {
             terminals.push(h.clone());
         }
         self.data_man.insert_terminals_to_db(&terminals);
-    }
-
-    pub fn construct_state_info(&self, inner: &mut ConsensusGraphInner) {
-        // Compute receipts root for the deferred block of the mining block,
-        // which is not in the db
-        if inner.pivot_index_to_height(inner.pivot_chain.len())
-            > DEFERRED_STATE_EPOCH_COUNT
-        {
-            let state_height = inner
-                .pivot_index_to_height(inner.pivot_chain.len())
-                - DEFERRED_STATE_EPOCH_COUNT;
-            let pivot_arena_index =
-                inner.get_pivot_block_arena_index(state_height);
-            let pivot_hash = inner.arena[pivot_arena_index].hash.clone();
-            let epoch_arena_indices = &inner.arena[pivot_arena_index]
-                .data
-                .ordered_executable_epoch_blocks;
-            let mut epoch_receipts =
-                Vec::with_capacity(epoch_arena_indices.len());
-
-            let mut receipts_correct = true;
-            for i in epoch_arena_indices {
-                if let Some(r) = self.data_man.block_results_by_hash_with_epoch(
-                    &inner.arena[*i].hash,
-                    &pivot_hash,
-                    true,
-                ) {
-                    epoch_receipts.push(r.receipts);
-                } else {
-                    // Constructed pivot chain does not match receipts in
-                    // db, so we have to recompute
-                    // the receipts of this epoch
-                    receipts_correct = false;
-                    break;
-                }
-            }
-            if receipts_correct {
-                let pivot_receipts_root =
-                    BlockHeaderBuilder::compute_block_receipts_root(
-                        &epoch_receipts,
-                    );
-                let pivot_logs_bloom_hash =
-                    BlockHeaderBuilder::compute_block_logs_bloom_hash(
-                        &epoch_receipts,
-                    );
-                self.data_man.insert_epoch_execution_commitments(
-                    pivot_hash,
-                    pivot_receipts_root,
-                    pivot_logs_bloom_hash,
-                );
-            } else {
-                let epoch_arena_index =
-                    inner.get_pivot_block_arena_index(state_height);
-                let reward_execution_info =
-                    self.executor.get_reward_execution_info(
-                        &self.data_man,
-                        inner,
-                        epoch_arena_index,
-                    );
-                let epoch_block_hashes =
-                    inner.get_epoch_block_hashes(epoch_arena_index);
-                let start_block_number =
-                    inner.get_epoch_start_block_number(epoch_arena_index);
-                self.executor.compute_epoch(EpochExecutionTask::new(
-                    pivot_hash,
-                    epoch_block_hashes,
-                    start_block_number,
-                    reward_execution_info,
-                    true,
-                    false,
-                ));
-            }
-        }
     }
 
     pub fn on_new_block(
