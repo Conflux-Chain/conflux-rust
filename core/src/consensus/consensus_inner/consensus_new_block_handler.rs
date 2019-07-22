@@ -1143,7 +1143,7 @@ impl ConsensusNewBlockHandler {
                 (inner.inner_conf.adaptive_weight_alpha_den as i128) * weight,
             );
         }
-        inner.adaptive_tree.catepillar_apply(
+        inner.adaptive_tree.caterpillar_apply(
             parent,
             -weight * (inner.inner_conf.adaptive_weight_alpha_num as i128),
         );
@@ -1153,7 +1153,7 @@ impl ConsensusNewBlockHandler {
             (inner.inner_conf.adaptive_weight_alpha_den as i128)
                 * inclusive_weight,
         );
-        inner.inclusive_adaptive_tree.catepillar_apply(
+        inner.inclusive_adaptive_tree.caterpillar_apply(
             parent,
             -inclusive_weight
                 * (inner.inner_conf.adaptive_weight_alpha_num as i128),
