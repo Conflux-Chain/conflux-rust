@@ -2,48 +2,47 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{Message, MsgId, RequestId};
-use primitives::{block::CompactBlock, Block};
+use crate::sync::message::{Message, MsgId, RequestId};
+use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, PartialEq, Default)]
-pub struct GetCompactBlocksResponse {
+pub struct GetBlockBodiesResponse {
     pub request_id: RequestId,
-    pub compact_blocks: Vec<CompactBlock>,
-    pub blocks: Vec<Block>,
+    pub bodies: Vec<Block>,
 }
 
-impl Message for GetCompactBlocksResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS_RESPONSE }
+impl Message for GetBlockBodiesResponse {
+    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_BODIES_RESPONSE }
+
+    fn is_size_sensitive(&self) -> bool { self.bodies.len() > 0 }
 }
 
-impl Deref for GetCompactBlocksResponse {
+impl Deref for GetBlockBodiesResponse {
     type Target = RequestId;
 
     fn deref(&self) -> &Self::Target { &self.request_id }
 }
 
-impl DerefMut for GetCompactBlocksResponse {
+impl DerefMut for GetBlockBodiesResponse {
     fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
-impl Encodable for GetCompactBlocksResponse {
+impl Encodable for GetBlockBodiesResponse {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(3)
+            .begin_list(2)
             .append(&self.request_id)
-            .append_list(&self.compact_blocks)
-            .append_list(&self.blocks);
+            .append_list(&self.bodies);
     }
 }
 
-impl Decodable for GetCompactBlocksResponse {
+impl Decodable for GetBlockBodiesResponse {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(GetCompactBlocksResponse {
+        Ok(GetBlockBodiesResponse {
             request_id: rlp.val_at(0)?,
-            compact_blocks: rlp.list_at(1)?,
-            blocks: rlp.list_at(2)?,
+            bodies: rlp.list_at(1)?,
         })
     }
 }

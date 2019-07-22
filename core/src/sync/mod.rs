@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 mod error;
+mod message;
 pub mod request_manager;
 mod state;
 
@@ -36,17 +37,16 @@ pub mod random {
 }
 
 pub mod msg_sender {
+    use crate::sync::message::{Message, MsgId};
     use cfx_bytes::Bytes;
-    use message::Message;
+    use metrics::{register_meter_with_group, Meter};
     use network::{
         throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
         PeerId,
     };
     use priority_send_queue::SendQueuePriority;
-
-    use message::MsgId;
-    use metrics::{register_meter_with_group, Meter};
     use std::sync::Arc;
+
     lazy_static! {
         static ref GET_BLOCK_TXN_RESPOPNSE_METER: Arc<Meter> =
             register_meter_with_group(

@@ -1,4 +1,4 @@
-use message::TransIndex;
+use crate::sync::message::TransIndex;
 use primitives::{SignedTransaction, TxPropagateId};
 use std::{
     collections::HashSet,

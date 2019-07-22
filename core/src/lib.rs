@@ -11,7 +11,6 @@ extern crate keccak_hash as hash;
 extern crate keylib;
 #[macro_use]
 extern crate log;
-extern crate message;
 extern crate network;
 extern crate parking_lot;
 extern crate primitives;

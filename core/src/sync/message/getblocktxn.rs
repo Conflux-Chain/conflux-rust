@@ -2,45 +2,52 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{Message, MsgId, RequestId};
+use crate::sync::message::{Message, MsgId, RequestId};
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, PartialEq)]
-pub struct GetTerminalBlockHashesResponse {
+#[derive(Debug, PartialEq, Default)]
+pub struct GetBlockTxn {
     pub request_id: RequestId,
-    pub hashes: Vec<H256>,
+    pub block_hash: H256,
+    pub indexes: Vec<usize>,
 }
 
-impl Message for GetTerminalBlockHashesResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE }
+impl Message for GetBlockTxn {
+    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_TXN }
 }
 
-impl Deref for GetTerminalBlockHashesResponse {
+impl Deref for GetBlockTxn {
     type Target = RequestId;
 
     fn deref(&self) -> &Self::Target { &self.request_id }
 }
 
-impl DerefMut for GetTerminalBlockHashesResponse {
+impl DerefMut for GetBlockTxn {
     fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
-impl Encodable for GetTerminalBlockHashesResponse {
+impl Encodable for GetBlockTxn {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.request_id)
-            .append_list(&self.hashes);
+            .append(&self.block_hash)
+            .append_list(&self.indexes);
     }
 }
 
-impl Decodable for GetTerminalBlockHashesResponse {
+impl Decodable for GetBlockTxn {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(GetTerminalBlockHashesResponse {
+        if rlp.item_count()? != 3 {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+
+        Ok(GetBlockTxn {
             request_id: rlp.val_at(0)?,
-            hashes: rlp.list_at(1)?,
+            block_hash: rlp.val_at(1)?,
+            indexes: rlp.list_at(2)?,
         })
     }
 }

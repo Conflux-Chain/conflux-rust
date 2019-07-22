@@ -2,52 +2,49 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{Message, MsgId, RequestId};
+use crate::sync::message::{Message, MsgId, RequestId};
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, PartialEq)]
-pub struct GetBlockHashes {
-    request_id: RequestId,
-    hash: H256,
-    max_blocks: usize,
+#[derive(Debug, PartialEq, Default)]
+pub struct GetCompactBlocks {
+    pub request_id: RequestId,
+    pub hashes: Vec<H256>,
 }
 
-impl Message for GetBlockHashes {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES }
+impl Message for GetCompactBlocks {
+    fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS }
 }
 
-impl Deref for GetBlockHashes {
+impl Deref for GetCompactBlocks {
     type Target = RequestId;
 
     fn deref(&self) -> &Self::Target { &self.request_id }
 }
 
-impl DerefMut for GetBlockHashes {
+impl DerefMut for GetCompactBlocks {
     fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
-impl Encodable for GetBlockHashes {
+impl Encodable for GetCompactBlocks {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(3)
+            .begin_list(2)
             .append(&self.request_id)
-            .append(&self.hash)
-            .append(&self.max_blocks);
+            .append_list(&self.hashes);
     }
 }
 
-impl Decodable for GetBlockHashes {
+impl Decodable for GetCompactBlocks {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 3 {
+        if rlp.item_count()? != 2 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        Ok(GetBlockHashes {
+        Ok(GetCompactBlocks {
             request_id: rlp.val_at(0)?,
-            hash: rlp.val_at(1)?,
-            max_blocks: rlp.val_at(2)?,
+            hashes: rlp.list_at(1)?,
         })
     }
 }
