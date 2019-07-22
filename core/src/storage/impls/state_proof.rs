@@ -6,7 +6,7 @@ pub use super::multi_version_merkle_patricia_trie::TrieProof;
 use crate::hash::KECCAK_EMPTY;
 use primitives::MerkleHash;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct StateProof {
     pub delta_proof: Option<TrieProof>,
     pub intermediate_proof: Option<TrieProof>,
@@ -14,22 +14,16 @@ pub struct StateProof {
 }
 
 impl StateProof {
-    pub fn for_delta(delta_proof: TrieProof) -> Self {
-        StateProof {
-            delta_proof: Some(delta_proof),
-            intermediate_proof: None,
-            snapshot_proof: None,
-        }
+    pub fn with_delta(mut self, maybe_delta_proof: Option<TrieProof>) -> Self {
+        self.delta_proof = maybe_delta_proof;
+        self
     }
 
-    pub fn for_intermediate(
-        delta_proof: TrieProof, intermediate_proof: TrieProof,
+    pub fn with_intermediate(
+        mut self, maybe_intermediate_proof: Option<TrieProof>,
     ) -> Self {
-        StateProof {
-            delta_proof: Some(delta_proof),
-            intermediate_proof: Some(intermediate_proof),
-            snapshot_proof: None,
-        }
+        self.intermediate_proof = maybe_intermediate_proof;
+        self
     }
 
     pub fn is_valid(

@@ -135,20 +135,10 @@ impl<'trie> SubTrieVisitor<'trie> {
         return Ok(Some(merkles));
     }
 
-    fn get_trie_node_with_proof<'a>(
-        &self, key: KeyPart, allocator_ref: AllocatorRefRefDeltaMpt<'a>,
-        proof_nodes: &mut Vec<TrieProofNode>,
-    ) -> Result<
-        Option<
-            GuardedValue<
-                Option<MutexGuard<'a, CacheManagerDeltaMpt>>,
-                &'a TrieNodeDeltaMpt,
-            >,
-        >,
-    >
-    where
-        'trie: 'a,
-    {
+    pub fn get_proof<'a>(&self, key: KeyPart) -> Result<TrieProof> {
+        let allocator_ref = &self.node_memory_manager().get_allocator();
+        let mut proof_nodes = vec![];
+
         let node_memory_manager = self.node_memory_manager();
         let cache_manager = node_memory_manager.get_cache_manager();
         let mut node_ref = self.root.node_ref.clone();
@@ -196,7 +186,7 @@ impl<'trie> SubTrieVisitor<'trie> {
             match trie_node.walk::<Read>(key) {
                 WalkStop::Arrived => {
                     node_memory_manager.log_uncached_key_access(db_load_count);
-                    return Ok(Some(trie_node));
+                    return Ok(TrieProof::new(proof_nodes));
                 }
                 WalkStop::Descent {
                     key_remaining,
@@ -206,9 +196,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                     node_ref = child_node;
                     key = key_remaining;
                 }
-                _ => {
-                    return Ok(None);
-                }
+                _ => return Ok(TrieProof::new(proof_nodes)),
             }
         }
     }
@@ -220,24 +208,6 @@ impl<'trie> SubTrieVisitor<'trie> {
         Ok(match maybe_trie_node {
             None => None,
             Some(trie_node) => trie_node.value_clone().into_option(),
-        })
-    }
-
-    pub fn get_with_proof(
-        &self, key: KeyPart,
-    ) -> Result<(Option<Box<[u8]>>, TrieProof)> {
-        let mut proof_nodes = vec![];
-
-        let allocator = self.node_memory_manager().get_allocator();
-        let maybe_trie_node =
-            self.get_trie_node_with_proof(key, &allocator, &mut proof_nodes)?;
-
-        Ok(match maybe_trie_node {
-            None => (None, TrieProof::new(proof_nodes)),
-            Some(trie_node) => {
-                let value = trie_node.value_clone().into_option();
-                (value, TrieProof::new(proof_nodes))
-            }
         })
     }
 
@@ -817,7 +787,7 @@ use super::{
     children_table::ChildrenTableDeltaMpt,
     merkle::*,
     trie_node::TrieNodeAction,
-    trie_proof::{TrieProof, TrieProofNode},
+    trie_proof::TrieProof,
     walk::{access_mode::*, KeyPart, WalkStop},
     *,
 };
