@@ -36,6 +36,9 @@ use std::{
 const NULL: usize = !0;
 const NULLU64: u64 = !0;
 
+#[allow(dead_code)]
+const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
+
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
     // num/den is the actual adaptive alpha parameter in GHAST. We use a
@@ -531,6 +534,76 @@ impl ConsensusGraphInner {
         let parent = self.arena[epoch_arena_index].parent;
 
         return self.arena[parent].past_num_blocks + 1;
+    }
+
+    fn get_blame(&self, arena_index: usize) -> u32 {
+        let block_header = self
+            .data_man
+            .block_header_by_hash(&self.arena[arena_index].hash)
+            .unwrap();
+        block_header.blame()
+    }
+
+    #[allow(dead_code)]
+    fn find_the_first_trusted_blame(
+        &self, pivot_index: usize,
+    ) -> Option<usize> {
+        let mut cur_pivot_index = pivot_index;
+        while cur_pivot_index < self.pivot_chain.len() {
+            let arena_index = self.pivot_chain[cur_pivot_index];
+            let blame_ratio = self.compute_blame_ratio(arena_index);
+            if blame_ratio < MAX_BLAME_RATIO_FOR_TRUST {
+                return Some(cur_pivot_index);
+            }
+            cur_pivot_index += 1;
+        }
+
+        None
+    }
+
+    // Compute the ratio of blames that the block gets
+    fn compute_blame_ratio(&self, arena_index: usize) -> f64 {
+        let mut total_blame_count = 0 as u64;
+        let mut queue = VecDeque::new();
+        let mut votes = HashMap::new();
+        queue.push_back((arena_index, 0 as u32));
+        while let Some((index, step)) = queue.pop_front() {
+            if index == arena_index {
+                votes.insert(index, true);
+            } else {
+                let mut my_blame = self.get_blame(index);
+                let mut parent = index;
+                loop {
+                    parent = self.arena[parent].parent;
+                    if my_blame == 0 {
+                        let parent_vote = *votes.get(&parent).unwrap();
+                        votes.insert(index, parent_vote);
+                        if !parent_vote {
+                            total_blame_count += 1;
+                        }
+                        break;
+                    } else if parent == arena_index {
+                        votes.insert(index, false);
+                        total_blame_count += 1;
+                        break;
+                    }
+                    my_blame -= 1;
+                }
+            }
+
+            let next_step = step + 1;
+            if next_step >= BLAME_BOUND {
+                continue;
+            }
+
+            for child in &self.arena[index].children {
+                queue.push_back((*child, next_step));
+            }
+        }
+
+        let total_vote_count = votes.len();
+
+        total_blame_count as f64 / total_vote_count as f64
     }
 
     pub fn check_mining_adaptive_block(
