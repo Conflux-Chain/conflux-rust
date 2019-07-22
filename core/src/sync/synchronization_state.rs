@@ -226,9 +226,11 @@ impl SyncPhase {
                 | MsgId::GET_BLOCK_HEADERS_RESPONSE => true,
                 _ => false,
             },
-            // FIXME enable checkpoint-related messages
             SyncPhase::SyncCheckpoints(_) => match *msg_id {
-                MsgId::STATUS | MsgId::TRANSACTION_PROPAGATION_CONTROL => true,
+                MsgId::STATUS
+                | MsgId::TRANSACTION_PROPAGATION_CONTROL
+                | MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE
+                | MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => true,
                 _ => false,
             },
             SyncPhase::SyncBlocks(_) => match *msg_id {
