@@ -120,7 +120,7 @@ class TestNode:
                 ssh_args, self.user, self.ip, self.datadir)
             cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
                 self.datadir, self.user, self.ip, ssh_args)
-            cli_kill = "ssh {}@{} killall conflux".format(
+            cli_kill = "ssh {}@{} killall conflux;".format(
                 self.user, self.ip)
             self.args[0] = "~/conflux"
             cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
