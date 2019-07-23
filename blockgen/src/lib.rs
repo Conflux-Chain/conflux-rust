@@ -315,6 +315,73 @@ impl BlockGenerator {
         )
     }
 
+    /// Assemble a new block without nonce and with options to override the
+    /// states/blame. This function is used for testing only to generate
+    /// incorrect blocks
+    pub fn assemble_new_block_with_blame_info(
+        &self, num_txs: usize, block_size_limit: usize,
+        additional_transactions: Vec<Arc<SignedTransaction>>,
+        blame_override: Option<u32>, state_root_override: Option<H256>,
+        receipt_root_override: Option<H256>,
+        logs_bloom_hash_override: Option<H256>,
+    ) -> Block
+    {
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+
+        let (best_info, transactions) =
+            self.txpool.get_best_info_with_packed_transactions(
+                num_txs,
+                block_size_limit,
+                block_gas_limit,
+                additional_transactions,
+            );
+
+        let (
+            mut blame,
+            state_root_with_aux,
+            mut deferred_state_root,
+            mut deferred_receipts_root,
+            mut deferred_logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .get_blame_and_deferred_state_for_generation(
+                &best_info.best_block_hash,
+            )
+            .unwrap();
+
+        if let Some(x) = blame_override {
+            blame = x;
+        }
+        if let Some(x) = state_root_override {
+            deferred_state_root = x;
+        }
+        if let Some(x) = receipt_root_override {
+            deferred_receipts_root = x;
+        }
+        if let Some(x) = logs_bloom_hash_override {
+            deferred_logs_bloom_hash = x;
+        }
+
+        let best_block_hash = best_info.best_block_hash.clone();
+        let mut referee = best_info.bounded_terminal_block_hashes.clone();
+        referee.retain(|r| *r != best_block_hash);
+
+        self.assemble_new_block_impl(
+            best_block_hash,
+            referee,
+            blame,
+            state_root_with_aux,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+            block_gas_limit,
+            transactions,
+            0,
+            None,
+        )
+    }
+
     /// Update and sync a new block
     pub fn on_mined_block(&self, block: Block) {
         self.sync.on_mined_block(block);
@@ -389,6 +456,27 @@ impl BlockGenerator {
             num_txs,
             block_size_limit,
             additional_transactions,
+        );
+        self.generate_block_impl(block)
+    }
+
+    /// Generate a block with transactions in the pool.
+    /// This is used for testing only
+    pub fn generate_block_with_blame_info(
+        &self, num_txs: usize, block_size_limit: usize,
+        additional_transactions: Vec<Arc<SignedTransaction>>,
+        blame: Option<u32>, state_root: Option<H256>,
+        receipts_root: Option<H256>, logs_bloom_hash: Option<H256>,
+    ) -> H256
+    {
+        let block = self.assemble_new_block_with_blame_info(
+            num_txs,
+            block_size_limit,
+            additional_transactions,
+            blame,
+            state_root,
+            receipts_root,
+            logs_bloom_hash,
         );
         self.generate_block_impl(block)
     }
