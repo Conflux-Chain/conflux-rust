@@ -37,20 +37,17 @@ pub mod random {
 }
 
 pub mod msg_sender {
-    use crate::sync::{
-        message::{Message, MsgId},
-        LocalMessageTask, SyncHandlerWorkType, SynchronizationProtocolHandler,
-    };
+    use crate::sync::message::{Message, MsgId};
     use cfx_bytes::Bytes;
     use metrics::{register_meter_with_group, Meter};
     use network::{
-        throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
-        NetworkContext, PeerId,
+        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
+        PeerId,
     };
     use priority_send_queue::SendQueuePriority;
     use std::sync::Arc;
 
-    const NULL: usize = !0;
+    pub const NULL: usize = !0;
 
     lazy_static! {
         static ref GET_BLOCK_TXN_RESPOPNSE_METER: Arc<Meter> =
@@ -271,52 +268,38 @@ pub mod msg_sender {
     }
 
     pub fn send_message(
-        protocol_handler: &SynchronizationProtocolHandler, io: &NetworkContext,
-        peer: PeerId, msg: &Message, priority: SendQueuePriority,
+        io: &NetworkContext, peer: PeerId, msg: &Message,
+        priority: SendQueuePriority,
     ) -> Result<(), NetworkError>
     {
-        send_message_with_throttling(
-            protocol_handler,
-            io,
-            peer,
-            msg,
-            priority,
-            false,
-        )
+        send_message_with_throttling(io, peer, msg, priority, false)
     }
 
     pub fn send_message_with_throttling(
-        protocol_handler: &SynchronizationProtocolHandler, io: &NetworkContext,
-        peer: PeerId, msg: &Message, priority: SendQueuePriority,
-        throttling_disabled: bool,
+        io: &NetworkContext, peer: PeerId, msg: &Message,
+        priority: SendQueuePriority, throttling_disabled: bool,
     ) -> Result<(), NetworkError>
     {
-        let mut raw = Bytes::new();
-        raw.push(msg.msg_id().into());
-        raw.extend(msg.rlp_bytes().iter());
-        let size = raw.len();
-
-        if peer == NULL {
-            protocol_handler
-                .local_message
-                .lock()
-                .push_back(LocalMessageTask { message: raw });
-            io.dispatch_work(
-                SyncHandlerWorkType::LocalMessage as HandlerWorkType,
-            );
-        } else {
+        if peer != NULL {
             if !throttling_disabled && msg.is_size_sensitive() {
                 if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
                     debug!("Throttling failure: {:?}", e);
                     return Err(e);
                 }
             }
+        }
 
-            if let Err(e) = io.send(peer, raw, priority) {
-                debug!("Error sending message: {:?}", e);
-                return Err(e);
-            };
+        let mut raw = Bytes::new();
+        raw.push(msg.msg_id().into());
+        raw.extend(msg.rlp_bytes().iter());
+        let size = raw.len();
 
+        if let Err(e) = io.send(peer, raw, priority) {
+            debug!("Error sending message: {:?}", e);
+            return Err(e);
+        };
+
+        if peer != NULL {
             match msg.msg_id().into() {
                 MsgId::STATUS => ON_STATUS_METER.mark(size),
                 MsgId::GET_BLOCK_HEADERS_RESPONSE => {
@@ -415,6 +398,7 @@ pub mod msg_sender {
                 io.get_peer_node_id(peer)
             );
         }
+
         Ok(())
     }
 

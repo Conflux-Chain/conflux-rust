@@ -34,6 +34,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const NULL: usize = !0;
+
 const MAX_SESSIONS: usize = 2048;
 
 const DEFAULT_PORT: u16 = 32323;
@@ -1492,6 +1494,19 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
     fn send(
         &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error> {
+        if peer == NULL {
+            let protocol_handler = self
+                .network_service
+                .handlers
+                .read()
+                .get(&self.protocol)
+                .unwrap()
+                .clone();
+
+            protocol_handler.send_local_message(self, msg);
+            return Ok(());
+        }
+
         let session = self.network_service.sessions.get(peer);
         trace!("Sending {} bytes to {}", msg.len(), peer);
         if let Some(session) = session {
