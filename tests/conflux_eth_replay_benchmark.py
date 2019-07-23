@@ -293,7 +293,8 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             if speed_diff > 0:
                 time.sleep(speed_diff)
 
-            peers_to_send = range(0, self.num_nodes)
+            # peers_to_send = range(0, self.num_nodes)
+            peers_to_send = random.sample(range(0, self.num_nodes), 1)
             txs_rlp = rlp.codec.length_prefix(len(txs), 192) + txs
             for peer_to_send in peers_to_send:
                 self.nodes[peer_to_send].p2p.send_protocol_packet(int_to_bytes(TRANSACTIONS) + txs_rlp)
@@ -315,7 +316,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     if txpool_received == 0:
                         should_sleep = 1
                     else:
-                        should_sleep = elapsed_time * (tx_count - txpool_received) / txpool_received + 1
+                        should_sleep = elapsed_time * (tx_count - txpool_received + 45000) / txpool_received + 1
                     final_slow_down = max(final_slow_down, should_sleep)
                     self.log.info("Conflux full node is slow by %s at receiving txs, slow down by %s.",
                                   tx_count - txpool_received, should_sleep)
