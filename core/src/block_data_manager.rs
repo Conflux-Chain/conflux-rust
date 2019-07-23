@@ -148,7 +148,6 @@ impl BlockDataManager {
                         ))
                         .unwrap()
                     {
-                        let mut success = true;
                         let mut cur_hash =
                             *checkpoint_block.block_header.parent_hash();
                         for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
@@ -176,14 +175,11 @@ impl BlockDataManager {
                                 cur_hash =
                                     *cur_block.block_header.parent_hash();
                             } else {
-                                success = false;
-                                break;
+                                panic!("recovery checkpoint from disk failed.");
                             }
                         }
 
-                        if success {
-                            data_man.genesis_block = checkpoint_block;
-                        }
+                        data_man.genesis_block = checkpoint_block;
                     }
                 }
             }
@@ -208,8 +204,20 @@ impl BlockDataManager {
         data_man.insert_block_header(
             data_man.genesis_block.hash(),
             Arc::new(data_man.genesis_block.block_header.clone()),
+            true,
         );
         data_man.insert_block_to_kv(data_man.genesis_block(), true);
+
+        // persist local_block_info for real genesis block
+        if data_man.genesis_block().block_header.hash()
+            == genesis_block.block_header.hash()
+        {
+            data_man.insert_local_block_info_to_db(
+                &genesis_block.block_header.hash(),
+                LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
+            );
+        }
+
         data_man
     }
 
@@ -550,11 +558,13 @@ impl BlockDataManager {
         }
     }
 
-    pub fn insert_block_header(&self, hash: H256, header: Arc<BlockHeader>) {
-        if self.config.persist_header {
+    pub fn insert_block_header(
+        &self, hash: H256, header: Arc<BlockHeader>, persistent: bool,
+    ) {
+        if persistent {
             self.insert_block_header_to_db(&header);
-            self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
         }
+        self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
         self.block_headers.write().insert(hash, header);
     }
 
