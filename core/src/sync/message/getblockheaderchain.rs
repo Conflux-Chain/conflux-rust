@@ -2,16 +2,55 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::message::{Message, MsgId, RequestId};
+use crate::sync::{
+    message::{
+        GetBlockHeadersResponse, Message, MsgId, Request, RequestContext,
+        RequestId,
+    },
+    synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
+    Error,
+};
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::ops::{Deref, DerefMut};
+use std::{
+    cmp::min,
+    ops::{Deref, DerefMut},
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GetBlockHeaderChain {
     pub request_id: RequestId,
     pub hash: H256,
     pub max_blocks: u64,
+}
+
+impl Request for GetBlockHeaderChain {
+    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+        let mut hash = self.hash.clone();
+        let mut block_headers_resp = GetBlockHeadersResponse::default();
+        block_headers_resp.set_request_id(self.request_id());
+
+        for _ in 0..min(MAX_HEADERS_TO_SEND, self.max_blocks) {
+            let header = context.graph.block_header_by_hash(&hash);
+            if header.is_none() {
+                break;
+            }
+            let header = header.unwrap();
+            block_headers_resp.headers.push(header.clone());
+            if hash == context.graph.genesis_hash() {
+                break;
+            }
+            hash = header.parent_hash().clone();
+        }
+
+        debug!(
+            "Returned {:?} block headers to peer {:?}",
+            block_headers_resp.headers.len(),
+            context.peer
+        );
+
+        context.send_response(&block_headers_resp)
+    }
 }
 
 impl Message for GetBlockHeaderChain {

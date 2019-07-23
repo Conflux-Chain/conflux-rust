@@ -2,8 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::message::{Message, MsgId, RequestId};
+use crate::sync::{
+    message::{Message, MsgId, Request, RequestContext, RequestId},
+    Error,
+};
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
+use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     collections::HashSet,
@@ -95,6 +99,8 @@ impl Message for TransactionDigests {
     fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_DIGESTS }
 
     fn is_size_sensitive(&self) -> bool { self.trans_short_ids.len() > 1 }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
 impl Encodable for TransactionDigests {
@@ -124,8 +130,28 @@ pub struct GetTransactions {
     pub tx_ids: HashSet<TxPropagateId>,
 }
 
+impl Request for GetTransactions {
+    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+        let transactions =
+            context.request_manager.get_sent_transactions(&self.indices);
+        let response = GetTransactionsResponse {
+            request_id: self.request_id.clone(),
+            transactions,
+        };
+        debug!(
+            "on_get_transactions request {} txs, returned {} txs",
+            self.indices.len(),
+            response.transactions.len()
+        );
+
+        context.send_response(&response)
+    }
+}
+
 impl Message for GetTransactions {
     fn msg_id(&self) -> MsgId { MsgId::GET_TRANSACTIONS }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
 impl Deref for GetTransactions {
@@ -173,6 +199,8 @@ impl Message for GetTransactionsResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_TRANSACTIONS_RESPONSE }
 
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
 impl Deref for GetTransactionsResponse {

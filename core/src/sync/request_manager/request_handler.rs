@@ -395,8 +395,6 @@ pub trait Request: Send + Debug {
     fn timeout(&self) -> Duration; // request timeout for resend purpose
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
-    fn handle(self, io: &NetworkContext, peer: PeerId) -> Result<(), Error>;
-
     // occurs when peer disconnected or invalid message received
     fn on_removed(&self);
 
