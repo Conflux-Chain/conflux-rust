@@ -1,30 +1,22 @@
-use message::{TransIndex, TransactionDigests};
-use metrics::{register_meter_with_group, Meter};
-use primitives::{SignedTransaction, TxFullId, TxPropagateId};
+use crate::sync::message::TransIndex;
+use primitives::{SignedTransaction, TxPropagateId};
 use std::{
-    collections::HashMap,
+    collections::HashSet,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
-lazy_static! {
-    static ref TX_FIRST_MISS_METER: Arc<Meter> =
-        register_meter_with_group("tx_pool", "tx_first_miss_size");
-    static ref TX_FOR_COMPARE_METER: Arc<Meter> =
-        register_meter_with_group("tx_pool", "tx_for_compare_size");
-    static ref TX_RANDOM_BYTE_METER: Arc<Meter> =
-        register_meter_with_group("tx_pool", "tx_random_byte_size");
-}
+
 const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct ReceivedTransactionTimeWindowedEntry {
     pub secs: u64,
-    pub tx_ids: Vec<Arc<TxFullId>>,
+    pub tx_ids: Vec<TxPropagateId>,
 }
 
 struct ReceivedTransactionContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    txid_container: HashMap<Arc<TxPropagateId>, Vec<Arc<TxFullId>>>,
+    txid_container: HashSet<TxPropagateId>,
     time_windowed_indices: Vec<Option<ReceivedTransactionTimeWindowedEntry>>,
 }
 
@@ -37,7 +29,7 @@ impl ReceivedTransactionContainerInner {
         ReceivedTransactionContainerInner {
             window_size,
             slot_duration_as_secs,
-            txid_container: HashMap::new(),
+            txid_container: HashSet::new(),
             time_windowed_indices,
         }
     }
@@ -59,23 +51,9 @@ impl ReceivedTransactionContainer {
         }
     }
 
-    pub fn contains_txid(
-        &self, fixed_bytes: TxPropagateId, random_byte: u8, random_position: u8,
-    ) -> bool {
+    pub fn contains_txid(&self, key: &TxPropagateId) -> bool {
         let inner = &self.inner;
-        TX_FOR_COMPARE_METER.mark(1);
-        if inner.txid_container.contains_key(&fixed_bytes) {
-            TX_FIRST_MISS_METER.mark(1);
-            if let Some(vector) = inner.txid_container.get(&fixed_bytes) {
-                for value in vector {
-                    if value[random_position as usize] == random_byte {
-                        TX_RANDOM_BYTE_METER.mark(1);
-                        return true;
-                    }
-                }
-            }
-        }
-        false
+        inner.txid_container.contains(key)
     }
 
     pub fn get_length(&self) -> usize { self.inner.txid_container.len() }
@@ -83,6 +61,11 @@ impl ReceivedTransactionContainer {
     pub fn append_transactions(
         &mut self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
+        let tx_ids = transactions
+            .iter()
+            .map(|tx| TxPropagateId::from(tx.hash()))
+            .collect::<Vec<_>>();
+
         let inner = &mut self.inner;
 
         let now = SystemTime::now();
@@ -103,21 +86,7 @@ impl ReceivedTransactionContainer {
                 inner.time_windowed_indices[window_index].as_mut().unwrap();
             if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
                 for tx_id in &indices_with_time.tx_ids {
-                    let key = TransactionDigests::to_u24(
-                        tx_id[29], tx_id[30], tx_id[31],
-                    );
-                    if let Some(vector) = inner.txid_container.get_mut(&key) {
-                        // if there is a value asscicated with the key
-                        if vector.len() == 1 {
-                            inner.txid_container.remove(&key);
-                        } else {
-                            vector
-                                .iter()
-                                .position(|v| Arc::clone(v) == *tx_id)
-                                .map(|i| vector.remove(i));
-                            //.is_some();
-                        }
-                    }
+                    inner.txid_container.remove(tx_id);
                 }
                 indices_with_time.secs = secs;
                 indices_with_time.tx_ids = Vec::new();
@@ -125,19 +94,11 @@ impl ReceivedTransactionContainer {
             indices_with_time
         };
 
-        for transaction in transactions {
-            let hash = transaction.hash();
-            let full_hash_id = Arc::new(hash);
-            let short_id = Arc::new(TransactionDigests::to_u24(
-                hash[29], hash[30], hash[31],
-            )); //read the last three bytes
-            inner
-                .txid_container
-                .entry(short_id)
-                .and_modify(|v| v.push(Arc::clone(&full_hash_id)))
-                .or_insert(vec![Arc::clone(&full_hash_id)]); //if occupied, append, else, insert.
-
-            entry.tx_ids.push(full_hash_id);
+        for tx_id in tx_ids {
+            if !inner.txid_container.contains(&tx_id) {
+                inner.txid_container.insert(tx_id.clone());
+                entry.tx_ids.push(tx_id);
+            }
         }
     }
 }

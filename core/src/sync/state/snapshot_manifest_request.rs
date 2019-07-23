@@ -1,9 +1,11 @@
 use crate::sync::{
-    msg_sender::send_message, request_manager::Request,
-    state::snapshot_manifest_response::SnapshotManifestResponse, Error,
+    message::{Message, MsgId},
+    msg_sender::send_message,
+    request_manager::Request,
+    state::snapshot_manifest_response::SnapshotManifestResponse,
+    Error,
 };
 use cfx_types::H256;
-use message::{Message, MsgId};
 use network::{NetworkContext, PeerId};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};

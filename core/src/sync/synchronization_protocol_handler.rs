@@ -7,18 +7,23 @@ use super::{
     SharedSynchronizationGraph, SynchronizationGraph, SynchronizationPeerState,
     SynchronizationState,
 };
-use crate::{consensus::SharedConsensusGraph, pow::ProofOfWorkConfig};
+use crate::{
+    consensus::SharedConsensusGraph,
+    pow::ProofOfWorkConfig,
+    sync::message::{
+        GetBlockHashesByEpoch, GetBlockHashesResponse, GetBlockHeaderChain,
+        GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn,
+        GetBlockTxnResponse, GetBlocks, GetBlocksResponse,
+        GetBlocksWithPublicResponse, GetCompactBlocks,
+        GetCompactBlocksResponse, GetTerminalBlockHashes,
+        GetTerminalBlockHashesResponse, GetTransactions,
+        GetTransactionsResponse, Message, MsgId, NewBlock, NewBlockHashes,
+        Status, TransactionDigests, TransactionPropagationControl,
+        Transactions,
+    },
+};
 use cfx_types::H256;
 use io::TimerToken;
-use message::{
-    GetBlockHashesByEpoch, GetBlockHashesResponse, GetBlockHeaderChain,
-    GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse,
-    GetBlocks, GetBlocksResponse, GetBlocksWithPublicResponse,
-    GetCompactBlocks, GetCompactBlocksResponse, GetTerminalBlockHashes,
-    GetTerminalBlockHashesResponse, GetTransactions, GetTransactionsResponse,
-    Message, MsgId, NewBlock, NewBlockHashes, Status, TransactionDigests,
-    TransactionPropagationControl, Transactions,
-};
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,

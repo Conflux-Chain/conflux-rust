@@ -2,32 +2,32 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{Message, MsgId, RequestId};
+use crate::sync::message::{Message, MsgId, RequestId};
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct GetBlockHeaders {
+#[derive(Debug, PartialEq)]
+pub struct GetTerminalBlockHashesResponse {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
 }
 
-impl Message for GetBlockHeaders {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS }
+impl Message for GetTerminalBlockHashesResponse {
+    fn msg_id(&self) -> MsgId { MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE }
 }
 
-impl Deref for GetBlockHeaders {
+impl Deref for GetTerminalBlockHashesResponse {
     type Target = RequestId;
 
     fn deref(&self) -> &Self::Target { &self.request_id }
 }
 
-impl DerefMut for GetBlockHeaders {
+impl DerefMut for GetTerminalBlockHashesResponse {
     fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
-impl Encodable for GetBlockHeaders {
+impl Encodable for GetTerminalBlockHashesResponse {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
             .begin_list(2)
@@ -36,13 +36,9 @@ impl Encodable for GetBlockHeaders {
     }
 }
 
-impl Decodable for GetBlockHeaders {
+impl Decodable for GetTerminalBlockHashesResponse {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(GetBlockHeaders {
+        Ok(GetTerminalBlockHashesResponse {
             request_id: rlp.val_at(0)?,
             hashes: rlp.list_at(1)?,
         })

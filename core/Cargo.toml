@@ -20,7 +20,6 @@ lazy_static = "1.1.0"
 keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
 secret-store = { path = "../secret_store" }
 rand = "0.5"
-message = { path = "../message" }
 error-chain = { version = "0.12", default-features = false }
 slab = "0.4"
 kvdb = "0.1"
