@@ -511,29 +511,18 @@ impl RpcImpl {
     fn generate_block_with_blame_info(
         &self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo,
     ) -> RpcResult<H256> {
-        let sroot = if let Some(x) = blame_info.deferred_state_root {
-            Some(x.into())
-        } else {
-            None
-        };
-        let rroot = if let Some(x) = blame_info.deferred_receipts_root {
-            Some(x.into())
-        } else {
-            None
-        };
-        let lroot = if let Some(x) = blame_info.deferred_logs_bloom_hash {
-            Some(x.into())
-        } else {
-            None
-        };
         Ok(self.block_gen.generate_block_with_blame_info(
             num_txs,
             block_size_limit,
             vec![],
             blame_info.blame,
-            sroot,
-            rroot,
-            lroot,
+            blame_info.deferred_state_root.and_then(|x| Some(x.into())),
+            blame_info
+                .deferred_receipts_root
+                .and_then(|x| Some(x.into())),
+            blame_info
+                .deferred_logs_bloom_hash
+                .and_then(|x| Some(x.into())),
         ))
     }
 
