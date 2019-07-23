@@ -10,9 +10,11 @@ use rlp::*;
 use std::{
     collections::{hash_map::HashMap, VecDeque},
     sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+pub const TIME_WINDOW: u64 = 100;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<Meter> =
@@ -175,7 +177,7 @@ pub struct TransactionPoolInner {
     deferred_pool: DeferredPool,
     ready_account_pool: ReadyAccountPool,
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
-    garbage_collection_queue: VecDeque<Address>,
+    garbage_collection_queue: VecDeque<(Address, u64)>,
     txs: HashMap<H256, Arc<SignedTransaction>>,
 }
 
@@ -221,10 +223,22 @@ impl TransactionPoolInner {
         return self.garbage_collection_queue.len() >= self.capacity;
     }
 
+    pub fn get_current_timestamp(&self) -> u64 {
+        let start = SystemTime::now();
+        let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
+        since_the_epoch.as_secs()
+    }
+
     fn collect_garbage(&mut self) {
-        let mut failed_try = 0;
         while self.is_full() {
-            let addr = self.garbage_collection_queue.pop_front().unwrap();
+            let (addr, timestamp) =
+                self.garbage_collection_queue.front().unwrap().clone();
+
+            if timestamp + TIME_WINDOW >= self.get_current_timestamp() {
+                break;
+            }
+
+            self.garbage_collection_queue.pop_front();
 
             // abort if a tx'nonce >= ready nonce
             let (ready_nonce, _) = self
@@ -234,27 +248,15 @@ impl TransactionPoolInner {
             let lowest_nonce =
                 *self.deferred_pool.get_lowest_nonce(&addr).unwrap();
 
-            let mut failed = false;
-
             if lowest_nonce >= ready_nonce {
-                warn!("an unexecuted tx is trying to be garbage-collected and stopped");
-                failed = true;
+                warn!("an unexecuted tx is garbage-collected.");
             }
 
-            //            if !self.deferred_pool.check_tx_packed(addr,
-            // lowest_nonce) {                warn!("an unpacked tx
-            // is trying to be garbage-collected and stopped");
-            //                failed = true;
-            //            }
-
-            if failed {
-                self.garbage_collection_queue.push_back(addr.clone());
-                failed_try += 1;
-                TX_POOL_INNER_FAILED_GARBAGE_COLLECTED.mark(1);
-                if failed_try >= 10 {
-                    break;
-                }
-                continue;
+            if !self
+                .deferred_pool
+                .check_tx_packed(addr.clone(), lowest_nonce)
+            {
+                self.unpacked_transaction_count -= 1;
             }
 
             let removed_tx = self
@@ -267,7 +269,7 @@ impl TransactionPoolInner {
             // maintain ready account pool
             if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
                 if ready_tx.hash() == removed_tx.hash() {
-                    warn!("a ready tx is be garbage-collected");
+                    warn!("a ready tx is garbage-collected");
                     self.ready_account_pool.remove(&addr);
                 }
             }
@@ -311,8 +313,10 @@ impl TransactionPoolInner {
 
         match &result {
             InsertResult::NewAdded => {
-                self.garbage_collection_queue
-                    .push_back(transaction.sender());
+                self.garbage_collection_queue.push_back((
+                    transaction.sender(),
+                    self.get_current_timestamp(),
+                ));
                 self.txs.insert(transaction.hash(), transaction.clone());
                 if !packed {
                     self.unpacked_transaction_count += 1;
