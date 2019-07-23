@@ -20,22 +20,24 @@ pub struct DataPropagation {
 }
 
 impl DataPropagation {
-    pub fn register(
-        interval_ms: u64, size: usize, network: &NetworkService,
-    ) -> Result<(), String> {
-        if interval_ms == 0 || size == 0 {
-            return Ok(());
-        }
-
-        let dp = DataPropagation {
+    pub fn new(interval_ms: u64, size: usize) -> Self {
+        DataPropagation {
             interval: Duration::from_millis(interval_ms),
             size,
             peers: RwLock::new(HashSet::new()),
-        };
+        }
+    }
+
+    pub fn register(
+        dp: Arc<DataPropagation>, network: Arc<NetworkService>,
+    ) -> Result<(), String> {
+        if dp.interval == Duration::from_millis(0) || dp.size == 0 {
+            return Ok(());
+        }
 
         network
             .register_protocol(
-                Arc::new(dp),
+                dp,
                 PROTOCOL_ID_DATA_PROPAGATION,
                 &[PROTOCOL_VERSION_DATA_PROPAGATION],
             )
