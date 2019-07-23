@@ -1414,7 +1414,7 @@ impl<EthTxT: EthTxTypeTrait> TxExtractor for EthTxExtractor<EthTxT> {
 
         let mut basic_verification_index = self.counters.lock().n_tx_seen;
         let mut thread = basic_verification_index % Self::N_TX_BASIC_VERIFIERS;
-        for i in 0..block.transactions.len() {
+        for (i, _) in block.transactions.enumerate() {
             unsafe {
                 let tx = block.transactions.get_unchecked(i);
                 self.tx_verify(
