@@ -207,6 +207,17 @@ impl BlockDataManager {
             true,
         );
         data_man.insert_block_to_kv(data_man.genesis_block(), true);
+
+        // persist local_block_info for real genesis block
+        if data_man.genesis_block().block_header.hash()
+            == genesis_block.block_header.hash()
+        {
+            data_man.insert_local_block_info_to_db(
+                &genesis_block.block_header.hash(),
+                LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
+            );
+        }
+
         data_man
     }
 
