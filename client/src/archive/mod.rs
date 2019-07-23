@@ -39,7 +39,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 use txgen::{
-    propagate::DataPropagationService, SpecialTransactionGenerator,
+    propagate::DataPropagation, SpecialTransactionGenerator,
     TransactionGenerator,
 };
 
@@ -211,11 +211,11 @@ impl ArchiveClient {
         sync.register().unwrap();
 
         if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
-            let dp = DataPropagationService::new(
+            let dp = Arc::new(DataPropagation::new(
                 conf.raw_conf.data_propagate_interval_ms,
                 conf.raw_conf.data_propagate_size,
-            );
-            dp.register(network.clone())?;
+            ));
+            DataPropagation::register(dp, network.clone())?;
         }
 
         let txgen = Arc::new(TransactionGenerator::new(
