@@ -1,10 +1,12 @@
 use crate::sync::{
-    msg_sender::send_message, request_manager::RequestManager,
-    synchronization_protocol_handler::ProtocolConfiguration, Error, ErrorKind,
-};
-use message::{
-    GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders, GetBlockTxn,
-    GetBlocks, GetCompactBlocks, GetTransactions, Message,
+    message::{
+        GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders,
+        GetBlockTxn, GetBlocks, GetCompactBlocks, GetTransactions, Message,
+    },
+    msg_sender::send_message,
+    request_manager::RequestManager,
+    synchronization_protocol_handler::ProtocolConfiguration,
+    Error, ErrorKind,
 };
 use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;

@@ -5,8 +5,7 @@
 use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
-use crate::sync::{random, Error, ErrorKind};
-use message::MsgId;
+use crate::sync::{message::MsgId, random, Error, ErrorKind};
 use parking_lot::{Mutex, RwLock};
 use rand::Rng;
 use std::{

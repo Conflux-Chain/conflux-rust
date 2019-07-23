@@ -1,5 +1,5 @@
+use crate::sync::message::{Message, MsgId};
 use cfx_types::H256;
-use message::{Message, MsgId};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 #[derive(Debug)]

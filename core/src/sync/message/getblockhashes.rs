@@ -2,48 +2,52 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{Message, MsgId, RequestId};
+use crate::sync::message::{Message, MsgId, RequestId};
+use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, PartialEq)]
-pub struct GetBlockHashesByEpoch {
-    pub request_id: RequestId,
-    pub epochs: Vec<u64>,
+pub struct GetBlockHashes {
+    request_id: RequestId,
+    hash: H256,
+    max_blocks: usize,
 }
 
-impl Message for GetBlockHashesByEpoch {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES_BY_EPOCH }
+impl Message for GetBlockHashes {
+    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES }
 }
 
-impl Deref for GetBlockHashesByEpoch {
+impl Deref for GetBlockHashes {
     type Target = RequestId;
 
     fn deref(&self) -> &Self::Target { &self.request_id }
 }
 
-impl DerefMut for GetBlockHashesByEpoch {
+impl DerefMut for GetBlockHashes {
     fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
-impl Encodable for GetBlockHashesByEpoch {
+impl Encodable for GetBlockHashes {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.request_id)
-            .append_list(&self.epochs);
+            .append(&self.hash)
+            .append(&self.max_blocks);
     }
 }
 
-impl Decodable for GetBlockHashesByEpoch {
+impl Decodable for GetBlockHashes {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
+        if rlp.item_count()? != 3 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        Ok(GetBlockHashesByEpoch {
+        Ok(GetBlockHashes {
             request_id: rlp.val_at(0)?,
-            epochs: rlp.list_at(1)?,
+            hash: rlp.val_at(1)?,
+            max_blocks: rlp.val_at(2)?,
         })
     }
 }

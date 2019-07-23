@@ -4,12 +4,14 @@ use super::{
     },
     synchronization_state::SynchronizationState,
 };
-use crate::sync::Error;
-use cfx_types::H256;
-use message::{
-    GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders, GetBlockTxn,
-    GetBlocks, GetCompactBlocks, GetTransactions, TransIndex,
+use crate::sync::{
+    message::{
+        GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders,
+        GetBlockTxn, GetBlocks, GetCompactBlocks, GetTransactions, TransIndex,
+    },
+    Error,
 };
+use cfx_types::H256;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};

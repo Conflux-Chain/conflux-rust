@@ -2,11 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate core;
-extern crate log;
-extern crate primitives;
-extern crate rlp;
-
 mod blockbodies;
 mod blockhashes;
 mod blockheaders;
@@ -29,7 +24,7 @@ mod status;
 mod terminalblockhashes;
 mod transactions;
 
-pub use crate::{
+pub use self::{
     blockbodies::GetBlockBodiesResponse,
     blockhashes::GetBlockHashesResponse,
     blockheaders::GetBlockHeadersResponse,

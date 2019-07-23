@@ -1,5 +1,5 @@
+use crate::sync::message::{Message, MsgId};
 use cfx_bytes::Bytes;
-use message::{Message, MsgId};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 #[derive(Debug)]
