@@ -92,7 +92,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         else:
             self.num_nodes = 1
 
-        self.conf_parameters = {"log_level": "\"debug\"",
+        self.conf_parameters = {"log_level": "\"warn\"",
                                 # "storage_cache_start_size": "1000000",
                                 # Do not re-alloc.
                                 "storage_cache_start_size": "20000000",

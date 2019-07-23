@@ -338,7 +338,7 @@ impl NoncePool {
     ///   1. all nonce in `[nouce, tx.nouce]` exists
     ///   2. tx.packed is false and tx.nouce is minimum
     pub fn recalculate_readiness_with_local_info(
-        &self, nonce: U256, balance: U256,
+        &self, nonce: U256,
     ) -> Option<Arc<SignedTransaction>> {
         NoncePoolNode::query(&self.root, &nonce).filter(|x| {
             let a = if nonce == U256::from(0) {
@@ -352,7 +352,8 @@ impl NoncePool {
             // 2, b.0 - a.0 means number of transactions in `[nouce, tx.nouce]`
             // 3. x.nonce - nonce + 1 means expected number of transactions in
             // `[nouce, tx.nouce]`
-            // U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <= balance
+            // U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <=
+            // balance
             U256::from(b.0 - a.0 - 1) == x.nonce - nonce
         })
     }
