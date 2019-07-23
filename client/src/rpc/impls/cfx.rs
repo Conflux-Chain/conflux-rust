@@ -5,7 +5,7 @@
 use crate::rpc::{
     traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
     types::{
-        Block as RpcBlock, Bytes, EpochNumber, Filter as RpcFilter,
+        BlameInfo, Block as RpcBlock, Bytes, EpochNumber, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, Receipt, Status as RpcStatus,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         U256 as RpcU256, U64 as RpcU64,
@@ -508,6 +508,24 @@ impl RpcImpl {
         Ok(self.block_gen.generate_custom_block(transactions))
     }
 
+    fn generate_block_with_blame_info(
+        &self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo,
+    ) -> RpcResult<H256> {
+        Ok(self.block_gen.generate_block_with_blame_info(
+            num_txs,
+            block_size_limit,
+            vec![],
+            blame_info.blame,
+            blame_info.deferred_state_root.and_then(|x| Some(x.into())),
+            blame_info
+                .deferred_receipts_root
+                .and_then(|x| Some(x.into())),
+            blame_info
+                .deferred_logs_bloom_hash
+                .and_then(|x| Some(x.into())),
+        ))
+    }
+
     fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>> {
         info!("RPC Request: get_peer_info");
         Ok(self.sync.get_peer_info())
@@ -999,6 +1017,16 @@ impl TestRpc for TestRpcImpl {
         &self, tx_hash: H256,
     ) -> RpcResult<Option<RpcReceipt>> {
         self.rpc_impl.get_transaction_receipt(tx_hash)
+    }
+
+    fn generate_block_with_blame_info(
+        &self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo,
+    ) -> RpcResult<H256> {
+        self.rpc_impl.generate_block_with_blame_info(
+            num_txs,
+            block_size_limit,
+            blame_info,
+        )
     }
 }
 
