@@ -2,7 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::message::{Message, MsgId, RequestId};
+use crate::sync::{
+    message::{
+        GetBlockHashesResponse, Message, MsgId, Request, RequestContext,
+        RequestId,
+    },
+    synchronization_protocol_handler::MAX_EPOCHS_TO_SEND,
+    Error,
+};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
 
@@ -10,6 +17,32 @@ use std::ops::{Deref, DerefMut};
 pub struct GetBlockHashesByEpoch {
     pub request_id: RequestId,
     pub epochs: Vec<u64>,
+}
+
+impl Request for GetBlockHashesByEpoch {
+    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+        if self.epochs.is_empty() {
+            return Ok(());
+        }
+
+        let hashes = self
+            .epochs
+            .iter()
+            .take(MAX_EPOCHS_TO_SEND as usize)
+            .map(|&e| context.graph.get_block_hashes_by_epoch(e))
+            .filter_map(Result::ok)
+            .fold(vec![], |mut res, sub| {
+                res.extend(sub);
+                res
+            });
+
+        let response = GetBlockHashesResponse {
+            request_id: self.request_id.clone(),
+            hashes,
+        };
+
+        context.send_response(&response)
+    }
 }
 
 impl Message for GetBlockHashesByEpoch {

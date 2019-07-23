@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod account;
+mod blame_info;
 mod block;
 mod bytes;
 mod call_request;
@@ -18,6 +19,7 @@ mod uint;
 
 pub use self::{
     account::Account,
+    blame_info::BlameInfo,
     block::{Block, BlockTransactions},
     bytes::Bytes,
     call_request::CallRequest,

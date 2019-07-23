@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::super::types::{
-    Block, Bytes, Receipt as RpcReceipt, Status as RpcStatus,
+    BlameInfo, Block, Bytes, Receipt as RpcReceipt, Status as RpcStatus,
 };
 use cfx_types::H256;
 use cfxcore::PeerInfo;
@@ -82,6 +82,11 @@ pub trait TestRpc {
     #[rpc(name = "test_generateblockwithfaketxs")]
     fn generate_block_with_fake_txs(
         &self, raw: Bytes, tx_data_len: Option<usize>,
+    ) -> RpcResult<H256>;
+
+    #[rpc(name = "test_generateblockwithblameinfo")]
+    fn generate_block_with_blame_info(
+        &self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo,
     ) -> RpcResult<H256>;
 
     #[rpc(name = "gettransactionreceipt")]
