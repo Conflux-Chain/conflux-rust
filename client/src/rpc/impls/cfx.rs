@@ -22,7 +22,7 @@ use network::{
     get_high_priority_packets,
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
-    SessionDetails,
+    NetworkService, SessionDetails,
 };
 use parking_lot::{Condvar, Mutex};
 use primitives::{
@@ -42,13 +42,14 @@ pub struct RpcImpl {
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
     exit: Arc<(Mutex<bool>, Condvar)>,
+    network: Arc<NetworkService>,
 }
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
-        exit: Arc<(Mutex<bool>, Condvar)>,
+        exit: Arc<(Mutex<bool>, Condvar)>, network: Arc<NetworkService>,
     ) -> Self
     {
         RpcImpl {
@@ -57,6 +58,7 @@ impl RpcImpl {
             block_gen,
             tx_pool,
             exit,
+            network,
         }
     }
 
@@ -359,7 +361,7 @@ impl RpcImpl {
             },
         };
         info!("RPC Request: add_peer({:?})", node.clone());
-        match self.sync.add_peer(node) {
+        match self.network.add_peer(node) {
             Ok(x) => Ok(x),
             Err(_) => Err(RpcError::internal_error()),
         }
@@ -374,7 +376,7 @@ impl RpcImpl {
             },
         };
         info!("RPC Request: drop_peer({:?})", node.clone());
-        match self.sync.drop_peer(node) {
+        match self.network.drop_peer(node) {
             Ok(_) => Ok(()),
             Err(_) => Err(RpcError::internal_error()),
         }
@@ -528,7 +530,10 @@ impl RpcImpl {
 
     fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>> {
         info!("RPC Request: get_peer_info");
-        Ok(self.sync.get_peer_info())
+        match self.network.get_peer_info() {
+            None => Ok(Vec::new()),
+            Some(peers) => Ok(peers),
+        }
     }
 
     fn stop(&self) -> RpcResult<()> {
@@ -539,7 +544,7 @@ impl RpcImpl {
     }
 
     fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>> {
-        match self.sync.sign_challenge(challenge) {
+        match self.network.sign_challenge(challenge) {
             Ok(r) => Ok(r),
             Err(_) => Err(RpcError::internal_error()),
         }
@@ -564,7 +569,7 @@ impl RpcImpl {
     }
 
     fn add_latency(&self, id: NodeId, latency_ms: f64) -> RpcResult<()> {
-        match self.sync.add_latency(id, latency_ms) {
+        match self.network.add_latency(id, latency_ms) {
             Ok(_) => Ok(()),
             Err(_) => Err(RpcError::internal_error()),
         }
@@ -759,7 +764,7 @@ impl RpcImpl {
     }
 
     fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {
-        match self.sync.get_network_service().get_node(&id) {
+        match self.network.get_node(&id) {
             None => Ok(None),
             Some((trusted, node)) => {
                 if trusted {
@@ -774,11 +779,7 @@ impl RpcImpl {
     fn net_sessions(
         &self, node_id: Option<NodeId>,
     ) -> RpcResult<Vec<SessionDetails>> {
-        match self
-            .sync
-            .get_network_service()
-            .get_detailed_sessions(node_id.into())
-        {
+        match self.network.get_detailed_sessions(node_id.into()) {
             None => Ok(Vec::new()),
             Some(sessions) => Ok(sessions),
         }

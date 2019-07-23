@@ -65,7 +65,7 @@ pub use crate::{
     consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
     sync::{
         SharedSynchronizationGraph, SharedSynchronizationService,
-        SynchronizationService,
+        SynchronizationGraph, SynchronizationService,
     },
     transaction_pool::{SharedTransactionPool, TransactionPool},
     verification::REFEREE_BOUND,

@@ -11,8 +11,8 @@ use blockgen::BlockGenerator;
 use cfxcore::{
     genesis, pow::WORKER_COMPUTATION_PARALLELISM, statistics::Statistics,
     storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, SynchronizationService,
-    TransactionPool,
+    vm_factory::VmFactory, ConsensusGraph, SynchronizationGraph,
+    SynchronizationService, TransactionPool,
 };
 
 use crate::rpc::{
@@ -189,37 +189,45 @@ impl ArchiveClient {
         let protocol_config = conf.protocol_config();
         let verification_config = conf.verification_config();
 
-        let mut sync = cfxcore::SynchronizationService::new(
-            false,
-            NetworkService::new(network_config),
+        let network = {
+            let mut network = NetworkService::new(network_config);
+            network.start().unwrap();
+            Arc::new(network)
+        };
+
+        let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),
-            protocol_config,
             verification_config,
-            pow_config.clone(),
-        );
-        sync.start().unwrap();
+            pow_config,
+        ));
+
+        let sync = Arc::new(SynchronizationService::new(
+            false,
+            network.clone(),
+            consensus.clone(),
+            sync_graph.clone(),
+            protocol_config,
+        ));
+        sync.register().unwrap();
 
         if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
-            DataPropagation::register(
+            let dp = Arc::new(DataPropagation::new(
                 conf.raw_conf.data_propagate_interval_ms,
                 conf.raw_conf.data_propagate_size,
-                sync.get_network_service(),
-            )?;
+            ));
+            DataPropagation::register(dp, network.clone())?;
         }
-
-        let sync = Arc::new(sync);
-        let sync_graph = sync.get_synchronization_graph();
 
         let txgen = Arc::new(TransactionGenerator::new(
             consensus.clone(),
             txpool.clone(),
             secret_store.clone(),
-            sync.net_key_pair().ok(),
+            network.net_key_pair().ok(),
         ));
 
         let special_txgen =
             Arc::new(Mutex::new(SpecialTransactionGenerator::new(
-                sync.net_key_pair().unwrap(),
+                network.net_key_pair().unwrap(),
                 &public_to_address(secret_store.get_keypair(0).public()),
                 U256::from_dec_str("10000000000000000").unwrap(),
                 U256::from_dec_str("10000000000000000").unwrap(),
@@ -298,6 +306,7 @@ impl ArchiveClient {
             blockgen.clone(),
             txpool.clone(),
             exit,
+            network.clone(),
         ));
 
         let debug_rpc_http_server = super::rpc::new_http(

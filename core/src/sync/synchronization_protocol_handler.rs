@@ -4,12 +4,10 @@
 
 use super::{
     super::transaction_pool::SharedTransactionPool, random, Error, ErrorKind,
-    SharedSynchronizationGraph, SynchronizationGraph, SynchronizationPeerState,
-    SynchronizationState,
+    SharedSynchronizationGraph, SynchronizationPeerState, SynchronizationState,
 };
 use crate::{
     consensus::SharedConsensusGraph,
-    pow::ProofOfWorkConfig,
     sync::message::{
         GetBlockHashesResponse, GetBlockHeadersResponse, GetBlockTxnResponse,
         GetBlocksResponse, GetBlocksWithPublicResponse,
@@ -45,7 +43,7 @@ use crate::{
         synchronization_state::SyncPhase,
         SynchronizationGraphInner,
     },
-    verification::{VerificationConfig, ACCEPTABLE_TIME_DRIFT},
+    verification::ACCEPTABLE_TIME_DRIFT,
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{Block, BlockHeader, SignedTransaction, TxPropagateId};
@@ -250,7 +248,7 @@ impl SynchronizationProtocolHandler {
     pub fn new(
         is_full_node: bool, protocol_config: ProtocolConfiguration,
         consensus_graph: SharedConsensusGraph,
-        verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
+        sync_graph: SharedSynchronizationGraph,
     ) -> Self
     {
         let syn = Arc::new(SynchronizationState::new(
@@ -268,11 +266,7 @@ impl SynchronizationProtocolHandler {
 
         Self {
             protocol_config,
-            graph: Arc::new(SynchronizationGraph::new(
-                consensus_graph.clone(),
-                verification_config,
-                pow_config,
-            )),
+            graph: sync_graph,
             syn: syn.clone(),
             request_manager,
             latest_epoch_requested: Mutex::new(0),
