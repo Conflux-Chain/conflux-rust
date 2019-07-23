@@ -11,12 +11,9 @@ use crate::{
     consensus::SharedConsensusGraph,
     pow::ProofOfWorkConfig,
     sync::message::{
-        GetBlockHashesByEpoch, GetBlockHashesResponse, GetBlockHeaderChain,
-        GetBlockHeaders, GetBlockHeadersResponse, GetBlockTxn,
-        GetBlockTxnResponse, GetBlocks, GetBlocksResponse,
-        GetBlocksWithPublicResponse, GetCompactBlocks,
-        GetCompactBlocksResponse, GetTerminalBlockHashes,
-        GetTerminalBlockHashesResponse, GetTransactions,
+        GetBlockHashesResponse, GetBlockHeadersResponse, GetBlockTxnResponse,
+        GetBlocksResponse, GetBlocksWithPublicResponse,
+        GetCompactBlocksResponse, GetTerminalBlockHashesResponse,
         GetTransactionsResponse, Message, MsgId, NewBlock, NewBlockHashes,
         Status, TransactionDigests, TransactionPropagationControl,
         Transactions,
@@ -34,15 +31,16 @@ use rlp::Rlp;
 //use slab::Slab;
 use super::{
     msg_sender::{send_message, send_message_with_throttling},
-    request_manager::{Request, RequestManager, RequestMessage},
+    request_manager::{RequestManager, RequestMessage},
 };
 use crate::{
     block_data_manager::BlockStatus,
     consensus::ConsensusGraphInner,
     sync::{
+        message::RequestContext,
         state::{
-            SnapshotChunkRequest, SnapshotChunkResponse, SnapshotChunkSync,
-            SnapshotManifestRequest, SnapshotManifestResponse, StateSync,
+            SnapshotChunkResponse, SnapshotChunkSync, SnapshotManifestResponse,
+            StateSync,
         },
         synchronization_state::SyncPhase,
         SynchronizationGraphInner,
@@ -59,6 +57,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<Meter> =
         register_meter_with_group("system_metrics", "tx_propagate_set_size");
@@ -85,7 +84,7 @@ pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 pub const MAX_HEADERS_TO_SEND: u64 = 512;
 pub const MAX_BLOCKS_TO_SEND: u64 = 256;
 pub const MAX_EPOCHS_TO_SEND: u64 = 128;
-const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
+pub const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
 lazy_static! {
     pub static ref REQUEST_START_WAITING_TIME: Duration =
         Duration::from_secs(1);
@@ -360,16 +359,21 @@ impl SynchronizationProtocolHandler {
         //            return;
         //        }
 
+        let request_context = RequestContext {
+            peer,
+            io,
+            graph: self.graph.clone(),
+            request_manager: self.request_manager.clone(),
+        };
+
+        if msg_id.handle_request(&request_context, &rlp)? {
+            return Ok(());
+        }
+
         match msg_id {
             MsgId::STATUS => self.on_status(io, peer, &rlp),
             MsgId::GET_BLOCK_HEADERS_RESPONSE => {
                 self.on_block_headers_response(io, peer, &rlp)
-            }
-            MsgId::GET_BLOCK_HEADERS => {
-                self.on_get_block_headers(io, peer, &rlp)
-            }
-            MsgId::GET_BLOCK_HEADER_CHAIN => {
-                self.on_get_block_header_chain(io, peer, &rlp)
             }
             MsgId::NEW_BLOCK => self.on_new_block(io, peer, &rlp),
             MsgId::NEW_BLOCK_HASHES => self.on_new_block_hashes(io, peer, &rlp),
@@ -379,21 +383,13 @@ impl SynchronizationProtocolHandler {
             MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
                 self.on_blocks_with_public_response(io, peer, &rlp)
             }
-            MsgId::GET_BLOCKS => self.on_get_blocks(io, peer, &rlp),
             MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
                 self.on_terminal_block_hashes_response(io, peer, &rlp)
             }
-            MsgId::GET_TERMINAL_BLOCK_HASHES => {
-                self.on_get_terminal_block_hashes(io, peer, &rlp)
-            }
             MsgId::TRANSACTIONS => self.on_transactions(peer, &rlp),
-            MsgId::GET_CMPCT_BLOCKS => {
-                self.on_get_compact_blocks(io, peer, &rlp)
-            }
             MsgId::GET_CMPCT_BLOCKS_RESPONSE => {
                 self.on_get_compact_blocks_response(io, peer, &rlp)
             }
-            MsgId::GET_BLOCK_TXN => self.on_get_blocktxn(io, peer, &rlp),
             MsgId::GET_BLOCK_TXN_RESPONSE => {
                 self.on_get_blocktxn_response(io, peer, &rlp)
             }
@@ -401,18 +397,11 @@ impl SynchronizationProtocolHandler {
                 self.on_trans_prop_ctrl(peer, &rlp)
             }
             MsgId::TRANSACTION_DIGESTS => self.on_trans_digests(io, peer, &rlp),
-            MsgId::GET_TRANSACTIONS => self.on_get_transactions(io, peer, &rlp),
             MsgId::GET_TRANSACTIONS_RESPONSE => {
                 self.on_get_transactions_response(io, peer, &rlp)
             }
-            MsgId::GET_BLOCK_HASHES_BY_EPOCH => {
-                self.on_get_block_hashes_by_epoch(io, peer, &rlp)
-            }
             MsgId::GET_BLOCK_HASHES_RESPONSE => {
                 self.on_block_hashes_response(io, peer, &rlp)
-            }
-            MsgId::GET_SNAPSHOT_MANIFEST => {
-                rlp.as_val::<SnapshotManifestRequest>()?.handle(io, peer)
             }
             MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE => {
                 let resp = rlp.as_val::<SnapshotManifestResponse>()?;
@@ -422,9 +411,6 @@ impl SynchronizationProtocolHandler {
                     resp,
                     &self.request_manager,
                 )
-            }
-            MsgId::GET_SNAPSHOT_CHUNK => {
-                rlp.as_val::<SnapshotChunkRequest>()?.handle(io, peer)
             }
             MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => {
                 let resp = rlp.as_val::<SnapshotChunkResponse>()?;
@@ -505,46 +491,6 @@ impl SynchronizationProtocolHandler {
         if disconnect {
             io.disconnect_peer(peer, op);
         }
-    }
-
-    fn on_get_compact_blocks(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        if !self.syn.contains_peer(&peer) {
-            warn!("Unexpected message from unrecognized peer: peer={:?} msg=GET_CMPCT_BLOCKS", peer);
-            return Ok(());
-        }
-
-        let req: GetCompactBlocks = rlp.as_val()?;
-        let mut compact_blocks = Vec::with_capacity(req.hashes.len());
-        let mut blocks = Vec::new();
-        debug!("on_get_compact_blocks, msg=:{:?}", req);
-        for hash in &req.hashes {
-            if let Some(compact_block) =
-                self.graph.data_man.compact_block_by_hash(hash)
-            {
-                if (compact_blocks.len() as u64) < MAX_HEADERS_TO_SEND {
-                    compact_blocks.push(compact_block);
-                }
-            } else if let Some(block) = self.graph.block_by_hash(hash) {
-                debug!("Have complete block but no compact block, return complete block instead");
-                if (blocks.len() as u64) < MAX_BLOCKS_TO_SEND {
-                    blocks.push(block);
-                }
-            } else {
-                warn!(
-                    "Peer {} requested non-existent compact block {}",
-                    peer, hash
-                );
-            }
-        }
-        let resp = GetCompactBlocksResponse {
-            request_id: req.request_id,
-            compact_blocks,
-            blocks: blocks.iter().map(|b| b.as_ref().clone()).collect(),
-        };
-        send_message(io, peer, &resp, SendQueuePriority::High)?;
-        Ok(())
     }
 
     /// For requested compact block,
@@ -703,27 +649,6 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn on_get_transactions(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let get_transactions = rlp.as_val::<GetTransactions>()?;
-        let transactions = self
-            .request_manager
-            .get_sent_transactions(&get_transactions.indices);
-        let resp = GetTransactionsResponse {
-            request_id: get_transactions.request_id,
-            transactions,
-        };
-        debug!(
-            "on_get_transactions request {} txs, returned {} txs",
-            get_transactions.indices.len(),
-            resp.transactions.len()
-        );
-
-        send_message(io, peer, &resp, SendQueuePriority::Normal)?;
-        Ok(())
-    }
-
     fn on_trans_digests(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -758,53 +683,6 @@ impl SynchronizationProtocolHandler {
             transaction_digests.window_index,
             &transaction_digests.trans_short_ids,
         );
-        Ok(())
-    }
-
-    fn on_get_blocktxn(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req: GetBlockTxn = rlp.as_val()?;
-        debug!("on_get_blocktxn");
-        match self.graph.block_by_hash(&req.block_hash) {
-            Some(block) => {
-                debug!("Process get_blocktxn hash={:?}", block.hash());
-                let mut tx_resp = Vec::with_capacity(req.indexes.len());
-                let mut last = 0;
-                for index in req.indexes {
-                    last += index;
-                    if last >= block.transactions.len() {
-                        warn!(
-                            "Request tx index out of bound, peer={}, hash={}",
-                            peer,
-                            block.hash()
-                        );
-                        return Err(ErrorKind::Invalid.into());
-                    }
-                    tx_resp.push(block.transactions[last].transaction.clone());
-                    last += 1;
-                }
-                let resp = GetBlockTxnResponse {
-                    request_id: req.request_id,
-                    block_hash: req.block_hash,
-                    block_txn: tx_resp,
-                };
-                send_message(io, peer, &resp, SendQueuePriority::High)?;
-            }
-            None => {
-                warn!(
-                    "Get blocktxn request of non-existent block, hash={}",
-                    req.block_hash
-                );
-
-                let resp = GetBlockTxnResponse {
-                    request_id: req.request_id,
-                    block_hash: H256::default(),
-                    block_txn: Vec::new(),
-                };
-                send_message(io, peer, &resp, SendQueuePriority::High)?;
-            }
-        }
         Ok(())
     }
 
@@ -963,72 +841,6 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn on_get_block_headers(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req = rlp.as_val::<GetBlockHeaders>()?;
-        debug!("on_get_block_headers, msg=:{:?}", req);
-
-        if req.hashes.is_empty() {
-            debug!("Received empty GetBlockHeaders msg: peer={:?}", peer);
-            return Ok(());
-        }
-
-        let headers = req
-            .hashes
-            .iter()
-            .take(MAX_HEADERS_TO_SEND as usize)
-            .filter_map(|hash| self.graph.block_header_by_hash(&hash))
-            .collect();
-
-        let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(req.request_id());
-        block_headers_resp.headers = headers;
-
-        debug!(
-            "Returned {:?} block headers to peer {:?}",
-            block_headers_resp.headers.len(),
-            peer
-        );
-
-        let msg: Box<dyn Message> = Box::new(block_headers_resp);
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
-        Ok(())
-    }
-
-    fn on_get_block_header_chain(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req = rlp.as_val::<GetBlockHeaderChain>()?;
-        debug!("on_get_block_header_chain, msg=:{:?}", req);
-
-        let mut hash = req.hash;
-        let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(req.request_id());
-
-        for _n in 0..cmp::min(MAX_HEADERS_TO_SEND, req.max_blocks) {
-            let header = self.graph.block_header_by_hash(&hash);
-            if header.is_none() {
-                break;
-            }
-            let header = header.unwrap();
-            block_headers_resp.headers.push(header.clone());
-            if hash == self.graph.genesis_hash() {
-                break;
-            }
-            hash = header.parent_hash().clone();
-        }
-        debug!(
-            "Returned {:?} block headers to peer {:?}",
-            block_headers_resp.headers.len(),
-            peer
-        );
-
-        let msg: Box<dyn Message> = Box::new(block_headers_resp);
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
-        Ok(())
-    }
-
     fn on_trans_prop_ctrl(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
         let trans_prop_ctrl = rlp.as_val::<TransactionPropagationControl>()?;
         debug!(
@@ -1039,129 +851,6 @@ impl SynchronizationProtocolHandler {
         let peer_info = self.syn.get_peer_info(&peer)?;
         peer_info.write().need_prop_trans = !trans_prop_ctrl.catch_up_mode;
 
-        Ok(())
-    }
-
-    fn on_get_blocks(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req = rlp.as_val::<GetBlocks>()?;
-        debug!("on_get_blocks, msg=:{:?}", req);
-        if req.hashes.is_empty() {
-            debug!("Received empty getblocks message: peer={:?}", peer);
-        } else if req.with_public {
-            let mut blocks = Vec::new();
-            let mut packet_size_left = MAX_PACKET_SIZE;
-            for hash in req.hashes.iter() {
-                if let Some(block) = self.graph.block_by_hash(hash) {
-                    if packet_size_left
-                        >= block.approximated_rlp_size_with_public()
-                    {
-                        packet_size_left -=
-                            block.approximated_rlp_size_with_public();
-                        let block = block.as_ref().clone();
-                        blocks.push(block);
-                    } else {
-                        break;
-                    }
-                }
-            }
-
-            let mut msg = Box::new(GetBlocksWithPublicResponse {
-                request_id: req.request_id().into(),
-                blocks,
-            });
-
-            loop {
-                // The number of blocks will keep decreasing for each iteration
-                // in the loop. when `msg.blocks.len() == 0`, we
-                // should not get `OversizedPacket` error, and
-                // we will break out of the loop then.
-                if let Err(e) = send_message(
-                    io,
-                    peer,
-                    msg.as_ref(),
-                    SendQueuePriority::High,
-                ) {
-                    match e.kind() {
-                        network::ErrorKind::OversizedPacket => {
-                            let block_count = msg.blocks.len() / 2;
-                            msg.blocks.truncate(block_count);
-                        }
-                        _ => {
-                            return Err(e.into());
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        } else {
-            let mut blocks = Vec::new();
-            let mut packet_size_left = MAX_PACKET_SIZE;
-            for hash in req.hashes.iter() {
-                if let Some(block) = self.graph.block_by_hash(hash) {
-                    if packet_size_left >= block.approximated_rlp_size() {
-                        packet_size_left -= block.approximated_rlp_size();
-                        let block = block.as_ref().clone();
-                        blocks.push(block);
-                    } else {
-                        break;
-                    }
-                }
-            }
-
-            let mut msg = Box::new(GetBlocksResponse {
-                request_id: req.request_id().into(),
-                blocks,
-            });
-
-            loop {
-                // The number of blocks will keep decreasing for each iteration
-                // in the loop. when `msg.blocks.len() == 0`, we
-                // should not get `OversizedPacket` error, and
-                // we will break out of the loop then.
-                if let Err(e) = send_message(
-                    io,
-                    peer,
-                    msg.as_ref(),
-                    SendQueuePriority::High,
-                ) {
-                    match e.kind() {
-                        network::ErrorKind::OversizedPacket => {
-                            let block_count = msg.blocks.len() / 2;
-                            msg.blocks.truncate(block_count);
-                        }
-                        _ => {
-                            return Err(e.into());
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn on_get_terminal_block_hashes(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req = rlp.as_val::<GetTerminalBlockHashes>()?;
-        debug!("on_get_terminal_block_hashes, msg=:{:?}", req);
-        let best_info = self.graph.consensus.get_best_info();
-        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
-        {
-            x.clone()
-        } else {
-            best_info.bounded_terminal_block_hashes.clone()
-        };
-        let msg: Box<dyn Message> = Box::new(GetTerminalBlockHashesResponse {
-            request_id: req.request_id().into(),
-            hashes: terminal_hashes,
-        });
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -1185,36 +874,6 @@ impl SynchronizationProtocolHandler {
                 self.request_block_headers(io, Some(peer), vec![hash.clone()]);
             }
         }
-        Ok(())
-    }
-
-    fn on_get_block_hashes_by_epoch(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req = rlp.as_val::<GetBlockHashesByEpoch>()?;
-        debug!("on_get_block_hashes_by_epoch, msg=:{:?}", req);
-
-        if req.epochs.is_empty() {
-            debug!("Received empty GetBlockHashesByEpoch msg: peer={:?}", peer);
-            return Ok(());
-        }
-
-        let hashes = req
-            .epochs
-            .iter()
-            .take(MAX_EPOCHS_TO_SEND as usize)
-            .map(|&e| self.graph.get_block_hashes_by_epoch(e))
-            .filter_map(Result::ok)
-            .fold(vec![], |mut res, sub| {
-                res.extend(sub);
-                res
-            });
-
-        let msg: Box<dyn Message> = Box::new(GetBlockHashesResponse {
-            request_id: req.request_id().into(),
-            hashes,
-        });
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 

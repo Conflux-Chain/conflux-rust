@@ -3,15 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Message, MsgId},
-    msg_sender::send_message,
-    request_manager::Request,
+    message::{Message, MsgId, Request, RequestContext},
+    request_manager::Request as RequestMessage,
     state::snapshot_manifest_response::SnapshotManifestResponse,
     Error,
 };
 use cfx_types::H256;
-use network::{NetworkContext, PeerId};
-use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{any::Any, time::Duration};
 
@@ -31,6 +28,20 @@ impl SnapshotManifestRequest {
 }
 
 impl Request for SnapshotManifestRequest {
+    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+        // todo find manifest from storage APIs
+        let response = SnapshotManifestResponse {
+            request_id: self.request_id,
+            checkpoint: self.checkpoint.clone(),
+            state_root: H256::zero(),
+            chunk_hashes: Vec::new(),
+        };
+
+        context.send_response(&response)
+    }
+}
+
+impl RequestMessage for SnapshotManifestRequest {
     fn set_request_id(&mut self, request_id: u64) {
         self.request_id = request_id;
     }
@@ -42,23 +53,9 @@ impl Request for SnapshotManifestRequest {
     // todo configurable
     fn timeout(&self) -> Duration { Duration::from_secs(30) }
 
-    fn handle(self, io: &NetworkContext, peer: PeerId) -> Result<(), Error> {
-        // todo find manifest from storage APIs
-        let response = SnapshotManifestResponse {
-            request_id: self.request_id,
-            checkpoint: self.checkpoint,
-            state_root: H256::zero(),
-            chunk_hashes: Vec::new(),
-        };
-
-        send_message(io, peer, &response, SendQueuePriority::High)?;
-
-        Ok(())
-    }
-
     fn on_removed(&self) {}
 
-    fn preprocess(&self) -> Box<Request> {
+    fn preprocess(&self) -> Box<RequestMessage> {
         Box::new(SnapshotManifestRequest::new(self.checkpoint.clone()))
     }
 }

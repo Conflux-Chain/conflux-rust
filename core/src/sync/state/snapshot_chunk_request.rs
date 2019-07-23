@@ -3,15 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Message, MsgId},
-    msg_sender::send_message,
-    request_manager::Request,
+    message::{Message, MsgId, Request, RequestContext},
+    request_manager::Request as RequestMessage,
     state::snapshot_chunk_response::SnapshotChunkResponse,
     Error,
 };
 use cfx_types::H256;
-use network::{NetworkContext, PeerId};
-use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{any::Any, time::Duration};
 
@@ -33,6 +30,18 @@ impl SnapshotChunkRequest {
 }
 
 impl Request for SnapshotChunkRequest {
+    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+        // todo find chunk from storage APIs
+        let response = SnapshotChunkResponse {
+            request_id: self.request_id,
+            chunk: Vec::new(),
+        };
+
+        context.send_response(&response)
+    }
+}
+
+impl RequestMessage for SnapshotChunkRequest {
     fn set_request_id(&mut self, request_id: u64) {
         self.request_id = request_id;
     }
@@ -43,21 +52,9 @@ impl Request for SnapshotChunkRequest {
 
     fn timeout(&self) -> Duration { Duration::from_secs(120) }
 
-    fn handle(self, io: &NetworkContext, peer: PeerId) -> Result<(), Error> {
-        // todo find chunk from storage APIs
-        let response = SnapshotChunkResponse {
-            request_id: self.request_id,
-            chunk: Vec::new(),
-        };
-
-        send_message(io, peer, &response, SendQueuePriority::High)?;
-
-        Ok(())
-    }
-
     fn on_removed(&self) {}
 
-    fn preprocess(&self) -> Box<Request> {
+    fn preprocess(&self) -> Box<RequestMessage> {
         Box::new(SnapshotChunkRequest::new(
             self.checkpoint.clone(),
             self.chunk_hash.clone(),

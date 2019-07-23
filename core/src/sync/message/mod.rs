@@ -17,6 +17,7 @@ mod getterminalblockhashes;
 mod message;
 mod newblock;
 mod newblockhashes;
+mod request;
 mod status;
 mod terminalblockhashes;
 mod transactions;
@@ -37,6 +38,7 @@ pub use self::{
     message::{Message, MsgId, RequestId},
     newblock::NewBlock,
     newblockhashes::NewBlockHashes,
+    request::{Request, RequestContext},
     status::Status,
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{
