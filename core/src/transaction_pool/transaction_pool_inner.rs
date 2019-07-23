@@ -234,7 +234,7 @@ impl TransactionPoolInner {
             let (addr, timestamp) =
                 self.garbage_collection_queue.front().unwrap().clone();
 
-            if timestamp + TIME_WINDOW < self.get_current_timestamp() {
+            if timestamp + TIME_WINDOW >= self.get_current_timestamp() {
                 break;
             }
 
