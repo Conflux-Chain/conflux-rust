@@ -100,7 +100,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                                 "storage_idle_size": "2000000",
                                 "storage_node_map_size": "200000000",
                                 "ledger_cache_size": "3000",
-                                "send_tx_period_ms": "31536000000",
+                                "send_tx_period_ms": "1300",
                                 "enable_discovery": "false",
                                 "egress_queue_capacity": "1024",
                                 "egress_min_throttle": "100",
