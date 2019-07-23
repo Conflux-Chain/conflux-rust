@@ -2,14 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod blockbodies;
 mod blockhashes;
 mod blockheaders;
 mod blocks;
 mod blocktxn;
 mod cmpctblocks;
-mod getblockbodies;
-mod getblockhashes;
 mod getblockhashesbyepoch;
 mod getblockheaderchain;
 mod getblockheaders;
@@ -25,14 +22,11 @@ mod terminalblockhashes;
 mod transactions;
 
 pub use self::{
-    blockbodies::GetBlockBodiesResponse,
     blockhashes::GetBlockHashesResponse,
     blockheaders::GetBlockHeadersResponse,
     blocks::{GetBlocksResponse, GetBlocksWithPublicResponse},
     blocktxn::GetBlockTxnResponse,
     cmpctblocks::GetCompactBlocksResponse,
-    getblockbodies::GetBlockBodies,
-    getblockhashes::GetBlockHashes,
     getblockhashesbyepoch::GetBlockHashesByEpoch,
     getblockheaderchain::GetBlockHeaderChain,
     getblockheaders::GetBlockHeaders,
