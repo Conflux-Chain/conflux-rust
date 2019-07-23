@@ -2,6 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::sync::{
+    message::{
+        GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders,
+        GetBlockTxn, GetBlocks, GetCompactBlocks, GetTerminalBlockHashes,
+        GetTransactions, Request, RequestContext,
+    },
+    state::{SnapshotChunkRequest, SnapshotManifestRequest},
+    Error,
+};
+use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::fmt;
 
@@ -51,6 +61,46 @@ build_msgid! {
     GET_SNAPSHOT_CHUNK_RESPONSE = 0x1c
 }
 
+impl MsgId {
+    pub fn handle_request(
+        &self, context: &RequestContext, rlp: &Rlp,
+    ) -> Result<bool, Error> {
+        match *self {
+            MsgId::GET_BLOCK_HEADERS => {
+                rlp.as_val::<GetBlockHeaders>()?.handle(context)?
+            }
+            MsgId::GET_BLOCK_HEADER_CHAIN => {
+                rlp.as_val::<GetBlockHeaderChain>()?.handle(&context)?
+            }
+            MsgId::GET_BLOCKS => rlp.as_val::<GetBlocks>()?.handle(&context)?,
+            MsgId::GET_TERMINAL_BLOCK_HASHES => {
+                rlp.as_val::<GetTerminalBlockHashes>()?.handle(&context)?
+            }
+            MsgId::GET_CMPCT_BLOCKS => {
+                rlp.as_val::<GetCompactBlocks>()?.handle(&context)?
+            }
+            MsgId::GET_BLOCK_TXN => {
+                rlp.as_val::<GetBlockTxn>()?.handle(&context)?
+            }
+            MsgId::GET_TRANSACTIONS => {
+                rlp.as_val::<GetTransactions>()?.handle(&context)?
+            }
+            MsgId::GET_BLOCK_HASHES_BY_EPOCH => {
+                rlp.as_val::<GetBlockHashesByEpoch>()?.handle(&context)?
+            }
+            MsgId::GET_SNAPSHOT_MANIFEST => {
+                rlp.as_val::<SnapshotManifestRequest>()?.handle(&context)?
+            }
+            MsgId::GET_SNAPSHOT_CHUNK => {
+                rlp.as_val::<SnapshotChunkRequest>()?.handle(&context)?
+            }
+            _ => return Ok(false),
+        }
+
+        Ok(true)
+    }
+}
+
 impl From<u8> for MsgId {
     fn from(inner: u8) -> Self { MsgId(inner) }
 }
@@ -70,6 +120,8 @@ pub trait Message: Send + Sync + Encodable + 'static {
 
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
