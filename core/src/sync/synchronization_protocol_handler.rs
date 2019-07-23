@@ -108,8 +108,9 @@ const EPOCH_SYNC_MAX_INFLIGHT: u64 = 300;
 const EPOCH_SYNC_BATCH_SIZE: u64 = 30;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-enum SyncHandlerWorkType {
+pub enum SyncHandlerWorkType {
     RecoverPublic = 1,
+    LocalMessage = 2,
 }
 
 struct RecoverPublicTask {
@@ -117,6 +118,10 @@ struct RecoverPublicTask {
     requested: HashSet<H256>,
     failed_peer: PeerId,
     compact: bool,
+}
+
+pub struct LocalMessageTask {
+    message: Vec<u8>,
 }
 
 struct FutureBlockContainerInner {
@@ -222,6 +227,9 @@ pub struct SynchronizationProtocolHandler {
 
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
+
+    // Worker task queue for local message
+    pub local_message: Mutex<VecDeque<LocalMessageTask>>,
 
     // state sync for any checkpoint
     state_sync: Mutex<SnapshotChunkSync>,
@@ -543,7 +551,7 @@ impl SynchronizationProtocolHandler {
             compact_blocks,
             blocks: blocks.iter().map(|b| b.as_ref().clone()).collect(),
         };
-        send_message(io, peer, &resp, SendQueuePriority::High)?;
+        send_message(self, io, peer, &resp, SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -720,7 +728,7 @@ impl SynchronizationProtocolHandler {
             resp.transactions.len()
         );
 
-        send_message(io, peer, &resp, SendQueuePriority::Normal)?;
+        send_message(self, io, peer, &resp, SendQueuePriority::Normal)?;
         Ok(())
     }
 
@@ -789,7 +797,7 @@ impl SynchronizationProtocolHandler {
                     block_hash: req.block_hash,
                     block_txn: tx_resp,
                 };
-                send_message(io, peer, &resp, SendQueuePriority::High)?;
+                send_message(self, io, peer, &resp, SendQueuePriority::High)?;
             }
             None => {
                 warn!(
@@ -802,7 +810,7 @@ impl SynchronizationProtocolHandler {
                     block_hash: H256::default(),
                     block_txn: Vec::new(),
                 };
-                send_message(io, peer, &resp, SendQueuePriority::High)?;
+                send_message(self, io, peer, &resp, SendQueuePriority::High)?;
             }
         }
         Ok(())
@@ -992,7 +1000,7 @@ impl SynchronizationProtocolHandler {
         );
 
         let msg: Box<dyn Message> = Box::new(block_headers_resp);
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
+        send_message(self, io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -1025,7 +1033,7 @@ impl SynchronizationProtocolHandler {
         );
 
         let msg: Box<dyn Message> = Box::new(block_headers_resp);
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
+        send_message(self, io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -1078,6 +1086,7 @@ impl SynchronizationProtocolHandler {
                 // should not get `OversizedPacket` error, and
                 // we will break out of the loop then.
                 if let Err(e) = send_message(
+                    self,
                     io,
                     peer,
                     msg.as_ref(),
@@ -1122,6 +1131,7 @@ impl SynchronizationProtocolHandler {
                 // should not get `OversizedPacket` error, and
                 // we will break out of the loop then.
                 if let Err(e) = send_message(
+                    self,
                     io,
                     peer,
                     msg.as_ref(),
@@ -1161,7 +1171,7 @@ impl SynchronizationProtocolHandler {
             request_id: req.request_id().into(),
             hashes: terminal_hashes,
         });
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
+        send_message(self, io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -1214,7 +1224,7 @@ impl SynchronizationProtocolHandler {
             request_id: req.request_id().into(),
             hashes,
         });
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)?;
+        send_message(self, io, peer, msg.as_ref(), SendQueuePriority::High)?;
         Ok(())
     }
 
@@ -1869,6 +1879,18 @@ impl SynchronizationProtocolHandler {
         self.on_blocks_inner(io, task)
     }
 
+    fn on_local_message_task(&self, io: &NetworkContext) {
+        let task = self.local_message.lock().pop_front().unwrap();
+        let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+        let peer = if chosen_peer.is_some() {
+            chosen_peer.unwrap()
+        } else {
+            0
+        };
+
+        self.on_message(io, peer, task.message.as_slice());
+    }
+
     pub fn on_mined_block(&self, mut block: Block) -> Vec<H256> {
         let hash = block.block_header.hash();
         info!("Mined block {:?} header={:?}", hash, block.block_header);
@@ -2011,7 +2033,7 @@ impl SynchronizationProtocolHandler {
         }
 
         for id in peer_ids {
-            send_message(io, id, msg, priority)?;
+            send_message(self, io, id, msg, priority)?;
         }
 
         Ok(())
@@ -2037,7 +2059,7 @@ impl SynchronizationProtocolHandler {
             best_epoch: best_info.best_epoch_number as u64,
             terminal_block_hashes: terminal_hashes,
         });
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
+        send_message(self, io, peer, msg.as_ref(), SendQueuePriority::High)
     }
 
     pub fn announce_new_blocks(&self, io: &NetworkContext, hashes: &[H256]) {
@@ -2048,6 +2070,7 @@ impl SynchronizationProtocolHandler {
             });
             for id in self.syn.peers.read().keys() {
                 send_message_with_throttling(
+                    self,
                     io,
                     *id,
                     msg.as_ref(),
@@ -2175,6 +2198,7 @@ impl SynchronizationProtocolHandler {
         );
         for peer_id in lucky_peers {
             match send_message(
+                self,
                 io,
                 peer_id,
                 tx_msg.as_ref(),
@@ -2372,6 +2396,7 @@ impl SynchronizationProtocolHandler {
 
         for peer in need_notify {
             if send_message(
+                self,
                 io,
                 peer,
                 trans_prop_ctrl_msg.as_ref(),
@@ -2555,6 +2580,10 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             if let Err(e) = self.on_blocks_inner_task(io) {
                 warn!("Error processing RecoverPublic task: {:?}", e);
             }
+        } else if work_type
+            == SyncHandlerWorkType::LocalMessage as HandlerWorkType
+        {
+            self.on_local_message_task(io);
         } else {
             warn!("Unknown SyncHandlerWorkType");
         }

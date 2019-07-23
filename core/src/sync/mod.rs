@@ -22,8 +22,8 @@ pub use self::{
         SynchronizationGraphInner, SynchronizationGraphNode,
     },
     synchronization_protocol_handler::{
-        ProtocolConfiguration, SynchronizationProtocolHandler,
-        SYNCHRONIZATION_PROTOCOL_VERSION,
+        LocalMessageTask, ProtocolConfiguration, SyncHandlerWorkType,
+        SynchronizationProtocolHandler, SYNCHRONIZATION_PROTOCOL_VERSION,
     },
     synchronization_service::{
         SharedSynchronizationService, SynchronizationService,
@@ -37,15 +37,20 @@ pub mod random {
 }
 
 pub mod msg_sender {
-    use crate::sync::message::{Message, MsgId};
+    use crate::sync::{
+        message::{Message, MsgId},
+        LocalMessageTask, SyncHandlerWorkType, SynchronizationProtocolHandler,
+    };
     use cfx_bytes::Bytes;
     use metrics::{register_meter_with_group, Meter};
     use network::{
-        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
-        PeerId,
+        throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
+        NetworkContext, PeerId,
     };
     use priority_send_queue::SendQueuePriority;
     use std::sync::Arc;
+
+    const NULL: usize = !0;
 
     lazy_static! {
         static ref GET_BLOCK_TXN_RESPOPNSE_METER: Arc<Meter> =
@@ -266,131 +271,150 @@ pub mod msg_sender {
     }
 
     pub fn send_message(
-        io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: SendQueuePriority,
+        protocol_handler: &SynchronizationProtocolHandler, io: &NetworkContext,
+        peer: PeerId, msg: &Message, priority: SendQueuePriority,
     ) -> Result<(), NetworkError>
     {
-        send_message_with_throttling(io, peer, msg, priority, false)
+        send_message_with_throttling(
+            protocol_handler,
+            io,
+            peer,
+            msg,
+            priority,
+            false,
+        )
     }
 
     pub fn send_message_with_throttling(
-        io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: SendQueuePriority, throttling_disabled: bool,
+        protocol_handler: &SynchronizationProtocolHandler, io: &NetworkContext,
+        peer: PeerId, msg: &Message, priority: SendQueuePriority,
+        throttling_disabled: bool,
     ) -> Result<(), NetworkError>
     {
-        if !throttling_disabled && msg.is_size_sensitive() {
-            if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
-                debug!("Throttling failure: {:?}", e);
-                return Err(e);
-            }
-        }
         let mut raw = Bytes::new();
         raw.push(msg.msg_id().into());
         raw.extend(msg.rlp_bytes().iter());
         let size = raw.len();
 
-        if let Err(e) = io.send(peer, raw, priority) {
-            debug!("Error sending message: {:?}", e);
-            return Err(e);
-        };
+        if peer == NULL {
+            protocol_handler
+                .local_message
+                .lock()
+                .push_back(LocalMessageTask { message: raw });
+            io.dispatch_work(
+                SyncHandlerWorkType::LocalMessage as HandlerWorkType,
+            );
+        } else {
+            if !throttling_disabled && msg.is_size_sensitive() {
+                if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
+                    debug!("Throttling failure: {:?}", e);
+                    return Err(e);
+                }
+            }
 
-        match msg.msg_id().into() {
-            MsgId::STATUS => ON_STATUS_METER.mark(size),
-            MsgId::GET_BLOCK_HEADERS_RESPONSE => {
-                GET_BLOCK_HEADER_RESPONSE_METER.mark(size);
-                GET_BLOCK_HEADER_RESPONSE_COUNTER.mark(1);
+            if let Err(e) = io.send(peer, raw, priority) {
+                debug!("Error sending message: {:?}", e);
+                return Err(e);
+            };
+
+            match msg.msg_id().into() {
+                MsgId::STATUS => ON_STATUS_METER.mark(size),
+                MsgId::GET_BLOCK_HEADERS_RESPONSE => {
+                    GET_BLOCK_HEADER_RESPONSE_METER.mark(size);
+                    GET_BLOCK_HEADER_RESPONSE_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCK_HEADERS => {
+                    GET_BLOCK_HEADERS_METER.mark(size);
+                    GET_BLOCK_HEADERS_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCK_HEADER_CHAIN => {
+                    GET_BLOCK_HEADER_CHAIN_METER.mark(size);
+                    GET_BLOCK_HEADER_CHAIN_COUNTER.mark(1);
+                }
+                MsgId::NEW_BLOCK => {
+                    NEW_BLOCK_METER.mark(size);
+                    NEW_BLOCK_COUNTER.mark(1);
+                }
+                MsgId::NEW_BLOCK_HASHES => {
+                    NEW_BLOCK_HASHES_METER.mark(size);
+                    NEW_BLOCK_HASHES_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCKS_RESPONSE => {
+                    GET_BLOCKS_RESPONSE_METER.mark(size);
+                    GET_BLOCKS_RESPONSE_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
+                    GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER.mark(size);
+                    GET_BLOCKS_WITH_PUBLIC_RESPONSE_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCKS => {
+                    GET_BLOCKS_METER.mark(size);
+                    GET_BLOCKS_COUNTER.mark(1);
+                }
+                MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
+                    GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER.mark(size);
+                    GET_TERMINAL_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
+                }
+                MsgId::GET_TERMINAL_BLOCK_HASHES => {
+                    GET_TERMINAL_BLOCK_HASHES_METER.mark(size);
+                    GET_TERMINAL_BLOCK_HASHES_COUNTER.mark(1);
+                }
+                MsgId::TRANSACTIONS => {
+                    TRANSACTIONS_METER.mark(size);
+                    TRANSACTIONS_COUNTER.mark(1);
+                }
+                MsgId::GET_CMPCT_BLOCKS => {
+                    GET_CMPCT_BLOCKS_METER.mark(size);
+                    GET_CMPCT_BLOCKS_COUNTER.mark(1);
+                }
+                MsgId::GET_CMPCT_BLOCKS_RESPONSE => {
+                    GET_CMPCT_BLOCKS_RESPONSE_METER.mark(size);
+                    GET_CMPCT_BLOCKS_RESPONSE_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCK_TXN => {
+                    GET_BLOCK_TXN_METER.mark(size);
+                    GET_BLOCK_TXN_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCK_TXN_RESPONSE => {
+                    GET_BLOCK_TXN_RESPOPNSE_METER.mark(size);
+                    GET_BLOCK_TXN_RESPOPNSE_COUNTER.mark(1);
+                }
+                MsgId::TRANSACTION_PROPAGATION_CONTROL => {
+                    TRANSACTION_PROPAGATION_CONTROL_METER.mark(size);
+                    TRANSACTION_PROPAGATION_CONTROL_COUNTER.mark(1);
+                }
+                MsgId::TRANSACTION_DIGESTS => {
+                    TRANSACTION_DIGESTS_METER.mark(size);
+                    TRANSACTION_DIGESTS_COUNTER.mark(1);
+                }
+                MsgId::GET_TRANSACTIONS => {
+                    GET_TRANSACTIONS_METER.mark(size);
+                    GET_TRANSACTIONS_COUNTER.mark(1);
+                }
+                MsgId::GET_TRANSACTIONS_RESPONSE => {
+                    GET_TRANSACTIONS_RESPONSE_METER.mark(size);
+                    GET_TRANSACTIONS_RESPONSE_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCK_HASHES_BY_EPOCH => {
+                    GET_BLOCK_HASHES_BY_EPOCH_METER.mark(size);
+                    GET_BLOCK_HASHES_BY_EPOCH_COUNTER.mark(1);
+                }
+                MsgId::GET_BLOCK_HASHES_RESPONSE => {
+                    GET_BLOCK_HASHES_RESPONSE_METER.mark(size);
+                    GET_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
+                }
+                _ => {
+                    OTHER_HIGH_METER.mark(size);
+                    OTHER_HIGH_COUNTER.mark(1);
+                }
             }
-            MsgId::GET_BLOCK_HEADERS => {
-                GET_BLOCK_HEADERS_METER.mark(size);
-                GET_BLOCK_HEADERS_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCK_HEADER_CHAIN => {
-                GET_BLOCK_HEADER_CHAIN_METER.mark(size);
-                GET_BLOCK_HEADER_CHAIN_COUNTER.mark(1);
-            }
-            MsgId::NEW_BLOCK => {
-                NEW_BLOCK_METER.mark(size);
-                NEW_BLOCK_COUNTER.mark(1);
-            }
-            MsgId::NEW_BLOCK_HASHES => {
-                NEW_BLOCK_HASHES_METER.mark(size);
-                NEW_BLOCK_HASHES_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCKS_RESPONSE => {
-                GET_BLOCKS_RESPONSE_METER.mark(size);
-                GET_BLOCKS_RESPONSE_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
-                GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER.mark(size);
-                GET_BLOCKS_WITH_PUBLIC_RESPONSE_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCKS => {
-                GET_BLOCKS_METER.mark(size);
-                GET_BLOCKS_COUNTER.mark(1);
-            }
-            MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
-                GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER.mark(size);
-                GET_TERMINAL_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
-            }
-            MsgId::GET_TERMINAL_BLOCK_HASHES => {
-                GET_TERMINAL_BLOCK_HASHES_METER.mark(size);
-                GET_TERMINAL_BLOCK_HASHES_COUNTER.mark(1);
-            }
-            MsgId::TRANSACTIONS => {
-                TRANSACTIONS_METER.mark(size);
-                TRANSACTIONS_COUNTER.mark(1);
-            }
-            MsgId::GET_CMPCT_BLOCKS => {
-                GET_CMPCT_BLOCKS_METER.mark(size);
-                GET_CMPCT_BLOCKS_COUNTER.mark(1);
-            }
-            MsgId::GET_CMPCT_BLOCKS_RESPONSE => {
-                GET_CMPCT_BLOCKS_RESPONSE_METER.mark(size);
-                GET_CMPCT_BLOCKS_RESPONSE_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCK_TXN => {
-                GET_BLOCK_TXN_METER.mark(size);
-                GET_BLOCK_TXN_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCK_TXN_RESPONSE => {
-                GET_BLOCK_TXN_RESPOPNSE_METER.mark(size);
-                GET_BLOCK_TXN_RESPOPNSE_COUNTER.mark(1);
-            }
-            MsgId::TRANSACTION_PROPAGATION_CONTROL => {
-                TRANSACTION_PROPAGATION_CONTROL_METER.mark(size);
-                TRANSACTION_PROPAGATION_CONTROL_COUNTER.mark(1);
-            }
-            MsgId::TRANSACTION_DIGESTS => {
-                TRANSACTION_DIGESTS_METER.mark(size);
-                TRANSACTION_DIGESTS_COUNTER.mark(1);
-            }
-            MsgId::GET_TRANSACTIONS => {
-                GET_TRANSACTIONS_METER.mark(size);
-                GET_TRANSACTIONS_COUNTER.mark(1);
-            }
-            MsgId::GET_TRANSACTIONS_RESPONSE => {
-                GET_TRANSACTIONS_RESPONSE_METER.mark(size);
-                GET_TRANSACTIONS_RESPONSE_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCK_HASHES_BY_EPOCH => {
-                GET_BLOCK_HASHES_BY_EPOCH_METER.mark(size);
-                GET_BLOCK_HASHES_BY_EPOCH_COUNTER.mark(1);
-            }
-            MsgId::GET_BLOCK_HASHES_RESPONSE => {
-                GET_BLOCK_HASHES_RESPONSE_METER.mark(size);
-                GET_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
-            }
-            _ => {
-                OTHER_HIGH_METER.mark(size);
-                OTHER_HIGH_COUNTER.mark(1);
-            }
+
+            debug!(
+                "Send message({}) to {:?}",
+                msg.msg_id(),
+                io.get_peer_node_id(peer)
+            );
         }
-
-        debug!(
-            "Send message({}) to {:?}",
-            msg.msg_id(),
-            io.get_peer_node_id(peer)
-        );
         Ok(())
     }
 
