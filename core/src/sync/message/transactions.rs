@@ -4,11 +4,13 @@
 
 use crate::sync::{
     message::{
-        Context, Handleable, Message, MsgId, Request, RequestContext, RequestId,
+        metrics::TX_HANDLE_TIMER, Context, Handleable, Message, MsgId,
+        RequestId,
     },
     request_manager::RequestMessage,
     Error, ErrorKind,
 };
+use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -146,10 +148,12 @@ pub struct GetTransactions {
     pub tx_ids: HashSet<TxPropagateId>,
 }
 
-impl Request for GetTransactions {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
-        let transactions =
-            context.request_manager.get_sent_transactions(&self.indices);
+impl Handleable for GetTransactions {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let transactions = ctx
+            .manager
+            .request_manager
+            .get_sent_transactions(&self.indices);
         let response = GetTransactionsResponse {
             request_id: self.request_id.clone(),
             transactions,
@@ -160,7 +164,7 @@ impl Request for GetTransactions {
             response.transactions.len()
         );
 
-        context.send_response(&response)
+        ctx.send_response(&response)
     }
 }
 
@@ -213,6 +217,8 @@ pub struct GetTransactionsResponse {
 
 impl Handleable for GetTransactionsResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
+
         debug!("on_get_transactions_response {:?}", self.request_id());
 
         let req = ctx.match_request(self.request_id())?;

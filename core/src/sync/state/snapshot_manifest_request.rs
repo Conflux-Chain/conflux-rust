@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Message, MsgId, Request, RequestContext},
+    message::{Context, Handleable, Message, MsgId},
     request_manager::Request as RequestMessage,
     state::snapshot_manifest_response::SnapshotManifestResponse,
     Error,
@@ -27,8 +27,8 @@ impl SnapshotManifestRequest {
     }
 }
 
-impl Request for SnapshotManifestRequest {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+impl Handleable for SnapshotManifestRequest {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         // todo find manifest from storage APIs
         let response = SnapshotManifestResponse {
             request_id: self.request_id,
@@ -37,7 +37,7 @@ impl Request for SnapshotManifestRequest {
             chunk_hashes: Vec::new(),
         };
 
-        context.send_response(&response)
+        ctx.send_response(&response)
     }
 }
 

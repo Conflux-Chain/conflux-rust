@@ -3,12 +3,16 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Context, Handleable, Message, MsgId, RequestId},
+    message::{
+        metrics::BLOCK_HANDLE_TIMER, Context, Handleable, Message, MsgId,
+        RequestId,
+    },
     request_manager::RequestMessage,
     synchronization_protocol_handler::RecoverPublicTask,
     Error, ErrorKind,
 };
 use cfx_types::H256;
+use metrics::MeterTimer;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
@@ -24,6 +28,8 @@ pub struct GetBlocksResponse {
 
 impl Handleable for GetBlocksResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
+
         debug!(
             "on_blocks_response, get block hashes {:?}",
             self.blocks

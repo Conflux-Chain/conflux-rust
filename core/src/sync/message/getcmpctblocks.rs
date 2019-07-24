@@ -4,7 +4,7 @@
 
 use crate::sync::{
     message::{
-        GetCompactBlocksResponse, Message, MsgId, Request, RequestContext,
+        Context, GetCompactBlocksResponse, Handleable, Message, MsgId,
         RequestId,
     },
     synchronization_protocol_handler::{
@@ -22,19 +22,19 @@ pub struct GetCompactBlocks {
     pub hashes: Vec<H256>,
 }
 
-impl Request for GetCompactBlocks {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+impl Handleable for GetCompactBlocks {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         let mut compact_blocks = Vec::with_capacity(self.hashes.len());
         let mut blocks = Vec::new();
 
         for hash in self.hashes.iter() {
             if let Some(compact_block) =
-                context.graph.data_man.compact_block_by_hash(hash)
+                ctx.manager.graph.data_man.compact_block_by_hash(hash)
             {
                 if (compact_blocks.len() as u64) < MAX_HEADERS_TO_SEND {
                     compact_blocks.push(compact_block);
                 }
-            } else if let Some(block) = context.graph.block_by_hash(hash) {
+            } else if let Some(block) = ctx.manager.graph.block_by_hash(hash) {
                 debug!("Have complete block but no compact block, return complete block instead");
                 if (blocks.len() as u64) < MAX_BLOCKS_TO_SEND {
                     blocks.push(block.as_ref().clone());
@@ -42,7 +42,7 @@ impl Request for GetCompactBlocks {
             } else {
                 warn!(
                     "Peer {} requested non-existent compact block {}",
-                    context.peer, hash
+                    ctx.peer, hash
                 );
             }
         }
@@ -53,7 +53,7 @@ impl Request for GetCompactBlocks {
             blocks,
         };
 
-        context.send_response(&response)
+        ctx.send_response(&response)
     }
 }
 

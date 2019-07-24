@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
+    message::Message, msg_sender::send_message,
     request_manager::RequestMessage, Error, SynchronizationProtocolHandler,
 };
 use network::{NetworkContext, PeerId};
@@ -20,6 +21,11 @@ impl<'a> Context<'a> {
         self.manager
             .request_manager
             .match_request(self.io, self.peer, request_id)
+    }
+
+    pub fn send_response(&self, response: &Message) -> Result<(), Error> {
+        send_message(self.io, self.peer, response, response.priority())?;
+        Ok(())
     }
 }
 

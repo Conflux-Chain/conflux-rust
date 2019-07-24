@@ -4,7 +4,7 @@
 
 use crate::sync::{
     message::{
-        GetBlockTxnResponse, Message, MsgId, Request, RequestContext, RequestId,
+        Context, GetBlockTxnResponse, Handleable, Message, MsgId, RequestId,
     },
     Error, ErrorKind,
 };
@@ -19,9 +19,9 @@ pub struct GetBlockTxn {
     pub indexes: Vec<usize>,
 }
 
-impl Request for GetBlockTxn {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
-        match context.graph.block_by_hash(&self.block_hash) {
+impl Handleable for GetBlockTxn {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        match ctx.manager.graph.block_by_hash(&self.block_hash) {
             Some(block) => {
                 debug!("Process get_blocktxn hash={:?}", block.hash());
                 let mut tx_resp = Vec::with_capacity(self.indexes.len());
@@ -31,7 +31,7 @@ impl Request for GetBlockTxn {
                     if last >= block.transactions.len() {
                         warn!(
                             "Request tx index out of bound, peer={}, hash={}",
-                            context.peer,
+                            ctx.peer,
                             block.hash()
                         );
                         return Err(ErrorKind::Invalid.into());
@@ -45,7 +45,7 @@ impl Request for GetBlockTxn {
                     block_txn: tx_resp,
                 };
 
-                context.send_response(&response)
+                ctx.send_response(&response)
             }
             None => {
                 warn!(
@@ -59,7 +59,7 @@ impl Request for GetBlockTxn {
                     block_txn: Vec::new(),
                 };
 
-                context.send_response(&response)
+                ctx.send_response(&response)
             }
         }
     }

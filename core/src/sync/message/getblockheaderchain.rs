@@ -4,8 +4,7 @@
 
 use crate::sync::{
     message::{
-        GetBlockHeadersResponse, Message, MsgId, Request, RequestContext,
-        RequestId,
+        Context, GetBlockHeadersResponse, Handleable, Message, MsgId, RequestId,
     },
     synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
     Error,
@@ -24,20 +23,20 @@ pub struct GetBlockHeaderChain {
     pub max_blocks: u64,
 }
 
-impl Request for GetBlockHeaderChain {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
-        let mut hash = self.hash.clone();
+impl Handleable for GetBlockHeaderChain {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let mut hash = self.hash;
         let mut block_headers_resp = GetBlockHeadersResponse::default();
         block_headers_resp.set_request_id(self.request_id());
 
         for _ in 0..min(MAX_HEADERS_TO_SEND, self.max_blocks) {
-            let header = context.graph.block_header_by_hash(&hash);
+            let header = ctx.manager.graph.block_header_by_hash(&hash);
             if header.is_none() {
                 break;
             }
             let header = header.unwrap();
             block_headers_resp.headers.push(header.clone());
-            if hash == context.graph.genesis_hash() {
+            if hash == ctx.manager.graph.genesis_hash() {
                 break;
             }
             hash = header.parent_hash().clone();
@@ -46,10 +45,10 @@ impl Request for GetBlockHeaderChain {
         debug!(
             "Returned {:?} block headers to peer {:?}",
             block_headers_resp.headers.len(),
-            context.peer
+            ctx.peer
         );
 
-        context.send_response(&block_headers_resp)
+        ctx.send_response(&block_headers_resp)
     }
 }
 

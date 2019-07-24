@@ -4,8 +4,7 @@
 
 use crate::sync::{
     message::{
-        request::{Request, RequestContext},
-        GetBlockHeadersResponse, Message, MsgId, RequestId,
+        Context, GetBlockHeadersResponse, Handleable, Message, MsgId, RequestId,
     },
     synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
     Error,
@@ -20,8 +19,8 @@ pub struct GetBlockHeaders {
     pub hashes: Vec<H256>,
 }
 
-impl Request for GetBlockHeaders {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+impl Handleable for GetBlockHeaders {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         if self.hashes.is_empty() {
             return Ok(());
         }
@@ -30,20 +29,20 @@ impl Request for GetBlockHeaders {
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND as usize)
-            .filter_map(|hash| context.graph.block_header_by_hash(&hash))
+            .filter_map(|hash| ctx.manager.graph.block_header_by_hash(&hash))
             .collect();
 
         let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(self.request_id.request_id());
+        block_headers_resp.set_request_id(self.request_id());
         block_headers_resp.headers = headers;
 
         debug!(
             "Returned {:?} block headers to peer {:?}",
             block_headers_resp.headers.len(),
-            context.peer,
+            ctx.peer,
         );
 
-        context.send_response(&block_headers_resp)
+        ctx.send_response(&block_headers_resp)
     }
 }
 

@@ -16,9 +16,9 @@ mod getcmpctblocks;
 mod getterminalblockhashes;
 mod handleable;
 mod message;
+mod metrics;
 mod newblock;
 mod newblockhashes;
-mod request;
 mod status;
 mod terminalblockhashes;
 mod transactions;
@@ -40,7 +40,6 @@ pub use self::{
     message::{Message, MsgId, RequestId},
     newblock::NewBlock,
     newblockhashes::NewBlockHashes,
-    request::{Request, RequestContext},
     status::Status,
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{

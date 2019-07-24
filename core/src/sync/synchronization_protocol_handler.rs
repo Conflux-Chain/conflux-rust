@@ -8,10 +8,7 @@ use super::{
 use crate::{
     consensus::SharedConsensusGraph,
     sync::message::{
-        GetBlockHashesResponse, GetBlockHeadersResponse, GetBlockTxnResponse,
-        GetBlocksResponse, GetBlocksWithPublicResponse,
-        GetCompactBlocksResponse, GetTerminalBlockHashesResponse,
-        GetTransactionsResponse, Message, MsgId, NewBlock, NewBlockHashes,
+        GetBlockHeadersResponse, Message, MsgId, NewBlock, NewBlockHashes,
         Status, TransactionDigests, TransactionPropagationControl,
     },
 };
@@ -27,29 +24,24 @@ use rlp::Rlp;
 //use slab::Slab;
 use super::{
     msg_sender::{send_message, send_message_with_throttling, NULL},
-    request_manager::{RequestManager, RequestMessage},
+    request_manager::RequestManager,
 };
 use crate::{
     block_data_manager::BlockStatus,
     consensus::ConsensusGraphInner,
     sync::{
-        message::{Context, Handleable, RequestContext},
-        state::{
-            SnapshotChunkResponse, SnapshotChunkSync, SnapshotManifestResponse,
-            StateSync,
-        },
+        message::Context,
+        state::{SnapshotChunkSync, StateSync},
         synchronization_state::SyncPhase,
         SynchronizationGraphInner,
     },
-    verification::ACCEPTABLE_TIME_DRIFT,
 };
-use metrics::{register_meter_with_group, Meter, MeterTimer};
+use metrics::{register_meter_with_group, Meter};
 use primitives::{Block, BlockHeader, SignedTransaction, TxPropagateId};
 use priority_send_queue::SendQueuePriority;
 use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    iter::FromIterator,
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -57,20 +49,8 @@ use std::{
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<Meter> =
         register_meter_with_group("system_metrics", "tx_propagate_set_size");
-    static ref BLOCK_HEADER_HANDLE_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "sync::on_block_headers");
-    static ref BLOCK_HANDLE_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "sync::on_blocks");
-    static ref CMPCT_BLOCK_HANDLE_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "sync::on_compact_block");
-    static ref BLOCK_TXN_HANDLE_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "sync::on_block_txn");
     static ref BLOCK_RECOVER_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "sync:recover_block");
-    static ref CMPCT_BLOCK_RECOVER_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "sync:recover_compact_block");
-    static ref TX_HANDLE_TIMER: Arc<Meter> =
-        register_meter_with_group("timer", "sync::on_tx_response");
 }
 
 const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
@@ -172,7 +152,7 @@ impl FutureBlockContainerInner {
     }
 }
 
-struct FutureBlockContainer {
+pub struct FutureBlockContainer {
     inner: RwLock<FutureBlockContainerInner>,
 }
 
@@ -264,7 +244,7 @@ pub struct SynchronizationProtocolHandler {
     local_message: AsyncTaskQueue<LocalMessageTask>,
 
     // state sync for any checkpoint
-    state_sync: Mutex<SnapshotChunkSync>,
+    pub state_sync: Mutex<SnapshotChunkSync>,
 }
 
 #[derive(Clone)]
@@ -340,7 +320,7 @@ impl SynchronizationProtocolHandler {
         self.syn.sync_phase.lock().catch_up_mode()
     }
 
-    fn need_requesting_blocks(&self) -> bool {
+    pub fn need_requesting_blocks(&self) -> bool {
         self.syn.sync_phase.lock().need_requesting_blocks()
     }
 
@@ -404,86 +384,18 @@ impl SynchronizationProtocolHandler {
         //            return;
         //        }
 
-        let request_context = RequestContext {
-            peer,
-            io,
-            graph: self.graph.clone(),
-            request_manager: self.request_manager.clone(),
-        };
-
-        if msg_id.handle_request(&request_context, &rlp)? {
-            return Ok(());
-        }
-
         let ctx = Context {
             peer,
             io,
             manager: self,
         };
 
-        match msg_id {
-            MsgId::STATUS => {
-                rlp.as_val::<Status>()?.handle(&ctx)?;
-                Ok(self.start_sync(io))
-            }
-            MsgId::GET_BLOCK_HEADERS_RESPONSE => {
-                self.on_block_headers_response(io, peer, &rlp)
-            }
-            MsgId::NEW_BLOCK => self.on_new_block(io, peer, &rlp),
-            MsgId::NEW_BLOCK_HASHES => self.on_new_block_hashes(io, peer, &rlp),
-            MsgId::GET_BLOCKS_RESPONSE => {
-                let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
-                rlp.as_val::<GetBlocksResponse>()?.handle(&ctx)
-            }
-            MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
-                rlp.as_val::<GetBlocksWithPublicResponse>()?.handle(&ctx)
-            }
-            MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
-                self.on_terminal_block_hashes_response(io, peer, &rlp)
-            }
-            MsgId::GET_CMPCT_BLOCKS_RESPONSE => {
-                self.on_get_compact_blocks_response(io, peer, &rlp)
-            }
-            MsgId::GET_BLOCK_TXN_RESPONSE => {
-                self.on_get_blocktxn_response(io, peer, &rlp)
-            }
-            MsgId::TRANSACTION_PROPAGATION_CONTROL => {
-                rlp.as_val::<TransactionPropagationControl>()?.handle(&ctx)
-            }
-            MsgId::TRANSACTION_DIGESTS => {
-                rlp.as_val::<TransactionDigests>()?.handle(&ctx)
-            }
-            MsgId::GET_TRANSACTIONS_RESPONSE => {
-                let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
-                rlp.as_val::<GetTransactionsResponse>()?.handle(&ctx)
-            }
-            MsgId::GET_BLOCK_HASHES_RESPONSE => {
-                self.on_block_hashes_response(io, peer, &rlp)
-            }
-            MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE => {
-                let resp = rlp.as_val::<SnapshotManifestResponse>()?;
-                self.state_sync.lock().handle_snapshot_manifest_response(
-                    io,
-                    peer,
-                    resp,
-                    &self.request_manager,
-                )
-            }
-            MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => {
-                let resp = rlp.as_val::<SnapshotChunkResponse>()?;
-                self.state_sync.lock().handle_snapshot_chunk_response(
-                    io,
-                    peer,
-                    resp,
-                    &self.request_manager,
-                )
-            }
-            _ => {
-                warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
-                io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
-                Ok(())
-            }
+        if !msg_id.handle(&ctx, &rlp)? {
+            warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
+            io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
         }
+
+        Ok(())
     }
 
     /// Error handling for dispatched messages.
@@ -550,311 +462,7 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    /// For requested compact block,
-    ///     if a compact block is returned
-    ///         if it is recoverable and reconstructed block is valid,
-    ///             it's removed from requested_manager
-    ///         if it is recoverable and reconstructed block is not valid,
-    ///             it's sent to requested_manager as requested but not received
-    /// block, and the full block
-    fn on_get_compact_blocks_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(CMPCT_BLOCK_HANDLE_TIMER.as_ref());
-        let resp: GetCompactBlocksResponse = rlp.as_val()?;
-        debug!(
-            "on_get_compact_blocks_response request_id={} compact={} block={}",
-            resp.request_id(),
-            resp.compact_blocks.len(),
-            resp.blocks.len()
-        );
-        let req =
-            self.request_manager
-                .match_request(io, peer, resp.request_id())?;
-        let mut failed_blocks = HashSet::new();
-        let mut completed_blocks = Vec::new();
-        let mut requested_blocks: HashSet<H256> = match req {
-            RequestMessage::Compact(request) => {
-                HashSet::from_iter(request.hashes.iter().cloned())
-            }
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, resp);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
-        for mut cmpct in resp.compact_blocks {
-            let hash = cmpct.hash();
-            if !requested_blocks.remove(&hash) {
-                warn!("Response has not requested compact block {:?}", hash);
-                continue;
-            }
-            if self.graph.contains_block(&hash) {
-                debug!(
-                    "Get cmpct block, but full block already received, hash={}",
-                    hash
-                );
-                continue;
-            } else {
-                if let Some(header) = self.graph.block_header_by_hash(&hash) {
-                    if self.graph.data_man.contains_compact_block(&hash) {
-                        debug!("Cmpct block already received, hash={}", hash);
-                        continue;
-                    } else {
-                        debug!("Cmpct block Processing, hash={}", hash);
-                        let missing = {
-                            let _timer = MeterTimer::time_func(
-                                CMPCT_BLOCK_RECOVER_TIMER.as_ref(),
-                            );
-                            self.graph.data_man.build_partial(&mut cmpct)
-                        };
-                        if !missing.is_empty() {
-                            debug!(
-                                "Request {} missing tx in {}",
-                                missing.len(),
-                                hash
-                            );
-                            self.graph.data_man.insert_compact_block(cmpct);
-                            self.request_manager
-                                .request_blocktxn(io, peer, hash, missing);
-                        } else {
-                            let trans = cmpct
-                                .reconstructed_txes
-                                .into_iter()
-                                .map(|tx| tx.unwrap())
-                                .collect();
-                            let (success, to_relay) = self.graph.insert_block(
-                                Block::new(header, trans),
-                                true,  // need_to_verify
-                                true,  // persistent
-                                false, // recover_from_db
-                            );
-                            // May fail due to transactions hash collision
-                            if !success {
-                                failed_blocks.insert(hash);
-                            }
-                            if to_relay {
-                                completed_blocks.push(hash);
-                            }
-                        }
-                    }
-                } else {
-                    warn!(
-                        "Get cmpct block, but header not received, hash={}",
-                        hash
-                    );
-                    continue;
-                }
-            }
-        }
-        self.blocks_received(
-            io,
-            failed_blocks,
-            completed_blocks.clone().into_iter().collect(),
-            true,
-            Some(peer),
-        );
-
-        self.recover_public_queue.dispatch(
-            io,
-            RecoverPublicTask::new(resp.blocks, requested_blocks, peer, true),
-        );
-
-        // Broadcast completed block_header_ready blocks
-        self.relay_blocks(io, completed_blocks)
-    }
-
-    fn on_get_blocktxn_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(BLOCK_TXN_HANDLE_TIMER.as_ref());
-        let resp: GetBlockTxnResponse = rlp.as_val()?;
-        debug!("on_get_blocktxn_response");
-        let resp_hash = resp.block_hash;
-        let req =
-            self.request_manager
-                .match_request(io, peer, resp.request_id())?;
-        let req = match &req {
-            RequestMessage::BlockTxn(request) => request,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, resp);
-                self.request_manager.remove_mismatch_request(io, &req);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
-        let mut request_again = false;
-        let mut request_from_same_peer = false;
-        if resp_hash != req.block_hash {
-            warn!("Response blocktxn is not the requested block, req={:?}, resp={:?}", req.block_hash, resp_hash);
-            request_again = true;
-        } else {
-            if self.graph.contains_block(&resp_hash) {
-                debug!(
-                    "Get blocktxn, but full block already received, hash={}",
-                    resp_hash
-                );
-            } else {
-                if let Some(header) =
-                    self.graph.block_header_by_hash(&resp_hash)
-                {
-                    debug!("Process blocktxn hash={:?}", resp_hash);
-                    let signed_txes = self
-                        .graph
-                        .data_man
-                        .recover_unsigned_tx_with_order(&resp.block_txn)?;
-                    match self.graph.data_man.compact_block_by_hash(&resp_hash)
-                    {
-                        Some(cmpct) => {
-                            let mut trans = Vec::with_capacity(
-                                cmpct.reconstructed_txes.len(),
-                            );
-                            let mut index = 0;
-                            for tx in cmpct.reconstructed_txes {
-                                match tx {
-                                    Some(tx) => trans.push(tx),
-                                    None => {
-                                        trans.push(signed_txes[index].clone());
-                                        index += 1;
-                                    }
-                                }
-                            }
-                            // FIXME Should check if hash matches
-
-                            let (success, to_relay) = self.graph.insert_block(
-                                Block::new(header, trans),
-                                true,  // need_to_verify
-                                true,  // persistent
-                                false, // recover_from_db
-                            );
-
-                            let mut blocks = Vec::new();
-                            blocks.push(resp_hash);
-                            if success {
-                                request_again = false;
-
-                                // a transaction from compact block should be
-                                // added to received pool
-                                self.request_manager
-                                    .append_received_transactions(signed_txes);
-                            } else {
-                                // If the peer is honest, may still fail due to
-                                // tx hash collision
-                                request_again = true;
-                                request_from_same_peer = true;
-                            }
-                            if to_relay && !self.catch_up_mode() {
-                                self.relay_blocks(io, blocks).ok();
-                            }
-                        }
-                        None => {
-                            request_again = true;
-                            warn!("Get blocktxn, but misses compact block, hash={}", resp_hash);
-                        }
-                    }
-                } else {
-                    request_again = true;
-                    warn!(
-                        "Get blocktxn, but header not received, hash={}",
-                        resp_hash
-                    );
-                }
-            }
-        }
-        if request_again {
-            let mut req_hashes = HashSet::new();
-            req_hashes.insert(req.block_hash);
-            let req_peer = if request_from_same_peer {
-                Some(peer)
-            } else {
-                None
-            };
-            self.blocks_received(
-                io,
-                req_hashes,
-                HashSet::new(),
-                true,
-                req_peer,
-            );
-        }
-        Ok(())
-    }
-
-    fn on_terminal_block_hashes_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let terminal_block_hashes =
-            rlp.as_val::<GetTerminalBlockHashesResponse>()?;
-        debug!(
-            "on_terminal_block_hashes_response, msg=:{:?}",
-            terminal_block_hashes
-        );
-        self.request_manager.match_request(
-            io,
-            peer,
-            terminal_block_hashes.request_id(),
-        )?;
-
-        for hash in &terminal_block_hashes.hashes {
-            if !self.graph.contains_block_header(&hash) {
-                self.request_block_headers(io, Some(peer), vec![hash.clone()]);
-            }
-        }
-        Ok(())
-    }
-
-    fn on_block_hashes_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp = rlp.as_val::<GetBlockHashesResponse>()?;
-        debug!("on_block_hashes_response, msg={:?}", resp);
-
-        let req =
-            self.request_manager
-                .match_request(io, peer, resp.request_id())?;
-
-        match req {
-            RequestMessage::Epochs(epoch_req) => {
-                // assume received everything
-                // FIXME: peer should signal error?
-                let req = epoch_req.epochs.clone().into_iter().collect();
-                let rec = epoch_req.epochs.clone().into_iter().collect();
-                self.request_manager.epochs_received(io, req, rec);
-            }
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, resp);
-                self.request_manager.remove_mismatch_request(io, &req);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
-
-        // request missing headers
-        let missing_headers = resp
-            .hashes
-            .iter()
-            .filter(|h| !self.graph.contains_block_header(&h))
-            .cloned()
-            .collect();
-
-        // NOTE: this is to make sure no section of the DAG is skipped
-        // e.g. if the request for epoch 4 is lost or the reply is in-
-        // correct, the request for epoch 5 should recursively request
-        // all dependent blocks (see on_block_headers_response)
-
-        // self.request_manager.request_block_headers(
-        //     io,
-        //     Some(peer),
-        //     missing_headers,
-        // );
-
-        self.request_block_headers(io, Some(peer), missing_headers);
-
-        // TODO: handle empty response
-
-        // try requesting some more epochs
-        self.start_sync(io);
-        Ok(())
-    }
-
-    fn start_sync(&self, io: &NetworkContext) {
+    pub fn start_sync(&self, io: &NetworkContext) {
         let checkpoint = self.syn.sync_phase.lock().get_sync_checkpoint();
 
         if let Some(checkpoint) = checkpoint {
@@ -1004,7 +612,7 @@ impl SynchronizationProtocolHandler {
 
     // FIXME This is actually a recursive DFS to traverse all block headers in
     // the db
-    fn request_block_headers(
+    pub fn request_block_headers(
         &self, io: &NetworkContext, peer: Option<usize>,
         mut header_hashes: Vec<H256>,
     )
@@ -1051,241 +659,18 @@ impl SynchronizationProtocolHandler {
             headers.push((*header).clone());
             block_headers_resp.headers = headers;
 
-            let request_context = RequestContext {
+            let ctx = Context {
                 peer: NULL,
                 io,
-                graph: self.graph.clone(),
-                request_manager: self.request_manager.clone(),
+                manager: self,
             };
 
-            request_context
-                .send_response(&block_headers_resp)
+            ctx.send_response(&block_headers_resp)
                 .expect("send response should not be error");
             return true;
         } else {
             return false;
         }
-    }
-
-    // FIXME Remove recursive call if block headers exist db
-    fn handle_block_headers(
-        &self, io: &NetworkContext, block_headers: &Vec<BlockHeader>,
-        requested: Vec<H256>, chosen_peer: Option<usize>,
-    )
-    {
-        let mut hashes = HashSet::new();
-        let mut dependent_hashes = HashSet::new();
-        let mut need_to_relay = HashSet::new();
-        let mut returned_headers = HashSet::new();
-        let now_timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        for header in block_headers {
-            let hash = header.hash();
-            returned_headers.insert(hash);
-            // check timestamp drift
-            if self.graph.verification_config.verify_timestamp {
-                if header.timestamp() > now_timestamp + ACCEPTABLE_TIME_DRIFT {
-                    self.future_blocks.insert(header.clone());
-                    continue;
-                }
-            }
-
-            // check whether block is in old era
-            let (era_genesis_hash, era_genesis_height) =
-                self.graph.get_genesis_hash_and_height_in_current_era();
-            if (header.height() < era_genesis_height)
-                || (header.height() == era_genesis_height
-                    && header.hash() != era_genesis_hash)
-            {
-                // TODO: optimize to make block body empty
-                assert!(true);
-            }
-
-            // insert into sync graph
-            let (valid, to_relay) = self.graph.insert_block_header(
-                &mut header.clone(),
-                true,
-                false,
-                self.insert_header_to_consensus(),
-                true,
-            );
-            if !valid {
-                continue;
-            }
-
-            // check missing dependencies
-            let parent = header.parent_hash();
-            if !self.graph.contains_block_header(parent) {
-                dependent_hashes.insert(*parent);
-            }
-
-            for referee in header.referee_hashes() {
-                if !self.graph.contains_block_header(referee) {
-                    dependent_hashes.insert(*referee);
-                }
-            }
-            need_to_relay.extend(to_relay);
-
-            // check block body
-            if !self.graph.contains_block(&hash) {
-                hashes.insert(hash);
-            }
-        }
-
-        // do not request headers we just received
-        dependent_hashes.remove(&H256::default());
-        for hash in &returned_headers {
-            dependent_hashes.remove(hash);
-        }
-
-        debug!(
-            "get headers response of hashes:{:?}, requesting block:{:?}",
-            returned_headers, hashes
-        );
-
-        self.request_manager.headers_received(
-            io,
-            requested.into_iter().collect(),
-            returned_headers,
-        );
-
-        // request missing headers. We do not need to request more headers on
-        // the pivot chain after the request_epoch mechanism is applied.
-        self.request_block_headers(
-            io,
-            chosen_peer,
-            dependent_hashes.into_iter().collect(),
-        );
-
-        if self.need_requesting_blocks() {
-            // request missing blocks
-            self.request_missing_blocks(
-                io,
-                chosen_peer,
-                hashes.into_iter().collect(),
-            );
-
-            // relay if necessary
-            self.relay_blocks(io, need_to_relay.into_iter().collect())
-                .ok();
-        }
-    }
-
-    fn on_block_headers_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
-        let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
-        debug!("on_block_headers_response, msg=:{:?}", block_headers);
-
-        if peer == NULL {
-            let requested = block_headers
-                .headers
-                .iter()
-                .map(|h| h.hash().clone())
-                .collect();
-
-            self.handle_block_headers(
-                io,
-                &block_headers.headers,
-                requested,
-                None,
-            );
-            return Ok(());
-        }
-
-        let id = block_headers.request_id();
-        let req = self.request_manager.match_request(io, peer, id)?;
-
-        self.validate_block_headers_response(io, &req, &block_headers)?;
-
-        // keep first time drift validation error to return later
-        let now_timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let timestamp_validation_result =
-            if self.graph.verification_config.verify_timestamp {
-                block_headers
-                    .headers
-                    .iter()
-                    .map(|h| {
-                        self.graph
-                            .verification_config
-                            .validate_header_timestamp(h, now_timestamp)
-                    })
-                    .find(|result| result.is_err())
-                    .unwrap_or(Ok(()))
-            } else {
-                Ok(())
-            };
-
-        let chosen_peer = if timestamp_validation_result.is_ok() {
-            Some(peer)
-        } else {
-            let mut exclude = HashSet::new();
-            exclude.insert(peer);
-            self.syn.get_random_peer(&exclude)
-        };
-
-        // re-request headers requested but not received
-        let requested = match &req {
-            RequestMessage::Headers(h) => h.hashes.clone(),
-            RequestMessage::HeaderChain(h) => vec![h.hash],
-            _ => return Err(ErrorKind::UnexpectedResponse.into()),
-        };
-        self.handle_block_headers(
-            io,
-            &block_headers.headers,
-            requested,
-            chosen_peer,
-        );
-
-        timestamp_validation_result
-    }
-
-    fn validate_block_headers_response(
-        &self, io: &NetworkContext, req: &RequestMessage,
-        resp: &GetBlockHeadersResponse,
-    ) -> Result<(), Error>
-    {
-        match &req {
-            // For normal header requests, we have no
-            // assumption about the response structure.
-            RequestMessage::Headers(_) => return Ok(()),
-
-            // For chained header requests, we assume the
-            // response contains a sequence of block headers
-            // which are listed in order with parent-child
-            // relationship. For example, bh[i-1] should be
-            // the parent of bh[i] which is in turn the parent
-            // of bh[i+1].
-            RequestMessage::HeaderChain(_) => {
-                let mut parent_hash = None;
-                for header in &resp.headers {
-                    let hash = header.hash();
-                    if parent_hash != None && parent_hash.unwrap() != hash {
-                        // chain assumption not met, resend request
-                        self.request_manager.remove_mismatch_request(io, req);
-                        return Err(ErrorKind::Invalid.into());
-                    }
-                    parent_hash = Some(header.parent_hash().clone());
-                }
-
-                return Ok(());
-            }
-
-            // Although the response matches the request id, it does
-            // not match the content, so resend the request again.
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, resp);
-                self.request_manager.remove_mismatch_request(io, &req);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
     }
 
     fn on_blocks_inner(
@@ -1379,101 +764,6 @@ impl SynchronizationProtocolHandler {
         // broadcast to peers.
         self.graph.insert_block(block, false, true, false);
         to_relay
-    }
-
-    pub fn on_new_decoded_block(
-        &self, mut block: Block, need_to_verify: bool, persistent: bool,
-    ) -> Result<Vec<H256>, Error> {
-        let hash = block.block_header.hash();
-        let mut need_to_relay = Vec::new();
-        match self.graph.block_header_by_hash(&hash) {
-            Some(header) => block.block_header = header,
-            None => {
-                let res = self.graph.insert_block_header(
-                    &mut block.block_header,
-                    need_to_verify,
-                    false,
-                    false,
-                    true,
-                );
-                if res.0 {
-                    need_to_relay.extend(res.1);
-                } else {
-                    return Err(Error::from_kind(ErrorKind::Invalid));
-                }
-            }
-        }
-
-        let (_, to_relay) =
-            self.graph
-                .insert_block(block, need_to_verify, persistent, false);
-        if to_relay {
-            need_to_relay.push(hash);
-        }
-        Ok(need_to_relay)
-    }
-
-    // TODO This is only used in tests now. Maybe we can add a rpc to send full
-    // block and remove NEW_BLOCK from p2p
-    fn on_new_block(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let new_block = rlp.as_val::<NewBlock>()?;
-        let mut block = new_block.block;
-        self.graph.data_man.recover_block(&mut block)?;
-        debug!(
-            "on_new_block, header={:?} tx_number={}",
-            block.block_header,
-            block.transactions.len()
-        );
-        let parent_hash = block.block_header.parent_hash().clone();
-        let referee_hashes = block.block_header.referee_hashes().clone();
-
-        let headers_to_request = std::iter::once(parent_hash)
-            .chain(referee_hashes)
-            .filter(|h| !self.graph.contains_block_header(&h))
-            .collect();
-
-        self.request_block_headers(io, Some(peer), headers_to_request);
-
-        let need_to_relay = self.on_new_decoded_block(block, true, true)?;
-
-        // broadcast the hash of the newly got block
-        self.relay_blocks(io, need_to_relay)
-    }
-
-    fn on_new_block_hashes(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let new_block_hashes = rlp.as_val::<NewBlockHashes>()?;
-        debug!("on_new_block_hashes, msg={:?}", new_block_hashes);
-
-        if self.catch_up_mode() {
-            if let Ok(info) = self.syn.get_peer_info(&peer) {
-                let mut info = info.write();
-                new_block_hashes.block_hashes.iter().for_each(|h| {
-                    info.latest_block_hashes.insert(h.clone());
-                });
-            }
-            return Ok(());
-        }
-
-        let headers_to_request = new_block_hashes
-            .block_hashes
-            .iter()
-            .filter(|hash| !self.graph.contains_block_header(&hash))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        // self.request_manager.request_block_headers(
-        //     io,
-        //     Some(peer),
-        //     headers_to_request,
-        // );
-
-        self.request_block_headers(io, Some(peer), headers_to_request);
-
-        Ok(())
     }
 
     fn broadcast_message(
@@ -1732,7 +1022,7 @@ impl SynchronizationProtocolHandler {
 
     /// If we are in `SyncHeaders` phase, we should insert graph-ready block
     /// headers to sync graph directly
-    fn insert_header_to_consensus(&self) -> bool {
+    pub fn insert_header_to_consensus(&self) -> bool {
         match &*self.syn.sync_phase.lock() {
             SyncPhase::SyncHeaders(_) => true,
             _ => false,
@@ -1874,7 +1164,7 @@ impl SynchronizationProtocolHandler {
         Some(())
     }
 
-    fn request_missing_blocks(
+    pub fn request_missing_blocks(
         &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
     ) {
         // FIXME: This is a naive strategy. Need to
