@@ -3,9 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Message, MsgId, Request, RequestContext, RequestId},
-    Error,
+    message::{
+        metrics::TX_HANDLE_TIMER, Context, Handleable, Message, MsgId,
+        RequestId,
+    },
+    request_manager::RequestMessage,
+    Error, ErrorKind,
 };
+use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -17,6 +22,59 @@ use std::{
 #[derive(Debug, PartialEq)]
 pub struct Transactions {
     pub transactions: Vec<TransactionWithSignature>,
+}
+
+impl Handleable for Transactions {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let transactions = self.transactions;
+        debug!(
+            "Received {:?} transactions from Peer {:?}",
+            transactions.len(),
+            ctx.peer
+        );
+
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        let should_disconnect = {
+            let mut peer_info = peer_info.write();
+            if peer_info.notified_mode.is_some()
+                && (peer_info.notified_mode.unwrap() == true)
+            {
+                peer_info.received_transaction_count += transactions.len();
+                if peer_info.received_transaction_count
+                    > ctx
+                        .manager
+                        .protocol_config
+                        .max_trans_count_received_in_catch_up
+                        as usize
+                {
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+
+        if should_disconnect {
+            bail!(ErrorKind::TooManyTrans);
+        }
+
+        let (signed_trans, _) = ctx
+            .manager
+            .graph
+            .consensus
+            .txpool
+            .insert_new_transactions(&transactions);
+
+        ctx.manager
+            .request_manager
+            .append_received_transactions(signed_trans);
+
+        debug!("Transactions successfully inserted to transaction pool");
+
+        Ok(())
+    }
 }
 
 impl Message for Transactions {
@@ -44,6 +102,17 @@ impl Decodable for Transactions {
 #[derive(Debug, PartialEq)]
 pub struct TransactionPropagationControl {
     pub catch_up_mode: bool,
+}
+
+impl Handleable for TransactionPropagationControl {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!("on_trans_prop_ctrl, peer {}, msg=:{:?}", ctx.peer, self);
+
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        peer_info.write().need_prop_trans = !self.catch_up_mode;
+
+        Ok(())
+    }
 }
 
 impl Message for TransactionPropagationControl {
@@ -95,6 +164,35 @@ pub struct TransactionDigests {
     pub trans_short_ids: Vec<TxPropagateId>,
 }
 
+impl Handleable for TransactionDigests {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+
+        let mut peer_info = peer_info.write();
+        if let Some(true) = peer_info.notified_mode {
+            peer_info.received_transaction_count += self.trans_short_ids.len();
+            if peer_info.received_transaction_count
+                > ctx
+                    .manager
+                    .protocol_config
+                    .max_trans_count_received_in_catch_up
+                    as usize
+            {
+                bail!(ErrorKind::TooManyTrans);
+            }
+        }
+
+        ctx.manager.request_manager.request_transactions(
+            ctx.io,
+            ctx.peer,
+            self.window_index,
+            &self.trans_short_ids,
+        );
+
+        Ok(())
+    }
+}
+
 impl Message for TransactionDigests {
     fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_DIGESTS }
 
@@ -130,10 +228,12 @@ pub struct GetTransactions {
     pub tx_ids: HashSet<TxPropagateId>,
 }
 
-impl Request for GetTransactions {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
-        let transactions =
-            context.request_manager.get_sent_transactions(&self.indices);
+impl Handleable for GetTransactions {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let transactions = ctx
+            .manager
+            .request_manager
+            .get_sent_transactions(&self.indices);
         let response = GetTransactionsResponse {
             request_id: self.request_id.clone(),
             transactions,
@@ -144,7 +244,7 @@ impl Request for GetTransactions {
             response.transactions.len()
         );
 
-        context.send_response(&response)
+        ctx.send_response(&response)
     }
 }
 
@@ -193,6 +293,50 @@ impl Decodable for GetTransactions {
 pub struct GetTransactionsResponse {
     pub request_id: RequestId,
     pub transactions: Vec<TransactionWithSignature>,
+}
+
+impl Handleable for GetTransactionsResponse {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
+
+        debug!("on_get_transactions_response {:?}", self.request_id());
+
+        let req = ctx.match_request(self.request_id())?;
+
+        let req_tx_ids: HashSet<TxPropagateId> = match req {
+            RequestMessage::Transactions(request) => request.tx_ids,
+            _ => {
+                warn!("Get response not matching the request! req={:?}, resp={:?}", req, self);
+                return Err(ErrorKind::UnexpectedResponse.into());
+            }
+        };
+        // FIXME: Do some check based on transaction request.
+
+        debug!(
+            "Received {:?} transactions from Peer {:?}",
+            self.transactions.len(),
+            ctx.peer
+        );
+
+        ctx.manager
+            .request_manager
+            .transactions_received(&req_tx_ids);
+
+        let (signed_trans, _) = ctx
+            .manager
+            .graph
+            .consensus
+            .txpool
+            .insert_new_transactions(&self.transactions);
+
+        ctx.manager
+            .request_manager
+            .append_received_transactions(signed_trans);
+
+        debug!("Transactions successfully inserted to transaction pool");
+
+        Ok(())
+    }
 }
 
 impl Message for GetTransactionsResponse {

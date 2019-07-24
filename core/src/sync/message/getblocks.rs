@@ -4,8 +4,8 @@
 
 use crate::sync::{
     message::{
-        GetBlocksResponse, GetBlocksWithPublicResponse, Message, MsgId,
-        Request, RequestContext, RequestId,
+        Context, GetBlocksResponse, GetBlocksWithPublicResponse, Handleable,
+        Message, MsgId, RequestId,
     },
     synchronization_protocol_handler::MAX_PACKET_SIZE,
     Error, ErrorKind,
@@ -23,14 +23,12 @@ pub struct GetBlocks {
 }
 
 impl GetBlocks {
-    fn get_blocks(
-        &self, context: &RequestContext, with_public: bool,
-    ) -> Vec<Block> {
+    fn get_blocks(&self, ctx: &Context, with_public: bool) -> Vec<Block> {
         let mut blocks = Vec::new();
         let mut packet_size_left = MAX_PACKET_SIZE;
 
         for hash in self.hashes.iter() {
-            if let Some(block) = context.graph.block_by_hash(hash) {
+            if let Some(block) = ctx.manager.graph.block_by_hash(hash) {
                 let block_size = if with_public {
                     block.approximated_rlp_size_with_public()
                 } else {
@@ -50,14 +48,14 @@ impl GetBlocks {
     }
 
     fn send_response_with_public(
-        &self, context: &RequestContext, blocks: Vec<Block>,
+        &self, ctx: &Context, blocks: Vec<Block>,
     ) -> Result<(), Error> {
         let mut response = GetBlocksWithPublicResponse {
             request_id: self.request_id.clone(),
             blocks,
         };
 
-        while let Err(e) = context.send_response(&response) {
+        while let Err(e) = ctx.send_response(&response) {
             if GetBlocks::is_oversize_packet_err(&e) {
                 let block_count = response.blocks.len() / 2;
                 response.blocks.truncate(block_count);
@@ -80,14 +78,14 @@ impl GetBlocks {
     }
 
     fn send_response(
-        &self, context: &RequestContext, blocks: Vec<Block>,
+        &self, ctx: &Context, blocks: Vec<Block>,
     ) -> Result<(), Error> {
         let mut response = GetBlocksResponse {
             request_id: self.request_id.clone(),
             blocks,
         };
 
-        while let Err(e) = context.send_response(&response) {
+        while let Err(e) = ctx.send_response(&response) {
             if GetBlocks::is_oversize_packet_err(&e) {
                 let block_count = response.blocks.len() / 2;
                 response.blocks.truncate(block_count);
@@ -100,17 +98,17 @@ impl GetBlocks {
     }
 }
 
-impl Request for GetBlocks {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+impl Handleable for GetBlocks {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         if self.hashes.is_empty() {
             return Ok(());
         }
 
-        let blocks = self.get_blocks(context, self.with_public);
+        let blocks = self.get_blocks(ctx, self.with_public);
         if self.with_public {
-            self.send_response_with_public(context, blocks)
+            self.send_response_with_public(ctx, blocks)
         } else {
-            self.send_response(context, blocks)
+            self.send_response(ctx, blocks)
         }
     }
 }

@@ -2,15 +2,65 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::message::{Message, MsgId, RequestId};
+use crate::sync::{
+    message::{
+        metrics::BLOCK_HANDLE_TIMER, Context, Handleable, Message, MsgId,
+        RequestId,
+    },
+    request_manager::RequestMessage,
+    synchronization_protocol_handler::RecoverPublicTask,
+    Error, ErrorKind,
+};
+use cfx_types::H256;
+use metrics::MeterTimer;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::HashSet,
+    ops::{Deref, DerefMut},
+};
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetBlocksResponse {
     pub request_id: RequestId,
     pub blocks: Vec<Block>,
+}
+
+impl Handleable for GetBlocksResponse {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
+
+        debug!(
+            "on_blocks_response, get block hashes {:?}",
+            self.blocks
+                .iter()
+                .map(|b| b.block_header.hash())
+                .collect::<Vec<H256>>()
+        );
+        let req = ctx.match_request(self.request_id())?;
+        let req_hashes_vec = match req {
+            RequestMessage::Blocks(request) => request.hashes,
+            _ => {
+                warn!("Get response not matching the request! req={:?}, resp={:?}", req, &self);
+                return Err(ErrorKind::UnexpectedResponse.into());
+            }
+        };
+
+        let requested_blocks: HashSet<H256> =
+            req_hashes_vec.into_iter().collect();
+
+        ctx.manager.recover_public_queue.dispatch(
+            ctx.io,
+            RecoverPublicTask::new(
+                self.blocks,
+                requested_blocks,
+                ctx.peer,
+                false,
+            ),
+        );
+
+        Ok(())
+    }
 }
 
 impl Message for GetBlocksResponse {
@@ -53,6 +103,41 @@ impl Decodable for GetBlocksResponse {
 pub struct GetBlocksWithPublicResponse {
     pub request_id: RequestId,
     pub blocks: Vec<Block>,
+}
+
+impl Handleable for GetBlocksWithPublicResponse {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!(
+            "on_blocks_with_public_response, get block hashes {:?}",
+            self.blocks
+                .iter()
+                .map(|b| b.block_header.hash())
+                .collect::<Vec<H256>>()
+        );
+        let req = ctx.match_request(self.request_id())?;
+        let req_hashes_vec = match req {
+            RequestMessage::Blocks(request) => request.hashes,
+            RequestMessage::Compact(request) => request.hashes,
+            _ => {
+                warn!("Get response not matching the request! req={:?}, resp={:?}", req, self);
+                return Err(ErrorKind::UnexpectedResponse.into());
+            }
+        };
+        let requested_blocks: HashSet<H256> =
+            req_hashes_vec.into_iter().collect();
+
+        ctx.manager.recover_public_queue.dispatch(
+            ctx.io,
+            RecoverPublicTask::new(
+                self.blocks,
+                requested_blocks,
+                ctx.peer,
+                false,
+            ),
+        );
+
+        Ok(())
+    }
 }
 
 impl Message for GetBlocksWithPublicResponse {

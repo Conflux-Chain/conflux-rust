@@ -4,11 +4,19 @@
 
 use crate::sync::{
     message::{
-        GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders,
-        GetBlockTxn, GetBlocks, GetCompactBlocks, GetTerminalBlockHashes,
-        GetTransactions, Request, RequestContext,
+        transactions::Transactions, Context, GetBlockHashesByEpoch,
+        GetBlockHashesResponse, GetBlockHeaderChain, GetBlockHeaders,
+        GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse, GetBlocks,
+        GetBlocksResponse, GetBlocksWithPublicResponse, GetCompactBlocks,
+        GetCompactBlocksResponse, GetTerminalBlockHashes,
+        GetTerminalBlockHashesResponse, GetTransactions,
+        GetTransactionsResponse, Handleable, NewBlock, NewBlockHashes, Status,
+        TransactionDigests, TransactionPropagationControl,
     },
-    state::{SnapshotChunkRequest, SnapshotManifestRequest},
+    state::{
+        SnapshotChunkRequest, SnapshotChunkResponse, SnapshotManifestRequest,
+        SnapshotManifestResponse,
+    },
     Error,
 };
 use priority_send_queue::SendQueuePriority;
@@ -62,37 +70,85 @@ build_msgid! {
 }
 
 impl MsgId {
-    pub fn handle_request(
-        &self, context: &RequestContext, rlp: &Rlp,
-    ) -> Result<bool, Error> {
+    /// handle the RLP encoded message with given context `ctx`.
+    /// If the message not handled, return `Ok(false)`.
+    /// Otherwise, return `Ok(true)` if handled successfully
+    /// or Err(e) on any error.
+    pub fn handle(&self, ctx: &Context, rlp: &Rlp) -> Result<bool, Error> {
         match *self {
+            MsgId::STATUS => rlp.as_val::<Status>()?.handle(ctx)?,
+            MsgId::NEW_BLOCK => rlp.as_val::<NewBlock>()?.handle(&ctx)?,
+            MsgId::NEW_BLOCK_HASHES => {
+                rlp.as_val::<NewBlockHashes>()?.handle(&ctx)?;
+            }
             MsgId::GET_BLOCK_HEADERS => {
-                rlp.as_val::<GetBlockHeaders>()?.handle(context)?
+                rlp.as_val::<GetBlockHeaders>()?.handle(ctx)?;
+            }
+            MsgId::GET_BLOCK_HEADERS_RESPONSE => {
+                rlp.as_val::<GetBlockHeadersResponse>()?.handle(&ctx)?;
             }
             MsgId::GET_BLOCK_HEADER_CHAIN => {
-                rlp.as_val::<GetBlockHeaderChain>()?.handle(&context)?
+                rlp.as_val::<GetBlockHeaderChain>()?.handle(&ctx)?;
             }
-            MsgId::GET_BLOCKS => rlp.as_val::<GetBlocks>()?.handle(&context)?,
+            MsgId::GET_BLOCKS => rlp.as_val::<GetBlocks>()?.handle(&ctx)?,
+            MsgId::GET_BLOCKS_RESPONSE => {
+                rlp.as_val::<GetBlocksResponse>()?.handle(&ctx)?;
+            }
+            MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
+                rlp.as_val::<GetBlocksWithPublicResponse>()?.handle(&ctx)?;
+            }
             MsgId::GET_TERMINAL_BLOCK_HASHES => {
-                rlp.as_val::<GetTerminalBlockHashes>()?.handle(&context)?
+                rlp.as_val::<GetTerminalBlockHashes>()?.handle(&ctx)?;
+            }
+            MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
+                rlp.as_val::<GetTerminalBlockHashesResponse>()?
+                    .handle(&ctx)?;
             }
             MsgId::GET_CMPCT_BLOCKS => {
-                rlp.as_val::<GetCompactBlocks>()?.handle(&context)?
+                rlp.as_val::<GetCompactBlocks>()?.handle(&ctx)?;
+            }
+            MsgId::GET_CMPCT_BLOCKS_RESPONSE => {
+                rlp.as_val::<GetCompactBlocksResponse>()?.handle(&ctx)?;
             }
             MsgId::GET_BLOCK_TXN => {
-                rlp.as_val::<GetBlockTxn>()?.handle(&context)?
+                rlp.as_val::<GetBlockTxn>()?.handle(&ctx)?;
+            }
+            MsgId::GET_BLOCK_TXN_RESPONSE => {
+                rlp.as_val::<GetBlockTxnResponse>()?.handle(&ctx)?;
+            }
+            MsgId::TRANSACTIONS => {
+                rlp.as_val::<Transactions>()?.handle(&ctx)?;
+            }
+            MsgId::TRANSACTION_PROPAGATION_CONTROL => {
+                rlp.as_val::<TransactionPropagationControl>()?
+                    .handle(&ctx)?;
+            }
+            MsgId::TRANSACTION_DIGESTS => {
+                rlp.as_val::<TransactionDigests>()?.handle(&ctx)?;
             }
             MsgId::GET_TRANSACTIONS => {
-                rlp.as_val::<GetTransactions>()?.handle(&context)?
+                rlp.as_val::<GetTransactions>()?.handle(&ctx)?;
+            }
+            MsgId::GET_TRANSACTIONS_RESPONSE => {
+                rlp.as_val::<GetTransactionsResponse>()?.handle(&ctx)?;
             }
             MsgId::GET_BLOCK_HASHES_BY_EPOCH => {
-                rlp.as_val::<GetBlockHashesByEpoch>()?.handle(&context)?
+                rlp.as_val::<GetBlockHashesByEpoch>()?.handle(&ctx)?;
+            }
+            MsgId::GET_BLOCK_HASHES_RESPONSE => {
+                rlp.as_val::<GetBlockHashesResponse>()?.handle(&ctx)?;
             }
             MsgId::GET_SNAPSHOT_MANIFEST => {
-                rlp.as_val::<SnapshotManifestRequest>()?.handle(&context)?
+                rlp.as_val::<SnapshotManifestRequest>()?.handle(&ctx)?;
+            }
+            MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE => {
+                rlp.as_val::<SnapshotManifestResponse>()?.handle(&ctx)?;
             }
             MsgId::GET_SNAPSHOT_CHUNK => {
-                rlp.as_val::<SnapshotChunkRequest>()?.handle(&context)?
+                rlp.as_val::<SnapshotChunkRequest>()?.handle(&ctx)?;
+            }
+            MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => {
+                rlp.as_val::<SnapshotChunkResponse>()?.handle(&ctx)?;
             }
             _ => return Ok(false),
         }
