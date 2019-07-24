@@ -30,7 +30,6 @@ macro_rules! build_msgid {
 build_msgid! {
     STATUS = 0x00
     NEW_BLOCK_HASHES = 0x01
-    TRANSACTIONS = 0x02
 
     GET_BLOCK_HASHES = 0x03
     GET_BLOCK_HASHES_RESPONSE = 0x04

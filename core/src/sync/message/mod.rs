@@ -14,6 +14,7 @@ mod getblocks;
 mod getblocktxn;
 mod getcmpctblocks;
 mod getterminalblockhashes;
+mod handleable;
 mod message;
 mod newblock;
 mod newblockhashes;
@@ -35,6 +36,7 @@ pub use self::{
     getblocktxn::GetBlockTxn,
     getcmpctblocks::GetCompactBlocks,
     getterminalblockhashes::GetTerminalBlockHashes,
+    handleable::{Context, Handleable},
     message::{Message, MsgId, RequestId},
     newblock::NewBlock,
     newblockhashes::NewBlockHashes,
@@ -43,6 +45,6 @@ pub use self::{
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{
         GetTransactions, GetTransactionsResponse, TransIndex,
-        TransactionDigests, TransactionPropagationControl, Transactions,
+        TransactionDigests, TransactionPropagationControl,
     },
 };

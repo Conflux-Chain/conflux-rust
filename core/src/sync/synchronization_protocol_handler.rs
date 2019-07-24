@@ -3,8 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    super::transaction_pool::SharedTransactionPool, random, Error, ErrorKind,
-    SharedSynchronizationGraph, SynchronizationPeerState, SynchronizationState,
+    random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
     consensus::SharedConsensusGraph,
@@ -14,7 +13,6 @@ use crate::{
         GetCompactBlocksResponse, GetTerminalBlockHashesResponse,
         GetTransactionsResponse, Message, MsgId, NewBlock, NewBlockHashes,
         Status, TransactionDigests, TransactionPropagationControl,
-        Transactions,
     },
 };
 use cfx_types::H256;
@@ -35,7 +33,7 @@ use crate::{
     block_data_manager::BlockStatus,
     consensus::ConsensusGraphInner,
     sync::{
-        message::RequestContext,
+        message::{Context, Handleable, RequestContext},
         state::{
             SnapshotChunkResponse, SnapshotChunkSync, SnapshotManifestResponse,
             StateSync,
@@ -376,8 +374,20 @@ impl SynchronizationProtocolHandler {
             return Ok(());
         }
 
+        let ctx = Context {
+            peer,
+            syn: self.syn.clone(),
+            graph: self.graph.clone(),
+            request_manager: self.request_manager.clone(),
+            protocol_config: &self.protocol_config,
+            io,
+        };
+
         match msg_id {
-            MsgId::STATUS => self.on_status(io, peer, &rlp),
+            MsgId::STATUS => {
+                rlp.as_val::<Status>()?.handle(&ctx)?;
+                Ok(self.start_sync(io))
+            }
             MsgId::GET_BLOCK_HEADERS_RESPONSE => {
                 self.on_block_headers_response(io, peer, &rlp)
             }
@@ -392,7 +402,6 @@ impl SynchronizationProtocolHandler {
             MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
                 self.on_terminal_block_hashes_response(io, peer, &rlp)
             }
-            MsgId::TRANSACTIONS => self.on_transactions(peer, &rlp),
             MsgId::GET_CMPCT_BLOCKS_RESPONSE => {
                 self.on_get_compact_blocks_response(io, peer, &rlp)
             }
@@ -400,11 +409,14 @@ impl SynchronizationProtocolHandler {
                 self.on_get_blocktxn_response(io, peer, &rlp)
             }
             MsgId::TRANSACTION_PROPAGATION_CONTROL => {
-                self.on_trans_prop_ctrl(peer, &rlp)
+                rlp.as_val::<TransactionPropagationControl>()?.handle(&ctx)
             }
-            MsgId::TRANSACTION_DIGESTS => self.on_trans_digests(io, peer, &rlp),
+            MsgId::TRANSACTION_DIGESTS => {
+                rlp.as_val::<TransactionDigests>()?.handle(&ctx)
+            }
             MsgId::GET_TRANSACTIONS_RESPONSE => {
-                self.on_get_transactions_response(io, peer, &rlp)
+                let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
+                rlp.as_val::<GetTransactionsResponse>()?.handle(&ctx)
             }
             MsgId::GET_BLOCK_HASHES_RESPONSE => {
                 self.on_block_hashes_response(io, peer, &rlp)
@@ -615,83 +627,6 @@ impl SynchronizationProtocolHandler {
         self.relay_blocks(io, completed_blocks)
     }
 
-    fn on_get_transactions_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
-        let resp = rlp.as_val::<GetTransactionsResponse>()?;
-        debug!("on_get_transactions_response {:?}", resp.request_id());
-
-        let req =
-            self.request_manager
-                .match_request(io, peer, resp.request_id())?;
-        let req_tx_ids: HashSet<TxPropagateId> = match req {
-            RequestMessage::Transactions(request) => request.tx_ids,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, resp);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
-        // FIXME: Do some check based on transaction request.
-
-        let transactions = resp.transactions;
-        debug!(
-            "Received {:?} transactions from Peer {:?}",
-            transactions.len(),
-            peer
-        );
-
-        self.request_manager.transactions_received(&req_tx_ids);
-
-        let (signed_trans, _) = self
-            .get_transaction_pool()
-            .insert_new_transactions(&transactions);
-
-        self.request_manager
-            .append_received_transactions(signed_trans);
-
-        debug!("Transactions successfully inserted to transaction pool");
-
-        Ok(())
-    }
-
-    fn on_trans_digests(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let transaction_digests = rlp.as_val::<TransactionDigests>()?;
-
-        let peer_info = self.syn.get_peer_info(&peer)?;
-        let should_disconnect = {
-            let mut peer_info = peer_info.write();
-            if peer_info.notified_mode.is_some()
-                && (peer_info.notified_mode.unwrap() == true)
-            {
-                peer_info.received_transaction_count +=
-                    transaction_digests.trans_short_ids.len();
-                if peer_info.received_transaction_count
-                    > self.protocol_config.max_trans_count_received_in_catch_up
-                        as usize
-                {
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        };
-        if should_disconnect {
-            bail!(ErrorKind::TooManyTrans);
-        }
-        self.request_manager.request_transactions(
-            io,
-            peer,
-            transaction_digests.window_index,
-            &transaction_digests.trans_short_ids,
-        );
-        Ok(())
-    }
-
     fn on_get_blocktxn_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -807,64 +742,6 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn on_transactions(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
-        let transactions = rlp.as_val::<Transactions>()?;
-        let transactions = transactions.transactions;
-        debug!(
-            "Received {:?} transactions from Peer {:?}",
-            transactions.len(),
-            peer
-        );
-
-        let peer_info = self.syn.get_peer_info(&peer)?;
-        let should_disconnect = {
-            let mut peer_info = peer_info.write();
-            if peer_info.notified_mode.is_some()
-                && (peer_info.notified_mode.unwrap() == true)
-            {
-                peer_info.received_transaction_count += transactions.len();
-                if peer_info.received_transaction_count
-                    > self.protocol_config.max_trans_count_received_in_catch_up
-                        as usize
-                {
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        };
-
-        if should_disconnect {
-            bail!(ErrorKind::TooManyTrans);
-        }
-
-        let (signed_trans, _) = self
-            .get_transaction_pool()
-            .insert_new_transactions(&transactions);
-
-        self.request_manager
-            .append_received_transactions(signed_trans);
-
-        debug!("Transactions successfully inserted to transaction pool");
-
-        Ok(())
-    }
-
-    fn on_trans_prop_ctrl(&self, peer: PeerId, rlp: &Rlp) -> Result<(), Error> {
-        let trans_prop_ctrl = rlp.as_val::<TransactionPropagationControl>()?;
-        debug!(
-            "on_trans_prop_ctrl, peer {}, msg=:{:?}",
-            peer, trans_prop_ctrl
-        );
-
-        let peer_info = self.syn.get_peer_info(&peer)?;
-        peer_info.write().need_prop_trans = !trans_prop_ctrl.catch_up_mode;
-
-        Ok(())
-    }
-
     fn on_terminal_block_hashes_response(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -937,53 +814,6 @@ impl SynchronizationProtocolHandler {
         // TODO: handle empty response
 
         // try requesting some more epochs
-        self.start_sync(io);
-        Ok(())
-    }
-
-    fn on_status(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let status = rlp.as_val::<Status>()?;
-        if !self.syn.on_status(peer) {
-            warn!("Unexpected Status message from peer={}", peer);
-            return Err(ErrorKind::UnknownPeer.into());
-        }
-        debug!("on_status, msg=:{:?}", status);
-        let genesis_hash = self.graph.genesis_hash();
-        if genesis_hash != status.genesis_hash {
-            debug!(
-                "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
-                peer, genesis_hash, status.genesis_hash
-            );
-            return Err(ErrorKind::Invalid.into());
-        }
-
-        let mut latest: HashSet<H256> =
-            status.terminal_block_hashes.into_iter().collect();
-        latest.extend(self.graph.initial_missed_block_hashes.lock().drain());
-
-        let peer_state = SynchronizationPeerState {
-            id: peer,
-            protocol_version: status.protocol_version,
-            genesis_hash: status.genesis_hash,
-            best_epoch: status.best_epoch,
-            latest_block_hashes: latest,
-            received_transaction_count: 0,
-            need_prop_trans: true,
-            notified_mode: None,
-            heartbeat: Instant::now(),
-        };
-
-        debug!(
-            "New peer (pv={:?}, gh={:?})",
-            status.protocol_version, status.genesis_hash
-        );
-
-        debug!("Peer {:?} connected", peer);
-        self.syn.peer_connected(peer, peer_state);
-        self.request_manager.on_peer_connected(peer);
-
         self.start_sync(io);
         Ok(())
     }
@@ -1783,10 +1613,6 @@ impl SynchronizationProtocolHandler {
         }
 
         Ok(())
-    }
-
-    fn get_transaction_pool(&self) -> SharedTransactionPool {
-        self.graph.consensus.txpool.clone()
     }
 
     fn select_peers_for_transactions<F>(&self, filter: F) -> Vec<PeerId>
