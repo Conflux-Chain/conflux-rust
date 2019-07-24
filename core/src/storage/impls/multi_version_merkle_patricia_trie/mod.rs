@@ -138,6 +138,8 @@ pub(self) mod node_ref_map;
 /// mutability.
 mod slab;
 
+pub use merkle_patricia_trie::trie_proof::TrieProof;
+
 use self::{
     cache::algorithm::lru::LRU, merkle_patricia_trie::*,
     node_memory_manager::*, node_ref_map::DeltaMptDbKey,

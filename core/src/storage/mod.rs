@@ -11,6 +11,8 @@ pub mod tests;
 
 mod impls;
 
+pub use self::impls::state_proof::{StateProof, TrieProof};
+
 pub use self::{
     impls::{
         defaults,

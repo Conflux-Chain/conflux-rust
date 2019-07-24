@@ -66,10 +66,6 @@ unsafe impl<CacheAlgoDataT: CacheAlgoDataTrait> Sync
 {
 }
 
-/// Key length should be multiple of 8.
-// TODO(yz): align key @8B with mask.
-pub type KeyPart<'a> = &'a [u8];
-
 impl<CacheAlgoDataT: CacheAlgoDataTrait> Drop for TrieNode<CacheAlgoDataT> {
     fn drop(&mut self) {
         unsafe {
@@ -237,255 +233,31 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
 
         Ok(())
     }
-}
 
-pub enum WalkStop<'key> {
-    // path matching fails at some point. Want the new path_steps,
-    // path_end_mask, ..., etc Basically, a new node should be created to
-    // replace the current node from parent children table;
-    // modify this node or create a new node to insert as children of new
-    // node, (update path) then
-    // the child that should be followed is nil at the new node.
-    // if put single version, this node changes, this node replaced, parent
-    // update child and merkle. Before merkle update, this node must be saved
-    // in mem or into disk db (not that expensive). if get / delete (not
-    // found)
-    PathDiverted {
-        /// Key may terminate on the path.
-        key_child_index: Option<u8>,
-        key_remaining: KeyPart<'key>,
-        matched_path: CompressedPathRaw,
-        unmatched_child_index: u8,
-        unmatched_path_remaining: CompressedPathRaw,
-    },
-
-    // If exactly at this node.
-    // if put, update this node
-    // if delete, may cause deletion / path compression (delete this node,
-    // parent update child, update path of original child node)
-    Arrived,
-
-    Descent {
-        key_remaining: KeyPart<'key>,
-        child_index: u8,
-        child_node: NodeRefDeltaMpt,
-    },
-
-    // To descent, however child doesn't exists:
-    // to modify this node or create a new node to replace this node (update
-    // child) Then create a new node for remaining key_part (we don't care
-    // about begin_mask). if put single version, this node changes, parent
-    // update merkle. if get / delete (not found)
-    ChildNotFound {
-        key_remaining: KeyPart<'key>,
-        child_index: u8,
-    },
-}
-
-impl<'key> WalkStop<'key> {
-    fn child_not_found_uninitialized() -> Self {
-        WalkStop::ChildNotFound {
-            key_remaining: Default::default(),
-            child_index: 0,
-        }
-    }
-
-    fn path_diverted_uninitialized() -> Self {
-        WalkStop::PathDiverted {
-            key_child_index: None,
-            key_remaining: Default::default(),
-            matched_path: Default::default(),
-            unmatched_child_index: 0,
-            unmatched_path_remaining: Default::default(),
+    pub fn create_proof_node(&self) -> TrieProofNode {
+        TrieProofNode {
+            path_end_mask: self.path_end_mask,
+            path: self
+                .path
+                .get_slice(self.get_compressed_path_size() as usize)
+                .into(),
+            value: self.value_clone().into_option(),
+            children_table: None,
+            merkle_hash: self.merkle_hash,
         }
     }
 }
 
-pub mod access_mode {
-    pub trait AccessMode {
-        fn is_read_only() -> bool;
-    }
-
-    pub struct Read {}
-    pub struct Write {}
-
-    impl AccessMode for Read {
-        fn is_read_only() -> bool { return true; }
-    }
-
-    impl AccessMode for Write {
-        fn is_read_only() -> bool { return false; }
-    }
-}
-
-/// Traverse.
 impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
-    // TODO(yz): write test.
-    /// The start of key is always aligned with compressed path of
-    /// current node, e.g. if compressed path starts at the second-half, so
-    /// should be key.
     pub fn walk<'key, AM: AccessMode>(
         &self, key: KeyPart<'key>,
-    ) -> WalkStop<'key> {
-        let path = self.compressed_path_ref();
-        let path_slice = path.path_slice;
-
-        // Compare bytes till the last full byte. The first byte is always
-        // included because even if it's the second-half, it must be
-        // already matched before entering this TrieNode.
-        let memcmp_len = min(
-            path_slice.len() - ((path.end_mask != 0) as usize),
-            key.len(),
-        );
-
-        for i in 0..memcmp_len {
-            if path_slice[i] != key[i] {
-                if AM::is_read_only() {
-                    return WalkStop::path_diverted_uninitialized();
-                } else {
-                    let matched_path: CompressedPathRaw;
-                    let key_child_index: u8;
-                    let key_remaining: &[u8];
-                    let unmatched_child_index: u8;
-                    let unmatched_path_remaining: &[u8];
-
-                    if CompressedPathRaw::first_nibble(path_slice[i] ^ key[i])
-                        == 0
-                    {
-                        // "First half" matched
-                        matched_path = CompressedPathRaw::new_and_apply_mask(
-                            &path_slice[0..i + 1],
-                            CompressedPathRaw::first_nibble(!0),
-                        );
-
-                        key_child_index =
-                            CompressedPathRaw::second_nibble(key[i]);
-                        key_remaining = &key[i + 1..];
-                        unmatched_child_index =
-                            CompressedPathRaw::second_nibble(path_slice[i]);
-                        unmatched_path_remaining = &path_slice[i + 1..];
-                    } else {
-                        matched_path =
-                            CompressedPathRaw::new(&path_slice[0..i], 0);
-                        key_child_index =
-                            CompressedPathRaw::first_nibble(key[i]);
-                        key_remaining = &key[i..];
-                        unmatched_child_index =
-                            CompressedPathRaw::first_nibble(path_slice[i]);
-                        unmatched_path_remaining = &path_slice[i..];
-                    }
-                    return WalkStop::PathDiverted {
-                        key_child_index: Some(key_child_index),
-                        key_remaining: key_remaining.into(),
-                        matched_path,
-                        unmatched_child_index,
-                        unmatched_path_remaining: CompressedPathRaw::new(
-                            unmatched_path_remaining,
-                            self.path_end_mask,
-                        ),
-                    };
-                }
-            }
-        }
-        // Key is fully consumed, get value attached.
-        if key.len() == memcmp_len {
-            // Compressed path isn't fully consumed.
-            if path_slice.len() > memcmp_len {
-                if AM::is_read_only() {
-                    return WalkStop::path_diverted_uninitialized();
-                } else {
-                    return WalkStop::PathDiverted {
-                        // key_remaining is empty, and key_child_index doesn't
-                        // make sense, but we need to
-                        // mark it.
-                        key_remaining: Default::default(),
-                        key_child_index: None,
-                        matched_path: CompressedPathRaw::new(
-                            &path_slice[0..memcmp_len],
-                            0,
-                        ),
-                        unmatched_child_index: CompressedPathRaw::first_nibble(
-                            path_slice[memcmp_len],
-                        ),
-                        unmatched_path_remaining: CompressedPathRaw::new(
-                            &path_slice[memcmp_len..],
-                            self.path_end_mask,
-                        ),
-                    };
-                }
-            } else {
-                return WalkStop::Arrived;
-            }
-        } else {
-            // Key is not fully consumed.
-
-            // When path is fully consumed, check if child exists under
-            // child_index.
-            let child_index;
-            let key_remaining;
-
-            if path_slice.len() == memcmp_len {
-                // Compressed path is fully consumed. Descend into one child.
-                child_index = CompressedPathRaw::first_nibble(key[memcmp_len]);
-                key_remaining = &key[memcmp_len..];
-            } else {
-                // One half byte remaining to match with path. Consume it in the
-                // key.
-                if CompressedPathRaw::first_nibble(
-                    path_slice[memcmp_len] ^ key[memcmp_len],
-                ) != 0
-                {
-                    // Mismatch.
-                    if AM::is_read_only() {
-                        return WalkStop::path_diverted_uninitialized();
-                    } else {
-                        return WalkStop::PathDiverted {
-                            key_child_index: Some(
-                                CompressedPathRaw::first_nibble(
-                                    key[memcmp_len],
-                                ),
-                            ),
-                            key_remaining: &key[memcmp_len..],
-                            matched_path: CompressedPathRaw::new(
-                                &path_slice[0..memcmp_len],
-                                0,
-                            ),
-                            unmatched_child_index:
-                                CompressedPathRaw::first_nibble(
-                                    path_slice[memcmp_len],
-                                ),
-                            unmatched_path_remaining: CompressedPathRaw::new(
-                                &path_slice[memcmp_len..],
-                                self.path_end_mask,
-                            ),
-                        };
-                    }
-                } else {
-                    child_index =
-                        CompressedPathRaw::second_nibble(key[memcmp_len]);
-                    key_remaining = &key[memcmp_len + 1..];
-                }
-            }
-
-            match self.get_child(child_index) {
-                Option::None => {
-                    if AM::is_read_only() {
-                        return WalkStop::child_not_found_uninitialized();
-                    }
-                    return WalkStop::ChildNotFound {
-                        key_remaining,
-                        child_index,
-                    };
-                }
-                Option::Some(child_node) => {
-                    return WalkStop::Descent {
-                        key_remaining,
-                        child_node: child_node.into(),
-                        child_index,
-                    };
-                }
-            }
-        }
+    ) -> WalkStop<'key, NodeRefDeltaMpt> {
+        walk::<AM, NodeRefDeltaMpt>(
+            key,
+            self.compressed_path_ref(),
+            self.path_end_mask,
+            &|index| self.get_child(index).map(Into::into),
+        )
     }
 }
 
@@ -757,7 +529,6 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug for TrieNode<CacheAlgoDataT> {
     }
 }
 
-use self::access_mode::*;
 use super::{
     super::{
         super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
@@ -766,11 +537,12 @@ use super::{
     compressed_path::*,
     maybe_in_place_byte_array::MaybeInPlaceByteArray,
     mpt_value::MptValue,
+    trie_proof::TrieProofNode,
+    walk::{access_mode::AccessMode, walk, KeyPart, WalkStop},
 };
 use primitives::MerkleHash;
 use rlp::*;
 use std::{
-    cmp::min,
     fmt::{Debug, Formatter},
     hint::unreachable_unchecked,
     marker::{Send, Sync},

@@ -468,6 +468,107 @@ fn test_set_order_concurrent() {
     }
 }
 
+#[test]
+fn test_proofs() {
+    let mut rng = get_rng_for_test();
+    let state_manager = new_state_manager_for_testing();
+    let mut state = state_manager.get_state_for_genesis_write();
+    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
+        .iter()
+        .filter(|_| rng.gen_bool(0.5))
+        .cloned()
+        .collect();
+
+    for key in &keys {
+        state.set(key, key).expect("Failed to insert key.");
+    }
+
+    let mut epoch_id = H256::default();
+    epoch_id[0] = 1;
+    let root = state.compute_state_root().unwrap();
+    state.commit(epoch_id).unwrap();
+
+    let delta_root = root.state_root.delta_root;
+    let intermediate_root = root.state_root.intermediate_delta_root;
+    let snapshot_root = root.state_root.snapshot_root;
+
+    rng.shuffle(keys.as_mut());
+
+    for key in &keys {
+        let (value, proof) =
+            state.get_with_proof(key).expect("Failed to get key.");
+
+        // valid proof
+        assert!(proof.is_valid(
+            key,
+            value.as_ref().map(|x| &**x),
+            delta_root,
+            intermediate_root,
+            snapshot_root,
+        ));
+
+        // invalid state root
+        let mut invalid_root = delta_root.clone();
+        invalid_root[0] = 0x00;
+        assert!(!proof.is_valid(
+            key,
+            value.as_ref().map(|x| &**x),
+            invalid_root,
+            invalid_root,
+            invalid_root,
+        ));
+
+        // invalid value
+        assert!(!proof.is_valid(
+            key,
+            Some(&[0x00; 100]),
+            delta_root,
+            intermediate_root,
+            snapshot_root,
+        ));
+
+        // invalid hash
+        let mut invalid_proof = proof.clone();
+        if let Some(delta_proof) = &mut invalid_proof.delta_proof {
+            delta_proof.nodes[0].merkle_hash[0] = 0x00;
+        }
+
+        assert!(!invalid_proof.is_valid(
+            key,
+            value.as_ref().map(|x| &**x),
+            delta_root,
+            intermediate_root,
+            snapshot_root,
+        ));
+    }
+
+    let nonexistent_keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
+        .iter()
+        .filter(|_| rng.gen_bool(0.5))
+        .cloned()
+        .collect();
+
+    for key in &nonexistent_keys {
+        if keys.contains(key) {
+            continue;
+        }
+
+        let (value, proof) =
+            state.get_with_proof(key).expect("Failed to get key.");
+
+        assert_eq!(value, None);
+
+        // valid non-existence proof
+        assert!(proof.is_valid(
+            key,
+            None,
+            delta_root,
+            intermediate_root,
+            snapshot_root,
+        ));
+    }
+}
+
 use super::{
     super::{
         impls::multi_version_merkle_patricia_trie::merkle_patricia_trie::CompressedPathRaw,
