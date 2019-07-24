@@ -129,35 +129,36 @@ impl<'a> UdpIoContext<'a> {
 /// existing peers. Inside NetworkService, it has an IoService event loop with a
 /// thread pool.
 pub struct NetworkService {
-    io_service: Option<IoService<NetworkIoMessage>>,
-    inner: Option<Arc<NetworkServiceInner>>,
+    io_service: RwLock<Option<IoService<NetworkIoMessage>>>,
+    inner: RwLock<Option<Arc<NetworkServiceInner>>>,
     config: NetworkConfiguration,
 }
 
 impl NetworkService {
     pub fn new(config: NetworkConfiguration) -> NetworkService {
         NetworkService {
-            io_service: None,
-            inner: None,
+            io_service: RwLock::new(None),
+            inner: RwLock::new(None),
             config,
         }
     }
 
     /// Create and start the event loop inside the NetworkService
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(&self) -> Result<(), Error> {
+        let mut io_service = self.io_service.write();
         let raw_io_service = IoService::<NetworkIoMessage>::start()?;
-        self.io_service = Some(raw_io_service);
+        *io_service = Some(raw_io_service);
 
-        if self.inner.is_none() {
+        if let maybe_inner @ None = &mut *self.inner.write() {
             let inner = Arc::new(match self.config.test_mode {
                 true => NetworkServiceInner::new_with_latency(&self.config)?,
                 false => NetworkServiceInner::new(&self.config)?,
             });
-            self.io_service
+            io_service
                 .as_ref()
                 .unwrap()
                 .register_handler(inner.clone())?;
-            self.inner = Some(inner);
+            *maybe_inner = Some(inner);
         }
 
         Ok(())
@@ -165,26 +166,19 @@ impl NetworkService {
 
     /// Add a P2P peer to the client as a trusted node
     pub fn add_peer(&self, node: NodeEntry) -> Result<(), Error> {
-        if let Some(ref x) = self.inner {
-            x.node_db.write().insert_trusted(node);
-            Ok(())
-        } else {
-            Err("Network service not started yet!".into())
-        }
+        self.exec_or_err(|_, inner| {
+            Ok(inner.node_db.write().insert_trusted(node))
+        })
     }
 
     /// Drop a P2P peer from the client
     pub fn drop_peer(&self, node: NodeEntry) -> Result<(), Error> {
-        if let Some(ref x) = self.inner {
-            x.drop_node(node.id)
-        } else {
-            Err("Network service not started yet!".into())
-        }
+        self.exec_or_err(|_, inner| inner.drop_node(node.id))
     }
 
     /// Get the local address of the client
     pub fn local_addr(&self) -> Option<SocketAddr> {
-        self.inner.as_ref().map(|inner_ref| inner_ref.local_addr())
+        self.inner.read().as_ref().map(|inner| inner.local_addr())
     }
 
     /// Register a new protocol handler
@@ -193,34 +187,41 @@ impl NetworkService {
         protocol: ProtocolId, versions: &[u8],
     ) -> Result<(), Error>
     {
-        self.io_service.as_ref().unwrap().send_message(
-            NetworkIoMessage::AddHandler {
+        self.exec_or_err(|io, _| {
+            io.send_message(NetworkIoMessage::AddHandler {
                 handler,
                 protocol,
                 versions: versions.to_vec(),
-            },
-        )?;
-        Ok(())
+            })
+            .map_err(Into::into)
+        })
     }
 
     /// Executes action in the network context
     pub fn with_context<F>(&self, protocol: ProtocolId, action: F)
     where F: FnOnce(&NetworkContext) {
-        let io = IoContext::new(self.io_service.as_ref().unwrap().channel(), 0);
-        if let Some(ref inner) = self.inner {
+        let io = IoContext::new(
+            self.io_service.read().as_ref().unwrap().channel(),
+            0,
+        );
+        if let Some(ref inner) = *self.inner.read() {
             inner.with_context(protocol, &io, action);
         };
     }
 
     /// Return the current connected peers
     pub fn get_peer_info(&self) -> Option<Vec<PeerInfo>> {
-        self.inner.as_ref().map(|inner| inner.get_peer_info())
+        self.inner
+            .read()
+            .as_ref()
+            .map(|inner| inner.get_peer_info())
     }
 
     /// Sign a challenge to provide self NodeId
     pub fn sign_challenge(&self, challenge: Vec<u8>) -> Result<Vec<u8>, Error> {
         let hash = keccak(challenge);
-        if let Some(ref inner) = self.inner {
+
+        self.exec_or_err(|_, inner| {
             let signature = match sign(inner.metadata.keys.secret(), &hash) {
                 Ok(s) => s,
                 Err(e) => {
@@ -229,41 +230,31 @@ impl NetworkService {
                 }
             };
             Ok(signature[..].to_owned())
-        } else {
-            Err("Network service not started yet!".into())
-        }
+        })
     }
 
     pub fn net_key_pair(&self) -> Result<KeyPair, Error> {
-        if let Some(ref inner) = self.inner {
-            Ok(inner.metadata.keys.clone())
-        } else {
-            Err("Network service not started yet!".into())
-        }
+        self.exec_or_err(|_, inner| Ok(inner.metadata.keys.clone()))
     }
 
     pub fn add_latency(
         &self, id: NodeId, latency_ms: f64,
     ) -> Result<(), Error> {
-        if let Some(ref inner) = self.inner {
-            inner.add_latency(id, latency_ms)
-        } else {
-            Err("Network service not started yet!".into())
-        }
+        self.exec_or_err(|_, inner| inner.add_latency(id, latency_ms))
     }
 
     pub fn get_node(&self, id: &NodeId) -> Option<(bool, Node)> {
-        let inner = self.inner.as_ref()?;
-        let node_db = inner.node_db.read();
-        let (trusted, node) = node_db.get_with_trusty(id)?;
-        Some((trusted, node.clone()))
+        self.exec_or_none(|inner| {
+            let node_db = inner.node_db.read();
+            let (trusted, node) = node_db.get_with_trusty(id)?;
+            Some((trusted, node.clone()))
+        })
     }
 
     pub fn get_detailed_sessions(
         &self, node_id: Option<NodeId>,
     ) -> Option<Vec<SessionDetails>> {
-        let inner = self.inner.as_ref()?;
-        match node_id {
+        self.exec_or_none(|inner| match node_id {
             None => Some(
                 inner
                     .sessions
@@ -277,6 +268,25 @@ impl NetworkService {
                 let details = session.read().details();
                 Some(vec![details])
             }
+        })
+    }
+
+    fn exec_or_err<F, T>(&self, f: F) -> Result<T, Error>
+    where F: FnOnce(
+            &IoService<NetworkIoMessage>,
+            &Arc<NetworkServiceInner>,
+        ) -> Result<T, Error> {
+        match (&*self.io_service.read(), &*self.inner.read()) {
+            (Some(io), Some(inner)) => f(io, inner),
+            _ => Err("Network service not started yet!".into()),
+        }
+    }
+
+    fn exec_or_none<F, T>(&self, f: F) -> Option<T>
+    where F: FnOnce(&Arc<NetworkServiceInner>) -> Option<T> {
+        match &*self.inner.read() {
+            None => None,
+            Some(inner) => f(inner),
         }
     }
 }

@@ -189,11 +189,7 @@ impl ArchiveClient {
         let protocol_config = conf.protocol_config();
         let verification_config = conf.verification_config();
 
-        let network = {
-            let mut network = NetworkService::new(network_config);
-            network.start().unwrap();
-            Arc::new(network)
-        };
+        let network = Arc::new(NetworkService::new(network_config));
 
         let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),
@@ -208,6 +204,8 @@ impl ArchiveClient {
             sync_graph.clone(),
             protocol_config,
         ));
+
+        network.start().unwrap();
         sync.register().unwrap();
 
         if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
