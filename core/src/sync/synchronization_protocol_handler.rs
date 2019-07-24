@@ -759,6 +759,11 @@ impl SynchronizationProtocolHandler {
                             blocks.push(resp_hash);
                             if success {
                                 request_again = false;
+
+                                // a transaction from compact block should be
+                                // added to received pool
+                                self.request_manager
+                                    .append_received_transactions(signed_txes);
                             } else {
                                 // If the peer is honest, may still fail due to
                                 // tx hash collision
