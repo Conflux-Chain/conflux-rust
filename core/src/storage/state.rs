@@ -29,6 +29,9 @@ pub trait StateTrait {
 
     // Actions.
     fn get(&self, access_key: &[u8]) -> Result<Option<Box<[u8]>>>;
+    fn get_with_proof(
+        &self, access_key: &[u8],
+    ) -> Result<(Option<Box<[u8]>>, StateProof)>;
     fn set(&mut self, access_key: &[u8], value: &[u8]) -> Result<()>;
     fn delete(&mut self, access_key: &[u8]) -> Result<Option<Box<[u8]>>>;
     // Delete everything prefixed by access_key and return deleted key value
@@ -48,6 +51,6 @@ pub trait StateTrait {
     // TODO(yz): verifiable proof related methods.
 }
 
-use super::impls::errors::*;
+use super::impls::{errors::*, state_proof::StateProof};
 use crate::statedb::KeyPadding;
 use primitives::{EpochId, MerkleHash, StateRootWithAuxInfo};
