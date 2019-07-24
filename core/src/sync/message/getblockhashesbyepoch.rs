@@ -4,8 +4,7 @@
 
 use crate::sync::{
     message::{
-        GetBlockHashesResponse, Message, MsgId, Request, RequestContext,
-        RequestId,
+        Context, GetBlockHashesResponse, Handleable, Message, MsgId, RequestId,
     },
     synchronization_protocol_handler::MAX_EPOCHS_TO_SEND,
     Error,
@@ -19,8 +18,8 @@ pub struct GetBlockHashesByEpoch {
     pub epochs: Vec<u64>,
 }
 
-impl Request for GetBlockHashesByEpoch {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+impl Handleable for GetBlockHashesByEpoch {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         if self.epochs.is_empty() {
             return Ok(());
         }
@@ -29,7 +28,7 @@ impl Request for GetBlockHashesByEpoch {
             .epochs
             .iter()
             .take(MAX_EPOCHS_TO_SEND as usize)
-            .map(|&e| context.graph.get_block_hashes_by_epoch(e))
+            .map(|&e| ctx.manager.graph.get_block_hashes_by_epoch(e))
             .filter_map(Result::ok)
             .fold(vec![], |mut res, sub| {
                 res.extend(sub);
@@ -41,7 +40,7 @@ impl Request for GetBlockHashesByEpoch {
             hashes,
         };
 
-        context.send_response(&response)
+        ctx.send_response(&response)
     }
 }
 

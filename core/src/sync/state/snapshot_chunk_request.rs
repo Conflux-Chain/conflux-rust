@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Message, MsgId, Request, RequestContext},
+    message::{Context, Handleable, Message, MsgId},
     request_manager::Request as RequestMessage,
     state::snapshot_chunk_response::SnapshotChunkResponse,
     Error,
@@ -29,15 +29,15 @@ impl SnapshotChunkRequest {
     }
 }
 
-impl Request for SnapshotChunkRequest {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
+impl Handleable for SnapshotChunkRequest {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         // todo find chunk from storage APIs
         let response = SnapshotChunkResponse {
             request_id: self.request_id,
             chunk: Vec::new(),
         };
 
-        context.send_response(&response)
+        ctx.send_response(&response)
     }
 }
 

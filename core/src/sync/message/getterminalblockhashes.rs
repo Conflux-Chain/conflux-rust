@@ -4,8 +4,8 @@
 
 use crate::sync::{
     message::{
-        GetTerminalBlockHashesResponse, Message, MsgId, Request,
-        RequestContext, RequestId,
+        Context, GetTerminalBlockHashesResponse, Handleable, Message, MsgId,
+        RequestId,
     },
     Error,
 };
@@ -17,9 +17,9 @@ pub struct GetTerminalBlockHashes {
     pub request_id: RequestId,
 }
 
-impl Request for GetTerminalBlockHashes {
-    fn handle(&self, context: &RequestContext) -> Result<(), Error> {
-        let best_info = context.graph.consensus.get_best_info();
+impl Handleable for GetTerminalBlockHashes {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let best_info = ctx.manager.graph.consensus.get_best_info();
         let terminal_hashes = match &best_info.terminal_block_hashes {
             Some(x) => x.clone(),
             None => best_info.bounded_terminal_block_hashes.clone(),
@@ -28,7 +28,7 @@ impl Request for GetTerminalBlockHashes {
             request_id: self.request_id.clone(),
             hashes: terminal_hashes,
         };
-        context.send_response(&response)
+        ctx.send_response(&response)
     }
 }
 

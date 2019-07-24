@@ -228,10 +228,6 @@ pub mod msg_sender {
                 "network_connection_data_counter",
                 "get_terminal_block_hashes_counter"
             );
-        static ref TRANSACTIONS_METER: Arc<Meter> = register_meter_with_group(
-            "network_connection_data",
-            "transactions"
-        );
         static ref TRANSACTIONS_COUNTER: Arc<Meter> = register_meter_with_group(
             "network_connection_data_counter",
             "transactions_counter"
@@ -341,10 +337,6 @@ pub mod msg_sender {
                 MsgId::GET_TERMINAL_BLOCK_HASHES => {
                     GET_TERMINAL_BLOCK_HASHES_METER.mark(size);
                     GET_TERMINAL_BLOCK_HASHES_COUNTER.mark(1);
-                }
-                MsgId::TRANSACTIONS => {
-                    TRANSACTIONS_METER.mark(size);
-                    TRANSACTIONS_COUNTER.mark(1);
                 }
                 MsgId::GET_CMPCT_BLOCKS => {
                     GET_CMPCT_BLOCKS_METER.mark(size);
