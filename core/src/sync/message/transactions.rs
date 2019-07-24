@@ -23,10 +23,10 @@ pub struct TransactionPropagationControl {
 }
 
 impl Handleable for TransactionPropagationControl {
-    fn handle(&self, ctx: &Context) -> Result<(), Error> {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_trans_prop_ctrl, peer {}, msg=:{:?}", ctx.peer, self);
 
-        let peer_info = ctx.syn.get_peer_info(&ctx.peer)?;
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
         peer_info.write().need_prop_trans = !self.catch_up_mode;
 
         Ok(())
@@ -83,21 +83,24 @@ pub struct TransactionDigests {
 }
 
 impl Handleable for TransactionDigests {
-    fn handle(&self, ctx: &Context) -> Result<(), Error> {
-        let peer_info = ctx.syn.get_peer_info(&ctx.peer)?;
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
 
         let mut peer_info = peer_info.write();
         if let Some(true) = peer_info.notified_mode {
             peer_info.received_transaction_count += self.trans_short_ids.len();
             if peer_info.received_transaction_count
-                > ctx.protocol_config.max_trans_count_received_in_catch_up
+                > ctx
+                    .manager
+                    .protocol_config
+                    .max_trans_count_received_in_catch_up
                     as usize
             {
                 bail!(ErrorKind::TooManyTrans);
             }
         }
 
-        ctx.request_manager.request_transactions(
+        ctx.manager.request_manager.request_transactions(
             ctx.io,
             ctx.peer,
             self.window_index,
@@ -209,14 +212,10 @@ pub struct GetTransactionsResponse {
 }
 
 impl Handleable for GetTransactionsResponse {
-    fn handle(&self, ctx: &Context) -> Result<(), Error> {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_get_transactions_response {:?}", self.request_id());
 
-        let req = ctx.request_manager.match_request(
-            ctx.io,
-            ctx.peer,
-            self.request_id(),
-        )?;
+        let req = ctx.match_request(self.request_id())?;
 
         let req_tx_ids: HashSet<TxPropagateId> = match req {
             RequestMessage::Transactions(request) => request.tx_ids,
@@ -233,15 +232,19 @@ impl Handleable for GetTransactionsResponse {
             ctx.peer
         );
 
-        ctx.request_manager.transactions_received(&req_tx_ids);
+        ctx.manager
+            .request_manager
+            .transactions_received(&req_tx_ids);
 
         let (signed_trans, _) = ctx
+            .manager
             .graph
             .consensus
             .txpool
             .insert_new_transactions(&self.transactions);
 
-        ctx.request_manager
+        ctx.manager
+            .request_manager
             .append_received_transactions(signed_trans);
 
         debug!("Transactions successfully inserted to transaction pool");

@@ -23,15 +23,15 @@ pub struct Status {
 }
 
 impl Handleable for Status {
-    fn handle(&self, ctx: &Context) -> Result<(), Error> {
-        if !ctx.syn.on_status(ctx.peer) {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        if !ctx.manager.syn.on_status(ctx.peer) {
             warn!("Unexpected Status message from peer={}", ctx.peer);
             return Err(ErrorKind::UnknownPeer.into());
         }
 
         debug!("on_status, msg=:{:?}", self);
 
-        let genesis_hash = ctx.graph.genesis_hash();
+        let genesis_hash = ctx.manager.graph.genesis_hash();
         if genesis_hash != self.genesis_hash {
             debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
@@ -42,7 +42,9 @@ impl Handleable for Status {
 
         let mut latest: HashSet<H256> =
             self.terminal_block_hashes.iter().cloned().collect();
-        latest.extend(ctx.graph.initial_missed_block_hashes.lock().drain());
+        latest.extend(
+            ctx.manager.graph.initial_missed_block_hashes.lock().drain(),
+        );
 
         let peer_state = SynchronizationPeerState {
             id: ctx.peer,
@@ -62,8 +64,8 @@ impl Handleable for Status {
         );
 
         debug!("Peer {:?} connected", ctx.peer);
-        ctx.syn.peer_connected(ctx.peer, peer_state);
-        ctx.request_manager.on_peer_connected(ctx.peer);
+        ctx.manager.syn.peer_connected(ctx.peer, peer_state);
+        ctx.manager.request_manager.on_peer_connected(ctx.peer);
 
         Ok(())
     }

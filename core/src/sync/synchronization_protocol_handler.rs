@@ -122,7 +122,7 @@ impl<T> AsyncTaskQueue<T> {
         }
     }
 
-    fn dispatch(&self, io: &NetworkContext, task: T) {
+    pub fn dispatch(&self, io: &NetworkContext, task: T) {
         self.tasks.lock().push_back(task);
         io.dispatch_work(self.work_type);
     }
@@ -135,6 +135,21 @@ pub struct RecoverPublicTask {
     requested: HashSet<H256>,
     failed_peer: PeerId,
     compact: bool,
+}
+
+impl RecoverPublicTask {
+    pub fn new(
+        blocks: Vec<Block>, requested: HashSet<H256>, failed_peer: PeerId,
+        compact: bool,
+    ) -> Self
+    {
+        RecoverPublicTask {
+            blocks,
+            requested,
+            failed_peer,
+            compact,
+        }
+    }
 }
 
 pub struct LocalMessageTask {
@@ -235,15 +250,15 @@ impl FutureBlockContainer {
 }
 
 pub struct SynchronizationProtocolHandler {
-    protocol_config: ProtocolConfiguration,
-    graph: SharedSynchronizationGraph,
-    syn: Arc<SynchronizationState>,
-    request_manager: Arc<RequestManager>,
+    pub protocol_config: ProtocolConfiguration,
+    pub graph: SharedSynchronizationGraph,
+    pub syn: Arc<SynchronizationState>,
+    pub request_manager: Arc<RequestManager>,
     latest_epoch_requested: Mutex<u64>,
-    future_blocks: FutureBlockContainer,
+    pub future_blocks: FutureBlockContainer,
 
     // Worker task queue for recover public
-    recover_public_queue: AsyncTaskQueue<RecoverPublicTask>,
+    pub recover_public_queue: AsyncTaskQueue<RecoverPublicTask>,
 
     // Worker task queue for local message
     local_message: AsyncTaskQueue<LocalMessageTask>,
@@ -402,13 +417,8 @@ impl SynchronizationProtocolHandler {
 
         let ctx = Context {
             peer,
-            syn: self.syn.clone(),
-            graph: self.graph.clone(),
-            request_manager: self.request_manager.clone(),
-            protocol_config: &self.protocol_config,
             io,
-            recover_public_queue: &self.recover_public_queue,
-            local_message_queue: &self.local_message,
+            manager: self,
         };
 
         match msg_id {
@@ -422,10 +432,11 @@ impl SynchronizationProtocolHandler {
             MsgId::NEW_BLOCK => self.on_new_block(io, peer, &rlp),
             MsgId::NEW_BLOCK_HASHES => self.on_new_block_hashes(io, peer, &rlp),
             MsgId::GET_BLOCKS_RESPONSE => {
-                self.on_blocks_response(io, peer, &rlp)
+                let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
+                rlp.as_val::<GetBlocksResponse>()?.handle(&ctx)
             }
             MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
-                self.on_blocks_with_public_response(io, peer, &rlp)
+                rlp.as_val::<GetBlocksWithPublicResponse>()?.handle(&ctx)
             }
             MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
                 self.on_terminal_block_hashes_response(io, peer, &rlp)
@@ -645,12 +656,7 @@ impl SynchronizationProtocolHandler {
 
         self.recover_public_queue.dispatch(
             io,
-            RecoverPublicTask {
-                blocks: resp.blocks,
-                requested: requested_blocks,
-                failed_peer: peer,
-                compact: true,
-            },
+            RecoverPublicTask::new(resp.blocks, requested_blocks, peer, true),
         );
 
         // Broadcast completed block_header_ready blocks
@@ -1280,88 +1286,6 @@ impl SynchronizationProtocolHandler {
                 return Err(ErrorKind::UnexpectedResponse.into());
             }
         };
-    }
-
-    fn on_blocks_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());
-        let blocks = rlp.as_val::<GetBlocksResponse>()?;
-        debug!(
-            "on_blocks_response, get block hashes {:?}",
-            blocks
-                .blocks
-                .iter()
-                .map(|b| b.block_header.hash())
-                .collect::<Vec<H256>>()
-        );
-        let req = self.request_manager.match_request(
-            io,
-            peer,
-            blocks.request_id(),
-        )?;
-        let req_hashes_vec = match req {
-            RequestMessage::Blocks(request) => request.hashes,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, blocks);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
-
-        let requested_blocks: HashSet<H256> =
-            req_hashes_vec.into_iter().collect();
-        self.recover_public_queue.dispatch(
-            io,
-            RecoverPublicTask {
-                blocks: blocks.blocks,
-                requested: requested_blocks,
-                failed_peer: peer,
-                compact: false,
-            },
-        );
-
-        Ok(())
-    }
-
-    fn on_blocks_with_public_response(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let blocks = rlp.as_val::<GetBlocksWithPublicResponse>()?;
-        debug!(
-            "on_blocks_with_public_response, get block hashes {:?}",
-            blocks
-                .blocks
-                .iter()
-                .map(|b| b.block_header.hash())
-                .collect::<Vec<H256>>()
-        );
-        let req = self.request_manager.match_request(
-            io,
-            peer,
-            blocks.request_id(),
-        )?;
-        let req_hashes_vec = match req {
-            RequestMessage::Blocks(request) => request.hashes,
-            RequestMessage::Compact(request) => request.hashes,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, blocks);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
-        let requested_blocks: HashSet<H256> =
-            req_hashes_vec.into_iter().collect();
-
-        self.recover_public_queue.dispatch(
-            io,
-            RecoverPublicTask {
-                blocks: blocks.blocks,
-                requested: requested_blocks,
-                failed_peer: peer,
-                compact: false,
-            },
-        );
-
-        Ok(())
     }
 
     fn on_blocks_inner(
@@ -2013,12 +1937,12 @@ impl SynchronizationProtocolHandler {
             requested.insert(block.hash());
             self.recover_public_queue.dispatch(
                 io,
-                RecoverPublicTask {
-                    blocks: vec![block.as_ref().clone()],
+                RecoverPublicTask::new(
+                    vec![block.as_ref().clone()],
                     requested,
-                    failed_peer: 0,
-                    compact: false,
-                },
+                    0,
+                    false,
+                ),
             );
             return true;
         } else {
