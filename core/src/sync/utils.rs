@@ -150,6 +150,7 @@ pub fn initialize_synchronization_graph(
         consensus.clone(),
         verification_config,
         pow_config,
+        false,
     ));
 
     (sync, consensus, genesis_block)

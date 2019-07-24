@@ -212,7 +212,7 @@ impl SynchronizationGraphInner {
             self.old_era_blocks_frontier_set.remove(&index);
             self.arena.remove(index);
             self.hash_to_arena_indices.remove(&hash);
-            self.data_man.remove_block_header(&hash);
+            self.data_man.remove_block_header(&hash, false);
 
             num_cleared += 1;
             if num_cleared == max_num_of_cleared_blocks {
@@ -720,8 +720,8 @@ impl SynchronizationGraphInner {
 
             self.arena.remove(*index);
             self.hash_to_arena_indices.remove(&hash);
-            self.data_man.remove_block_header(&hash);
-            self.data_man.remove_block_from_kv(&hash);
+            self.data_man.remove_block_header(&hash, true);
+            self.data_man.remove_block_from_db(&hash);
         }
     }
 
@@ -764,6 +764,8 @@ pub struct SynchronizationGraph {
     /// Channel used to send work to `ConsensusGraph`
     /// Each element is <block_hash, ignore_body>
     consensus_sender: Mutex<Sender<(H256, bool)>>,
+    /// whether it is a archive node or full node
+    is_full_node: bool,
 }
 
 pub type SharedSynchronizationGraph = Arc<SynchronizationGraph>;
@@ -772,6 +774,7 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
+        is_full_node: bool,
     ) -> Self
     {
         let data_man = consensus.data_man.clone();
@@ -791,6 +794,7 @@ impl SynchronizationGraph {
             consensus: consensus.clone(),
             statistics: consensus.statistics.clone(),
             consensus_sender: Mutex::new(consensus_sender),
+            is_full_node,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
@@ -837,6 +841,22 @@ impl SynchronizationGraph {
         self.consensus
             .txpool
             .set_to_be_propagated_transactions(transactions);
+    }
+
+    fn try_remove_old_era_blocks_from_disk(&self) {
+        let mut num_of_blocks_to_remove = 2;
+        while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
+            // only full node should remove blocks in old eras
+            if self.is_full_node {
+                // TODO: remove state root
+                self.data_man.remove_block_header(&hash, false);
+                self.data_man.remove_block_from_db(&hash);
+            }
+            num_of_blocks_to_remove -= 1;
+            if num_of_blocks_to_remove == 0 {
+                break;
+            }
+        }
     }
 
     fn recover_graph_from_db(&mut self, header_only: bool) {
@@ -1193,6 +1213,7 @@ impl SynchronizationGraph {
         }
 
         inner.try_clear_old_era_blocks();
+        self.try_remove_old_era_blocks_from_disk();
 
         (true, need_to_relay)
     }
@@ -1347,7 +1368,7 @@ impl SynchronizationGraph {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
                 self.data_man.insert_compact_block(block.to_compact());
-                self.data_man.insert_block_to_kv(block.clone(), persistent);
+                self.data_man.insert_block_to_db(block.clone(), persistent);
             }
         } else {
             insert_success = false;

@@ -199,6 +199,7 @@ impl FullClient {
             consensus.clone(),
             verification_config,
             pow_config,
+            true,
         ));
 
         let sync = Arc::new(SynchronizationService::new(

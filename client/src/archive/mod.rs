@@ -199,6 +199,7 @@ impl ArchiveClient {
             consensus.clone(),
             verification_config,
             pow_config,
+            false,
         ));
 
         let sync = Arc::new(SynchronizationService::new(
