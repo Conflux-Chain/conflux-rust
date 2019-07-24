@@ -22,6 +22,7 @@ use crate::sync::{
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::fmt;
+use crate::sync::message::transactions::Transactions;
 
 pub type MsgIdInner = u8;
 #[derive(Debug, PartialEq, Eq)]
@@ -38,6 +39,7 @@ macro_rules! build_msgid {
 build_msgid! {
     STATUS = 0x00
     NEW_BLOCK_HASHES = 0x01
+    TRANSACTIONS = 0x02
 
     GET_BLOCK_HASHES = 0x03
     GET_BLOCK_HASHES_RESPONSE = 0x04
@@ -114,6 +116,9 @@ impl MsgId {
             }
             MsgId::GET_BLOCK_TXN_RESPONSE => {
                 rlp.as_val::<GetBlockTxnResponse>()?.handle(&ctx)?;
+            }
+            MsgId::TRANSACTIONS => {
+                rlp.as_val::<Transactions>()?.handle(&ctx)?;
             }
             MsgId::TRANSACTION_PROPAGATION_CONTROL => {
                 rlp.as_val::<TransactionPropagationControl>()?

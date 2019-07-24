@@ -20,6 +20,82 @@ use std::{
 };
 
 #[derive(Debug, PartialEq)]
+pub struct Transactions {
+    pub transactions: Vec<TransactionWithSignature>,
+}
+
+impl Handleable for Transactions {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let transactions = self.transactions;
+        debug!(
+            "Received {:?} transactions from Peer {:?}",
+            transactions.len(),
+            ctx.peer
+        );
+
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        let should_disconnect = {
+            let mut peer_info = peer_info.write();
+            if peer_info.notified_mode.is_some()
+                && (peer_info.notified_mode.unwrap() == true)
+            {
+                peer_info.received_transaction_count += transactions.len();
+                if peer_info.received_transaction_count
+                    > ctx.manager.protocol_config.max_trans_count_received_in_catch_up
+                    as usize
+                {
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+
+        if should_disconnect {
+            bail!(ErrorKind::TooManyTrans);
+        }
+
+        let (signed_trans, _) = ctx
+            .manager
+            .graph
+            .consensus
+            .txpool
+            .insert_new_transactions(&transactions);
+
+        ctx.manager.request_manager
+            .append_received_transactions(signed_trans);
+
+        debug!("Transactions successfully inserted to transaction pool");
+
+        Ok(())
+    }
+}
+
+impl Message for Transactions {
+    fn msg_id(&self) -> MsgId { MsgId::TRANSACTIONS }
+
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
+}
+
+impl Encodable for Transactions {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.append_list(&self.transactions);
+    }
+}
+
+impl Decodable for Transactions {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Transactions {
+            transactions: rlp.as_list()?,
+        })
+    }
+}
+
+////////////////////////////////////////////////////////////////////
+
+#[derive(Debug, PartialEq)]
 pub struct TransactionPropagationControl {
     pub catch_up_mode: bool,
 }
