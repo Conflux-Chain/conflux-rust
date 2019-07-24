@@ -214,6 +214,8 @@ pub trait NetworkProtocolHandler: Sync + Send {
 
     fn on_timeout(&self, io: &NetworkContext, timer: TimerToken);
 
+    fn send_local_message(&self, _io: &NetworkContext, _message: Vec<u8>) {}
+
     fn on_work_dispatch(
         &self, _io: &NetworkContext, _work_type: HandlerWorkType,
     ) {

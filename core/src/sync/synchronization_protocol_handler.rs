@@ -28,7 +28,7 @@ use rand::Rng;
 use rlp::Rlp;
 //use slab::Slab;
 use super::{
-    msg_sender::{send_message, send_message_with_throttling},
+    msg_sender::{send_message, send_message_with_throttling, NULL},
     request_manager::{RequestManager, RequestMessage},
 };
 use crate::{
@@ -105,8 +105,9 @@ const EPOCH_SYNC_MAX_INFLIGHT: u64 = 300;
 const EPOCH_SYNC_BATCH_SIZE: u64 = 30;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
-enum SyncHandlerWorkType {
+pub enum SyncHandlerWorkType {
     RecoverPublic = 1,
+    LocalMessage = 2,
 }
 
 struct RecoverPublicTask {
@@ -114,6 +115,10 @@ struct RecoverPublicTask {
     requested: HashSet<H256>,
     failed_peer: PeerId,
     compact: bool,
+}
+
+pub struct LocalMessageTask {
+    message: Vec<u8>,
 }
 
 struct FutureBlockContainerInner {
@@ -220,6 +225,9 @@ pub struct SynchronizationProtocolHandler {
     // Worker task queue for recover public
     recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
 
+    // Worker task queue for local message
+    local_message: Mutex<VecDeque<LocalMessageTask>>,
+
     // state sync for any checkpoint
     state_sync: Mutex<SnapshotChunkSync>,
 }
@@ -274,6 +282,7 @@ impl SynchronizationProtocolHandler {
                 future_block_buffer_capacity,
             ),
             recover_public_queue: Mutex::new(VecDeque::new()),
+            local_message: Mutex::new(VecDeque::new()),
             state_sync: Mutex::new(SnapshotChunkSync::new(syn)),
         }
     }
@@ -327,23 +336,26 @@ impl SynchronizationProtocolHandler {
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
-        if !self.syn.contains_peer(&peer) {
-            debug!(
-                "dispatch_message: Peer does not exist: peer={} msg_id={}",
-                peer, msg_id
-            );
-            // We may only receive status message from a peer not in
-            // `syn.peers`, and this peer should be in
-            // `syn.handshaking_peers`
-            if !self.syn.handshaking_peers.read().contains_key(&peer)
-                || msg_id != MsgId::STATUS
-            {
-                warn!("Message from unknown peer {:?}", msg_id);
-                return Ok(());
+        if peer != NULL {
+            if !self.syn.contains_peer(&peer) {
+                debug!(
+                    "dispatch_message: Peer does not exist: peer={} msg_id={}",
+                    peer, msg_id
+                );
+                // We may only receive status message from a peer not in
+                // `syn.peers`, and this peer should be in
+                // `syn.handshaking_peers`
+                if !self.syn.handshaking_peers.read().contains_key(&peer)
+                    || msg_id != MsgId::STATUS
+                {
+                    warn!("Message from unknown peer {:?}", msg_id);
+                    return Ok(());
+                }
+            } else {
+                self.syn.update_heartbeat(&peer);
             }
-        } else {
-            self.syn.update_heartbeat(&peer);
         }
+
         self.syn.validate_msg_id(&msg_id);
         //        if !self.syn.validate_msg_id(&msg_id) {
         //            debug!(
@@ -1162,12 +1174,22 @@ impl SynchronizationProtocolHandler {
                     return true;
                 }
             }
-            self.handle_block_headers(
+            let mut block_headers_resp = GetBlockHeadersResponse::default();
+            block_headers_resp.set_request_id(0);
+            let mut headers = Vec::new();
+            headers.push((*header).clone());
+            block_headers_resp.headers = headers;
+
+            let request_context = RequestContext {
+                peer: NULL,
                 io,
-                &vec![header.as_ref().clone()],
-                Vec::new(),
-                None,
-            );
+                graph: self.graph.clone(),
+                request_manager: self.request_manager.clone(),
+            };
+
+            request_context
+                .send_response(&block_headers_resp)
+                .expect("send response should not be error");
             return true;
         } else {
             return false;
@@ -1286,6 +1308,23 @@ impl SynchronizationProtocolHandler {
         let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
         let block_headers = rlp.as_val::<GetBlockHeadersResponse>()?;
         debug!("on_block_headers_response, msg=:{:?}", block_headers);
+
+        if peer == NULL {
+            let requested = block_headers
+                .headers
+                .iter()
+                .map(|h| h.hash().clone())
+                .collect();
+
+            self.handle_block_headers(
+                io,
+                &block_headers.headers,
+                requested,
+                None,
+            );
+            return Ok(());
+        }
+
         let id = block_headers.request_id();
         let req = self.request_manager.match_request(io, peer, id)?;
 
@@ -1520,6 +1559,11 @@ impl SynchronizationProtocolHandler {
     fn on_blocks_inner_task(&self, io: &NetworkContext) -> Result<(), Error> {
         let task = self.recover_public_queue.lock().pop_front().unwrap();
         self.on_blocks_inner(io, task)
+    }
+
+    fn on_local_message_task(&self, io: &NetworkContext) {
+        let task = self.local_message.lock().pop_front().unwrap();
+        self.on_message(io, NULL, task.message.as_slice());
     }
 
     pub fn on_mined_block(&self, mut block: Block) -> Vec<H256> {
@@ -2193,6 +2237,13 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
     }
 
+    fn send_local_message(&self, io: &NetworkContext, message: Vec<u8>) {
+        self.local_message
+            .lock()
+            .push_back(LocalMessageTask { message });
+        io.dispatch_work(SyncHandlerWorkType::LocalMessage as HandlerWorkType);
+    }
+
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
@@ -2208,6 +2259,10 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             if let Err(e) = self.on_blocks_inner_task(io) {
                 warn!("Error processing RecoverPublic task: {:?}", e);
             }
+        } else if work_type
+            == SyncHandlerWorkType::LocalMessage as HandlerWorkType
+        {
+            self.on_local_message_task(io);
         } else {
             warn!("Unknown SyncHandlerWorkType");
         }
