@@ -316,6 +316,7 @@ impl TransactionGenerator {
                 *balance_map.entry(receiver_address).or_insert(0.into()) +=
                     balance_to_transfer;
                 tx_n += 1;
+                TX_GEN_METER.mark(1);
             } else {
                 // The transaction pool is full and the tx is discarded, so the
                 // state should not updated. We add unconditional
@@ -323,10 +324,7 @@ impl TransactionGenerator {
                 // expected throughput.
                 thread::sleep(tx_config.period);
             }
-            if tx_n % 100 == 0 {
-                TX_GEN_METER.mark(100);
-                info!("Generated {} transactions", tx_n);
-            }
+
             let now = Instant::now();
             let time_elapsed = now.duration_since(start_time);
             if let Some(time_left) =
