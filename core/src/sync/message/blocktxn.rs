@@ -92,7 +92,8 @@ impl Handleable for GetBlockTxnResponse {
 
                         // a transaction from compact block should be
                         // added to received pool
-                        ctx.manager.request_manager
+                        ctx.manager
+                            .request_manager
                             .append_received_transactions(signed_txes);
                     } else {
                         // If the peer is honest, may still fail due to
