@@ -108,7 +108,29 @@ pub enum SyncHandlerWorkType {
     LocalMessage = 2,
 }
 
-struct RecoverPublicTask {
+/// FIFO queue to async execute tasks.
+pub struct AsyncTaskQueue<T> {
+    tasks: Mutex<VecDeque<T>>,
+    work_type: HandlerWorkType,
+}
+
+impl<T> AsyncTaskQueue<T> {
+    fn new(work_type: SyncHandlerWorkType) -> Self {
+        AsyncTaskQueue {
+            tasks: Mutex::new(VecDeque::new()),
+            work_type: work_type as HandlerWorkType,
+        }
+    }
+
+    fn dispatch(&self, io: &NetworkContext, task: T) {
+        self.tasks.lock().push_back(task);
+        io.dispatch_work(self.work_type);
+    }
+
+    fn pop(&self) -> Option<T> { self.tasks.lock().pop_front() }
+}
+
+pub struct RecoverPublicTask {
     blocks: Vec<Block>,
     requested: HashSet<H256>,
     failed_peer: PeerId,
@@ -221,10 +243,10 @@ pub struct SynchronizationProtocolHandler {
     future_blocks: FutureBlockContainer,
 
     // Worker task queue for recover public
-    recover_public_queue: Mutex<VecDeque<RecoverPublicTask>>,
+    recover_public_queue: AsyncTaskQueue<RecoverPublicTask>,
 
     // Worker task queue for local message
-    local_message: Mutex<VecDeque<LocalMessageTask>>,
+    local_message: AsyncTaskQueue<LocalMessageTask>,
 
     // state sync for any checkpoint
     state_sync: Mutex<SnapshotChunkSync>,
@@ -279,8 +301,12 @@ impl SynchronizationProtocolHandler {
             future_blocks: FutureBlockContainer::new(
                 future_block_buffer_capacity,
             ),
-            recover_public_queue: Mutex::new(VecDeque::new()),
-            local_message: Mutex::new(VecDeque::new()),
+            recover_public_queue: AsyncTaskQueue::new(
+                SyncHandlerWorkType::RecoverPublic,
+            ),
+            local_message: AsyncTaskQueue::new(
+                SyncHandlerWorkType::LocalMessage,
+            ),
             state_sync: Mutex::new(SnapshotChunkSync::new(syn)),
         }
     }
@@ -381,6 +407,8 @@ impl SynchronizationProtocolHandler {
             request_manager: self.request_manager.clone(),
             protocol_config: &self.protocol_config,
             io,
+            recover_public_queue: &self.recover_public_queue,
+            local_message_queue: &self.local_message,
         };
 
         match msg_id {
@@ -615,12 +643,14 @@ impl SynchronizationProtocolHandler {
             Some(peer),
         );
 
-        self.dispatch_recover_public_task(
+        self.recover_public_queue.dispatch(
             io,
-            resp.blocks,
-            requested_blocks,
-            peer,
-            true,
+            RecoverPublicTask {
+                blocks: resp.blocks,
+                requested: requested_blocks,
+                failed_peer: peer,
+                compact: true,
+            },
         );
 
         // Broadcast completed block_header_ready blocks
@@ -1280,12 +1310,14 @@ impl SynchronizationProtocolHandler {
 
         let requested_blocks: HashSet<H256> =
             req_hashes_vec.into_iter().collect();
-        self.dispatch_recover_public_task(
+        self.recover_public_queue.dispatch(
             io,
-            blocks.blocks,
-            requested_blocks,
-            peer,
-            false,
+            RecoverPublicTask {
+                blocks: blocks.blocks,
+                requested: requested_blocks,
+                failed_peer: peer,
+                compact: false,
+            },
         );
 
         Ok(())
@@ -1319,12 +1351,14 @@ impl SynchronizationProtocolHandler {
         let requested_blocks: HashSet<H256> =
             req_hashes_vec.into_iter().collect();
 
-        self.dispatch_recover_public_task(
+        self.recover_public_queue.dispatch(
             io,
-            blocks.blocks,
-            requested_blocks,
-            peer,
-            false,
+            RecoverPublicTask {
+                blocks: blocks.blocks,
+                requested: requested_blocks,
+                failed_peer: peer,
+                compact: false,
+            },
         );
 
         Ok(())
@@ -1392,12 +1426,12 @@ impl SynchronizationProtocolHandler {
     }
 
     fn on_blocks_inner_task(&self, io: &NetworkContext) -> Result<(), Error> {
-        let task = self.recover_public_queue.lock().pop_front().unwrap();
+        let task = self.recover_public_queue.pop().unwrap();
         self.on_blocks_inner(io, task)
     }
 
     fn on_local_message_task(&self, io: &NetworkContext) {
-        let task = self.local_message.lock().pop_front().unwrap();
+        let task = self.local_message.pop().unwrap();
         self.on_message(io, NULL, task.message.as_slice());
     }
 
@@ -1916,23 +1950,6 @@ impl SynchronizationProtocolHandler {
         Some(())
     }
 
-    fn dispatch_recover_public_task(
-        &self, io: &NetworkContext, blocks: Vec<Block>,
-        requested: HashSet<H256>, failed_peer: PeerId, compact: bool,
-    )
-    {
-        self.recover_public_queue
-            .lock()
-            .push_back(RecoverPublicTask {
-                blocks,
-                requested,
-                failed_peer,
-                compact,
-            });
-
-        io.dispatch_work(SyncHandlerWorkType::RecoverPublic as HandlerWorkType);
-    }
-
     fn request_missing_blocks(
         &self, io: &NetworkContext, peer_id: Option<PeerId>, hashes: Vec<H256>,
     ) {
@@ -1994,12 +2011,14 @@ impl SynchronizationProtocolHandler {
             // to set `failed_peer` to 0 since it will not be used.
             let mut requested = HashSet::new();
             requested.insert(block.hash());
-            self.dispatch_recover_public_task(
+            self.recover_public_queue.dispatch(
                 io,
-                vec![block.as_ref().clone()],
-                requested,
-                0,
-                false,
+                RecoverPublicTask {
+                    blocks: vec![block.as_ref().clone()],
+                    requested,
+                    failed_peer: 0,
+                    compact: false,
+                },
             );
             return true;
         } else {
@@ -2070,9 +2089,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
 
     fn send_local_message(&self, io: &NetworkContext, message: Vec<u8>) {
         self.local_message
-            .lock()
-            .push_back(LocalMessageTask { message });
-        io.dispatch_work(SyncHandlerWorkType::LocalMessage as HandlerWorkType);
+            .dispatch(io, LocalMessageTask { message });
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {

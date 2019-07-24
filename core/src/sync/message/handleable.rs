@@ -4,8 +4,9 @@
 
 use crate::{
     sync::{
-        request_manager::RequestManager, Error, ProtocolConfiguration,
-        SynchronizationState,
+        request_manager::RequestManager,
+        synchronization_protocol_handler::{AsyncTaskQueue, RecoverPublicTask},
+        Error, LocalMessageTask, ProtocolConfiguration, SynchronizationState,
     },
     SynchronizationGraph,
 };
@@ -19,6 +20,9 @@ pub struct Context<'a> {
     pub request_manager: Arc<RequestManager>,
     pub protocol_config: &'a ProtocolConfiguration,
     pub io: &'a NetworkContext,
+
+    pub recover_public_queue: &'a AsyncTaskQueue<RecoverPublicTask>,
+    pub local_message_queue: &'a AsyncTaskQueue<LocalMessageTask>,
 }
 
 // todo merge with Request and RequestContext!!!
