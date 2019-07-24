@@ -154,7 +154,7 @@ impl TransactionPool {
 
         if failure.len() != 0 {
             for (_, msg) in failure.clone() {
-                if msg != format!("Failed imported to deferred pool: Tx with same nonce already inserted, try to replace it with a higher gas price") {
+                if msg != String::from("Failed imported to deferred pool: Tx with same nonce already inserted, try to replace it with a higher gas price") {
                     warn!("Failed insert tx due to: {}", msg);
                     panic!(msg);
                 }
