@@ -4,10 +4,10 @@
 
 use crate::sync::{
     message::{
-        Context, GetBlockHashesByEpoch, GetBlockHashesResponse,
-        GetBlockHeaderChain, GetBlockHeaders, GetBlockHeadersResponse,
-        GetBlockTxn, GetBlockTxnResponse, GetBlocks, GetBlocksResponse,
-        GetBlocksWithPublicResponse, GetCompactBlocks,
+        transactions::Transactions, Context, GetBlockHashesByEpoch,
+        GetBlockHashesResponse, GetBlockHeaderChain, GetBlockHeaders,
+        GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse, GetBlocks,
+        GetBlocksResponse, GetBlocksWithPublicResponse, GetCompactBlocks,
         GetCompactBlocksResponse, GetTerminalBlockHashes,
         GetTerminalBlockHashesResponse, GetTransactions,
         GetTransactionsResponse, Handleable, NewBlock, NewBlockHashes, Status,
@@ -22,7 +22,6 @@ use crate::sync::{
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::fmt;
-use crate::sync::message::transactions::Transactions;
 
 pub type MsgIdInner = u8;
 #[derive(Debug, PartialEq, Eq)]

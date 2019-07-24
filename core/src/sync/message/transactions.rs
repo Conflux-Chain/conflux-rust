@@ -41,8 +41,11 @@ impl Handleable for Transactions {
             {
                 peer_info.received_transaction_count += transactions.len();
                 if peer_info.received_transaction_count
-                    > ctx.manager.protocol_config.max_trans_count_received_in_catch_up
-                    as usize
+                    > ctx
+                        .manager
+                        .protocol_config
+                        .max_trans_count_received_in_catch_up
+                        as usize
                 {
                     true
                 } else {
@@ -64,7 +67,8 @@ impl Handleable for Transactions {
             .txpool
             .insert_new_transactions(&transactions);
 
-        ctx.manager.request_manager
+        ctx.manager
+            .request_manager
             .append_received_transactions(signed_trans);
 
         debug!("Transactions successfully inserted to transaction pool");
