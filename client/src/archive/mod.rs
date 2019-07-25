@@ -189,17 +189,17 @@ impl ArchiveClient {
         let protocol_config = conf.protocol_config();
         let verification_config = conf.verification_config();
 
-        let network = {
-            let mut network = NetworkService::new(network_config);
-            network.start().unwrap();
-            Arc::new(network)
-        };
-
         let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),
             verification_config,
             pow_config,
         ));
+
+        let network = {
+            let mut network = NetworkService::new(network_config);
+            network.start().unwrap();
+            Arc::new(network)
+        };
 
         let sync = Arc::new(SynchronizationService::new(
             false,
