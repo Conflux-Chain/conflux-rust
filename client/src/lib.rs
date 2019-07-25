@@ -23,4 +23,4 @@ mod tests;
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
 const TESTNET_VERSION: &'static str =
-    "0000000000000000000000000000000000000009";
+    "000000000000000000000000000000000000000a";
