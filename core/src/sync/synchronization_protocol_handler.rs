@@ -28,10 +28,7 @@ use crate::{
     sync::{
         message::Context,
         state::SnapshotChunkSync,
-        synchronization_phases::{
-            SyncPhaseType, SynchronizationPhaseManager,
-            SynchronizationPhaseTrait,
-        },
+        synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
     },
 };
 use metrics::{register_meter_with_group, Meter};
@@ -304,10 +301,6 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    pub fn register_sync_phases(&self, phase: Arc<SynchronizationPhaseTrait>) {
-        self.phase_manager.register_phase(phase);
-    }
-
     fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
         self.graph.get_to_propagate_trans()
     }
@@ -464,6 +457,23 @@ impl SynchronizationProtocolHandler {
         } else {
             self.request_missing_terminals(io);
         }
+    }
+
+    /// request missing blocked after `recover_graph_from_db` is called
+    /// should be called in `start_sync`
+    pub fn request_initial_missed_block(&self, io: &NetworkContext) {
+        let mut to_request;
+        {
+            let mut missing_hashes =
+                self.graph.initial_missed_block_hashes.lock();
+            if missing_hashes.is_empty() {
+                return;
+            }
+            to_request = missing_hashes.iter().cloned().collect::<Vec<H256>>();
+            missing_hashes.clear();
+        }
+        let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+        self.request_block_headers(io, chosen_peer, to_request);
     }
 
     pub fn request_missing_terminals(&self, io: &NetworkContext) {
@@ -777,8 +787,6 @@ impl SynchronizationProtocolHandler {
     fn send_status(
         &self, io: &NetworkContext, peer: PeerId,
     ) -> Result<(), NetworkError> {
-        debug!("Sending status message to {:?}", peer);
-
         let best_info = self.graph.consensus.get_best_info();
 
         let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
@@ -787,13 +795,19 @@ impl SynchronizationProtocolHandler {
         } else {
             best_info.bounded_terminal_block_hashes.clone()
         };
-        let msg: Box<dyn Message> = Box::new(Status {
+
+        let status_message = Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
-            genesis_hash: self.graph.genesis_hash(),
-            best_epoch: best_info.best_epoch_number as u64,
+            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
+            best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,
-        });
+        };
+
+        debug!("Sending status message to {:?}: {:?}", peer, status_message);
+
+        let msg: Box<dyn Message> = Box::new(status_message);
+
         send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
     }
 
@@ -1028,6 +1042,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
+        self.phase_manager.try_initialize(io, self);
         let current_phase = self.phase_manager.get_current_phase();
         let next_phase_type = current_phase.next();
         if current_phase.phase_type() != next_phase_type {

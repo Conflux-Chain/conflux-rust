@@ -190,17 +190,18 @@ impl ArchiveClient {
         let protocol_config = conf.protocol_config();
         let verification_config = conf.verification_config();
 
+        let sync_graph = Arc::new(SynchronizationGraph::new(
+            consensus.clone(),
+            verification_config,
+            pow_config,
+            false,
+        ));
+
         let network = {
             let mut network = NetworkService::new(network_config);
             network.start().unwrap();
             Arc::new(network)
         };
-
-        let sync_graph = Arc::new(SynchronizationGraph::new(
-            consensus.clone(),
-            verification_config,
-            pow_config,
-        ));
 
         let initial_sync_phase = SyncPhaseType::CatchUpRecoverBlockFromDB;
         let sync = Arc::new(SynchronizationService::new(

@@ -36,6 +36,7 @@ pub enum SyncPhaseType {
 }
 
 pub trait SynchronizationPhaseTrait: Send + Sync {
+    fn name(&self) -> String;
     fn phase_type(&self) -> SyncPhaseType;
     fn next(&self) -> SyncPhaseType;
     fn start(
@@ -45,6 +46,7 @@ pub trait SynchronizationPhaseTrait: Send + Sync {
 }
 
 pub struct SynchronizationPhaseManagerInner {
+    initialized: bool,
     current_phase: SyncPhaseType,
     phases: HashMap<SyncPhaseType, Arc<SynchronizationPhaseTrait>>,
 }
@@ -52,6 +54,7 @@ pub struct SynchronizationPhaseManagerInner {
 impl SynchronizationPhaseManagerInner {
     pub fn new(initial_phase_type: SyncPhaseType) -> Self {
         SynchronizationPhaseManagerInner {
+            initialized: false,
             current_phase: initial_phase_type,
             phases: HashMap::new(),
         }
@@ -74,6 +77,15 @@ impl SynchronizationPhaseManagerInner {
 
     pub fn change_phase_to(&mut self, phase_type: SyncPhaseType) {
         self.current_phase = phase_type;
+    }
+
+    pub fn try_initialize(&mut self) -> bool {
+        let initialized = self.initialized;
+        if !self.initialized {
+            self.initialized = true;
+        }
+
+        initialized
     }
 }
 
@@ -141,6 +153,18 @@ impl SynchronizationPhaseManager {
         let current_phase = self.get_current_phase();
         current_phase.start(io, sync_handler);
     }
+
+    pub fn try_initialize(
+        &self, io: &NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+    )
+    {
+        if !self.inner.write().try_initialize() {
+            // if not initialized
+            let current_phase = self.get_current_phase();
+            current_phase.start(io, sync_handler);
+        }
+    }
 }
 
 pub struct CatchUpRecoverBlockHeaderFromDbPhase {
@@ -154,6 +178,10 @@ impl CatchUpRecoverBlockHeaderFromDbPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
+    fn name(&self) -> String {
+        String::from("CatchUpRecoverBlockHeaderFromDbPhase")
+    }
+
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
     }
@@ -165,6 +193,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     )
     {
+        info!("start phase {:?}", self.name());
         // FIXME: should dispatch to another worker thread to do this.
         self.graph.recover_graph_from_db(true /* header_only */);
     }
@@ -184,6 +213,8 @@ impl CatchUpSyncBlockHeaderPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
+    fn name(&self) -> String { String::from("CatchUpSyncBlockHeaderPhase") }
+
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpSyncBlockHeader
     }
@@ -209,10 +240,12 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
+        info!("start phase {:?}", self.name());
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
         *sync_handler.latest_epoch_requested.lock() = cur_era_genesis_height;
 
+        sync_handler.request_initial_missed_block(io);
         sync_handler.request_epochs(io);
     }
 }
@@ -226,6 +259,8 @@ impl CatchUpCheckpointPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
+    fn name(&self) -> String { String::from("CatchUpCheckpointPhase") }
+
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpCheckpoint }
 
     fn next(&self) -> SyncPhaseType { SyncPhaseType::CatchUpRecoverBlockFromDB }
@@ -235,6 +270,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     )
     {
+        info!("start phase {:?}", self.name());
     }
 }
 
@@ -249,6 +285,8 @@ impl CatchUpRecoverBlockFromDbPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
+    fn name(&self) -> String { String::from("CatchUpRecoverBlockFromDbPhase") }
+
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpRecoverBlockFromDB
     }
@@ -260,28 +298,32 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     )
     {
-        let (cur_era_genesis_hash, _) =
-            self.graph.get_genesis_hash_and_height_in_current_era();
-        // Acquire both lock first to ensure consistency
-        let old_consensus_inner = &mut *self.graph.consensus.inner.write();
-        let old_sync_inner = &mut *self.graph.inner.write();
-        let new_consensus_inner = ConsensusGraphInner::with_era_genesis_block(
-            old_consensus_inner.pow_config.clone(),
-            self.graph.data_man.clone(),
-            old_consensus_inner.inner_conf.clone(),
-            &cur_era_genesis_hash,
-        );
-        self.graph.consensus.update_best_info(&new_consensus_inner);
-        *old_consensus_inner = new_consensus_inner;
-        let new_sync_inner = SynchronizationGraphInner::with_genesis_block(
-            self.graph
-                .data_man
-                .block_header_by_hash(&cur_era_genesis_hash)
-                .expect("era genesis exists"),
-            old_sync_inner.pow_config.clone(),
-            old_sync_inner.data_man.clone(),
-        );
-        *old_sync_inner = new_sync_inner;
+        info!("start phase {:?}", self.name());
+        {
+            let (cur_era_genesis_hash, _) =
+                self.graph.get_genesis_hash_and_height_in_current_era();
+            // Acquire both lock first to ensure consistency
+            let old_consensus_inner = &mut *self.graph.consensus.inner.write();
+            let old_sync_inner = &mut *self.graph.inner.write();
+            let new_consensus_inner =
+                ConsensusGraphInner::with_era_genesis_block(
+                    old_consensus_inner.pow_config.clone(),
+                    self.graph.data_man.clone(),
+                    old_consensus_inner.inner_conf.clone(),
+                    &cur_era_genesis_hash,
+                );
+            self.graph.consensus.update_best_info(&new_consensus_inner);
+            *old_consensus_inner = new_consensus_inner;
+            let new_sync_inner = SynchronizationGraphInner::with_genesis_block(
+                self.graph
+                    .data_man
+                    .block_header_by_hash(&cur_era_genesis_hash)
+                    .expect("era genesis exists"),
+                old_sync_inner.pow_config.clone(),
+                old_sync_inner.data_man.clone(),
+            );
+            *old_sync_inner = new_sync_inner;
+        }
 
         // FIXME: should dispatch to another worker thread to do this.
         self.graph.recover_graph_from_db(false /* header_only */);
@@ -302,6 +344,8 @@ impl CatchUpSyncBlockPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
+    fn name(&self) -> String { String::from("CatchUpSyncBlockPhase") }
+
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpSyncBlock }
 
     fn next(&self) -> SyncPhaseType {
@@ -325,10 +369,13 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
+        info!("start phase {:?}", self.name());
+
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
         *sync_handler.latest_epoch_requested.lock() = cur_era_genesis_height;
 
+        sync_handler.request_initial_missed_block(io);
         sync_handler.request_epochs(io);
     }
 }
@@ -340,10 +387,12 @@ impl NormalSyncPhase {
 }
 
 impl SynchronizationPhaseTrait for NormalSyncPhase {
+    fn name(&self) -> String { String::from("NormalSyncPhase") }
+
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::Normal }
 
     fn next(&self) -> SyncPhaseType {
-        // FIXME: hhandle the case where we need to switch back phase
+        // FIXME: handle the case where we need to switch back phase
         self.phase_type()
     }
 
@@ -352,6 +401,7 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
+        info!("start phase {:?}", self.name());
         sync_handler.request_missing_terminals(io);
     }
 }

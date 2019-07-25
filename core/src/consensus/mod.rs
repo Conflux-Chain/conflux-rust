@@ -729,6 +729,22 @@ impl ConsensusGraph {
                 self.inner.read_recursive().block_hashes_by_epoch(height)
             })
     }
+
+    /// blocks that two eras farther from current era can be safely garbage
+    /// collected
+    pub fn retrieve_old_era_blocks(&self) -> Option<H256> {
+        let inner = &mut *self.inner.write();
+        if inner.old_era_block_sets.len() < 2 {
+            return None;
+        }
+        if inner.old_era_block_sets.front().unwrap().is_empty() {
+            inner.old_era_block_sets.pop_front();
+            // we simply return None here since next call of this function will
+            // handle other cases
+            return None;
+        }
+        inner.old_era_block_sets.front_mut().unwrap().pop()
+    }
 }
 
 impl Drop for ConsensusGraph {

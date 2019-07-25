@@ -31,7 +31,7 @@ impl Handleable for Status {
 
         debug!("on_status, msg=:{:?}", self);
 
-        let genesis_hash = ctx.manager.graph.genesis_hash();
+        let genesis_hash = ctx.manager.graph.data_man.true_genesis_block.hash();
         if genesis_hash != self.genesis_hash {
             debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",

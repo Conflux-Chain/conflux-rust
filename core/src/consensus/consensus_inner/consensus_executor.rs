@@ -1056,13 +1056,13 @@ impl ConsensusExecutionHandler {
                     };
                     if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
                         self.data_man
-                            .insert_transaction_address_to_kv(&hash, &tx_addr);
+                            .insert_transaction_address(&hash, &tx_addr);
                     }
                 }
             }
 
             let block_receipts = Arc::new(receipts);
-            self.data_man.insert_block_results_to_kv(
+            self.data_man.insert_block_results(
                 block.hash(),
                 pivot_block.hash(),
                 block_receipts.clone(),
