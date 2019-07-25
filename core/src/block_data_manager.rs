@@ -79,6 +79,7 @@ pub struct BlockDataManager {
     config: DataManagerConfiguration,
 
     pub genesis_block: Arc<Block>,
+    pub true_genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
@@ -121,6 +122,7 @@ impl BlockDataManager {
             epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
             genesis_block: genesis_block.clone(),
+            true_genesis_block: genesis_block.clone(),
             db,
             storage_manager,
             cache_man,

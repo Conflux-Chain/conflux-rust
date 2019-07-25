@@ -470,10 +470,27 @@ impl SynchronizationProtocolHandler {
                 .lock()
                 .start(checkpoint, io, &self.request_manager);
         } else if self.catch_up_mode() {
+            self.request_initial_missed_block(io);
             self.request_epochs(io);
         } else {
+            self.request_initial_missed_block(io);
             self.request_missing_terminals(io);
         }
+    }
+
+    fn request_initial_missed_block(&self, io: &NetworkContext) {
+        let mut to_request;
+        {
+            let mut missing_hashes =
+                self.graph.initial_missed_block_hashes.lock();
+            if missing_hashes.is_empty() {
+                return;
+            }
+            to_request = missing_hashes.iter().cloned().collect::<Vec<H256>>();
+            missing_hashes.clear();
+        }
+        let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+        self.request_block_headers(io, chosen_peer, to_request);
     }
 
     fn request_missing_terminals(&self, io: &NetworkContext) {
@@ -813,7 +830,7 @@ impl SynchronizationProtocolHandler {
         let msg: Box<dyn Message> = Box::new(Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
-            genesis_hash: self.graph.genesis_hash(),
+            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
             best_epoch: best_info.best_epoch_number as u64,
             terminal_block_hashes: terminal_hashes,
         });
