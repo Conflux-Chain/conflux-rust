@@ -212,7 +212,8 @@ impl SynchronizationGraphInner {
             self.old_era_blocks_frontier_set.remove(&index);
             self.arena.remove(index);
             self.hash_to_arena_indices.remove(&hash);
-            self.data_man.remove_block_header(&hash);
+            // only remove block header in memory cache
+            self.data_man.remove_block_header(&hash, false);
 
             num_cleared += 1;
             if num_cleared == max_num_of_cleared_blocks {
@@ -720,10 +721,8 @@ impl SynchronizationGraphInner {
 
             self.arena.remove(*index);
             self.hash_to_arena_indices.remove(&hash);
-            // this will remove header in memory cache
-            self.data_man.remove_block_header(&hash);
-            // this will remove block in memory cache and header/block in db
-            self.data_man.remove_block(&hash);
+            // remove header/block in memory cache and header/block in db
+            self.data_man.remove_block(&hash, true);
         }
     }
 
@@ -852,9 +851,9 @@ impl SynchronizationGraph {
             if self.is_full_node {
                 // TODO: remove state root
                 // remove block header in memory cache
-                self.data_man.remove_block_header(&hash);
+                self.data_man.remove_block_header(&hash, false);
                 // remove block body in memory cache and db
-                self.data_man.remove_block_body_from_db(&hash);
+                self.data_man.remove_block_body(&hash, true);
             }
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {

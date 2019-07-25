@@ -283,7 +283,6 @@ impl BlockDataManager {
     }
 
     fn remove_block_header_from_db(&self, hash: &H256) {
-        self.block_headers.write().remove(hash);
         let mut dbops = self.db.key_value().transaction();
         dbops.delete(COL_BLOCKS, hash);
         self.db
@@ -413,14 +412,21 @@ impl BlockDataManager {
             .expect("crash for db failure");
     }
 
-    pub fn remove_block_body_from_db(&self, hash: &H256) {
-        self.blocks.write().remove(hash);
+    fn remove_block_body_from_db(&self, hash: &H256) {
         let mut dbops = self.db.key_value().transaction();
         dbops.delete(COL_BLOCKS, &Self::block_body_key(hash));
         self.db
             .key_value()
             .write(dbops)
             .expect("crash for db failure");
+    }
+
+    /// remove block body in memory cache and db
+    pub fn remove_block_body(&self, hash: &H256, remove_db: bool) {
+        if remove_db {
+            self.remove_block_body_from_db(hash);
+        }
+        self.blocks.write().remove(hash);
     }
 
     pub fn block_by_hash(
@@ -547,10 +553,10 @@ impl BlockDataManager {
         Some(rlp.as_val().expect("Wrong block rlp format!"))
     }
 
-    /// remove block body and block header in db
-    pub fn remove_block(&self, hash: &H256) {
-        self.remove_block_header_from_db(hash);
-        self.remove_block_body_from_db(hash);
+    /// remove block body and block header in memory cache and db
+    pub fn remove_block(&self, hash: &H256, remove_db: bool) {
+        self.remove_block_header(hash, remove_db);
+        self.remove_block_body(hash, remove_db);
     }
 
     pub fn block_header_by_hash(
@@ -585,8 +591,12 @@ impl BlockDataManager {
         self.block_headers.write().insert(hash, header);
     }
 
-    pub fn remove_block_header(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
-        self.block_headers.write().remove(hash)
+    /// remove block header in memory cache and db
+    pub fn remove_block_header(&self, hash: &H256, remove_db: bool) {
+        if remove_db {
+            self.remove_block_header_from_db(hash);
+        }
+        self.block_headers.write().remove(hash);
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
