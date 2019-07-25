@@ -470,14 +470,16 @@ impl SynchronizationProtocolHandler {
                 .lock()
                 .start(checkpoint, io, &self.request_manager);
         } else if self.catch_up_mode() {
-            self.request_initial_missed_block(io);
             self.request_epochs(io);
         } else {
-            self.request_initial_missed_block(io);
             self.request_missing_terminals(io);
         }
     }
 
+    /// request missing blocked after `recover_graph_from_db` is called
+    /// should be called in `start_sync`
+    /// TODO: remove #[allow(dead_code)]
+    #[allow(dead_code)]
     fn request_initial_missed_block(&self, io: &NetworkContext) {
         let mut to_request;
         {
