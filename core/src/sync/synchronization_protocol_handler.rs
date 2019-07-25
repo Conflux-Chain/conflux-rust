@@ -476,6 +476,25 @@ impl SynchronizationProtocolHandler {
         }
     }
 
+    /// request missing blocked after `recover_graph_from_db` is called
+    /// should be called in `start_sync`
+    /// TODO: remove #[allow(dead_code)]
+    #[allow(dead_code)]
+    fn request_initial_missed_block(&self, io: &NetworkContext) {
+        let mut to_request;
+        {
+            let mut missing_hashes =
+                self.graph.initial_missed_block_hashes.lock();
+            if missing_hashes.is_empty() {
+                return;
+            }
+            to_request = missing_hashes.iter().cloned().collect::<Vec<H256>>();
+            missing_hashes.clear();
+        }
+        let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+        self.request_block_headers(io, chosen_peer, to_request);
+    }
+
     fn request_missing_terminals(&self, io: &NetworkContext) {
         let peers: Vec<PeerId> =
             self.syn.peers.read().keys().cloned().collect();
@@ -813,7 +832,7 @@ impl SynchronizationProtocolHandler {
         let msg: Box<dyn Message> = Box::new(Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
-            genesis_hash: self.graph.genesis_hash(),
+            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
             best_epoch: best_info.best_epoch_number as u64,
             terminal_block_hashes: terminal_hashes,
         });
