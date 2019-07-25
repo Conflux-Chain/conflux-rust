@@ -739,6 +739,8 @@ impl ConsensusGraph {
         }
         if inner.old_era_block_sets.front().unwrap().is_empty() {
             inner.old_era_block_sets.pop_front();
+            // we simply return None here since next call of this function will
+            // handle other cases
             return None;
         }
         inner.old_era_block_sets.front_mut().unwrap().pop()

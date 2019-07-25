@@ -212,7 +212,7 @@ impl SynchronizationGraphInner {
             self.old_era_blocks_frontier_set.remove(&index);
             self.arena.remove(index);
             self.hash_to_arena_indices.remove(&hash);
-            self.data_man.remove_block_header(&hash, false);
+            self.data_man.remove_block_header(&hash);
 
             num_cleared += 1;
             if num_cleared == max_num_of_cleared_blocks {
@@ -720,8 +720,10 @@ impl SynchronizationGraphInner {
 
             self.arena.remove(*index);
             self.hash_to_arena_indices.remove(&hash);
-            self.data_man.remove_block_header(&hash, true);
-            self.data_man.remove_block_from_db(&hash);
+            // this will remove header in memory cache
+            self.data_man.remove_block_header(&hash);
+            // this will remove block in memory cache and header/block in db
+            self.data_man.remove_block(&hash);
         }
     }
 
@@ -849,8 +851,10 @@ impl SynchronizationGraph {
             // only full node should remove blocks in old eras
             if self.is_full_node {
                 // TODO: remove state root
-                self.data_man.remove_block_header(&hash, false);
-                self.data_man.remove_block_from_db(&hash);
+                // remove block header in memory cache
+                self.data_man.remove_block_header(&hash);
+                // remove block body in memory cache and db
+                self.data_man.remove_block_body_from_db(&hash);
             }
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {
@@ -1368,7 +1372,7 @@ impl SynchronizationGraph {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
                 self.data_man.insert_compact_block(block.to_compact());
-                self.data_man.insert_block_to_db(block.clone(), persistent);
+                self.data_man.insert_block(block.clone(), persistent);
             }
         } else {
             insert_success = false;

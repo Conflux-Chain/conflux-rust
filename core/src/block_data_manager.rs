@@ -204,9 +204,9 @@ impl BlockDataManager {
         data_man.insert_block_header(
             data_man.genesis_block.hash(),
             Arc::new(data_man.genesis_block.block_header.clone()),
-            true,
+            false,
         );
-        data_man.insert_block_to_db(data_man.genesis_block(), true);
+        data_man.insert_block(data_man.genesis_block(), true);
 
         // persist local_block_info for real genesis block
         if data_man.genesis_block().block_header.hash()
@@ -413,6 +413,16 @@ impl BlockDataManager {
             .expect("crash for db failure");
     }
 
+    pub fn remove_block_body_from_db(&self, hash: &H256) {
+        self.blocks.write().remove(hash);
+        let mut dbops = self.db.key_value().transaction();
+        dbops.delete(COL_BLOCKS, &Self::block_body_key(hash));
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
     pub fn block_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<Arc<Block>> {
@@ -457,7 +467,8 @@ impl BlockDataManager {
         Some(blocks)
     }
 
-    pub fn insert_block_to_db(&self, block: Arc<Block>, persistent: bool) {
+    /// insert block into memory cache, block body and header into db
+    pub fn insert_block(&self, block: Arc<Block>, persistent: bool) {
         let hash = block.hash();
         if persistent {
             self.insert_block_header_to_db(&block.block_header);
@@ -536,14 +547,10 @@ impl BlockDataManager {
         Some(rlp.as_val().expect("Wrong block rlp format!"))
     }
 
-    pub fn remove_block_from_db(&self, hash: &H256) {
-        self.blocks.write().remove(hash);
-        let mut dbops = self.db.key_value().transaction();
-        dbops.delete(COL_BLOCKS, &Self::block_body_key(hash));
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+    /// remove block body and block header in db
+    pub fn remove_block(&self, hash: &H256) {
+        self.remove_block_header_from_db(hash);
+        self.remove_block_body_from_db(hash);
     }
 
     pub fn block_header_by_hash(
@@ -578,12 +585,7 @@ impl BlockDataManager {
         self.block_headers.write().insert(hash, header);
     }
 
-    pub fn remove_block_header(
-        &self, hash: &H256, remove_from_db: bool,
-    ) -> Option<Arc<BlockHeader>> {
-        if remove_from_db {
-            self.remove_block_header_from_db(hash)
-        }
+    pub fn remove_block_header(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
         self.block_headers.write().remove(hash)
     }
 
