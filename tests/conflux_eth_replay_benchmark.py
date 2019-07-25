@@ -61,6 +61,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     INITIALIZE_TPS = 4000
     INITIALIZE_SLEEP = 20
     GENESIS_KEY = decode_hex("9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471")
+    TOTAL_TX_NUMBER = 4000000
 
     def __init__(self):
         self.setup_clean_chain = True
@@ -127,8 +128,6 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         # Start mininode connection
         start_p2p_connection(self.nodes, self.remote, self.local_ip)
 
-        # time.sleep(10000)
-
         block_gen_threads = []
         node_id = 0
         for node in self.nodes:
@@ -145,147 +144,11 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         tx_batch_size = 1000
         tx_bytes = 0
         tx_received_slowdown = 0
-
-        # Construct balance distribution transactions and erc20 contract transactions.
-        init_txs = []
-        # solc = Solc()
-        # erc20_contract = solc.get_contract_instance(source=os.path.dirname(os.path.realpath(__file__)) + "/erc20.sol",
-        #                                             contract_name="FixedSupplyToken")
-
-        # nonce = 0
-        # genesis_key = ConfluxEthReplayTest.GENESIS_KEY
-        # genesis_addr = privtoaddr(ConfluxEthReplayTest.GENESIS_KEY)
-        # gas_price = 1
-        # gas = 50000000
-        # tx_conf = {"from": Web3.toChecksumAddress(encode_hex(genesis_addr)),
-        #            "nonce": int_to_hex(nonce),
-        #            "gas": int_to_hex(gas),
-        #            "gasPrice": int_to_hex(gas_price)}
-        # raw_create = erc20_contract.constructor().buildTransaction(tx_conf)
-        # tx_data = decode_hex(raw_create["data"])
-        # tx_create = create_transaction(pri_key=genesis_key,
-        #                                receiver=b'',
-        #                                nonce=nonce,
-        #                                gas_price=gas_price,
-        #                                data=tx_data,
-        #                                gas=gas,
-        #                                value=0)
-        # init_txs.append(tx_create)
-
-        # erc20_address = Web3.toChecksumAddress(encode_hex(sha3_256(rlp.encode([genesis_addr, nonce]))[-20:]))
-        # self.log.debug("erc20_address = %s", erc20_address)
-
-        """Debug only code
-        self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
-        time.sleep(10)
-
-        genesis_addr = encode_hex(privtoaddr(ConfluxEthReplayTest.GENESIS_KEY))
-        tx = erc20_contract.functions.balanceOf(Web3.toChecksumAddress(genesis_addr)).buildTransaction({
-            "from": Web3.toChecksumAddress(genesis_addr),
-            "gas": int_to_hex(gas),
-            "gasPrice":int_to_hex(gas_price),
-            "to": erc20_address})
-        tx["value"] = int_to_hex(tx['value'])
-        tx["hash"] = "0x"+"0"*64
-        tx["nonce"] = int_to_hex(1)
-        tx["v"] = "0x0"
-        tx["r"] = "0x0"
-        tx["s"] = "0x0"
-        result = self.nodes[0].cfx_call(tx)
-        balance = bytes_to_int(decode_hex(result))
-        self.log.debug("address=%s, balance=%s", genesis_addr, balance)
-        """
-
-        # for nonce in range(1, self.num_nodes + 1):
-        #     i = nonce - 1
-        #     addr = self.nodes[i].addr
-        #     init_tx = create_transaction(
-        #         pri_key=ConfluxEthReplayTest.GENESIS_KEY,
-        #         value=10000000000000000, receiver=addr, nonce=nonce)
-        #     init_txs.append(init_tx)
-
-        # for nonce in range(self.num_nodes + 1, 2 * self.num_nodes + 1):
-        #     i = nonce - self.num_nodes - 1
-        #     receiver_addr = self.nodes[i].addr
-        #
-        #     genesis_key = ConfluxEthReplayTest.GENESIS_KEY
-        #     genesis_addr = privtoaddr(ConfluxEthReplayTest.GENESIS_KEY)
-        #     value = 10000000000000000
-        #
-        #     gas_price = 1
-        #     gas = 100000
-        #
-        #     to_address = Web3.toChecksumAddress(encode_hex(receiver_addr))
-        #     tx_data_hex = erc20_contract.functions.transfer(to_address, value).buildTransaction({
-        #         "gas": int_to_hex(gas),
-        #         "gasPrice": int_to_hex(gas_price),
-        #         "to": to_address})["data"]
-        #     self.log.info("sender %s, receiver %s, value %s, transaction data hex %s",
-        #                   encode_hex_0x(genesis_addr), encode_hex_0x(receiver_addr), hex(value), tx_data_hex)
-        #     tx_data = decode_hex(tx_data_hex)
-        #     tx = create_transaction(pri_key=genesis_key, receiver=decode_hex(erc20_address), value=0, nonce=nonce,
-        #                             gas=gas, gas_price=gas_price, data=tx_data)
-        #     init_txs.append(tx)
-        #
-        # print(self.nodes)
-        # self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
-
-        tx_count = len(init_txs)
-
-        """Debug only code
-        # Wait for transactions to be inserted into pool.
-        time.sleep(1)
-        # Deferred exec.
-        for _times in range(0, 6):
-            self.nodes[0].generateoneblock(2 * self.num_nodes + 1, BlockGenThread.BLOCK_SIZE_LIMIT)
-        time.sleep(10)
-
-        caller_addr = encode_hex(self.nodes[0].addr)
-        tx = erc20_contract.functions.balanceOf(Web3.toChecksumAddress(caller_addr)).buildTransaction(
-            {"from": Web3.toChecksumAddress(caller_addr),
-             "gas": int_to_hex(gas),
-             "gasPrice":int_to_hex(gas_price),
-             "to": erc20_address})
-        tx["value"] = int_to_hex(tx['value'])
-        tx["hash"] = "0x"+"0"*64
-        tx["nonce"] = int_to_hex(0)
-        tx["v"] = "0x0"
-        tx["r"] = "0x0"
-        tx["s"] = "0x0"
-        result = self.nodes[0].cfx_call(tx)
-        balance = bytes_to_int(decode_hex(result))
-        self.log.debug("address=%s, balance=%s", caller_addr, balance)
-
-        self.nodes[0].generateoneblockspecial(0, BlockGenThread.BLOCK_SIZE_LIMIT, 1, 1)
-        # Deferred exec.
-        for _times in range(0, 6):
-            self.nodes[0].generateoneblock(2 * self.num_nodes + 1, BlockGenThread.BLOCK_SIZE_LIMIT)
-        time.sleep(10)
-
-        caller_addr = encode_hex(self.nodes[0].addr)
-        tx = erc20_contract.functions.balanceOf(Web3.toChecksumAddress(caller_addr)).buildTransaction(
-            {"from": Web3.toChecksumAddress(caller_addr),
-             "gas": int_to_hex(gas),
-             "gasPrice":int_to_hex(gas_price),
-             "to": erc20_address})
-        tx["value"] = int_to_hex(tx['value'])
-        tx["hash"] = "0x"+"0"*64
-        tx["nonce"] = int_to_hex(2)
-        tx["v"] = "0x0"
-        tx["r"] = "0x0"
-        tx["s"] = "0x0"
-        result = self.nodes[0].cfx_call(tx)
-        balance = bytes_to_int(decode_hex(result))
-        self.log.debug("address=%s, balance=%s", caller_addr, balance)
-
-        time.sleep(2000)
-        """
-
-        total = 4000000
+        tx_count = 0
         expected_elapsed_time = 0
 
         for txs, count in RlpIter(f, tx_batch_size):
-            if tx_count > total:
+            if tx_count >= ConfluxEthReplayTest.TOTAL_TX_NUMBER:
                 break
 
             elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
@@ -294,21 +157,21 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                 time.sleep(speed_diff)
 
             # peers_to_send = range(0, self.num_nodes)
-            peers_to_send = random.sample(range(0, self.num_nodes), 1)
+            peer_to_send = random.choice(range(0, self.num_nodes), 1)
             txs_rlp = rlp.codec.length_prefix(len(txs), 192) + txs
-            for peer_to_send in peers_to_send:
-                self.nodes[peer_to_send].p2p.send_protocol_packet(int_to_bytes(TRANSACTIONS) + txs_rlp)
+            self.nodes[peer_to_send].p2p.send_protocol_packet(int_to_bytes(TRANSACTIONS) + txs_rlp)
 
             tx_bytes += len(txs)
             expected_elapsed_time = tx_received_slowdown + 1.0 * tx_bytes / ConfluxEthReplayTest.EXPECTED_TX_SIZE_PER_SEC
 
             if int(elapsed_time - last_log_elapsed_time) >= 1:
-                txpool_status = self.nodes[0].txpool_status()
+                txpool_status = self.nodes[peer_to_send].txpool_status()
                 txpool_received = txpool_status["received"]
                 last_log_elapsed_time = elapsed_time
 
-                self.log.info("elapsed %ss,\t sent %s/%s(%s%%) txs", elapsed_time, tx_count, total,
-                              tx_count * 100.0 / total)
+                self.log.info("elapsed %ss,\t sent %s/%s(%s%%) txs", elapsed_time, tx_count,
+                              ConfluxEthReplayTest.TOTAL_TX_NUMBER,
+                              tx_count * 100.0 / ConfluxEthReplayTest.TOTAL_TX_NUMBER)
 
                 final_slow_down = 0
 
@@ -318,8 +181,8 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     else:
                         should_sleep = elapsed_time * (tx_count - txpool_received + 45000) / txpool_received + 1
                     final_slow_down = max(final_slow_down, should_sleep)
-                    self.log.info("Conflux full node is slow by %s at receiving txs, slow down by %s.",
-                                  tx_count - txpool_received, should_sleep)
+                    self.log.warning("Conflux node %s is slow by %s at receiving txs, slow down by %s.", peer_to_send,
+                                     tx_count - txpool_received, should_sleep)
 
                 txpool_unpacked = txpool_status["unpacked"]
                 unpacked_limit = 300000
@@ -328,10 +191,11 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                         should_sleep = 1
                     else:
                         should_sleep = elapsed_time * (txpool_unpacked - unpacked_limit) / (
-                                    txpool_received - txpool_unpacked) + 1
+                                txpool_received - txpool_unpacked) + 1
                     final_slow_down = max(final_slow_down, should_sleep)
-                    self.log.info("Conflux full node has too many unpacked txs %s. sleep %s", txpool_unpacked,
-                                  should_sleep)
+                    self.log.warning("Conflux node %s has too many unpacked txs %s. sleep %s", peer_to_send,
+                                     txpool_unpacked,
+                                     should_sleep)
                 tx_received_slowdown += final_slow_down
 
             tx_count += count
@@ -371,7 +235,7 @@ class BlockGenThread(threading.Thread):
         self.hashpower_percent = hashpower
 
     def run(self):
-        self.log.info("block gen thread started to run")
+        self.log.info("block gen %s thread started to run", self.node_id)
         # start_time = datetime.datetime.now()
         # pre_generated_blocks = math.ceil(1.0 * ConfluxEthReplayTest.INITIALIZE_TXS / BlockGenThread.BLOCK_TX_LIMIT)
         # for i in range(0, pre_generated_blocks):
@@ -394,8 +258,8 @@ class BlockGenThread(threading.Thread):
             try:
                 elapsed_sec = (datetime.datetime.now() - start_time).total_seconds()
                 sleep_sec = total_mining_sec - elapsed_sec
-                self.log.info("%s elapsed time %s, total mining time %s sec, actually sleep %s sec",
-                              self.node_id, elapsed_sec, total_mining_sec, sleep_sec)
+                self.log.debug("%s elapsed time %s, total mining time %s sec, actually sleep %s sec",
+                               self.node_id, elapsed_sec, total_mining_sec, sleep_sec)
                 if sleep_sec > 0:
                     time.sleep(sleep_sec)
 
@@ -425,14 +289,15 @@ class BlockGenThread(threading.Thread):
                 erc20_tx_count = math.ceil(BlockGenThread.ERC20_TX_PER_BLOCK * generate_factor)
                 self.node.generateoneblockspecial(BlockGenThread.BLOCK_TX_LIMIT,
                                                   BlockGenThread.BLOCK_SIZE_LIMIT, simple_tx_count, erc20_tx_count)
-                self.log.info("%s generated block with %s simple tx and %s erc20 tx",
-                              self.node_id, simple_tx_count, erc20_tx_count)
+                self.log.debug("node %s generated one block with %s extra dummy tx and %s extra erc20 tx",
+                               self.node_id, simple_tx_count, erc20_tx_count)
             except Exception as e:
-                self.log.info("%s Fails to generate blocks", self.node_id)
-                self.log.info("%s %s", self.node_id, e)
+                self.log.warning("node %s Fails to generate blocks with error msg: %s", self.node_id, e)
                 time.sleep(5)
+        self.log.info("block gen %s thread is terminated", self.node_id)
 
     def stop(self):
+        self.log.info("Terminating block gen %s thread", self.node_id)
         self.stopped = True
 
 
