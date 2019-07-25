@@ -783,7 +783,7 @@ impl SynchronizationGraph {
                 data_man.clone(),
             ),
         ));
-        let mut sync_graph = SynchronizationGraph {
+        let sync_graph = SynchronizationGraph {
             inner: inner.clone(),
             data_man: data_man.clone(),
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
@@ -839,7 +839,7 @@ impl SynchronizationGraph {
             .set_to_be_propagated_transactions(transactions);
     }
 
-    fn recover_graph_from_db(&mut self, header_only: bool) {
+    pub fn recover_graph_from_db(&self, header_only: bool) {
         info!("Start fast recovery of the block DAG from database");
         let terminals_opt = self.data_man.terminals_from_db();
         if terminals_opt.is_none() {

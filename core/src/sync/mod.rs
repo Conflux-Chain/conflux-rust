@@ -10,6 +10,7 @@ mod state;
 pub mod tests;
 
 mod synchronization_graph;
+mod synchronization_phases;
 mod synchronization_protocol_handler;
 mod synchronization_service;
 mod synchronization_state;
@@ -21,9 +22,16 @@ pub use self::{
         SharedSynchronizationGraph, SyncGraphStatistics, SynchronizationGraph,
         SynchronizationGraphInner, SynchronizationGraphNode,
     },
+    synchronization_phases::{
+        CatchUpCheckpointPhase, CatchUpRecoverBlockFromDbPhase,
+        CatchUpRecoverBlockHeaderFromDbPhase, CatchUpSyncBlockHeaderPhase,
+        CatchUpSyncBlockPhase, NormalSyncPhase, SyncPhaseType,
+        SynchronizationPhaseManager, SynchronizationPhaseTrait,
+    },
     synchronization_protocol_handler::{
         LocalMessageTask, ProtocolConfiguration, SyncHandlerWorkType,
-        SynchronizationProtocolHandler, SYNCHRONIZATION_PROTOCOL_VERSION,
+        SynchronizationProtocolHandler, CATCH_UP_EPOCH_LAG_THRESHOLD,
+        SYNCHRONIZATION_PROTOCOL_VERSION,
     },
     synchronization_service::{
         SharedSynchronizationService, SynchronizationService,
