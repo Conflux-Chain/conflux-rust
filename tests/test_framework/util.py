@@ -516,8 +516,6 @@ def checktx(node, tx_hash):
 
 
 def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
-    print("nodes=", nodes)
-    print("sample=", sample)
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
     threads = []
@@ -573,7 +571,6 @@ class ConnectThread(threading.Thread):
                     connect_nodes(self.nodes, self.a, p)
                 for p in self.latencies[self.a]:
                     self.nodes[self.a].addlatency(self.nodes[p].key, self.latencies[self.a][p])
-                print("{} vs {}".format(len(self.nodes[self.a].getpeerinfo()), self.min_peers))
                 if len(self.nodes[self.a].getpeerinfo()) >= self.min_peers:
                     break
                 else:

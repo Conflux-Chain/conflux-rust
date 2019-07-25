@@ -157,7 +157,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                 time.sleep(speed_diff)
 
             # peers_to_send = range(0, self.num_nodes)
-            peer_to_send = random.choice(range(0, self.num_nodes), 1)
+            peer_to_send = random.choice(range(0, self.num_nodes))
             txs_rlp = rlp.codec.length_prefix(len(txs), 192) + txs
             self.nodes[peer_to_send].p2p.send_protocol_packet(int_to_bytes(TRANSACTIONS) + txs_rlp)
 
