@@ -201,11 +201,6 @@ impl BlockDataManager {
             },
         );
 
-        data_man.insert_block_header(
-            data_man.genesis_block.hash(),
-            Arc::new(data_man.genesis_block.block_header.clone()),
-            false,
-        );
         data_man.insert_block(data_man.genesis_block(), true);
 
         // persist local_block_info for real genesis block
@@ -399,6 +394,17 @@ impl BlockDataManager {
             }
     }
 
+    /// insert block body in memory cache and db
+    pub fn insert_block_body(
+        &self, hash: H256, block: Arc<Block>, persistent: bool,
+    ) {
+        if persistent {
+            self.insert_block_body_to_db(&block);
+        }
+        self.cache_man.lock().note_used(CacheId::Block(hash));
+        self.blocks.write().insert(hash, block);
+    }
+
     fn insert_block_body_to_db(&self, block: &Block) {
         let mut dbops = self.db.key_value().transaction();
         dbops.put(
@@ -473,15 +479,15 @@ impl BlockDataManager {
         Some(blocks)
     }
 
-    /// insert block into memory cache, block body and header into db
+    /// insert block/header into memory cache, block/header into db
     pub fn insert_block(&self, block: Arc<Block>, persistent: bool) {
         let hash = block.hash();
-        if persistent {
-            self.insert_block_header_to_db(&block.block_header);
-            self.insert_block_body_to_db(&block);
-        }
-        self.blocks.write().insert(hash, block);
-        self.cache_man.lock().note_used(CacheId::Block(hash));
+        self.insert_block_header(
+            hash,
+            Arc::new(block.block_header.clone()),
+            persistent,
+        );
+        self.insert_block_body(hash, block, persistent);
     }
 
     fn local_block_info_key(block_hash: &H256) -> Vec<u8> {
@@ -680,7 +686,7 @@ impl BlockDataManager {
         Some(receipts)
     }
 
-    pub fn insert_block_results_to_db(
+    pub fn insert_block_results(
         &self, hash: H256, epoch: H256, receipts: Arc<Vec<Receipt>>,
         persistent: bool,
     )
@@ -748,7 +754,7 @@ impl BlockDataManager {
             })
     }
 
-    pub fn insert_transaction_address_to_db(
+    pub fn insert_transaction_address(
         &self, hash: &H256, tx_address: &TransactionAddress,
     ) {
         if !self.config.record_tx_address {
@@ -868,7 +874,7 @@ impl BlockDataManager {
                         .outcome_status
                         == TRANSACTION_OUTCOME_SUCCESS
                     {
-                        self.insert_transaction_address_to_db(
+                        self.insert_transaction_address(
                             &tx.hash,
                             &TransactionAddress {
                                 block_hash: *block_hash,

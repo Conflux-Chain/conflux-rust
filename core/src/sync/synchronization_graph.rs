@@ -1371,7 +1371,13 @@ impl SynchronizationGraph {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
                 self.data_man.insert_compact_block(block.to_compact());
-                self.data_man.insert_block(block.clone(), persistent);
+                // block header was inserted in before, only insert block body
+                // here
+                self.data_man.insert_block_body(
+                    block.hash(),
+                    block.clone(),
+                    persistent,
+                );
             }
         } else {
             insert_success = false;
