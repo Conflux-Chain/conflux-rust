@@ -148,10 +148,12 @@ impl RequestManager {
             return;
         }
 
-        if let Err(e) = self
-            .request_handler
-            .send_general_request(io, peer, request, delay)
-        {
+        if let Err(e) = self.request_handler.send_general_request(
+            io,
+            peer,
+            request,
+            Some(next_delay),
+        ) {
             self.waiting_requests.lock().push(TimedWaitingRequest::new(
                 Instant::now() + cur_delay,
                 WaitingRequest(e, next_delay),
@@ -579,17 +581,17 @@ impl RequestManager {
             // Waiting requests are already in-flight, so send them without
             // checking
             let WaitingRequest(request, delay) = req.request;
-            let new_delay = delay + *REQUEST_START_WAITING_TIME;
+            let next_delay = delay + *REQUEST_START_WAITING_TIME;
 
             if let Err(e) = self.request_handler.send_general_request(
                 io,
                 Some(chosen_peer),
                 request.resend(),
-                Some(new_delay),
+                Some(next_delay),
             ) {
                 self.waiting_requests.lock().push(TimedWaitingRequest::new(
-                    Instant::now() + new_delay,
-                    WaitingRequest(e, new_delay),
+                    Instant::now() + delay,
+                    WaitingRequest(e, next_delay),
                     None,
                 ));
             }
