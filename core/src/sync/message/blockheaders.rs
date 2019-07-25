@@ -5,8 +5,8 @@
 use crate::{
     sync::{
         message::{
-            metrics::BLOCK_HEADER_HANDLE_TIMER, Context, Handleable, Message,
-            MsgId, RequestId,
+            metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaderChain,
+            GetBlockHeaders, Handleable, Message, MsgId, RequestId,
         },
         msg_sender::NULL,
         request_manager::RequestMessage,
@@ -79,11 +79,22 @@ impl Handleable for GetBlockHeadersResponse {
         };
 
         // re-request headers requested but not received
-        let requested = match req {
-            RequestMessage::Headers(h) => h.hashes,
-            RequestMessage::HeaderChain(h) => vec![h.hash],
-            _ => return Err(ErrorKind::UnexpectedResponse.into()),
+        let requested: Vec<H256> = if let Ok(req) = req
+            .downcast_general::<GetBlockHeaders>(
+                ctx.io,
+                &ctx.manager.request_manager,
+                false,
+            ) {
+            req.hashes.iter().cloned().collect()
+        } else {
+            let req = req.downcast_general::<GetBlockHeaderChain>(
+                ctx.io,
+                &ctx.manager.request_manager,
+                false,
+            )?;
+            vec![req.hash]
         };
+
         self.handle_block_headers(ctx, &self.headers, requested, chosen_peer);
 
         timestamp_validation_result
@@ -205,44 +216,47 @@ impl GetBlockHeadersResponse {
         resp: &GetBlockHeadersResponse,
     ) -> Result<(), Error>
     {
-        match &req {
-            // For normal header requests, we have no
-            // assumption about the response structure.
-            RequestMessage::Headers(_) => return Ok(()),
+        // For normal header requests, we have no
+        // assumption about the response structure.
+        if req
+            .downcast_general::<GetBlockHeaders>(
+                ctx.io,
+                &ctx.manager.request_manager,
+                false,
+            )
+            .is_ok()
+        {
+            return Ok(());
+        }
 
-            // For chained header requests, we assume the
-            // response contains a sequence of block headers
-            // which are listed in order with parent-child
-            // relationship. For example, bh[i-1] should be
-            // the parent of bh[i] which is in turn the parent
-            // of bh[i+1].
-            RequestMessage::HeaderChain(_) => {
-                let mut parent_hash = None;
-                for header in &resp.headers {
-                    let hash = header.hash();
-                    if parent_hash != None && parent_hash.unwrap() != hash {
-                        // chain assumption not met, resend request
-                        ctx.manager
-                            .request_manager
-                            .remove_mismatch_request(ctx.io, req);
-                        return Err(ErrorKind::Invalid.into());
-                    }
-                    parent_hash = Some(header.parent_hash().clone());
-                }
+        // Although the response matches the request id, it does
+        // not match the content, so resend the request again.
+        req.downcast_general::<GetBlockHeaderChain>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            true,
+        )?;
 
-                return Ok(());
-            }
-
-            // Although the response matches the request id, it does
-            // not match the content, so resend the request again.
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, resp);
+        // For chained header requests, we assume the
+        // response contains a sequence of block headers
+        // which are listed in order with parent-child
+        // relationship. For example, bh[i-1] should be
+        // the parent of bh[i] which is in turn the parent
+        // of bh[i+1].
+        let mut parent_hash = None;
+        for header in &resp.headers {
+            let hash = header.hash();
+            if parent_hash != None && parent_hash.unwrap() != hash {
+                // chain assumption not met, resend request
                 ctx.manager
                     .request_manager
-                    .remove_mismatch_request(ctx.io, &req);
-                return Err(ErrorKind::UnexpectedResponse.into());
+                    .remove_mismatch_request(ctx.io, req);
+                return Err(ErrorKind::Invalid.into());
             }
-        };
+            parent_hash = Some(header.parent_hash().clone());
+        }
+
+        return Ok(());
     }
 }
 

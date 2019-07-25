@@ -4,11 +4,10 @@
 
 use crate::sync::{
     message::{
-        metrics::BLOCK_TXN_HANDLE_TIMER, Context, Handleable, Message, MsgId,
-        RequestId,
+        metrics::BLOCK_TXN_HANDLE_TIMER, Context, GetBlockTxn, Handleable,
+        Message, MsgId, RequestId,
     },
-    request_manager::RequestMessage,
-    Error, ErrorKind,
+    Error,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
@@ -33,16 +32,12 @@ impl Handleable for GetBlockTxnResponse {
         debug!("on_get_blocktxn_response");
         let resp_hash = self.block_hash;
         let req = ctx.match_request(self.request_id())?;
-        let req = match req {
-            RequestMessage::BlockTxn(request) => request,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, self);
-                ctx.manager
-                    .request_manager
-                    .remove_mismatch_request(ctx.io, &req);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
+        let req = req.downcast_general::<GetBlockTxn>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            true,
+        )?;
+
         let mut request_again = false;
         let mut request_from_same_peer = false;
         if resp_hash != req.block_hash {
