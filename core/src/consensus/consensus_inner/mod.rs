@@ -472,6 +472,11 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    pub fn set_initial_sequence_number(&mut self, initial_sn: u64) {
+        self.sequence_number_of_block_entrance = initial_sn;
+    }
+
+    #[inline]
     fn is_heavier(a: (i128, &H256), b: (i128, &H256)) -> bool {
         (a.0 > b.0) || ((a.0 == b.0) && (*a.1 > *b.1))
     }
