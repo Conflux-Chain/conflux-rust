@@ -258,6 +258,8 @@ pub struct ConsensusGraphInner {
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     total_weight_in_past_2d: TotalWeightInPast,
+    /// block set of each old era, will garbage collected by sync graph
+    pub old_era_block_sets: VecDeque<Vec<H256>>,
 }
 
 pub struct ConsensusGraphNode {
@@ -345,6 +347,7 @@ impl ConsensusGraphInner {
                 cur: U256::zero(),
                 delta: U256::zero(),
             },
+            old_era_block_sets: VecDeque::new(),
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph

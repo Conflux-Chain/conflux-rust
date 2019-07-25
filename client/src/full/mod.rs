@@ -193,6 +193,7 @@ impl FullClient {
             consensus.clone(),
             verification_config,
             pow_config,
+            true,
         ));
 
         let network = {

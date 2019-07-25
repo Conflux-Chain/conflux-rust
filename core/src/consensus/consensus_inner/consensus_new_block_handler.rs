@@ -122,6 +122,7 @@ impl ConsensusNewBlockHandler {
         // Next we are going to compute the new legacy_refs map based on current
         // graph information
         let mut new_legacy_refs = HashMap::new();
+        let mut outside_block_hashes = Vec::new();
         for index in sorted_outside_block_arena_indices.iter() {
             let referees = ConsensusNewBlockHandler::process_referees(
                 inner,
@@ -132,7 +133,9 @@ impl ConsensusNewBlockHandler {
             if !referees.is_empty() {
                 new_legacy_refs.insert(inner.arena[*index].hash, referees);
             }
+            outside_block_hashes.push(inner.arena[*index].hash);
         }
+        inner.old_era_block_sets.push_back(outside_block_hashes);
         // Now we append all existing legacy_refs into the new_legacy_refs
         for (hash, old_referees) in inner.legacy_refs.iter() {
             let referees = ConsensusNewBlockHandler::process_referees(

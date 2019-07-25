@@ -201,12 +201,7 @@ impl BlockDataManager {
             },
         );
 
-        data_man.insert_block_header(
-            data_man.genesis_block.hash(),
-            Arc::new(data_man.genesis_block.block_header.clone()),
-            true,
-        );
-        data_man.insert_block_to_kv(data_man.genesis_block(), true);
+        data_man.insert_block(data_man.genesis_block(), true);
 
         // persist local_block_info for real genesis block
         if data_man.genesis_block().block_header.hash()
@@ -276,6 +271,15 @@ impl BlockDataManager {
     fn insert_block_header_to_db(&self, header: &BlockHeader) {
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_BLOCKS, &header.hash(), &rlp::encode(header));
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
+    fn remove_block_header_from_db(&self, hash: &H256) {
+        let mut dbops = self.db.key_value().transaction();
+        dbops.delete(COL_BLOCKS, hash);
         self.db
             .key_value()
             .write(dbops)
@@ -390,6 +394,17 @@ impl BlockDataManager {
             }
     }
 
+    /// insert block body in memory cache and db
+    pub fn insert_block_body(
+        &self, hash: H256, block: Arc<Block>, persistent: bool,
+    ) {
+        if persistent {
+            self.insert_block_body_to_db(&block);
+        }
+        self.cache_man.lock().note_used(CacheId::Block(hash));
+        self.blocks.write().insert(hash, block);
+    }
+
     fn insert_block_body_to_db(&self, block: &Block) {
         let mut dbops = self.db.key_value().transaction();
         dbops.put(
@@ -401,6 +416,23 @@ impl BlockDataManager {
             .key_value()
             .write(dbops)
             .expect("crash for db failure");
+    }
+
+    fn remove_block_body_from_db(&self, hash: &H256) {
+        let mut dbops = self.db.key_value().transaction();
+        dbops.delete(COL_BLOCKS, &Self::block_body_key(hash));
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
+    /// remove block body in memory cache and db
+    pub fn remove_block_body(&self, hash: &H256, remove_db: bool) {
+        if remove_db {
+            self.remove_block_body_from_db(hash);
+        }
+        self.blocks.write().remove(hash);
     }
 
     pub fn block_by_hash(
@@ -447,14 +479,15 @@ impl BlockDataManager {
         Some(blocks)
     }
 
-    pub fn insert_block_to_kv(&self, block: Arc<Block>, persistent: bool) {
+    /// insert block/header into memory cache, block/header into db
+    pub fn insert_block(&self, block: Arc<Block>, persistent: bool) {
         let hash = block.hash();
-        if persistent {
-            self.insert_block_header_to_db(&block.block_header);
-            self.insert_block_body_to_db(&block);
-        }
-        self.blocks.write().insert(hash, block);
-        self.cache_man.lock().note_used(CacheId::Block(hash));
+        self.insert_block_header(
+            hash,
+            Arc::new(block.block_header.clone()),
+            persistent,
+        );
+        self.insert_block_body(hash, block, persistent);
     }
 
     fn local_block_info_key(block_hash: &H256) -> Vec<u8> {
@@ -526,14 +559,10 @@ impl BlockDataManager {
         Some(rlp.as_val().expect("Wrong block rlp format!"))
     }
 
-    pub fn remove_block_from_kv(&self, hash: &H256) {
-        self.blocks.write().remove(hash);
-        let mut dbops = self.db.key_value().transaction();
-        dbops.delete(COL_BLOCKS, hash);
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+    /// remove block body and block header in memory cache and db
+    pub fn remove_block(&self, hash: &H256, remove_db: bool) {
+        self.remove_block_header(hash, remove_db);
+        self.remove_block_body(hash, remove_db);
     }
 
     pub fn block_header_by_hash(
@@ -568,8 +597,12 @@ impl BlockDataManager {
         self.block_headers.write().insert(hash, header);
     }
 
-    pub fn remove_block_header(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
-        self.block_headers.write().remove(hash)
+    /// remove block header in memory cache and db
+    pub fn remove_block_header(&self, hash: &H256, remove_db: bool) {
+        if remove_db {
+            self.remove_block_header_from_db(hash);
+        }
+        self.block_headers.write().remove(hash);
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
@@ -653,7 +686,7 @@ impl BlockDataManager {
         Some(receipts)
     }
 
-    pub fn insert_block_results_to_kv(
+    pub fn insert_block_results(
         &self, hash: H256, epoch: H256, receipts: Arc<Vec<Receipt>>,
         persistent: bool,
     )
@@ -721,7 +754,7 @@ impl BlockDataManager {
             })
     }
 
-    pub fn insert_transaction_address_to_kv(
+    pub fn insert_transaction_address(
         &self, hash: &H256, tx_address: &TransactionAddress,
     ) {
         if !self.config.record_tx_address {
@@ -841,7 +874,7 @@ impl BlockDataManager {
                         .outcome_status
                         == TRANSACTION_OUTCOME_SUCCESS
                     {
-                        self.insert_transaction_address_to_kv(
+                        self.insert_transaction_address(
                             &tx.hash,
                             &TransactionAddress {
                                 block_hash: *block_hash,
