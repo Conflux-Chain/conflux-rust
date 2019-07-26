@@ -46,6 +46,7 @@ pub mod error;
 mod evm;
 pub mod executive;
 pub mod genesis;
+pub mod light_protocol;
 pub mod machine;
 pub mod pow;
 pub(crate) mod snapshot;
@@ -63,6 +64,7 @@ pub mod test_helpers;
 
 pub use crate::{
     consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
+    light_protocol::QueryService,
     sync::{
         SharedSynchronizationGraph, SharedSynchronizationService,
         SynchronizationGraph, SynchronizationService,
