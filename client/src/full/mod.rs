@@ -10,9 +10,10 @@ use blockgen::BlockGenerator;
 
 use cfxcore::{
     genesis, pow::WORKER_COMPUTATION_PARALLELISM, statistics::Statistics,
-    storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, SynchronizationGraph,
-    SynchronizationService, TransactionPool,
+    storage::StorageManager, sync::SyncPhaseType,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
+    ConsensusGraph, SynchronizationGraph, SynchronizationService,
+    TransactionPool,
 };
 
 use crate::rpc::{
@@ -202,12 +203,13 @@ impl FullClient {
             Arc::new(network)
         };
 
+        let initial_sync_phase = SyncPhaseType::CatchUpRecoverBlockHeaderFromDB;
         let sync = Arc::new(SynchronizationService::new(
             true,
             network.clone(),
-            consensus.clone(),
             sync_graph.clone(),
             protocol_config,
+            initial_sync_phase,
         ));
         sync.register().unwrap();
 

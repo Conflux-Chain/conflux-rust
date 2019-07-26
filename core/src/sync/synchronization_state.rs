@@ -5,8 +5,8 @@
 use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
-use crate::sync::{message::MsgId, random, Error, ErrorKind};
-use parking_lot::{Mutex, RwLock};
+use crate::sync::{random, Error, ErrorKind};
+use parking_lot::RwLock;
 use rand::Rng;
 use std::{
     collections::{HashMap, HashSet},
@@ -37,23 +37,15 @@ pub type SynchronizationPeers =
 
 pub struct SynchronizationState {
     is_full_node: bool,
-    pub sync_phase: Mutex<SyncPhase>,
     pub peers: RwLock<SynchronizationPeers>,
     pub handshaking_peers: RwLock<HashMap<PeerId, Instant>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
 }
 
 impl SynchronizationState {
-    pub fn new(is_full_node: bool, genesis_hash: H256) -> Self {
+    pub fn new(is_full_node: bool) -> Self {
         SynchronizationState {
             is_full_node,
-            sync_phase: Mutex::new(
-                if is_full_node {
-                    SyncPhase::SyncHeaders(genesis_hash)
-                } else {
-                    SyncPhase::SyncBlocks(genesis_hash)
-                },
-            ),
             peers: Default::default(),
             handshaking_peers: Default::default(),
             last_sent_transaction_hashes: Default::default(),
@@ -174,94 +166,5 @@ impl SynchronizationState {
 
         peer_best_epoches.sort();
         Some(peer_best_epoches[peer_best_epoches.len() / 2])
-    }
-
-    pub fn validate_msg_id(&self, msg_id: &MsgId) -> bool {
-        let sync_phase = &*self.sync_phase.lock();
-        if sync_phase.validate_msg_id(msg_id) {
-            true
-        } else {
-            debug!("MsgId:{:?} is ignored in phase {:?}", msg_id, sync_phase);
-            false
-        }
-    }
-}
-
-/// The phases are used to control the catch-up logic.
-/// Archive nodes do not have phases `SyncHeaders` and `SyncCheckpoints`.
-#[derive(Debug)]
-pub enum SyncPhase {
-    /// The first phase to sync all headers after the latest known checkpoint
-    /// and handle these headers in Consensus without handling any
-    /// state-related work. After enough headers are received, we can find
-    /// a new checkpoint and enter `SyncCheckPoints`. The hash inside is the
-    /// checkpoint from which we need to start syncing to the latest
-    /// headers.
-    SyncHeaders(H256),
-
-    /// The second phase to sync the states of the new checkpoint. The hash
-    /// inside is the hash of the checkpoint block. After the
-    /// state is retrieved, we'll be able to execute and verify blocks
-    /// after it, so we can enter `SyncBlocks`.
-    SyncCheckpoints(H256),
-
-    /// The third phase to sync all blocks since the latest checkpoint. The
-    /// hash inside is the checkpoint from which we need to start syncing
-    /// to the latest blocks.
-    SyncBlocks(H256),
-
-    /// We have catch up with most peers, so we can follow normal logic.
-    Latest,
-}
-
-impl SyncPhase {
-    /// Check if the msg_id should be processed in current phase.
-    fn validate_msg_id(&self, msg_id: &MsgId) -> bool {
-        match self {
-            SyncPhase::SyncHeaders(_) => match *msg_id {
-                MsgId::STATUS
-                | MsgId::TRANSACTION_PROPAGATION_CONTROL
-                | MsgId::GET_BLOCK_HASHES_RESPONSE
-                | MsgId::GET_BLOCK_HEADERS_RESPONSE => true,
-                _ => false,
-            },
-            SyncPhase::SyncCheckpoints(_) => match *msg_id {
-                MsgId::STATUS
-                | MsgId::TRANSACTION_PROPAGATION_CONTROL
-                | MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE
-                | MsgId::GET_SNAPSHOT_CHUNK_RESPONSE => true,
-                _ => false,
-            },
-            SyncPhase::SyncBlocks(_) => match *msg_id {
-                MsgId::STATUS
-                | MsgId::TRANSACTION_PROPAGATION_CONTROL
-                | MsgId::GET_BLOCK_HASHES_RESPONSE
-                | MsgId::GET_BLOCKS_RESPONSE
-                | MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE => true,
-                _ => false,
-            },
-            SyncPhase::Latest => true,
-        }
-    }
-
-    pub fn catch_up_mode(&self) -> bool {
-        match self {
-            SyncPhase::Latest => false,
-            _ => true,
-        }
-    }
-
-    pub fn need_requesting_blocks(&self) -> bool {
-        match self {
-            SyncPhase::SyncBlocks(_) | SyncPhase::Latest => true,
-            _ => false,
-        }
-    }
-
-    pub fn get_sync_checkpoint(&self) -> Option<H256> {
-        match self {
-            SyncPhase::SyncCheckpoints(checkpoint) => Some(checkpoint.clone()),
-            _ => None,
-        }
     }
 }

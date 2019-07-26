@@ -15,6 +15,7 @@ class BlameTest(ConfluxTestFramework):
         self.setup_nodes()
 
     def run_test(self):
+        time.sleep(7)
         client0 = RpcClient(self.nodes[0])
         client1 = RpcClient(self.nodes[1])
         genesis = self.nodes[0].getbestblockhash()
