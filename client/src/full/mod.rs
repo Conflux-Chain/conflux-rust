@@ -179,7 +179,7 @@ impl FullClient {
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::new(
-            conf.consensus_config(data_man.get_instance_id()),
+            conf.consensus_config(),
             vm.clone(),
             txpool.clone(),
             statistics.clone(),

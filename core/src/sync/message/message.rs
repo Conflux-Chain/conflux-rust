@@ -5,9 +5,9 @@
 use crate::sync::{
     message::{
         transactions::Transactions, Context, GetBlockHashesByEpoch,
-        GetBlockHashesResponse, GetBlockHeaderChain, GetBlockHeaders,
-        GetBlockHeadersResponse, GetBlockTxn, GetBlockTxnResponse, GetBlocks,
-        GetBlocksResponse, GetBlocksWithPublicResponse, GetCompactBlocks,
+        GetBlockHashesResponse, GetBlockHeaders, GetBlockHeadersResponse,
+        GetBlockTxn, GetBlockTxnResponse, GetBlocks, GetBlocksResponse,
+        GetBlocksWithPublicResponse, GetCompactBlocks,
         GetCompactBlocksResponse, GetTerminalBlockHashes,
         GetTerminalBlockHashesResponse, GetTransactions,
         GetTransactionsResponse, Handleable, NewBlock, NewBlockHashes, Status,
@@ -86,9 +86,6 @@ impl MsgId {
             }
             MsgId::GET_BLOCK_HEADERS_RESPONSE => {
                 rlp.as_val::<GetBlockHeadersResponse>()?.handle(&ctx)?;
-            }
-            MsgId::GET_BLOCK_HEADER_CHAIN => {
-                rlp.as_val::<GetBlockHeaderChain>()?.handle(&ctx)?;
             }
             MsgId::GET_BLOCKS => rlp.as_val::<GetBlocks>()?.handle(&ctx)?,
             MsgId::GET_BLOCKS_RESPONSE => {

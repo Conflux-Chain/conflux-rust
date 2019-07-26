@@ -5,12 +5,11 @@
 use crate::{
     sync::{
         message::{
-            metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaderChain,
-            GetBlockHeaders, Handleable, Message, MsgId, RequestId,
+            metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
+            Handleable, Message, MsgId, RequestId,
         },
         msg_sender::NULL,
-        request_manager::RequestMessage,
-        Error, ErrorKind,
+        Error,
     },
     verification::ACCEPTABLE_TIME_DRIFT,
 };
@@ -45,8 +44,11 @@ impl Handleable for GetBlockHeadersResponse {
         }
 
         let req = ctx.match_request(self.request_id())?;
-
-        self.validate_block_headers_response(ctx, &req, &self)?;
+        let req = req.downcast_general::<GetBlockHeaders>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            true,
+        )?;
 
         // keep first time drift validation error to return later
         let now_timestamp = SystemTime::now()
@@ -79,22 +81,7 @@ impl Handleable for GetBlockHeadersResponse {
         };
 
         // re-request headers requested but not received
-        let requested: Vec<H256> = if let Ok(req) = req
-            .downcast_general::<GetBlockHeaders>(
-                ctx.io,
-                &ctx.manager.request_manager,
-                false,
-            ) {
-            req.hashes.iter().cloned().collect()
-        } else {
-            let req = req.downcast_general::<GetBlockHeaderChain>(
-                ctx.io,
-                &ctx.manager.request_manager,
-                false,
-            )?;
-            vec![req.hash]
-        };
-
+        let requested: Vec<H256> = req.hashes.iter().cloned().collect();
         self.handle_block_headers(ctx, &self.headers, requested, chosen_peer);
 
         timestamp_validation_result
@@ -209,54 +196,6 @@ impl GetBlockHeadersResponse {
                 .relay_blocks(ctx.io, need_to_relay.into_iter().collect())
                 .ok();
         }
-    }
-
-    fn validate_block_headers_response(
-        &self, ctx: &Context, req: &RequestMessage,
-        resp: &GetBlockHeadersResponse,
-    ) -> Result<(), Error>
-    {
-        // For normal header requests, we have no
-        // assumption about the response structure.
-        if req
-            .downcast_general::<GetBlockHeaders>(
-                ctx.io,
-                &ctx.manager.request_manager,
-                false,
-            )
-            .is_ok()
-        {
-            return Ok(());
-        }
-
-        // Although the response matches the request id, it does
-        // not match the content, so resend the request again.
-        req.downcast_general::<GetBlockHeaderChain>(
-            ctx.io,
-            &ctx.manager.request_manager,
-            true,
-        )?;
-
-        // For chained header requests, we assume the
-        // response contains a sequence of block headers
-        // which are listed in order with parent-child
-        // relationship. For example, bh[i-1] should be
-        // the parent of bh[i] which is in turn the parent
-        // of bh[i+1].
-        let mut parent_hash = None;
-        for header in &resp.headers {
-            let hash = header.hash();
-            if parent_hash != None && parent_hash.unwrap() != hash {
-                // chain assumption not met, resend request
-                ctx.manager
-                    .request_manager
-                    .remove_mismatch_request(ctx.io, req);
-                return Err(ErrorKind::Invalid.into());
-            }
-            parent_hash = Some(header.parent_hash().clone());
-        }
-
-        return Ok(());
     }
 }
 
