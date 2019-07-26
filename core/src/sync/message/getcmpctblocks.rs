@@ -4,22 +4,64 @@
 
 use crate::sync::{
     message::{
-        Context, GetCompactBlocksResponse, Handleable, Message, MsgId,
-        RequestId,
+        Context, GetBlocks, GetCompactBlocksResponse, Handleable, Key,
+        KeyContainer, Message, MsgId, RequestId,
     },
+    request_manager::Request,
     synchronization_protocol_handler::{
         MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND,
     },
-    Error,
+    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::ops::{Deref, DerefMut};
+use std::{
+    any::Any,
+    ops::{Deref, DerefMut},
+    time::Duration,
+};
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetCompactBlocks {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
+}
+
+impl Request for GetCompactBlocks {
+    fn set_request_id(&mut self, request_id: u64) {
+        self.request_id.set_request_id(request_id);
+    }
+
+    fn as_message(&self) -> &Message { self }
+
+    fn as_any(&self) -> &Any { self }
+
+    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
+        conf.blocks_request_timeout
+    }
+
+    fn on_removed(&self, inflight_keys: &mut KeyContainer) {
+        let msg_type = MsgId::GET_BLOCKS.into();
+        for hash in self.hashes.iter() {
+            inflight_keys.remove(msg_type, Key::Hash(*hash));
+        }
+    }
+
+    fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
+        let msg_type = MsgId::GET_BLOCKS.into();
+        self.hashes
+            .retain(|h| inflight_keys.add(msg_type, Key::Hash(*h)));
+    }
+
+    fn is_empty(&self) -> bool { self.hashes.is_empty() }
+
+    fn resend(&self) -> Option<Box<Request>> {
+        Some(Box::new(GetBlocks {
+            request_id: 0.into(),
+            with_public: true,
+            hashes: self.hashes.iter().cloned().collect(),
+        }))
+    }
 }
 
 impl Handleable for GetCompactBlocks {

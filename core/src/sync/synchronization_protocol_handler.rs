@@ -1029,8 +1029,7 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        self.request_manager
-            .resend_waiting_requests(io, self.request_block_need_public());
+        self.request_manager.resend_waiting_requests(io);
     }
 
     fn block_cache_gc(&self) { self.graph.data_man.gc_cache() }

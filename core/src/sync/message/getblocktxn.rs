@@ -4,19 +4,53 @@
 
 use crate::sync::{
     message::{
-        Context, GetBlockTxnResponse, Handleable, Message, MsgId, RequestId,
+        Context, GetBlockTxnResponse, GetBlocks, Handleable, KeyContainer,
+        Message, MsgId, RequestId,
     },
-    Error, ErrorKind,
+    request_manager::Request,
+    Error, ErrorKind, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::ops::{Deref, DerefMut};
+use std::{
+    any::Any,
+    ops::{Deref, DerefMut},
+    time::Duration,
+};
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetBlockTxn {
     pub request_id: RequestId,
     pub block_hash: H256,
     pub indexes: Vec<usize>,
+}
+
+impl Request for GetBlockTxn {
+    fn set_request_id(&mut self, request_id: u64) {
+        self.request_id.set_request_id(request_id)
+    }
+
+    fn as_message(&self) -> &Message { self }
+
+    fn as_any(&self) -> &Any { self }
+
+    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
+        conf.blocks_request_timeout
+    }
+
+    fn on_removed(&self, _inflight_keys: &mut KeyContainer) {}
+
+    fn with_inflight(&mut self, _inflight_keys: &mut KeyContainer) {}
+
+    fn is_empty(&self) -> bool { false }
+
+    fn resend(&self) -> Option<Box<Request>> {
+        Some(Box::new(GetBlocks {
+            request_id: 0.into(),
+            with_public: true,
+            hashes: vec![self.block_hash.clone()],
+        }))
+    }
 }
 
 impl Handleable for GetBlockTxn {

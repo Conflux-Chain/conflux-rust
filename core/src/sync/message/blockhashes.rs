@@ -3,9 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Context, Handleable, Message, MsgId, RequestId},
-    request_manager::RequestMessage,
-    Error, ErrorKind,
+    message::{
+        Context, GetBlockHashesByEpoch, Handleable, Message, MsgId, RequestId,
+    },
+    Error,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -22,25 +23,19 @@ impl Handleable for GetBlockHashesResponse {
         debug!("on_block_hashes_response, msg={:?}", self);
 
         let req = ctx.match_request(self.request_id())?;
+        let epoch_req = req.downcast_general::<GetBlockHashesByEpoch>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            true,
+        )?;
 
-        match req {
-            RequestMessage::Epochs(epoch_req) => {
-                // assume received everything
-                // FIXME: peer should signal error?
-                let req = epoch_req.epochs.clone().into_iter().collect();
-                let rec = epoch_req.epochs.clone().into_iter().collect();
-                ctx.manager
-                    .request_manager
-                    .epochs_received(ctx.io, req, rec);
-            }
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, self);
-                ctx.manager
-                    .request_manager
-                    .remove_mismatch_request(ctx.io, &req);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
+        // assume received everything
+        // FIXME: peer should signal error?
+        let req = epoch_req.epochs.clone().into_iter().collect();
+        let rec = epoch_req.epochs.clone().into_iter().collect();
+        ctx.manager
+            .request_manager
+            .epochs_received(ctx.io, req, rec);
 
         // request missing headers
         let missing_headers = self

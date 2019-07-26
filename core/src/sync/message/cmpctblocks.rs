@@ -5,11 +5,10 @@
 use crate::sync::{
     message::{
         metrics::{CMPCT_BLOCK_HANDLE_TIMER, CMPCT_BLOCK_RECOVER_TIMER},
-        Context, Handleable, Message, MsgId, RequestId,
+        Context, GetCompactBlocks, Handleable, Message, MsgId, RequestId,
     },
-    request_manager::RequestMessage,
     synchronization_protocol_handler::RecoverPublicTask,
-    Error, ErrorKind,
+    Error,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
@@ -17,7 +16,6 @@ use primitives::{block::CompactBlock, Block};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     collections::HashSet,
-    iter::FromIterator,
     ops::{Deref, DerefMut},
 };
 
@@ -49,15 +47,18 @@ impl Handleable for GetCompactBlocksResponse {
         let req = ctx.match_request(self.request_id())?;
         let mut failed_blocks = HashSet::new();
         let mut completed_blocks = Vec::new();
-        let mut requested_blocks: HashSet<H256> = match req {
-            RequestMessage::Compact(request) => {
-                HashSet::from_iter(request.hashes.iter().cloned())
-            }
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, self);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
+
+        let mut requested_blocks: HashSet<H256> = req
+            .downcast_general::<GetCompactBlocks>(
+                ctx.io,
+                &ctx.manager.request_manager,
+                false,
+            )?
+            .hashes
+            .iter()
+            .cloned()
+            .collect();
+
         for mut cmpct in self.compact_blocks {
             let hash = cmpct.hash();
 

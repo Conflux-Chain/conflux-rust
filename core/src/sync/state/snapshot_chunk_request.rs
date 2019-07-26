@@ -3,10 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Context, Handleable, Message, MsgId},
-    request_manager::Request as RequestMessage,
+    message::{Context, Handleable, KeyContainer, Message, MsgId},
+    request_manager::Request,
     state::snapshot_chunk_response::SnapshotChunkResponse,
-    Error,
+    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -41,7 +41,7 @@ impl Handleable for SnapshotChunkRequest {
     }
 }
 
-impl RequestMessage for SnapshotChunkRequest {
+impl Request for SnapshotChunkRequest {
     fn set_request_id(&mut self, request_id: u64) {
         self.request_id = request_id;
     }
@@ -50,16 +50,17 @@ impl RequestMessage for SnapshotChunkRequest {
 
     fn as_any(&self) -> &Any { self }
 
-    fn timeout(&self) -> Duration { Duration::from_secs(120) }
-
-    fn on_removed(&self) {}
-
-    fn preprocess(&self) -> Box<RequestMessage> {
-        Box::new(SnapshotChunkRequest::new(
-            self.checkpoint.clone(),
-            self.chunk_hash.clone(),
-        ))
+    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
+        conf.blocks_request_timeout
     }
+
+    fn on_removed(&self, _inflight_keys: &mut KeyContainer) {}
+
+    fn with_inflight(&mut self, _inflight_keys: &mut KeyContainer) {}
+
+    fn is_empty(&self) -> bool { false }
+
+    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
 }
 
 impl Message for SnapshotChunkRequest {

@@ -4,16 +4,20 @@
 
 use crate::sync::{
     message::{
-        Context, GetBlockHeadersResponse, Handleable, Message, MsgId, RequestId,
+        Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
+        Message, MsgId, RequestId,
     },
+    request_manager::Request,
     synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
-    Error,
+    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
+    any::Any,
     cmp::min,
     ops::{Deref, DerefMut},
+    time::Duration,
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -21,6 +25,40 @@ pub struct GetBlockHeaderChain {
     pub request_id: RequestId,
     pub hash: H256,
     pub max_blocks: u64,
+}
+
+impl Request for GetBlockHeaderChain {
+    fn set_request_id(&mut self, request_id: u64) {
+        self.request_id.set_request_id(request_id);
+    }
+
+    fn as_message(&self) -> &Message { self }
+
+    fn as_any(&self) -> &Any { self }
+
+    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
+        conf.headers_request_timeout
+    }
+
+    fn on_removed(&self, inflight_keys: &mut KeyContainer) {
+        inflight_keys.remove(
+            MsgId::GET_BLOCK_HEADERS.into(),
+            Key::Hash(self.hash.clone()),
+        );
+    }
+
+    fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
+        if !inflight_keys.add(
+            MsgId::GET_BLOCK_HEADERS.into(),
+            Key::Hash(self.hash.clone()),
+        ) {
+            self.hash = H256::zero();
+        }
+    }
+
+    fn is_empty(&self) -> bool { self.hash.is_zero() }
+
+    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
 }
 
 impl Handleable for GetBlockHeaderChain {
