@@ -8,7 +8,6 @@ mod blocks;
 mod blocktxn;
 mod cmpctblocks;
 mod getblockhashesbyepoch;
-mod getblockheaderchain;
 mod getblockheaders;
 mod getblocks;
 mod getblocktxn;
@@ -31,7 +30,6 @@ pub use self::{
     blocktxn::GetBlockTxnResponse,
     cmpctblocks::GetCompactBlocksResponse,
     getblockhashesbyepoch::GetBlockHashesByEpoch,
-    getblockheaderchain::GetBlockHeaderChain,
     getblockheaders::GetBlockHeaders,
     getblocks::GetBlocks,
     getblocktxn::GetBlockTxn,

@@ -1272,7 +1272,7 @@ impl ConsensusNewBlockHandler {
             let block_info = LocalBlockInfo::new(
                 BlockStatus::Pending,
                 sn,
-                self.conf.instance_id,
+                self.data_man.get_instance_id(),
             );
             self.data_man
                 .insert_local_block_info_to_db(hash, block_info);
@@ -1614,7 +1614,7 @@ impl ConsensusNewBlockHandler {
             self.persist_terminals(inner);
             NULLU64
         } else {
-            self.conf.instance_id
+            self.data_man.get_instance_id()
         };
 
         let block_info = LocalBlockInfo::new(
