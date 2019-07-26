@@ -549,9 +549,7 @@ impl RequestManager {
     }
 
     /// Send waiting requests that their backoff delay have passes
-    pub fn resend_waiting_requests(
-        &self, io: &NetworkContext, _with_public: bool,
-    ) {
+    pub fn resend_waiting_requests(&self, io: &NetworkContext) {
         debug!("resend_waiting_requests: start");
         let mut waiting_requests = self.waiting_requests.lock();
         let now = Instant::now();
@@ -582,7 +580,7 @@ impl RequestManager {
             };
             let next_delay = delay + *REQUEST_START_WAITING_TIME;
 
-            if let Err(e) = self.request_handler.send_general_request(
+            if let Err(req) = self.request_handler.send_general_request(
                 io,
                 Some(chosen_peer),
                 request,
@@ -590,7 +588,7 @@ impl RequestManager {
             ) {
                 self.waiting_requests.lock().push(TimedWaitingRequest::new(
                     Instant::now() + delay,
-                    WaitingRequest(e, next_delay),
+                    WaitingRequest(req, next_delay),
                     None,
                 ));
             }
