@@ -498,10 +498,13 @@ fn test_proofs() {
         let (value, proof) =
             state.get_with_proof(key).expect("Failed to get key.");
 
+        let key = &key.to_vec();
+        let value = &value.map(Into::into);
+
         // valid proof
         assert!(proof.is_valid(
             key,
-            value.as_ref().map(|x| &**x),
+            value,
             delta_root,
             intermediate_root,
             snapshot_root,
@@ -512,7 +515,7 @@ fn test_proofs() {
         invalid_root[0] = 0x00;
         assert!(!proof.is_valid(
             key,
-            value.as_ref().map(|x| &**x),
+            value,
             invalid_root,
             invalid_root,
             invalid_root,
@@ -521,7 +524,7 @@ fn test_proofs() {
         // invalid value
         assert!(!proof.is_valid(
             key,
-            Some(&[0x00; 100]),
+            &Some(vec![0x00; 100]),
             delta_root,
             intermediate_root,
             snapshot_root,
@@ -535,11 +538,15 @@ fn test_proofs() {
 
         assert!(!invalid_proof.is_valid(
             key,
-            value.as_ref().map(|x| &**x),
+            value,
             delta_root,
             intermediate_root,
             snapshot_root,
         ));
+
+        // test rlp
+        assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
+        assert_ne!(proof, rlp::decode(&rlp::encode(&invalid_proof)).unwrap());
     }
 
     let nonexistent_keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
@@ -560,8 +567,8 @@ fn test_proofs() {
 
         // valid non-existence proof
         assert!(proof.is_valid(
-            key,
-            None,
+            &key.to_vec(),
+            &None,
             delta_root,
             intermediate_root,
             snapshot_root,
