@@ -60,7 +60,7 @@ impl Request for SnapshotChunkRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Box<Request> { Box::new(self.clone()) }
+    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
 }
 
 impl Message for SnapshotChunkRequest {

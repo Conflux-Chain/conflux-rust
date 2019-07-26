@@ -52,7 +52,7 @@ impl Request for GetBlockHashesByEpoch {
 
     fn is_empty(&self) -> bool { self.epochs.is_empty() }
 
-    fn resend(&self) -> Box<Request> { Box::new(self.clone()) }
+    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
 }
 
 impl Handleable for GetBlockHashesByEpoch {

@@ -44,12 +44,12 @@ impl Request for GetBlockTxn {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Box<Request> {
-        Box::new(GetBlocks {
+    fn resend(&self) -> Option<Box<Request>> {
+        Some(Box::new(GetBlocks {
             request_id: 0.into(),
             with_public: true,
             hashes: vec![self.block_hash.clone()],
-        })
+        }))
     }
 }
 

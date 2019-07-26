@@ -265,9 +265,7 @@ impl Request for GetTransactions {
 
     fn is_empty(&self) -> bool { self.tx_ids.is_empty() }
 
-    fn is_resend_enabled(&self) -> bool { false }
-
-    fn resend(&self) -> Box<Request> { panic!("should not re-propagate txs") }
+    fn resend(&self) -> Option<Box<Request>> { None }
 }
 
 impl Handleable for GetTransactions {

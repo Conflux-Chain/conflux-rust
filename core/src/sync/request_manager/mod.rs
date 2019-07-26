@@ -333,13 +333,8 @@ impl RequestManager {
         &self, io: &NetworkContext, msg: &RequestMessage,
     ) {
         let chosen_peer = self.syn.get_random_peer(&HashSet::new());
-        if msg.request.is_resend_enabled() {
-            self.request_with_delay(
-                io,
-                msg.request.resend(),
-                chosen_peer,
-                msg.delay,
-            );
+        if let Some(request) = msg.request.resend() {
+            self.request_with_delay(io, request, chosen_peer, msg.delay);
         }
     }
 
@@ -581,12 +576,16 @@ impl RequestManager {
             // Waiting requests are already in-flight, so send them without
             // checking
             let WaitingRequest(request, delay) = req.request;
+            let request = match request.resend() {
+                Some(r) => r,
+                None => continue,
+            };
             let next_delay = delay + *REQUEST_START_WAITING_TIME;
 
             if let Err(e) = self.request_handler.send_general_request(
                 io,
                 Some(chosen_peer),
-                request.resend(),
+                request,
                 Some(next_delay),
             ) {
                 self.waiting_requests.lock().push(TimedWaitingRequest::new(

@@ -53,7 +53,7 @@ impl Request for GetBlockHeaders {
 
     fn is_empty(&self) -> bool { self.hashes.is_empty() }
 
-    fn resend(&self) -> Box<Request> { Box::new(self.clone()) }
+    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
 }
 
 impl Handleable for GetBlockHeaders {

@@ -55,12 +55,12 @@ impl Request for GetCompactBlocks {
 
     fn is_empty(&self) -> bool { self.hashes.is_empty() }
 
-    fn resend(&self) -> Box<Request> {
-        Box::new(GetBlocks {
+    fn resend(&self) -> Option<Box<Request>> {
+        Some(Box::new(GetBlocks {
             request_id: 0.into(),
             with_public: true,
             hashes: self.hashes.iter().cloned().collect(),
-        })
+        }))
     }
 }
 

@@ -386,15 +386,31 @@ pub struct SynchronizationPeerRequest {
 pub trait Request: Send + Debug {
     fn set_request_id(&mut self, request_id: u64);
     fn as_message(&self) -> &Message;
-    fn as_any(&self) -> &Any; // to support downcast trait to struct
-    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration; // request timeout for resend purpose
+    /// Support to downcast trait to concrete request type.
+    fn as_any(&self) -> &Any;
+    /// Request timeout for resend purpose.
+    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration;
 
-    // occurs when peer disconnected or invalid message received
+    /// Cleanup the inflight request items when peer disconnected or invalid
+    /// message received.
     fn on_removed(&self, inflight_keys: &mut KeyContainer);
+    /// Before send a request, check if its items already in flight.
+    /// If in flight, do not request duplicated items.
+    /// Otherwise, insert the item key into `inflight_keys`.
     fn with_inflight(&mut self, inflight_keys: &mut KeyContainer);
+    /// If all requested items are already in flight, then do not send request
+    /// to remote peer.
     fn is_empty(&self) -> bool;
-    fn is_resend_enabled(&self) -> bool { true }
-    fn resend(&self) -> Box<Request>;
+    /// When a request failed (send fail, invalid response or timeout), it will
+    /// be resend automatically.
+    ///
+    /// For some kind of requests, it will resend other kind of request other
+    /// than the original one. E.g. when get compact block failed, it will
+    /// request the whole block instead.
+    ///
+    /// If resend is not required, return `None`, e.g. request transactions
+    /// failed.
+    fn resend(&self) -> Option<Box<Request>>;
 }
 
 #[derive(Debug)]
