@@ -205,7 +205,7 @@ impl FullClient {
 
         let initial_sync_phase = SyncPhaseType::CatchUpRecoverBlockHeaderFromDB;
         let sync = Arc::new(SynchronizationService::new(
-            false,
+            true,
             network.clone(),
             sync_graph.clone(),
             protocol_config,
