@@ -621,25 +621,31 @@ impl SynchronizationProtocolHandler {
         if self.graph.contains_block_header(hash) {
             return true;
         }
+
+        if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
+            debug_assert!(match info.get_status() {
+                BlockStatus::Invalid => false,
+                _ => true,
+            });
+            if info.get_seq_num()
+                < self.graph.consensus.current_era_genesis_seq_num()
+            {
+                debug!("Ignore header in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
+                // The block is ordered before current era genesis, so we do
+                // not need to process it
+                return true;
+            }
+
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
+                // This block header has already entered consensus
+                // graph in this run.
+                return true;
+            }
+        }
+
         if let Some(header) = self.graph.data_man.block_header_by_hash(hash) {
             debug!("Recovered header {:?} from db", hash);
             // Process headers from db
-            if let Some(info) =
-                self.graph.data_man.local_block_info_from_db(hash)
-            {
-                debug_assert!(match info.get_status() {
-                    BlockStatus::Invalid => false,
-                    _ => true,
-                });
-                if info.get_seq_num()
-                    < self.graph.consensus.current_era_genesis_seq_num()
-                {
-                    debug!("Ignore header in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
-                    // The block is ordered before current era genesis, so we do
-                    // not need to process it
-                    return true;
-                }
-            }
             let mut block_headers_resp = GetBlockHeadersResponse::default();
             block_headers_resp.set_request_id(0);
             let mut headers = Vec::new();
@@ -1129,21 +1135,32 @@ impl SynchronizationProtocolHandler {
         if self.graph.contains_block(hash) {
             return true;
         }
+
+        if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
+            if info.get_seq_num()
+                < self.graph.consensus.current_era_genesis_seq_num()
+            {
+                debug!(
+                    "Ignore block in old era hash={:?}, seq={}, cur_era_seq={}",
+                    hash,
+                    info.get_seq_num(),
+                    self.graph.consensus.current_era_genesis_seq_num()
+                );
+                // The block is ordered before current era genesis, so we do
+                // not need to process it
+                return true;
+            }
+
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
+                // This block has already entered consensus graph
+                // in this run.
+                return true;
+            }
+        }
+
         if let Some(block) = self.graph.data_man.block_by_hash(hash, false) {
             debug!("Recovered block {:?} from db", hash);
             // Process blocks from db
-            if let Some(info) =
-                self.graph.data_man.local_block_info_from_db(hash)
-            {
-                if info.get_seq_num()
-                    < self.graph.consensus.current_era_genesis_seq_num()
-                {
-                    debug!("Ignore block in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
-                    // The block is ordered before current era genesis, so we do
-                    // not need to process it
-                    return true;
-                }
-            }
             // The parameter `failed_peer` is only used when there exist some
             // blocks in `requested` but not in `blocks`.
             // Here `requested` and `blocks` have the same block, so it's okay
