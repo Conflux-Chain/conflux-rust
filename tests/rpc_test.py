@@ -21,6 +21,7 @@ class RpcTest(ConfluxTestFramework):
         self.setup_nodes()
 
     def run_test(self):
+        time.sleep(7)
         self._test_sayhello()
 
         blocks = self.nodes[0].generate(1, 0)

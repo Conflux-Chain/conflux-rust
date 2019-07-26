@@ -811,10 +811,6 @@ impl SynchronizationGraph {
                 }
             })
             .expect("Cannot fail");
-
-        // TODO: determine the parameter by sync phase
-        sync_graph.recover_graph_from_db(false);
-
         sync_graph
     }
 
@@ -862,7 +858,7 @@ impl SynchronizationGraph {
         }
     }
 
-    fn recover_graph_from_db(&self, header_only: bool) {
+    pub fn recover_graph_from_db(&self, header_only: bool) {
         info!("Start fast recovery of the block DAG from database");
         let terminals_opt = self.data_man.terminals_from_db();
         if terminals_opt.is_none() {
@@ -1315,6 +1311,8 @@ impl SynchronizationGraph {
         let mut need_to_relay = false;
 
         let hash = block.hash();
+
+        debug!("insert_block {:?}", hash);
 
         let inner = &mut *self.inner.write();
 

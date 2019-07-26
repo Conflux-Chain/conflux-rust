@@ -5,12 +5,9 @@
 use super::{
     random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
-use crate::{
-    consensus::SharedConsensusGraph,
-    sync::message::{
-        GetBlockHeadersResponse, Message, MsgId, NewBlock, NewBlockHashes,
-        Status, TransactionDigests, TransactionPropagationControl,
-    },
+use crate::sync::message::{
+    GetBlockHeadersResponse, Message, MsgId, NewBlock, NewBlockHashes, Status,
+    TransactionDigests, TransactionPropagationControl,
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -28,12 +25,10 @@ use super::{
 };
 use crate::{
     block_data_manager::BlockStatus,
-    consensus::ConsensusGraphInner,
     sync::{
         message::Context,
-        state::{SnapshotChunkSync, StateSync},
-        synchronization_state::SyncPhase,
-        SynchronizationGraphInner,
+        state::SnapshotChunkSync,
+        synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
     },
 };
 use metrics::{register_meter_with_group, Meter};
@@ -53,7 +48,7 @@ lazy_static! {
         register_meter_with_group("timer", "sync:recover_block");
 }
 
-const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
+pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
 
 pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
 
@@ -234,8 +229,9 @@ pub struct SynchronizationProtocolHandler {
     pub graph: SharedSynchronizationGraph,
     pub syn: Arc<SynchronizationState>,
     pub request_manager: Arc<RequestManager>,
-    latest_epoch_requested: Mutex<u64>,
+    pub latest_epoch_requested: Mutex<u64>,
     pub future_blocks: FutureBlockContainer,
+    pub phase_manager: SynchronizationPhaseManager,
 
     // Worker task queue for recover public
     pub recover_public_queue: AsyncTaskQueue<RecoverPublicTask>,
@@ -270,31 +266,30 @@ pub struct ProtocolConfiguration {
 impl SynchronizationProtocolHandler {
     pub fn new(
         is_full_node: bool, protocol_config: ProtocolConfiguration,
-        consensus_graph: SharedConsensusGraph,
+        initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
     ) -> Self
     {
-        let syn = Arc::new(SynchronizationState::new(
-            is_full_node,
-            consensus_graph
-                .data_man
-                .get_cur_consensus_era_genesis_hash(),
-        ));
-
+        let sync_state = Arc::new(SynchronizationState::new(is_full_node));
         let request_manager =
-            Arc::new(RequestManager::new(&protocol_config, syn.clone()));
+            Arc::new(RequestManager::new(&protocol_config, sync_state.clone()));
 
         let future_block_buffer_capacity =
             protocol_config.future_block_buffer_capacity;
 
         Self {
             protocol_config,
-            graph: sync_graph,
-            syn: syn.clone(),
+            graph: sync_graph.clone(),
+            syn: sync_state.clone(),
             request_manager,
             latest_epoch_requested: Mutex::new(0),
             future_blocks: FutureBlockContainer::new(
                 future_block_buffer_capacity,
+            ),
+            phase_manager: SynchronizationPhaseManager::new(
+                initial_sync_phase,
+                sync_state.clone(),
+                sync_graph.clone(),
             ),
             recover_public_queue: AsyncTaskQueue::new(
                 SyncHandlerWorkType::RecoverPublic,
@@ -302,7 +297,7 @@ impl SynchronizationProtocolHandler {
             local_message: AsyncTaskQueue::new(
                 SyncHandlerWorkType::LocalMessage,
             ),
-            state_sync: Mutex::new(SnapshotChunkSync::new(syn)),
+            state_sync: Mutex::new(SnapshotChunkSync::new(sync_state)),
         }
     }
 
@@ -317,11 +312,14 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn catch_up_mode(&self) -> bool {
-        self.syn.sync_phase.lock().catch_up_mode()
+        self.phase_manager.get_current_phase().phase_type()
+            != SyncPhaseType::Normal
     }
 
     pub fn need_requesting_blocks(&self) -> bool {
-        self.syn.sync_phase.lock().need_requesting_blocks()
+        let current_phase = self.phase_manager.get_current_phase();
+        current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlock
+            || current_phase.phase_type() == SyncPhaseType::Normal
     }
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
@@ -374,15 +372,6 @@ impl SynchronizationProtocolHandler {
                 self.syn.update_heartbeat(&peer);
             }
         }
-
-        self.syn.validate_msg_id(&msg_id);
-        //        if !self.syn.validate_msg_id(&msg_id) {
-        //            debug!(
-        //                "Message {:?} from peer {:?} is not needed in current
-        // phase",                msg_id, peer
-        //            );
-        //            return;
-        //        }
 
         let ctx = Context {
             peer,
@@ -463,13 +452,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn start_sync(&self, io: &NetworkContext) {
-        let checkpoint = self.syn.sync_phase.lock().get_sync_checkpoint();
-
-        if let Some(checkpoint) = checkpoint {
-            self.state_sync
-                .lock()
-                .start(checkpoint, io, &self.request_manager);
-        } else if self.catch_up_mode() {
+        if self.catch_up_mode() {
             self.request_epochs(io);
         } else {
             self.request_missing_terminals(io);
@@ -478,9 +461,7 @@ impl SynchronizationProtocolHandler {
 
     /// request missing blocked after `recover_graph_from_db` is called
     /// should be called in `start_sync`
-    /// TODO: remove #[allow(dead_code)]
-    #[allow(dead_code)]
-    fn request_initial_missed_block(&self, io: &NetworkContext) {
+    pub fn request_initial_missed_block(&self, io: &NetworkContext) {
         let mut to_request;
         {
             let mut missing_hashes =
@@ -495,7 +476,7 @@ impl SynchronizationProtocolHandler {
         self.request_block_headers(io, chosen_peer, to_request);
     }
 
-    fn request_missing_terminals(&self, io: &NetworkContext) {
+    pub fn request_missing_terminals(&self, io: &NetworkContext) {
         let peers: Vec<PeerId> =
             self.syn.peers.read().keys().cloned().collect();
 
@@ -537,7 +518,7 @@ impl SynchronizationProtocolHandler {
         }
     }
 
-    fn request_epochs(&self, io: &NetworkContext) {
+    pub fn request_epochs(&self, io: &NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
         let best_peer_epoch = self.best_peer_epoch().unwrap_or(0);
@@ -564,19 +545,6 @@ impl SynchronizationProtocolHandler {
             } else if best_peer_epoch == 0 {
                 // We have recovered all epochs from db, and there is no peer to
                 // request new epochs, so we should enter `Latest` phase
-                if self.syn.is_full_node() {
-                    // FIXME Consensus may have not finished processing all
-                    // blocks
-                    *self.syn.sync_phase.lock() = SyncPhase::SyncBlocks(
-                        self.graph
-                            .data_man
-                            .get_cur_consensus_era_genesis_hash(),
-                    );
-                } else {
-                    // As a archive node, blocks have already been requested
-                    // while requesting headers
-                    *self.syn.sync_phase.lock() = SyncPhase::Latest;
-                }
                 return;
             }
 
@@ -819,8 +787,6 @@ impl SynchronizationProtocolHandler {
     fn send_status(
         &self, io: &NetworkContext, peer: PeerId,
     ) -> Result<(), NetworkError> {
-        debug!("Sending status message to {:?}", peer);
-
         let best_info = self.graph.consensus.get_best_info();
 
         let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
@@ -829,13 +795,19 @@ impl SynchronizationProtocolHandler {
         } else {
             best_info.bounded_terminal_block_hashes.clone()
         };
-        let msg: Box<dyn Message> = Box::new(Status {
+
+        let status_message = Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
             genesis_hash: self.graph.data_man.true_genesis_block.hash(),
-            best_epoch: best_info.best_epoch_number as u64,
+            best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,
-        });
+        };
+
+        debug!("Sending status message to {:?}: {:?}", peer, status_message);
+
+        let msg: Box<dyn Message> = Box::new(status_message);
+
         send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
     }
 
@@ -1042,10 +1014,8 @@ impl SynchronizationProtocolHandler {
     /// If we are in `SyncHeaders` phase, we should insert graph-ready block
     /// headers to sync graph directly
     pub fn insert_header_to_consensus(&self) -> bool {
-        match &*self.syn.sync_phase.lock() {
-            SyncPhase::SyncHeaders(_) => true,
-            _ => false,
-        }
+        let current_phase = self.phase_manager.get_current_phase();
+        current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlockHeader
     }
 
     pub fn propagate_new_transactions(&self, io: &NetworkContext) {
@@ -1072,79 +1042,16 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
-        let sync_phase = &mut *self.syn.sync_phase.lock();
-        // TODO handle the case where we need to switch back phase
-        // TODO Do not acquire any consensus inner lock
-        match sync_phase {
-            SyncPhase::SyncHeaders(h) => {
-                let middle_epoch = self.syn.get_middle_epoch()?;
-                if self.graph.consensus.best_epoch_number()
-                    + CATCH_UP_EPOCH_LAG_THRESHOLD
-                    >= middle_epoch
-                {
-                    let _checkpoint = self
-                        .graph
-                        .data_man
-                        .get_cur_consensus_era_genesis_hash();
-                    // FIXME We should set it to `checkpoint` once we can
-                    // retrieve checkpoint states
-                    *sync_phase = SyncPhase::SyncCheckpoints(*h);
-                    //                    *sync_phase =
-                    // SyncPhase::SyncCheckpoints(checkpoint);
-                }
-            }
-            SyncPhase::SyncCheckpoints(h) => {
-                // TODO handle the case where the checkpoint changes before we
-                // retrieve the state TODO handle checkpoint
-                // timeout to try to retrieve the checkpoint
-                // before this one FIXME We should
-                // advance `SyncCheckpoints` to `SyncBlocks` in the handler of
-                // the checkpoint state message
-                *sync_phase = SyncPhase::SyncBlocks(h.clone());
-                // Reset our states to sync blocks and insert them into
-                // consensus again.
-                let (cur_era_genesis_hash, cur_era_genesis_height) =
-                    self.graph.get_genesis_hash_and_height_in_current_era();
-                *self.latest_epoch_requested.lock() = cur_era_genesis_height;
-                // Acquire both lock first to ensure consistency
-                let old_consensus_inner =
-                    &mut *self.graph.consensus.inner.write();
-                let old_sync_inner = &mut *self.graph.inner.write();
-                let new_consensus_inner =
-                    ConsensusGraphInner::with_era_genesis_block(
-                        old_consensus_inner.pow_config.clone(),
-                        self.graph.data_man.clone(),
-                        old_consensus_inner.inner_conf.clone(),
-                        &cur_era_genesis_hash,
-                    );
-                self.graph.consensus.update_best_info(&new_consensus_inner);
-                *old_consensus_inner = new_consensus_inner;
-                let new_sync_inner =
-                    SynchronizationGraphInner::with_genesis_block(
-                        self.graph
-                            .data_man
-                            .block_header_by_hash(&cur_era_genesis_hash)
-                            .expect("era genesis exists"),
-                        old_sync_inner.pow_config.clone(),
-                        old_sync_inner.data_man.clone(),
-                    );
-                *old_sync_inner = new_sync_inner;
-            }
-            SyncPhase::SyncBlocks(_) => {
-                let middle_epoch = self.syn.get_middle_epoch()?;
-                if self.graph.consensus.best_epoch_number()
-                    + CATCH_UP_EPOCH_LAG_THRESHOLD
-                    >= middle_epoch
-                {
-                    *sync_phase = SyncPhase::Latest;
-                }
-            }
-            SyncPhase::Latest => {
-                // TODO handle the case where we need to switch back phase
-            }
+        self.phase_manager.try_initialize(io, self);
+        let current_phase = self.phase_manager.get_current_phase();
+        let next_phase_type = current_phase.next();
+        if current_phase.phase_type() != next_phase_type {
+            // Phase changed
+            self.phase_manager
+                .change_phase_to(next_phase_type, io, self);
         }
 
-        let catch_up_mode = sync_phase.catch_up_mode();
+        let catch_up_mode = self.catch_up_mode();
         let mut need_notify = Vec::new();
         for (peer, state) in self.syn.peers.read().iter() {
             let mut state = state.write();
@@ -1386,7 +1293,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_sync_phase(io);
-                self.start_sync(io);
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();

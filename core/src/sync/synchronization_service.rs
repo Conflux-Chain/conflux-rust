@@ -6,9 +6,9 @@ use super::{
     Error, SharedSynchronizationGraph, SynchronizationProtocolHandler,
     SYNCHRONIZATION_PROTOCOL_VERSION,
 };
-use crate::{
-    consensus::SharedConsensusGraph,
-    sync::synchronization_protocol_handler::ProtocolConfiguration,
+use crate::sync::{
+    synchronization_phases::SyncPhaseType,
+    synchronization_protocol_handler::ProtocolConfiguration,
 };
 use cfx_types::H256;
 use network::{NetworkService, ProtocolId};
@@ -24,15 +24,15 @@ pub struct SynchronizationService {
 impl SynchronizationService {
     pub fn new(
         is_full_node: bool, network: Arc<NetworkService>,
-        consensus_graph: SharedConsensusGraph,
         sync_graph: SharedSynchronizationGraph,
         protocol_config: ProtocolConfiguration,
+        initial_sync_phase: SyncPhaseType,
     ) -> Self
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
             is_full_node,
             protocol_config,
-            consensus_graph,
+            initial_sync_phase,
             sync_graph,
         ));
 
