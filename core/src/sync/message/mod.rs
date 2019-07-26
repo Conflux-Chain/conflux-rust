@@ -15,6 +15,7 @@ mod getblocktxn;
 mod getcmpctblocks;
 mod getterminalblockhashes;
 mod handleable;
+mod keys;
 mod message;
 mod metrics;
 mod newblock;
@@ -37,6 +38,7 @@ pub use self::{
     getcmpctblocks::GetCompactBlocks,
     getterminalblockhashes::GetTerminalBlockHashes,
     handleable::{Context, Handleable},
+    keys::{Key, KeyContainer},
     message::{Message, MsgId, RequestId},
     newblock::NewBlock,
     newblockhashes::NewBlockHashes,

@@ -4,12 +4,11 @@
 
 use crate::sync::{
     message::{
-        metrics::BLOCK_HANDLE_TIMER, Context, Handleable, Message, MsgId,
-        RequestId,
+        metrics::BLOCK_HANDLE_TIMER, Context, GetBlocks, GetCompactBlocks,
+        Handleable, Message, MsgId, RequestId,
     },
-    request_manager::RequestMessage,
     synchronization_protocol_handler::RecoverPublicTask,
-    Error, ErrorKind,
+    Error,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
@@ -38,16 +37,16 @@ impl Handleable for GetBlocksResponse {
                 .collect::<Vec<H256>>()
         );
         let req = ctx.match_request(self.request_id())?;
-        let req_hashes_vec = match req {
-            RequestMessage::Blocks(request) => request.hashes,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, &self);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
-
-        let requested_blocks: HashSet<H256> =
-            req_hashes_vec.into_iter().collect();
+        let requested_blocks: HashSet<H256> = req
+            .downcast_general::<GetBlocks>(
+                ctx.io,
+                &ctx.manager.request_manager,
+                false,
+            )?
+            .hashes
+            .iter()
+            .cloned()
+            .collect();
 
         ctx.manager.recover_public_queue.dispatch(
             ctx.io,
@@ -115,25 +114,25 @@ impl Handleable for GetBlocksWithPublicResponse {
                 .collect::<Vec<H256>>()
         );
         let req = ctx.match_request(self.request_id())?;
-        let req_hashes_vec = match req {
-            RequestMessage::Blocks(request) => request.hashes,
-            RequestMessage::Compact(request) => request.hashes,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, self);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
+        let req_hashes: HashSet<H256> = if let Ok(req) = req
+            .downcast_general::<GetCompactBlocks>(
+                ctx.io,
+                &ctx.manager.request_manager,
+                false,
+            ) {
+            req.hashes.iter().cloned().collect()
+        } else {
+            let req = req.downcast_general::<GetBlocks>(
+                ctx.io,
+                &ctx.manager.request_manager,
+                false,
+            )?;
+            req.hashes.iter().cloned().collect()
         };
-        let requested_blocks: HashSet<H256> =
-            req_hashes_vec.into_iter().collect();
 
         ctx.manager.recover_public_queue.dispatch(
             ctx.io,
-            RecoverPublicTask::new(
-                self.blocks,
-                requested_blocks,
-                ctx.peer,
-                false,
-            ),
+            RecoverPublicTask::new(self.blocks, req_hashes, ctx.peer, false),
         );
 
         Ok(())

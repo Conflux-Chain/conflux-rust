@@ -4,19 +4,21 @@
 
 use crate::sync::{
     message::{
-        metrics::TX_HANDLE_TIMER, Context, Handleable, Message, MsgId,
-        RequestId,
+        metrics::TX_HANDLE_TIMER, Context, Handleable, Key, KeyContainer,
+        Message, MsgId, RequestId,
     },
-    request_manager::RequestMessage,
-    Error, ErrorKind,
+    request_manager::Request,
+    Error, ErrorKind, ProtocolConfiguration,
 };
 use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
+    any::Any,
     collections::HashSet,
     ops::{Deref, DerefMut},
+    time::Duration,
 };
 
 #[derive(Debug, PartialEq)]
@@ -228,6 +230,44 @@ pub struct GetTransactions {
     pub tx_ids: HashSet<TxPropagateId>,
 }
 
+impl Request for GetTransactions {
+    fn set_request_id(&mut self, request_id: u64) {
+        self.request_id.set_request_id(request_id);
+    }
+
+    fn as_message(&self) -> &Message { self }
+
+    fn as_any(&self) -> &Any { self }
+
+    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
+        conf.transaction_request_timeout
+    }
+
+    fn on_removed(&self, inflight_keys: &mut KeyContainer) {
+        let msg_type = self.msg_id().into();
+        for tx_id in self.tx_ids.iter() {
+            inflight_keys.remove(msg_type, Key::Id(*tx_id));
+        }
+    }
+
+    fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
+        let msg_type = self.msg_id().into();
+
+        let mut tx_ids: HashSet<TxPropagateId> = HashSet::new();
+        for id in self.tx_ids.iter() {
+            if inflight_keys.add(msg_type, Key::Id(*id)) {
+                tx_ids.insert(*id);
+            }
+        }
+
+        self.tx_ids = tx_ids;
+    }
+
+    fn is_empty(&self) -> bool { self.tx_ids.is_empty() }
+
+    fn resend(&self) -> Option<Box<Request>> { None }
+}
+
 impl Handleable for GetTransactions {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let transactions = ctx
@@ -302,14 +342,12 @@ impl Handleable for GetTransactionsResponse {
         debug!("on_get_transactions_response {:?}", self.request_id());
 
         let req = ctx.match_request(self.request_id())?;
+        let req = req.downcast_general::<GetTransactions>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            false,
+        )?;
 
-        let req_tx_ids: HashSet<TxPropagateId> = match req {
-            RequestMessage::Transactions(request) => request.tx_ids,
-            _ => {
-                warn!("Get response not matching the request! req={:?}, resp={:?}", req, self);
-                return Err(ErrorKind::UnexpectedResponse.into());
-            }
-        };
         // FIXME: Do some check based on transaction request.
 
         debug!(
@@ -320,7 +358,7 @@ impl Handleable for GetTransactionsResponse {
 
         ctx.manager
             .request_manager
-            .transactions_received(&req_tx_ids);
+            .transactions_received(&req.tx_ids);
 
         let (signed_trans, _) = ctx
             .manager

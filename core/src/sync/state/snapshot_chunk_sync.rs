@@ -56,7 +56,8 @@ impl StateSync for SnapshotChunkSync {
         // start to request manifest with specified checkpoint
         let request = SnapshotManifestRequest::new(checkpoint);
         let peer = self.sync.get_random_peer(&HashSet::new());
-        request_manager.send_general_request(io, peer, Box::new(request));
+
+        request_manager.request_with_delay(io, Box::new(request), peer, None);
     }
 }
 
@@ -80,8 +81,11 @@ impl SnapshotChunkSync {
             request_manager.match_request(io, peer, response.request_id)?;
 
         // validate the responded manifest
-        let request = message
-            .downcast_general::<SnapshotManifestRequest>(io, request_manager)?;
+        let request = message.downcast_general::<SnapshotManifestRequest>(
+            io,
+            request_manager,
+            true,
+        )?;
         if request.checkpoint != response.checkpoint {
             return Err(ErrorKind::Invalid.into());
         }
@@ -115,10 +119,11 @@ impl SnapshotChunkSync {
             if let Some(chunk_hash) = self.pending_chunks.pop_front() {
                 let request =
                     SnapshotChunkRequest::new(checkpoint.clone(), chunk_hash);
-                request_manager.send_general_request(
+                request_manager.request_with_delay(
                     io,
-                    Some(peer),
                     Box::new(request),
+                    Some(peer),
+                    None,
                 );
             } else {
                 break;
@@ -137,8 +142,11 @@ impl SnapshotChunkSync {
             request_manager.match_request(io, peer, response.request_id)?;
 
         // validate the responded chunk hash
-        let request = message
-            .downcast_general::<SnapshotChunkRequest>(io, request_manager)?;
+        let request = message.downcast_general::<SnapshotChunkRequest>(
+            io,
+            request_manager,
+            true,
+        )?;
         let responded_chunk_hash = keccak(response.chunk);
         if responded_chunk_hash != request.chunk_hash {
             return Err(ErrorKind::Invalid.into());
