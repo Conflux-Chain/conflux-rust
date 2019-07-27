@@ -648,7 +648,6 @@ impl SynchronizationProtocolHandler {
 
         // FIXME: If there is no block info in db, whether we need to fetch
         // block header from db?
-
         if let Some(header) = self.graph.data_man.block_header_by_hash(hash) {
             debug!("Recovered header {:?} from db", hash);
             // Process headers from db
@@ -1207,7 +1206,6 @@ impl SynchronizationProtocolHandler {
 
         // FIXME: If there is no block info in db, whether we need to fetch
         // block from db?
-
         if let Some(block) = self.graph.data_man.block_by_hash(hash, false) {
             debug!("Recovered block {:?} from db", hash);
             // Process blocks from db
