@@ -44,7 +44,7 @@ impl Handleable for GetBlockHeadersResponse {
         }
 
         let req = ctx.match_request(self.request_id())?;
-        let req = req.downcast_general::<GetBlockHeaders>(
+        let req = req.downcast_ref::<GetBlockHeaders>(
             ctx.io,
             &ctx.manager.request_manager,
             true,
