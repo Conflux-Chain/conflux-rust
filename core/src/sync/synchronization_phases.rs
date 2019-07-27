@@ -222,7 +222,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     fn next(&self) -> SyncPhaseType {
         let middle_epoch = self.syn.get_middle_epoch();
         if middle_epoch.is_none() {
-            return SyncPhaseType::CatchUpCheckpoint;
+            return self.phase_type();
         }
         let middle_epoch = middle_epoch.unwrap();
         if self.graph.consensus.best_epoch_number()
@@ -351,7 +351,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     fn next(&self) -> SyncPhaseType {
         let middle_epoch = self.syn.get_middle_epoch();
         if middle_epoch.is_none() {
-            return SyncPhaseType::Normal;
+            return self.phase_type();
         }
         let middle_epoch = middle_epoch.unwrap();
         if self.graph.consensus.best_epoch_number()

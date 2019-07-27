@@ -24,7 +24,7 @@ use super::{
     request_manager::RequestManager,
 };
 use crate::{
-    block_data_manager::BlockStatus,
+    block_data_manager::{BlockStatus, NULLU64},
     sync::{
         message::Context,
         state::SnapshotChunkSync,
@@ -71,6 +71,7 @@ const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
+const HEARTBEAT_TIMER: TimerToken = 9;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -636,12 +637,17 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id()
+                || info.get_instance_id() == NULLU64
+            {
                 // This block header has already entered consensus
                 // graph in this run.
                 return true;
             }
         }
+
+        // FIXME: If there is no block info in db, whether we need to fetch
+        // block header from db?
 
         if let Some(header) = self.graph.data_man.block_header_by_hash(hash) {
             debug!("Recovered header {:?} from db", hash);
@@ -815,6 +821,41 @@ impl SynchronizationProtocolHandler {
         let msg: Box<dyn Message> = Box::new(status_message);
 
         send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
+    }
+
+    fn broadcast_status(&self, io: &NetworkContext) {
+        let best_info = self.graph.consensus.get_best_info();
+
+        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
+        {
+            x.clone()
+        } else {
+            best_info.bounded_terminal_block_hashes.clone()
+        };
+
+        let status_message = Status {
+            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
+            network_id: 0x0,
+            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
+            best_epoch: best_info.best_epoch_number,
+            terminal_block_hashes: terminal_hashes,
+        };
+
+        debug!("Broadcasting status message: {:?}", status_message);
+
+        let msg: Box<dyn Message> = Box::new(status_message);
+
+        if self
+            .broadcast_message(
+                io,
+                PeerId::max_value(),
+                msg.as_ref(),
+                SendQueuePriority::Normal,
+            )
+            .is_err()
+        {
+            warn!("Error broadcsting status message");
+        }
     }
 
     pub fn announce_new_blocks(&self, io: &NetworkContext, hashes: &[H256]) {
@@ -1038,6 +1079,10 @@ impl SynchronizationProtocolHandler {
         self.request_manager.resend_waiting_requests(io);
     }
 
+    pub fn send_heartbeat(&self, io: &NetworkContext) {
+        self.broadcast_status(io);
+    }
+
     fn block_cache_gc(&self) { self.graph.data_man.gc_cache() }
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
@@ -1151,12 +1196,17 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id()
+                || info.get_instance_id() == NULLU64
+            {
                 // This block has already entered consensus graph
                 // in this run.
                 return true;
             }
         }
+
+        // FIXME: If there is no block info in db, whether we need to fetch
+        // block from db?
 
         if let Some(block) = self.graph.data_man.block_by_hash(hash, false) {
             debug!("Recovered block {:?} from db", hash);
@@ -1217,7 +1267,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             CHECK_REQUEST_TIMER,
             self.protocol_config.check_request_period,
         )
-        .expect("Error registering transactions timer");
+        .expect("Error registering check request timer");
+        io.register_timer(HEARTBEAT_TIMER, Duration::from_secs(30))
+            .expect("Error registering heartbeat timer");
         io.register_timer(
             BLOCK_CACHE_GC_TIMER,
             self.protocol_config.block_cache_gc_period,
@@ -1303,6 +1355,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);
+            }
+            HEARTBEAT_TIMER => {
+                self.send_heartbeat(io);
             }
             BLOCK_CACHE_GC_TIMER => {
                 self.block_cache_gc();

@@ -35,7 +35,7 @@ use std::{
 };
 use threadpool::ThreadPool;
 
-const NULLU64: u64 = !0;
+pub const NULLU64: u64 = !0;
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
