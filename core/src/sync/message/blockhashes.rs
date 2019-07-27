@@ -23,7 +23,7 @@ impl Handleable for GetBlockHashesResponse {
         debug!("on_block_hashes_response, msg={:?}", self);
 
         let req = ctx.match_request(self.request_id())?;
-        let epoch_req = req.downcast_general::<GetBlockHashesByEpoch>(
+        let epoch_req = req.downcast_ref::<GetBlockHashesByEpoch>(
             ctx.io,
             &ctx.manager.request_manager,
             true,

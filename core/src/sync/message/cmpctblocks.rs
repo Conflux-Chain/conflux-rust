@@ -49,7 +49,7 @@ impl Handleable for GetCompactBlocksResponse {
         let mut completed_blocks = Vec::new();
 
         let mut requested_blocks: HashSet<H256> = req
-            .downcast_general::<GetCompactBlocks>(
+            .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
                 true,
