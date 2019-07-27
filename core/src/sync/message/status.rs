@@ -88,6 +88,7 @@ impl Handleable for Status {
             debug!("Peer {:?} connected", ctx.peer);
             ctx.manager.syn.peer_connected(ctx.peer, peer_state);
             ctx.manager.request_manager.on_peer_connected(ctx.peer);
+            ctx.manager.state_sync.on_peer_connected(ctx);
 
             ctx.manager.start_sync(ctx.io);
         }
