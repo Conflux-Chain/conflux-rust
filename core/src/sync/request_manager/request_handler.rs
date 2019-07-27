@@ -430,10 +430,10 @@ impl RequestMessage {
 
     pub fn get_msg(&self) -> &Message { self.request.as_message() }
 
-    /// Download cast general request to specified request type.
+    /// Download cast request to specified request type.
     /// If downcast failed, resend the request again and return
     /// `UnexpectedResponse` error.
-    pub fn downcast_general<T: Request + Any>(
+    pub fn downcast_ref<T: Request + Any>(
         &self, io: &NetworkContext, request_manager: &RequestManager,
         remove_on_mismatch: bool,
     ) -> Result<&T, Error>

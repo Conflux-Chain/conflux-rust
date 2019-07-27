@@ -81,7 +81,7 @@ impl SnapshotChunkSync {
             request_manager.match_request(io, peer, response.request_id)?;
 
         // validate the responded manifest
-        let request = message.downcast_general::<SnapshotManifestRequest>(
+        let request = message.downcast_ref::<SnapshotManifestRequest>(
             io,
             request_manager,
             true,
@@ -142,7 +142,7 @@ impl SnapshotChunkSync {
             request_manager.match_request(io, peer, response.request_id)?;
 
         // validate the responded chunk hash
-        let request = message.downcast_general::<SnapshotChunkRequest>(
+        let request = message.downcast_ref::<SnapshotChunkRequest>(
             io,
             request_manager,
             true,
