@@ -241,7 +241,7 @@ pub struct SynchronizationProtocolHandler {
     local_message: AsyncTaskQueue<LocalMessageTask>,
 
     // state sync for any checkpoint
-    pub state_sync: Mutex<SnapshotChunkSync>,
+    pub state_sync: SnapshotChunkSync,
 }
 
 #[derive(Clone)]
@@ -297,7 +297,7 @@ impl SynchronizationProtocolHandler {
             local_message: AsyncTaskQueue::new(
                 SyncHandlerWorkType::LocalMessage,
             ),
-            state_sync: Mutex::new(SnapshotChunkSync::new(sync_state)),
+            state_sync: SnapshotChunkSync::default(),
         }
     }
 

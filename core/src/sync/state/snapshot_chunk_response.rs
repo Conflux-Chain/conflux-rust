@@ -19,13 +19,7 @@ impl Handleable for SnapshotChunkResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         ctx.manager
             .state_sync
-            .lock()
-            .handle_snapshot_chunk_response(
-                ctx.io,
-                ctx.peer,
-                self,
-                &ctx.manager.request_manager,
-            )
+            .handle_snapshot_chunk_response(ctx, self)
     }
 }
 
