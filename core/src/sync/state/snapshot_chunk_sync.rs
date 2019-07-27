@@ -10,22 +10,22 @@ use crate::sync::{
         snapshot_manifest_request::SnapshotManifestRequest,
         snapshot_manifest_response::SnapshotManifestResponse, StateSync,
     },
-    Error, ErrorKind, SynchronizationProtocolHandler,
+    SynchronizationProtocolHandler,
 };
 use cfx_types::H256;
-use keccak_hash::keccak;
-use network::NetworkContext;
+use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
-use std::collections::{HashSet, VecDeque};
-
-const MAX_DOWNLOAD_PEERS: usize = 8;
+use std::{
+    collections::{HashSet, VecDeque},
+    fmt::{Debug, Formatter, Result},
+    time::Instant,
+};
 
 #[derive(Copy, Clone)]
 pub enum Status {
     Inactive,
-    DownloadingManifest,
-    DownloadingChunks,
-    Restoring,
+    DownloadingManifest(Instant),
+    DownloadingChunks(Instant),
     Completed,
 }
 
@@ -33,17 +33,61 @@ impl Default for Status {
     fn default() -> Self { Status::Inactive }
 }
 
+impl Debug for Status {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        let status = match self {
+            Status::Inactive => "inactive".into(),
+            Status::DownloadingManifest(t) => {
+                format!("downloading manifest ({:?})", t.elapsed())
+            }
+            Status::DownloadingChunks(t) => {
+                format!("downloading chunks ({:?})", t.elapsed())
+            }
+            Status::Completed => "completed".into(),
+        };
+
+        write!(f, "{}", status)
+    }
+}
+
 #[derive(Default)]
 struct Inner {
     checkpoint: H256,
     status: Status,
-    manifest: Option<SnapshotManifestResponse>,
     pending_chunks: VecDeque<H256>,
+    downloading_chunks: HashSet<H256>,
+    restoring_chunks: HashSet<H256>,
+    restored_chunks: HashSet<H256>,
 }
 
-#[derive(Default)]
+impl Inner {
+    fn reset(&mut self, checkpoint: H256) {
+        self.checkpoint = checkpoint;
+        self.status = Status::DownloadingManifest(Instant::now());
+        self.pending_chunks.clear();
+        self.downloading_chunks.clear();
+        self.restoring_chunks.clear();
+        self.restored_chunks.clear();
+    }
+}
+
+impl Debug for Inner {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(
+            f,
+            "(status = {:?}, pending = {}, downloading = {}, restoring = {}, restored = {})",
+            self.status,
+            self.pending_chunks.len(),
+            self.downloading_chunks.len(),
+            self.restoring_chunks.len(),
+            self.restored_chunks.len(),
+        )
+    }
+}
+
 pub struct SnapshotChunkSync {
     inner: RwLock<Inner>,
+    max_download_peers: usize,
 }
 
 impl StateSync for SnapshotChunkSync {
@@ -60,8 +104,7 @@ impl StateSync for SnapshotChunkSync {
 
         self.abort();
 
-        inner.checkpoint = checkpoint.clone();
-        inner.status = Status::DownloadingManifest;
+        inner.reset(checkpoint.clone());
 
         // start to request manifest with specified checkpoint
         let request = SnapshotManifestRequest::new(checkpoint);
@@ -77,6 +120,17 @@ impl StateSync for SnapshotChunkSync {
 }
 
 impl SnapshotChunkSync {
+    pub fn new(max_download_peers: usize) -> Self {
+        SnapshotChunkSync {
+            inner: Default::default(),
+            max_download_peers: if max_download_peers == 0 {
+                1
+            } else {
+                max_download_peers
+            },
+        }
+    }
+
     fn abort(&self) {
         // todo cleanup current syncing with storage APIs
     }
@@ -85,98 +139,128 @@ impl SnapshotChunkSync {
 
     pub fn handle_snapshot_manifest_response(
         &self, ctx: &Context, response: SnapshotManifestResponse,
-    ) -> Result<(), Error> {
-        let message = ctx.match_request(response.request_id)?;
-        let request = message.downcast_ref::<SnapshotManifestRequest>(
-            ctx.io,
-            &ctx.manager.request_manager,
-            true,
-        )?;
-
-        // validate the responded manifest
-        if request.checkpoint != response.checkpoint {
-            ctx.manager
-                .request_manager
-                .remove_mismatch_request(ctx.io, &message);
-            return Err(ErrorKind::Invalid.into());
-        }
-
-        // todo validate the responded: state root, checkpoint and current
-        // status
-
+    ) {
         let mut inner = self.inner.write();
 
-        inner.pending_chunks = VecDeque::from(response.chunk_hashes.clone());
-        inner.manifest = Some(response);
-        inner.status = Status::DownloadingChunks;
+        // new era started
+        if response.checkpoint != inner.checkpoint {
+            info!(
+                "Checkpoint changed and ignore the received snapshot manifest, new checkpoint = {:?}, requested checkpoint = {:?}",
+                inner.checkpoint,
+                response.checkpoint);
+            return;
+        }
 
-        // todo if peers not enough, start more when new peer connected
+        // status mismatch
+        match inner.status {
+            Status::DownloadingManifest(start_time) => {
+                info!(
+                    "Snapshot manifest received, checkpoint = {:?}, elapsed = {:?}, chunks = {}",
+                    inner.checkpoint,
+                    start_time.elapsed(),
+                    response.chunk_hashes.len(),
+                );
+            }
+            _ => {
+                info!("Snapshot manifest received, but mismatch with current status {:?}", inner.status);
+                return;
+            }
+        }
+
+        // update status
+        inner
+            .pending_chunks
+            .extend(response.chunk_hashes.into_iter());
+        inner.status = Status::DownloadingChunks(Instant::now());
+
+        // request snapshot chunks from peers concurrently
         let peers = ctx
             .manager
             .syn
-            .get_random_peer_vec(MAX_DOWNLOAD_PEERS, |_| true);
+            .get_random_peer_vec(self.max_download_peers, |_| true);
 
         for peer in peers {
-            if let Some(chunk_hash) = inner.pending_chunks.pop_front() {
-                let request =
-                    SnapshotChunkRequest::new(inner.checkpoint, chunk_hash);
-                ctx.manager.request_manager.request_with_delay(
-                    ctx.io,
-                    Box::new(request),
-                    Some(peer),
-                    None,
-                );
-            } else {
+            if self.request_chunk(ctx, &mut inner, peer).is_none() {
                 break;
             }
         }
 
-        Ok(())
+        debug!("sync state progress: {:?}", *inner);
+    }
+
+    fn request_chunk(
+        &self, ctx: &Context, inner: &mut Inner, peer: PeerId,
+    ) -> Option<H256> {
+        let chunk_hash = inner.pending_chunks.pop_front()?;
+        assert!(inner.downloading_chunks.insert(chunk_hash));
+
+        let request = SnapshotChunkRequest::new(
+            inner.checkpoint.clone(),
+            chunk_hash.clone(),
+        );
+
+        ctx.manager.request_manager.request_with_delay(
+            ctx.io,
+            Box::new(request),
+            Some(peer),
+            None,
+        );
+
+        Some(chunk_hash)
     }
 
     pub fn handle_snapshot_chunk_response(
-        &self, ctx: &Context, response: SnapshotChunkResponse,
-    ) -> Result<(), Error> {
-        let message = ctx.match_request(response.request_id)?;
-        let request = message.downcast_ref::<SnapshotChunkRequest>(
-            ctx.io,
-            &ctx.manager.request_manager,
-            true,
-        )?;
-
-        // validate the responded chunk hash
-        let responded_chunk_hash = keccak(response.chunk);
-        if responded_chunk_hash != request.chunk_hash {
-            ctx.manager
-                .request_manager
-                .remove_mismatch_request(ctx.io, &message);
-            return Err(ErrorKind::Invalid.into());
-        }
-
-        // todo restore the snapshot in storage
-        // 1. restore async (e.g. via channel)
-        // 2. when restore completed, verify the restored state root
-
+        &self, ctx: &Context, chunk: H256, _response: SnapshotChunkResponse,
+    ) {
         let mut inner = self.inner.write();
 
-        match inner.pending_chunks.pop_front() {
-            Some(chunk_hash) => {
-                let request = SnapshotChunkRequest::new(
-                    inner.checkpoint.clone(),
-                    chunk_hash,
-                );
-                ctx.manager.request_manager.request_with_delay(
-                    ctx.io,
-                    Box::new(request),
-                    Some(ctx.peer),
-                    None,
+        // status mismatch
+        let download_start_time: Instant;
+        match inner.status {
+            Status::DownloadingChunks(t) => {
+                download_start_time = t;
+                debug!(
+                    "Snapshot chunk received, checkpoint = {:?}, chunk = {:?}",
+                    inner.checkpoint, chunk
                 );
             }
-            None => {
-                inner.status = Status::Restoring;
+            _ => {
+                debug!("Snapshot chunk received, but mismatch with current status {:?}", inner.status);
+                return;
             }
         }
 
-        Ok(())
+        // maybe received a out-of-date snapshot chunk, e.g. new era started
+        if !inner.downloading_chunks.remove(&chunk) {
+            debug!("Snapshot chunk received, but not in downloading queue");
+            return;
+        }
+
+        assert_eq!(inner.restoring_chunks.contains(&chunk), false);
+        assert_eq!(inner.restored_chunks.contains(&chunk), false);
+
+        // todo restore the snapshot in storage
+        // 1. restore async (e.g. via channel, write to disk first)
+        // 2. when restore completed, verify the restored state root
+        inner.restoring_chunks.insert(chunk);
+
+        // continue to request remaining chunks
+        self.request_chunk(ctx, &mut inner, ctx.peer);
+
+        if inner.downloading_chunks.is_empty() {
+            debug!(
+                "Snapshot chunks are all downloaded in {:?}",
+                download_start_time.elapsed()
+            );
+        }
+
+        debug!("sync state progress: {:?}", *inner);
+    }
+
+    pub fn on_peer_connected(&self, ctx: &Context) {
+        let mut inner = self.inner.write();
+        if inner.downloading_chunks.len() < self.max_download_peers {
+            self.request_chunk(ctx, &mut inner, ctx.peer);
+        }
     }
 }

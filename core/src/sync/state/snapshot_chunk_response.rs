@@ -4,9 +4,11 @@
 
 use crate::sync::{
     message::{Context, Handleable, Message, MsgId},
-    Error,
+    state::SnapshotChunkRequest,
+    Error, ErrorKind,
 };
 use cfx_bytes::Bytes;
+use keccak_hash::keccak;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 #[derive(Debug)]
@@ -17,9 +19,29 @@ pub struct SnapshotChunkResponse {
 
 impl Handleable for SnapshotChunkResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        ctx.manager
-            .state_sync
-            .handle_snapshot_chunk_response(ctx, self)
+        let message = ctx.match_request(self.request_id)?;
+
+        let request = message.downcast_ref::<SnapshotChunkRequest>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            true,
+        )?;
+
+        let responded_chunk_hash = keccak(&self.chunk);
+        if responded_chunk_hash != request.chunk_hash {
+            ctx.manager
+                .request_manager
+                .remove_mismatch_request(ctx.io, &message);
+            bail!(ErrorKind::Invalid);
+        }
+
+        ctx.manager.state_sync.handle_snapshot_chunk_response(
+            ctx,
+            responded_chunk_hash,
+            self,
+        );
+
+        Ok(())
     }
 }
 
