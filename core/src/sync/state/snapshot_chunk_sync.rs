@@ -20,7 +20,8 @@ use std::collections::{HashSet, VecDeque};
 
 const MAX_DOWNLOAD_PEERS: usize = 8;
 
-enum Status {
+#[derive(Copy, Clone)]
+pub enum Status {
     Inactive,
     DownloadingManifest,
     DownloadingChunks,
@@ -79,6 +80,8 @@ impl SnapshotChunkSync {
     fn abort(&self) {
         // todo cleanup current syncing with storage APIs
     }
+
+    pub fn status(&self) -> Status { self.inner.read().status }
 
     pub fn handle_snapshot_manifest_response(
         &self, ctx: &Context, response: SnapshotManifestResponse,
