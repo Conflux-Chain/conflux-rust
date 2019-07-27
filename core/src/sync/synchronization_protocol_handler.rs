@@ -261,6 +261,7 @@ pub struct ProtocolConfiguration {
     pub min_peers_propagation: usize,
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
+    pub max_download_state_peers: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -277,7 +278,9 @@ impl SynchronizationProtocolHandler {
         let future_block_buffer_capacity =
             protocol_config.future_block_buffer_capacity;
 
-        let state_sync = Arc::new(SnapshotChunkSync::default());
+        let state_sync = Arc::new(SnapshotChunkSync::new(
+            protocol_config.max_download_state_peers,
+        ));
 
         Self {
             protocol_config,
