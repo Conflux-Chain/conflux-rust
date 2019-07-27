@@ -6,17 +6,17 @@ use crate::sync::{
     message::Context,
     state::{
         snapshot_chunk_request::SnapshotChunkRequest,
-        snapshot_chunk_response::SnapshotChunkResponse,
         snapshot_manifest_request::SnapshotManifestRequest,
         snapshot_manifest_response::SnapshotManifestResponse, StateSync,
     },
     SynchronizationProtocolHandler,
 };
+use cfx_bytes::Bytes;
 use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
     time::Instant,
 };
@@ -210,7 +210,7 @@ impl SnapshotChunkSync {
     }
 
     pub fn handle_snapshot_chunk_response(
-        &self, ctx: &Context, chunk: H256, _response: SnapshotChunkResponse,
+        &self, ctx: &Context, chunk: H256, _kvs: HashMap<H256, Bytes>,
     ) {
         let mut inner = self.inner.write();
 

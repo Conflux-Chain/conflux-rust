@@ -10,7 +10,7 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{any::Any, time::Duration};
+use std::{any::Any, collections::HashMap, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct SnapshotChunkRequest {
@@ -32,11 +32,8 @@ impl SnapshotChunkRequest {
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         // todo find chunk from storage APIs
-        let response = SnapshotChunkResponse {
-            request_id: self.request_id,
-            chunk: Vec::new(),
-        };
-
+        let kvs = HashMap::new();
+        let response = SnapshotChunkResponse::new(self.request_id, kvs);
         ctx.send_response(&response)
     }
 }

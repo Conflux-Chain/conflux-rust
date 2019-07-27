@@ -35,6 +35,11 @@ impl Handleable for SnapshotManifestResponse {
         )?;
 
         if request.checkpoint != self.checkpoint {
+            debug!(
+                "Responded snapshot manifest checkpoint mismatch, requested = {:?}, responded = {:?}",
+                request.checkpoint,
+                self.checkpoint,
+            );
             ctx.manager
                 .request_manager
                 .remove_mismatch_request(ctx.io, &message);
@@ -44,6 +49,7 @@ impl Handleable for SnapshotManifestResponse {
         let distinct_chunks: HashSet<H256> =
             self.chunk_hashes.iter().cloned().collect();
         if distinct_chunks.len() != self.chunk_hashes.len() {
+            debug!("Responded snapshot manifest has duplicated chunks");
             ctx.manager
                 .request_manager
                 .remove_mismatch_request(ctx.io, &message);

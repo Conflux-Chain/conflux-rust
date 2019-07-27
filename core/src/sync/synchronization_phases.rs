@@ -265,8 +265,6 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpCheckpoint }
 
     fn next(&self) -> SyncPhaseType {
-        // todo start to sync new checkpoint if new ear started.
-
         match self.state_sync.status() {
             Status::Completed => SyncPhaseType::CatchUpRecoverBlockFromDB,
             _ => self.phase_type(),
