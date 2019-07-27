@@ -8,7 +8,7 @@ mod snapshot_chunk_sync;
 mod snapshot_manifest_request;
 mod snapshot_manifest_response;
 
-use crate::sync::request_manager::RequestManager;
+use crate::sync::SynchronizationProtocolHandler;
 use cfx_types::H256;
 use network::NetworkContext;
 
@@ -24,8 +24,8 @@ pub trait StateSync {
     /// - Otherwise if checkpoint not changed, then no-op happen.
     /// - Otherwise, cleanup the previous sync and start new sync.
     fn start(
-        &mut self, _checkpoint: H256, _io: &NetworkContext,
-        _request_manager: &RequestManager,
+        &self, _checkpoint: H256, _io: &NetworkContext,
+        _sync_handler: &SynchronizationProtocolHandler,
     );
 }
 

@@ -25,13 +25,7 @@ impl Handleable for SnapshotManifestResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         ctx.manager
             .state_sync
-            .lock()
-            .handle_snapshot_manifest_response(
-                ctx.io,
-                ctx.peer,
-                self,
-                &ctx.manager.request_manager,
-            )
+            .handle_snapshot_manifest_response(ctx, self)
     }
 }
 
