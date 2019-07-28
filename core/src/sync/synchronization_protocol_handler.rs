@@ -255,7 +255,6 @@ pub struct ProtocolConfiguration {
     pub transaction_request_timeout: Duration,
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
-    pub start_as_catch_up_mode: bool,
     pub received_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
