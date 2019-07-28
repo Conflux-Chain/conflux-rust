@@ -15,20 +15,15 @@ use futures::{
 
 use io::TimerToken;
 use parking_lot::RwLock;
-use priority_send_queue::SendQueuePriority;
 use rand::Rng;
 use rlp::Rlp;
 
-use cfx_bytes::Bytes;
 use cfx_types::H256;
 use primitives::{BlockHeader, EpochNumber, StateRoot};
 
 use crate::{
     consensus::{ConsensusGraph, DEFERRED_STATE_EPOCH_COUNT},
-    network::{
-        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
-        NetworkProtocolHandler, PeerId,
-    },
+    network::{NetworkContext, NetworkProtocolHandler, PeerId},
     statedb::StateDb,
     storage::{
         state_manager::StateManagerTrait, SnapshotAndEpochIdRef, StateProof,
@@ -72,47 +67,6 @@ impl QueryHandler {
             peers: RwLock::new(HashSet::new()),
             pending: RwLock::new(BTreeMap::new()),
         }
-    }
-
-    // TODO(thegaram): share `send_message` and
-    // `send_message_with_throttling` with sync
-    fn send_message(
-        io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: SendQueuePriority,
-    ) -> Result<(), NetworkError>
-    {
-        QueryHandler::send_message_with_throttling(
-            io, peer, msg, priority, false,
-        )
-    }
-
-    fn send_message_with_throttling(
-        io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: SendQueuePriority, throttling_disabled: bool,
-    ) -> Result<(), NetworkError>
-    {
-        if !throttling_disabled && msg.is_size_sensitive() {
-            if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
-                debug!("Throttling failure: {:?}", e);
-                return Err(e);
-            }
-        }
-        let mut raw = Bytes::new();
-        raw.push(msg.msg_id().into());
-        raw.extend(msg.rlp_bytes().iter());
-        let _size = raw.len();
-
-        if let Err(e) = io.send(peer, raw, priority) {
-            debug!("Error sending message: {:?}", e);
-            return Err(e);
-        };
-
-        debug!(
-            "Send message({}) to {:?}",
-            msg.msg_id(),
-            io.get_peer_node_id(peer)
-        );
-        Ok(())
     }
 
     fn dispatch_message(
@@ -266,13 +220,7 @@ impl QueryHandler {
             state_root,
         });
 
-        QueryHandler::send_message(
-            io,
-            peer,
-            msg.as_ref(),
-            SendQueuePriority::High,
-        )?;
-
+        msg.send(io, peer, None)?;
         Ok(())
     }
 
@@ -315,13 +263,7 @@ impl QueryHandler {
             proof,
         });
 
-        QueryHandler::send_message(
-            io,
-            peer,
-            msg.as_ref(),
-            SendQueuePriority::High,
-        )?;
-
+        msg.send(io, peer, None)?;
         Ok(())
     }
 
@@ -382,8 +324,7 @@ impl QueryHandler {
 
         // send request
         let msg: Box<dyn Message> = Box::new(req);
-        let p = SendQueuePriority::High;
-        QueryHandler::send_message(io, peer, msg.as_ref(), p)?;
+        msg.send(io, peer, None)?;
 
         // poll result
         // TODO(thegaram): come up with something better

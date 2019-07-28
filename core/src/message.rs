@@ -9,6 +9,13 @@ pub mod macro_deps {
     pub use ::rlp::Encodable;
     pub use priority_send_queue::SendQueuePriority;
     pub use std::{any::Any, fmt};
+
+    pub use cfx_bytes::Bytes;
+
+    pub use crate::network::{
+        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
+        PeerId,
+    };
 }
 
 // `build_msgid { type=T A=1 B=2 ...}` generates an enum
@@ -60,6 +67,48 @@ macro_rules! build_msg_trait {
             fn is_size_sensitive(&self) -> bool { false }
             fn msg_id(&self) -> MsgId;
             fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
+
+            fn send(
+                &self, io: &NetworkContext, peer: PeerId,
+                priority: Option<SendQueuePriority>,
+            ) -> Result<usize, NetworkError>
+            {
+                self.send_with_throttling(io, peer, priority, false)
+            }
+
+            fn send_with_throttling(
+                &self, io: &NetworkContext, peer: PeerId,
+                priority: Option<SendQueuePriority>, throttling_disabled: bool,
+            ) -> Result<usize, NetworkError>
+            {
+                if !throttling_disabled && self.is_size_sensitive() {
+                    if let Err(e) = THROTTLING_SERVICE.read().check_throttling()
+                    {
+                        debug!("Throttling failure: {:?}", e);
+                        return Err(e);
+                    }
+                }
+
+                let mut raw = Bytes::new();
+                raw.push(self.msg_id().into());
+                raw.extend(self.rlp_bytes().iter());
+                let size = raw.len();
+
+                let priority = priority.unwrap_or(self.priority());
+
+                if let Err(e) = io.send(peer, raw, priority) {
+                    debug!("Error sending message: {:?}", e);
+                    return Err(e);
+                };
+
+                debug!(
+                    "Send message({}) to {:?}",
+                    self.msg_id(),
+                    io.get_peer_node_id(peer)
+                );
+
+                Ok(size)
+            }
         }
     };
 }
@@ -70,15 +119,6 @@ macro_rules! build_msg_impl {
             fn as_any(&self) -> &Any { self }
 
             fn msg_id(&self) -> MsgId { $msg }
-        }
-    };
-    ($name:ident, $msg:expr, $priority:expr) => {
-        impl Message for $name {
-            fn as_any(&self) -> &Any { self }
-
-            fn msg_id(&self) -> MsgId { $msg }
-
-            fn priority(&self) -> SendQueuePriority { $priority }
         }
     };
 }

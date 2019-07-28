@@ -46,12 +46,8 @@ pub mod random {
 
 pub mod msg_sender {
     use crate::sync::message::{Message, MsgId};
-    use cfx_bytes::Bytes;
     use metrics::{register_meter_with_group, Meter};
-    use network::{
-        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
-        PeerId,
-    };
+    use network::{Error as NetworkError, NetworkContext, PeerId};
     use priority_send_queue::SendQueuePriority;
     use std::sync::Arc;
 
@@ -273,7 +269,7 @@ pub mod msg_sender {
 
     pub fn send_message(
         io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: SendQueuePriority,
+        priority: Option<SendQueuePriority>,
     ) -> Result<(), NetworkError>
     {
         send_message_with_throttling(io, peer, msg, priority, false)
@@ -281,27 +277,11 @@ pub mod msg_sender {
 
     pub fn send_message_with_throttling(
         io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: SendQueuePriority, throttling_disabled: bool,
+        priority: Option<SendQueuePriority>, throttling_disabled: bool,
     ) -> Result<(), NetworkError>
     {
-        if peer != NULL {
-            if !throttling_disabled && msg.is_size_sensitive() {
-                if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
-                    debug!("Throttling failure: {:?}", e);
-                    return Err(e);
-                }
-            }
-        }
-
-        let mut raw = Bytes::new();
-        raw.push(msg.msg_id().into());
-        raw.extend(msg.rlp_bytes().iter());
-        let size = raw.len();
-
-        if let Err(e) = io.send(peer, raw, priority) {
-            debug!("Error sending message: {:?}", e);
-            return Err(e);
-        };
+        let size =
+            msg.send_with_throttling(io, peer, priority, throttling_disabled)?;
 
         if peer != NULL {
             match msg.msg_id().into() {
@@ -391,15 +371,8 @@ pub mod msg_sender {
                     OTHER_HIGH_COUNTER.mark(1);
                 }
             }
-
-            debug!(
-                "Send message({}) to {:?}",
-                msg.msg_id(),
-                io.get_peer_node_id(peer)
-            );
         }
 
         Ok(())
     }
-
 }

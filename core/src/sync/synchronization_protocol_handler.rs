@@ -778,7 +778,7 @@ impl SynchronizationProtocolHandler {
         }
 
         for id in peer_ids {
-            send_message(io, id, msg, priority)?;
+            send_message(io, id, msg, Some(priority))?;
         }
 
         Ok(())
@@ -808,7 +808,7 @@ impl SynchronizationProtocolHandler {
 
         let msg: Box<dyn Message> = Box::new(status_message);
 
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
+        send_message(io, peer, msg.as_ref(), Some(SendQueuePriority::High))
     }
 
     pub fn announce_new_blocks(&self, io: &NetworkContext, hashes: &[H256]) {
@@ -822,7 +822,7 @@ impl SynchronizationProtocolHandler {
                     io,
                     *id,
                     msg.as_ref(),
-                    SendQueuePriority::High,
+                    Some(SendQueuePriority::High),
                     true,
                 )
                 .unwrap_or_else(|e| {
@@ -945,7 +945,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 peer_id,
                 tx_msg.as_ref(),
-                SendQueuePriority::Normal,
+                Some(SendQueuePriority::Normal),
             ) {
                 Ok(_) => {
                     trace!(
@@ -1076,7 +1076,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 peer,
                 trans_prop_ctrl_msg.as_ref(),
-                SendQueuePriority::High,
+                Some(SendQueuePriority::High),
             )
             .is_err()
             {

@@ -89,7 +89,7 @@ impl RequestHandler {
         if let Some(peer_info) = peers.get_mut(&peer) {
             if let Some(request_id) = peer_info.get_next_request_id() {
                 msg.set_request_id(request_id);
-                send_message(io, peer, msg.get_msg(), priority)?;
+                send_message(io, peer, msg.get_msg(), Some(priority))?;
                 let timed_req = Arc::new(TimedSyncRequests::from_request(
                     peer,
                     request_id,
@@ -144,7 +144,7 @@ impl RequestHandler {
 
         request.set_request_id(request_id);
         let message = request.as_message();
-        if send_message(io, peer, message, message.priority()).is_err() {
+        if send_message(io, peer, message, None).is_err() {
             return Err(request);
         }
 
@@ -329,7 +329,7 @@ impl RequestContainer {
                         io,
                         self.peer_id,
                         pending_msg.get_msg(),
-                        SendQueuePriority::High,
+                        Some(SendQueuePriority::High),
                     );
 
                     if send_res.is_err() {
