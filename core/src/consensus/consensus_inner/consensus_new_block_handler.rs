@@ -6,14 +6,14 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     consensus::{
         consensus_inner::{
+            confirmation_meter::ConfirmationMeter,
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
             ConsensusGraphInner, NULL, NULLU64,
         },
         debug::ComputeEpochDebugRecord,
         ConsensusConfig, ANTICONE_BARRIER_CAP, DEFERRED_STATE_EPOCH_COUNT,
         EPOCH_SET_PERSISTENCE_DELAY, ERA_CHECKPOINT_GAP,
-        ERA_RECYCLE_TRANSACTION_DELAY, MAX_NUM_MAINTAINED_RISK,
-        MIN_MAINTAINED_RISK,
+        ERA_RECYCLE_TRANSACTION_DELAY,
     },
     rlp::Encodable,
     statistics::SharedStatistics,
@@ -23,9 +23,8 @@ use crate::{
     },
     SharedTransactionPool,
 };
-use cfx_types::{into_i128, H256};
+use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
-use parking_lot::RwLock;
 use primitives::{BlockHeader, SignedTransaction, StateRootWithAuxInfo};
 use std::{
     cmp::max,
@@ -35,18 +34,12 @@ use std::{
     sync::Arc,
 };
 
-pub struct FinalityManager {
-    pub lowest_epoch_num: u64,
-    pub risks_less_than: VecDeque<f64>,
-}
-
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,
     txpool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     executor: Arc<ConsensusExecutor>,
     statistics: SharedStatistics,
-    finality_manager: RwLock<FinalityManager>,
 }
 
 /// ConsensusNewBlockHandler contains all sub-routines for handling new arriving
@@ -65,10 +58,6 @@ impl ConsensusNewBlockHandler {
             data_man,
             executor,
             statistics,
-            finality_manager: RwLock::new(FinalityManager {
-                lowest_epoch_num: 0,
-                risks_less_than: VecDeque::new(),
-            }),
         }
     }
 
@@ -540,143 +529,6 @@ impl ConsensusNewBlockHandler {
                 .blockset_in_own_view_of_epoch,
             block_set,
         );
-    }
-
-    pub fn confirmation_risk_by_hash(
-        &self, inner: &ConsensusGraphInner, hash: H256,
-    ) -> Option<f64> {
-        let index = *inner.hash_to_arena_indices.get(&hash)?;
-        let epoch_num = inner.arena[index].data.epoch_number;
-        if epoch_num == NULLU64 {
-            return None;
-        }
-
-        if epoch_num == 0 {
-            return Some(0.0);
-        }
-
-        let finality = self.finality_manager.read();
-
-        if epoch_num < finality.lowest_epoch_num {
-            return Some(MIN_MAINTAINED_RISK);
-        }
-
-        let idx = (epoch_num - finality.lowest_epoch_num) as usize;
-        if idx < finality.risks_less_than.len() {
-            let mut max_risk = 0.0;
-            for i in 0..idx + 1 {
-                let risk = *finality.risks_less_than.get(i).unwrap();
-                if max_risk < risk {
-                    max_risk = risk;
-                }
-            }
-            Some(max_risk)
-        } else {
-            None
-        }
-    }
-
-    fn confirmation_risk(
-        &self, inner: &mut ConsensusGraphInner, w_0: i128, w_4: i128,
-        epoch_num: u64,
-    ) -> f64
-    {
-        // Compute w_1
-        let idx = inner.get_pivot_block_arena_index(epoch_num);
-        let w_1 = inner.block_weight(idx, false);
-
-        // Compute w_2
-        let parent = inner.arena[idx].parent;
-        assert!(parent != NULL);
-        let mut max_weight = 0;
-        for child in inner.arena[parent].children.iter() {
-            if *child == idx || inner.arena[*child].data.partial_invalid {
-                continue;
-            }
-
-            let child_weight = inner.block_weight(*child, false);
-            if child_weight > max_weight {
-                max_weight = child_weight;
-            }
-        }
-        let w_2 = max_weight;
-
-        // Compute w_3
-        let w_3 = inner.arena[idx].past_weight;
-
-        // Compute d
-        let d = into_i128(&inner.current_difficulty);
-
-        // Compute n
-        let w_2_4 = w_2 + w_4;
-        let n = if w_1 >= w_2_4 { w_1 - w_2_4 } else { 0 };
-
-        let n = (n / d) + 1;
-
-        // Compute m
-        let m = if w_0 >= w_3 { w_0 - w_3 } else { 0 };
-
-        let m = m / d;
-
-        // Compute risk
-        let m_2 = 2i128 * m;
-        let e_1 = m_2 / 5i128;
-        let e_2 = m_2 / 7i128;
-        let n_min_1 = e_1 + 13i128;
-        let n_min_2 = e_2 + 36i128;
-        let n_min = if n_min_1 < n_min_2 { n_min_1 } else { n_min_2 };
-
-        let mut risk = 0.9;
-        if n <= n_min {
-            return risk;
-        }
-
-        risk = 0.0001;
-
-        let n_min_1 = e_1 + 19i128;
-        let n_min_2 = e_2 + 57i128;
-        let n_min = if n_min_1 < n_min_2 { n_min_1 } else { n_min_2 };
-
-        if n <= n_min {
-            return risk;
-        }
-
-        risk = 0.000001;
-        risk
-    }
-
-    fn update_confirmation_risks(
-        &self, inner: &mut ConsensusGraphInner, w_4: i128,
-    ) {
-        if inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
-            let w_0 = inner
-                .weight_tree
-                .get(inner.cur_era_genesis_block_arena_index);
-            let mut risks = VecDeque::new();
-            let mut epoch_num = inner
-                .pivot_index_to_height(inner.pivot_chain.len())
-                - DEFERRED_STATE_EPOCH_COUNT;
-            let mut count = 0;
-            while epoch_num > 0 && count < MAX_NUM_MAINTAINED_RISK {
-                let risk = self.confirmation_risk(inner, w_0, w_4, epoch_num);
-                if risk <= MIN_MAINTAINED_RISK {
-                    break;
-                }
-                risks.push_front(risk);
-                epoch_num -= 1;
-                count += 1;
-            }
-
-            if risks.is_empty() {
-                epoch_num = 0;
-            } else {
-                epoch_num += 1;
-            }
-
-            let mut finality = self.finality_manager.write();
-            finality.lowest_epoch_num = epoch_num;
-            finality.risks_less_than = risks;
-        }
     }
 
     #[allow(dead_code)]
@@ -1256,8 +1108,8 @@ impl ConsensusNewBlockHandler {
     }
 
     pub fn on_new_block(
-        &self, inner: &mut ConsensusGraphInner, hash: &H256,
-        block_header: &BlockHeader,
+        &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
+        hash: &H256, block_header: &BlockHeader,
         transactions: Option<&Vec<Arc<SignedTransaction>>>,
     )
     {
@@ -1362,7 +1214,7 @@ impl ConsensusNewBlockHandler {
             inner.pivot_index_to_height(inner.pivot_chain.len() + 1);
         let old_pivot_chain_len = inner.pivot_chain.len();
         if fully_valid && !pending {
-            inner.aggregate_total_weight_in_past(my_weight);
+            meter.aggregate_total_weight_in_past(my_weight);
 
             let last = inner.pivot_chain.last().cloned().unwrap();
             if inner.arena[me].parent == last {
@@ -1501,7 +1353,7 @@ impl ConsensusNewBlockHandler {
         }
 
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
-        self.update_confirmation_risks(inner, inner.get_total_weight_in_past());
+        meter.update_confirmation_risks(inner);
 
         let new_pivot_era_block = inner
             .get_era_block_with_parent(*inner.pivot_chain.last().unwrap(), 0);
