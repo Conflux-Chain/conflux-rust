@@ -28,10 +28,6 @@ pub struct GetCompactBlocks {
 }
 
 impl Request for GetCompactBlocks {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id);
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -57,7 +53,7 @@ impl Request for GetCompactBlocks {
 
     fn resend(&self) -> Option<Box<Request>> {
         Some(Box::new(GetBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             with_public: true,
             hashes: self.hashes.iter().cloned().collect(),
         }))
@@ -97,10 +93,6 @@ impl Handleable for GetCompactBlocks {
 
         ctx.send_response(&response)
     }
-}
-
-impl Message for GetCompactBlocks {
-    fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS }
 }
 
 impl Deref for GetCompactBlocks {

@@ -5,9 +5,6 @@
 mod message;
 mod protocol;
 
-pub type RequestId = u64;
-
-pub use self::{
-    message::{Message, MsgId},
-    protocol::{GetStateEntry, GetStateRoot, StateEntry, StateRoot},
-};
+pub use crate::message::{HasRequestId, RequestId};
+pub use message::{Message, MsgId};
+pub use protocol::{GetStateEntry, GetStateRoot, StateEntry, StateRoot};

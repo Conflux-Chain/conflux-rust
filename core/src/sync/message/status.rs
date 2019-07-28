@@ -3,10 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{
-        handleable::{Context, Handleable},
-        Message, MsgId,
-    },
+    message::handleable::{Context, Handleable},
     Error, ErrorKind, SynchronizationPeerState,
 };
 use cfx_types::H256;
@@ -71,10 +68,6 @@ impl Handleable for Status {
 
         Ok(())
     }
-}
-
-impl Message for Status {
-    fn msg_id(&self) -> MsgId { MsgId::STATUS }
 }
 
 impl Encodable for Status {

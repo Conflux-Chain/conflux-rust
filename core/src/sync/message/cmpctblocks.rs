@@ -5,7 +5,7 @@
 use crate::sync::{
     message::{
         metrics::{CMPCT_BLOCK_HANDLE_TIMER, CMPCT_BLOCK_RECOVER_TIMER},
-        Context, GetCompactBlocks, Handleable, Message, MsgId, RequestId,
+        Context, GetCompactBlocks, Handleable, RequestId,
     },
     synchronization_protocol_handler::RecoverPublicTask,
     Error,
@@ -39,12 +39,12 @@ impl Handleable for GetCompactBlocksResponse {
 
         debug!(
             "on_get_compact_blocks_response request_id={} compact={} block={}",
-            self.request_id(),
+            self.request_id,
             self.compact_blocks.len(),
             self.blocks.len()
         );
 
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let mut failed_blocks = HashSet::new();
         let mut completed_blocks = Vec::new();
 
@@ -147,10 +147,6 @@ impl Handleable for GetCompactBlocksResponse {
         // Broadcast completed block_header_ready blocks
         ctx.manager.relay_blocks(ctx.io, completed_blocks)
     }
-}
-
-impl Message for GetCompactBlocksResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS_RESPONSE }
 }
 
 impl Deref for GetCompactBlocksResponse {

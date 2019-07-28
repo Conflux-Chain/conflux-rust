@@ -168,7 +168,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlockHeaders {
-            request_id: 0.into(),
+            request_id: 0,
             hashes,
         };
 
@@ -185,7 +185,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlockHeaderChain {
-            request_id: 0.into(),
+            request_id: 0,
             hash: *hash,
             max_blocks,
         };
@@ -197,7 +197,7 @@ impl RequestManager {
         &self, io: &NetworkContext, peer_id: Option<PeerId>, epochs: Vec<u64>,
     ) {
         let request = GetBlockHashesByEpoch {
-            request_id: 0.into(),
+            request_id: 0,
             epochs,
         };
 
@@ -212,7 +212,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             with_public,
             hashes,
         };
@@ -262,7 +262,7 @@ impl RequestManager {
         debug!("Request {} tx from peer={}", tx_ids.len(), peer_id);
 
         let request = GetTransactions {
-            request_id: 0.into(),
+            request_id: 0,
             indices,
             tx_ids: tx_ids.clone(),
         };
@@ -291,7 +291,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetCompactBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             hashes,
         };
 
@@ -306,7 +306,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlockTxn {
-            request_id: 0.into(),
+            request_id: 0,
             block_hash: block_hash.clone(),
             indexes,
         };

@@ -6,7 +6,7 @@ use crate::{
     sync::{
         message::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaderChain,
-            GetBlockHeaders, Handleable, Message, MsgId, RequestId,
+            GetBlockHeaders, Handleable, RequestId,
         },
         msg_sender::NULL,
         request_manager::RequestMessage,
@@ -26,7 +26,7 @@ use std::{
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetBlockHeadersResponse {
-    request_id: RequestId,
+    pub request_id: RequestId,
     pub headers: Vec<BlockHeader>,
 }
 
@@ -44,7 +44,7 @@ impl Handleable for GetBlockHeadersResponse {
             return Ok(());
         }
 
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
 
         self.validate_block_headers_response(ctx, &req, &self)?;
 
@@ -259,11 +259,6 @@ impl GetBlockHeadersResponse {
         return Ok(());
     }
 }
-
-impl Message for GetBlockHeadersResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS_RESPONSE }
-}
-
 impl Deref for GetBlockHeadersResponse {
     type Target = RequestId;
 

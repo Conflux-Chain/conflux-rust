@@ -26,8 +26,8 @@ use primitives::{BlockHeader, EpochNumber, StateRoot};
 use crate::{
     consensus::{ConsensusGraph, DEFERRED_STATE_EPOCH_COUNT},
     network::{
-        throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
-        NetworkContext, NetworkProtocolHandler, PeerId,
+        throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
+        NetworkProtocolHandler, PeerId,
     },
     statedb::StateDb,
     storage::{
@@ -37,7 +37,7 @@ use crate::{
 
 use super::{
     message::{
-        GetStateEntry, GetStateRoot, Message, MsgId, RequestId,
+        GetStateEntry, GetStateRoot, HasRequestId, Message, MsgId, RequestId,
         StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
     },
     Error, ErrorKind,
@@ -229,9 +229,10 @@ impl QueryHandler {
         }
     }
 
-    fn match_request<T: Message + Clone>(
+    fn match_request<T>(
         &self, peer: PeerId, id: RequestId,
-    ) -> Result<(T, Sender<QueryResult>), Error> {
+    ) -> Result<(T, Sender<QueryResult>), Error>
+    where T: Message + Clone + 'static {
         let (msg, sender) = match self.pending.write().remove(&(peer, id)) {
             Some(PendingRequest { msg, sender }) => (msg, sender),
             None => {
@@ -362,9 +363,10 @@ impl QueryHandler {
     }
 
     /// Send `req` to `peer` and wait for result.
-    pub fn execute_request<T: Message + Clone>(
+    pub fn execute_request<T>(
         &self, io: &NetworkContext, peer: PeerId, mut req: T,
-    ) -> Result<QueryResult, Error> {
+    ) -> Result<QueryResult, Error>
+    where T: Message + HasRequestId + Clone + 'static {
         // set request id
         let id = self.next_request_id();
         req.set_request_id(id);
@@ -420,14 +422,9 @@ impl NetworkProtocolHandler for QueryHandler {
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
-        match self.dispatch_message(io, peer, msg_id.into(), rlp) {
-            Err(e) => self.handle_error(io, peer, msg_id.into(), e),
-            _ => {}
+        if let Err(e) = self.dispatch_message(io, peer, msg_id.into(), rlp) {
+            self.handle_error(io, peer, msg_id.into(), e);
         }
-    }
-
-    fn on_work_dispatch(&self, _io: &NetworkContext, _: HandlerWorkType) {
-        // EMPTY
     }
 
     fn on_peer_connected(&self, _io: &NetworkContext, peer: PeerId) {

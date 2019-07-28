@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, Handleable, Message, MsgId},
-    Error,
+use crate::{
+    message::macro_deps::*,
+    sync::{
+        message::{Context, Handleable, Message, MsgId},
+        Error,
+    },
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -17,9 +20,7 @@ pub struct SnapshotManifestResponse {
     pub chunk_hashes: Vec<H256>,
 }
 
-impl Message for SnapshotManifestResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE }
-}
+build_msg_impl! { SnapshotManifestResponse, MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE }
 
 impl Handleable for SnapshotManifestResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

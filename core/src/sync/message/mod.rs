@@ -24,6 +24,8 @@ mod status;
 mod terminalblockhashes;
 mod transactions;
 
+pub use crate::message::{HasRequestId, RequestId};
+
 pub use self::{
     blockhashes::GetBlockHashesResponse,
     blockheaders::GetBlockHeadersResponse,
@@ -39,13 +41,13 @@ pub use self::{
     getterminalblockhashes::GetTerminalBlockHashes,
     handleable::{Context, Handleable},
     keys::{Key, KeyContainer},
-    message::{Message, MsgId, RequestId},
+    message::{Message, MsgId},
     newblock::NewBlock,
     newblockhashes::NewBlockHashes,
     status::Status,
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{
         GetTransactions, GetTransactionsResponse, TransIndex,
-        TransactionDigests, TransactionPropagationControl,
+        TransactionDigests, TransactionPropagationControl, Transactions,
     },
 };

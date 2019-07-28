@@ -4,8 +4,8 @@
 
 use crate::sync::{
     message::{
-        Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
-        Message, MsgId, RequestId,
+        Context, GetBlockHeadersResponse, Handleable, HasRequestId, Key,
+        KeyContainer, Message, MsgId, RequestId,
     },
     request_manager::Request,
     synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
@@ -28,10 +28,6 @@ pub struct GetBlockHeaderChain {
 }
 
 impl Request for GetBlockHeaderChain {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id);
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -65,7 +61,7 @@ impl Handleable for GetBlockHeaderChain {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let mut hash = self.hash;
         let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(self.request_id());
+        block_headers_resp.set_request_id(self.request_id);
 
         for _ in 0..min(MAX_HEADERS_TO_SEND, self.max_blocks) {
             let header = ctx.manager.graph.block_header_by_hash(&hash);
@@ -88,10 +84,6 @@ impl Handleable for GetBlockHeaderChain {
 
         ctx.send_response(&block_headers_resp)
     }
-}
-
-impl Message for GetBlockHeaderChain {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADER_CHAIN }
 }
 
 impl Deref for GetBlockHeaderChain {

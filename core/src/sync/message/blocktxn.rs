@@ -5,7 +5,7 @@
 use crate::sync::{
     message::{
         metrics::BLOCK_TXN_HANDLE_TIMER, Context, GetBlockTxn, Handleable,
-        Message, MsgId, RequestId,
+        RequestId,
     },
     Error,
 };
@@ -31,7 +31,7 @@ impl Handleable for GetBlockTxnResponse {
 
         debug!("on_get_blocktxn_response");
         let resp_hash = self.block_hash;
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let req = req.downcast_general::<GetBlockTxn>(
             ctx.io,
             &ctx.manager.request_manager,
@@ -131,12 +131,6 @@ impl Handleable for GetBlockTxnResponse {
         }
         Ok(())
     }
-}
-
-impl Message for GetBlockTxnResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_TXN_RESPONSE }
-
-    fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 }
 
 impl Deref for GetBlockTxnResponse {

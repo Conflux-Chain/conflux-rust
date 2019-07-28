@@ -6,8 +6,8 @@ use super::{
     random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::sync::message::{
-    GetBlockHeadersResponse, Message, MsgId, NewBlock, NewBlockHashes, Status,
-    TransactionDigests, TransactionPropagationControl,
+    GetBlockHeadersResponse, HasRequestId, Message, MsgId, NewBlock,
+    NewBlockHashes, Status, TransactionDigests, TransactionPropagationControl,
 };
 use cfx_types::H256;
 use io::TimerToken;

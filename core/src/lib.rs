@@ -46,6 +46,8 @@ pub mod error;
 mod evm;
 pub mod executive;
 pub mod genesis;
+#[macro_use]
+pub mod message;
 pub mod light_protocol;
 pub mod machine;
 pub mod pow;

@@ -3,10 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{
-        Context, GetTerminalBlockHashesResponse, Handleable, Message, MsgId,
-        RequestId,
-    },
+    message::{Context, GetTerminalBlockHashesResponse, Handleable, RequestId},
     Error,
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -30,10 +27,6 @@ impl Handleable for GetTerminalBlockHashes {
         };
         ctx.send_response(&response)
     }
-}
-
-impl Message for GetTerminalBlockHashes {
-    fn msg_id(&self) -> MsgId { MsgId::GET_TERMINAL_BLOCK_HASHES }
 }
 
 impl Deref for GetTerminalBlockHashes {

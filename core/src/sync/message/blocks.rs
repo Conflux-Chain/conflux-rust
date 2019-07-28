@@ -5,7 +5,7 @@
 use crate::sync::{
     message::{
         metrics::BLOCK_HANDLE_TIMER, Context, GetBlocks, GetCompactBlocks,
-        Handleable, Message, MsgId, RequestId,
+        Handleable, RequestId,
     },
     synchronization_protocol_handler::RecoverPublicTask,
     Error,
@@ -36,7 +36,7 @@ impl Handleable for GetBlocksResponse {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let requested_blocks: HashSet<H256> = req
             .downcast_general::<GetBlocks>(
                 ctx.io,
@@ -60,12 +60,6 @@ impl Handleable for GetBlocksResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetBlocksResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS_RESPONSE }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
 impl Deref for GetBlocksResponse {
@@ -113,7 +107,7 @@ impl Handleable for GetBlocksWithPublicResponse {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let req_hashes: HashSet<H256> = if let Ok(req) = req
             .downcast_general::<GetCompactBlocks>(
                 ctx.io,
@@ -137,12 +131,6 @@ impl Handleable for GetBlocksWithPublicResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetBlocksWithPublicResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
 impl Deref for GetBlocksWithPublicResponse {

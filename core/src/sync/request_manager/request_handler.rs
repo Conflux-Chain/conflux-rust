@@ -1,5 +1,5 @@
 use crate::sync::{
-    message::{KeyContainer, Message},
+    message::{HasRequestId, KeyContainer, Message},
     msg_sender::send_message,
     request_manager::RequestManager,
     synchronization_protocol_handler::ProtocolConfiguration,
@@ -383,8 +383,7 @@ pub struct SynchronizationPeerRequest {
 }
 
 /// Trait of request message
-pub trait Request: Send + Debug {
-    fn set_request_id(&mut self, request_id: u64);
+pub trait Request: Send + Debug + HasRequestId {
     fn as_message(&self) -> &Message;
     /// Support to downcast trait to concrete request type.
     fn as_any(&self) -> &Any;

@@ -5,14 +5,13 @@
 use crate::sync::{
     message::{
         metrics::TX_HANDLE_TIMER, Context, Handleable, Key, KeyContainer,
-        Message, MsgId, RequestId,
+        Message, RequestId,
     },
     request_manager::Request,
     Error, ErrorKind, ProtocolConfiguration,
 };
 use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
-use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     any::Any,
@@ -79,12 +78,6 @@ impl Handleable for Transactions {
     }
 }
 
-impl Message for Transactions {
-    fn msg_id(&self) -> MsgId { MsgId::TRANSACTIONS }
-
-    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
-}
-
 impl Encodable for Transactions {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream.append_list(&self.transactions);
@@ -115,10 +108,6 @@ impl Handleable for TransactionPropagationControl {
 
         Ok(())
     }
-}
-
-impl Message for TransactionPropagationControl {
-    fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_PROPAGATION_CONTROL }
 }
 
 impl Encodable for TransactionPropagationControl {
@@ -195,14 +184,6 @@ impl Handleable for TransactionDigests {
     }
 }
 
-impl Message for TransactionDigests {
-    fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_DIGESTS }
-
-    fn is_size_sensitive(&self) -> bool { self.trans_short_ids.len() > 1 }
-
-    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-}
-
 impl Encodable for TransactionDigests {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
@@ -231,10 +212,6 @@ pub struct GetTransactions {
 }
 
 impl Request for GetTransactions {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id);
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -288,12 +265,6 @@ impl Handleable for GetTransactions {
     }
 }
 
-impl Message for GetTransactions {
-    fn msg_id(&self) -> MsgId { MsgId::GET_TRANSACTIONS }
-
-    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-}
-
 impl Deref for GetTransactions {
     type Target = RequestId;
 
@@ -339,9 +310,9 @@ impl Handleable for GetTransactionsResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
 
-        debug!("on_get_transactions_response {:?}", self.request_id());
+        debug!("on_get_transactions_response {:?}", self.request_id);
 
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let req = req.downcast_general::<GetTransactions>(
             ctx.io,
             &ctx.manager.request_manager,
@@ -375,14 +346,6 @@ impl Handleable for GetTransactionsResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetTransactionsResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_TRANSACTIONS_RESPONSE }
-
-    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
-
-    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
 impl Deref for GetTransactionsResponse {

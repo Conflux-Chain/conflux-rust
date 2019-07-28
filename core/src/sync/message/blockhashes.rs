@@ -3,9 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{
-        Context, GetBlockHashesByEpoch, Handleable, Message, MsgId, RequestId,
-    },
+    message::{Context, GetBlockHashesByEpoch, Handleable, RequestId},
     Error,
 };
 use cfx_types::H256;
@@ -22,7 +20,7 @@ impl Handleable for GetBlockHashesResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_block_hashes_response, msg={:?}", self);
 
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let epoch_req = req.downcast_general::<GetBlockHashesByEpoch>(
             ctx.io,
             &ctx.manager.request_manager,
@@ -69,10 +67,6 @@ impl Handleable for GetBlockHashesResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetBlockHashesResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES_RESPONSE }
 }
 
 impl Deref for GetBlockHashesResponse {

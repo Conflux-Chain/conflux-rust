@@ -5,7 +5,7 @@
 use crate::sync::{
     message::{
         Context, GetBlockTxnResponse, GetBlocks, Handleable, KeyContainer,
-        Message, MsgId, RequestId,
+        Message, RequestId,
     },
     request_manager::Request,
     Error, ErrorKind, ProtocolConfiguration,
@@ -26,10 +26,6 @@ pub struct GetBlockTxn {
 }
 
 impl Request for GetBlockTxn {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id)
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -46,7 +42,7 @@ impl Request for GetBlockTxn {
 
     fn resend(&self) -> Option<Box<Request>> {
         Some(Box::new(GetBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             with_public: true,
             hashes: vec![self.block_hash.clone()],
         }))
@@ -97,10 +93,6 @@ impl Handleable for GetBlockTxn {
             }
         }
     }
-}
-
-impl Message for GetBlockTxn {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_TXN }
 }
 
 impl Deref for GetBlockTxn {
