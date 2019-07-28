@@ -68,11 +68,9 @@ impl SynchronizationService {
     }
 
     fn relay_blocks(&self, need_to_relay: Vec<H256>) {
-        self.network.with_context(self.protocol, |io| {
-            // FIXME: We may need to propagate the error up
-            self.protocol_handler
-                .relay_blocks(io, need_to_relay)
-                .unwrap();
+        // FIXME: We may need to propagate the error up
+        let _res = self.network.with_context(self.protocol, |io| {
+            self.protocol_handler.relay_blocks(io, need_to_relay)
         });
     }
 

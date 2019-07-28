@@ -27,8 +27,7 @@ use crate::{
     consensus::{ConsensusGraph, DEFERRED_STATE_EPOCH_COUNT},
     network::{
         throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
-        NetworkContext, NetworkProtocolHandler, NetworkService, PeerId,
-        ProtocolId,
+        NetworkContext, NetworkProtocolHandler, PeerId,
     },
     statedb::StateDb,
     storage::{
@@ -43,10 +42,6 @@ use super::{
     },
     Error, ErrorKind,
 };
-
-// TODO(thegaram): remove this once the `network.with_context`
-// call is moved to QueryService
-const LIGHT_PROTOCOL_ID: ProtocolId = *b"clp"; // Conflux Light Protocol
 
 const POLL_PERIOD_MS: u64 = 100;
 const MAX_POLL_TIME_MS: u64 = 1000;
@@ -64,19 +59,15 @@ struct PendingRequest {
 
 pub(super) struct QueryHandler {
     consensus: Arc<ConsensusGraph>,
-    network: Arc<NetworkService>,
     next_request_id: RwLock<u64>,
     peers: RwLock<HashSet<PeerId>>,
     pending: RwLock<BTreeMap<(PeerId, RequestId), PendingRequest>>,
 }
 
 impl QueryHandler {
-    pub fn new(
-        consensus: Arc<ConsensusGraph>, network: Arc<NetworkService>,
-    ) -> Self {
+    pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
         QueryHandler {
             consensus,
-            network,
             next_request_id: RwLock::new(0),
             peers: RwLock::new(HashSet::new()),
             pending: RwLock::new(BTreeMap::new()),
@@ -372,7 +363,7 @@ impl QueryHandler {
 
     /// Send `req` to `peer` and wait for result.
     pub fn execute_request<T: Message + Clone>(
-        &self, peer: PeerId, mut req: T,
+        &self, io: &NetworkContext, peer: PeerId, mut req: T,
     ) -> Result<QueryResult, Error> {
         // set request id
         let id = self.next_request_id();
@@ -388,12 +379,9 @@ impl QueryHandler {
         };
 
         // send request
-        // TODO(thegaram): move this to QueryService level
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            let msg: Box<dyn Message> = Box::new(req);
-            let p = SendQueuePriority::High;
-            QueryHandler::send_message(io, peer, msg.as_ref(), p).unwrap();
-        });
+        let msg: Box<dyn Message> = Box::new(req);
+        let p = SendQueuePriority::High;
+        QueryHandler::send_message(io, peer, msg.as_ref(), p)?;
 
         // poll result
         // TODO(thegaram): come up with something better

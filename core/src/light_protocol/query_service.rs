@@ -31,10 +31,8 @@ impl QueryService {
     pub fn new(
         consensus: Arc<ConsensusGraph>, network: Arc<NetworkService>,
     ) -> Self {
-        let handler = QueryHandler::new(consensus, network.clone());
-
         QueryService {
-            handler: Arc::new(handler),
+            handler: Arc::new(QueryHandler::new(consensus)),
             network,
         }
     }
@@ -62,11 +60,12 @@ impl QueryService {
             epoch,
         };
 
-        // TODO(thegaram): call with self.network.with_context
-        match self.handler.execute_request(peer, req)? {
-            QueryResult::StateRoot(sr) => Ok(sr),
-            _ => Err(ErrorKind::UnexpectedResponse.into()),
-        }
+        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
+            match self.handler.execute_request(io, peer, req)? {
+                QueryResult::StateRoot(sr) => Ok(sr),
+                _ => Err(ErrorKind::UnexpectedResponse.into()),
+            }
+        })
     }
 
     pub fn query_state_entry(
@@ -80,11 +79,12 @@ impl QueryService {
             key,
         };
 
-        // TODO(thegaram): call with self.network.with_context
-        match self.handler.execute_request(peer, req)? {
-            QueryResult::StateEntry(entry) => Ok(entry),
-            _ => Err(ErrorKind::UnexpectedResponse.into()),
-        }
+        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
+            match self.handler.execute_request(io, peer, req)? {
+                QueryResult::StateEntry(entry) => Ok(entry),
+                _ => Err(ErrorKind::UnexpectedResponse.into()),
+            }
+        })
     }
 
     pub fn query_account(
