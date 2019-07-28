@@ -53,6 +53,8 @@ impl Handleable for NewBlockHashes {
 
 impl Message for NewBlockHashes {
     fn msg_id(&self) -> MsgId { MsgId::NEW_BLOCK_HASHES }
+
+    fn msg_name(&self) -> String { String::from("NewBlockHashes") }
 }
 
 impl Encodable for NewBlockHashes {

@@ -394,7 +394,7 @@ pub mod msg_sender {
 
             debug!(
                 "Send message({}) to {:?}",
-                msg.msg_id(),
+                msg.msg_name(),
                 io.get_peer_node_id(peer)
             );
         }

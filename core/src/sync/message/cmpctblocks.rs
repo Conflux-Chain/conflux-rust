@@ -151,6 +151,8 @@ impl Handleable for GetCompactBlocksResponse {
 
 impl Message for GetCompactBlocksResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS_RESPONSE }
+
+    fn msg_name(&self) -> String { String::from("GetCompactBlocksResponse") }
 }
 
 impl Deref for GetCompactBlocksResponse {
