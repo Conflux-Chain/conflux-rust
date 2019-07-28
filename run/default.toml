@@ -125,7 +125,6 @@ log_conf="log.yaml"
 # transaction_request_timeout_ms=30_000
 # tx_maintained_for_peer_timeout_ms=600_000
 # max_inflight_request_count=32
-# start_as_catch_up_mode=false
 # received_tx_index_maintain_timeout_ms=600_000
 # max_trans_count_received_in_catch_up=60000
 # request_block_with_public=false

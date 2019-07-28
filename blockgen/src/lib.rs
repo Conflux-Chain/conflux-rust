@@ -633,7 +633,7 @@ impl BlockGenerator {
 
             if bg.is_mining_block_outdated(current_mining_block.as_ref()) {
                 // TODO: #transations TBD
-                if bg.sync.catch_up_mode() {
+                if !bg.pow_config.test_mode && bg.sync.catch_up_mode() {
                     thread::sleep(sleep_duration);
                     continue;
                 }

@@ -52,7 +52,7 @@ impl SynchronizationState {
         }
     }
 
-    pub fn on_status(&self, peer: PeerId) -> bool {
+    pub fn on_status_in_handshaking(&self, peer: PeerId) -> bool {
         let peers = self.peers.read();
         let mut handshaking_peers = self.handshaking_peers.write();
         handshaking_peers.remove(&peer).is_some() && !peers.contains_key(&peer)
