@@ -794,60 +794,42 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
+    fn produce_status_message(&self) -> Status {
+        let best_info = self.graph.consensus.get_best_info();
+
+        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
+        {
+            x.clone()
+        } else {
+            best_info.bounded_terminal_block_hashes.clone()
+        };
+
+        Status {
+            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
+            network_id: 0x0,
+            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
+            best_epoch: best_info.best_epoch_number,
+            terminal_block_hashes: terminal_hashes,
+        }
+    }
+
     fn send_status(
         &self, io: &NetworkContext, peer: PeerId,
     ) -> Result<(), NetworkError> {
-        let best_info = self.graph.consensus.get_best_info();
-
-        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
-        {
-            x.clone()
-        } else {
-            best_info.bounded_terminal_block_hashes.clone()
-        };
-
-        let status_message = Status {
-            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
-            network_id: 0x0,
-            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
-            best_epoch: best_info.best_epoch_number,
-            terminal_block_hashes: terminal_hashes,
-        };
-
+        let status_message = self.produce_status_message();
         debug!("Sending status message to {:?}: {:?}", peer, status_message);
-
-        let msg: Box<dyn Message> = Box::new(status_message);
-
-        send_message(io, peer, msg.as_ref(), SendQueuePriority::High)
+        send_message(io, peer, &status_message, SendQueuePriority::High)
     }
 
     fn broadcast_status(&self, io: &NetworkContext) {
-        let best_info = self.graph.consensus.get_best_info();
-
-        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
-        {
-            x.clone()
-        } else {
-            best_info.bounded_terminal_block_hashes.clone()
-        };
-
-        let status_message = Status {
-            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
-            network_id: 0x0,
-            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
-            best_epoch: best_info.best_epoch_number,
-            terminal_block_hashes: terminal_hashes,
-        };
-
+        let status_message = self.produce_status_message();
         debug!("Broadcasting status message: {:?}", status_message);
-
-        let msg: Box<dyn Message> = Box::new(status_message);
 
         if self
             .broadcast_message(
                 io,
                 PeerId::max_value(),
-                msg.as_ref(),
+                &status_message,
                 SendQueuePriority::Normal,
             )
             .is_err()
