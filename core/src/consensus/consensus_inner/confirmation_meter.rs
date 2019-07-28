@@ -6,7 +6,7 @@ use crate::consensus::{
     consensus_inner::{NULL, NULLU64},
     ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
 };
-use cfx_types::{into_i128, into_u256, H256, U256};
+use cfx_types::{into_i128, H256};
 use parking_lot::RwLock;
 use std::collections::VecDeque;
 
@@ -14,9 +14,9 @@ pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
 pub const MAX_NUM_MAINTAINED_RISK: usize = 10;
 
 pub struct TotalWeightInPastMovingDelta {
-    pub old: U256,
-    pub cur: U256,
-    pub delta: U256,
+    pub old: i128,
+    pub cur: i128,
+    pub delta: i128,
 }
 
 pub struct FinalityManager {
@@ -33,9 +33,9 @@ impl ConfirmationMeterInner {
     pub fn new() -> Self {
         Self {
             total_weight_in_past_2d: TotalWeightInPastMovingDelta {
-                old: U256::zero(),
-                cur: U256::zero(),
-                delta: U256::zero(),
+                old: 0,
+                cur: 0,
+                delta: 0,
             },
             finality_manager: FinalityManager {
                 lowest_epoch_num: 0,
@@ -66,12 +66,12 @@ impl ConfirmationMeter {
     pub fn aggregate_total_weight_in_past(&self, weight: i128) {
         let mut inner = self.inner.write();
         let total_weight = &mut inner.total_weight_in_past_2d;
-        total_weight.cur += into_u256(weight);
+        total_weight.cur += weight;
     }
 
     fn get_total_weight_in_past(&self) -> i128 {
         let inner = self.inner.read();
-        into_i128(&inner.total_weight_in_past_2d.delta)
+        inner.total_weight_in_past_2d.delta
     }
 
     pub fn confirmation_risk_by_hash(
