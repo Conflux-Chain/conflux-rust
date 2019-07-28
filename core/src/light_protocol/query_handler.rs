@@ -4,7 +4,10 @@
 
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 extern crate futures;
@@ -54,7 +57,7 @@ struct PendingRequest {
 
 pub(super) struct QueryHandler {
     consensus: Arc<ConsensusGraph>,
-    next_request_id: RwLock<u64>,
+    next_request_id: AtomicU64,
     peers: RwLock<HashSet<PeerId>>,
     pending: RwLock<BTreeMap<(PeerId, RequestId), PendingRequest>>,
 }
@@ -63,7 +66,7 @@ impl QueryHandler {
     pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
         QueryHandler {
             consensus,
-            next_request_id: RwLock::new(0),
+            next_request_id: AtomicU64::new(0),
             peers: RwLock::new(HashSet::new()),
             pending: RwLock::new(BTreeMap::new()),
         }
@@ -298,10 +301,7 @@ impl QueryHandler {
     }
 
     fn next_request_id(&self) -> RequestId {
-        let mut id = self.next_request_id.write();
-        let request_id = *id;
-        *id += 1;
-        request_id.into()
+        self.next_request_id.fetch_add(1, Ordering::Relaxed).into()
     }
 
     /// Send `req` to `peer` and wait for result.
