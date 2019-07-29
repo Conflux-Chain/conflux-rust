@@ -8,7 +8,7 @@ use crate::sync::{
     message::{
         GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
         GetCompactBlocks, GetTransactions, Key, KeyContainer, MsgId,
-        TransIndex,TransactionDigests
+        TransIndex, TransactionDigests,
     },
     Error,
 };
@@ -238,7 +238,8 @@ impl RequestManager {
                     continue;
                 }
 
-                if !inflight_keys.add(msg_type, Key::Id(fixed_bytes_vector[i])) {
+                if !inflight_keys.add(msg_type, Key::Id(fixed_bytes_vector[i]))
+                {
                     // Already being requested
                     continue;
                 }

@@ -185,11 +185,9 @@ impl Handleable for TransactionDigests {
             }
         }
 
-        ctx.manager.request_manager.request_transactions(
-            ctx.io,
-            ctx.peer,
-            self,
-        );
+        ctx.manager
+            .request_manager
+            .request_transactions(ctx.io, ctx.peer, self);
 
         Ok(())
     }
@@ -248,14 +246,14 @@ impl TransactionDigests {
 
         for i in (0..self.trans_short_ids.len())
             .step_by(TransactionDigests::SHORT_ID_SIZE_IN_BYTES)
-            {
-                random_byte_vector.push(self.trans_short_ids[i]);
-                fixed_bytes_vector.push(TransactionDigests::to_u24(
-                    self.trans_short_ids[i + 1],
-                    self.trans_short_ids[i + 2],
-                    self.trans_short_ids[i + 3],
-                ));
-            }
+        {
+            random_byte_vector.push(self.trans_short_ids[i]);
+            fixed_bytes_vector.push(TransactionDigests::to_u24(
+                self.trans_short_ids[i + 1],
+                self.trans_short_ids[i + 2],
+                self.trans_short_ids[i + 3],
+            ));
+        }
 
         (random_byte_vector, fixed_bytes_vector)
     }
