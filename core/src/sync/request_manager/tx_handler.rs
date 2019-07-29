@@ -1,8 +1,6 @@
-use message::{TransIndex, TransactionDigests};
 use metrics::{register_meter_with_group, Meter};
 use primitives::{SignedTransaction, TxFullId, TxPropagateId};
-use crate::sync::message::TransIndex;
-use primitives::{SignedTransaction, TxPropagateId};
+use crate::sync::message::{TransIndex,TransactionDigests};
 use std::{
     collections::HashMap,
     sync::Arc,

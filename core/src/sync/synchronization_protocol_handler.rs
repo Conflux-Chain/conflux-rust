@@ -32,7 +32,7 @@ use crate::{
     },
 };
 use metrics::{register_meter_with_group, Meter};
-use primitives::{Block, BlockHeader, SignedTransaction, TxPropagateId};
+use primitives::{Block, BlockHeader, SignedTransaction};
 use priority_send_queue::SendQueuePriority;
 use std::{
     cmp,
