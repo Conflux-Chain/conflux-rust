@@ -363,7 +363,7 @@ class RemoteSimulate(ConfluxTestFramework):
 
         retry = 0
         while pre_block_count < self.options.num_blocks + cur_block_count:
-            time.sleep(self.options.generation_period_ms / 2)
+            time.sleep(self.options.generation_period_ms / 1000 / 2)
 
             # block count
             block_count = self.nodes[0].getblockcount()
