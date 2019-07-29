@@ -101,6 +101,8 @@ impl Handleable for GetCompactBlocks {
 
 impl Message for GetCompactBlocks {
     fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS }
+
+    fn msg_name(&self) -> &'static str { "GetCompactBlocks" }
 }
 
 impl Deref for GetCompactBlocks {

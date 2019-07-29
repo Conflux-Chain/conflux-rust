@@ -19,6 +19,8 @@ pub struct SnapshotManifestResponse {
 
 impl Message for SnapshotManifestResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "SnapshotManifestResponse" }
 }
 
 impl Handleable for SnapshotManifestResponse {

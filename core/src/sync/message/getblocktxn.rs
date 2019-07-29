@@ -101,6 +101,8 @@ impl Handleable for GetBlockTxn {
 
 impl Message for GetBlockTxn {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_TXN }
+
+    fn msg_name(&self) -> &'static str { "GetBlockTxn" }
 }
 
 impl Deref for GetBlockTxn {

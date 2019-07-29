@@ -65,6 +65,8 @@ impl Handleable for GetBlocksResponse {
 impl Message for GetBlocksResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS_RESPONSE }
 
+    fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
+
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
@@ -141,6 +143,8 @@ impl Handleable for GetBlocksWithPublicResponse {
 
 impl Message for GetBlocksWithPublicResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
 
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }

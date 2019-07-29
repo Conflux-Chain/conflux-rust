@@ -98,6 +98,8 @@ impl Handleable for Status {
 
 impl Message for Status {
     fn msg_id(&self) -> MsgId { MsgId::STATUS }
+
+    fn msg_name(&self) -> &'static str { "Status" }
 }
 
 impl Encodable for Status {

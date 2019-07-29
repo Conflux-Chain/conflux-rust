@@ -83,6 +83,8 @@ impl Handleable for GetBlockHashesByEpoch {
 
 impl Message for GetBlockHashesByEpoch {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES_BY_EPOCH }
+
+    fn msg_name(&self) -> &'static str { "GetBlockHashesByEpoch" }
 }
 
 impl Deref for GetBlockHashesByEpoch {
