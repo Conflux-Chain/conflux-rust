@@ -256,11 +256,4 @@ impl SnapshotChunkSync {
 
         debug!("sync state progress: {:?}", *inner);
     }
-
-    pub fn on_peer_connected(&self, ctx: &Context) {
-        let mut inner = self.inner.write();
-        if inner.downloading_chunks.len() < self.max_download_peers {
-            self.request_chunk(ctx, &mut inner, ctx.peer);
-        }
-    }
 }
