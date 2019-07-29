@@ -12,8 +12,7 @@ use crate::{
         },
         debug::ComputeEpochDebugRecord,
         ConsensusConfig, ANTICONE_BARRIER_CAP, DEFERRED_STATE_EPOCH_COUNT,
-        EPOCH_SET_PERSISTENCE_DELAY, ERA_CHECKPOINT_GAP,
-        ERA_RECYCLE_TRANSACTION_DELAY,
+        EPOCH_SET_PERSISTENCE_DELAY, ERA_RECYCLE_TRANSACTION_DELAY,
     },
     rlp::Encodable,
     statistics::SharedStatistics,
@@ -1082,10 +1081,10 @@ impl ConsensusNewBlockHandler {
     ) -> usize {
         // FIXME: We should use finality to implement this function
         let best_height = inner.best_epoch_number();
-        if best_height <= ERA_CHECKPOINT_GAP {
+        if best_height <= inner.inner_conf.era_checkpoint_gap {
             return inner.cur_era_genesis_block_arena_index;
         }
-        let stable_height = best_height - ERA_CHECKPOINT_GAP;
+        let stable_height = best_height - inner.inner_conf.era_checkpoint_gap;
         let stable_era_height = inner.get_era_height(stable_height - 1, 0);
         if stable_era_height < inner.inner_conf.era_epoch_count {
             return inner.cur_era_genesis_block_arena_index;
