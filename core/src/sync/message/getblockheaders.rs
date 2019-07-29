@@ -85,6 +85,8 @@ impl Handleable for GetBlockHeaders {
 
 impl Message for GetBlockHeaders {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS }
+
+    fn msg_name(&self) -> &'static str { "GetBlockHeaders" }
 }
 
 impl Deref for GetBlockHeaders {

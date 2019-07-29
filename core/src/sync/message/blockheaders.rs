@@ -201,6 +201,8 @@ impl GetBlockHeadersResponse {
 
 impl Message for GetBlockHeadersResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetBlockHeadersResponse" }
 }
 
 impl Deref for GetBlockHeadersResponse {

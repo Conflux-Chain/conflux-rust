@@ -136,6 +136,8 @@ impl Handleable for GetBlockTxnResponse {
 impl Message for GetBlockTxnResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_TXN_RESPONSE }
 
+    fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
+
     fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 }
 

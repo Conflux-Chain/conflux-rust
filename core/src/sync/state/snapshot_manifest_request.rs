@@ -65,6 +65,8 @@ impl Request for SnapshotManifestRequest {
 
 impl Message for SnapshotManifestRequest {
     fn msg_id(&self) -> MsgId { MsgId::GET_SNAPSHOT_MANIFEST }
+
+    fn msg_name(&self) -> &'static str { "SnapshotManifestRequest" }
 }
 
 impl Encodable for SnapshotManifestRequest {

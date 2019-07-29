@@ -171,6 +171,8 @@ impl fmt::Display for MsgId {
 pub trait Message: Send + Sync + Encodable + 'static {
     fn msg_id(&self) -> MsgId;
 
+    fn msg_name(&self) -> &'static str;
+
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
 

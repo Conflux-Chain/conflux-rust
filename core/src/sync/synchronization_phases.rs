@@ -36,7 +36,7 @@ pub enum SyncPhaseType {
 }
 
 pub trait SynchronizationPhaseTrait: Send + Sync {
-    fn name(&self) -> String;
+    fn name(&self) -> &'static str;
     fn phase_type(&self) -> SyncPhaseType;
     fn next(&self) -> SyncPhaseType;
     fn start(
@@ -178,9 +178,7 @@ impl CatchUpRecoverBlockHeaderFromDbPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
-    fn name(&self) -> String {
-        String::from("CatchUpRecoverBlockHeaderFromDbPhase")
-    }
+    fn name(&self) -> &'static str { "CatchUpRecoverBlockHeaderFromDbPhase" }
 
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
@@ -213,7 +211,7 @@ impl CatchUpSyncBlockHeaderPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
-    fn name(&self) -> String { String::from("CatchUpSyncBlockHeaderPhase") }
+    fn name(&self) -> &'static str { "CatchUpSyncBlockHeaderPhase" }
 
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpSyncBlockHeader
@@ -259,7 +257,7 @@ impl CatchUpCheckpointPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
-    fn name(&self) -> String { String::from("CatchUpCheckpointPhase") }
+    fn name(&self) -> &'static str { "CatchUpCheckpointPhase" }
 
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpCheckpoint }
 
@@ -285,7 +283,7 @@ impl CatchUpRecoverBlockFromDbPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
-    fn name(&self) -> String { String::from("CatchUpRecoverBlockFromDbPhase") }
+    fn name(&self) -> &'static str { "CatchUpRecoverBlockFromDbPhase" }
 
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpRecoverBlockFromDB
@@ -344,7 +342,7 @@ impl CatchUpSyncBlockPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
-    fn name(&self) -> String { String::from("CatchUpSyncBlockPhase") }
+    fn name(&self) -> &'static str { "CatchUpSyncBlockPhase" }
 
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpSyncBlock }
 
@@ -387,7 +385,7 @@ impl NormalSyncPhase {
 }
 
 impl SynchronizationPhaseTrait for NormalSyncPhase {
-    fn name(&self) -> String { String::from("NormalSyncPhase") }
+    fn name(&self) -> &'static str { "NormalSyncPhase" }
 
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::Normal }
 

@@ -73,6 +73,8 @@ impl Handleable for GetBlockHashesResponse {
 
 impl Message for GetBlockHashesResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetBlockHashesResponse" }
 }
 
 impl Deref for GetBlockHashesResponse {

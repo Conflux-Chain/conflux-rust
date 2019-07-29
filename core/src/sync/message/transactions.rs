@@ -82,6 +82,8 @@ impl Handleable for Transactions {
 impl Message for Transactions {
     fn msg_id(&self) -> MsgId { MsgId::TRANSACTIONS }
 
+    fn msg_name(&self) -> &'static str { "Transactions" }
+
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 }
 
@@ -119,6 +121,8 @@ impl Handleable for TransactionPropagationControl {
 
 impl Message for TransactionPropagationControl {
     fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_PROPAGATION_CONTROL }
+
+    fn msg_name(&self) -> &'static str { "TransactionPropagationControl" }
 }
 
 impl Encodable for TransactionPropagationControl {
@@ -197,6 +201,8 @@ impl Handleable for TransactionDigests {
 
 impl Message for TransactionDigests {
     fn msg_id(&self) -> MsgId { MsgId::TRANSACTION_DIGESTS }
+
+    fn msg_name(&self) -> &'static str { "TransactionDigests" }
 
     fn is_size_sensitive(&self) -> bool { self.trans_short_ids.len() > 1 }
 
@@ -291,6 +297,8 @@ impl Handleable for GetTransactions {
 impl Message for GetTransactions {
     fn msg_id(&self) -> MsgId { MsgId::GET_TRANSACTIONS }
 
+    fn msg_name(&self) -> &'static str { "GetTransactions" }
+
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
@@ -379,6 +387,8 @@ impl Handleable for GetTransactionsResponse {
 
 impl Message for GetTransactionsResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_TRANSACTIONS_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
 
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 

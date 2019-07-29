@@ -151,6 +151,8 @@ impl Handleable for GetBlocks {
 
 impl Message for GetBlocks {
     fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS }
+
+    fn msg_name(&self) -> &'static str { "GetBlocks" }
 }
 
 impl Deref for GetBlocks {
