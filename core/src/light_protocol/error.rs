@@ -35,11 +35,6 @@ error_chain! {
             display("Invalid proof"),
         }
 
-        InvalidRequestId {
-            description("Invalid request id"),
-            display("Invalid request id"),
-        }
-
         InvalidStateRoot {
             description("Invalid state root"),
             display("Invalid state root"),
@@ -48,6 +43,11 @@ error_chain! {
         PivotHashMismatch {
             description("Pivot hash mismatch"),
             display("Pivot hash mismatch"),
+        }
+
+        UnexpectedRequestId {
+            description("Unexpected request id"),
+            display("Unexpected request id"),
         }
 
         UnexpectedResponse {
