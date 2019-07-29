@@ -77,7 +77,7 @@ pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
 // eras.
 const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
 // FIXME: We should use finality to determine the checkpoint moment instead.
-const ERA_CHECKPOINT_GAP: u64 = 50000;
+const ERA_CHECKPOINT_GAP: u64 = 500000;
 
 // A block can blame up to BLAME_BOUND ancestors that their states are
 // incorrect.
