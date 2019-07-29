@@ -44,7 +44,7 @@ impl Handleable for GetBlocksResponse {
             .downcast_general::<GetBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
-                false,
+                true,
             )?
             .hashes
             .iter()

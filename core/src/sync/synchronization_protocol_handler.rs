@@ -28,7 +28,7 @@ use super::{
     request_manager::RequestManager,
 };
 use crate::{
-    block_data_manager::BlockStatus,
+    block_data_manager::{BlockStatus, NULLU64},
     sync::{
         message::Context,
         state::SnapshotChunkSync,
@@ -75,6 +75,7 @@ const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
+const HEARTBEAT_TIMER: TimerToken = 9;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -258,7 +259,6 @@ pub struct ProtocolConfiguration {
     pub transaction_request_timeout: Duration,
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
-    pub start_as_catch_up_mode: bool,
     pub received_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
@@ -625,25 +625,35 @@ impl SynchronizationProtocolHandler {
         if self.graph.contains_block_header(hash) {
             return true;
         }
+
+        if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
+            debug_assert!(match info.get_status() {
+                BlockStatus::Invalid => false,
+                _ => true,
+            });
+            if info.get_seq_num()
+                < self.graph.consensus.current_era_genesis_seq_num()
+            {
+                debug!("Ignore header in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
+                // The block is ordered before current era genesis, so we do
+                // not need to process it
+                return true;
+            }
+
+            if info.get_instance_id() == self.graph.data_man.get_instance_id()
+                || info.get_instance_id() == NULLU64
+            {
+                // This block header has already entered consensus
+                // graph in this run.
+                return true;
+            }
+        }
+
+        // FIXME: If there is no block info in db, whether we need to fetch
+        // block header from db?
         if let Some(header) = self.graph.data_man.block_header_by_hash(hash) {
             debug!("Recovered header {:?} from db", hash);
             // Process headers from db
-            if let Some(info) =
-                self.graph.data_man.local_block_info_from_db(hash)
-            {
-                debug_assert!(match info.get_status() {
-                    BlockStatus::Invalid => false,
-                    _ => true,
-                });
-                if info.get_seq_num()
-                    < self.graph.consensus.current_era_genesis_seq_num()
-                {
-                    debug!("Ignore header in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
-                    // The block is ordered before current era genesis, so we do
-                    // not need to process it
-                    return true;
-                }
-            }
             let mut block_headers_resp = GetBlockHeadersResponse::default();
             block_headers_resp.set_request_id(0);
             let mut headers = Vec::new();
@@ -788,9 +798,7 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn send_status(
-        &self, io: &NetworkContext, peer: PeerId,
-    ) -> Result<(), NetworkError> {
+    fn produce_status_message(&self) -> Status {
         let best_info = self.graph.consensus.get_best_info();
 
         let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
@@ -800,19 +808,38 @@ impl SynchronizationProtocolHandler {
             best_info.bounded_terminal_block_hashes.clone()
         };
 
-        let status_message = Status {
+        Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             network_id: 0x0,
             genesis_hash: self.graph.data_man.true_genesis_block.hash(),
             best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,
-        };
+        }
+    }
 
+    fn send_status(
+        &self, io: &NetworkContext, peer: PeerId,
+    ) -> Result<(), NetworkError> {
+        let status_message = self.produce_status_message();
         debug!("Sending status message to {:?}: {:?}", peer, status_message);
+        send_message(io, peer, &status_message, Some(SendQueuePriority::High))
+    }
 
-        let msg: Box<dyn Message> = Box::new(status_message);
+    fn broadcast_status(&self, io: &NetworkContext) {
+        let status_message = self.produce_status_message();
+        debug!("Broadcasting status message: {:?}", status_message);
 
-        send_message(io, peer, msg.as_ref(), Some(SendQueuePriority::High))
+        if self
+            .broadcast_message(
+                io,
+                PeerId::max_value(),
+                &status_message,
+                SendQueuePriority::Normal,
+            )
+            .is_err()
+        {
+            warn!("Error broadcsting status message");
+        }
     }
 
     pub fn announce_new_blocks(&self, io: &NetworkContext, hashes: &[H256]) {
@@ -1036,6 +1063,10 @@ impl SynchronizationProtocolHandler {
         self.request_manager.resend_waiting_requests(io);
     }
 
+    pub fn send_heartbeat(&self, io: &NetworkContext) {
+        self.broadcast_status(io);
+    }
+
     fn block_cache_gc(&self) { self.graph.data_man.gc_cache() }
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
@@ -1133,21 +1164,36 @@ impl SynchronizationProtocolHandler {
         if self.graph.contains_block(hash) {
             return true;
         }
+
+        if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
+            if info.get_seq_num()
+                < self.graph.consensus.current_era_genesis_seq_num()
+            {
+                debug!(
+                    "Ignore block in old era hash={:?}, seq={}, cur_era_seq={}",
+                    hash,
+                    info.get_seq_num(),
+                    self.graph.consensus.current_era_genesis_seq_num()
+                );
+                // The block is ordered before current era genesis, so we do
+                // not need to process it
+                return true;
+            }
+
+            if info.get_instance_id() == self.graph.data_man.get_instance_id()
+                || info.get_instance_id() == NULLU64
+            {
+                // This block has already entered consensus graph
+                // in this run.
+                return true;
+            }
+        }
+
+        // FIXME: If there is no block info in db, whether we need to fetch
+        // block from db?
         if let Some(block) = self.graph.data_man.block_by_hash(hash, false) {
             debug!("Recovered block {:?} from db", hash);
             // Process blocks from db
-            if let Some(info) =
-                self.graph.data_man.local_block_info_from_db(hash)
-            {
-                if info.get_seq_num()
-                    < self.graph.consensus.current_era_genesis_seq_num()
-                {
-                    debug!("Ignore block in old era hash={:?}, seq={}, cur_era_seq={}", hash, info.get_seq_num(), self.graph.consensus.current_era_genesis_seq_num());
-                    // The block is ordered before current era genesis, so we do
-                    // not need to process it
-                    return true;
-                }
-            }
             // The parameter `failed_peer` is only used when there exist some
             // blocks in `requested` but not in `blocks`.
             // Here `requested` and `blocks` have the same block, so it's okay
@@ -1204,7 +1250,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             CHECK_REQUEST_TIMER,
             self.protocol_config.check_request_period,
         )
-        .expect("Error registering transactions timer");
+        .expect("Error registering check request timer");
+        io.register_timer(HEARTBEAT_TIMER, Duration::from_secs(30))
+            .expect("Error registering heartbeat timer");
         io.register_timer(
             BLOCK_CACHE_GC_TIMER,
             self.protocol_config.block_cache_gc_period,
@@ -1290,6 +1338,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);
+            }
+            HEARTBEAT_TIMER => {
+                self.send_heartbeat(io);
             }
             BLOCK_CACHE_GC_TIMER => {
                 self.block_cache_gc();

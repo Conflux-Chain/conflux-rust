@@ -6,9 +6,8 @@ use super::{
 };
 use crate::sync::{
     message::{
-        msgid, GetBlockHashesByEpoch, GetBlockHeaderChain, GetBlockHeaders,
-        GetBlockTxn, GetBlocks, GetCompactBlocks, GetTransactions, Key,
-        KeyContainer, TransIndex,
+        msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
+        GetCompactBlocks, GetTransactions, Key, KeyContainer, TransIndex,
     },
     Error,
 };
@@ -170,24 +169,6 @@ impl RequestManager {
         let request = GetBlockHeaders {
             request_id: 0,
             hashes,
-        };
-
-        self.request_with_delay(io, Box::new(request), peer_id, None);
-    }
-
-    /// Request a header if it's not already in_flight. The request is delayed
-    /// if the header is requested before.
-    pub fn request_block_header_chain(
-        &self, io: &NetworkContext, peer_id: Option<PeerId>, hash: &H256,
-        max_blocks: u64,
-    )
-    {
-        let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
-
-        let request = GetBlockHeaderChain {
-            request_id: 0,
-            hash: *hash,
-            max_blocks,
         };
 
         self.request_with_delay(io, Box::new(request), peer_id, None);

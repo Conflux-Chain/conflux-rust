@@ -11,11 +11,6 @@ class FixedGenerateTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 2
 
-        # NOTE: nodes turn off catch-up mode after ~5s;
-        # we do not broadcast new blocks in catch-up mode,
-        # so this would break the tests
-        self.conf_parameters = {"start_as_catch_up_mode":"false"}
-
     def setup_network(self):
         self.setup_nodes()
 

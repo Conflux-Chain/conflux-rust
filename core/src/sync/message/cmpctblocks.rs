@@ -55,7 +55,7 @@ impl Handleable for GetCompactBlocksResponse {
             .downcast_general::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
-                false,
+                true,
             )?
             .hashes
             .iter()

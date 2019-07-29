@@ -44,14 +44,14 @@ impl ProofOfWorkConfig {
     pub fn new(test_mode: bool, initial_difficulty: Option<u64>) -> Self {
         if test_mode {
             ProofOfWorkConfig {
-                test_mode: true,
+                test_mode,
                 initial_difficulty: initial_difficulty.unwrap_or(4),
                 block_generation_period: 1000000,
                 difficulty_adjustment_epoch_period: 20,
             }
         } else {
             ProofOfWorkConfig {
-                test_mode: false,
+                test_mode,
                 initial_difficulty: INITIAL_DIFFICULTY,
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
                 difficulty_adjustment_epoch_period:

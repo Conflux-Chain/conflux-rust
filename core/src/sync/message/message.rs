@@ -66,7 +66,6 @@ build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE }
 build_msg_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN }
 build_msg_impl! { TransactionPropagationControl, msgid::TRANSACTION_PROPAGATION_CONTROL }
 build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH }
-build_msg_impl! { GetBlockHeaderChain, msgid::GET_BLOCK_HEADER_CHAIN }
 
 // normal priority and size-sensitive message types
 impl Message for Transactions {
@@ -131,7 +130,6 @@ impl Message for GetTransactionsResponse {
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetBlockHashesByEpoch }
-build_has_request_id_impl! { GetBlockHeaderChain }
 build_has_request_id_impl! { GetBlockHeaders }
 build_has_request_id_impl! { GetBlockHeadersResponse }
 build_has_request_id_impl! { GetBlocks }
@@ -157,9 +155,6 @@ pub fn handle_rlp_message(
         }
         msgid::GET_BLOCK_HEADERS_RESPONSE => {
             rlp.as_val::<GetBlockHeadersResponse>()?.handle(&ctx)?;
-        }
-        msgid::GET_BLOCK_HEADER_CHAIN => {
-            rlp.as_val::<GetBlockHeaderChain>()?.handle(&ctx)?;
         }
         msgid::GET_BLOCKS => rlp.as_val::<GetBlocks>()?.handle(&ctx)?,
         msgid::GET_BLOCKS_RESPONSE => {

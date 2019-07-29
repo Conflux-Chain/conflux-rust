@@ -185,22 +185,6 @@ class GetBlockHeaders(rlp.Serializable):
             hashes=hashes,
         )
 
-
-class GetBlockHeaderChain(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("hash", hash32),
-        ("max_blocks", big_endian_int),
-    ]
-
-    def __init__(self, hash, max_blocks, reqid=0):
-        super().__init__(
-            reqid=reqid,
-            hash=hash,
-            max_blocks=max_blocks,
-        )
-
-
 class BlockHeader(rlp.Serializable):
     fields = [
         ("parent_hash", binary),
@@ -452,7 +436,6 @@ msg_id_dict = {
     GetBlockTxn: GET_BLOCK_TXN,
     GetBlockTxnResponse: GET_BLOCK_TXN_RESPONSE,
     GetBlockHashesByEpoch: GET_BLOCK_HASHES_BY_EPOCH,
-    GetBlockHeaderChain: GET_BLOCK_HEADER_CHAIN,
 }
 
 msg_class_dict = {}
