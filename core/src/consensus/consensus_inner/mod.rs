@@ -54,6 +54,8 @@ pub struct ConsensusInnerConfig {
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
     pub era_epoch_count: u64,
+    // FIXME: We should replace this to use confirmation risk instead
+    pub era_checkpoint_gap: u64,
     // Optimistic execution is the feature to execute ahead of the deferred
     // execution boundary. The goal is to pipeline the transaction
     // execution and the block packaging and verification.
