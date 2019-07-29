@@ -25,6 +25,11 @@ error_chain! {
             display("Internal error"),
         }
 
+        InvalidMessageFormat {
+            description("Invalid message format"),
+            display("Invalid message format"),
+        }
+
         InvalidProof {
             description("Invalid proof"),
             display("Invalid proof"),
@@ -48,6 +53,11 @@ error_chain! {
         UnexpectedResponse {
             description("Unexpected response"),
             display("Unexpected response"),
+        }
+
+        UnknownMessage {
+            description("Unknown message"),
+            display("Unknown message"),
         }
 
         UnknownPeer {

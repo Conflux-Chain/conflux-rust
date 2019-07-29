@@ -84,11 +84,7 @@ impl QueryHandler {
             msgid::STATE_ROOT => self.on_state_root(io, peer, &rlp),
             msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
             msgid::STATE_ENTRY => self.on_state_entry(io, peer, &rlp),
-            _ => {
-                warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
-                // io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
-                Ok(())
-            }
+            _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
 
@@ -103,11 +99,13 @@ impl QueryHandler {
         // TODO(thegaram): remove wildcard so that
         // the compiler can help us cover all cases
         let disconnect = match e.0 {
-            ErrorKind::InvalidStateRoot => true,
+            ErrorKind::InternalError => false,
+            ErrorKind::InvalidMessageFormat => true,
             ErrorKind::InvalidProof => true,
             ErrorKind::InvalidRequestId => true,
+            ErrorKind::InvalidStateRoot => true,
+            ErrorKind::UnknownMessage => true,
             ErrorKind::PivotHashMismatch => false,
-            ErrorKind::InternalError => false,
             _ => false,
         };
 
@@ -361,6 +359,15 @@ impl NetworkProtocolHandler for QueryHandler {
     fn initialize(&self, _io: &NetworkContext) {}
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+        if raw.len() < 2 {
+            return self.handle_error(
+                io,
+                peer,
+                msgid::INVALID,
+                ErrorKind::InvalidMessageFormat.into(),
+            );
+        }
+
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
