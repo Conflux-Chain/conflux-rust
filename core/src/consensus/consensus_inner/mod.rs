@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub mod confirmation_meter;
 pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
@@ -17,9 +18,7 @@ use crate::{
     statedb::StateDb,
     storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
 };
-use cfx_types::{
-    into_i128, into_u256, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
-};
+use cfx_types::{into_i128, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::{
     CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
@@ -139,12 +138,6 @@ impl Default for ConsensusGraphExecutionInfo {
     }
 }
 
-pub struct TotalWeightInPast {
-    pub old: U256,
-    pub cur: U256,
-    pub delta: U256,
-}
-
 ///
 /// Implementation details of the GHAST algorithm
 ///
@@ -257,7 +250,6 @@ pub struct ConsensusGraphInner {
     execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
-    total_weight_in_past_2d: TotalWeightInPast,
     /// block set of each old era, will garbage collected by sync graph
     pub old_era_block_sets: VecDeque<Vec<H256>>,
 }
@@ -342,11 +334,6 @@ impl ConsensusGraphInner {
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
-            total_weight_in_past_2d: TotalWeightInPast {
-                old: U256::zero(),
-                cur: U256::zero(),
-                delta: U256::zero(),
-            },
             old_era_block_sets: VecDeque::new(),
         };
 
@@ -511,22 +498,6 @@ impl ConsensusGraphInner {
         let height = self.arena[parent].height;
         let era_height = self.get_era_height(height, offset);
         self.ancestor_at(parent, era_height)
-    }
-
-    pub fn update_total_weight_in_past(&mut self) {
-        let total_weight = &mut self.total_weight_in_past_2d;
-        total_weight.delta = total_weight.cur - total_weight.old;
-        total_weight.old = total_weight.cur;
-    }
-
-    fn aggregate_total_weight_in_past(&mut self, weight: i128) {
-        let total_weight = &mut self.total_weight_in_past_2d;
-        total_weight.cur += into_u256(weight);
-    }
-
-    fn get_total_weight_in_past(&self) -> i128 {
-        let total_weight = &self.total_weight_in_past_2d;
-        into_i128(&total_weight.delta)
     }
 
     #[inline]

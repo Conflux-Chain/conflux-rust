@@ -3,20 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 mod anticone_cache;
-mod confirmation;
 pub mod consensus_inner;
 mod debug;
 
 use super::consensus::consensus_inner::{
+    confirmation_meter::ConfirmationMeter,
     consensus_executor::ConsensusExecutor,
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
 use crate::{
-    block_data_manager::BlockDataManager,
-    consensus::confirmation::ConfirmationTrait, pow::ProofOfWorkConfig,
-    state::State, statistics::SharedStatistics,
-    transaction_pool::SharedTransactionPool, vm_factory::VmFactory,
-    REFEREE_BOUND,
+    block_data_manager::BlockDataManager, pow::ProofOfWorkConfig, state::State,
+    statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
+    vm_factory::VmFactory, REFEREE_BOUND,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
@@ -40,9 +38,6 @@ lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "consensus_on_new_block_timer");
 }
-
-const MIN_MAINTAINED_RISK: f64 = 0.000001;
-const MAX_NUM_MAINTAINED_RISK: usize = 10;
 
 pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
 pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
@@ -140,6 +135,7 @@ pub struct ConsensusGraph {
     executor: Arc<ConsensusExecutor>,
     pub statistics: SharedStatistics,
     pub new_block_handler: ConsensusNewBlockHandler,
+    pub confirmation_meter: ConfirmationMeter,
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
@@ -149,14 +145,6 @@ pub struct ConsensusGraph {
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
-
-impl ConfirmationTrait for ConsensusGraph {
-    fn confirmation_risk_by_hash(&self, hash: H256) -> Option<f64> {
-        let inner = self.inner.read();
-        self.new_block_handler
-            .confirmation_risk_by_hash(&*inner, hash)
-    }
-}
 
 impl ConsensusGraph {
     /// Build the ConsensusGraph with a specific era genesis block and various
@@ -182,6 +170,7 @@ impl ConsensusGraph {
             inner.clone(),
             conf.bench_mode,
         );
+        let confirmation_meter = ConfirmationMeter::new();
 
         let graph = ConsensusGraph {
             inner,
@@ -192,6 +181,7 @@ impl ConsensusGraph {
             new_block_handler: ConsensusNewBlockHandler::new(
                 conf, txpool, data_man, executor, statistics,
             ),
+            confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
             block_count: Mutex::new(1),
         };
@@ -230,7 +220,7 @@ impl ConsensusGraph {
     }
 
     pub fn update_total_weight_in_past(&self) {
-        self.inner.write().update_total_weight_in_past();
+        self.confirmation_meter.update_total_weight_in_past();
     }
 
     /// Wait for the generation and the execution completion of a block in the
@@ -459,6 +449,7 @@ impl ConsensusGraph {
                 let inner = &mut *self.inner.write();
                 self.new_block_handler.on_new_block(
                     inner,
+                    &self.confirmation_meter,
                     hash,
                     &block.block_header,
                     Some(&block.transactions),
@@ -476,6 +467,7 @@ impl ConsensusGraph {
             let inner = &mut *self.inner.write();
             self.new_block_handler.on_new_block(
                 inner,
+                &self.confirmation_meter,
                 hash,
                 header.as_ref(),
                 None,
