@@ -1354,6 +1354,10 @@ impl ConsensusNewBlockHandler {
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
         meter.update_confirmation_risks(inner);
 
+        // Note that after the checkpoint (if happens), the old_pivot_chain_len
+        // value will become obsolete
+        let old_pivot_chain_height =
+            inner.pivot_index_to_height(old_pivot_chain_len);
         let new_pivot_era_block = inner
             .get_era_block_with_parent(*inner.pivot_chain.last().unwrap(), 0);
         let new_era_height = inner.arena[new_pivot_era_block].height;
@@ -1411,15 +1415,10 @@ impl ConsensusNewBlockHandler {
                 None
             };
             let mut state_at = fork_at;
-            if fork_at + DEFERRED_STATE_EPOCH_COUNT
-                > inner.pivot_index_to_height(old_pivot_chain_len)
-            {
-                if inner.pivot_index_to_height(old_pivot_chain_len)
-                    > DEFERRED_STATE_EPOCH_COUNT
-                {
-                    state_at = inner.pivot_index_to_height(old_pivot_chain_len)
-                        - DEFERRED_STATE_EPOCH_COUNT
-                        + 1;
+            if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height {
+                if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
+                    state_at =
+                        old_pivot_chain_height - DEFERRED_STATE_EPOCH_COUNT + 1;
                 } else {
                     state_at = 1;
                 }
