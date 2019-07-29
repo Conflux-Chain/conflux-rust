@@ -238,6 +238,9 @@ impl ArchiveClient {
 
         let blockgen_config = conf.blockgen_config();
         if let Some(chain_path) = blockgen_config.test_chain_path {
+            // make sure db recovery has completed
+            thread::sleep(Duration::from_secs(7));
+
             let file_path = Path::new(&chain_path);
             let file = File::open(file_path).map_err(|e| {
                 format!("Failed to open test-chain file {:?}", e)
