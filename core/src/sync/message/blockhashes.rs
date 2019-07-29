@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, GetBlockHashesByEpoch, Handleable, RequestId},
-    Error,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{Context, GetBlockHashesByEpoch, Handleable},
+        Error,
+    },
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};

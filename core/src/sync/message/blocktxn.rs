@@ -2,12 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        metrics::BLOCK_TXN_HANDLE_TIMER, Context, GetBlockTxn, Handleable,
-        RequestId,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{
+            metrics::BLOCK_TXN_HANDLE_TIMER, Context, GetBlockTxn, Handleable,
+        },
+        Error,
     },
-    Error,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;

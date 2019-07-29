@@ -2,14 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlockHeadersResponse, Handleable, HasRequestId, Key,
-        KeyContainer, Message, MsgId, RequestId,
+use crate::{
+    message::{HasRequestId, Message, RequestId},
+    sync::{
+        message::{
+            msgid, Context, GetBlockHeadersResponse, Handleable, Key,
+            KeyContainer,
+        },
+        request_manager::Request,
+        synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
+        Error, ProtocolConfiguration,
     },
-    request_manager::Request,
-    synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
-    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -37,17 +40,14 @@ impl Request for GetBlockHeaderChain {
     }
 
     fn on_removed(&self, inflight_keys: &mut KeyContainer) {
-        inflight_keys.remove(
-            MsgId::GET_BLOCK_HEADERS.into(),
-            Key::Hash(self.hash.clone()),
-        );
+        inflight_keys
+            .remove(msgid::GET_BLOCK_HEADERS, Key::Hash(self.hash.clone()));
     }
 
     fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
-        if !inflight_keys.add(
-            MsgId::GET_BLOCK_HEADERS.into(),
-            Key::Hash(self.hash.clone()),
-        ) {
+        if !inflight_keys
+            .add(msgid::GET_BLOCK_HEADERS, Key::Hash(self.hash.clone()))
+        {
             self.hash = H256::zero();
         }
     }

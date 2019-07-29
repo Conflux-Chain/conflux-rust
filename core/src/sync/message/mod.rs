@@ -24,8 +24,6 @@ mod status;
 mod terminalblockhashes;
 mod transactions;
 
-pub use crate::message::{HasRequestId, RequestId};
-
 pub use self::{
     blockhashes::GetBlockHashesResponse,
     blockheaders::GetBlockHeadersResponse,
@@ -41,7 +39,7 @@ pub use self::{
     getterminalblockhashes::GetTerminalBlockHashes,
     handleable::{Context, Handleable},
     keys::{Key, KeyContainer},
-    message::{Message, MsgId},
+    message::{handle_rlp_message, msgid},
     newblock::NewBlock,
     newblockhashes::NewBlockHashes,
     status::Status,

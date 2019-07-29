@@ -5,6 +5,5 @@
 mod message;
 mod protocol;
 
-pub use crate::message::{HasRequestId, RequestId};
-pub use message::{Message, MsgId};
+pub use message::msgid;
 pub use protocol::{GetStateEntry, GetStateRoot, StateEntry, StateRoot};

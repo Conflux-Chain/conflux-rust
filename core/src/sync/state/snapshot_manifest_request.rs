@@ -3,11 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::macro_deps::*,
+    message::{HasRequestId, Message, MsgId, RequestId},
     sync::{
-        message::{
-            Context, Handleable, HasRequestId, KeyContainer, Message, MsgId,
-        },
+        message::{msgid, Context, Handleable, KeyContainer},
         request_manager::Request,
         state::snapshot_manifest_response::SnapshotManifestResponse,
         Error, ProtocolConfiguration,
@@ -15,7 +13,7 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct SnapshotManifestRequest {
@@ -32,7 +30,7 @@ impl SnapshotManifestRequest {
     }
 }
 
-build_msg_impl! { SnapshotManifestRequest, MsgId::GET_SNAPSHOT_MANIFEST }
+build_msg_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST }
 build_has_request_id_impl! { SnapshotManifestRequest }
 
 impl Handleable for SnapshotManifestRequest {

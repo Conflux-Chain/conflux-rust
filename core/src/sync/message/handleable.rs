@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::Message, msg_sender::send_message,
-    request_manager::RequestMessage, Error, SynchronizationProtocolHandler,
+use crate::{
+    message::Message,
+    sync::{
+        msg_sender::send_message, request_manager::RequestMessage, Error,
+        SynchronizationProtocolHandler,
+    },
 };
 use network::{NetworkContext, PeerId};
 

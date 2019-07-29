@@ -2,8 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::RequestId;
-use crate::storage::StateProof;
+use crate::{message::RequestId, storage::StateProof};
 use cfx_types::H256;
 use primitives::StateRoot as PrimitiveStateRoot;
 use rlp_derive::{RlpDecodable, RlpEncodable};

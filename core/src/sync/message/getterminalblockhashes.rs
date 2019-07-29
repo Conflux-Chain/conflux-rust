@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, GetTerminalBlockHashesResponse, Handleable, RequestId},
-    Error,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{Context, GetTerminalBlockHashesResponse, Handleable},
+        Error,
+    },
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};

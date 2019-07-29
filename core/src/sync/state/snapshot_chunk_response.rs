@@ -3,14 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::macro_deps::*,
+    message::{Message, MsgId},
     sync::{
-        message::{Context, Handleable, Message, MsgId},
+        message::{msgid, Context, Handleable},
         Error,
     },
 };
 use cfx_bytes::Bytes;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::any::Any;
 
 #[derive(Debug)]
 pub struct SnapshotChunkResponse {
@@ -18,7 +19,7 @@ pub struct SnapshotChunkResponse {
     pub chunk: Bytes,
 }
 
-build_msg_impl! { SnapshotChunkResponse, MsgId::GET_SNAPSHOT_CHUNK_RESPONSE }
+build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE }
 
 impl Handleable for SnapshotChunkResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

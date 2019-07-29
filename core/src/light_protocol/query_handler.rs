@@ -35,11 +35,13 @@ use crate::{
 
 use super::{
     message::{
-        GetStateEntry, GetStateRoot, HasRequestId, Message, MsgId, RequestId,
+        msgid, GetStateEntry, GetStateRoot,
         StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
     },
     Error, ErrorKind,
 };
+
+use crate::message::{HasRequestId, Message, MsgId, RequestId};
 
 const POLL_PERIOD_MS: u64 = 100;
 const MAX_POLL_TIME_MS: u64 = 1000;
@@ -78,10 +80,10 @@ impl QueryHandler {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
 
         match msg_id {
-            MsgId::GET_STATE_ROOT => self.on_get_state_root(io, peer, &rlp),
-            MsgId::STATE_ROOT => self.on_state_root(io, peer, &rlp),
-            MsgId::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
-            MsgId::STATE_ENTRY => self.on_state_entry(io, peer, &rlp),
+            msgid::GET_STATE_ROOT => self.on_get_state_root(io, peer, &rlp),
+            msgid::STATE_ROOT => self.on_state_root(io, peer, &rlp),
+            msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
+            msgid::STATE_ENTRY => self.on_state_entry(io, peer, &rlp),
             _ => {
                 warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
                 // io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));

@@ -2,14 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlockHeadersResponse, Handleable, HasRequestId, Key,
-        KeyContainer, Message, RequestId,
+use crate::{
+    message::{HasRequestId, Message, RequestId},
+    sync::{
+        message::{
+            Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
+        },
+        request_manager::Request,
+        synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
+        Error, ProtocolConfiguration,
     },
-    request_manager::Request,
-    synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
-    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};

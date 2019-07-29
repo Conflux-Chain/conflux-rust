@@ -3,10 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    message::RequestId,
     sync::{
         message::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaderChain,
-            GetBlockHeaders, Handleable, RequestId,
+            GetBlockHeaders, Handleable,
         },
         msg_sender::NULL,
         request_manager::RequestMessage,

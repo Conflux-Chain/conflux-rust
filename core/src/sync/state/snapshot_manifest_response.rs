@@ -3,14 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::macro_deps::*,
+    message::{Message, MsgId},
     sync::{
-        message::{Context, Handleable, Message, MsgId},
+        message::{msgid, Context, Handleable},
         Error,
     },
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::any::Any;
 
 #[derive(Debug)]
 pub struct SnapshotManifestResponse {
@@ -20,7 +21,7 @@ pub struct SnapshotManifestResponse {
     pub chunk_hashes: Vec<H256>,
 }
 
-build_msg_impl! { SnapshotManifestResponse, MsgId::GET_SNAPSHOT_MANIFEST_RESPONSE }
+build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE }
 
 impl Handleable for SnapshotManifestResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

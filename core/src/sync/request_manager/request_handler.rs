@@ -1,9 +1,11 @@
-use crate::sync::{
-    message::{HasRequestId, KeyContainer, Message},
-    msg_sender::send_message,
-    request_manager::RequestManager,
-    synchronization_protocol_handler::ProtocolConfiguration,
-    Error, ErrorKind,
+use crate::{
+    message::{HasRequestId, Message},
+    sync::{
+        message::KeyContainer, msg_sender::send_message,
+        request_manager::RequestManager,
+        synchronization_protocol_handler::ProtocolConfiguration, Error,
+        ErrorKind,
+    },
 };
 use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;

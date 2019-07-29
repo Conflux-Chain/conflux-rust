@@ -2,17 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    GetStateEntry, GetStateRoot, HasRequestId, RequestId, StateEntry, StateRoot,
-};
+use super::{GetStateEntry, GetStateRoot, StateEntry, StateRoot};
+use crate::message::{HasRequestId, Message, MsgId, RequestId};
+use std::any::Any;
 
-// import all other modules needed for macro expansion
-use crate::message::macro_deps::*;
-
-// generate `pub enum MsgId`
+// generate `pub mod msgid`
 build_msgid! {
-    type=u8
-
     // STATUS = 0x00
     GET_STATE_ROOT = 0x01
     STATE_ROOT = 0x02
@@ -20,14 +15,11 @@ build_msgid! {
     STATE_ENTRY = 0x04
 }
 
-// generate `pub trait Message`
-build_msg_trait! {}
-
 // generate `impl Message for _` for each message type
-build_msg_impl! { GetStateRoot, MsgId::GET_STATE_ROOT }
-build_msg_impl! { StateRoot, MsgId::STATE_ROOT }
-build_msg_impl! { GetStateEntry, MsgId::GET_STATE_ENTRY }
-build_msg_impl! { StateEntry, MsgId::STATE_ENTRY }
+build_msg_impl! { GetStateRoot, msgid::GET_STATE_ROOT }
+build_msg_impl! { StateRoot, msgid::STATE_ROOT }
+build_msg_impl! { GetStateEntry, msgid::GET_STATE_ENTRY }
+build_msg_impl! { StateEntry, msgid::STATE_ENTRY }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }

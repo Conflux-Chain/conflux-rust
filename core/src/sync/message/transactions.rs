@@ -2,13 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        metrics::TX_HANDLE_TIMER, Context, Handleable, Key, KeyContainer,
-        Message, RequestId,
+use crate::{
+    message::{Message, RequestId},
+    sync::{
+        message::{
+            metrics::TX_HANDLE_TIMER, Context, Handleable, Key, KeyContainer,
+        },
+        request_manager::Request,
+        Error, ErrorKind, ProtocolConfiguration,
     },
-    request_manager::Request,
-    Error, ErrorKind, ProtocolConfiguration,
 };
 use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};

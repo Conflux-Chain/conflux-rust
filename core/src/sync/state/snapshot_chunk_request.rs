@@ -3,11 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::macro_deps::*,
+    message::{HasRequestId, Message, MsgId, RequestId},
     sync::{
-        message::{
-            Context, Handleable, HasRequestId, KeyContainer, Message, MsgId,
-        },
+        message::{msgid, Context, Handleable, KeyContainer},
         request_manager::Request,
         state::snapshot_chunk_response::SnapshotChunkResponse,
         Error, ProtocolConfiguration,
@@ -15,7 +13,7 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct SnapshotChunkRequest {
@@ -34,7 +32,7 @@ impl SnapshotChunkRequest {
     }
 }
 
-build_msg_impl! { SnapshotChunkRequest, MsgId::GET_SNAPSHOT_CHUNK }
+build_msg_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK }
 build_has_request_id_impl! { SnapshotChunkRequest }
 
 impl Handleable for SnapshotChunkRequest {
