@@ -11,7 +11,7 @@ use crate::sync::{
     Error, ErrorKind, ProtocolConfiguration,
 };
 use metrics::MeterTimer;
-use primitives::{transaction::TxPropagateId, TransactionWithSignature};
+use primitives::{transaction::TxPropagateId, TransactionWithSignature, TxFullId};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
@@ -269,7 +269,14 @@ impl TransactionDigests {
     }
 
     pub fn to_u24(v1: u8, v2: u8, v3: u8) -> u32 {
-        v1 as u32 * 65536 + v2 as u32 * 256 + v3 as u32
+        ((v1 as u32) <<16)+((v2 as u32) <<8) + v3 as u32
+    }
+
+    pub fn append_to_message(message: &mut Vec<u8>,random_position:usize, transaction_id: &TxFullId){
+        message.push(transaction_id[random_position]);
+        message.push(transaction_id[29]);
+        message.push(transaction_id[30]);
+        message.push(transaction_id[31]);
     }
 }
 
