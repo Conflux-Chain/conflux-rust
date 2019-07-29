@@ -66,7 +66,7 @@ impl Request for SnapshotChunkRequest {
 impl Message for SnapshotChunkRequest {
     fn msg_id(&self) -> MsgId { MsgId::GET_SNAPSHOT_CHUNK }
 
-    fn msg_name(&self) -> String { String::from("SnapshotChunkRequest") }
+    fn msg_name(&self) -> &'static str { "SnapshotChunkRequest" }
 }
 
 impl Encodable for SnapshotChunkRequest {

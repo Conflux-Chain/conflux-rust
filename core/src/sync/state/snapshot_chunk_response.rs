@@ -32,7 +32,7 @@ impl Handleable for SnapshotChunkResponse {
 impl Message for SnapshotChunkResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_SNAPSHOT_CHUNK_RESPONSE }
 
-    fn msg_name(&self) -> String { String::from("SnapshotChunkResponse") }
+    fn msg_name(&self) -> &'static str { "SnapshotChunkResponse" }
 }
 
 impl Encodable for SnapshotChunkResponse {

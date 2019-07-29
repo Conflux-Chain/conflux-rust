@@ -87,7 +87,7 @@ fn on_new_decoded_block(
 impl Message for NewBlock {
     fn msg_id(&self) -> MsgId { MsgId::NEW_BLOCK }
 
-    fn msg_name(&self) -> String { String::from("NewBlock") }
+    fn msg_name(&self) -> &'static str { "NewBlock" }
 }
 
 impl Encodable for NewBlock {

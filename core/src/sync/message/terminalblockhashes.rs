@@ -39,9 +39,7 @@ impl Handleable for GetTerminalBlockHashesResponse {
 impl Message for GetTerminalBlockHashesResponse {
     fn msg_id(&self) -> MsgId { MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE }
 
-    fn msg_name(&self) -> String {
-        String::from("GetTerminalBlockHashesResponse")
-    }
+    fn msg_name(&self) -> &'static str { "GetTerminalBlockHashesResponse" }
 }
 
 impl Deref for GetTerminalBlockHashesResponse {
