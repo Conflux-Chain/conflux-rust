@@ -30,6 +30,7 @@ pub trait Message: Send + Sync + Encodable {
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
     fn msg_id(&self) -> MsgId;
+    fn msg_name(&self) -> &'static str;
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
     fn send(
@@ -66,7 +67,7 @@ pub trait Message: Send + Sync + Encodable {
 
         debug!(
             "Send message({}) to {:?}",
-            self.msg_id(),
+            self.msg_name(),
             io.get_peer_node_id(peer)
         );
 
@@ -75,11 +76,13 @@ pub trait Message: Send + Sync + Encodable {
 }
 
 macro_rules! build_msg_impl {
-    ($name:ident, $msg:expr) => {
+    ($name:ident, $msg:expr, $name_str:literal) => {
         impl Message for $name {
             fn as_any(&self) -> &Any { self }
 
             fn msg_id(&self) -> MsgId { $msg }
+
+            fn msg_name(&self) -> &'static str { $name_str }
         }
     };
 }

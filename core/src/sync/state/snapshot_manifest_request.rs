@@ -30,7 +30,7 @@ impl SnapshotManifestRequest {
     }
 }
 
-build_msg_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST }
+build_msg_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
 build_has_request_id_impl! { SnapshotManifestRequest }
 
 impl Handleable for SnapshotManifestRequest {

@@ -32,7 +32,7 @@ impl SnapshotChunkRequest {
     }
 }
 
-build_msg_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK }
+build_msg_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
 build_has_request_id_impl! { SnapshotChunkRequest }
 
 impl Handleable for SnapshotChunkRequest {

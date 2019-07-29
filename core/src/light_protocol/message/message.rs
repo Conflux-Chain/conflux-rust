@@ -16,10 +16,10 @@ build_msgid! {
 }
 
 // generate `impl Message for _` for each message type
-build_msg_impl! { GetStateRoot, msgid::GET_STATE_ROOT }
-build_msg_impl! { StateRoot, msgid::STATE_ROOT }
-build_msg_impl! { GetStateEntry, msgid::GET_STATE_ENTRY }
-build_msg_impl! { StateEntry, msgid::STATE_ENTRY }
+build_msg_impl! { GetStateRoot, msgid::GET_STATE_ROOT, "GetStateRoot" }
+build_msg_impl! { StateRoot, msgid::STATE_ROOT, "StateRoot" }
+build_msg_impl! { GetStateEntry, msgid::GET_STATE_ENTRY, "GetStateEntry" }
+build_msg_impl! { StateEntry, msgid::STATE_ENTRY, "StateEntry" }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }

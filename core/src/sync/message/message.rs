@@ -52,26 +52,28 @@ build_msgid! {
 
 // generate `impl Message for _` for each message type
 // high priority message types
-build_msg_impl! { Status, msgid::STATUS }
-build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES }
-build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE }
-build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS }
-build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE }
-build_msg_impl! { NewBlock, msgid::NEW_BLOCK }
-build_msg_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE }
-build_msg_impl! { GetTerminalBlockHashes, msgid::GET_TERMINAL_BLOCK_HASHES }
-build_msg_impl! { GetBlocks, msgid::GET_BLOCKS }
-build_msg_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS }
-build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE }
-build_msg_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN }
-build_msg_impl! { TransactionPropagationControl, msgid::TRANSACTION_PROPAGATION_CONTROL }
-build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH }
+build_msg_impl! { Status, msgid::STATUS, "Status" }
+build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
+build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse" }
+build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
+build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse" }
+build_msg_impl! { NewBlock, msgid::NEW_BLOCK, "NewBlock" }
+build_msg_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE, "GetTerminalBlockHashesResponse" }
+build_msg_impl! { GetTerminalBlockHashes, msgid::GET_TERMINAL_BLOCK_HASHES, "GetTerminalBlockHashes" }
+build_msg_impl! { GetBlocks, msgid::GET_BLOCKS, "GetBlocks" }
+build_msg_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS, "GetCompactBlocks" }
+build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse" }
+build_msg_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn" }
+build_msg_impl! { TransactionPropagationControl, msgid::TRANSACTION_PROPAGATION_CONTROL, "TransactionPropagationControl" }
+build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
 
 // normal priority and size-sensitive message types
 impl Message for Transactions {
     fn as_any(&self) -> &Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::TRANSACTIONS }
+
+    fn msg_name(&self) -> &'static str { "Transactions" }
 
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 }
@@ -81,6 +83,8 @@ impl Message for GetBlocksResponse {
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_RESPONSE }
 
+    fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
+
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
@@ -88,6 +92,8 @@ impl Message for GetBlocksWithPublicResponse {
     fn as_any(&self) -> &Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
 
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
@@ -97,6 +103,8 @@ impl Message for GetBlockTxnResponse {
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_TXN_RESPONSE }
 
+    fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
+
     fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 }
 
@@ -104,6 +112,8 @@ impl Message for TransactionDigests {
     fn as_any(&self) -> &Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::TRANSACTION_DIGESTS }
+
+    fn msg_name(&self) -> &'static str { "TransactionDigests" }
 
     fn is_size_sensitive(&self) -> bool { self.trans_short_ids.len() > 1 }
 
@@ -115,6 +125,8 @@ impl Message for GetTransactions {
 
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS }
 
+    fn msg_name(&self) -> &'static str { "GetTransactions" }
+
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
@@ -122,6 +134,8 @@ impl Message for GetTransactionsResponse {
     fn as_any(&self) -> &Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
 
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
