@@ -33,7 +33,6 @@ impl Handleable for SnapshotManifestRequest {
         let response = SnapshotManifestResponse {
             request_id: self.request_id,
             checkpoint: self.checkpoint.clone(),
-            state_root: H256::zero(),
             chunk_hashes: Vec::new(),
         };
 

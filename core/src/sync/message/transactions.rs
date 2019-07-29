@@ -350,7 +350,7 @@ impl Handleable for GetTransactionsResponse {
         debug!("on_get_transactions_response {:?}", self.request_id());
 
         let req = ctx.match_request(self.request_id())?;
-        let req = req.downcast_general::<GetTransactions>(
+        let req = req.downcast_ref::<GetTransactions>(
             ctx.io,
             &ctx.manager.request_manager,
             false,

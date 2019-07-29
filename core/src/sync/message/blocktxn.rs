@@ -32,7 +32,7 @@ impl Handleable for GetBlockTxnResponse {
         debug!("on_get_blocktxn_response");
         let resp_hash = self.block_hash;
         let req = ctx.match_request(self.request_id())?;
-        let req = req.downcast_general::<GetBlockTxn>(
+        let req = req.downcast_ref::<GetBlockTxn>(
             ctx.io,
             &ctx.manager.request_manager,
             true,

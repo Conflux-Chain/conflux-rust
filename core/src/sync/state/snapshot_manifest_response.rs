@@ -4,16 +4,17 @@
 
 use crate::sync::{
     message::{Context, Handleable, Message, MsgId},
-    Error,
+    state::SnapshotManifestRequest,
+    Error, ErrorKind,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub checkpoint: H256,
-    pub state_root: H256,
     pub chunk_hashes: Vec<H256>,
 }
 
@@ -25,39 +26,63 @@ impl Message for SnapshotManifestResponse {
 
 impl Handleable for SnapshotManifestResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let message = ctx.match_request(self.request_id)?;
+
+        let request = message.downcast_ref::<SnapshotManifestRequest>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            true,
+        )?;
+
+        if request.checkpoint != self.checkpoint {
+            debug!(
+                "Responded snapshot manifest checkpoint mismatch, requested = {:?}, responded = {:?}",
+                request.checkpoint,
+                self.checkpoint,
+            );
+            ctx.manager
+                .request_manager
+                .remove_mismatch_request(ctx.io, &message);
+            bail!(ErrorKind::Invalid);
+        }
+
+        let distinct_chunks: HashSet<H256> =
+            self.chunk_hashes.iter().cloned().collect();
+        if distinct_chunks.len() != self.chunk_hashes.len() {
+            debug!("Responded snapshot manifest has duplicated chunks");
+            ctx.manager
+                .request_manager
+                .remove_mismatch_request(ctx.io, &message);
+            bail!(ErrorKind::Invalid);
+        }
+
         ctx.manager
             .state_sync
-            .lock()
-            .handle_snapshot_manifest_response(
-                ctx.io,
-                ctx.peer,
-                self,
-                &ctx.manager.request_manager,
-            )
+            .handle_snapshot_manifest_response(ctx, self);
+
+        Ok(())
     }
 }
 
 impl Encodable for SnapshotManifestResponse {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(4)
+        s.begin_list(3)
             .append(&self.request_id)
             .append(&self.checkpoint)
-            .append(&self.state_root)
             .append_list(&self.chunk_hashes);
     }
 }
 
 impl Decodable for SnapshotManifestResponse {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 4 {
+        if rlp.item_count()? != 3 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
         Ok(SnapshotManifestResponse {
             request_id: rlp.val_at(0)?,
             checkpoint: rlp.val_at(1)?,
-            state_root: rlp.val_at(2)?,
-            chunk_hashes: rlp.list_at(3)?,
+            chunk_hashes: rlp.list_at(2)?,
         })
     }
 }

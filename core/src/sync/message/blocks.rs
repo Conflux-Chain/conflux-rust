@@ -38,7 +38,7 @@ impl Handleable for GetBlocksResponse {
         );
         let req = ctx.match_request(self.request_id())?;
         let requested_blocks: HashSet<H256> = req
-            .downcast_general::<GetBlocks>(
+            .downcast_ref::<GetBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
                 true,
@@ -117,14 +117,14 @@ impl Handleable for GetBlocksWithPublicResponse {
         );
         let req = ctx.match_request(self.request_id())?;
         let req_hashes: HashSet<H256> = if let Ok(req) = req
-            .downcast_general::<GetCompactBlocks>(
+            .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
                 false,
             ) {
             req.hashes.iter().cloned().collect()
         } else {
-            let req = req.downcast_general::<GetBlocks>(
+            let req = req.downcast_ref::<GetBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
                 false,
