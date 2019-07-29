@@ -2,14 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{H256, H64};
+use cfx_types::H256;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 pub enum Key {
     Hash(H256),
     Num(u64),
-    Id(H64),
+    Id(u32),
 }
 
 #[derive(Default)]

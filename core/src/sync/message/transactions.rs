@@ -163,7 +163,8 @@ impl Decodable for TransIndex {
 #[derive(Debug, PartialEq)]
 pub struct TransactionDigests {
     pub window_index: usize,
-    pub trans_short_ids: Vec<TxPropagateId>,
+    pub random_position: u8,
+    trans_short_ids: Vec<u8>,
 }
 
 impl Handleable for TransactionDigests {
@@ -187,8 +188,7 @@ impl Handleable for TransactionDigests {
         ctx.manager.request_manager.request_transactions(
             ctx.io,
             ctx.peer,
-            self.window_index,
-            &self.trans_short_ids,
+            self,
         );
 
         Ok(())
@@ -206,8 +206,9 @@ impl Message for TransactionDigests {
 impl Encodable for TransactionDigests {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.window_index)
+            .append(&self.random_position)
             .append_list(&self.trans_short_ids);
     }
 }
@@ -216,8 +217,61 @@ impl Decodable for TransactionDigests {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(TransactionDigests {
             window_index: rlp.val_at(0)?,
-            trans_short_ids: rlp.list_at(1)?,
+            random_position: rlp.val_at(1)?,
+            trans_short_ids: rlp.list_at(2)?,
         })
+    }
+}
+
+impl TransactionDigests {
+    const SHORT_ID_SIZE_IN_BYTES: usize = 4;
+
+    pub fn new(
+        window_index: usize, random_position: u8, trans_short_ids: Vec<u8>,
+    ) -> TransactionDigests {
+        TransactionDigests {
+            window_index,
+            random_position,
+            trans_short_ids,
+        }
+    }
+
+    pub fn get_decomposed_short_ids(&self) -> (Vec<u8>, Vec<TxPropagateId>) {
+        if self.trans_short_ids.len()
+            % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
+            != 0
+        {
+            panic!("TransactionDigests length Error!");
+        }
+        let mut random_byte_vector: Vec<u8> = Vec::new();
+        let mut fixed_bytes_vector: Vec<TxPropagateId> = Vec::new();
+
+        for i in (0..self.trans_short_ids.len())
+            .step_by(TransactionDigests::SHORT_ID_SIZE_IN_BYTES)
+            {
+                random_byte_vector.push(self.trans_short_ids[i]);
+                fixed_bytes_vector.push(TransactionDigests::to_u24(
+                    self.trans_short_ids[i + 1],
+                    self.trans_short_ids[i + 2],
+                    self.trans_short_ids[i + 3],
+                ));
+            }
+
+        (random_byte_vector, fixed_bytes_vector)
+    }
+
+    pub fn get_len(&self) -> usize {
+        if self.trans_short_ids.len()
+            % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
+            != 0
+        {
+            panic!("TransactionDigests length Error!");
+        }
+        self.trans_short_ids.len() / TransactionDigests::SHORT_ID_SIZE_IN_BYTES
+    }
+
+    pub fn to_u24(v1: u8, v2: u8, v3: u8) -> u32 {
+        v1 as u32 * 65536 + v2 as u32 * 256 + v3 as u32
     }
 }
 
