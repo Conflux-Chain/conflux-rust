@@ -8,9 +8,9 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use primitives::Block;
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 
-#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct NewBlock {
     pub block: Block,
 }

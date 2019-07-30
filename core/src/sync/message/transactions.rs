@@ -16,10 +16,12 @@ use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp_derive::{
+    RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
+};
 use std::{any::Any, collections::HashSet, time::Duration};
 
-#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct Transactions {
     pub transactions: Vec<TransactionWithSignature>,
 }

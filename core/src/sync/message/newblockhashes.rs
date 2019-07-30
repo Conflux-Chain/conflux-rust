@@ -7,9 +7,9 @@ use crate::sync::{
     Error,
 };
 use cfx_types::H256;
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 
-#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct NewBlockHashes {
     pub block_hashes: Vec<H256>,
 }
