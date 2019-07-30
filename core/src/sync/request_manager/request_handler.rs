@@ -39,17 +39,12 @@ impl RequestHandler {
     }
 
     pub fn add_peer(&self, peer_id: PeerId) {
-        let mut requests_vec = Vec::with_capacity(
-            self.protocol_config.max_inflight_request_count as usize,
-        );
-        for _i in 0..self.protocol_config.max_inflight_request_count {
-            requests_vec.push(None);
-        }
         self.peers.lock().insert(
             peer_id,
             RequestContainer {
                 peer_id,
-                inflight_requests: requests_vec,
+                inflight_requests: HashMap::new(),
+                next_request_id: 0,
                 max_inflight_request_count: self
                     .protocol_config
                     .max_inflight_request_count,
@@ -217,9 +212,7 @@ impl RequestHandler {
 #[derive(Default)]
 struct RequestContainer {
     peer_id: PeerId,
-    pub inflight_requests: Vec<Option<SynchronizationPeerRequest>>,
-    /// lowest = next if there is no inflight requests
-    pub lowest_request_id: u64,
+    pub inflight_requests: HashMap<u64, SynchronizationPeerRequest>,
     pub next_request_id: u64,
     pub max_inflight_request_count: u64,
     pub pending_requests: VecDeque<RequestMessage>,
@@ -230,8 +223,8 @@ impl RequestContainer {
     /// otherwise, actual new request id will be given to this request
     /// when it is moved from pending to inflight queue.
     pub fn get_next_request_id(&mut self) -> Option<u64> {
-        if self.next_request_id
-            < self.lowest_request_id + self.max_inflight_request_count
+        if self.inflight_requests.len()
+            < self.max_inflight_request_count as usize
         {
             let id = self.next_request_id;
             self.next_request_id += 1;
@@ -246,22 +239,14 @@ impl RequestContainer {
         timed_req: Arc<TimedSyncRequests>,
     )
     {
-        self.inflight_requests
-            [(request_id % self.max_inflight_request_count) as usize] =
-            Some(SynchronizationPeerRequest { message, timed_req });
+        self.inflight_requests.insert(
+            request_id,
+            SynchronizationPeerRequest { message, timed_req },
+        );
     }
 
     pub fn append_pending_request(&mut self, msg: RequestMessage) {
         self.pending_requests.push_back(msg);
-    }
-
-    #[allow(unused)]
-    pub fn is_inflight_request(&self, request_id: u64) -> bool {
-        request_id < self.next_request_id
-            && request_id >= self.lowest_request_id
-            && self.inflight_requests
-                [(request_id % self.max_inflight_request_count) as usize]
-                .is_some()
     }
 
     pub fn has_pending_requests(&self) -> bool {
@@ -275,28 +260,13 @@ impl RequestContainer {
     pub fn remove_inflight_request(
         &mut self, request_id: u64,
     ) -> Option<SynchronizationPeerRequest> {
-        if request_id < self.next_request_id
-            && request_id >= self.lowest_request_id
-        {
-            let save_req = mem::replace(
-                &mut self.inflight_requests
-                    [(request_id % self.max_inflight_request_count) as usize],
-                None,
-            );
-            // Advance lowest_request_id to the next in-flight request
-            if request_id == self.lowest_request_id {
-                while self.inflight_requests[(self.lowest_request_id
-                    % self.max_inflight_request_count)
-                    as usize]
-                    .is_none()
-                    && self.lowest_request_id < self.next_request_id
-                {
-                    self.lowest_request_id += 1;
-                }
-            }
-            save_req
+        if let Some(save_req) = self.inflight_requests.remove(&request_id) {
+            Some(save_req)
         } else {
-            debug!("Remove out of bound request peer={} request_id={} low={} next={}", self.peer_id, request_id, self.lowest_request_id, self.next_request_id);
+            debug!(
+                "Remove out of bound request peer={} request_id={} next={}",
+                self.peer_id, request_id, self.next_request_id
+            );
             None
         }
     }
@@ -364,11 +334,11 @@ impl RequestContainer {
 
     pub fn get_unfinished_requests(&mut self) -> Vec<RequestMessage> {
         let mut unfinished_requests = Vec::new();
-        while let Some(maybe_req) = self.inflight_requests.pop() {
-            if let Some(req) = maybe_req {
-                req.timed_req.removed.store(true, AtomicOrdering::Relaxed);
-                unfinished_requests.push(req.message);
-            }
+        let mut new_map = HashMap::new();
+        mem::swap(&mut self.inflight_requests, &mut new_map);
+        for (_, req) in new_map {
+            req.timed_req.removed.store(true, AtomicOrdering::Relaxed);
+            unfinished_requests.push(req.message);
         }
 
         while let Some(req) = self.pending_requests.pop_front() {
