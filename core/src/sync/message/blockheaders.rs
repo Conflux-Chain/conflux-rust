@@ -20,7 +20,6 @@ use primitives::BlockHeader;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     collections::HashSet,
-    ops::{Deref, DerefMut},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -198,15 +197,6 @@ impl GetBlockHeadersResponse {
                 .ok();
         }
     }
-}
-impl Deref for GetBlockHeadersResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlockHeadersResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlockHeadersResponse {

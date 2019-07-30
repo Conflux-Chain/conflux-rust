@@ -10,7 +10,6 @@ use crate::{
     },
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, PartialEq)]
 pub struct GetTerminalBlockHashes {
@@ -30,16 +29,6 @@ impl Handleable for GetTerminalBlockHashes {
         };
         ctx.send_response(&response)
     }
-}
-
-impl Deref for GetTerminalBlockHashes {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetTerminalBlockHashes {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetTerminalBlockHashes {

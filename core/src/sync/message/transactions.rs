@@ -15,12 +15,7 @@ use crate::{
 use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    any::Any,
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use std::{any::Any, collections::HashSet, time::Duration};
 
 #[derive(Debug, PartialEq)]
 pub struct Transactions {
@@ -267,16 +262,6 @@ impl Handleable for GetTransactions {
     }
 }
 
-impl Deref for GetTransactions {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetTransactions {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
-}
-
 impl Encodable for GetTransactions {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
@@ -348,16 +333,6 @@ impl Handleable for GetTransactionsResponse {
 
         Ok(())
     }
-}
-
-impl Deref for GetTransactionsResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetTransactionsResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetTransactionsResponse {
