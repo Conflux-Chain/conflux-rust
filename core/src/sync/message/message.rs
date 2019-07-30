@@ -126,7 +126,7 @@ impl Message for TransactionDigests {
 
     fn msg_name(&self) -> &'static str { "TransactionDigests" }
 
-    fn is_size_sensitive(&self) -> bool { self.trans_short_ids.len() > 1 }
+    fn is_size_sensitive(&self) -> bool { self.len() > 1 }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }

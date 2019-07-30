@@ -8,6 +8,7 @@ use crate::sync::{
     message::{
         msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
         GetCompactBlocks, GetTransactions, Key, KeyContainer, TransIndex,
+        TransactionDigests,
     },
     Error,
 };
@@ -201,12 +202,18 @@ impl RequestManager {
     }
 
     pub fn request_transactions(
-        &self, io: &NetworkContext, peer_id: PeerId, window_index: usize,
-        received_tx_ids: &Vec<TxPropagateId>,
+        &self, io: &NetworkContext, peer_id: PeerId,
+        transaction_digests: TransactionDigests,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
-        if received_tx_ids.is_empty() {
+
+        let window_index: usize = transaction_digests.window_index;
+        let (random_byte_vector, fixed_bytes_vector) =
+            transaction_digests.get_decomposed_short_ids();
+        let random_position: u8 = transaction_digests.random_position;
+
+        if fixed_bytes_vector.is_empty() {
             return;
         }
         let mut inflight_keys = self.inflight_keys.lock();
@@ -220,20 +227,25 @@ impl RequestManager {
             let mut tx_ids = HashSet::new();
             let mut indices = Vec::new();
 
-            for (idx, tx_id) in received_tx_ids.iter().enumerate() {
-                if received_transactions.contains_txid(tx_id) {
+            for i in 0..fixed_bytes_vector.len() {
+                if received_transactions.contains_txid(
+                    fixed_bytes_vector[i],
+                    random_byte_vector[i],
+                    random_position,
+                ) {
                     // Already received
                     continue;
                 }
 
-                if !inflight_keys.add(msg_type, Key::Id(*tx_id)) {
+                if !inflight_keys.add(msg_type, Key::Id(fixed_bytes_vector[i]))
+                {
                     // Already being requested
                     continue;
                 }
 
-                let index = TransIndex::new((window_index, idx));
+                let index = TransIndex::new((window_index, i));
                 indices.push(index);
-                tx_ids.insert(*tx_id);
+                tx_ids.insert(fixed_bytes_vector[i]);
             }
 
             (indices, tx_ids)
