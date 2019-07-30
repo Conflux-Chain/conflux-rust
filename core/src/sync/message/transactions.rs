@@ -81,7 +81,7 @@ impl Handleable for Transactions {
 
 ////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct TransactionPropagationControl {
     pub catch_up_mode: bool,
 }
