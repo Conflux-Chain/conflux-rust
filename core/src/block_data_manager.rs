@@ -39,6 +39,7 @@ pub const NULLU64: u64 = !0;
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
+const EPOCH_EXECUTION_RESULT_SUFFIX_BYTE: u8 = 3;
 
 #[derive(Clone)]
 pub struct EpochExecutionContext {
@@ -61,6 +62,47 @@ impl Decodable for EpochExecutionContext {
 
 impl HeapSizeOf for EpochExecutionContext {
     fn heap_size_of_children(&self) -> usize { std::mem::size_of::<u64>() }
+}
+
+#[derive(Clone)]
+pub struct ConsensusGraphExecutionInfo {
+    pub state_valid: bool,
+    pub original_deferred_state_root: H256,
+    pub original_deferred_receipt_root: H256,
+    pub original_deferred_logs_bloom_hash: H256,
+}
+
+impl Default for ConsensusGraphExecutionInfo {
+    fn default() -> Self {
+        ConsensusGraphExecutionInfo {
+            state_valid: true,
+            original_deferred_state_root: Default::default(),
+            original_deferred_receipt_root: Default::default(),
+            original_deferred_logs_bloom_hash: Default::default(),
+        }
+    }
+}
+
+impl Encodable for ConsensusGraphExecutionInfo {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream
+            .begin_list(4)
+            .append(&self.state_valid)
+            .append(&self.original_deferred_state_root)
+            .append(&self.original_deferred_receipt_root)
+            .append(&self.original_deferred_logs_bloom_hash);
+    }
+}
+
+impl Decodable for ConsensusGraphExecutionInfo {
+    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
+        Ok(ConsensusGraphExecutionInfo {
+            state_valid: r.val_at(0)?,
+            original_deferred_state_root: r.val_at(1)?,
+            original_deferred_receipt_root: r.val_at(2)?,
+            original_deferred_logs_bloom_hash: r.val_at(3)?,
+        })
+    }
 }
 
 pub struct BlockDataManager {
@@ -292,6 +334,13 @@ impl BlockDataManager {
         let mut key = Vec::with_capacity(block_hash.len() + 1);
         key.extend_from_slice(&block_hash);
         key.push(BLOCK_BODY_SUFFIX_BYTE);
+        key
+    }
+
+    fn epoch_execution_result_key(hash: &H256) -> Vec<u8> {
+        let mut key = Vec::with_capacity(hash.len() + 1);
+        key.extend_from_slice(&hash);
+        key.push(EPOCH_EXECUTION_RESULT_SUFFIX_BYTE);
         key
     }
 
@@ -1266,6 +1315,37 @@ impl BlockDataManager {
             last = index + 1;
         }
         missing_encoded
+    }
+
+    pub fn insert_consensus_graph_execution_info_to_db(
+        &self, hash: &H256, ctx: &ConsensusGraphExecutionInfo,
+    ) {
+        let mut dbops = self.db.key_value().transaction();
+        dbops.put(
+            COL_EXECUTION_CONTEXT,
+            &Self::epoch_execution_result_key(hash),
+            &rlp::encode(ctx),
+        );
+        self.db
+            .key_value()
+            .write(dbops)
+            .expect("crash for db failure");
+    }
+
+    pub fn consensus_graph_execution_info_from_db(
+        &self, hash: &H256,
+    ) -> Option<ConsensusGraphExecutionInfo> {
+        let rlp_bytes = self
+            .db
+            .key_value()
+            .get(
+                COL_EXECUTION_CONTEXT,
+                &Self::epoch_execution_result_key(hash),
+            )
+            .expect("crash for db failure")?;
+        let rlp = Rlp::new(&rlp_bytes);
+
+        Some(rlp.as_val().expect("Wrong consensus_graph_execution_info rlp format!"))
     }
 }
 
