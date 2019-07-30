@@ -114,6 +114,7 @@ build_config! {
         (txgen_account_count, (usize), 10)
         (persist_header, (bool), true)
         (tx_cache_count, (usize), 250000)
+        (max_download_state_peers, (usize), 8)
     }
     {
         (
@@ -337,6 +338,7 @@ impl Configuration {
             future_block_buffer_capacity: self
                 .raw_conf
                 .future_block_buffer_capacity,
+            max_download_state_peers: self.raw_conf.max_download_state_peers,
         }
     }
 

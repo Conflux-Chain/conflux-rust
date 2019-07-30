@@ -5,6 +5,7 @@
 use crate::{
     consensus::ConsensusGraphInner,
     sync::{
+        state::{SnapshotChunkSync, StateSync, Status},
         synchronization_protocol_handler::{
             SynchronizationProtocolHandler, CATCH_UP_EPOCH_LAG_THRESHOLD,
         },
@@ -98,6 +99,7 @@ impl SynchronizationPhaseManager {
         initial_phase_type: SyncPhaseType,
         sync_state: Arc<SynchronizationState>,
         sync_graph: SharedSynchronizationGraph,
+        state_sync: Arc<SnapshotChunkSync>,
     ) -> Self
     {
         let sync_manager = SynchronizationPhaseManager {
@@ -115,9 +117,8 @@ impl SynchronizationPhaseManager {
                 sync_graph.clone(),
             ),
         ));
-        sync_manager.register_phase(Arc::new(CatchUpCheckpointPhase::new(
-            sync_graph.clone(),
-        )));
+        sync_manager
+            .register_phase(Arc::new(CatchUpCheckpointPhase::new(state_sync)));
         sync_manager.register_phase(Arc::new(
             CatchUpRecoverBlockFromDbPhase::new(sync_graph.clone()),
         ));
@@ -248,11 +249,13 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     }
 }
 
-pub struct CatchUpCheckpointPhase {}
+pub struct CatchUpCheckpointPhase {
+    state_sync: Arc<SnapshotChunkSync>,
+}
 
 impl CatchUpCheckpointPhase {
-    pub fn new(_graph: SharedSynchronizationGraph) -> Self {
-        CatchUpCheckpointPhase {}
+    pub fn new(state_sync: Arc<SnapshotChunkSync>) -> Self {
+        CatchUpCheckpointPhase { state_sync }
     }
 }
 
@@ -261,14 +264,28 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
 
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpCheckpoint }
 
-    fn next(&self) -> SyncPhaseType { SyncPhaseType::CatchUpRecoverBlockFromDB }
+    fn next(&self) -> SyncPhaseType {
+        match self.state_sync.status() {
+            Status::Completed => SyncPhaseType::CatchUpRecoverBlockFromDB,
+            _ => self.phase_type(),
+        }
+    }
 
     fn start(
-        &self, _io: &NetworkContext,
-        _sync_handler: &SynchronizationProtocolHandler,
+        &self, io: &NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
     )
     {
         info!("start phase {:?}", self.name());
+
+        let checkpoint = sync_handler
+            .graph
+            .data_man
+            .get_cur_consensus_era_genesis_hash();
+
+        info!("start to sync state for checkpoint {:?}", checkpoint);
+
+        self.state_sync.start(checkpoint, io, sync_handler);
     }
 }
 

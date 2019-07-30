@@ -245,7 +245,7 @@ pub struct SynchronizationProtocolHandler {
     local_message: AsyncTaskQueue<LocalMessageTask>,
 
     // state sync for any checkpoint
-    pub state_sync: Mutex<SnapshotChunkSync>,
+    pub state_sync: Arc<SnapshotChunkSync>,
 }
 
 #[derive(Clone)]
@@ -265,6 +265,7 @@ pub struct ProtocolConfiguration {
     pub min_peers_propagation: usize,
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
+    pub max_download_state_peers: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -281,6 +282,10 @@ impl SynchronizationProtocolHandler {
         let future_block_buffer_capacity =
             protocol_config.future_block_buffer_capacity;
 
+        let state_sync = Arc::new(SnapshotChunkSync::new(
+            protocol_config.max_download_state_peers,
+        ));
+
         Self {
             protocol_config,
             graph: sync_graph.clone(),
@@ -294,6 +299,7 @@ impl SynchronizationProtocolHandler {
                 initial_sync_phase,
                 sync_state.clone(),
                 sync_graph.clone(),
+                state_sync.clone(),
             ),
             recover_public_queue: AsyncTaskQueue::new(
                 SyncHandlerWorkType::RecoverPublic,
@@ -301,7 +307,7 @@ impl SynchronizationProtocolHandler {
             local_message: AsyncTaskQueue::new(
                 SyncHandlerWorkType::LocalMessage,
             ),
-            state_sync: Mutex::new(SnapshotChunkSync::new(sync_state)),
+            state_sync,
         }
     }
 
