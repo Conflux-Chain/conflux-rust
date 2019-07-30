@@ -16,14 +16,10 @@ use crate::{
 };
 use cfx_types::H256;
 use primitives::Block;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use rlp_derive::{RlpDecodable, RlpEncodable};
+use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlocks {
     pub request_id: RequestId,
     pub with_public: bool,
@@ -141,40 +137,5 @@ impl Handleable for GetBlocks {
         } else {
             self.send_response(ctx, blocks)
         }
-    }
-}
-
-impl Deref for GetBlocks {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlocks {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
-}
-
-impl Encodable for GetBlocks {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        let with_public_n = if self.with_public { 1 as u8 } else { 0 as u8 };
-        stream
-            .begin_list(3)
-            .append(&self.request_id)
-            .append(&with_public_n)
-            .append_list(&self.hashes);
-    }
-}
-
-impl Decodable for GetBlocks {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 3 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(GetBlocks {
-            request_id: rlp.val_at(0)?,
-            with_public: rlp.val_at::<u8>(1)? == 1,
-            hashes: rlp.list_at(2)?,
-        })
     }
 }

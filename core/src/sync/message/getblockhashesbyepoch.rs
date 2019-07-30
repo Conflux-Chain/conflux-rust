@@ -13,14 +13,10 @@ use crate::{
         Error, ProtocolConfiguration,
     },
 };
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use rlp_derive::{RlpDecodable, RlpEncodable};
+use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHashesByEpoch {
     pub request_id: RequestId,
     pub epochs: Vec<u64>,
@@ -72,37 +68,5 @@ impl Handleable for GetBlockHashesByEpoch {
         };
 
         ctx.send_response(&response)
-    }
-}
-
-impl Deref for GetBlockHashesByEpoch {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlockHashesByEpoch {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
-}
-
-impl Encodable for GetBlockHashesByEpoch {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.epochs);
-    }
-}
-
-impl Decodable for GetBlockHashesByEpoch {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(GetBlockHashesByEpoch {
-            request_id: rlp.val_at(0)?,
-            epochs: rlp.list_at(1)?,
-        })
     }
 }

@@ -17,12 +17,10 @@ use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-};
+use rlp_derive::{RlpDecodable, RlpEncodable};
+use std::collections::HashSet;
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetBlocksResponse {
     pub request_id: RequestId,
     pub blocks: Vec<Block>,
@@ -62,34 +60,6 @@ impl Handleable for GetBlocksResponse {
         );
 
         Ok(())
-    }
-}
-
-impl Deref for GetBlocksResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlocksResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
-}
-
-impl Encodable for GetBlocksResponse {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.blocks);
-    }
-}
-
-impl Decodable for GetBlocksResponse {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(GetBlocksResponse {
-            request_id: rlp.val_at(0)?,
-            blocks: rlp.list_at(1)?,
-        })
     }
 }
 
@@ -134,16 +104,6 @@ impl Handleable for GetBlocksWithPublicResponse {
 
         Ok(())
     }
-}
-
-impl Deref for GetBlocksWithPublicResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlocksWithPublicResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlocksWithPublicResponse {

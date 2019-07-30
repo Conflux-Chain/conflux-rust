@@ -13,10 +13,11 @@ use crate::{
 use cfx_bytes::Bytes;
 use cfx_types::H256;
 use keccak_hash::keccak;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp::{DecoderError, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, collections::HashMap};
 
-#[derive(Debug)]
+#[derive(Debug, RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkResponse {
     pub request_id: u64,
     pub chunk: Bytes,
@@ -95,26 +96,5 @@ impl SnapshotChunkResponse {
         }
 
         Ok(kvs)
-    }
-}
-
-impl Encodable for SnapshotChunkResponse {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.chunk);
-    }
-}
-
-impl Decodable for SnapshotChunkResponse {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(SnapshotChunkResponse {
-            request_id: rlp.val_at(0)?,
-            chunk: rlp.list_at(1)?,
-        })
     }
 }
