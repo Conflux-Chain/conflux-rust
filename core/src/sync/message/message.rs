@@ -54,7 +54,6 @@ build_msgid! {
 
 // generate `impl Message for _` for each message type
 // high priority message types
-build_msg_impl! { Status, msgid::STATUS, "Status" }
 build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
 build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse" }
 build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
@@ -70,6 +69,16 @@ build_msg_impl! { TransactionPropagationControl, msgid::TRANSACTION_PROPAGATION_
 build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
 
 // normal priority and size-sensitive message types
+impl Message for Status {
+    fn as_any(&self) -> &Any { self }
+
+    fn msg_id(&self) -> MsgId { msgid::STATUS }
+
+    fn msg_name(&self) -> &'static str { "Status" }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+}
+
 impl Message for Transactions {
     fn as_any(&self) -> &Any { self }
 

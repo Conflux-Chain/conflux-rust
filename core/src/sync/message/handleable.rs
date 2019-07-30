@@ -27,7 +27,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn send_response(&self, response: &Message) -> Result<(), Error> {
-        send_message(self.io, self.peer, response, None)?;
+        send_message(self.io, self.peer, response)?;
         Ok(())
     }
 }

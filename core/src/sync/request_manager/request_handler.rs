@@ -9,7 +9,6 @@ use crate::{
 };
 use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;
-use priority_send_queue::SendQueuePriority;
 use std::{
     any::Any,
     cmp::Ordering,
@@ -78,15 +77,13 @@ impl RequestHandler {
 
     pub fn send_request(
         &self, io: &NetworkContext, peer: PeerId, mut msg: RequestMessage,
-        priority: SendQueuePriority,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let mut peers = self.peers.lock();
         let mut requests_queue = self.requests_queue.lock();
         if let Some(peer_info) = peers.get_mut(&peer) {
             if let Some(request_id) = peer_info.get_next_request_id() {
                 msg.set_request_id(request_id);
-                send_message(io, peer, msg.get_msg(), Some(priority))?;
+                send_message(io, peer, msg.get_msg())?;
                 let timed_req = Arc::new(TimedSyncRequests::from_request(
                     peer,
                     request_id,
@@ -141,7 +138,7 @@ impl RequestHandler {
 
         request.set_request_id(request_id);
         let message = request.as_message();
-        if send_message(io, peer, message, None).is_err() {
+        if send_message(io, peer, message).is_err() {
             return Err(request);
         }
 
@@ -295,14 +292,8 @@ impl RequestContainer {
                 if let Some(new_request_id) = self.get_next_request_id() {
                     let mut pending_msg = self.pop_pending_request().unwrap();
                     pending_msg.set_request_id(new_request_id);
-                    // FIXME: May need to set priority more precisely.
-                    // Simply treat request as high priority for now.
-                    let send_res = send_message(
-                        io,
-                        self.peer_id,
-                        pending_msg.get_msg(),
-                        Some(SendQueuePriority::High),
-                    );
+                    let send_res =
+                        send_message(io, self.peer_id, pending_msg.get_msg());
 
                     if send_res.is_err() {
                         warn!("Error while send_message, err={:?}", send_res);

@@ -35,17 +35,13 @@ pub trait Message: Send + Sync + Encodable {
 
     fn send(
         &self, io: &NetworkContext, peer: PeerId,
-        priority: Option<SendQueuePriority>,
-    ) -> Result<usize, NetworkError>
-    {
-        self.send_with_throttling(io, peer, priority, false)
+    ) -> Result<usize, NetworkError> {
+        self.send_with_throttling(io, peer, false)
     }
 
     fn send_with_throttling(
-        &self, io: &NetworkContext, peer: PeerId,
-        priority: Option<SendQueuePriority>, throttling_disabled: bool,
-    ) -> Result<usize, NetworkError>
-    {
+        &self, io: &NetworkContext, peer: PeerId, throttling_disabled: bool,
+    ) -> Result<usize, NetworkError> {
         if !throttling_disabled && self.is_size_sensitive() {
             if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
                 debug!("Throttling failure: {:?}", e);
@@ -58,9 +54,7 @@ pub trait Message: Send + Sync + Encodable {
         raw.extend(self.rlp_bytes().iter());
         let size = raw.len();
 
-        let priority = priority.unwrap_or(self.priority());
-
-        if let Err(e) = io.send(peer, raw, priority) {
+        if let Err(e) = io.send(peer, raw, self.priority()) {
             debug!("Error sending message: {:?}", e);
             return Err(e);
         };
