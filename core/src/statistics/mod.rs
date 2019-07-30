@@ -50,6 +50,12 @@ impl Statistics {
         inner.consensus_graph.processed_block_count
     }
 
+    pub fn clear_sync_and_consensus_graph_statistics(&self) {
+        let mut inner = self.inner.write();
+        inner.sync_graph.clear();
+        inner.consensus_graph.clear();
+    }
+
     pub fn log_statistics(&self) {
         let inner = self.inner.read();
         info!("Statistics: {:?}", *inner);
