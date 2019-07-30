@@ -25,7 +25,7 @@ struct ReceivedTransactionTimeWindowedEntry {
 struct ReceivedTransactionContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    txid_container: HashMap<Arc<TxPropagateId>, Vec<Arc<H256>>>,
+    txid_container: HashMap<TxPropagateId, Vec<Arc<H256>>>,
     time_windowed_indices: Vec<Option<ReceivedTransactionTimeWindowedEntry>>,
 }
 
@@ -129,9 +129,8 @@ impl ReceivedTransactionContainer {
         for transaction in transactions {
             let hash = transaction.hash();
             let full_hash_id = Arc::new(hash);
-            let short_id = Arc::new(TransactionDigests::to_u24(
-                hash[29], hash[30], hash[31],
-            )); //read the last three bytes
+            let short_id =
+                TransactionDigests::to_u24(hash[29], hash[30], hash[31]); //read the last three bytes
             inner
                 .txid_container
                 .entry(short_id)
