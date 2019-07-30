@@ -135,10 +135,6 @@ impl GetBlocks {
 
 impl Handleable for GetBlocks {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        if self.hashes.is_empty() {
-            return Ok(());
-        }
-
         let blocks = self.get_blocks(ctx, self.with_public);
         if self.with_public {
             self.send_response_with_public(ctx, blocks)

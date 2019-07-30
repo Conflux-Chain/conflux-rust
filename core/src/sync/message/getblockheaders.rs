@@ -56,10 +56,6 @@ impl Request for GetBlockHeaders {
 
 impl Handleable for GetBlockHeaders {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        if self.hashes.is_empty() {
-            return Ok(());
-        }
-
         let headers = self
             .hashes
             .iter()

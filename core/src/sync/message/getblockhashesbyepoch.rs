@@ -55,10 +55,6 @@ impl Request for GetBlockHashesByEpoch {
 
 impl Handleable for GetBlockHashesByEpoch {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        if self.epochs.is_empty() {
-            return Ok(());
-        }
-
         let hashes = self
             .epochs
             .iter()
