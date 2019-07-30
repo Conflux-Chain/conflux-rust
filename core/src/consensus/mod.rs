@@ -105,6 +105,11 @@ impl ConsensusGraphStatistics {
             processed_block_count: 0,
         }
     }
+
+    pub fn clear(&mut self) {
+        self.inserted_block_count = 0;
+        self.processed_block_count = 0;
+    }
 }
 
 #[derive(Default)]
