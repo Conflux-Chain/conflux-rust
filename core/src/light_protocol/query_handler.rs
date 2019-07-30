@@ -26,7 +26,9 @@ use primitives::{BlockHeader, EpochNumber, StateRoot};
 
 use crate::{
     consensus::{ConsensusGraph, DEFERRED_STATE_EPOCH_COUNT},
-    network::{NetworkContext, NetworkProtocolHandler, PeerId},
+    network::{
+        NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
+    },
     statedb::StateDb,
     storage::{
         state_manager::StateManagerTrait, SnapshotAndEpochIdRef, StateProof,
@@ -84,11 +86,7 @@ impl QueryHandler {
             msgid::STATE_ROOT => self.on_state_root(io, peer, &rlp),
             msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
             msgid::STATE_ENTRY => self.on_state_entry(io, peer, &rlp),
-            _ => {
-                warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
-                // io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
-                Ok(())
-            }
+            _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
 
@@ -100,19 +98,65 @@ impl QueryHandler {
             peer, msg_id, e
         );
 
-        // TODO(thegaram): remove wildcard so that
-        // the compiler can help us cover all cases
-        let disconnect = match e.0 {
-            ErrorKind::InvalidStateRoot => true,
-            ErrorKind::InvalidProof => true,
-            ErrorKind::InvalidRequestId => true,
-            ErrorKind::PivotHashMismatch => false,
-            ErrorKind::InternalError => false,
-            _ => false,
+        let mut disconnect = true;
+        let mut op = None;
+
+        // NOTE: do not use wildcard; this way, the compiler
+        // will help covering all the cases.
+        match e.0 {
+            // NOTE: to help with backward-compatibility, we
+            // should not disconnect on `UnknownMessage`
+            ErrorKind::NoResponse
+            | ErrorKind::InternalError
+            | ErrorKind::PivotHashMismatch
+            | ErrorKind::UnknownMessage => disconnect = false,
+
+            ErrorKind::UnknownPeer | ErrorKind::Msg(_) => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
+
+            ErrorKind::UnexpectedRequestId | ErrorKind::UnexpectedResponse => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+
+            ErrorKind::InvalidMessageFormat
+            | ErrorKind::InvalidProof
+            | ErrorKind::InvalidStateRoot
+            | ErrorKind::ValidationFailed
+            | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+
+            // network errors
+            ErrorKind::Network(kind) => match kind {
+                network::ErrorKind::AddressParse
+                | network::ErrorKind::AddressResolve(_)
+                | network::ErrorKind::Auth
+                | network::ErrorKind::BadAddr
+                | network::ErrorKind::Disconnect(_)
+                | network::ErrorKind::Expired
+                | network::ErrorKind::InvalidNodeId
+                | network::ErrorKind::Io(_)
+                | network::ErrorKind::OversizedPacket
+                | network::ErrorKind::Throttling(_) => disconnect = false,
+
+                network::ErrorKind::BadProtocol
+                | network::ErrorKind::Decoder => {
+                    op = Some(UpdateNodeOperation::Remove)
+                }
+
+                network::ErrorKind::SocketIo(_)
+                | network::ErrorKind::Msg(_)
+                | network::ErrorKind::__Nonexhaustive {} => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
+            },
+
+            ErrorKind::__Nonexhaustive {} => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
         };
 
         if disconnect {
-            io.disconnect_peer(peer, None);
+            io.disconnect_peer(peer, op);
         }
     }
 
@@ -196,7 +240,7 @@ impl QueryHandler {
             Some(PendingRequest { msg, sender }) => (msg, sender),
             None => {
                 warn!("Unexpected request id: {:?}", id);
-                return Err(ErrorKind::UnexpectedResponse.into());
+                return Err(ErrorKind::UnexpectedRequestId.into());
             }
         };
 
@@ -361,6 +405,15 @@ impl NetworkProtocolHandler for QueryHandler {
     fn initialize(&self, _io: &NetworkContext) {}
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+        if raw.len() < 2 {
+            return self.handle_error(
+                io,
+                peer,
+                msgid::INVALID,
+                ErrorKind::InvalidMessageFormat.into(),
+            );
+        }
+
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);

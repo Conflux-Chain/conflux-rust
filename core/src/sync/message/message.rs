@@ -48,6 +48,8 @@ build_msgid! {
     GET_SNAPSHOT_MANIFEST_RESPONSE = 0x1a
     GET_SNAPSHOT_CHUNK = 0x1b
     GET_SNAPSHOT_CHUNK_RESPONSE = 0x1c
+
+    INVALID = 0xff
 }
 
 // generate `impl Message for _` for each message type

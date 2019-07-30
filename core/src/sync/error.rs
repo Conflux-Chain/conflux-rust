@@ -20,6 +20,11 @@ error_chain! {
             display("Invalid block"),
         }
 
+        InvalidMessageFormat {
+            description("Invalid message format"),
+            display("Invalid message format"),
+        }
+
         UnknownPeer {
             description("Unknown peer"),
             display("Unknown peer"),
