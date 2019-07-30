@@ -1,9 +1,11 @@
-use crate::sync::{
-    message::{KeyContainer, Message},
-    msg_sender::send_message,
-    request_manager::RequestManager,
-    synchronization_protocol_handler::ProtocolConfiguration,
-    Error, ErrorKind,
+use crate::{
+    message::{HasRequestId, Message},
+    sync::{
+        message::KeyContainer, msg_sender::send_message,
+        request_manager::RequestManager,
+        synchronization_protocol_handler::ProtocolConfiguration, Error,
+        ErrorKind,
+    },
 };
 use network::{NetworkContext, PeerId};
 use parking_lot::Mutex;
@@ -89,7 +91,7 @@ impl RequestHandler {
         if let Some(peer_info) = peers.get_mut(&peer) {
             if let Some(request_id) = peer_info.get_next_request_id() {
                 msg.set_request_id(request_id);
-                send_message(io, peer, msg.get_msg(), priority)?;
+                send_message(io, peer, msg.get_msg(), Some(priority))?;
                 let timed_req = Arc::new(TimedSyncRequests::from_request(
                     peer,
                     request_id,
@@ -144,7 +146,7 @@ impl RequestHandler {
 
         request.set_request_id(request_id);
         let message = request.as_message();
-        if send_message(io, peer, message, message.priority()).is_err() {
+        if send_message(io, peer, message, None).is_err() {
             return Err(request);
         }
 
@@ -329,7 +331,7 @@ impl RequestContainer {
                         io,
                         self.peer_id,
                         pending_msg.get_msg(),
-                        SendQueuePriority::High,
+                        Some(SendQueuePriority::High),
                     );
 
                     if send_res.is_err() {
@@ -383,8 +385,7 @@ pub struct SynchronizationPeerRequest {
 }
 
 /// Trait of request message
-pub trait Request: Send + Debug {
-    fn set_request_id(&mut self, request_id: u64);
+pub trait Request: Send + Debug + HasRequestId {
     fn as_message(&self) -> &Message;
     /// Support to downcast trait to concrete request type.
     fn as_any(&self) -> &Any;
@@ -430,10 +431,10 @@ impl RequestMessage {
 
     pub fn get_msg(&self) -> &Message { self.request.as_message() }
 
-    /// Download cast general request to specified request type.
+    /// Download cast request to specified request type.
     /// If downcast failed, resend the request again and return
     /// `UnexpectedResponse` error.
-    pub fn downcast_general<T: Request + Any>(
+    pub fn downcast_ref<T: Request + Any>(
         &self, io: &NetworkContext, request_manager: &RequestManager,
         remove_on_mismatch: bool,
     ) -> Result<&T, Error>

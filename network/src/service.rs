@@ -204,12 +204,15 @@ impl NetworkService {
     }
 
     /// Executes action in the network context
-    pub fn with_context<F>(&self, protocol: ProtocolId, action: F)
-    where F: FnOnce(&NetworkContext) {
+    pub fn with_context<F, R, E: std::convert::From<String>>(
+        &self, protocol: ProtocolId, action: F,
+    ) -> Result<R, E>
+    where F: FnOnce(&NetworkContext) -> Result<R, E> {
         let io = IoContext::new(self.io_service.as_ref().unwrap().channel(), 0);
-        if let Some(ref inner) = self.inner {
-            inner.with_context(protocol, &io, action);
-        };
+        match self.inner {
+            Some(ref inner) => inner.with_context(protocol, &io, action),
+            None => Err("Network service not started yet!".to_owned().into()),
+        }
     }
 
     /// Return the current connected peers
@@ -1022,14 +1025,15 @@ impl NetworkServiceInner {
         }
     }
 
-    pub fn with_context<F>(
+    pub fn with_context<F, R, E>(
         &self, protocol: ProtocolId, io: &IoContext<NetworkIoMessage>,
         action: F,
-    ) where
-        F: FnOnce(&NetworkContext),
+    ) -> Result<R, E>
+    where
+        F: FnOnce(&NetworkContext) -> Result<R, E>,
     {
         let context = NetworkContext::new(io, protocol, self);
-        action(&context);
+        action(&context)
     }
 
     fn udp_readable(&self, io: &IoContext<NetworkIoMessage>) {

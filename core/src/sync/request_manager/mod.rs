@@ -6,9 +6,9 @@ use super::{
 };
 use crate::sync::{
     message::{
-        GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
-        GetCompactBlocks, GetTransactions, Key, KeyContainer, MsgId,
-        TransIndex, TransactionDigests,
+        msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
+        GetCompactBlocks, GetTransactions, Key, KeyContainer, TransIndex,
+        TransactionDigests,
     },
     Error,
 };
@@ -108,7 +108,7 @@ impl RequestManager {
     pub fn num_epochs_in_flight(&self) -> u64 {
         self.inflight_keys
             .lock()
-            .len(MsgId::GET_BLOCK_HASHES_BY_EPOCH.into()) as u64
+            .len(msgid::GET_BLOCK_HASHES_BY_EPOCH) as u64
     }
 
     /// Send request to remote peer with delay mechanism. If failed,
@@ -122,6 +122,10 @@ impl RequestManager {
             // retain the request items that not in flight.
             let mut inflight_keys = self.inflight_keys.lock();
             request.with_inflight(&mut inflight_keys);
+        }
+
+        if request.is_empty() {
+            return;
         }
 
         // increase delay for resent request.
@@ -141,10 +145,6 @@ impl RequestManager {
                 peer,
             ));
 
-            return;
-        }
-
-        if request.is_empty() {
             return;
         }
 
@@ -168,7 +168,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlockHeaders {
-            request_id: 0.into(),
+            request_id: 0,
             hashes,
         };
 
@@ -179,7 +179,7 @@ impl RequestManager {
         &self, io: &NetworkContext, peer_id: Option<PeerId>, epochs: Vec<u64>,
     ) {
         let request = GetBlockHashesByEpoch {
-            request_id: 0.into(),
+            request_id: 0,
             epochs,
         };
 
@@ -194,7 +194,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             with_public,
             hashes,
         };
@@ -220,7 +220,7 @@ impl RequestManager {
         let mut inflight_keys = self.inflight_keys.lock();
         let received_transactions = self.received_transactions.read();
 
-        let msg_type = MsgId::GET_TRANSACTIONS.into();
+        let msg_type = msgid::GET_TRANSACTIONS;
         INFLIGHT_TX_POOL_METER.mark(inflight_keys.len(msg_type));
         TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
@@ -255,7 +255,7 @@ impl RequestManager {
         debug!("Request {} tx from peer={}", tx_ids.len(), peer_id);
 
         let request = GetTransactions {
-            request_id: 0.into(),
+            request_id: 0,
             indices,
             tx_ids: tx_ids.clone(),
         };
@@ -284,7 +284,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetCompactBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             hashes,
         };
 
@@ -299,7 +299,7 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
         let request = GetBlockTxn {
-            request_id: 0.into(),
+            request_id: 0,
             block_hash: block_hash.clone(),
             indexes,
         };
@@ -367,7 +367,7 @@ impl RequestManager {
         );
         let missing_headers = {
             let mut inflight_keys = self.inflight_keys.lock();
-            let msg_type = MsgId::GET_BLOCK_HEADERS.into();
+            let msg_type = msgid::GET_BLOCK_HEADERS;
             let mut missing_headers = Vec::new();
             for req_hash in &req_hashes {
                 if !received_headers.remove(req_hash) {
@@ -405,7 +405,7 @@ impl RequestManager {
         );
         let missing_epochs = {
             let mut inflight_keys = self.inflight_keys.lock();
-            let msg_type = MsgId::GET_BLOCK_HASHES_BY_EPOCH.into();
+            let msg_type = msgid::GET_BLOCK_HASHES_BY_EPOCH;
             let mut missing_epochs = Vec::new();
             for epoch_number in &req_epochs {
                 if !received_epochs.remove(epoch_number) {
@@ -450,7 +450,7 @@ impl RequestManager {
         );
         let missing_blocks = {
             let mut inflight_keys = self.inflight_keys.lock();
-            let msg_type = MsgId::GET_BLOCKS.into();
+            let msg_type = msgid::GET_BLOCKS;
             let mut missing_blocks = Vec::new();
             for req_hash in &req_hashes {
                 if !received_blocks.remove(req_hash) {
@@ -497,7 +497,7 @@ impl RequestManager {
     ) {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
         let mut inflight_keys = self.inflight_keys.lock();
-        let msg_type = MsgId::GET_TRANSACTIONS.into();
+        let msg_type = msgid::GET_TRANSACTIONS;
         for tx in received_transactions {
             inflight_keys.remove(msg_type, Key::Id(*tx));
         }

@@ -5,9 +5,13 @@
 use super::{
     random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
-use crate::sync::message::{
-    GetBlockHeadersResponse, Message, MsgId, NewBlock, NewBlockHashes, Status,
-    TransactionDigests, TransactionPropagationControl,
+use crate::{
+    message::{HasRequestId, Message, MsgId},
+    sync::message::{
+        handle_rlp_message, msgid, GetBlockHeadersResponse, NewBlock,
+        NewBlockHashes, Status, TransactionDigests,
+        TransactionPropagationControl,
+    },
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -241,7 +245,7 @@ pub struct SynchronizationProtocolHandler {
     local_message: AsyncTaskQueue<LocalMessageTask>,
 
     // state sync for any checkpoint
-    pub state_sync: Mutex<SnapshotChunkSync>,
+    pub state_sync: Arc<SnapshotChunkSync>,
 }
 
 #[derive(Clone)]
@@ -261,6 +265,7 @@ pub struct ProtocolConfiguration {
     pub min_peers_propagation: usize,
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
+    pub max_download_state_peers: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -277,6 +282,10 @@ impl SynchronizationProtocolHandler {
         let future_block_buffer_capacity =
             protocol_config.future_block_buffer_capacity;
 
+        let state_sync = Arc::new(SnapshotChunkSync::new(
+            protocol_config.max_download_state_peers,
+        ));
+
         Self {
             protocol_config,
             graph: sync_graph.clone(),
@@ -290,6 +299,7 @@ impl SynchronizationProtocolHandler {
                 initial_sync_phase,
                 sync_state.clone(),
                 sync_graph.clone(),
+                state_sync.clone(),
             ),
             recover_public_queue: AsyncTaskQueue::new(
                 SyncHandlerWorkType::RecoverPublic,
@@ -297,7 +307,7 @@ impl SynchronizationProtocolHandler {
             local_message: AsyncTaskQueue::new(
                 SyncHandlerWorkType::LocalMessage,
             ),
-            state_sync: Mutex::new(SnapshotChunkSync::new(sync_state)),
+            state_sync,
         }
     }
 
@@ -363,7 +373,7 @@ impl SynchronizationProtocolHandler {
                 // `syn.peers`, and this peer should be in
                 // `syn.handshaking_peers`
                 if !self.syn.handshaking_peers.read().contains_key(&peer)
-                    || msg_id != MsgId::STATUS
+                    || msg_id != msgid::STATUS
                 {
                     warn!("Message from unknown peer {:?}", msg_id);
                     return Ok(());
@@ -379,7 +389,7 @@ impl SynchronizationProtocolHandler {
             manager: self,
         };
 
-        if !msg_id.handle(&ctx, &rlp)? {
+        if !handle_rlp_message(msg_id, &ctx, &rlp)? {
             warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
             io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
         }
@@ -788,7 +798,7 @@ impl SynchronizationProtocolHandler {
         }
 
         for id in peer_ids {
-            send_message(io, id, msg, priority)?;
+            send_message(io, id, msg, Some(priority))?;
         }
 
         Ok(())
@@ -818,7 +828,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), NetworkError> {
         let status_message = self.produce_status_message();
         debug!("Sending status message to {:?}: {:?}", peer, status_message);
-        send_message(io, peer, &status_message, SendQueuePriority::High)
+        send_message(io, peer, &status_message, Some(SendQueuePriority::High))
     }
 
     fn broadcast_status(&self, io: &NetworkContext) {
@@ -849,7 +859,7 @@ impl SynchronizationProtocolHandler {
                     io,
                     *id,
                     msg.as_ref(),
-                    SendQueuePriority::High,
+                    Some(SendQueuePriority::High),
                     true,
                 )
                 .unwrap_or_else(|e| {
@@ -987,8 +997,12 @@ impl SynchronizationProtocolHandler {
                 ordered_positions.pop().unwrap() as u8,
                 messages.pop().unwrap(),
             );
-            match send_message(io, peer_id, &tx_msg, SendQueuePriority::Normal)
-            {
+            match send_message(
+                io,
+                peer_id,
+                &tx_msg,
+                Some(SendQueuePriority::Normal),
+            ) {
                 Ok(_) => {
                     trace!(
                         "{:02} <- Transactions ({} entries)",
@@ -1122,7 +1136,7 @@ impl SynchronizationProtocolHandler {
                 io,
                 peer,
                 trans_prop_ctrl_msg.as_ref(),
-                SendQueuePriority::High,
+                Some(SendQueuePriority::High),
             )
             .is_err()
             {

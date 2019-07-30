@@ -2,14 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlockHashesResponse, Handleable, Key, KeyContainer,
-        Message, MsgId, RequestId,
+use crate::{
+    message::{Message, RequestId},
+    sync::{
+        message::{
+            Context, GetBlockHashesResponse, Handleable, Key, KeyContainer,
+        },
+        request_manager::Request,
+        synchronization_protocol_handler::MAX_EPOCHS_TO_SEND,
+        Error, ProtocolConfiguration,
     },
-    request_manager::Request,
-    synchronization_protocol_handler::MAX_EPOCHS_TO_SEND,
-    Error, ProtocolConfiguration,
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
@@ -25,10 +27,6 @@ pub struct GetBlockHashesByEpoch {
 }
 
 impl Request for GetBlockHashesByEpoch {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id);
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -57,10 +55,6 @@ impl Request for GetBlockHashesByEpoch {
 
 impl Handleable for GetBlockHashesByEpoch {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        if self.epochs.is_empty() {
-            return Ok(());
-        }
-
         let hashes = self
             .epochs
             .iter()
@@ -79,10 +73,6 @@ impl Handleable for GetBlockHashesByEpoch {
 
         ctx.send_response(&response)
     }
-}
-
-impl Message for GetBlockHashesByEpoch {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES_BY_EPOCH }
 }
 
 impl Deref for GetBlockHashesByEpoch {

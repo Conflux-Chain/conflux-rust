@@ -1,7 +1,9 @@
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_config::CacheConfig,
-    consensus::{ConsensusConfig, ConsensusInnerConfig},
+    consensus::{
+        ConsensusConfig, ConsensusInnerConfig, ERA_DEFAULT_CHECKPOINT_GAP,
+    },
     db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
@@ -132,6 +134,7 @@ pub fn initialize_synchronization_graph(
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
                 era_epoch_count,
+                era_checkpoint_gap: ERA_DEFAULT_CHECKPOINT_GAP,
                 enable_optimistic_execution: false,
             },
             bench_mode: true, /* Set bench_mode to true so that we skip

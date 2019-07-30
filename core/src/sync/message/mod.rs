@@ -37,13 +37,13 @@ pub use self::{
     getterminalblockhashes::GetTerminalBlockHashes,
     handleable::{Context, Handleable},
     keys::{Key, KeyContainer},
-    message::{Message, MsgId, RequestId},
+    message::{handle_rlp_message, msgid},
     newblock::NewBlock,
     newblockhashes::NewBlockHashes,
     status::Status,
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{
         GetTransactions, GetTransactionsResponse, TransIndex,
-        TransactionDigests, TransactionPropagationControl,
+        TransactionDigests, TransactionPropagationControl, Transactions,
     },
 };

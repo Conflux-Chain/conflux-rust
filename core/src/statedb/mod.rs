@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::storage::{
-    Error as StorageError, ErrorKind as StorageErrorKind, Storage, StorageTrait,
+    Error as StorageError, ErrorKind as StorageErrorKind, StateProof, Storage,
+    StorageTrait,
 };
 use cfx_types::{Address, H256};
 use primitives::{Account, EpochId, StateRootWithAuxInfo};
@@ -97,6 +98,14 @@ impl<'a> StateDb<'a> {
     pub fn get_raw(&self, key: &StorageKey) -> Result<Option<Box<[u8]>>> {
         let r = Ok(self.storage.get(key.as_ref())?);
         trace!("get_raw key={:?}, value={:?}", key.as_ref(), r);
+        r
+    }
+
+    pub fn get_raw_with_proof(
+        &self, key: &Vec<u8>,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        let r = Ok(self.storage.get_with_proof(key)?);
+        trace!("get_raw_with_proof key={:?}, value={:?}", key, r);
         r
     }
 

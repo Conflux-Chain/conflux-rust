@@ -8,8 +8,8 @@ use cfxcore::{
     consensus::{
         ConsensusConfig, ConsensusInnerConfig,
         ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-        ADAPTIVE_WEIGHT_DEFAULT_BETA, ERA_DEFAULT_EPOCH_COUNT,
-        HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO,
+        ADAPTIVE_WEIGHT_DEFAULT_BETA, ERA_DEFAULT_CHECKPOINT_GAP,
+        ERA_DEFAULT_EPOCH_COUNT, HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO,
     },
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
@@ -103,6 +103,7 @@ build_config! {
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
+        (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
         (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 5000)
@@ -113,6 +114,7 @@ build_config! {
         (txgen_account_count, (usize), 10)
         (persist_header, (bool), true)
         (tx_cache_count, (usize), 250000)
+        (max_download_state_peers, (usize), 8)
     }
     {
         (
@@ -257,6 +259,7 @@ impl Configuration {
                     .raw_conf
                     .heavy_block_difficulty_ratio,
                 era_epoch_count: self.raw_conf.era_epoch_count,
+                era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
                 enable_optimistic_execution: self
                     .raw_conf
                     .enable_optimistic_execution,
@@ -335,6 +338,7 @@ impl Configuration {
             future_block_buffer_capacity: self
                 .raw_conf
                 .future_block_buffer_capacity,
+            max_download_state_peers: self.raw_conf.max_download_state_peers,
         }
     }
 

@@ -2,11 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlockHashesByEpoch, Handleable, Message, MsgId, RequestId,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{Context, GetBlockHashesByEpoch, Handleable},
+        Error,
     },
-    Error,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -22,8 +23,8 @@ impl Handleable for GetBlockHashesResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_block_hashes_response, msg={:?}", self);
 
-        let req = ctx.match_request(self.request_id())?;
-        let epoch_req = req.downcast_general::<GetBlockHashesByEpoch>(
+        let req = ctx.match_request(self.request_id)?;
+        let epoch_req = req.downcast_ref::<GetBlockHashesByEpoch>(
             ctx.io,
             &ctx.manager.request_manager,
             true,
@@ -69,10 +70,6 @@ impl Handleable for GetBlockHashesResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetBlockHashesResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HASHES_RESPONSE }
 }
 
 impl Deref for GetBlockHashesResponse {

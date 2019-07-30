@@ -163,7 +163,10 @@ impl<'trie> SubTrieVisitor<'trie> {
                 let mut n = trie_node.create_proof_node();
                 let children = trie_node.children_table.clone();
                 drop(trie_node);
-                n.children_table = self.retrieve_children_hashes(children)?;
+                n.children_table = self
+                    .retrieve_children_hashes(children)?
+                    .map(|x| x.to_vec())
+                    .unwrap_or_default();
                 n
             });
         }

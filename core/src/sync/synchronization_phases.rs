@@ -5,6 +5,7 @@
 use crate::{
     consensus::ConsensusGraphInner,
     sync::{
+        state::{SnapshotChunkSync, StateSync, Status},
         synchronization_protocol_handler::{
             SynchronizationProtocolHandler, CATCH_UP_EPOCH_LAG_THRESHOLD,
         },
@@ -36,7 +37,7 @@ pub enum SyncPhaseType {
 }
 
 pub trait SynchronizationPhaseTrait: Send + Sync {
-    fn name(&self) -> String;
+    fn name(&self) -> &'static str;
     fn phase_type(&self) -> SyncPhaseType;
     fn next(&self) -> SyncPhaseType;
     fn start(
@@ -98,6 +99,7 @@ impl SynchronizationPhaseManager {
         initial_phase_type: SyncPhaseType,
         sync_state: Arc<SynchronizationState>,
         sync_graph: SharedSynchronizationGraph,
+        state_sync: Arc<SnapshotChunkSync>,
     ) -> Self
     {
         let sync_manager = SynchronizationPhaseManager {
@@ -115,9 +117,8 @@ impl SynchronizationPhaseManager {
                 sync_graph.clone(),
             ),
         ));
-        sync_manager.register_phase(Arc::new(CatchUpCheckpointPhase::new(
-            sync_graph.clone(),
-        )));
+        sync_manager
+            .register_phase(Arc::new(CatchUpCheckpointPhase::new(state_sync)));
         sync_manager.register_phase(Arc::new(
             CatchUpRecoverBlockFromDbPhase::new(sync_graph.clone()),
         ));
@@ -178,9 +179,7 @@ impl CatchUpRecoverBlockHeaderFromDbPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
-    fn name(&self) -> String {
-        String::from("CatchUpRecoverBlockHeaderFromDbPhase")
-    }
+    fn name(&self) -> &'static str { "CatchUpRecoverBlockHeaderFromDbPhase" }
 
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
@@ -213,7 +212,7 @@ impl CatchUpSyncBlockHeaderPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
-    fn name(&self) -> String { String::from("CatchUpSyncBlockHeaderPhase") }
+    fn name(&self) -> &'static str { "CatchUpSyncBlockHeaderPhase" }
 
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpSyncBlockHeader
@@ -250,27 +249,43 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     }
 }
 
-pub struct CatchUpCheckpointPhase {}
+pub struct CatchUpCheckpointPhase {
+    state_sync: Arc<SnapshotChunkSync>,
+}
 
 impl CatchUpCheckpointPhase {
-    pub fn new(_graph: SharedSynchronizationGraph) -> Self {
-        CatchUpCheckpointPhase {}
+    pub fn new(state_sync: Arc<SnapshotChunkSync>) -> Self {
+        CatchUpCheckpointPhase { state_sync }
     }
 }
 
 impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
-    fn name(&self) -> String { String::from("CatchUpCheckpointPhase") }
+    fn name(&self) -> &'static str { "CatchUpCheckpointPhase" }
 
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpCheckpoint }
 
-    fn next(&self) -> SyncPhaseType { SyncPhaseType::CatchUpRecoverBlockFromDB }
+    fn next(&self) -> SyncPhaseType {
+        match self.state_sync.status() {
+            Status::Completed => SyncPhaseType::CatchUpRecoverBlockFromDB,
+            _ => self.phase_type(),
+        }
+    }
 
     fn start(
-        &self, _io: &NetworkContext,
-        _sync_handler: &SynchronizationProtocolHandler,
+        &self, io: &NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
     )
     {
         info!("start phase {:?}", self.name());
+
+        let checkpoint = sync_handler
+            .graph
+            .data_man
+            .get_cur_consensus_era_genesis_hash();
+
+        info!("start to sync state for checkpoint {:?}", checkpoint);
+
+        self.state_sync.start(checkpoint, io, sync_handler);
     }
 }
 
@@ -285,7 +300,7 @@ impl CatchUpRecoverBlockFromDbPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
-    fn name(&self) -> String { String::from("CatchUpRecoverBlockFromDbPhase") }
+    fn name(&self) -> &'static str { "CatchUpRecoverBlockFromDbPhase" }
 
     fn phase_type(&self) -> SyncPhaseType {
         SyncPhaseType::CatchUpRecoverBlockFromDB
@@ -344,7 +359,7 @@ impl CatchUpSyncBlockPhase {
 }
 
 impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
-    fn name(&self) -> String { String::from("CatchUpSyncBlockPhase") }
+    fn name(&self) -> &'static str { "CatchUpSyncBlockPhase" }
 
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpSyncBlock }
 
@@ -387,7 +402,7 @@ impl NormalSyncPhase {
 }
 
 impl SynchronizationPhaseTrait for NormalSyncPhase {
-    fn name(&self) -> String { String::from("NormalSyncPhase") }
+    fn name(&self) -> &'static str { "NormalSyncPhase" }
 
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::Normal }
 

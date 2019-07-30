@@ -2,14 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
-        Message, MsgId, RequestId,
+use crate::{
+    message::{HasRequestId, Message, RequestId},
+    sync::{
+        message::{
+            Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
+        },
+        request_manager::Request,
+        synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
+        Error, ProtocolConfiguration,
     },
-    request_manager::Request,
-    synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
-    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -26,10 +28,6 @@ pub struct GetBlockHeaders {
 }
 
 impl Request for GetBlockHeaders {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id);
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -58,10 +56,6 @@ impl Request for GetBlockHeaders {
 
 impl Handleable for GetBlockHeaders {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        if self.hashes.is_empty() {
-            return Ok(());
-        }
-
         let headers = self
             .hashes
             .iter()
@@ -70,7 +64,7 @@ impl Handleable for GetBlockHeaders {
             .collect();
 
         let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(self.request_id());
+        block_headers_resp.set_request_id(self.request_id);
         block_headers_resp.headers = headers;
 
         debug!(
@@ -81,10 +75,6 @@ impl Handleable for GetBlockHeaders {
 
         ctx.send_response(&block_headers_resp)
     }
-}
-
-impl Message for GetBlockHeaders {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS }
 }
 
 impl Deref for GetBlockHeaders {
