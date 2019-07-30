@@ -9,9 +9,9 @@ use crate::{
         Error,
     },
 };
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct GetTerminalBlockHashes {
     pub request_id: RequestId,
 }
@@ -28,19 +28,5 @@ impl Handleable for GetTerminalBlockHashes {
             hashes: terminal_hashes,
         };
         ctx.send_response(&response)
-    }
-}
-
-impl Encodable for GetTerminalBlockHashes {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(1).append(&self.request_id);
-    }
-}
-
-impl Decodable for GetTerminalBlockHashes {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(GetTerminalBlockHashes {
-            request_id: rlp.val_at(0)?,
-        })
     }
 }

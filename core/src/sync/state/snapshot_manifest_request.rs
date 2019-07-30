@@ -12,10 +12,10 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
     pub checkpoint: H256,
@@ -62,25 +62,4 @@ impl Request for SnapshotManifestRequest {
     fn is_empty(&self) -> bool { false }
 
     fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
-}
-
-impl Encodable for SnapshotManifestRequest {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(2)
-            .append(&self.request_id)
-            .append(&self.checkpoint);
-    }
-}
-
-impl Decodable for SnapshotManifestRequest {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(SnapshotManifestRequest {
-            request_id: rlp.val_at(0)?,
-            checkpoint: rlp.val_at(1)?,
-        })
-    }
 }

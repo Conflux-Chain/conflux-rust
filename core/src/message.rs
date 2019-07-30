@@ -7,7 +7,7 @@ pub type MsgId = u8;
 
 pub use cfx_bytes::Bytes;
 pub use priority_send_queue::SendQueuePriority;
-pub use rlp::Encodable;
+use rlp::Encodable;
 use std::any::Any;
 
 pub use crate::network::{

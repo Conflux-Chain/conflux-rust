@@ -11,10 +11,10 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, collections::HashSet};
 
-#[derive(Debug)]
+#[derive(Debug, RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub checkpoint: H256,
@@ -60,28 +60,5 @@ impl Handleable for SnapshotManifestResponse {
             .handle_snapshot_manifest_response(ctx, self);
 
         Ok(())
-    }
-}
-
-impl Encodable for SnapshotManifestResponse {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(3)
-            .append(&self.request_id)
-            .append(&self.checkpoint)
-            .append_list(&self.chunk_hashes);
-    }
-}
-
-impl Decodable for SnapshotManifestResponse {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 3 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(SnapshotManifestResponse {
-            request_id: rlp.val_at(0)?,
-            checkpoint: rlp.val_at(1)?,
-            chunk_hashes: rlp.list_at(2)?,
-        })
     }
 }

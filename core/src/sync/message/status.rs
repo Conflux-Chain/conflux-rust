@@ -7,10 +7,10 @@ use crate::sync::{
     Error, ErrorKind, SynchronizationPeerState,
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{collections::HashSet, time::Instant};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct Status {
     pub protocol_version: u8,
     pub network_id: u8,
@@ -90,29 +90,5 @@ impl Handleable for Status {
         }
 
         Ok(())
-    }
-}
-
-impl Encodable for Status {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(5)
-            .append(&self.protocol_version)
-            .append(&self.network_id)
-            .append(&self.genesis_hash)
-            .append(&self.best_epoch)
-            .append_list(&self.terminal_block_hashes);
-    }
-}
-
-impl Decodable for Status {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(Status {
-            protocol_version: rlp.val_at::<u8>(0)?,
-            network_id: rlp.val_at::<u8>(1)?,
-            genesis_hash: rlp.val_at::<H256>(2)?,
-            best_epoch: rlp.val_at::<u64>(3)?,
-            terminal_block_hashes: rlp.list_at(4)?,
-        })
     }
 }

@@ -12,10 +12,10 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, collections::HashMap, time::Duration};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkRequest {
     pub request_id: u64,
     pub checkpoint: H256,
@@ -60,27 +60,4 @@ impl Request for SnapshotChunkRequest {
     fn is_empty(&self) -> bool { false }
 
     fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
-}
-
-impl Encodable for SnapshotChunkRequest {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(3)
-            .append(&self.request_id)
-            .append(&self.checkpoint)
-            .append(&self.chunk_hash);
-    }
-}
-
-impl Decodable for SnapshotChunkRequest {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 3 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(SnapshotChunkRequest {
-            request_id: rlp.val_at(0)?,
-            checkpoint: rlp.val_at(1)?,
-            chunk_hash: rlp.val_at(2)?,
-        })
-    }
 }
