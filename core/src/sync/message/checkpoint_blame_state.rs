@@ -2,10 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, Handleable, KeyContainer, Message, MsgId},
-    request_manager::Request,
-    Error, ErrorKind, ProtocolConfiguration,
+use crate::{
+    message::{HasRequestId, Message, MsgId, RequestId},
+    sync::{
+        message::{msgid, Context, Handleable, KeyContainer},
+        request_manager::Request,
+        Error, ErrorKind, ProtocolConfiguration,
+    },
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -26,11 +29,10 @@ impl CheckpointBlameStateRequest {
     }
 }
 
-impl Request for CheckpointBlameStateRequest {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id = request_id;
-    }
+build_msg_impl! { CheckpointBlameStateRequest, msgid::GET_CHECKPOINT_BLAME_STATE_REQUEST, "CheckpointBlameStateRequest" }
+build_has_request_id_impl! { CheckpointBlameStateRequest }
 
+impl Request for CheckpointBlameStateRequest {
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -104,12 +106,6 @@ impl Handleable for CheckpointBlameStateRequest {
     }
 }
 
-impl Message for CheckpointBlameStateRequest {
-    fn msg_id(&self) -> MsgId { MsgId::GET_CHECKPOINT_BLAME_STATE_REQUEST }
-
-    fn msg_name(&self) -> &'static str { "GetCheckpointBlameStateRequest" }
-}
-
 impl Encodable for CheckpointBlameStateRequest {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
@@ -138,6 +134,8 @@ pub struct CheckpointBlameStateResponse {
     pub state_blame_vec: Vec<H256>,
 }
 
+build_msg_impl! { CheckpointBlameStateResponse, msgid::GET_CHECKPOINT_BLAME_STATE_RESPONSE, "CheckpointBlameStateResponse" }
+
 impl Handleable for CheckpointBlameStateResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         ctx.match_request(self.request_id)?;
@@ -147,12 +145,6 @@ impl Handleable for CheckpointBlameStateResponse {
             .handle_checkpoint_blame_state_response(ctx, &self.state_blame_vec);
         Ok(())
     }
-}
-
-impl Message for CheckpointBlameStateResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS_RESPONSE }
-
-    fn msg_name(&self) -> &'static str { "GetCheckpointBlameStateResponse" }
 }
 
 impl Encodable for CheckpointBlameStateResponse {

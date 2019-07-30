@@ -1345,7 +1345,10 @@ impl BlockDataManager {
             .expect("crash for db failure")?;
         let rlp = Rlp::new(&rlp_bytes);
 
-        Some(rlp.as_val().expect("Wrong consensus_graph_execution_info rlp format!"))
+        Some(
+            rlp.as_val()
+                .expect("Wrong consensus_graph_execution_info rlp format!"),
+        )
     }
 }
 
