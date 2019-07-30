@@ -413,6 +413,9 @@ impl SynchronizationProtocolHandler {
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
         match e.0 {
             ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidMessageFormat => {
+                op = Some(UpdateNodeOperation::Remove)
+            }
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
@@ -1290,9 +1293,19 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+        if raw.len() < 2 {
+            return self.handle_error(
+                io,
+                peer,
+                msgid::INVALID,
+                ErrorKind::InvalidMessageFormat.into(),
+            );
+        }
+
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
+
         self.dispatch_message(io, peer, msg_id.into(), rlp)
             .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }
