@@ -49,6 +49,11 @@ pub struct MultiVersionMerklePatriciaTrie {
 
 unsafe impl Sync for MultiVersionMerklePatriciaTrie {}
 
+// expose padding so that other modules can compute keys too
+pub fn padding(snapshot: &MerkleHash, intermediate: &MerkleHash) -> KeyPadding {
+    MultiVersionMerklePatriciaTrie::padding(&snapshot, &intermediate)
+}
+
 impl MultiVersionMerklePatriciaTrie {
     pub fn padding(
         snapshot_root: &MerkleHash, intermediate_delta_root: &MerkleHash,

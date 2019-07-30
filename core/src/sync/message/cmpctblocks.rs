@@ -2,13 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        metrics::{CMPCT_BLOCK_HANDLE_TIMER, CMPCT_BLOCK_RECOVER_TIMER},
-        Context, GetCompactBlocks, Handleable, Message, MsgId, RequestId,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{
+            metrics::{CMPCT_BLOCK_HANDLE_TIMER, CMPCT_BLOCK_RECOVER_TIMER},
+            Context, GetCompactBlocks, Handleable,
+        },
+        synchronization_protocol_handler::RecoverPublicTask,
+        Error,
     },
-    synchronization_protocol_handler::RecoverPublicTask,
-    Error,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
@@ -39,12 +42,12 @@ impl Handleable for GetCompactBlocksResponse {
 
         debug!(
             "on_get_compact_blocks_response request_id={} compact={} block={}",
-            self.request_id(),
+            self.request_id,
             self.compact_blocks.len(),
             self.blocks.len()
         );
 
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let mut failed_blocks = HashSet::new();
         let mut completed_blocks = Vec::new();
 
@@ -147,12 +150,6 @@ impl Handleable for GetCompactBlocksResponse {
         // Broadcast completed block_header_ready blocks
         ctx.manager.relay_blocks(ctx.io, completed_blocks)
     }
-}
-
-impl Message for GetCompactBlocksResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS_RESPONSE }
-
-    fn msg_name(&self) -> &'static str { "GetCompactBlocksResponse" }
 }
 
 impl Deref for GetCompactBlocksResponse {

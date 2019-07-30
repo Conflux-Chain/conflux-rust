@@ -2,13 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlockTxnResponse, GetBlocks, Handleable, KeyContainer,
-        Message, MsgId, RequestId,
+use crate::{
+    message::{Message, RequestId},
+    sync::{
+        message::{
+            Context, GetBlockTxnResponse, GetBlocks, Handleable, KeyContainer,
+        },
+        request_manager::Request,
+        Error, ErrorKind, ProtocolConfiguration,
     },
-    request_manager::Request,
-    Error, ErrorKind, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -26,10 +28,6 @@ pub struct GetBlockTxn {
 }
 
 impl Request for GetBlockTxn {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id)
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -46,7 +44,7 @@ impl Request for GetBlockTxn {
 
     fn resend(&self) -> Option<Box<Request>> {
         Some(Box::new(GetBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             with_public: true,
             hashes: vec![self.block_hash.clone()],
         }))
@@ -97,12 +95,6 @@ impl Handleable for GetBlockTxn {
             }
         }
     }
-}
-
-impl Message for GetBlockTxn {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_TXN }
-
-    fn msg_name(&self) -> &'static str { "GetBlockTxn" }
 }
 
 impl Deref for GetBlockTxn {

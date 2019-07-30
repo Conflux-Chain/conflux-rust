@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, Handleable, Message, MsgId, RequestId},
-    Error,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{Context, Handleable},
+        Error,
+    },
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -20,7 +23,7 @@ impl Handleable for GetTerminalBlockHashesResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_terminal_block_hashes_response, msg=:{:?}", self);
 
-        ctx.match_request(self.request_id())?;
+        ctx.match_request(self.request_id)?;
 
         for hash in self.hashes {
             if !ctx.manager.graph.contains_block_header(&hash) {
@@ -34,12 +37,6 @@ impl Handleable for GetTerminalBlockHashesResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetTerminalBlockHashesResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_TERMINAL_BLOCK_HASHES_RESPONSE }
-
-    fn msg_name(&self) -> &'static str { "GetTerminalBlockHashesResponse" }
 }
 
 impl Deref for GetTerminalBlockHashesResponse {

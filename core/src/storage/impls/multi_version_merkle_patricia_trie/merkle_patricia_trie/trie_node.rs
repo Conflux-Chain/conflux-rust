@@ -241,8 +241,12 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
                 .path
                 .get_slice(self.get_compressed_path_size() as usize)
                 .into(),
-            value: self.value_clone().into_option(),
-            children_table: None,
+            value: self
+                .value_clone()
+                .into_option()
+                .map(Into::into)
+                .unwrap_or_default(),
+            children_table: vec![],
             merkle_hash: self.merkle_hash,
         }
     }

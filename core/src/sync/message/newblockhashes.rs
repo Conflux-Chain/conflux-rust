@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Context, Handleable, Message, MsgId},
+    message::{Context, Handleable},
     Error,
 };
 use cfx_types::H256;
@@ -49,12 +49,6 @@ impl Handleable for NewBlockHashes {
 
         Ok(())
     }
-}
-
-impl Message for NewBlockHashes {
-    fn msg_id(&self) -> MsgId { MsgId::NEW_BLOCK_HASHES }
-
-    fn msg_name(&self) -> &'static str { "NewBlockHashes" }
 }
 
 impl Encodable for NewBlockHashes {

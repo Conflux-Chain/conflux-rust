@@ -2,12 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetTerminalBlockHashesResponse, Handleable, Message, MsgId,
-        RequestId,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{Context, GetTerminalBlockHashesResponse, Handleable},
+        Error,
     },
-    Error,
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::ops::{Deref, DerefMut};
@@ -30,12 +30,6 @@ impl Handleable for GetTerminalBlockHashes {
         };
         ctx.send_response(&response)
     }
-}
-
-impl Message for GetTerminalBlockHashes {
-    fn msg_id(&self) -> MsgId { MsgId::GET_TERMINAL_BLOCK_HASHES }
-
-    fn msg_name(&self) -> &'static str { "GetTerminalBlockHashes" }
 }
 
 impl Deref for GetTerminalBlockHashes {

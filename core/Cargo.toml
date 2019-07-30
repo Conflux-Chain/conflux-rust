@@ -16,6 +16,7 @@ network = { path = "../network" }
 io = { path = "../util/io" }
 log = "0.4"
 rlp = "0.3.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 lazy_static = "1.1.0"
 keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
 secret-store = { path = "../secret_store" }
@@ -42,6 +43,7 @@ priority-send-queue = { path = "../util/priority-send-queue" }
 toml = "0.4"
 metrics = { path = "../util/metrics" }
 hibitset = { path = "../util/hibitset" }
+futures = "0.1"
 
 [dev-dependencies]
 rustc-hex = "1.0"

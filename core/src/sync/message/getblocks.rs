@@ -2,14 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlocksResponse, GetBlocksWithPublicResponse, Handleable,
-        Key, KeyContainer, Message, MsgId, RequestId,
+use crate::{
+    message::{Message, RequestId},
+    sync::{
+        message::{
+            Context, GetBlocksResponse, GetBlocksWithPublicResponse,
+            Handleable, Key, KeyContainer,
+        },
+        request_manager::Request,
+        synchronization_protocol_handler::MAX_PACKET_SIZE,
+        Error, ErrorKind, ProtocolConfiguration,
     },
-    request_manager::Request,
-    synchronization_protocol_handler::MAX_PACKET_SIZE,
-    Error, ErrorKind, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use primitives::Block;
@@ -28,10 +31,6 @@ pub struct GetBlocks {
 }
 
 impl Request for GetBlocks {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id);
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -147,12 +146,6 @@ impl Handleable for GetBlocks {
             self.send_response(ctx, blocks)
         }
     }
-}
-
-impl Message for GetBlocks {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS }
-
-    fn msg_name(&self) -> &'static str { "GetBlocks" }
 }
 
 impl Deref for GetBlocks {

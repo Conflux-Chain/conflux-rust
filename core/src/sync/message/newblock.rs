@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{Context, Handleable, Message, MsgId},
+    message::{Context, Handleable},
     Error, ErrorKind,
 };
 use cfx_types::H256;
@@ -82,12 +82,6 @@ fn on_new_decoded_block(
         need_to_relay.push(hash);
     }
     Ok(need_to_relay)
-}
-
-impl Message for NewBlock {
-    fn msg_id(&self) -> MsgId { MsgId::NEW_BLOCK }
-
-    fn msg_name(&self) -> &'static str { "NewBlock" }
 }
 
 impl Encodable for NewBlock {

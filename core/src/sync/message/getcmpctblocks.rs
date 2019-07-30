@@ -2,16 +2,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        Context, GetBlocks, GetCompactBlocksResponse, Handleable, Key,
-        KeyContainer, Message, MsgId, RequestId,
+use crate::{
+    message::{Message, RequestId},
+    sync::{
+        message::{
+            msgid, Context, GetBlocks, GetCompactBlocksResponse, Handleable,
+            Key, KeyContainer,
+        },
+        request_manager::Request,
+        synchronization_protocol_handler::{
+            MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND,
+        },
+        Error, ProtocolConfiguration,
     },
-    request_manager::Request,
-    synchronization_protocol_handler::{
-        MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND,
-    },
-    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -28,10 +31,6 @@ pub struct GetCompactBlocks {
 }
 
 impl Request for GetCompactBlocks {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id.set_request_id(request_id);
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -41,14 +40,14 @@ impl Request for GetCompactBlocks {
     }
 
     fn on_removed(&self, inflight_keys: &mut KeyContainer) {
-        let msg_type = MsgId::GET_BLOCKS.into();
+        let msg_type = msgid::GET_BLOCKS;
         for hash in self.hashes.iter() {
             inflight_keys.remove(msg_type, Key::Hash(*hash));
         }
     }
 
     fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
-        let msg_type = MsgId::GET_BLOCKS.into();
+        let msg_type = msgid::GET_BLOCKS;
         self.hashes
             .retain(|h| inflight_keys.add(msg_type, Key::Hash(*h)));
     }
@@ -57,7 +56,7 @@ impl Request for GetCompactBlocks {
 
     fn resend(&self) -> Option<Box<Request>> {
         Some(Box::new(GetBlocks {
-            request_id: 0.into(),
+            request_id: 0,
             with_public: true,
             hashes: self.hashes.iter().cloned().collect(),
         }))
@@ -97,12 +96,6 @@ impl Handleable for GetCompactBlocks {
 
         ctx.send_response(&response)
     }
-}
-
-impl Message for GetCompactBlocks {
-    fn msg_id(&self) -> MsgId { MsgId::GET_CMPCT_BLOCKS }
-
-    fn msg_name(&self) -> &'static str { "GetCompactBlocks" }
 }
 
 impl Deref for GetCompactBlocks {

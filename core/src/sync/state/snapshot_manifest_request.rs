@@ -2,11 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, Handleable, KeyContainer, Message, MsgId},
-    request_manager::Request,
-    state::snapshot_manifest_response::SnapshotManifestResponse,
-    Error, ProtocolConfiguration,
+use crate::{
+    message::{HasRequestId, Message, MsgId, RequestId},
+    sync::{
+        message::{msgid, Context, Handleable, KeyContainer},
+        request_manager::Request,
+        state::snapshot_manifest_response::SnapshotManifestResponse,
+        Error, ProtocolConfiguration,
+    },
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -27,6 +30,9 @@ impl SnapshotManifestRequest {
     }
 }
 
+build_msg_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
+build_has_request_id_impl! { SnapshotManifestRequest }
+
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         // todo find manifest from storage APIs
@@ -41,10 +47,6 @@ impl Handleable for SnapshotManifestRequest {
 }
 
 impl Request for SnapshotManifestRequest {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id = request_id;
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -60,12 +62,6 @@ impl Request for SnapshotManifestRequest {
     fn is_empty(&self) -> bool { false }
 
     fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
-}
-
-impl Message for SnapshotManifestRequest {
-    fn msg_id(&self) -> MsgId { MsgId::GET_SNAPSHOT_MANIFEST }
-
-    fn msg_name(&self) -> &'static str { "SnapshotManifestRequest" }
 }
 
 impl Encodable for SnapshotManifestRequest {

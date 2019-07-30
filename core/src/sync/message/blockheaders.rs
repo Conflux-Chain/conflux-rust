@@ -3,10 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    message::RequestId,
     sync::{
         message::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
-            Handleable, Message, MsgId, RequestId,
+            Handleable,
         },
         msg_sender::NULL,
         Error,
@@ -25,7 +26,7 @@ use std::{
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetBlockHeadersResponse {
-    request_id: RequestId,
+    pub request_id: RequestId,
     pub headers: Vec<BlockHeader>,
 }
 
@@ -43,7 +44,7 @@ impl Handleable for GetBlockHeadersResponse {
             return Ok(());
         }
 
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let req = req.downcast_ref::<GetBlockHeaders>(
             ctx.io,
             &ctx.manager.request_manager,
@@ -198,13 +199,6 @@ impl GetBlockHeadersResponse {
         }
     }
 }
-
-impl Message for GetBlockHeadersResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_HEADERS_RESPONSE }
-
-    fn msg_name(&self) -> &'static str { "GetBlockHeadersResponse" }
-}
-
 impl Deref for GetBlockHeadersResponse {
     type Target = RequestId;
 

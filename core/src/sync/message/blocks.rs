@@ -2,13 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        metrics::BLOCK_HANDLE_TIMER, Context, GetBlocks, GetCompactBlocks,
-        Handleable, Message, MsgId, RequestId,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{
+            metrics::BLOCK_HANDLE_TIMER, Context, GetBlocks, GetCompactBlocks,
+            Handleable,
+        },
+        synchronization_protocol_handler::RecoverPublicTask,
+        Error,
     },
-    synchronization_protocol_handler::RecoverPublicTask,
-    Error,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
@@ -36,7 +39,7 @@ impl Handleable for GetBlocksResponse {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let requested_blocks: HashSet<H256> = req
             .downcast_ref::<GetBlocks>(
                 ctx.io,
@@ -60,14 +63,6 @@ impl Handleable for GetBlocksResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetBlocksResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS_RESPONSE }
-
-    fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
 impl Deref for GetBlocksResponse {
@@ -115,7 +110,7 @@ impl Handleable for GetBlocksWithPublicResponse {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let req_hashes: HashSet<H256> = if let Ok(req) = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
@@ -139,14 +134,6 @@ impl Handleable for GetBlocksWithPublicResponse {
 
         Ok(())
     }
-}
-
-impl Message for GetBlocksWithPublicResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
-
-    fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 }
 
 impl Deref for GetBlocksWithPublicResponse {

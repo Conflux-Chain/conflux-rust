@@ -2,11 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, Handleable, KeyContainer, Message, MsgId},
-    request_manager::Request,
-    state::snapshot_chunk_response::SnapshotChunkResponse,
-    Error, ProtocolConfiguration,
+use crate::{
+    message::{HasRequestId, Message, MsgId, RequestId},
+    sync::{
+        message::{msgid, Context, Handleable, KeyContainer},
+        request_manager::Request,
+        state::snapshot_chunk_response::SnapshotChunkResponse,
+        Error, ProtocolConfiguration,
+    },
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -29,6 +32,9 @@ impl SnapshotChunkRequest {
     }
 }
 
+build_msg_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
+build_has_request_id_impl! { SnapshotChunkRequest }
+
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         // todo find chunk from storage APIs
@@ -39,10 +45,6 @@ impl Handleable for SnapshotChunkRequest {
 }
 
 impl Request for SnapshotChunkRequest {
-    fn set_request_id(&mut self, request_id: u64) {
-        self.request_id = request_id;
-    }
-
     fn as_message(&self) -> &Message { self }
 
     fn as_any(&self) -> &Any { self }
@@ -58,12 +60,6 @@ impl Request for SnapshotChunkRequest {
     fn is_empty(&self) -> bool { false }
 
     fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
-}
-
-impl Message for SnapshotChunkRequest {
-    fn msg_id(&self) -> MsgId { MsgId::GET_SNAPSHOT_CHUNK }
-
-    fn msg_name(&self) -> &'static str { "SnapshotChunkRequest" }
 }
 
 impl Encodable for SnapshotChunkRequest {

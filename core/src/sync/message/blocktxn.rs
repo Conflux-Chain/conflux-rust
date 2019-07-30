@@ -2,12 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{
-        metrics::BLOCK_TXN_HANDLE_TIMER, Context, GetBlockTxn, Handleable,
-        Message, MsgId, RequestId,
+use crate::{
+    message::RequestId,
+    sync::{
+        message::{
+            metrics::BLOCK_TXN_HANDLE_TIMER, Context, GetBlockTxn, Handleable,
+        },
+        Error,
     },
-    Error,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
@@ -31,7 +33,7 @@ impl Handleable for GetBlockTxnResponse {
 
         debug!("on_get_blocktxn_response");
         let resp_hash = self.block_hash;
-        let req = ctx.match_request(self.request_id())?;
+        let req = ctx.match_request(self.request_id)?;
         let req = req.downcast_ref::<GetBlockTxn>(
             ctx.io,
             &ctx.manager.request_manager,
@@ -131,14 +133,6 @@ impl Handleable for GetBlockTxnResponse {
         }
         Ok(())
     }
-}
-
-impl Message for GetBlockTxnResponse {
-    fn msg_id(&self) -> MsgId { MsgId::GET_BLOCK_TXN_RESPONSE }
-
-    fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 }
 
 impl Deref for GetBlockTxnResponse {
