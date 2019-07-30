@@ -32,7 +32,7 @@ pub use crate::{
     state_root::*,
     transaction::{
         Action, SignedTransaction, Transaction, TransactionWithSignature,
-        TxFullId, TxPropagateId,
+        TxPropagateId,
     },
     transaction_address::TransactionAddress,
 };

@@ -21,8 +21,6 @@ pub type TxShortId = u64;
 
 pub type TxPropagateId = u32;
 
-pub type TxFullId = H256;
-
 #[derive(Debug, PartialEq, Clone)]
 /// Errors concerning transaction processing.
 pub enum TransactionError {
@@ -250,7 +248,7 @@ pub struct TransactionWithSignature {
     /// The S field of the signature; helps describe the point on the curve.
     pub s: U256,
     /// Hash of the transaction
-    pub hash: TxFullId,
+    pub hash: H256,
     /// The transaction size when serialized in rlp
     pub rlp_size: Option<usize>,
 }
@@ -343,7 +341,7 @@ impl TransactionWithSignature {
         }
     }
 
-    pub fn hash(&self) -> TxFullId { self.hash }
+    pub fn hash(&self) -> H256 { self.hash }
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
@@ -450,7 +448,7 @@ impl SignedTransaction {
     /// Checks if signature is empty.
     pub fn is_unsigned(&self) -> bool { self.transaction.is_unsigned() }
 
-    pub fn hash(&self) -> TxFullId { self.transaction.hash() }
+    pub fn hash(&self) -> H256 { self.transaction.hash() }
 
     pub fn gas(&self) -> &U256 { &self.transaction.gas }
 

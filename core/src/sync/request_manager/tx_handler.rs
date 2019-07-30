@@ -1,6 +1,7 @@
 use crate::sync::message::{TransIndex, TransactionDigests};
+use cfx_types::H256;
 use metrics::{register_meter_with_group, Meter};
-use primitives::{SignedTransaction, TxFullId, TxPropagateId};
+use primitives::{SignedTransaction, TxPropagateId};
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -18,13 +19,13 @@ const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct ReceivedTransactionTimeWindowedEntry {
     pub secs: u64,
-    pub tx_ids: Vec<Arc<TxFullId>>,
+    pub tx_ids: Vec<Arc<H256>>,
 }
 
 struct ReceivedTransactionContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    txid_container: HashMap<Arc<TxPropagateId>, Vec<Arc<TxFullId>>>,
+    txid_container: HashMap<Arc<TxPropagateId>, Vec<Arc<H256>>>,
     time_windowed_indices: Vec<Option<ReceivedTransactionTimeWindowedEntry>>,
 }
 

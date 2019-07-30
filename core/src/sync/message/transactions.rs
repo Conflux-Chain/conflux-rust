@@ -10,8 +10,9 @@ use crate::sync::{
     request_manager::Request,
     Error, ErrorKind, ProtocolConfiguration,
 };
+use cfx_types::H256;
 use metrics::MeterTimer;
-use primitives::{transaction::TxPropagateId, TransactionWithSignature, TxFullId};
+use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
@@ -213,10 +214,18 @@ impl Encodable for TransactionDigests {
 
 impl Decodable for TransactionDigests {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let trans_short_ids = rlp.list_at(2)?;
+        if trans_short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
+            != 0
+        {
+            return Err(DecoderError::Custom(
+                "TransactionDigests length Error!",
+            ));
+        }
         Ok(TransactionDigests {
             window_index: rlp.val_at(0)?,
             random_position: rlp.val_at(1)?,
-            trans_short_ids: rlp.list_at(2)?,
+            trans_short_ids,
         })
     }
 }
@@ -235,12 +244,6 @@ impl TransactionDigests {
     }
 
     pub fn get_decomposed_short_ids(&self) -> (Vec<u8>, Vec<TxPropagateId>) {
-        if self.trans_short_ids.len()
-            % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
-            != 0
-        {
-            panic!("TransactionDigests length Error!");
-        }
         let mut random_byte_vector: Vec<u8> = Vec::new();
         let mut fixed_bytes_vector: Vec<TxPropagateId> = Vec::new();
 
@@ -258,21 +261,17 @@ impl TransactionDigests {
         (random_byte_vector, fixed_bytes_vector)
     }
 
-    pub fn get_len(&self) -> usize {
-        if self.trans_short_ids.len()
-            % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
-            != 0
-        {
-            panic!("TransactionDigests length Error!");
-        }
+    pub fn len(&self) -> usize {
         self.trans_short_ids.len() / TransactionDigests::SHORT_ID_SIZE_IN_BYTES
     }
 
     pub fn to_u24(v1: u8, v2: u8, v3: u8) -> u32 {
-        ((v1 as u32) <<16)+((v2 as u32) <<8) + v3 as u32
+        ((v1 as u32) << 16) + ((v2 as u32) << 8) + v3 as u32
     }
 
-    pub fn append_to_message(message: &mut Vec<u8>,random_position:usize, transaction_id: &TxFullId){
+    pub fn append_to_message(
+        message: &mut Vec<u8>, random_position: usize, transaction_id: &H256,
+    ) {
         message.push(transaction_id[random_position]);
         message.push(transaction_id[29]);
         message.push(transaction_id[30]);
