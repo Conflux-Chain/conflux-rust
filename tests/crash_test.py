@@ -54,7 +54,7 @@ class CrashTest(ConfluxTestFramework):
         self.log.info("Pass 1")
 
         for i in range(1, self.num_nodes):
-            self.stop_node(i)
+            self.stop_node(i, kill=True)
         self.nodes[0].add_p2p_connection(P2PInterface())
         network_thread_start()
         self.nodes[0].p2p.wait_for_status()
