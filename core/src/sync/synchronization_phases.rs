@@ -339,6 +339,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             );
             *old_sync_inner = new_sync_inner;
 
+            self.graph.consensus.clear_block_count();
             self.graph
                 .statistics
                 .clear_sync_and_consensus_graph_statistics();
