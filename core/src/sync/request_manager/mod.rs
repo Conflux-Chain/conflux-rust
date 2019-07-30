@@ -124,6 +124,10 @@ impl RequestManager {
             request.with_inflight(&mut inflight_keys);
         }
 
+        if request.is_empty() {
+            return;
+        }
+
         // increase delay for resent request.
         let (cur_delay, next_delay) = match delay {
             Some(d) => (d, d + *REQUEST_START_WAITING_TIME),
@@ -141,10 +145,6 @@ impl RequestManager {
                 peer,
             ));
 
-            return;
-        }
-
-        if request.is_empty() {
             return;
         }
 
