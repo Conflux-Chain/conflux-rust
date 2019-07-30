@@ -340,7 +340,7 @@ impl RequestContainer {
             req.timed_req.removed.store(true, AtomicOrdering::Relaxed);
             unfinished_requests.push(req.message);
         }
-        self.inflight_requests.clear();
+
         while let Some(req) = self.pending_requests.pop_front() {
             unfinished_requests.push(req);
         }
