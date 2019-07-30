@@ -57,6 +57,8 @@ impl SyncGraphStatistics {
             inserted_block_count: 1,
         }
     }
+
+    pub fn clear(&mut self) { self.inserted_block_count = 1; }
 }
 
 pub struct SynchronizationGraphNode {
@@ -1426,12 +1428,6 @@ impl SynchronizationGraph {
     /// This only returns cached block count, and this is enough since this is
     /// only used in test.
     pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
-
-    // Manage statistics
-    pub fn stat_inc_inserted_count(&self) {
-        let mut inner = self.statistics.inner.write();
-        inner.sync_graph.inserted_block_count += 1;
-    }
 
     pub fn remove_expire_blocks(
         &self, expire_time: u64, recover: bool,

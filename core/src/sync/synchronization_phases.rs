@@ -338,6 +338,10 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 old_sync_inner.data_man.clone(),
             );
             *old_sync_inner = new_sync_inner;
+
+            self.graph
+                .statistics
+                .clear_sync_and_consensus_graph_statistics();
         }
 
         // FIXME: should dispatch to another worker thread to do this.
