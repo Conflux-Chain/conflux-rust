@@ -37,7 +37,6 @@ use crate::{
 };
 use metrics::{register_meter_with_group, Meter};
 use primitives::{Block, BlockHeader, SignedTransaction};
-use priority_send_queue::SendQueuePriority;
 use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -413,6 +412,9 @@ impl SynchronizationProtocolHandler {
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
         match e.0 {
             ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidMessageFormat => {
+                op = Some(UpdateNodeOperation::Remove)
+            }
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
@@ -775,9 +777,7 @@ impl SynchronizationProtocolHandler {
 
     fn broadcast_message(
         &self, io: &NetworkContext, skip_id: PeerId, msg: &Message,
-        priority: SendQueuePriority,
-    ) -> Result<(), NetworkError>
-    {
+    ) -> Result<(), NetworkError> {
         let mut peer_ids: Vec<PeerId> = self
             .syn
             .peers
@@ -798,7 +798,7 @@ impl SynchronizationProtocolHandler {
         }
 
         for id in peer_ids {
-            send_message(io, id, msg, Some(priority))?;
+            send_message(io, id, msg)?;
         }
 
         Ok(())
@@ -828,7 +828,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), NetworkError> {
         let status_message = self.produce_status_message();
         debug!("Sending status message to {:?}: {:?}", peer, status_message);
-        send_message(io, peer, &status_message, Some(SendQueuePriority::High))
+        send_message(io, peer, &status_message)
     }
 
     fn broadcast_status(&self, io: &NetworkContext) {
@@ -836,12 +836,7 @@ impl SynchronizationProtocolHandler {
         debug!("Broadcasting status message: {:?}", status_message);
 
         if self
-            .broadcast_message(
-                io,
-                PeerId::max_value(),
-                &status_message,
-                SendQueuePriority::Normal,
-            )
+            .broadcast_message(io, PeerId::max_value(), &status_message)
             .is_err()
         {
             warn!("Error broadcsting status message");
@@ -855,16 +850,10 @@ impl SynchronizationProtocolHandler {
                 block: (*block).clone().into(),
             });
             for id in self.syn.peers.read().keys() {
-                send_message_with_throttling(
-                    io,
-                    *id,
-                    msg.as_ref(),
-                    Some(SendQueuePriority::High),
-                    true,
-                )
-                .unwrap_or_else(|e| {
-                    warn!("Error sending new blocks, err={:?}", e);
-                });
+                send_message_with_throttling(io, *id, msg.as_ref(), true)
+                    .unwrap_or_else(|e| {
+                        warn!("Error sending new blocks, err={:?}", e);
+                    });
             }
         }
     }
@@ -881,7 +870,6 @@ impl SynchronizationProtocolHandler {
                 io,
                 PeerId::max_value(),
                 new_block_hash_msg.as_ref(),
-                SendQueuePriority::High,
             )
             .unwrap_or_else(|e| {
                 warn!("Error broadcasting blocks, err={:?}", e);
@@ -1000,8 +988,7 @@ impl SynchronizationProtocolHandler {
             match send_message(
                 io,
                 peer_id,
-                &tx_msg,
-                Some(SendQueuePriority::Normal),
+                &tx_msg
             ) {
                 Ok(_) => {
                     trace!(
@@ -1132,14 +1119,7 @@ impl SynchronizationProtocolHandler {
             Box::new(TransactionPropagationControl { catch_up_mode });
 
         for peer in need_notify {
-            if send_message(
-                io,
-                peer,
-                trans_prop_ctrl_msg.as_ref(),
-                Some(SendQueuePriority::High),
-            )
-            .is_err()
-            {
+            if send_message(io, peer, trans_prop_ctrl_msg.as_ref()).is_err() {
                 info!(
                     "Failed to send transaction control message to peer {}",
                     peer
@@ -1309,9 +1289,19 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+        if raw.len() < 2 {
+            return self.handle_error(
+                io,
+                peer,
+                msgid::INVALID,
+                ErrorKind::InvalidMessageFormat.into(),
+            );
+        }
+
         let msg_id = raw[0];
         let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
+
         self.dispatch_message(io, peer, msg_id.into(), rlp)
             .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }

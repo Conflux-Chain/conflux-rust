@@ -17,7 +17,6 @@ use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature, TxPropagateId};
-use priority_send_queue::SendQueuePriority;
 pub use request_handler::{
     Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
 };
@@ -264,7 +263,6 @@ impl RequestManager {
             io,
             peer_id,
             RequestMessage::new(Box::new(request), None),
-            SendQueuePriority::Normal,
         ) {
             warn!(
                 "Error requesting transactions peer={:?} count={} err={:?}",
@@ -308,7 +306,6 @@ impl RequestManager {
             io,
             peer_id,
             RequestMessage::new(Box::new(request), None),
-            SendQueuePriority::High,
         ) {
             warn!(
                 "Error requesting blocktxn peer={:?} hash={} err={:?}",

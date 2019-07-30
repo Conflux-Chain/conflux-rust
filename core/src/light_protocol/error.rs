@@ -25,14 +25,14 @@ error_chain! {
             display("Internal error"),
         }
 
+        InvalidMessageFormat {
+            description("Invalid message format"),
+            display("Invalid message format"),
+        }
+
         InvalidProof {
             description("Invalid proof"),
             display("Invalid proof"),
-        }
-
-        InvalidRequestId {
-            description("Invalid request id"),
-            display("Invalid request id"),
         }
 
         InvalidStateRoot {
@@ -45,9 +45,19 @@ error_chain! {
             display("Pivot hash mismatch"),
         }
 
+        UnexpectedRequestId {
+            description("Unexpected request id"),
+            display("Unexpected request id"),
+        }
+
         UnexpectedResponse {
             description("Unexpected response"),
             display("Unexpected response"),
+        }
+
+        UnknownMessage {
+            description("Unknown message"),
+            display("Unknown message"),
         }
 
         UnknownPeer {

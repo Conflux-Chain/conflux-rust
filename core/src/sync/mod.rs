@@ -49,7 +49,6 @@ pub mod msg_sender {
     use crate::message::Message;
     use metrics::{register_meter_with_group, Meter};
     use network::{Error as NetworkError, NetworkContext, PeerId};
-    use priority_send_queue::SendQueuePriority;
     use std::sync::Arc;
 
     pub const NULL: usize = !0;
@@ -270,19 +269,16 @@ pub mod msg_sender {
 
     pub fn send_message(
         io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: Option<SendQueuePriority>,
-    ) -> Result<(), NetworkError>
-    {
-        send_message_with_throttling(io, peer, msg, priority, false)
+    ) -> Result<(), NetworkError> {
+        send_message_with_throttling(io, peer, msg, false)
     }
 
     pub fn send_message_with_throttling(
         io: &NetworkContext, peer: PeerId, msg: &Message,
-        priority: Option<SendQueuePriority>, throttling_disabled: bool,
+        throttling_disabled: bool,
     ) -> Result<(), NetworkError>
     {
-        let size =
-            msg.send_with_throttling(io, peer, priority, throttling_disabled)?;
+        let size = msg.send_with_throttling(io, peer, throttling_disabled)?;
 
         if peer != NULL {
             match msg.msg_id().into() {

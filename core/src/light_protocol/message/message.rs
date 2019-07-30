@@ -13,6 +13,8 @@ build_msgid! {
     STATE_ROOT = 0x02
     GET_STATE_ENTRY = 0x03
     STATE_ENTRY = 0x04
+
+    INVALID = 0xff
 }
 
 // generate `impl Message for _` for each message type
