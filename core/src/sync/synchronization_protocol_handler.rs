@@ -985,11 +985,7 @@ impl SynchronizationProtocolHandler {
                 ordered_positions.pop().unwrap() as u8,
                 messages.pop().unwrap(),
             );
-            match send_message(
-                io,
-                peer_id,
-                &tx_msg
-            ) {
+            match send_message(io, peer_id, &tx_msg) {
                 Ok(_) => {
                     trace!(
                         "{:02} <- Transactions ({} entries)",
