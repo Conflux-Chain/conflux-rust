@@ -225,7 +225,7 @@ impl QueryHandler {
             state_root,
         });
 
-        msg.send(io, peer, None)?;
+        msg.send(io, peer)?;
         Ok(())
     }
 
@@ -268,7 +268,7 @@ impl QueryHandler {
             proof,
         });
 
-        msg.send(io, peer, None)?;
+        msg.send(io, peer)?;
         Ok(())
     }
 
@@ -326,7 +326,7 @@ impl QueryHandler {
 
         // send request
         let msg: Box<dyn Message> = Box::new(req);
-        msg.send(io, peer, None)?;
+        msg.send(io, peer)?;
 
         // poll result
         // TODO(thegaram): come up with something better
