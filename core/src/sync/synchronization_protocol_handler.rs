@@ -922,10 +922,10 @@ impl SynchronizationProtocolHandler {
         }
 
         // 29 since the remaining bytes is 29.
-        let mut ordered_positions: Vec<usize> =(0..lucky_peers.len() ).map(|val| val% 29).collect();
+        let mut ordered_positions: Vec<usize> =
+            (0..lucky_peers.len()).map(|val| val % 29).collect();
 
-
-        let mut messages: Vec<Vec<u8>> = vec![vec![];lucky_peers.len()];
+        let mut messages: Vec<Vec<u8>> = vec![vec![]; lucky_peers.len()];
 
         let sent_transactions = {
             let mut transactions = self.get_to_propagate_trans();
@@ -946,7 +946,11 @@ impl SynchronizationProtocolHandler {
                 for i in 0..lucky_peers.len() {
                     //consist of [one random position byte, and last three
                     // bytes]
-                    TransactionDigests::append_to_message(&mut messages[i], ordered_positions[i],h);
+                    TransactionDigests::append_to_message(
+                        &mut messages[i],
+                        ordered_positions[i],
+                        h,
+                    );
                 }
             }
 
@@ -978,22 +982,18 @@ impl SynchronizationProtocolHandler {
 
         for i in 0..lucky_peers.len() {
             let peer_id = lucky_peers[i];
-            let tx_msg =TransactionDigests::new(
+            let tx_msg = TransactionDigests::new(
                 window_index,
                 ordered_positions.pop().unwrap() as u8,
                 messages.pop().unwrap(),
             );
-            match send_message(
-                io,
-                peer_id,
-                &tx_msg,
-                SendQueuePriority::Normal,
-            ) {
+            match send_message(io, peer_id, &tx_msg, SendQueuePriority::Normal)
+            {
                 Ok(_) => {
                     trace!(
                         "{:02} <- Transactions ({} entries)",
                         peer_id,
-                        tx_msg.get_len()
+                        tx_msg.len()
                     );
                 }
                 Err(e) => {
