@@ -10,9 +10,9 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct GetTerminalBlockHashesResponse {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
@@ -35,23 +35,5 @@ impl Handleable for GetTerminalBlockHashesResponse {
         }
 
         Ok(())
-    }
-}
-
-impl Encodable for GetTerminalBlockHashesResponse {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.hashes);
-    }
-}
-
-impl Decodable for GetTerminalBlockHashesResponse {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(GetTerminalBlockHashesResponse {
-            request_id: rlp.val_at(0)?,
-            hashes: rlp.list_at(1)?,
-        })
     }
 }

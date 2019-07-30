@@ -16,9 +16,10 @@ use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, collections::HashSet, time::Duration};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct Transactions {
     pub transactions: Vec<TransactionWithSignature>,
 }
@@ -76,23 +77,9 @@ impl Handleable for Transactions {
     }
 }
 
-impl Encodable for Transactions {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.append_list(&self.transactions);
-    }
-}
-
-impl Decodable for Transactions {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(Transactions {
-            transactions: rlp.as_list()?,
-        })
-    }
-}
-
 ////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct TransactionPropagationControl {
     pub catch_up_mode: bool,
 }
@@ -108,23 +95,9 @@ impl Handleable for TransactionPropagationControl {
     }
 }
 
-impl Encodable for TransactionPropagationControl {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.append(&self.catch_up_mode);
-    }
-}
-
-impl Decodable for TransactionPropagationControl {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(TransactionPropagationControl {
-            catch_up_mode: rlp.as_val()?,
-        })
-    }
-}
-
 /////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct TransIndex(usize, usize);
 
 impl TransIndex {
@@ -133,18 +106,6 @@ impl TransIndex {
     pub fn first(&self) -> usize { self.0 }
 
     pub fn second(&self) -> usize { self.1 }
-}
-
-impl Encodable for TransIndex {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(2).append(&self.0).append(&self.1);
-    }
-}
-
-impl Decodable for TransIndex {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(TransIndex(rlp.val_at(0)?, rlp.val_at(1)?))
-    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -192,6 +153,10 @@ impl Encodable for TransactionDigests {
 
 impl Decodable for TransactionDigests {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if rlp.item_count()? != 3 {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+
         let trans_short_ids = rlp.list_at(2)?;
         if trans_short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
             != 0
@@ -345,7 +310,7 @@ impl Decodable for GetTransactions {
 
 ///////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct GetTransactionsResponse {
     pub request_id: RequestId,
     pub transactions: Vec<TransactionWithSignature>,
@@ -390,23 +355,5 @@ impl Handleable for GetTransactionsResponse {
         debug!("Transactions successfully inserted to transaction pool");
 
         Ok(())
-    }
-}
-
-impl Encodable for GetTransactionsResponse {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.transactions);
-    }
-}
-
-impl Decodable for GetTransactionsResponse {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(GetTransactionsResponse {
-            request_id: rlp.val_at(0)?,
-            transactions: rlp.list_at(1)?,
-        })
     }
 }

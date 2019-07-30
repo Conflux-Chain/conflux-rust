@@ -14,10 +14,10 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHeaders {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
@@ -70,27 +70,5 @@ impl Handleable for GetBlockHeaders {
         );
 
         ctx.send_response(&block_headers_resp)
-    }
-}
-
-impl Encodable for GetBlockHeaders {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.hashes);
-    }
-}
-
-impl Decodable for GetBlockHeaders {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(GetBlockHeaders {
-            request_id: rlp.val_at(0)?,
-            hashes: rlp.list_at(1)?,
-        })
     }
 }
