@@ -17,14 +17,10 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use rlp_derive::{RlpDecodable, RlpEncodable};
+use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetCompactBlocks {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
@@ -95,37 +91,5 @@ impl Handleable for GetCompactBlocks {
         };
 
         ctx.send_response(&response)
-    }
-}
-
-impl Deref for GetCompactBlocks {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetCompactBlocks {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
-}
-
-impl Encodable for GetCompactBlocks {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.hashes);
-    }
-}
-
-impl Decodable for GetCompactBlocks {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(GetCompactBlocks {
-            request_id: rlp.val_at(0)?,
-            hashes: rlp.list_at(1)?,
-        })
     }
 }

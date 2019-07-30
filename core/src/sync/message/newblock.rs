@@ -8,9 +8,9 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use primitives::Block;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct NewBlock {
     pub block: Block,
 }
@@ -82,16 +82,4 @@ fn on_new_decoded_block(
         need_to_relay.push(hash);
     }
     Ok(need_to_relay)
-}
-
-impl Encodable for NewBlock {
-    fn rlp_append(&self, stream: &mut RlpStream) { stream.append(&self.block); }
-}
-
-impl Decodable for NewBlock {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(NewBlock {
-            block: rlp.as_val::<Block>()?,
-        })
-    }
 }

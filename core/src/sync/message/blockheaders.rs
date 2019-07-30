@@ -17,14 +17,13 @@ use crate::{
 use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::BlockHeader;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::HashSet,
-    ops::{Deref, DerefMut},
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHeadersResponse {
     pub request_id: RequestId,
     pub headers: Vec<BlockHeader>,
@@ -197,32 +196,5 @@ impl GetBlockHeadersResponse {
                 .relay_blocks(ctx.io, need_to_relay.into_iter().collect())
                 .ok();
         }
-    }
-}
-impl Deref for GetBlockHeadersResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlockHeadersResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
-}
-
-impl Encodable for GetBlockHeadersResponse {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.headers);
-    }
-}
-
-impl Decodable for GetBlockHeadersResponse {
-    fn decode(rlp: &Rlp) -> Result<GetBlockHeadersResponse, DecoderError> {
-        Ok(GetBlockHeadersResponse {
-            request_id: rlp.val_at(0)?,
-            headers: rlp.list_at(1)?,
-        })
     }
 }
