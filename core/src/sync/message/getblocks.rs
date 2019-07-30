@@ -17,11 +17,7 @@ use crate::{
 use cfx_types::H256;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct GetBlocks {
@@ -142,16 +138,6 @@ impl Handleable for GetBlocks {
             self.send_response(ctx, blocks)
         }
     }
-}
-
-impl Deref for GetBlocks {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlocks {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlocks {

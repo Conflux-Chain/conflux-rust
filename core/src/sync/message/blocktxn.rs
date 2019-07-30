@@ -15,10 +15,7 @@ use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::{Block, TransactionWithSignature};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-};
+use std::collections::HashSet;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetBlockTxnResponse {
@@ -133,16 +130,6 @@ impl Handleable for GetBlockTxnResponse {
         }
         Ok(())
     }
-}
-
-impl Deref for GetBlockTxnResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlockTxnResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlockTxnResponse {

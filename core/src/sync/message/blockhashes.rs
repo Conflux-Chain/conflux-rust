@@ -11,7 +11,6 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, PartialEq)]
 pub struct GetBlockHashesResponse {
@@ -70,16 +69,6 @@ impl Handleable for GetBlockHashesResponse {
 
         Ok(())
     }
-}
-
-impl Deref for GetBlockHashesResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlockHashesResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlockHashesResponse {

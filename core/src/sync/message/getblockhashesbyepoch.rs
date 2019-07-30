@@ -14,11 +14,7 @@ use crate::{
     },
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct GetBlockHashesByEpoch {
@@ -73,16 +69,6 @@ impl Handleable for GetBlockHashesByEpoch {
 
         ctx.send_response(&response)
     }
-}
-
-impl Deref for GetBlockHashesByEpoch {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlockHashesByEpoch {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlockHashesByEpoch {

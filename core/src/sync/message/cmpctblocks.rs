@@ -17,10 +17,7 @@ use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::{block::CompactBlock, Block};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-};
+use std::collections::HashSet;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetCompactBlocksResponse {
@@ -150,16 +147,6 @@ impl Handleable for GetCompactBlocksResponse {
         // Broadcast completed block_header_ready blocks
         ctx.manager.relay_blocks(ctx.io, completed_blocks)
     }
-}
-
-impl Deref for GetCompactBlocksResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetCompactBlocksResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetCompactBlocksResponse {

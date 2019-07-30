@@ -17,10 +17,7 @@ use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-};
+use std::collections::HashSet;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetBlocksResponse {
@@ -63,16 +60,6 @@ impl Handleable for GetBlocksResponse {
 
         Ok(())
     }
-}
-
-impl Deref for GetBlocksResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlocksResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlocksResponse {
@@ -134,16 +121,6 @@ impl Handleable for GetBlocksWithPublicResponse {
 
         Ok(())
     }
-}
-
-impl Deref for GetBlocksWithPublicResponse {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlocksWithPublicResponse {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlocksWithPublicResponse {

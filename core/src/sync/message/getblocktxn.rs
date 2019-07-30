@@ -14,11 +14,7 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Default)]
 pub struct GetBlockTxn {
@@ -95,16 +91,6 @@ impl Handleable for GetBlockTxn {
             }
         }
     }
-}
-
-impl Deref for GetBlockTxn {
-    type Target = RequestId;
-
-    fn deref(&self) -> &Self::Target { &self.request_id }
-}
-
-impl DerefMut for GetBlockTxn {
-    fn deref_mut(&mut self) -> &mut RequestId { &mut self.request_id }
 }
 
 impl Encodable for GetBlockTxn {
