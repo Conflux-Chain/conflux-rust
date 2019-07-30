@@ -218,6 +218,11 @@ impl ConsensusGraph {
         )
     }
 
+    pub fn clear_block_count(&self) {
+        let block_count = &mut *self.block_count.lock();
+        *block_count = 1;
+    }
+
     /// Compute the expected difficulty of a new block given its parent
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
         let inner = self.inner.read();
@@ -439,9 +444,9 @@ impl ConsensusGraph {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
+        *self.block_count.lock() += 1;
 
         if !ignore_body {
-            *self.block_count.lock() += 1;
             let block = self.data_man.block_by_hash(hash, true).unwrap();
             debug!(
                 "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
