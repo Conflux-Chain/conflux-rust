@@ -1086,7 +1086,7 @@ impl SynchronizationProtocolHandler {
     pub fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
         self.phase_manager.try_initialize(io, self);
         let current_phase = self.phase_manager.get_current_phase();
-        let next_phase_type = current_phase.next();
+        let next_phase_type = current_phase.next(io, self);
         if current_phase.phase_type() != next_phase_type {
             // Phase changed
             self.phase_manager
