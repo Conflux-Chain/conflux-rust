@@ -7,7 +7,9 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
-    block_data_manager::{BlockDataManager, EpochExecutionContext},
+    block_data_manager::{
+        BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
+    },
     consensus::{
         anticone_cache::AnticoneCache, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
         BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
@@ -118,24 +120,6 @@ impl Default for ConsensusGraphPivotData {
     fn default() -> Self {
         ConsensusGraphPivotData {
             last_pivot_in_past_blocks: HashSet::new(),
-        }
-    }
-}
-
-struct ConsensusGraphExecutionInfo {
-    state_valid: bool,
-    original_deferred_state_root: H256,
-    original_deferred_receipt_root: H256,
-    original_deferred_logs_bloom_hash: H256,
-}
-
-impl Default for ConsensusGraphExecutionInfo {
-    fn default() -> Self {
-        ConsensusGraphExecutionInfo {
-            state_valid: true,
-            original_deferred_state_root: Default::default(),
-            original_deferred_receipt_root: Default::default(),
-            original_deferred_logs_bloom_hash: Default::default(),
         }
     }
 }
@@ -532,8 +516,7 @@ impl ConsensusGraphInner {
         self.get_blame(arena_index)
     }
 
-    #[allow(dead_code)]
-    fn find_the_first_with_correct_state_of(
+    pub fn find_the_first_with_correct_state_of(
         &self, pivot_index: usize,
     ) -> Option<usize> {
         let trusted_blame_pivot_index =
@@ -1869,17 +1852,19 @@ impl ConsensusGraphInner {
     ) -> Result<(), String> {
         // For the original genesis, it is always correct
         if self.arena[me].height == 0 {
-            self.execution_info_cache.insert(
-                me,
-                ConsensusGraphExecutionInfo {
-                    state_valid: true,
-                    original_deferred_state_root: self.genesis_block_state_root,
-                    original_deferred_receipt_root: self
-                        .genesis_block_receipts_root,
-                    original_deferred_logs_bloom_hash: self
-                        .genesis_block_logs_bloom_hash,
-                },
+            let exec_info = ConsensusGraphExecutionInfo {
+                state_valid: true,
+                original_deferred_state_root: self.genesis_block_state_root,
+                original_deferred_receipt_root: self
+                    .genesis_block_receipts_root,
+                original_deferred_logs_bloom_hash: self
+                    .genesis_block_logs_bloom_hash,
+            };
+            self.data_man.insert_consensus_graph_execution_info_to_db(
+                &self.arena[me].hash,
+                &exec_info,
             );
+            self.execution_info_cache.insert(me, exec_info);
             return Ok(());
         }
         let parent = self.arena[me].parent;
@@ -1913,15 +1898,17 @@ impl ConsensusGraphInner {
             debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
         }
 
-        self.execution_info_cache.insert(
-            me,
-            ConsensusGraphExecutionInfo {
-                state_valid,
-                original_deferred_state_root,
-                original_deferred_receipt_root,
-                original_deferred_logs_bloom_hash,
-            },
+        let exec_info = ConsensusGraphExecutionInfo {
+            state_valid,
+            original_deferred_state_root,
+            original_deferred_receipt_root,
+            original_deferred_logs_bloom_hash,
+        };
+        self.data_man.insert_consensus_graph_execution_info_to_db(
+            &self.arena[me].hash,
+            &exec_info,
         );
+        self.execution_info_cache.insert(me, exec_info);
 
         Ok(())
     }
