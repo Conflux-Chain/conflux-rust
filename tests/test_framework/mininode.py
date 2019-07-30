@@ -353,7 +353,7 @@ class P2PInterface(P2PConnection):
                     self._log_message("receive", "GET_BLOCK_TXN, hash={}".format(len(msg.block_hash)))
                     self.on_get_blocktxn(msg)
                 elif packet_type == GET_BLOCK_HASHES_BY_EPOCH:
-                    self._log_message("receive", "GET_BLOCK_HASHES_BY_EPOCH, epoch number: {}".format(msg.epoch_number))
+                    self._log_message("receive", "GET_BLOCK_HASHES_BY_EPOCH, epochs: {}".format(msg.epochs))
                     self.on_get_block_hashes_by_epoch(msg)
                 else:
                     self._log_message("receive", "Unknown packet {}".format(packet_type))
