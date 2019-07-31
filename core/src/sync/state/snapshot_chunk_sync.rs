@@ -26,7 +26,7 @@ pub enum Status {
     Inactive,
     DownloadingManifest(Instant),
     DownloadingChunks(Instant),
-    Completed,
+    Completed(H256),
 }
 
 impl Default for Status {
@@ -43,7 +43,9 @@ impl Debug for Status {
             Status::DownloadingChunks(t) => {
                 format!("downloading chunks ({:?})", t.elapsed())
             }
-            Status::Completed => "completed".into(),
+            Status::Completed(checkpoint) => {
+                format!("completed ({:?})", checkpoint)
+            }
         };
 
         write!(f, "{}", status)
