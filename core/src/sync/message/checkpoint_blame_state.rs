@@ -51,7 +51,7 @@ impl Request for CheckpointBlameStateRequest {
 }
 
 impl Handleable for CheckpointBlameStateRequest {
-    /// return an empty vec if some information not exist in bd, caller may find
+    /// return an empty vec if some information not exist in db, caller may find
     /// another peer to send the request; otherwise return a state_blame_vec
     /// of the requested block
     fn handle(self, ctx: &Context) -> Result<(), Error> {

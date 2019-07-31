@@ -273,6 +273,12 @@ impl SnapshotChunkSync {
     }
 
     fn request_checkpoint_blame_state(&self, ctx: &Context, inner: &mut Inner) {
+        // we don't find a trusted_blame_block, refuse to send a request and
+        // wait for next era
+        if inner.trusted_blame_block.is_none() {
+            return;
+        }
+
         let request = CheckpointBlameStateRequest::new(
             inner.trusted_blame_block.unwrap(),
         );
@@ -291,6 +297,22 @@ impl SnapshotChunkSync {
         &self, ctx: &Context, state_blame_vec: &Vec<H256>,
     ) {
         let mut inner = self.inner.write();
+
+        // match status
+        match inner.status {
+            Status::CheckingBlameState => {
+                info!(
+                    "state_blame_vec received, checkpoint = {:?} trusted_blame_block = {:?}",
+                    inner.checkpoint,
+                    inner.trusted_blame_block,
+                );
+            }
+            _ => {
+                info!("state_blame_vec received, but mismatch with current status {:?}", inner.status);
+                return;
+            }
+        }
+
         // empty vector, consider that peer does not have the block information,
         // random peek another peer to send the request again
         // TODO: handle the case when checkpoint changes
@@ -337,6 +359,6 @@ impl SnapshotChunkSync {
         }
         // TODO: check state_blame_vec[offset] equals to recovered checkpoint
         // state_root
-        inner.status = Status::Completed;
+        inner.status = Status::Completed(inner.checkpoint);
     }
 }
