@@ -4,11 +4,14 @@
 
 mod error;
 mod message;
+mod query_provider;
 mod query_service;
 
-pub(self) mod query_handler;
+use crate::network::ProtocolId;
+pub(self) const LIGHT_PROTOCOL_ID: ProtocolId = *b"clp"; // Conflux Light Protocol
+pub(self) const LIGHT_PROTOCOL_VERSION: u8 = 1;
 
-pub use self::{
-    error::{Error, ErrorKind},
-    query_service::QueryService,
-};
+pub(self) mod query_handler;
+pub(self) use self::error::{handle as handle_error, Error, ErrorKind};
+
+pub use self::{query_provider::QueryProvider, query_service::QueryService};

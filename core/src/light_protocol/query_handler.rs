@@ -26,24 +26,18 @@ use primitives::{BlockHeader, EpochNumber, StateRoot};
 
 use crate::{
     consensus::{ConsensusGraph, DEFERRED_STATE_EPOCH_COUNT},
-    network::{
-        NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
-    },
-    statedb::StateDb,
-    storage::{
-        state_manager::StateManagerTrait, SnapshotAndEpochIdRef, StateProof,
-    },
+    message::{HasRequestId, Message, MsgId, RequestId},
+    network::{NetworkContext, NetworkProtocolHandler, PeerId},
 };
 
 use super::{
+    handle_error,
     message::{
         msgid, GetStateEntry, GetStateRoot,
         StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
     },
     Error, ErrorKind,
 };
-
-use crate::message::{HasRequestId, Message, MsgId, RequestId};
 
 const POLL_PERIOD_MS: u64 = 100;
 const MAX_POLL_TIME_MS: u64 = 1000;
@@ -82,90 +76,20 @@ impl QueryHandler {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
 
         match msg_id {
-            msgid::GET_STATE_ROOT => self.on_get_state_root(io, peer, &rlp),
             msgid::STATE_ROOT => self.on_state_root(io, peer, &rlp),
-            msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
             msgid::STATE_ENTRY => self.on_state_entry(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
 
-    fn handle_error(
-        &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error,
-    ) {
-        warn!(
-            "Error while handling message, peer={}, msg_id={:?}, error={:?}",
-            peer, msg_id, e
-        );
-
-        let mut disconnect = true;
-        let mut op = None;
-
-        // NOTE: do not use wildcard; this way, the compiler
-        // will help covering all the cases.
-        match e.0 {
-            // NOTE: to help with backward-compatibility, we
-            // should not disconnect on `UnknownMessage`
-            ErrorKind::NoResponse
-            | ErrorKind::InternalError
-            | ErrorKind::PivotHashMismatch
-            | ErrorKind::UnknownMessage => disconnect = false,
-
-            ErrorKind::UnknownPeer | ErrorKind::Msg(_) => {
-                op = Some(UpdateNodeOperation::Failure)
-            }
-
-            ErrorKind::UnexpectedRequestId | ErrorKind::UnexpectedResponse => {
-                op = Some(UpdateNodeOperation::Demotion)
-            }
-
-            ErrorKind::InvalidMessageFormat
-            | ErrorKind::InvalidProof
-            | ErrorKind::InvalidStateRoot
-            | ErrorKind::ValidationFailed
-            | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
-
-            // network errors
-            ErrorKind::Network(kind) => match kind {
-                network::ErrorKind::AddressParse
-                | network::ErrorKind::AddressResolve(_)
-                | network::ErrorKind::Auth
-                | network::ErrorKind::BadAddr
-                | network::ErrorKind::Disconnect(_)
-                | network::ErrorKind::Expired
-                | network::ErrorKind::InvalidNodeId
-                | network::ErrorKind::Io(_)
-                | network::ErrorKind::OversizedPacket
-                | network::ErrorKind::Throttling(_) => disconnect = false,
-
-                network::ErrorKind::BadProtocol
-                | network::ErrorKind::Decoder => {
-                    op = Some(UpdateNodeOperation::Remove)
-                }
-
-                network::ErrorKind::SocketIo(_)
-                | network::ErrorKind::Msg(_)
-                | network::ErrorKind::__Nonexhaustive {} => {
-                    op = Some(UpdateNodeOperation::Failure)
-                }
-            },
-
-            ErrorKind::__Nonexhaustive {} => {
-                op = Some(UpdateNodeOperation::Failure)
-            }
-        };
-
-        if disconnect {
-            io.disconnect_peer(peer, op);
-        }
-    }
-
+    #[inline]
     fn get_local_pivot_hash(&self, epoch: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(epoch);
         let pivot_hash = self.consensus.get_hash_from_epoch_number(epoch)?;
         Ok(pivot_hash)
     }
 
+    #[inline]
     fn get_local_header(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
         let epoch = EpochNumber::Number(epoch);
         let hash = self.consensus.get_hash_from_epoch_number(epoch)?;
@@ -173,37 +97,10 @@ impl QueryHandler {
         header.ok_or(ErrorKind::InternalError.into())
     }
 
-    fn get_local_state_root(&self, epoch: u64) -> Result<StateRoot, Error> {
-        let h = self.get_local_header(epoch + DEFERRED_STATE_EPOCH_COUNT)?;
-        Ok(h.state_root_with_aux_info.state_root.clone())
-    }
-
+    #[inline]
     fn get_local_state_root_hash(&self, epoch: u64) -> Result<H256, Error> {
         let h = self.get_local_header(epoch + DEFERRED_STATE_EPOCH_COUNT)?;
         Ok(h.deferred_state_root().clone())
-    }
-
-    fn get_local_state_entry(
-        &self, hash: H256, key: &Vec<u8>,
-    ) -> Result<(Option<Vec<u8>>, StateProof), Error> {
-        let maybe_state = self
-            .consensus
-            .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
-            .map_err(|e| format!("Failed to get state, err={:?}", e))?;
-
-        match maybe_state {
-            None => Err(ErrorKind::InternalError.into()),
-            Some(state) => {
-                let (value, proof) = StateDb::new(state)
-                    .get_raw_with_proof(key)
-                    .or(Err(ErrorKind::InternalError))?;
-
-                let value = value.map(|x| x.to_vec());
-                Ok((value, proof))
-            }
-        }
     }
 
     fn validate_pivot_hash(&self, epoch: u64, hash: H256) -> Result<(), Error> {
@@ -253,26 +150,6 @@ impl QueryHandler {
         }
     }
 
-    fn on_get_state_root(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req: GetStateRoot = rlp.as_val()?;
-        info!("on_get_state_root req={:?}", req);
-        let request_id = req.request_id;
-
-        let pivot_hash = self.get_local_pivot_hash(req.epoch)?;
-        let state_root = self.get_local_state_root(req.epoch)?;
-
-        let msg: Box<dyn Message> = Box::new(GetStateRootResponse {
-            request_id,
-            pivot_hash,
-            state_root,
-        });
-
-        msg.send(io, peer)?;
-        Ok(())
-    }
-
     fn on_state_root(
         &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -288,31 +165,6 @@ impl QueryHandler {
         sender.complete(QueryResult::StateRoot(resp.state_root));
         // note: in case of early return, `sender` will be cancelled
 
-        Ok(())
-    }
-
-    fn on_get_state_entry(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let req: GetStateEntry = rlp.as_val()?;
-        info!("on_get_state_entry req={:?}", req);
-        let request_id = req.request_id;
-
-        let pivot_hash = self.get_local_pivot_hash(req.epoch)?;
-        let state_root = self.get_local_state_root(req.epoch)?;
-        let (entry, proof) =
-            self.get_local_state_entry(pivot_hash, &req.key)?;
-        let entry = entry.map(|x| x.to_vec());
-
-        let msg: Box<dyn Message> = Box::new(GetStateEntryResponse {
-            request_id,
-            pivot_hash,
-            state_root,
-            entry,
-            proof,
-        });
-
-        msg.send(io, peer)?;
         Ok(())
     }
 
@@ -406,7 +258,7 @@ impl NetworkProtocolHandler for QueryHandler {
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
         if raw.len() < 2 {
-            return self.handle_error(
+            return handle_error(
                 io,
                 peer,
                 msgid::INVALID,
@@ -419,7 +271,7 @@ impl NetworkProtocolHandler for QueryHandler {
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
         if let Err(e) = self.dispatch_message(io, peer, msg_id.into(), rlp) {
-            self.handle_error(io, peer, msg_id.into(), e);
+            handle_error(io, peer, msg_id.into(), e);
         }
     }
 

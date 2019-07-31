@@ -85,16 +85,37 @@ impl ConsensusNewBlockHandler {
     fn checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
     ) {
-        // We first compute the set of blocks inside the new era
+        let new_era_height = inner.arena[new_era_block_arena_index].height;
+        let new_era_stable_height =
+            new_era_height + inner.inner_conf.era_epoch_count;
+        // We first compute the set of blocks inside the new era and we
+        // recompute the past_weight inside the stable height.
         let mut new_era_block_arena_index_set = HashSet::new();
         new_era_block_arena_index_set.clear();
         let mut queue = VecDeque::new();
         queue.push_back(new_era_block_arena_index);
+        inner.arena[new_era_block_arena_index].past_weight = 0;
         new_era_block_arena_index_set.insert(new_era_block_arena_index);
         while let Some(x) = queue.pop_front() {
-            for child in inner.arena[x].children.iter() {
+            let children = inner.arena[x].children.clone();
+            for child in children.iter() {
                 queue.push_back(*child);
                 new_era_block_arena_index_set.insert(*child);
+                if inner.arena[*child].height <= new_era_stable_height {
+                    inner.arena[*child].past_weight = 0;
+                } else {
+                    let stable_era_genesis =
+                        inner.ancestor_at(*child, new_era_stable_height);
+                    let weight_in_my_epoch = inner.total_weight_in_own_epoch(
+                        &inner.arena[*child].data.blockset_in_own_view_of_epoch,
+                        false,
+                        Some(stable_era_genesis),
+                    );
+                    inner.arena[*child].past_weight = inner.arena[x]
+                        .past_weight
+                        + inner.block_weight(x, false)
+                        + weight_in_my_epoch;
+                }
             }
         }
 
@@ -141,7 +162,6 @@ impl ConsensusNewBlockHandler {
         // Next we are going to recompute all referee and referrer information
         // in arena
         let era_parent = inner.arena[new_era_block_arena_index].parent;
-        let new_era_height = inner.arena[new_era_block_arena_index].height;
         let new_era_pivot_index = inner.height_to_pivot_index(new_era_height);
         for v in new_era_block_arena_index_set.iter() {
             inner.arena[*v].referrers = Vec::new();
@@ -216,8 +236,7 @@ impl ConsensusNewBlockHandler {
 
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
-        inner.cur_era_stable_height =
-            new_era_height + inner.inner_conf.era_epoch_count;
+        inner.cur_era_stable_height = new_era_stable_height;
 
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
         let next_era_arena_index =
@@ -1244,6 +1263,13 @@ impl ConsensusNewBlockHandler {
                 inner,
                 new_checkpoint_era_genesis,
             );
+            let stable_era_genesis_arena_index =
+                inner.ancestor_at(me, inner.cur_era_stable_height);
+            meter.reset_for_checkpoint(
+                inner.weight_tree.get(stable_era_genesis_arena_index),
+                inner.cur_era_stable_height,
+            );
+            meter.update_confirmation_risks(inner);
             info!(
                 "New checkpoint formed at block {} height {}",
                 &inner.arena[inner.cur_era_genesis_block_arena_index].hash,

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::{
     consensus::ConsensusGraph,
-    network::{NetworkService, PeerId, ProtocolId},
+    network::{NetworkService, PeerId},
     statedb::StorageKey,
     storage,
 };
@@ -16,11 +16,8 @@ use crate::{
 use super::{
     message::{GetStateEntry, GetStateRoot},
     query_handler::{QueryHandler, QueryResult},
-    Error, ErrorKind,
+    Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
-
-const LIGHT_PROTOCOL_ID: ProtocolId = *b"clp"; // Conflux Light Protocol
-const LIGHT_PROTOCOL_VERSION: u8 = 1;
 
 pub struct QueryService {
     handler: Arc<QueryHandler>,
