@@ -79,24 +79,6 @@ impl Handleable for Transactions {
     }
 }
 
-////////////////////////////////////////////////////////////////////
-
-#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
-pub struct TransactionPropagationControl {
-    pub catch_up_mode: bool,
-}
-
-impl Handleable for TransactionPropagationControl {
-    fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_trans_prop_ctrl, peer {}, msg=:{:?}", ctx.peer, self);
-
-        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
-        peer_info.write().need_prop_trans = !self.catch_up_mode;
-
-        Ok(())
-    }
-}
-
 /////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
