@@ -6,6 +6,7 @@ mod blockhashes;
 mod blockheaders;
 mod blocks;
 mod blocktxn;
+mod checkpoint_blame_state;
 mod cmpctblocks;
 mod getblockhashesbyepoch;
 mod getblockheaders;
@@ -28,6 +29,9 @@ pub use self::{
     blockheaders::GetBlockHeadersResponse,
     blocks::{GetBlocksResponse, GetBlocksWithPublicResponse},
     blocktxn::GetBlockTxnResponse,
+    checkpoint_blame_state::{
+        CheckpointBlameStateRequest, CheckpointBlameStateResponse,
+    },
     cmpctblocks::GetCompactBlocksResponse,
     getblockhashesbyepoch::GetBlockHashesByEpoch,
     getblockheaders::GetBlockHeaders,

@@ -745,6 +745,13 @@ impl ConsensusGraph {
         }
         inner.old_era_block_sets.front_mut().unwrap().pop()
     }
+
+    pub fn get_trusted_blame_block(&self) -> Option<H256> {
+        let inner = self.inner.read();
+        inner
+            .find_the_first_with_correct_state_of(0)
+            .and_then(|index| Some(inner.arena[inner.pivot_chain[index]].hash))
+    }
 }
 
 impl Drop for ConsensusGraph {

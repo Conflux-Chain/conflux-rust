@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::Context,
+    message::{CheckpointBlameStateRequest, Context},
     state::{
         snapshot_chunk_request::SnapshotChunkRequest,
         snapshot_manifest_request::SnapshotManifestRequest,
@@ -15,6 +15,7 @@ use cfx_bytes::Bytes;
 use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
+use primitives::BlockHeaderBuilder;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
@@ -27,6 +28,8 @@ pub enum Status {
     DownloadingManifest(Instant),
     DownloadingChunks(Instant),
     Completed(H256),
+    CheckingBlameState,
+    Invalid,
 }
 
 impl Default for Status {
@@ -46,6 +49,8 @@ impl Debug for Status {
             Status::Completed(checkpoint) => {
                 format!("completed ({:?})", checkpoint)
             }
+            Status::CheckingBlameState => "checking blame state".into(),
+            Status::Invalid => "invalid".into(),
         };
 
         write!(f, "{}", status)
@@ -55,6 +60,7 @@ impl Debug for Status {
 #[derive(Default)]
 struct Inner {
     checkpoint: H256,
+    trusted_blame_block: Option<H256>,
     status: Status,
     pending_chunks: VecDeque<H256>,
     downloading_chunks: HashSet<H256>,
@@ -65,6 +71,7 @@ struct Inner {
 impl Inner {
     fn reset(&mut self, checkpoint: H256) {
         self.checkpoint = checkpoint;
+        self.trusted_blame_block = None;
         self.status = Status::DownloadingManifest(Instant::now());
         self.pending_chunks.clear();
         self.downloading_chunks.clear();
@@ -254,8 +261,104 @@ impl SnapshotChunkSync {
                 "Snapshot chunks are all downloaded in {:?}",
                 download_start_time.elapsed()
             );
+            // TODO: these code should be called after restore completed
+            // FIXME: we may not find a trusted_blame_block
+            inner.status = Status::CheckingBlameState;
+            inner.trusted_blame_block =
+                ctx.manager.graph.consensus.get_trusted_blame_block();
+            self.request_checkpoint_blame_state(ctx, &mut inner);
         }
 
         debug!("sync state progress: {:?}", *inner);
+    }
+
+    fn request_checkpoint_blame_state(&self, ctx: &Context, inner: &mut Inner) {
+        // we don't find a trusted_blame_block, refuse to send a request and
+        // wait for next era
+        if inner.trusted_blame_block.is_none() {
+            return;
+        }
+
+        let request = CheckpointBlameStateRequest::new(
+            inner.trusted_blame_block.unwrap(),
+        );
+        // TODO: exclude failed peers
+        let peer = ctx.manager.syn.get_random_peer(&HashSet::new());
+
+        ctx.manager.request_manager.request_with_delay(
+            ctx.io,
+            Box::new(request),
+            peer,
+            None,
+        );
+    }
+
+    pub fn handle_checkpoint_blame_state_response(
+        &self, ctx: &Context, state_blame_vec: &Vec<H256>,
+    ) {
+        let mut inner = self.inner.write();
+
+        // match status
+        match inner.status {
+            Status::CheckingBlameState => {
+                info!(
+                    "state_blame_vec received, checkpoint = {:?} trusted_blame_block = {:?}",
+                    inner.checkpoint,
+                    inner.trusted_blame_block,
+                );
+            }
+            _ => {
+                info!("state_blame_vec received, but mismatch with current status {:?}", inner.status);
+                return;
+            }
+        }
+
+        // empty vector, consider that peer does not have the block information,
+        // random peek another peer to send the request again
+        // TODO: handle the case when checkpoint changes
+        if state_blame_vec.is_empty() {
+            self.request_checkpoint_blame_state(ctx, &mut inner);
+            return;
+        }
+        // these two header must exist in disk, it's safe to unwrap
+        let checkpoint = ctx
+            .manager
+            .graph
+            .data_man
+            .block_header_by_hash(&inner.checkpoint)
+            .unwrap();
+        let trusted_blame_block = ctx
+            .manager
+            .graph
+            .data_man
+            .block_header_by_hash(&inner.trusted_blame_block.unwrap())
+            .unwrap();
+
+        // check blame count correct
+        if trusted_blame_block.blame() as usize + 1 != state_blame_vec.len() {
+            inner.status = Status::Invalid;
+            return;
+        }
+        // check checkpoint position in `state_blame_vec`
+        let offset = trusted_blame_block.height() - checkpoint.height();
+        if offset as usize >= state_blame_vec.len() {
+            inner.status = Status::Invalid;
+            return;
+        }
+        let deferred_state_root = if trusted_blame_block.blame() == 0 {
+            state_blame_vec[0]
+        } else {
+            BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                state_blame_vec.to_vec(),
+            )
+        };
+        // check `deferred_state_root` is correct
+        if deferred_state_root != *trusted_blame_block.deferred_state_root() {
+            inner.status = Status::Invalid;
+            return;
+        }
+        // TODO: check state_blame_vec[offset] equals to recovered checkpoint
+        // state_root
+        inner.status = Status::Completed(inner.checkpoint);
     }
 }
