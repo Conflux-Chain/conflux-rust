@@ -69,6 +69,21 @@ impl ConfirmationMeter {
         total_weight.cur += weight;
     }
 
+    pub fn reset_for_checkpoint(&self, total_weight: i128, stable_height: u64) {
+        let mut inner = self.inner.write();
+        let change = inner.total_weight_in_past_2d.cur - total_weight;
+        inner.total_weight_in_past_2d.cur = total_weight;
+        inner.total_weight_in_past_2d.old -= change;
+
+        if stable_height > inner.finality_manager.lowest_epoch_num {
+            let gap = stable_height - inner.finality_manager.lowest_epoch_num;
+            for _i in 0..gap {
+                inner.finality_manager.risks_less_than.pop_front();
+            }
+            inner.finality_manager.lowest_epoch_num = stable_height;
+        }
+    }
+
     fn get_total_weight_in_past(&self) -> i128 {
         let inner = self.inner.read();
         inner.total_weight_in_past_2d.delta

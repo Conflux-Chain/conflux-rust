@@ -273,9 +273,6 @@ pub struct ConsensusGraphNode {
     is_heavy: bool,
     difficulty: U256,
     /// The total weight of its past set (exclude itself)
-    // FIXME: This field is not maintained during after the checkpoint.
-    // We should review the finality computation and check whether we
-    // still need this field!
     past_weight: i128,
     past_num_blocks: u64,
     /// The total weight of its past set in its own era
@@ -1217,11 +1214,13 @@ impl ConsensusGraphInner {
 
         if parent != NULL {
             let era_genesis = self.get_era_block_with_parent(parent, 0);
+            let graph_era_stable_genesis =
+                self.ancestor_at(parent, self.cur_era_stable_height);
 
             let weight_in_my_epoch = self.total_weight_in_own_epoch(
                 &self.arena[index].data.blockset_in_own_view_of_epoch,
                 false,
-                None,
+                Some(graph_era_stable_genesis),
             );
             let weight_era_in_my_epoch = self.total_weight_in_own_epoch(
                 &self.arena[index].data.blockset_in_own_view_of_epoch,
