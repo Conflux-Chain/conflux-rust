@@ -1956,9 +1956,9 @@ fn main() -> errors::Result<()> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("last_state_root")
-                .value_name("last state root")
-                .help("last state root from previous tx replay")
+            Arg::with_name("last_epoch_id")
+                .value_name("last epoch id")
+                .help("last epoch id from previous tx replay")
                 .short("r")
                 .takes_value(true),
         )
