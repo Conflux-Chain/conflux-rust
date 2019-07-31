@@ -266,26 +266,39 @@ impl SnapshotChunkSync {
             inner.status = Status::CheckingBlameState;
             inner.trusted_blame_block =
                 ctx.manager.graph.consensus.get_trusted_blame_block();
-            let request = CheckpointBlameStateRequest::new(
-                inner.trusted_blame_block.unwrap(),
-            );
-            let peer = ctx.manager.syn.get_random_peer(&HashSet::new());
-
-            ctx.manager.request_manager.request_with_delay(
-                ctx.io,
-                Box::new(request),
-                peer,
-                None,
-            );
+            self.request_checkpoint_blame_state(ctx, &mut inner);
         }
 
         debug!("sync state progress: {:?}", *inner);
+    }
+
+    fn request_checkpoint_blame_state(&self, ctx: &Context, inner: &mut Inner) {
+        let request = CheckpointBlameStateRequest::new(
+            inner.trusted_blame_block.unwrap(),
+        );
+        // TODO: exclude failed peers
+        let peer = ctx.manager.syn.get_random_peer(&HashSet::new());
+
+        ctx.manager.request_manager.request_with_delay(
+            ctx.io,
+            Box::new(request),
+            peer,
+            None,
+        );
     }
 
     pub fn handle_checkpoint_blame_state_response(
         &self, ctx: &Context, state_blame_vec: &Vec<H256>,
     ) {
         let mut inner = self.inner.write();
+        // empty vector, consider that peer does not have the block information,
+        // random peek another peer to send the request again
+        // TODO: handle the case when checkpoint changes
+        if state_blame_vec.is_empty() {
+            self.request_checkpoint_blame_state(ctx, &mut inner);
+            return;
+        }
+        // these two header must exist in disk, it's safe to unwrap
         let checkpoint = ctx
             .manager
             .graph
@@ -322,7 +335,8 @@ impl SnapshotChunkSync {
             inner.status = Status::Invalid;
             return;
         }
-        // TODO: check state_blame_vec[offset] equals to checkpoint state_root
+        // TODO: check state_blame_vec[offset] equals to recovered checkpoint
+        // state_root
         inner.status = Status::Completed;
     }
 }

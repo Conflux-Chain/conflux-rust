@@ -7,14 +7,14 @@ use crate::{
     sync::{
         message::{msgid, Context, Handleable, KeyContainer},
         request_manager::Request,
-        Error, ErrorKind, ProtocolConfiguration,
+        Error, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct CheckpointBlameStateRequest {
     pub request_id: u64,
     pub trusted_blame_block: H256,
@@ -38,7 +38,7 @@ impl Request for CheckpointBlameStateRequest {
     fn as_any(&self) -> &Any { self }
 
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
-        conf.blocks_request_timeout
+        conf.headers_request_timeout
     }
 
     fn on_removed(&self, _inflight_keys: &mut KeyContainer) {}
@@ -51,6 +51,9 @@ impl Request for CheckpointBlameStateRequest {
 }
 
 impl Handleable for CheckpointBlameStateRequest {
+    /// return an empty vec if some information not exist in bd, caller may find
+    /// another peer to send the request; otherwise return a state_blame_vec
+    /// of the requested block
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let trusted_block = ctx
             .manager
@@ -59,16 +62,20 @@ impl Handleable for CheckpointBlameStateRequest {
             .block_header_by_hash(&self.trusted_blame_block);
         if trusted_block.is_none() {
             warn!(
-                "invalid trusted_blame_block={} in CheckpointBlameStateRequest from peer={}",
-                self.trusted_blame_block,
-                ctx.peer,
+                "failed to find trusted_blame_block={} in db from peer={}",
+                self.trusted_blame_block, ctx.peer,
             );
-            return Err(ErrorKind::Invalid.into());
+            let response = CheckpointBlameStateResponse {
+                request_id: self.request_id,
+                state_blame_vec: Vec::new(),
+            };
+            return ctx.send_response(&response);
         }
         let trusted_block = trusted_block.unwrap();
 
         let mut state_blame_vec = Vec::new();
         let mut block_hash = trusted_block.hash();
+        let mut request_invalid = false;
         loop {
             if let Some(exec_info) = ctx
                 .manager
@@ -89,46 +96,30 @@ impl Handleable for CheckpointBlameStateRequest {
                         "failed to find block={} in db, peer={}",
                         block_hash, ctx.peer
                     );
-                    return Err(ErrorKind::Invalid.into());
+                    request_invalid = true;
+                    break;
                 }
             } else {
                 warn!("failed to find ConsensusGraphExecutionInfo for block={} in db, peer={}", block_hash, ctx.peer);
-                return Err(ErrorKind::Invalid.into());
+                request_invalid = true;
+                break;
             }
         }
 
         let response = CheckpointBlameStateResponse {
             request_id: self.request_id,
-            state_blame_vec,
+            state_blame_vec: if request_invalid {
+                Vec::new()
+            } else {
+                state_blame_vec
+            },
         };
 
         ctx.send_response(&response)
     }
 }
 
-impl Encodable for CheckpointBlameStateRequest {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append(&self.trusted_blame_block);
-    }
-}
-
-impl Decodable for CheckpointBlameStateRequest {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 3 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(CheckpointBlameStateRequest {
-            request_id: rlp.val_at(0)?,
-            trusted_blame_block: rlp.val_at(1)?,
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct CheckpointBlameStateResponse {
     pub request_id: u64,
     pub state_blame_vec: Vec<H256>,
@@ -144,23 +135,5 @@ impl Handleable for CheckpointBlameStateResponse {
             .state_sync
             .handle_checkpoint_blame_state_response(ctx, &self.state_blame_vec);
         Ok(())
-    }
-}
-
-impl Encodable for CheckpointBlameStateResponse {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(2)
-            .append(&self.request_id)
-            .append_list(&self.state_blame_vec);
-    }
-}
-
-impl Decodable for CheckpointBlameStateResponse {
-    fn decode(rlp: &Rlp) -> Result<CheckpointBlameStateResponse, DecoderError> {
-        Ok(CheckpointBlameStateResponse {
-            request_id: rlp.val_at(0)?,
-            state_blame_vec: rlp.list_at(1)?,
-        })
     }
 }

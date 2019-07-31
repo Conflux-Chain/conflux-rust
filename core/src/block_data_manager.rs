@@ -29,6 +29,7 @@ use primitives::{
     TransactionWithSignature,
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::{HashMap, HashSet},
     sync::{mpsc::channel, Arc},
@@ -64,7 +65,7 @@ impl HeapSizeOf for EpochExecutionContext {
     fn heap_size_of_children(&self) -> usize { std::mem::size_of::<u64>() }
 }
 
-#[derive(Clone)]
+#[derive(Clone, RlpEncodable, RlpDecodable)]
 pub struct ConsensusGraphExecutionInfo {
     pub state_valid: bool,
     pub original_deferred_state_root: H256,
@@ -80,28 +81,6 @@ impl Default for ConsensusGraphExecutionInfo {
             original_deferred_receipt_root: Default::default(),
             original_deferred_logs_bloom_hash: Default::default(),
         }
-    }
-}
-
-impl Encodable for ConsensusGraphExecutionInfo {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(4)
-            .append(&self.state_valid)
-            .append(&self.original_deferred_state_root)
-            .append(&self.original_deferred_receipt_root)
-            .append(&self.original_deferred_logs_bloom_hash);
-    }
-}
-
-impl Decodable for ConsensusGraphExecutionInfo {
-    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
-        Ok(ConsensusGraphExecutionInfo {
-            state_valid: r.val_at(0)?,
-            original_deferred_state_root: r.val_at(1)?,
-            original_deferred_receipt_root: r.val_at(2)?,
-            original_deferred_logs_bloom_hash: r.val_at(3)?,
-        })
     }
 }
 
