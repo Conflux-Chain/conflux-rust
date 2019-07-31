@@ -1232,9 +1232,8 @@ impl ConsensusGraphInner {
                 + self.block_weight(parent, false)
                 + weight_in_my_epoch;
             let past_num_blocks = self.arena[parent].past_num_blocks
-                + 1
-                + (self.arena[index].data.blockset_in_own_view_of_epoch.len()
-                    as u64);
+                + self.arena[index].data.ordered_executable_epoch_blocks.len()
+                    as u64;
             let past_era_weight = if parent != era_genesis {
                 self.arena[parent].past_era_weight
                     + self.block_weight(parent, false)
