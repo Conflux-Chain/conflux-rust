@@ -1646,15 +1646,18 @@ impl TxReplayer {
     }
 
     pub fn commit(
-        latest_state: &mut StateDb, epoch_id: &EpochId, txs: u64, ops: u64,
-    ) {
+        latest_state: &mut StateDb, last_state_root: &mut H256, txs: u64,
+        ops: u64,
+    )
+    {
         warn!("Committing block at tx {}, ops {}.", txs, ops);
-        latest_state.commit(*epoch_id).unwrap();
+        let state_root = latest_state.commit(H256::default()).unwrap();
+        *last_state_root = state_root.state_root.delta_root;
     }
 
     pub fn add_tx<'a>(
         &'a self, tx: RealizedEthTx, latest_state: &mut StateDb<'a>,
-        last_epoch_id: &mut EpochId,
+        last_state_root: &mut H256,
     )
     {
         if let Some(sender) = tx.sender {
@@ -1704,17 +1707,16 @@ impl TxReplayer {
 
         self.tx_counts.set(self.tx_counts.get() + 1);
         if self.tx_counts.get() % Self::EPOCH_TXS == 0 {
-            *last_epoch_id = H256::from(U256::from(&*last_epoch_id) + 1);
             Self::commit(
                 latest_state,
-                last_epoch_id,
+                last_state_root,
                 self.tx_counts.get(),
                 self.ops_counts.get(),
             );
             *latest_state = StateDb::new(
                 self.storage_manager
                     .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                        last_epoch_id,
+                        &H256::default(),
                         None,
                     ))
                     .unwrap()
@@ -1750,8 +1752,8 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         Some(value) => Some(value.parse::<usize>().unwrap()),
     };
 
-    let mut last_epoch_id;
     let mut latest_state;
+    let mut last_state_root;
 
     if tx_replayer
         .storage_manager
@@ -1761,18 +1763,29 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         .value
         == 0
     {
-        last_epoch_id = H256::default();
+        last_state_root = H256::default();
         latest_state = StateDb::new(
             tx_replayer.storage_manager.get_state_for_genesis_write(),
         );
     } else {
-        last_epoch_id =
-            hexstr_to_h256(&matches.value_of("last_epoch_id").unwrap());
+        last_state_root =
+            hexstr_to_h256(&matches.value_of("last_state_root").unwrap());
+        let true_state_root = tx_replayer
+            .storage_manager
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                &EpochId::default(),
+                None,
+            ))
+            .unwrap()
+            .unwrap()
+            .compute_state_root()
+            .unwrap();
+        assert_eq!(true_state_root.state_root.delta_root, last_state_root);
         latest_state = StateDb::new(
             tx_replayer
                 .storage_manager
                 .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                    &last_epoch_id,
+                    &H256::default(),
                     None,
                 ))
                 .unwrap()
@@ -1876,7 +1889,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
                     tx_replayer.add_tx(
                         tx,
                         &mut latest_state,
-                        &mut last_epoch_id,
+                        &mut last_state_root,
                     );
                 }
             }
@@ -1894,11 +1907,11 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     }
     TxReplayer::commit(
         &mut latest_state,
-        &last_epoch_id,
+        &mut last_state_root,
         tx_replayer.tx_counts.get(),
         tx_replayer.ops_counts.get(),
     );
-    warn!("tx replay last epoch id = {:?}", last_epoch_id);
+    warn!("tx replay last state_root = {:?}", last_state_root);
     Ok(())
 }
 
@@ -1956,9 +1969,9 @@ fn main() -> errors::Result<()> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("last_epoch_id")
-                .value_name("last epoch id")
-                .help("last epoch id from previous tx replay")
+            Arg::with_name("last_state_root")
+                .value_name("last state root")
+                .help("last state root from previous tx replay")
                 .short("r")
                 .takes_value(true),
         )
@@ -2023,7 +2036,7 @@ use cfxcore::{
     statedb::StateDb,
     storage::{
         state_manager::StorageConfiguration, SnapshotAndEpochIdRef,
-        StorageManager, StorageManagerTrait,
+        StorageManager, StorageManagerTrait, StorageTrait,
     },
 };
 use clap::{App, Arg, ArgMatches};
