@@ -2,8 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use network;
 use rlp::DecoderError;
+
+use crate::{
+    message::MsgId,
+    network::{self, NetworkContext, PeerId, UpdateNodeOperation},
+};
 
 error_chain! {
     links {
@@ -69,5 +73,72 @@ error_chain! {
             description("Validation failed"),
             display("Validation failed"),
         }
+    }
+}
+
+pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
+    warn!(
+        "Error while handling message, peer={}, msg_id={:?}, error={:?}",
+        peer, msg_id, e
+    );
+
+    let mut disconnect = true;
+    let mut op = None;
+
+    // NOTE: do not use wildcard; this way, the compiler
+    // will help covering all the cases.
+    match e.0 {
+        // NOTE: to help with backward-compatibility, we
+        // should not disconnect on `UnknownMessage`
+        ErrorKind::NoResponse
+        | ErrorKind::InternalError
+        | ErrorKind::PivotHashMismatch
+        | ErrorKind::UnknownMessage => disconnect = false,
+
+        ErrorKind::UnknownPeer | ErrorKind::Msg(_) => {
+            op = Some(UpdateNodeOperation::Failure)
+        }
+
+        ErrorKind::UnexpectedRequestId | ErrorKind::UnexpectedResponse => {
+            op = Some(UpdateNodeOperation::Demotion)
+        }
+
+        ErrorKind::InvalidMessageFormat
+        | ErrorKind::InvalidProof
+        | ErrorKind::InvalidStateRoot
+        | ErrorKind::ValidationFailed
+        | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+
+        // network errors
+        ErrorKind::Network(kind) => match kind {
+            network::ErrorKind::AddressParse
+            | network::ErrorKind::AddressResolve(_)
+            | network::ErrorKind::Auth
+            | network::ErrorKind::BadAddr
+            | network::ErrorKind::Disconnect(_)
+            | network::ErrorKind::Expired
+            | network::ErrorKind::InvalidNodeId
+            | network::ErrorKind::Io(_)
+            | network::ErrorKind::OversizedPacket
+            | network::ErrorKind::Throttling(_) => disconnect = false,
+
+            network::ErrorKind::BadProtocol | network::ErrorKind::Decoder => {
+                op = Some(UpdateNodeOperation::Remove)
+            }
+
+            network::ErrorKind::SocketIo(_)
+            | network::ErrorKind::Msg(_)
+            | network::ErrorKind::__Nonexhaustive {} => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
+        },
+
+        ErrorKind::__Nonexhaustive {} => {
+            op = Some(UpdateNodeOperation::Failure)
+        }
+    };
+
+    if disconnect {
+        io.disconnect_peer(peer, op);
     }
 }
