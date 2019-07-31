@@ -97,7 +97,8 @@ impl ConsensusNewBlockHandler {
         inner.arena[new_era_block_arena_index].past_weight = 0;
         new_era_block_arena_index_set.insert(new_era_block_arena_index);
         while let Some(x) = queue.pop_front() {
-            for child in inner.arena[x].children.iter() {
+            let children = inner.arena[x].children.clone();
+            for child in children.iter() {
                 queue.push_back(*child);
                 new_era_block_arena_index_set.insert(*child);
                 if inner.arena[*child].height <= new_era_stable_height {

@@ -75,8 +75,8 @@ impl ConfirmationMeter {
         inner.total_weight_in_past_2d.cur = total_weight;
         inner.total_weight_in_past_2d.old -= change;
 
-        if stable_height > lowest_epoch_num {
-            let gap = stable_height - lowest_epoch_num;
+        if stable_height > inner.finality_manager.lowest_epoch_num {
+            let gap = stable_height - inner.finality_manager.lowest_epoch_num;
             for _i in 0..gap {
                 inner.finality_manager.risks_less_than.pop_front();
             }
