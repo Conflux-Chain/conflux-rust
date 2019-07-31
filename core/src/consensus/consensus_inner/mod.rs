@@ -7,7 +7,9 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
-    block_data_manager::{BlockDataManager, EpochExecutionContext},
+    block_data_manager::{
+        BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
+    },
     consensus::{
         anticone_cache::AnticoneCache, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
         BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
@@ -122,24 +124,27 @@ impl Default for ConsensusGraphPivotData {
     }
 }
 
-struct ConsensusGraphExecutionInfo {
-    state_valid: bool,
-    original_deferred_state_root: H256,
-    original_deferred_receipt_root: H256,
-    original_deferred_logs_bloom_hash: H256,
-}
-
-impl Default for ConsensusGraphExecutionInfo {
-    fn default() -> Self {
-        ConsensusGraphExecutionInfo {
-            state_valid: true,
-            original_deferred_state_root: Default::default(),
-            original_deferred_receipt_root: Default::default(),
-            original_deferred_logs_bloom_hash: Default::default(),
-        }
-    }
-}
-
+/// Implementation details of Eras and Checkpoints
+///
+/// Era in Conflux is defined based on the height of a block. Every
+/// epoch_block_count height corresponds to one era. For example, if
+/// era_block_count is 50000, then blocks at height 0 (the original genesis)
+/// is the era genesis of the first era. The blocks at height 50000 are era
+/// genesis blocks of the following era. Note that it is possible to have
+/// multiple era genesis blocks for one era period. Eventually, only
+/// one era genesis block and its subtree will become dominant and all other
+/// genesis blocks together with their subtrees will be discarded.
+///
+/// The definition of Era enables Conflux to form checkpoints at the stabilized
+/// era genesis blocks. To do that, we had the following modifications to the
+/// original GHAST algorithm. First of all, full nodes will validate the parent
+/// edge choice of each block but only *with in* its EraGenesis subtree. For
+/// example, for a block at height 100100 (era_epoch_count = 50000), its
+/// EraGenesis corresponds to its ancestor block at the height 100000 and
+/// its LastEraGenesis corresponds to its ancestor block at the height 50000.
+/// The anticone cut point for reward calculation will also stay within one era.
+/// Also the adaptive rule in GHAST is modified as well (described below) to
+/// reflect the era boundary.
 ///
 /// Implementation details of the GHAST algorithm
 ///
@@ -153,7 +158,7 @@ impl Default for ConsensusGraphExecutionInfo {
 /// 3   stable = True
 /// 4   Let f(x) = PastW(b) - PastW(x.parent) - x.parent.weight
 /// 5   Let g(x) = SubTW(B, x)
-/// 6   while a.parent != Nil do
+/// 6   while a != EraGenesis do
 /// 7       if f(a) > beta and g(a) / f(a) < alpha then
 /// 8           stable = False
 /// 9       a = a.parent
@@ -180,10 +185,16 @@ impl Default for ConsensusGraphExecutionInfo {
 /// 3   Let f(x) = SubTW(B, x.parent)
 /// 4   Let g(x) = SubStableTW(B, x)
 /// 5   adaptive = False
-/// 6   while a.parent != Nil do
+/// 6   while a != EraGenesis do
 /// 7       if f(a) > beta and g(a) / f(a) < alpha then
 /// 8           adaptive = True
 /// 9       a = a.parent
+///10   let f1(x) = InclusiveSubTW(B, x.parent)
+///11   let g1(x) = InclusiveSubTW(B, x)
+///12   while a != LastEraGenesis do
+///13       if f1(a) > beta and g1(a) / f1(a) < alpha then
+///14           adaptive = True
+///15       a = a.parent
 ///
 /// The only difference is that when maintaining g(x) * d - f(x) * n, we need to
 /// do special caterpillar update in the Link-Cut-Tree, i.e., given a node X, we
@@ -252,7 +263,7 @@ pub struct ConsensusGraphInner {
     execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
-    /// block set of each old era, will garbage collected by sync graph
+    // Block set of each old era. It will garbage collected by sync graph
     pub old_era_block_sets: VecDeque<Vec<H256>>,
 }
 
@@ -338,6 +349,8 @@ impl ConsensusGraphInner {
             last_recycled_era_block: 0,
             old_era_block_sets: VecDeque::new(),
         };
+        // The last vector is the current maintained set
+        inner.old_era_block_sets.push_back(Vec::new());
 
         // NOTE: Only genesis block will be first inserted into consensus graph
         // and then into synchronization graph. All the other blocks will be
@@ -532,8 +545,7 @@ impl ConsensusGraphInner {
         self.get_blame(arena_index)
     }
 
-    #[allow(dead_code)]
-    fn find_the_first_with_correct_state_of(
+    pub fn find_the_first_with_correct_state_of(
         &self, pivot_index: usize,
     ) -> Option<usize> {
         let trusted_blame_pivot_index =
@@ -1220,9 +1232,8 @@ impl ConsensusGraphInner {
                 + self.block_weight(parent, false)
                 + weight_in_my_epoch;
             let past_num_blocks = self.arena[parent].past_num_blocks
-                + 1
-                + (self.arena[index].data.blockset_in_own_view_of_epoch.len()
-                    as u64);
+                + self.arena[index].data.ordered_executable_epoch_blocks.len()
+                    as u64;
             let past_era_weight = if parent != era_genesis {
                 self.arena[parent].past_era_weight
                     + self.block_weight(parent, false)
@@ -1869,17 +1880,19 @@ impl ConsensusGraphInner {
     ) -> Result<(), String> {
         // For the original genesis, it is always correct
         if self.arena[me].height == 0 {
-            self.execution_info_cache.insert(
-                me,
-                ConsensusGraphExecutionInfo {
-                    state_valid: true,
-                    original_deferred_state_root: self.genesis_block_state_root,
-                    original_deferred_receipt_root: self
-                        .genesis_block_receipts_root,
-                    original_deferred_logs_bloom_hash: self
-                        .genesis_block_logs_bloom_hash,
-                },
+            let exec_info = ConsensusGraphExecutionInfo {
+                state_valid: true,
+                original_deferred_state_root: self.genesis_block_state_root,
+                original_deferred_receipt_root: self
+                    .genesis_block_receipts_root,
+                original_deferred_logs_bloom_hash: self
+                    .genesis_block_logs_bloom_hash,
+            };
+            self.data_man.insert_consensus_graph_execution_info_to_db(
+                &self.arena[me].hash,
+                &exec_info,
             );
+            self.execution_info_cache.insert(me, exec_info);
             return Ok(());
         }
         let parent = self.arena[me].parent;
@@ -1913,15 +1926,17 @@ impl ConsensusGraphInner {
             debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
         }
 
-        self.execution_info_cache.insert(
-            me,
-            ConsensusGraphExecutionInfo {
-                state_valid,
-                original_deferred_state_root,
-                original_deferred_receipt_root,
-                original_deferred_logs_bloom_hash,
-            },
+        let exec_info = ConsensusGraphExecutionInfo {
+            state_valid,
+            original_deferred_state_root,
+            original_deferred_receipt_root,
+            original_deferred_logs_bloom_hash,
+        };
+        self.data_man.insert_consensus_graph_execution_info_to_db(
+            &self.arena[me].hash,
+            &exec_info,
         );
+        self.execution_info_cache.insert(me, exec_info);
 
         Ok(())
     }

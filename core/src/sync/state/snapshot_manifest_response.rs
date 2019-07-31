@@ -33,15 +33,34 @@ impl Handleable for SnapshotManifestResponse {
             true,
         )?;
 
-        if request.checkpoint != self.checkpoint {
+        if let Err(e) = self.validate(request) {
+            ctx.manager
+                .request_manager
+                .remove_mismatch_request(ctx.io, &message);
+            return Err(e);
+        }
+
+        ctx.manager
+            .state_sync
+            .handle_snapshot_manifest_response(ctx, self);
+
+        Ok(())
+    }
+}
+
+impl SnapshotManifestResponse {
+    fn validate(&self, request: &SnapshotManifestRequest) -> Result<(), Error> {
+        if self.checkpoint != request.checkpoint {
             debug!(
                 "Responded snapshot manifest checkpoint mismatch, requested = {:?}, responded = {:?}",
                 request.checkpoint,
                 self.checkpoint,
             );
-            ctx.manager
-                .request_manager
-                .remove_mismatch_request(ctx.io, &message);
+            bail!(ErrorKind::Invalid);
+        }
+
+        if self.chunk_hashes.is_empty() {
+            debug!("Responded snapshot manifest has empty chunks");
             bail!(ErrorKind::Invalid);
         }
 
@@ -49,15 +68,8 @@ impl Handleable for SnapshotManifestResponse {
             self.chunk_hashes.iter().cloned().collect();
         if distinct_chunks.len() != self.chunk_hashes.len() {
             debug!("Responded snapshot manifest has duplicated chunks");
-            ctx.manager
-                .request_manager
-                .remove_mismatch_request(ctx.io, &message);
             bail!(ErrorKind::Invalid);
         }
-
-        ctx.manager
-            .state_sync
-            .handle_snapshot_manifest_response(ctx, self);
 
         Ok(())
     }
