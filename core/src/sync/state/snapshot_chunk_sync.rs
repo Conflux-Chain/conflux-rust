@@ -191,9 +191,7 @@ impl SnapshotChunkSync {
             .pending_chunks
             .extend(response.chunk_hashes.into_iter());
         inner.status = Status::DownloadingChunks(Instant::now());
-        inner
-            .state_blame_vec
-            .extend(response.state_blame_vec.into_iter());
+        inner.state_blame_vec = response.state_blame_vec;
 
         // request snapshot chunks from peers concurrently
         let peers = ctx.manager.syn.get_random_peers_satisfying(
