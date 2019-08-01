@@ -2,8 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use parking_lot::RwLock;
+use rlp::Rlp;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -16,34 +18,27 @@ use futures::{
     Async, Future,
 };
 
-use io::TimerToken;
-use parking_lot::RwLock;
-use rand::Rng;
-use rlp::Rlp;
-
 use cfx_types::H256;
 use primitives::{BlockHeader, EpochNumber, StateRoot};
 
 use crate::{
     consensus::{ConsensusGraph, DEFERRED_STATE_EPOCH_COUNT},
-    message::{HasRequestId, Message, MsgId, RequestId},
-    network::{NetworkContext, NetworkProtocolHandler, PeerId},
-};
-
-use super::{
-    handle_error,
-    message::{
-        msgid, GetStateEntry, GetStateRoot,
-        StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
+    light_protocol::{
+        message::{
+            GetStateEntry, GetStateRoot, StateEntry as GetStateEntryResponse,
+            StateRoot as GetStateRootResponse,
+        },
+        Error, ErrorKind,
     },
-    Error, ErrorKind,
+    message::{HasRequestId, Message, RequestId},
+    network::{NetworkContext, PeerId},
 };
 
 const POLL_PERIOD_MS: u64 = 100;
 const MAX_POLL_TIME_MS: u64 = 1000;
 
 #[derive(Debug)]
-pub(super) enum QueryResult {
+pub enum QueryResult {
     StateEntry(Option<Vec<u8>>),
     StateRoot(StateRoot),
 }
@@ -53,32 +48,20 @@ struct PendingRequest {
     sender: Sender<QueryResult>,
 }
 
-pub(super) struct QueryHandler {
+pub struct QueryHandler {
     consensus: Arc<ConsensusGraph>,
-    next_request_id: AtomicU64,
-    peers: RwLock<HashSet<PeerId>>,
+    next_request_id: Arc<AtomicU64>,
     pending: RwLock<BTreeMap<(PeerId, RequestId), PendingRequest>>,
 }
 
 impl QueryHandler {
-    pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
+    pub fn new(
+        consensus: Arc<ConsensusGraph>, next_request_id: Arc<AtomicU64>,
+    ) -> Self {
         QueryHandler {
             consensus,
-            next_request_id: AtomicU64::new(0),
-            peers: RwLock::new(HashSet::new()),
+            next_request_id,
             pending: RwLock::new(BTreeMap::new()),
-        }
-    }
-
-    fn dispatch_message(
-        &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
-    ) -> Result<(), Error> {
-        trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
-
-        match msg_id {
-            msgid::STATE_ROOT => self.on_state_root(io, peer, &rlp),
-            msgid::STATE_ENTRY => self.on_state_entry(io, peer, &rlp),
-            _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
 
@@ -129,6 +112,10 @@ impl QueryHandler {
         }
     }
 
+    fn next_request_id(&self) -> RequestId {
+        self.next_request_id.fetch_add(1, Ordering::Relaxed).into()
+    }
+
     fn match_request<T>(
         &self, peer: PeerId, id: RequestId,
     ) -> Result<(T, Sender<QueryResult>), Error>
@@ -150,7 +137,7 @@ impl QueryHandler {
         }
     }
 
-    fn on_state_root(
+    pub(super) fn on_state_root(
         &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateRootResponse = rlp.as_val()?;
@@ -168,7 +155,7 @@ impl QueryHandler {
         Ok(())
     }
 
-    fn on_state_entry(
+    pub(super) fn on_state_entry(
         &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateEntryResponse = rlp.as_val()?;
@@ -198,12 +185,8 @@ impl QueryHandler {
         Ok(())
     }
 
-    fn next_request_id(&self) -> RequestId {
-        self.next_request_id.fetch_add(1, Ordering::Relaxed).into()
-    }
-
     /// Send `req` to `peer` and wait for result.
-    pub fn execute_request<T>(
+    pub fn execute<T>(
         &self, io: &NetworkContext, peer: PeerId, mut req: T,
     ) -> Result<QueryResult, Error>
     where T: Message + HasRequestId + Clone + 'static {
@@ -242,50 +225,5 @@ impl QueryHandler {
         }
 
         Err(ErrorKind::NoResponse.into())
-    }
-
-    /// Get all peers in random order.
-    pub fn get_peers_shuffled(&self) -> Vec<PeerId> {
-        let mut rand = rand::thread_rng();
-        let mut peers: Vec<_> = self.peers.read().iter().cloned().collect();
-        rand.shuffle(&mut peers[..]);
-        peers
-    }
-}
-
-impl NetworkProtocolHandler for QueryHandler {
-    fn initialize(&self, _io: &NetworkContext) {}
-
-    fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
-        if raw.len() < 2 {
-            return handle_error(
-                io,
-                peer,
-                msgid::INVALID,
-                ErrorKind::InvalidMessageFormat.into(),
-            );
-        }
-
-        let msg_id = raw[0];
-        let rlp = Rlp::new(&raw[1..]);
-        debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
-
-        if let Err(e) = self.dispatch_message(io, peer, msg_id.into(), rlp) {
-            handle_error(io, peer, msg_id.into(), e);
-        }
-    }
-
-    fn on_peer_connected(&self, _io: &NetworkContext, peer: PeerId) {
-        info!("on_peer_connected: peer={:?}", peer);
-        self.peers.write().insert(peer);
-    }
-
-    fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {
-        info!("on_peer_disconnected: peer={:?}", peer);
-        self.peers.write().remove(&peer);
-    }
-
-    fn on_timeout(&self, _io: &NetworkContext, _timer: TimerToken) {
-        // EMPTY
     }
 }
