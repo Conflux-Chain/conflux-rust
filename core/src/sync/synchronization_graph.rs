@@ -381,7 +381,7 @@ impl SynchronizationGraphInner {
     /// Return the index of the inserted block.
     pub fn insert(&mut self, header: Arc<BlockHeader>) -> usize {
         let hash = header.hash();
-        let is_genesis = *header.parent_hash() == H256::default();
+        let is_genesis = hash == self.data_man.genesis_block().hash();
 
         let me = self.arena.insert(SynchronizationGraphNode {
             graph_status: if is_genesis {
@@ -389,7 +389,7 @@ impl SynchronizationGraphInner {
             } else {
                 BLOCK_HEADER_ONLY
             },
-            block_ready: *header.parent_hash() == H256::default(),
+            block_ready: is_genesis,
             parent_reclaimed: false,
             parent: NULL,
             children: Vec::new(),
@@ -404,8 +404,8 @@ impl SynchronizationGraphInner {
         });
         self.hash_to_arena_indices.insert(hash, me);
 
-        let parent_hash = header.parent_hash().clone();
-        if parent_hash != H256::default() {
+        if !is_genesis {
+            let parent_hash = header.parent_hash().clone();
             if let Some(parent) =
                 self.hash_to_arena_indices.get(&parent_hash).cloned()
             {
