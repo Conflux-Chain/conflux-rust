@@ -38,8 +38,9 @@ impl Handleable for Transactions {
         let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
         let should_disconnect = {
             let mut peer_info = peer_info.write();
-            if peer_info.notified_mode.is_some()
-                && (peer_info.notified_mode.unwrap() == true)
+            if peer_info
+                .notified_capabilities
+                .contains(DynamicCapability::TxRelay(false))
             {
                 peer_info.received_transaction_count += transactions.len();
                 if peer_info.received_transaction_count
@@ -122,7 +123,10 @@ impl Handleable for TransactionDigests {
         let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
 
         let mut peer_info = peer_info.write();
-        if let Some(true) = peer_info.notified_mode {
+        if peer_info
+            .notified_capabilities
+            .contains(DynamicCapability::TxRelay(false))
+        {
             peer_info.received_transaction_count += self.trans_short_ids.len();
             if peer_info.received_transaction_count
                 > ctx
