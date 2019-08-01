@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::{CheckpointBlameStateRequest, Context},
+    message::{CheckpointBlameStateRequest, Context, DynamicCapability},
     state::{
         snapshot_chunk_request::SnapshotChunkRequest,
         snapshot_manifest_request::SnapshotManifestRequest,
@@ -117,7 +117,12 @@ impl StateSync for SnapshotChunkSync {
 
         // start to request manifest with specified checkpoint
         let request = SnapshotManifestRequest::new(checkpoint);
-        let peer = sync_handler.syn.get_random_peer(&HashSet::new());
+        let peer = sync_handler.syn.get_random_peer_satisfying(|peer| {
+            peer.capabilities
+                .contains(DynamicCapability::ServeCheckpoint(Some(
+                    inner.checkpoint,
+                )))
+        });
 
         sync_handler.request_manager.request_with_delay(
             io,
@@ -183,10 +188,15 @@ impl SnapshotChunkSync {
         inner.status = Status::DownloadingChunks(Instant::now());
 
         // request snapshot chunks from peers concurrently
-        let peers = ctx
-            .manager
-            .syn
-            .get_random_peer_vec(self.max_download_peers, |_| true);
+        let peers = ctx.manager.syn.get_random_peers_satisfying(
+            self.max_download_peers,
+            |peer| {
+                peer.capabilities
+                    .contains(DynamicCapability::ServeCheckpoint(Some(
+                        inner.checkpoint,
+                    )))
+            },
+        );
 
         for peer in peers {
             if self.request_chunk(ctx, &mut inner, peer).is_none() {
@@ -272,6 +282,17 @@ impl SnapshotChunkSync {
         debug!("sync state progress: {:?}", *inner);
     }
 
+    pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {
+        let mut inner = self.inner.write();
+
+        if !inner.downloading_chunks.is_empty()
+            && inner.downloading_chunks.len() < self.max_download_peers
+            && checkpoint == &inner.checkpoint
+        {
+            self.request_chunk(ctx, &mut inner, ctx.peer);
+        }
+    }
+
     fn request_checkpoint_blame_state(&self, ctx: &Context, inner: &mut Inner) {
         // we don't find a trusted_blame_block, refuse to send a request and
         // wait for next era
@@ -282,8 +303,13 @@ impl SnapshotChunkSync {
         let request = CheckpointBlameStateRequest::new(
             inner.trusted_blame_block.unwrap(),
         );
-        // TODO: exclude failed peers
-        let peer = ctx.manager.syn.get_random_peer(&HashSet::new());
+
+        let peer = ctx.manager.syn.get_random_peer_satisfying(|peer| {
+            peer.capabilities
+                .contains(DynamicCapability::ServeCheckpoint(Some(
+                    inner.checkpoint,
+                )))
+        });
 
         ctx.manager.request_manager.request_with_delay(
             ctx.io,

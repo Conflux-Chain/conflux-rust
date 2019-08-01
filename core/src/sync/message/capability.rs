@@ -13,7 +13,7 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 use std::collections::HashMap;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum DynamicCapability {
     TxRelay(bool),                 // provide tx relay
     ServeHeaders(bool),            // provide block header downloads
@@ -99,6 +99,15 @@ impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
         peer.write().capabilities.insert(self.changed);
+
+        if let DynamicCapability::ServeCheckpoint(Some(checkpoint)) =
+            self.changed
+        {
+            ctx.manager
+                .state_sync
+                .on_checkpoint_served(ctx, &checkpoint);
+        }
+
         Ok(())
     }
 }
