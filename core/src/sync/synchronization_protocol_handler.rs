@@ -29,7 +29,7 @@ use super::{
 use crate::{
     block_data_manager::{BlockStatus, NULLU64},
     sync::{
-        message::{Capability, Context},
+        message::{Context, DynamicCapability},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
     },
@@ -910,7 +910,7 @@ impl SynchronizationProtocolHandler {
                     if !peer_info
                         .read()
                         .capabilities
-                        .contains(Capability::TxRelay(true))
+                        .contains(DynamicCapability::TxRelay(true))
                     {
                         return None;
                     }
@@ -1102,12 +1102,12 @@ impl SynchronizationProtocolHandler {
             let mut state = state.write();
             if !state
                 .notified_capabilities
-                .contains(Capability::TxRelay(catch_up_mode))
+                .contains(DynamicCapability::TxRelay(catch_up_mode))
             {
                 state.received_transaction_count = 0;
                 state
                     .notified_capabilities
-                    .insert(Capability::TxRelay(catch_up_mode));
+                    .insert(DynamicCapability::TxRelay(catch_up_mode));
                 need_notify.push(*peer);
             }
         }
@@ -1117,7 +1117,7 @@ impl SynchronizationProtocolHandler {
             self.graph.consensus.best_epoch_number()
         );
 
-        Capability::TxRelay(!catch_up_mode)
+        DynamicCapability::TxRelay(!catch_up_mode)
             .broadcast_with_peers(io, need_notify);
 
         Some(())

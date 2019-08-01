@@ -30,7 +30,9 @@ pub use self::{
     blockheaders::GetBlockHeadersResponse,
     blocks::{GetBlocksResponse, GetBlocksWithPublicResponse},
     blocktxn::GetBlockTxnResponse,
-    capability::{Capability, CapabilityChange, CapabilitySet},
+    capability::{
+        DynamicCapability, DynamicCapabilityChange, DynamicCapabilitySet,
+    },
     checkpoint_blame_state::{
         CheckpointBlameStateRequest, CheckpointBlameStateResponse,
     },

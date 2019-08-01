@@ -5,7 +5,7 @@
 use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
-use crate::sync::{message::CapabilitySet, random, Error, ErrorKind};
+use crate::sync::{message::DynamicCapabilitySet, random, Error, ErrorKind};
 use parking_lot::RwLock;
 use rand::Rng;
 use std::{
@@ -30,9 +30,9 @@ pub struct SynchronizationPeerState {
     pub heartbeat: Instant,
 
     // latest capabilities received from the remote peer.
-    pub capabilities: CapabilitySet,
+    pub capabilities: DynamicCapabilitySet,
     // latest capabilities that notified to the remote peer.
-    pub notified_capabilities: CapabilitySet,
+    pub notified_capabilities: DynamicCapabilitySet,
 }
 
 pub type SynchronizationPeers =

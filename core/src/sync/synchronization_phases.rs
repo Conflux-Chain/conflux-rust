@@ -5,7 +5,7 @@
 use crate::{
     consensus::ConsensusGraphInner,
     sync::{
-        message::Capability,
+        message::DynamicCapability,
         state::{SnapshotChunkSync, StateSync, Status},
         synchronization_protocol_handler::{
             SynchronizationProtocolHandler, CATCH_UP_EPOCH_LAG_THRESHOLD,
@@ -194,7 +194,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        Capability::ServeHeaders(true).broadcast(io, &sync_handler.syn);
+        DynamicCapability::ServeHeaders(true).broadcast(io, &sync_handler.syn);
         SyncPhaseType::CatchUpSyncBlockHeader
     }
 
@@ -293,7 +293,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             if completed == checkpoint {
                 // todo broadcast this cap when new era started,
                 // and filter peers with this cap to sync checkpoint.
-                Capability::ServeCheckpoint(Some(checkpoint))
+                DynamicCapability::ServeCheckpoint(Some(checkpoint))
                     .broadcast(io, &sync_handler.syn);
                 return SyncPhaseType::CatchUpRecoverBlockFromDB;
             }

@@ -6,8 +6,8 @@ use crate::{
     message::{Message, RequestId},
     sync::{
         message::{
-            metrics::TX_HANDLE_TIMER, Capability, Context, Handleable, Key,
-            KeyContainer,
+            metrics::TX_HANDLE_TIMER, Context, DynamicCapability, Handleable,
+            Key, KeyContainer,
         },
         request_manager::Request,
         Error, ErrorKind, ProtocolConfiguration,
@@ -41,7 +41,7 @@ impl Handleable for Transactions {
             let mut peer_info = peer_info.write();
             if !peer_info
                 .notified_capabilities
-                .contains(Capability::TxRelay(true))
+                .contains(DynamicCapability::TxRelay(true))
             {
                 peer_info.received_transaction_count += transactions.len();
                 peer_info.received_transaction_count
@@ -103,7 +103,7 @@ impl Handleable for TransactionDigests {
         let mut peer_info = peer_info.write();
         if !peer_info
             .notified_capabilities
-            .contains(Capability::TxRelay(true))
+            .contains(DynamicCapability::TxRelay(true))
         {
             peer_info.received_transaction_count += self.trans_short_ids.len();
             if peer_info.received_transaction_count

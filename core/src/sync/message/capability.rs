@@ -14,23 +14,23 @@ use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum Capability {
+pub enum DynamicCapability {
     TxRelay(bool),                 // provide tx relay
     ServeHeaders(bool),            // provide block header downloads
     ServeCheckpoint(Option<H256>), // provide checkpoint downloads
 }
 
-impl Capability {
+impl DynamicCapability {
     fn code(&self) -> u8 {
         match self {
-            Capability::TxRelay(_) => 0,
-            Capability::ServeHeaders(_) => 1,
-            Capability::ServeCheckpoint(_) => 2,
+            DynamicCapability::TxRelay(_) => 0,
+            DynamicCapability::ServeHeaders(_) => 1,
+            DynamicCapability::ServeCheckpoint(_) => 2,
         }
     }
 
     pub fn broadcast_with_peers(self, io: &NetworkContext, peers: Vec<PeerId>) {
-        let msg = CapabilityChange { changed: self };
+        let msg = DynamicCapabilityChange { changed: self };
 
         for peer in peers {
             if let Err(e) = send_message(io, peer, &msg) {
@@ -45,44 +45,44 @@ impl Capability {
     }
 }
 
-impl Encodable for Capability {
+impl Encodable for DynamicCapability {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(2).append(&self.code());
 
         match self {
-            Capability::TxRelay(enabled) => s.append(enabled),
-            Capability::ServeHeaders(enabled) => s.append(enabled),
-            Capability::ServeCheckpoint(cp) => s.append(cp),
+            DynamicCapability::TxRelay(enabled) => s.append(enabled),
+            DynamicCapability::ServeHeaders(enabled) => s.append(enabled),
+            DynamicCapability::ServeCheckpoint(cp) => s.append(cp),
         };
     }
 }
 
-impl Decodable for Capability {
+impl Decodable for DynamicCapability {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         if rlp.item_count()? != 2 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
         match rlp.val_at::<u8>(0)? {
-            0 => Ok(Capability::TxRelay(rlp.val_at(1)?)),
-            1 => Ok(Capability::ServeHeaders(rlp.val_at(1)?)),
-            2 => Ok(Capability::ServeCheckpoint(rlp.val_at(1)?)),
+            0 => Ok(DynamicCapability::TxRelay(rlp.val_at(1)?)),
+            1 => Ok(DynamicCapability::ServeHeaders(rlp.val_at(1)?)),
+            2 => Ok(DynamicCapability::ServeCheckpoint(rlp.val_at(1)?)),
             _ => Err(DecoderError::Custom("invalid capability code")),
         }
     }
 }
 
 #[derive(Debug, Default)]
-pub struct CapabilitySet {
-    caps: HashMap<u8, Capability>,
+pub struct DynamicCapabilitySet {
+    caps: HashMap<u8, DynamicCapability>,
 }
 
-impl CapabilitySet {
-    pub fn insert(&mut self, cap: Capability) {
+impl DynamicCapabilitySet {
+    pub fn insert(&mut self, cap: DynamicCapability) {
         self.caps.insert(cap.code(), cap);
     }
 
-    pub fn contains(&self, cap: Capability) -> bool {
+    pub fn contains(&self, cap: DynamicCapability) -> bool {
         match self.caps.get(&cap.code()) {
             Some(cur_cap) => cur_cap == &cap,
             None => return false,
@@ -91,11 +91,11 @@ impl CapabilitySet {
 }
 
 #[derive(Debug, RlpDecodableWrapper, RlpEncodableWrapper)]
-pub struct CapabilityChange {
-    pub changed: Capability,
+pub struct DynamicCapabilityChange {
+    pub changed: DynamicCapability,
 }
 
-impl Handleable for CapabilityChange {
+impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
         peer.write().capabilities.insert(self.changed);
