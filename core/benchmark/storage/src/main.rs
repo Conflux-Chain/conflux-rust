@@ -1651,7 +1651,13 @@ impl TxReplayer {
     )
     {
         warn!("Committing block at tx {}, ops {}.", txs, ops);
-        let state_root = latest_state.commit(H256::default()).unwrap();
+
+        // We want to use the delta trie root, but we don't want to compute
+        // twice.
+        let storage =
+            unsafe { std::mem::transmute::<_, &mut Storage>(latest_state) };
+        let state_root = storage.compute_state_root().unwrap();
+        storage.commit(state_root.state_root.delta_root).unwrap();
         *last_state_root = state_root.state_root.delta_root;
     }
 
@@ -1716,7 +1722,7 @@ impl TxReplayer {
             *latest_state = StateDb::new(
                 self.storage_manager
                     .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                        &H256::default(),
+                        last_state_root,
                         None,
                     ))
                     .unwrap()
@@ -1773,7 +1779,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         let true_state_root = tx_replayer
             .storage_manager
             .get_state_no_commit(SnapshotAndEpochIdRef::new(
-                &EpochId::default(),
+                &last_state_root,
                 None,
             ))
             .unwrap()
@@ -1785,7 +1791,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
             tx_replayer
                 .storage_manager
                 .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                    &H256::default(),
+                    &last_state_root,
                     None,
                 ))
                 .unwrap()
@@ -2035,7 +2041,7 @@ fn main() -> errors::Result<()> {
 use cfxcore::{
     statedb::StateDb,
     storage::{
-        state_manager::StorageConfiguration, SnapshotAndEpochIdRef,
+        state_manager::StorageConfiguration, SnapshotAndEpochIdRef, Storage,
         StorageManager, StorageManagerTrait, StorageTrait,
     },
 };
@@ -2057,7 +2063,7 @@ use heapsize::HeapSizeOf;
 use lazy_static::*;
 use log::*;
 use parking_lot::{Condvar, Mutex};
-use primitives::{Account, EpochId};
+use primitives::Account;
 use rlp::{Decodable, *};
 use std::{
     cell::Cell,
