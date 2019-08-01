@@ -14,11 +14,14 @@ from test_framework.util import *
 
 
 # This test is the same as `crash_test.py` except that nodes are launched as archive nodes instead of full nodes
-class CrashFullNodeTest(ConfluxTestFramework):
+class CrashArchiveNodeTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
         self.conf_parameters = {"persist_terminal_period_ms": "500"}
+        self.conf_parameters["log_level"] = "\"debug\""
+        self.conf_parameters["era_epoch_count"] = "150"
+        self.conf_parameters["era_checkpoint_gap"] = "150"
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -91,4 +94,4 @@ class CrashFullNodeTest(ConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    CrashFullNodeTest().main()
+    CrashArchiveNodeTest().main()
