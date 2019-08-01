@@ -38,7 +38,7 @@ build_msgid! {
     GET_CMPCT_BLOCKS_RESPONSE = 0x10
     GET_BLOCK_TXN = 0x11
     GET_BLOCK_TXN_RESPONSE = 0x12
-    DYNAMIC_CAPABILITY_CHANGE = 0x13
+    TRANSACTION_PROPAGATION_CONTROL = 0x13
     TRANSACTION_DIGESTS = 0x14
     GET_TRANSACTIONS = 0x15
     GET_TRANSACTIONS_RESPONSE = 0x16
@@ -69,7 +69,7 @@ build_msg_impl! { GetBlocks, msgid::GET_BLOCKS, "GetBlocks" }
 build_msg_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS, "GetCompactBlocks" }
 build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse" }
 build_msg_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn" }
-build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange" }
+build_msg_impl! { TransactionPropagationControl, msgid::TRANSACTION_PROPAGATION_CONTROL, "TransactionPropagationControl" }
 build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
 
 // normal priority and size-sensitive message types
@@ -204,8 +204,9 @@ pub fn handle_rlp_message(
         msgid::TRANSACTIONS => {
             rlp.as_val::<Transactions>()?.handle(&ctx)?;
         }
-        msgid::DYNAMIC_CAPABILITY_CHANGE => {
-            rlp.as_val::<DynamicCapabilityChange>()?.handle(&ctx)?;
+        msgid::TRANSACTION_PROPAGATION_CONTROL => {
+            rlp.as_val::<TransactionPropagationControl>()?
+                .handle(&ctx)?;
         }
         msgid::TRANSACTION_DIGESTS => {
             rlp.as_val::<TransactionDigests>()?.handle(&ctx)?;

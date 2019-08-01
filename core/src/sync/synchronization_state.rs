@@ -5,7 +5,7 @@
 use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
-use crate::sync::{message::DynamicCapabilitySet, random, Error, ErrorKind};
+use crate::sync::{random, Error, ErrorKind};
 use parking_lot::RwLock;
 use rand::Rng;
 use std::{
@@ -24,15 +24,12 @@ pub struct SynchronizationPeerState {
     /// The following fields are used to control how to handle
     /// transaction propagation for nodes in catch-up mode.
     pub received_transaction_count: usize,
+    pub need_prop_trans: bool,
+    pub notified_mode: Option<bool>,
 
     // heartbeat is used to disconnect inactive nodes periodically,
     // and updated when new message received.
     pub heartbeat: Instant,
-
-    // latest received capabilities from the remote peer.
-    pub capabilities: DynamicCapabilitySet,
-    // latest notified capabilities of mine to the remote peer.
-    pub notified_capabilities: DynamicCapabilitySet,
 }
 
 pub type SynchronizationPeers =
