@@ -123,7 +123,7 @@ impl QueryService {
         info!("get_account epoch={:?} address={:?}", epoch, address);
 
         // try each peer until we succeed
-        for peer in self.handler.get_peers_shuffled() {
+        for peer in self.handler.peers.all_peers_shuffled() {
             match self.query_account(peer, epoch, address) {
                 Ok(account) => return account,
                 Err(e) => {

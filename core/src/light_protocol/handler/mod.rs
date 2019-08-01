@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod handler;
+mod peers;
 mod query;
 mod sync;
 

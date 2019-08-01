@@ -24,6 +24,7 @@ use super::{
     message::{
         msgid, GetStateEntry, GetStateRoot,
         StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
+        Status,
     },
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
@@ -108,6 +109,29 @@ impl QueryProvider {
         }
     }
 
+    fn send_status(
+        &self, io: &NetworkContext, peer: PeerId,
+    ) -> Result<(), Error> {
+        let best_info = self.consensus.get_best_info();
+        let genesis_hash = self.consensus.data_man.true_genesis_block.hash();
+
+        let terminals = match &best_info.terminal_block_hashes {
+            Some(x) => x.clone(),
+            None => best_info.bounded_terminal_block_hashes.clone(),
+        };
+
+        let msg: Box<dyn Message> = Box::new(Status {
+            protocol_version: LIGHT_PROTOCOL_VERSION,
+            network_id: 0x0,
+            genesis_hash,
+            best_epoch: best_info.best_epoch_number,
+            terminals,
+        });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
     fn on_get_state_root(
         &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -176,8 +200,12 @@ impl NetworkProtocolHandler for QueryProvider {
         }
     }
 
-    fn on_peer_connected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
         info!("on_peer_connected: peer={:?}", peer);
+
+        if let Err(e) = self.send_status(io, peer) {
+            warn!("Error while sending status: {}", e);
+        }
     }
 
     fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {
