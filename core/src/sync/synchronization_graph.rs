@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, BlockStatus, NULLU64},
     consensus::{ConsensusGraphInner, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
@@ -228,9 +228,27 @@ impl SynchronizationGraphInner {
         }
     }
 
-    fn try_recover_expire_block(&mut self) -> (Vec<usize>, Vec<usize>) {
+    fn try_recover_expire_block(
+        &mut self,
+    ) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
         let mut graph_ready_blocks = Vec::new();
         let mut header_graph_ready_blocks = Vec::new();
+        let mut invalid_blocks = Vec::new();
+
+        let mut is_block_graph_ready = |hash: &H256, index: &usize| {
+            if let Some(info) = self.data_man.local_block_info_from_db(hash) {
+                if info.get_status() == BlockStatus::Invalid {
+                    invalid_blocks.push(*index);
+                    false
+                } else {
+                    info.get_instance_id() == self.data_man.get_instance_id()
+                        || info.get_instance_id() == NULLU64
+                }
+            } else {
+                false
+            }
+        };
+
         for index in &self.not_ready_blocks_frontier {
             let parent_hash = self.arena[*index].block_header.parent_hash();
 
@@ -248,13 +266,7 @@ impl SynchronizationGraphInner {
             // 2. parent in memory and status is BLOCK_GRAPH_READY
             let parent_graph_ready: bool = {
                 if self.arena[*index].parent == NULL {
-                    if let Some(_) =
-                        self.data_man.block_by_hash(parent_hash, false)
-                    {
-                        !self.data_man.verified_invalid(parent_hash)
-                    } else {
-                        false
-                    }
+                    is_block_graph_ready(parent_hash, index)
                 } else if self.arena[*index].parent != NULL
                     && self.arena[self.arena[*index].parent].graph_status
                         == BLOCK_GRAPH_READY
@@ -293,16 +305,11 @@ impl SynchronizationGraphInner {
                 for referee_hash in
                     self.arena[*index].block_header.referee_hashes()
                 {
-                    if !referee_hash_in_mem.contains(referee_hash) {
-                        referee_graph_ready &= {
-                            if let Some(_) =
-                                self.data_man.block_by_hash(referee_hash, false)
-                            {
-                                !self.data_man.verified_invalid(referee_hash)
-                            } else {
-                                false
-                            }
-                        }
+                    if !referee_hash_in_mem.contains(referee_hash)
+                        && referee_graph_ready
+                    {
+                        referee_graph_ready &=
+                            is_block_graph_ready(referee_hash, index);
                     }
                 }
             }
@@ -323,7 +330,11 @@ impl SynchronizationGraphInner {
             }
         }
 
-        (graph_ready_blocks, header_graph_ready_blocks)
+        (
+            graph_ready_blocks,
+            header_graph_ready_blocks,
+            invalid_blocks,
+        )
     }
 
     pub fn insert_invalid(&mut self, header: Arc<BlockHeader>) -> usize {
@@ -1436,10 +1447,11 @@ impl SynchronizationGraph {
         let mut to_relay_blocks = Vec::new();
 
         if recover {
-            // TODO: maybe we need to relay those blocks
-            // TODO: maybe we need to propagate header graph status
-            let (new_graph_ready_blocks, new_header_graph_ready_blocks) =
-                inner.try_recover_expire_block();
+            let (
+                new_graph_ready_blocks,
+                mut new_header_graph_ready_blocks,
+                invalid_blocks,
+            ) = inner.try_recover_expire_block();
 
             for index in &new_graph_ready_blocks {
                 if inner.arena[*index].parent == NULL {
@@ -1457,6 +1469,13 @@ impl SynchronizationGraph {
                     inner.arena[*index].parent_reclaimed = true;
                 }
                 inner.arena[*index].pending_referee_count = 0;
+            }
+
+            for index in &invalid_blocks {
+                // propagate_header_graph_status will also pass BLOCK_INVALID to
+                // descendants
+                inner.arena[*index].graph_status = BLOCK_INVALID;
+                new_header_graph_ready_blocks.push(*index);
             }
             // propagate BLOCK_HEADER_GRAPH_READY status to descendants
             let (invalid_set, need_to_relay) = self

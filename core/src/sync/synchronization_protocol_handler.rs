@@ -635,10 +635,10 @@ impl SynchronizationProtocolHandler {
         }
 
         if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
-            debug_assert!(match info.get_status() {
-                BlockStatus::Invalid => false,
-                _ => true,
-            });
+            if info.get_status() == BlockStatus::Invalid {
+                // this block was invalid before
+                return true;
+            }
             if info.get_seq_num()
                 < self.graph.consensus.current_era_genesis_seq_num()
             {
@@ -1167,6 +1167,10 @@ impl SynchronizationProtocolHandler {
         }
 
         if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
+            if info.get_status() == BlockStatus::Invalid {
+                // this block is invalid before
+                return true;
+            }
             if info.get_seq_num()
                 < self.graph.consensus.current_era_genesis_seq_num()
             {

@@ -1430,7 +1430,7 @@ impl Decodable for LocalBlockInfo {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum BlockStatus {
     Valid = 0,
     Invalid = 1,

@@ -1180,8 +1180,10 @@ impl ConsensusNewBlockHandler {
                 }
             };
             debug!(
-                "Forked at index {}",
-                inner.get_pivot_block_arena_index(fork_at - 1)
+                "Forked at height {}, fork parent block {}",
+                fork_at,
+                &inner.arena[inner.get_pivot_block_arena_index(fork_at - 1)]
+                    .hash
             );
         }
 
@@ -1255,7 +1257,7 @@ impl ConsensusNewBlockHandler {
         if new_checkpoint_era_genesis != inner.cur_era_genesis_block_arena_index
         {
             info!(
-                "Working on the checkpoint for block {} height {}",
+                "Working on new checkpoint, old checkpoint block {} height {}",
                 &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
                 inner.cur_era_genesis_height
             );
@@ -1271,8 +1273,9 @@ impl ConsensusNewBlockHandler {
             );
             meter.update_confirmation_risks(inner);
             info!(
-                "New checkpoint formed at block {} height {}",
+                "New checkpoint formed at block {} stable block {} height {}",
                 &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
+                &inner.arena[stable_era_genesis_arena_index].hash,
                 inner.cur_era_genesis_height
             );
         }
