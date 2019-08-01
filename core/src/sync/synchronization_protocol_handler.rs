@@ -561,12 +561,9 @@ impl SynchronizationProtocolHandler {
 
             // Epoch hashes are not in db, so should be requested from another
             // peer
-            let peer = self.syn.get_random_peer_satisfying(|peer| {
-                match self.syn.get_peer_info(&peer) {
-                    Err(_) => false,
-                    Ok(info) => info.read().best_epoch >= from,
-                }
-            });
+            let peer = self
+                .syn
+                .get_random_peer_satisfying(|peer| peer.best_epoch >= from);
 
             // no peer has the epoch we need; try later
             if peer.is_none() {
@@ -878,17 +875,15 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn select_peers_for_transactions<F>(&self, filter: F) -> Vec<PeerId>
-    where F: Fn(&PeerId) -> bool {
+    fn select_peers_for_transactions(&self) -> Vec<PeerId> {
         let num_peers = self.syn.peers.read().len() as f64;
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
 
         // min(sqrt(x)/x, throttle_ratio)
         let chosen_size = (num_peers.powf(-0.5).min(throttle_ratio) * num_peers)
             .round() as usize;
-        let mut peer_vec = self.syn.get_random_peer_vec(
+        let mut peer_vec = self.syn.get_random_peers(
             chosen_size.max(self.protocol_config.min_peers_propagation),
-            filter,
         );
         peer_vec.truncate(self.protocol_config.max_peers_propagation);
         peer_vec
@@ -1065,7 +1060,7 @@ impl SynchronizationProtocolHandler {
             return;
         }
 
-        let peers = self.select_peers_for_transactions(|_| true);
+        let peers = self.select_peers_for_transactions();
         self.propagate_transactions_to_peers(io, peers);
     }
 
