@@ -6,6 +6,7 @@ mod blockhashes;
 mod blockheaders;
 mod blocks;
 mod blocktxn;
+mod capability;
 mod checkpoint_blame_state;
 mod cmpctblocks;
 mod getblockhashesbyepoch;
@@ -29,6 +30,9 @@ pub use self::{
     blockheaders::GetBlockHeadersResponse,
     blocks::{GetBlocksResponse, GetBlocksWithPublicResponse},
     blocktxn::GetBlockTxnResponse,
+    capability::{
+        DynamicCapability, DynamicCapabilityChange, DynamicCapabilitySet,
+    },
     checkpoint_blame_state::{
         CheckpointBlameStateRequest, CheckpointBlameStateResponse,
     },
@@ -48,6 +52,6 @@ pub use self::{
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{
         GetTransactions, GetTransactionsResponse, TransIndex,
-        TransactionDigests, TransactionPropagationControl, Transactions,
+        TransactionDigests, Transactions,
     },
 };

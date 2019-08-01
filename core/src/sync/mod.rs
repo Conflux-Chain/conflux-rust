@@ -64,15 +64,15 @@ pub mod msg_sender {
                 "network_connection_data_counter",
                 "get_block_txn_response_counter"
             );
-        static ref TRANSACTION_PROPAGATION_CONTROL_METER: Arc<Meter> =
+        static ref DYNAMIC_CAPABILITY_CHANGE_METER: Arc<Meter> =
             register_meter_with_group(
                 "network_connection_data",
-                "transaction_propagation_control"
+                "dynamic_capability_change"
             );
-        static ref TRANSACTION_PROPAGATION_CONTROL_COUNTER: Arc<Meter> =
+        static ref DYNAMIC_CAPABILITY_CHANGE_COUNTER: Arc<Meter> =
             register_meter_with_group(
                 "network_connection_data_counter",
-                "transaction_propagation_control_counter"
+                "dynamic_capability_change_counter"
             );
         static ref TRANSACTION_DIGESTS_METER: Arc<Meter> =
             register_meter_with_group(
@@ -339,9 +339,9 @@ pub mod msg_sender {
                     GET_BLOCK_TXN_RESPOPNSE_METER.mark(size);
                     GET_BLOCK_TXN_RESPOPNSE_COUNTER.mark(1);
                 }
-                msgid::TRANSACTION_PROPAGATION_CONTROL => {
-                    TRANSACTION_PROPAGATION_CONTROL_METER.mark(size);
-                    TRANSACTION_PROPAGATION_CONTROL_COUNTER.mark(1);
+                msgid::DYNAMIC_CAPABILITY_CHANGE => {
+                    DYNAMIC_CAPABILITY_CHANGE_METER.mark(size);
+                    DYNAMIC_CAPABILITY_CHANGE_COUNTER.mark(1);
                 }
                 msgid::TRANSACTION_DIGESTS => {
                     TRANSACTION_DIGESTS_METER.mark(size);

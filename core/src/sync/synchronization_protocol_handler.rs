@@ -10,7 +10,6 @@ use crate::{
     sync::message::{
         handle_rlp_message, msgid, GetBlockHeadersResponse, NewBlock,
         NewBlockHashes, Status, TransactionDigests,
-        TransactionPropagationControl,
     },
 };
 use cfx_types::H256;
@@ -30,7 +29,7 @@ use super::{
 use crate::{
     block_data_manager::{BlockStatus, NULLU64},
     sync::{
-        message::Context,
+        message::{Context, DynamicCapability},
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
     },
@@ -908,7 +907,11 @@ impl SynchronizationProtocolHandler {
                             return None;
                         }
                     };
-                    if !peer_info.read().need_prop_trans {
+                    if !peer_info
+                        .read()
+                        .capabilities
+                        .contains(DynamicCapability::TxRelay(true))
+                    {
                         return None;
                     }
                     Some(peer_id)
@@ -1097,11 +1100,14 @@ impl SynchronizationProtocolHandler {
         let mut need_notify = Vec::new();
         for (peer, state) in self.syn.peers.read().iter() {
             let mut state = state.write();
-            if state.notified_mode.is_none()
-                || (state.notified_mode.unwrap() != catch_up_mode)
+            if !state
+                .notified_capabilities
+                .contains(DynamicCapability::TxRelay(catch_up_mode))
             {
                 state.received_transaction_count = 0;
-                state.notified_mode = Some(catch_up_mode);
+                state
+                    .notified_capabilities
+                    .insert(DynamicCapability::TxRelay(catch_up_mode));
                 need_notify.push(*peer);
             }
         }
@@ -1111,17 +1117,9 @@ impl SynchronizationProtocolHandler {
             self.graph.consensus.best_epoch_number()
         );
 
-        let trans_prop_ctrl_msg: Box<dyn Message> =
-            Box::new(TransactionPropagationControl { catch_up_mode });
+        DynamicCapability::TxRelay(!catch_up_mode)
+            .broadcast_with_peers(io, need_notify);
 
-        for peer in need_notify {
-            if send_message(io, peer, trans_prop_ctrl_msg.as_ref()).is_err() {
-                info!(
-                    "Failed to send transaction control message to peer {}",
-                    peer
-                );
-            }
-        }
         Some(())
     }
 
