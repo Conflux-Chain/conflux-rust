@@ -7,7 +7,6 @@ mod blockheaders;
 mod blocks;
 mod blocktxn;
 mod capability;
-mod checkpoint_blame_state;
 mod cmpctblocks;
 mod getblockhashesbyepoch;
 mod getblockheaders;
@@ -32,9 +31,6 @@ pub use self::{
     blocktxn::GetBlockTxnResponse,
     capability::{
         DynamicCapability, DynamicCapabilityChange, DynamicCapabilitySet,
-    },
-    checkpoint_blame_state::{
-        CheckpointBlameStateRequest, CheckpointBlameStateResponse,
     },
     cmpctblocks::GetCompactBlocksResponse,
     getblockhashesbyepoch::GetBlockHashesByEpoch,
