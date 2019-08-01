@@ -97,10 +97,8 @@ pub struct DynamicCapabilityChange {
 
 impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        {
-            let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
-            peer.write().capabilities.insert(self.changed);
-        }
+        let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        peer.write().capabilities.insert(self.changed);
 
         if let DynamicCapability::ServeCheckpoint(Some(checkpoint)) =
             self.changed
