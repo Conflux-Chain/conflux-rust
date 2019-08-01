@@ -6,7 +6,8 @@ use crate::{
     message::{Message, RequestId},
     sync::{
         message::{
-            metrics::TX_HANDLE_TIMER, Context, Handleable, Key, KeyContainer,
+            metrics::TX_HANDLE_TIMER, Context, DynamicCapability, Handleable,
+            Key, KeyContainer,
         },
         request_manager::Request,
         Error, ErrorKind, ProtocolConfiguration,
@@ -38,21 +39,17 @@ impl Handleable for Transactions {
         let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
         let should_disconnect = {
             let mut peer_info = peer_info.write();
-            if peer_info.notified_mode.is_some()
-                && (peer_info.notified_mode.unwrap() == true)
+            if peer_info
+                .notified_capabilities
+                .contains(DynamicCapability::TxRelay(false))
             {
                 peer_info.received_transaction_count += transactions.len();
-                if peer_info.received_transaction_count
+                peer_info.received_transaction_count
                     > ctx
                         .manager
                         .protocol_config
                         .max_trans_count_received_in_catch_up
                         as usize
-                {
-                    true
-                } else {
-                    false
-                }
             } else {
                 false
             }
@@ -74,24 +71,6 @@ impl Handleable for Transactions {
             .append_received_transactions(signed_trans);
 
         debug!("Transactions successfully inserted to transaction pool");
-
-        Ok(())
-    }
-}
-
-////////////////////////////////////////////////////////////////////
-
-#[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
-pub struct TransactionPropagationControl {
-    pub catch_up_mode: bool,
-}
-
-impl Handleable for TransactionPropagationControl {
-    fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_trans_prop_ctrl, peer {}, msg=:{:?}", ctx.peer, self);
-
-        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
-        peer_info.write().need_prop_trans = !self.catch_up_mode;
 
         Ok(())
     }
@@ -122,7 +101,10 @@ impl Handleable for TransactionDigests {
         let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
 
         let mut peer_info = peer_info.write();
-        if let Some(true) = peer_info.notified_mode {
+        if peer_info
+            .notified_capabilities
+            .contains(DynamicCapability::TxRelay(false))
+        {
             peer_info.received_transaction_count += self.trans_short_ids.len();
             if peer_info.received_transaction_count
                 > ctx

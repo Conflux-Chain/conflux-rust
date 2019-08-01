@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    message::handleable::{Context, Handleable},
+    message::{
+        handleable::{Context, Handleable},
+        DynamicCapability,
+    },
     Error, ErrorKind, SynchronizationPeerState,
 };
 use cfx_types::H256;
@@ -65,17 +68,21 @@ impl Handleable for Status {
                 ctx.manager.graph.initial_missed_block_hashes.lock().drain(),
             );
 
-            let peer_state = SynchronizationPeerState {
+            let mut peer_state = SynchronizationPeerState {
                 id: ctx.peer,
                 protocol_version: self.protocol_version,
                 genesis_hash,
                 best_epoch: self.best_epoch,
                 latest_block_hashes: latest,
                 received_transaction_count: 0,
-                need_prop_trans: true,
-                notified_mode: None,
                 heartbeat: Instant::now(),
+                capabilities: Default::default(),
+                notified_capabilities: Default::default(),
             };
+
+            peer_state
+                .capabilities
+                .insert(DynamicCapability::TxRelay(true));
 
             debug!(
                 "New peer (pv={:?}, gh={:?})",
