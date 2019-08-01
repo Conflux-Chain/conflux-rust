@@ -6,7 +6,8 @@ use crate::{
     message::{Message, RequestId},
     sync::{
         message::{
-            metrics::TX_HANDLE_TIMER, Context, Handleable, Key, KeyContainer,
+            metrics::TX_HANDLE_TIMER, Capability, Context, Handleable, Key,
+            KeyContainer,
         },
         request_manager::Request,
         Error, ErrorKind, ProtocolConfiguration,
@@ -38,21 +39,17 @@ impl Handleable for Transactions {
         let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
         let should_disconnect = {
             let mut peer_info = peer_info.write();
-            if peer_info.notified_mode.is_some()
-                && (peer_info.notified_mode.unwrap() == true)
+            if !peer_info
+                .notified_capabilities
+                .contains(Capability::TxRelay(true))
             {
                 peer_info.received_transaction_count += transactions.len();
-                if peer_info.received_transaction_count
+                peer_info.received_transaction_count
                     > ctx
                         .manager
                         .protocol_config
                         .max_trans_count_received_in_catch_up
                         as usize
-                {
-                    true
-                } else {
-                    false
-                }
             } else {
                 false
             }
@@ -104,7 +101,10 @@ impl Handleable for TransactionDigests {
         let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
 
         let mut peer_info = peer_info.write();
-        if let Some(true) = peer_info.notified_mode {
+        if !peer_info
+            .notified_capabilities
+            .contains(Capability::TxRelay(true))
+        {
             peer_info.received_transaction_count += self.trans_short_ids.len();
             if peer_info.received_transaction_count
                 > ctx

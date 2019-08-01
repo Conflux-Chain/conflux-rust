@@ -24,14 +24,15 @@ pub struct SynchronizationPeerState {
     /// The following fields are used to control how to handle
     /// transaction propagation for nodes in catch-up mode.
     pub received_transaction_count: usize,
-    pub notified_mode: Option<bool>,
 
     // heartbeat is used to disconnect inactive nodes periodically,
     // and updated when new message received.
     pub heartbeat: Instant,
 
-    // dynamic capabilities of the remote peer.
+    // latest capabilities received from the remote peer.
     pub capabilities: CapabilitySet,
+    // latest capabilities that notified to the remote peer.
+    pub notified_capabilities: CapabilitySet,
 }
 
 pub type SynchronizationPeers =

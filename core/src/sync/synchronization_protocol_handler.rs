@@ -1100,11 +1100,14 @@ impl SynchronizationProtocolHandler {
         let mut need_notify = Vec::new();
         for (peer, state) in self.syn.peers.read().iter() {
             let mut state = state.write();
-            if state.notified_mode.is_none()
-                || (state.notified_mode.unwrap() != catch_up_mode)
+            if !state
+                .notified_capabilities
+                .contains(Capability::TxRelay(catch_up_mode))
             {
                 state.received_transaction_count = 0;
-                state.notified_mode = Some(catch_up_mode);
+                state
+                    .notified_capabilities
+                    .insert(Capability::TxRelay(catch_up_mode));
                 need_notify.push(*peer);
             }
         }

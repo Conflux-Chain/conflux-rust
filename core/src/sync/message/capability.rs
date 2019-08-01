@@ -74,17 +74,16 @@ impl Decodable for Capability {
 
 #[derive(Debug, Default)]
 pub struct CapabilitySet {
-    // received capabilities from remote peer
-    recv: HashMap<u8, Capability>,
+    caps: HashMap<u8, Capability>,
 }
 
 impl CapabilitySet {
-    fn receive(&mut self, cap: Capability) {
-        self.recv.insert(cap.code(), cap);
+    pub fn insert(&mut self, cap: Capability) {
+        self.caps.insert(cap.code(), cap);
     }
 
     pub fn contains(&self, cap: Capability) -> bool {
-        match self.recv.get(&cap.code()) {
+        match self.caps.get(&cap.code()) {
             Some(cur_cap) => cur_cap == &cap,
             None => return false,
         }
@@ -99,7 +98,7 @@ pub struct CapabilityChange {
 impl Handleable for CapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
-        peer.write().capabilities.receive(self.changed);
+        peer.write().capabilities.insert(self.changed);
         Ok(())
     }
 }
