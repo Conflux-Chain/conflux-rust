@@ -72,9 +72,9 @@ impl Handleable for Status {
                 best_epoch: self.best_epoch,
                 latest_block_hashes: latest,
                 received_transaction_count: 0,
-                need_prop_trans: true,
-                notified_mode: None,
                 heartbeat: Instant::now(),
+                capabilities: Default::default(),
+                notified_capabilities: Default::default(),
             };
 
             debug!(
