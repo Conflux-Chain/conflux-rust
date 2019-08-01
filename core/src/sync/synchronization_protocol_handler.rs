@@ -1102,12 +1102,12 @@ impl SynchronizationProtocolHandler {
             let mut state = state.write();
             if !state
                 .notified_capabilities
-                .contains(DynamicCapability::TxRelay(catch_up_mode))
+                .contains(DynamicCapability::TxRelay(!catch_up_mode))
             {
                 state.received_transaction_count = 0;
                 state
                     .notified_capabilities
-                    .insert(DynamicCapability::TxRelay(catch_up_mode));
+                    .insert(DynamicCapability::TxRelay(!catch_up_mode));
                 need_notify.push(*peer);
             }
         }
