@@ -29,9 +29,9 @@ pub struct SynchronizationPeerState {
     // and updated when new message received.
     pub heartbeat: Instant,
 
-    // latest capabilities received from the remote peer.
+    // latest received capabilities from the remote peer.
     pub capabilities: DynamicCapabilitySet,
-    // latest capabilities that notified to the remote peer.
+    // latest notified capabilities of mine to the remote peer.
     pub notified_capabilities: DynamicCapabilitySet,
 }
 
