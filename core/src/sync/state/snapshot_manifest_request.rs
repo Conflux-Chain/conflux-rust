@@ -19,13 +19,15 @@ use std::{any::Any, time::Duration};
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
     pub checkpoint: H256,
+    pub trusted_blame_block: H256,
 }
 
 impl SnapshotManifestRequest {
-    pub fn new(checkpoint: H256) -> Self {
+    pub fn new(checkpoint: H256, trusted_blame_block: H256) -> Self {
         SnapshotManifestRequest {
             request_id: 0,
             checkpoint,
+            trusted_blame_block,
         }
     }
 }
@@ -40,9 +42,64 @@ impl Handleable for SnapshotManifestRequest {
             request_id: self.request_id,
             checkpoint: self.checkpoint.clone(),
             chunk_hashes: Vec::new(),
+            state_blame_vec: self
+                .get_blame_states(ctx)
+                .unwrap_or_else(|| Vec::new()),
         };
 
         ctx.send_response(&response)
+    }
+}
+
+impl SnapshotManifestRequest {
+    /// return an empty vec if some information not exist in db, caller may find
+    /// another peer to send the request; otherwise return a state_blame_vec
+    /// of the requested block
+    fn get_blame_states(self, ctx: &Context) -> Option<Vec<H256>> {
+        let trusted_block = ctx
+            .manager
+            .graph
+            .data_man
+            .block_header_by_hash(&self.trusted_blame_block)?;
+
+        let mut state_blame_vec = Vec::new();
+        let mut block_hash = trusted_block.hash();
+        let mut request_invalid = false;
+        loop {
+            if let Some(exec_info) = ctx
+                .manager
+                .graph
+                .data_man
+                .consensus_graph_execution_info_from_db(&block_hash)
+            {
+                state_blame_vec.push(exec_info.original_deferred_state_root);
+                if state_blame_vec.len() == trusted_block.blame() as usize + 1 {
+                    break;
+                }
+                if let Some(block) =
+                    ctx.manager.graph.data_man.block_header_by_hash(&block_hash)
+                {
+                    block_hash = block.parent_hash().clone();
+                } else {
+                    warn!(
+                        "failed to find block={} in db, peer={}",
+                        block_hash, ctx.peer
+                    );
+                    request_invalid = true;
+                    break;
+                }
+            } else {
+                warn!("failed to find ConsensusGraphExecutionInfo for block={} in db, peer={}", block_hash, ctx.peer);
+                request_invalid = true;
+                break;
+            }
+        }
+
+        if request_invalid {
+            None
+        } else {
+            Some(state_blame_vec)
+        }
     }
 }
 

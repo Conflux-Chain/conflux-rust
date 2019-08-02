@@ -289,19 +289,27 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .data_man
             .get_cur_consensus_era_genesis_hash();
 
-        if let Status::Completed(completed) = self.state_sync.status() {
-            if completed == checkpoint {
-                // todo broadcast this cap when new era started,
-                // and filter peers with this cap to sync checkpoint.
-                DynamicCapability::ServeCheckpoint(Some(checkpoint))
-                    .broadcast(io, &sync_handler.syn);
-                return SyncPhaseType::CatchUpRecoverBlockFromDB;
-            }
+        // move to next phase only if checkpoint not changed and sync completed
+        if self.state_sync.checkpoint() == checkpoint
+            && self.state_sync.status() == Status::Completed
+        {
+            DynamicCapability::ServeCheckpoint(Some(checkpoint))
+                .broadcast(io, &sync_handler.syn);
+            return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
 
         // start to sync new checkpoint if new era started,
-        // otherwise, no-op
-        self.state_sync.start(checkpoint, io, sync_handler);
+        if checkpoint != self.state_sync.checkpoint() {
+            match sync_handler.graph.consensus.get_trusted_blame_block() {
+                Some(block) => {
+                    self.state_sync.start(checkpoint, block, io, sync_handler)
+                }
+                None => {
+                    // FIXME should find the trusted blame block
+                    error!("failed to start checkpoint sync, the trusted blame block is unavailable");
+                }
+            }
+        }
 
         self.phase_type()
     }
@@ -318,9 +326,27 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .data_man
             .get_cur_consensus_era_genesis_hash();
 
-        info!("start to sync state for checkpoint {:?}", checkpoint);
+        let trusted_blame_block = match sync_handler
+            .graph
+            .consensus
+            .get_trusted_blame_block()
+        {
+            Some(block) => block,
+            None => {
+                // FIXME should find the trusted blame block
+                error!("failed to start checkpoint sync, the trusted blame block is unavailable");
+                return;
+            }
+        };
 
-        self.state_sync.start(checkpoint, io, sync_handler);
+        info!("start to sync state for checkpoint {:?}, trusted blame block = {:?}", checkpoint, trusted_blame_block);
+
+        self.state_sync.start(
+            checkpoint,
+            trusted_blame_block,
+            io,
+            sync_handler,
+        );
     }
 }
 

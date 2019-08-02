@@ -19,6 +19,7 @@ pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub checkpoint: H256,
     pub chunk_hashes: Vec<H256>,
+    pub state_blame_vec: Vec<H256>,
 }
 
 build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
@@ -68,6 +69,11 @@ impl SnapshotManifestResponse {
             self.chunk_hashes.iter().cloned().collect();
         if distinct_chunks.len() != self.chunk_hashes.len() {
             debug!("Responded snapshot manifest has duplicated chunks");
+            bail!(ErrorKind::Invalid);
+        }
+
+        if self.state_blame_vec.is_empty() {
+            debug!("Responded snapshot manifest has empty blame states");
             bail!(ErrorKind::Invalid);
         }
 
