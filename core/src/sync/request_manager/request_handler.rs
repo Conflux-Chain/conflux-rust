@@ -8,7 +8,7 @@ use crate::{
         Error, ErrorKind,
     },
 };
-use network::{NetworkContext, PeerId};
+use network::{NetworkContext, PeerId, UpdateNodeOperation};
 use parking_lot::Mutex;
 use std::{
     any::Any,
@@ -20,8 +20,11 @@ use std::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+const TIMEOUT_OBSERVING_PERIOD_IN_SEC: u64 = 600;
+const MAX_ALLOWED_TIMEOUT_IN_OBSERVING_PERIOD: u64 = 10;
 
 pub struct RequestHandler {
     protocol_config: ProtocolConfiguration,
@@ -174,7 +177,6 @@ impl RequestHandler {
                 break;
             } else {
                 debug!("Timeout request {:?}", sync_req);
-                // TODO And should handle timeout peers.
                 timeout_requests.push(sync_req);
             }
         }
@@ -190,6 +192,17 @@ impl RequestHandler {
             if let Ok(req) =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id)
             {
+                let peer_id = sync_req.peer_id;
+                if let Some(request_container) =
+                    self.peers.lock().get_mut(&peer_id)
+                {
+                    if request_container.on_timeout_should_disconnect() {
+                        io.disconnect_peer(
+                            peer_id,
+                            Some(UpdateNodeOperation::Demotion),
+                        );
+                    }
+                }
                 timeout_requests.push(req);
             } else {
                 debug!("Timeout a removed request {:?}", sync_req);
@@ -214,9 +227,38 @@ struct RequestContainer {
     pub next_request_id: u64,
     pub max_inflight_request_count: u64,
     pub pending_requests: VecDeque<RequestMessage>,
+    pub timeout_statistics: VecDeque<u64>,
 }
 
 impl RequestContainer {
+    pub fn on_timeout_should_disconnect(&mut self) -> bool {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        if self.timeout_statistics.is_empty() {
+            self.timeout_statistics.push_back(now);
+            return false;
+        }
+
+        self.timeout_statistics.push_back(now);
+        loop {
+            let old_time = *self.timeout_statistics.front().unwrap();
+            if now - old_time <= TIMEOUT_OBSERVING_PERIOD_IN_SEC {
+                break;
+            }
+            self.timeout_statistics.pop_front();
+        }
+
+        if self.timeout_statistics.len()
+            <= MAX_ALLOWED_TIMEOUT_IN_OBSERVING_PERIOD as usize
+        {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
     /// If new request will be allowed to send, advance the request id now,
     /// otherwise, actual new request id will be given to this request
     /// when it is moved from pending to inflight queue.
