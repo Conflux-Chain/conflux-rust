@@ -5,7 +5,10 @@
 use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
-use crate::sync::{message::DynamicCapabilitySet, random, Error, ErrorKind};
+use crate::sync::{
+    message::{DynamicCapability, DynamicCapabilitySet},
+    random, Error, ErrorKind,
+};
 use parking_lot::RwLock;
 use rand::Rng;
 use std::{
@@ -115,6 +118,22 @@ impl SynchronizationState {
 
         let mut rand = random::new();
         rand.choose(&choose_from).cloned()
+    }
+
+    pub fn get_random_peer_with_cap(
+        &self, cap: Option<DynamicCapability>,
+    ) -> Option<PeerId> {
+        match cap {
+            Some(cap) => self.get_random_peer_satisfying(|peer| {
+                peer.capabilities.contains(cap)
+            }),
+            None => {
+                let peers: Vec<PeerId> =
+                    self.peers.read().keys().cloned().collect();
+                let mut rand = random::new();
+                rand.choose(&peers).cloned()
+            }
+        }
     }
 
     pub fn get_random_peers(&self, size: usize) -> Vec<PeerId> {

@@ -2,10 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod message;
-mod protocol;
+mod handler;
+mod peers;
+mod query;
+mod sync;
 
-pub use message::msgid;
-pub use protocol::{
-    GetStateEntry, GetStateRoot, StateEntry, StateRoot, Status,
-};
+pub(super) use query::QueryResult;
+
+pub use handler::Handler;

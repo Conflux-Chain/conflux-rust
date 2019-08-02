@@ -8,6 +8,15 @@ use primitives::StateRoot as PrimitiveStateRoot;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
+pub struct Status {
+    pub protocol_version: u8,
+    pub network_id: u8,
+    pub genesis_hash: H256,
+    pub best_epoch: u64,
+    pub terminals: Vec<H256>,
+}
+
+#[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct GetStateRoot {
     pub request_id: RequestId,
     pub epoch: u64,
