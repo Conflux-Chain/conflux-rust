@@ -5,7 +5,10 @@
 use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
-use crate::sync::{random, Error, ErrorKind};
+use crate::sync::{
+    message::{DynamicCapability, DynamicCapabilitySet},
+    random, Error, ErrorKind,
+};
 use parking_lot::RwLock;
 use rand::Rng;
 use std::{
@@ -24,12 +27,15 @@ pub struct SynchronizationPeerState {
     /// The following fields are used to control how to handle
     /// transaction propagation for nodes in catch-up mode.
     pub received_transaction_count: usize,
-    pub need_prop_trans: bool,
-    pub notified_mode: Option<bool>,
 
     // heartbeat is used to disconnect inactive nodes periodically,
     // and updated when new message received.
     pub heartbeat: Instant,
+
+    // latest received capabilities from the remote peer.
+    pub capabilities: DynamicCapabilitySet,
+    // latest notified capabilities of mine to the remote peer.
+    pub notified_capabilities: DynamicCapabilitySet,
 }
 
 pub type SynchronizationPeers =
@@ -96,27 +102,72 @@ impl SynchronizationState {
     pub fn get_random_peer_satisfying<F>(
         &self, predicate: F,
     ) -> Option<PeerId>
-    where F: Fn(&&PeerId) -> bool {
-        let peer_set: HashSet<PeerId> =
-            self.peers.read().keys().cloned().collect();
-        let choose_from: Vec<&PeerId> =
-            peer_set.iter().filter(predicate).collect();
+    where F: Fn(&SynchronizationPeerState) -> bool {
+        let choose_from: Vec<PeerId> = self
+            .peers
+            .read()
+            .iter()
+            .filter_map(|(id, state)| {
+                if predicate(&*state.read()) {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         let mut rand = random::new();
-        rand.choose(&choose_from).cloned().cloned()
+        rand.choose(&choose_from).cloned()
+    }
+
+    pub fn get_random_peer_with_cap(
+        &self, cap: Option<DynamicCapability>,
+    ) -> Option<PeerId> {
+        match cap {
+            Some(cap) => self.get_random_peer_satisfying(|peer| {
+                peer.capabilities.contains(cap)
+            }),
+            None => {
+                let peers: Vec<PeerId> =
+                    self.peers.read().keys().cloned().collect();
+                let mut rand = random::new();
+                rand.choose(&peers).cloned()
+            }
+        }
+    }
+
+    pub fn get_random_peers(&self, size: usize) -> Vec<PeerId> {
+        let mut peers: Vec<PeerId> =
+            self.peers.read().keys().cloned().collect();
+        let mut rand = random::new();
+        rand.shuffle(&mut peers);
+        peers.truncate(size);
+        peers
     }
 
     /// Choose a random peer set given set size
     /// Return all peers if there are not enough peers
-    pub fn get_random_peer_vec<F>(
+    pub fn get_random_peers_satisfying<F>(
         &self, size: usize, filter: F,
     ) -> Vec<PeerId>
-    where F: Fn(&PeerId) -> bool {
-        let mut peer_vec: Vec<PeerId> =
-            self.peers.read().keys().cloned().filter(filter).collect();
+    where F: Fn(&SynchronizationPeerState) -> bool {
+        let mut peers: Vec<PeerId> = self
+            .peers
+            .read()
+            .iter()
+            .filter_map(|(id, state)| {
+                if filter(&*state.read()) {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         let mut rand = random::new();
-        rand.shuffle(&mut peer_vec);
-        peer_vec.truncate(size);
-        peer_vec
+        rand.shuffle(&mut peers);
+        peers.truncate(size);
+        peers
     }
 
     /// Updates the heartbeat for the specified peer. It takes no effect if the

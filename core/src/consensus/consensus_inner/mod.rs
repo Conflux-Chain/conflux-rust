@@ -14,13 +14,12 @@ use crate::{
         anticone_cache::AnticoneCache, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
         BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
     },
-    hash::KECCAK_EMPTY_LIST_RLP,
     pow::{target_difficulty, ProofOfWorkConfig},
     state::State,
     statedb::StateDb,
     storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
 };
-use cfx_types::{into_i128, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512};
+use cfx_types::{into_i128, H160, H256, U256, U512};
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::{
     CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
@@ -412,8 +411,6 @@ impl ConsensusGraphInner {
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
             last_pivot_in_past_blocks,
         });
-        assert!(inner.genesis_block_receipts_root == KECCAK_EMPTY_LIST_RLP);
-        assert!(inner.genesis_block_logs_bloom_hash == KECCAK_EMPTY_BLOOM);
 
         inner.data_man.insert_epoch_execution_context(
             data_man.genesis_block().hash(),
@@ -1153,7 +1150,7 @@ impl ConsensusGraphInner {
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
-        let parent = if *block_header.parent_hash() != H256::default() {
+        let parent = if hash != self.data_man.genesis_block().hash() {
             self.hash_to_arena_indices
                 .get(block_header.parent_hash())
                 .cloned()

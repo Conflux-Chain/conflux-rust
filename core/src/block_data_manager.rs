@@ -236,6 +236,9 @@ impl BlockDataManager {
             );
         }
 
+        *data_man.cur_consensus_era_genesis_hash.write() =
+            data_man.genesis_block().block_header.hash();
+
         data_man
     }
 

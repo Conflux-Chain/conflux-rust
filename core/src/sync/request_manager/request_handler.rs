@@ -1,10 +1,11 @@
 use crate::{
     message::{HasRequestId, Message},
     sync::{
-        message::KeyContainer, msg_sender::send_message,
+        message::{DynamicCapability, KeyContainer},
+        msg_sender::send_message,
         request_manager::RequestManager,
-        synchronization_protocol_handler::ProtocolConfiguration, Error,
-        ErrorKind,
+        synchronization_protocol_handler::ProtocolConfiguration,
+        Error, ErrorKind,
     },
 };
 use network::{NetworkContext, PeerId};
@@ -373,6 +374,9 @@ pub trait Request: Send + Debug + HasRequestId {
     /// If resend is not required, return `None`, e.g. request transactions
     /// failed.
     fn resend(&self) -> Option<Box<Request>>;
+
+    /// Required peer capability to send this request
+    fn required_capability(&self) -> Option<DynamicCapability> { None }
 }
 
 #[derive(Debug)]

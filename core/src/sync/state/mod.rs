@@ -24,8 +24,8 @@ pub trait StateSync {
     /// - Otherwise if checkpoint not changed, then no-op happen.
     /// - Otherwise, cleanup the previous sync and start new sync.
     fn start(
-        &self, _checkpoint: H256, _io: &NetworkContext,
-        _sync_handler: &SynchronizationProtocolHandler,
+        &self, _checkpoint: H256, _trusted_blame_block: H256,
+        _io: &NetworkContext, _sync_handler: &SynchronizationProtocolHandler,
     );
 }
 
