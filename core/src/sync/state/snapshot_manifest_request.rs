@@ -5,7 +5,9 @@
 use crate::{
     message::{HasRequestId, Message, MsgId, RequestId},
     sync::{
-        message::{msgid, Context, Handleable, KeyContainer},
+        message::{
+            msgid, Context, DynamicCapability, Handleable, KeyContainer,
+        },
         request_manager::Request,
         state::snapshot_manifest_response::SnapshotManifestResponse,
         Error, ProtocolConfiguration,
@@ -119,4 +121,10 @@ impl Request for SnapshotManifestRequest {
     fn is_empty(&self) -> bool { false }
 
     fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
+
+    fn required_capability(&self) -> Option<DynamicCapability> {
+        Some(DynamicCapability::ServeCheckpoint(Some(
+            self.checkpoint.clone(),
+        )))
+    }
 }
