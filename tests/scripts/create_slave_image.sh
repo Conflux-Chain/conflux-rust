@@ -5,12 +5,13 @@ export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 SCRIPT_DIR="$( cd "$(dirname "$0")" ; pwd -P )"
 
 if [[ $# -lt 1 ]]; then
-    echo "Parameters required: <keypair> [<branch>]"
+    echo "Parameters required: <keypair> [<branch>] [<repo>]"
     exit 1
 fi
 
 key_pair="$1"
 branch="${2:-master}"
+repo="${3:-https://github.com/Conflux-Chain/conflux-rust}"
 
 echo "create an instance to make slave image ..."
 $SCRIPT_DIR/launch-on-demand.sh 1 $key_pair ${key_pair}_master
@@ -20,7 +21,7 @@ master_ip=`cat ips`
 master_id=`cat instances`
 setup_script="setup_image.sh"
 scp -o "StrictHostKeyChecking no" $SCRIPT_DIR/$setup_script ubuntu@$master_ip:~
-ssh ubuntu@$master_ip ./$setup_script $branch
+ssh ubuntu@$master_ip ./$setup_script $branch $repo
 
 # create slave image
 echo "create slave image ..."
