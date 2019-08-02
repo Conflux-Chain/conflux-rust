@@ -322,8 +322,10 @@ impl RequestManager {
     pub fn send_request_again(
         &self, io: &NetworkContext, msg: &RequestMessage,
     ) {
-        let chosen_peer = self.syn.get_random_peer(&HashSet::new());
         if let Some(request) = msg.request.resend() {
+            let chosen_peer = self
+                .syn
+                .get_random_peer_with_cap(request.required_capability());
             self.request_with_delay(io, request, chosen_peer, msg.delay);
         }
     }
@@ -550,9 +552,11 @@ impl RequestManager {
                 break;
             }
 
-            let maybe_peer = req
-                .peer
-                .or_else(|| self.syn.get_random_peer(&HashSet::new()));
+            let maybe_peer = req.peer.or_else(|| {
+                self.syn.get_random_peer_with_cap(
+                    req.request.0.required_capability(),
+                )
+            });
             let chosen_peer = match maybe_peer {
                 Some(p) => p,
                 None => {

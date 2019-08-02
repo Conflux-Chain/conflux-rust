@@ -120,12 +120,9 @@ impl StateSync for SnapshotChunkSync {
         // start to request manifest with specified checkpoint
         let request =
             SnapshotManifestRequest::new(checkpoint, trusted_blame_block);
-        let peer = sync_handler.syn.get_random_peer_satisfying(|peer| {
-            peer.capabilities
-                .contains(DynamicCapability::ServeCheckpoint(Some(
-                    inner.checkpoint,
-                )))
-        });
+        let peer = sync_handler.syn.get_random_peer_with_cap(Some(
+            DynamicCapability::ServeCheckpoint(Some(inner.checkpoint.clone())),
+        ));
 
         sync_handler.request_manager.request_with_delay(
             io,
