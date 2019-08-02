@@ -17,25 +17,34 @@ use crate::{
     storage::{
         state_manager::StateManagerTrait, SnapshotAndEpochIdRef, StateProof,
     },
+    sync::SynchronizationGraph,
 };
 
 use super::{
     handle_error,
     message::{
-        msgid, GetStateEntry, GetStateRoot,
+        msgid, BlockHashes as GetBlockHashesResponse,
+        BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
+        GetBlockHeaders, GetStateEntry, GetStateRoot,
         StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
         Status,
     },
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
 
+pub const MAX_EPOCHS_TO_SEND: usize = 128;
+pub const MAX_HEADERS_TO_SEND: usize = 512;
+
 pub struct QueryProvider {
     consensus: Arc<ConsensusGraph>,
+    graph: Arc<SynchronizationGraph>,
 }
 
 impl QueryProvider {
-    pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
-        QueryProvider { consensus }
+    pub fn new(
+        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
+    ) -> Self {
+        QueryProvider { consensus, graph }
     }
 
     pub fn register(
@@ -52,6 +61,7 @@ impl QueryProvider {
             })
     }
 
+    #[rustfmt::skip]
     fn dispatch_message(
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
@@ -60,6 +70,8 @@ impl QueryProvider {
         match msg_id {
             msgid::GET_STATE_ROOT => self.on_get_state_root(io, peer, &rlp),
             msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
+            msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, &rlp),
+            msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -171,6 +183,53 @@ impl QueryProvider {
             state_root,
             entry,
             proof,
+        });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_block_hashes_by_epoch(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetBlockHashesByEpoch = rlp.as_val()?;
+        info!("on_get_block_hashes_by_epoch req={:?}", req);
+        let request_id = req.request_id;
+
+        let hashes = req
+            .epochs
+            .iter()
+            .take(MAX_EPOCHS_TO_SEND)
+            .filter_map(|&e| self.graph.get_block_hashes_by_epoch(e).ok())
+            .fold(vec![], |mut res, sub| {
+                res.extend(sub);
+                res
+            });
+
+        let msg: Box<dyn Message> =
+            Box::new(GetBlockHashesResponse { request_id, hashes });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_block_headers(
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetBlockHeaders = rlp.as_val()?;
+        info!("on_get_block_headers req={:?}", req);
+        let request_id = req.request_id;
+
+        let headers = req
+            .hashes
+            .iter()
+            .take(MAX_HEADERS_TO_SEND)
+            .filter_map(|h| self.graph.block_header_by_hash(&h))
+            .collect();
+
+        let msg: Box<dyn Message> = Box::new(GetBlockHeadersResponse {
+            request_id,
+            headers,
         });
 
         msg.send(io, peer)?;
