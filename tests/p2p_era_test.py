@@ -18,7 +18,7 @@ class P2PTest(ConfluxTestFramework):
         # Every node generates 1 tx every second
         self.conf_parameters["generate_tx_period_us"] = "100000"
         self.conf_parameters["log_level"] = "\"debug\""
-        self.conf_parameters["era_epoch_count"] = "150"
+        self.conf_parameters["era_epoch_count"] = "50"
         self.conf_parameters["era_checkpoint_gap"] = "150"
 
     def setup_network(self):
@@ -27,7 +27,7 @@ class P2PTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def run_test(self):
-        block_number = 4000
+        block_number = 2000
 
         # Setup balance for each node
         client = RpcClient(self.nodes[0])
@@ -42,7 +42,7 @@ class P2PTest(ConfluxTestFramework):
             self.log.debug("%d try to generate", chosen_peer)
             block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
             self.log.info("%d generate block %s", chosen_peer, block_hash)
-            time.sleep(random.random()/30)
+            time.sleep(random.random()/15)
         wait_for_block_count(self.nodes[0], block_number)
         sync_blocks(self.nodes, timeout=30)
         hasha = self.nodes[0].getbestblockhash()
