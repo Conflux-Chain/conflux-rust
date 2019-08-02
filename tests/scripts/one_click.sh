@@ -2,12 +2,13 @@
 set -euxo pipefail
 
 if [ $# -lt 2 ]; then
-    echo "Parameters required: <key_pair> <instance_count> [<branch_name>]"
+    echo "Parameters required: <key_pair> <instance_count> [<branch_name>] [<repository_url>]"
     exit 1
 fi
 key_pair="$1"
 slave_count=$2
 branch="${3:-master}"
+repo="${4:-https://github.com/Conflux-Chain/conflux-rust}"
 slave_role=${key_pair}_exp_slave
 
 run_latency_exp () {
@@ -16,7 +17,7 @@ run_latency_exp () {
     tps=$3
 
     #1) Create master instance and slave image
-    ./create_slave_image.sh $key_pair $branch
+    ./create_slave_image.sh $key_pair $branch $repo
     ./ip.sh --public
 
     #2) Launch slave instances
@@ -55,10 +56,11 @@ run_latency_exp () {
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000,250:1:150000:1000,250:1:150000:1000,250:1:150000:1000"
-exp_config="250:1:300000:4000"
+exp_config="250:1:300000:2000"
 
 # For experiments with --enable-tx-propagation , <txs_per_block> * <tx_size> will be used as block size 
-tps=4500
+
+tps=3000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps
 
