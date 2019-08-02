@@ -19,6 +19,10 @@ error_chain! {
     }
 
     errors {
+        GenesisMismatch {
+            description("Genesis mismatch"),
+            display("Genesis mismatch"),
+        }
         NoResponse {
             description("NoResponse"),
             display("NoResponse"),
@@ -95,9 +99,9 @@ pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         | ErrorKind::PivotHashMismatch
         | ErrorKind::UnknownMessage => disconnect = false,
 
-        ErrorKind::UnknownPeer | ErrorKind::Msg(_) => {
-            op = Some(UpdateNodeOperation::Failure)
-        }
+        ErrorKind::GenesisMismatch
+        | ErrorKind::UnknownPeer
+        | ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
 
         ErrorKind::UnexpectedRequestId | ErrorKind::UnexpectedResponse => {
             op = Some(UpdateNodeOperation::Demotion)

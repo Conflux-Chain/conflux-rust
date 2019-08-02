@@ -6,4 +6,6 @@ mod message;
 mod protocol;
 
 pub use message::msgid;
-pub use protocol::{GetStateEntry, GetStateRoot, StateEntry, StateRoot};
+pub use protocol::{
+    GetStateEntry, GetStateRoot, StateEntry, StateRoot, Status,
+};
