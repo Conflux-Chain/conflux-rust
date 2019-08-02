@@ -242,20 +242,6 @@ impl RequestContainer {
         }
 
         self.timeout_statistics.push_back(now);
-        let oldest_time = *self.timeout_statistics.front().unwrap();
-        if now - oldest_time < TIMEOUT_OBSERVING_PERIOD_IN_SEC {
-            return false;
-        } else if now - oldest_time == TIMEOUT_OBSERVING_PERIOD_IN_SEC {
-            if self.timeout_statistics.len()
-                <= MAX_ALLOWED_TIMEOUT_IN_OBSERVING_PERIOD as usize
-            {
-                return false;
-            } else {
-                return true;
-            }
-        }
-
-        self.timeout_statistics.pop_front();
         loop {
             let old_time = *self.timeout_statistics.front().unwrap();
             if now - old_time <= TIMEOUT_OBSERVING_PERIOD_IN_SEC {
