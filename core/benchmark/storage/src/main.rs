@@ -1645,11 +1645,7 @@ impl TxReplayer {
         }
     }
 
-    pub fn commit(
-        latest_state: &mut StateDb, last_state_root: &mut H256, txs: u64,
-        ops: u64,
-    )
-    {
+    pub fn commit(latest_state: &mut StateDb, txs: u64, ops: u64) -> H256 {
         warn!("Committing block at tx {}, ops {}.", txs, ops);
 
         // We want to use the delta trie root, but we don't want to compute
@@ -1658,7 +1654,7 @@ impl TxReplayer {
             unsafe { std::mem::transmute::<_, &mut Storage>(latest_state) };
         let state_root = storage.compute_state_root().unwrap();
         storage.commit(state_root.state_root.delta_root).unwrap();
-        *last_state_root = state_root.state_root.delta_root;
+        state_root.state_root.delta_root
     }
 
     pub fn add_tx<'a>(
@@ -1713,9 +1709,8 @@ impl TxReplayer {
 
         self.tx_counts.set(self.tx_counts.get() + 1);
         if self.tx_counts.get() % Self::EPOCH_TXS == 0 {
-            Self::commit(
+            *last_state_root = Self::commit(
                 latest_state,
-                last_state_root,
                 self.tx_counts.get(),
                 self.ops_counts.get(),
             );
@@ -1911,9 +1906,8 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
             }
         }
     }
-    TxReplayer::commit(
+    last_state_root = TxReplayer::commit(
         &mut latest_state,
-        &mut last_state_root,
         tx_replayer.tx_counts.get(),
         tx_replayer.ops_counts.get(),
     );
