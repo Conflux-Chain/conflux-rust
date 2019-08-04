@@ -214,8 +214,8 @@ impl<EthTxT: EthTxTypeTrait> EthTxVerifierWorkerThread<EthTxT> {
             n_contract_creation: 0,
             n_nonce_error: 0,
             tx_sender: Mutex::new(sender),
-            tx_maker: tx_maker,
-            out_streamer: out_streamer,
+            tx_maker,
+            out_streamer,
             thread_handle: None,
         }));
 
@@ -368,8 +368,8 @@ impl<EthTxT: EthTxTypeTrait> EthTxVerifier<EthTxT> {
         }
 
         Ok(EthTxVerifier {
-            workers: workers,
-            out_streamer: out_streamer,
+            workers,
+            out_streamer,
         })
     }
 
@@ -666,7 +666,7 @@ impl<RequestT: FIFOConsumerRequestTrait> FIFOConsumerThread<RequestT> {
             Arc::new(Mutex::new(FIFOConsumerResult::<ResultT> {
                 task_id: 0,
                 results: Default::default(),
-                result_processor: result_processor,
+                result_processor,
             }));
 
         let mut threads = Vec::with_capacity(n_threads);
@@ -959,7 +959,7 @@ impl TxMaker for RealizedEthTxMaker {
 
         Some(RealizedEthTx {
             sender: maybe_sender,
-            receiver: receiver,
+            receiver,
             amount_wei: tx.value,
             tx_fee_wei: tx_fee,
             types: EthTxType::Transaction,
@@ -1109,8 +1109,8 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
                     Some(sender) => (
                         task.basic_verification_index,
                         Ok(EthTxNonceVerifierRequest {
-                            block: block,
-                            block_number: block_number,
+                            block,
+                            block_number,
                             transaction_index: task.transaction_index,
                             base_transaction_number: task
                                 .base_transaction_number,
@@ -1127,10 +1127,10 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
         );
 
         let result = Ok(Arc::new(EthTxExtractor {
-            tx_basic_verifiers: tx_basic_verifiers,
+            tx_basic_verifiers,
             ethash_params: ethash.params.into(),
             params: EthSpec::load(File::open(path)?)?.params.into(),
-            dao_hardfork_info: dao_hardfork_info,
+            dao_hardfork_info,
             counters: Default::default(),
             nonce_verifier: EthTxVerifier::new(
                 path_to_tx_file,
@@ -1273,14 +1273,14 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
     {
         // FIXME: move it outside;
         let request = EthTxBasicVerifierRequest {
-            basic_verification_index: basic_verification_index,
+            basic_verification_index,
             base_transaction_number: base_tx_number,
-            block: block,
-            transaction_index: transaction_index,
+            block,
+            transaction_index,
 
-            check_low_s: check_low_s,
-            chain_id: chain_id,
-            allow_empty_signature: allow_empty_signature,
+            check_low_s,
+            chain_id,
+            allow_empty_signature,
 
             tx_extractor: self.shared_self.as_ref().unwrap().clone(),
         };
@@ -1414,7 +1414,7 @@ impl<EthTxT: EthTxTypeTrait> TxExtractor for EthTxExtractor<EthTxT> {
 
         let mut basic_verification_index = self.counters.lock().n_tx_seen;
         let mut thread = basic_verification_index % Self::N_TX_BASIC_VERIFIERS;
-        for (i, _) in block.transactions.enumerate() {
+        for i in 0..block.transactions.len() {
             unsafe {
                 let tx = block.transactions.get_unchecked(i);
                 self.tx_verify(
@@ -1638,22 +1638,20 @@ impl TxReplayer {
         });
 
         TxReplayer {
-            storage_manager: storage_manager,
+            storage_manager,
             tx_counts: Cell::new(0),
             ops_counts: Cell::new(0),
-            exit: exit,
+            exit,
         }
     }
 
-    pub fn commit(mut latest_state: StateDb, txs: u64, ops: u64) -> H256 {
+    pub fn commit(latest_state: &mut StateDb, txs: u64, ops: u64) -> H256 {
         warn!("Committing block at tx {}, ops {}.", txs, ops);
-        let state_root =
-            latest_state.get_storage_mut().compute_state_root().unwrap();
-        latest_state
-            .get_storage_mut()
-            .commit(state_root.clone())
-            .unwrap();
 
+        let storage = latest_state.get_storage_mut();
+        let state_root =
+            storage.compute_state_root().unwrap().state_root.delta_root;
+        storage.commit(state_root).unwrap();
         state_root
     }
 
@@ -1663,8 +1661,7 @@ impl TxReplayer {
     )
     {
         if let Some(sender) = tx.sender {
-            let maybe_account =
-                latest_state.get_account(&sender).unwrap();
+            let maybe_account = latest_state.get_account(&sender).unwrap();
             self.ops_counts.set(self.ops_counts.get() + 2);
             match maybe_account {
                 Some(mut account) => {
@@ -1686,8 +1683,7 @@ impl TxReplayer {
             }
         }
         if let Some(receiver) = tx.receiver {
-            let maybe_account =
-                latest_state.get_account(&receiver).unwrap();
+            let maybe_account = latest_state.get_account(&receiver).unwrap();
             let mut account;
             match maybe_account {
                 Some(account_) => {
@@ -1704,31 +1700,27 @@ impl TxReplayer {
                 }
             }
             latest_state
-                .set::<Account>(
-                    &latest_state.account_key(&receiver),
-                    &account,
-                )
+                .set::<Account>(&latest_state.account_key(&receiver), &account)
                 .unwrap();
             self.ops_counts.set(self.ops_counts.get() + 2);
         }
 
         self.tx_counts.set(self.tx_counts.get() + 1);
         if self.tx_counts.get() % Self::EPOCH_TXS == 0 {
-            unsafe {
-                *last_state_root = Self::commit(
-                    std::ptr::read(latest_state),
-                    self.tx_counts.get(),
-                    self.ops_counts.get(),
-                );
-                std::ptr::write(
-                    latest_state,
-                    StateDb::new(
-                        self.storage_manager
-                            .get_state_at(*last_state_root)
-                            .unwrap(),
-                    ),
-                );
-            }
+            *last_state_root = Self::commit(
+                latest_state,
+                self.tx_counts.get(),
+                self.ops_counts.get(),
+            );
+            *latest_state = StateDb::new(
+                self.storage_manager
+                    .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+                        last_state_root,
+                        None,
+                    ))
+                    .unwrap()
+                    .unwrap(),
+            );
         }
     }
 }
@@ -1759,8 +1751,9 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         Some(value) => Some(value.parse::<usize>().unwrap()),
     };
 
+    let mut latest_state;
     let mut last_state_root;
-    // Check if starting from empty.
+
     if tx_replayer
         .storage_manager
         .start_commit()
@@ -1770,27 +1763,34 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         == 0
     {
         last_state_root = H256::default();
+        latest_state = StateDb::new(
+            tx_replayer.storage_manager.get_state_for_genesis_write(),
+        );
     } else {
         last_state_root =
             hexstr_to_h256(&matches.value_of("last_state_root").unwrap());
-
-        assert_eq!(
-            last_state_root,
+        let true_state_root = tx_replayer
+            .storage_manager
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(
+                &last_state_root,
+                None,
+            ))
+            .unwrap()
+            .unwrap()
+            .compute_state_root()
+            .unwrap();
+        assert_eq!(true_state_root.state_root.delta_root, last_state_root);
+        latest_state = StateDb::new(
             tx_replayer
                 .storage_manager
-                .get_state_at(last_state_root)
+                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+                    &last_state_root,
+                    None,
+                ))
                 .unwrap()
-                .compute_state_root()
-                .unwrap()
+                .unwrap(),
         );
     }
-
-    let mut latest_state = StateDb::new(
-        tx_replayer
-            .storage_manager
-            .get_state_at(last_state_root)
-            .unwrap(),
-    );
 
     // Load block RLP from file.
     let mut rlp_file = File::open(matches.value_of("txs").unwrap())?;
@@ -1801,10 +1801,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         Some(mut value) => {
             let buffer_ptr = buffer.as_mut_ptr();
             let buffer = unsafe {
-                slice::from_raw_parts_mut(
-                    buffer_ptr.offset(0),
-                    BUFFER_SIZE,
-                )
+                slice::from_raw_parts_mut(buffer_ptr.offset(0), BUFFER_SIZE)
             };
             while value != 0 {
                 let buf_size = if value > BUFFER_SIZE {
@@ -1815,7 +1812,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
 
                 value -= rlp_file.read(&mut buffer[0..buf_size])?;
             }
-        },
+        }
         None => {}
     }
     let mut num_txs_read = 0;
@@ -1876,7 +1873,9 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
                     // Finally we have a tx.
                     num_txs_read += 1;
                     total_bytes_read += rlp_len;
-                    if txs_to_process.is_some() && num_txs_read > txs_to_process.unwrap() {
+                    if txs_to_process.is_some()
+                        && num_txs_read > txs_to_process.unwrap()
+                    {
                         println!("Already read {} transactions. total bytes read = {}. exiting...",
                                  num_txs_read, total_bytes_read);
                         break 'read;
@@ -1905,12 +1904,12 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
             }
         }
     }
-    TxReplayer::commit(
-        latest_state,
+    last_state_root = TxReplayer::commit(
+        &mut latest_state,
         tx_replayer.tx_counts.get(),
         tx_replayer.ops_counts.get(),
     );
-    warn!("tx replay last state root = {:?}", last_state_root);
+    warn!("tx replay last state_root = {:?}", last_state_root);
     Ok(())
 }
 
@@ -2032,10 +2031,10 @@ fn main() -> errors::Result<()> {
 }
 
 use cfxcore::{
-    statedb::{StateDb},
+    statedb::StateDb,
     storage::{
-        state_manager::StorageConfiguration, StorageManager,
-        StorageManagerTrait, StorageTrait,
+        state_manager::StorageConfiguration, SnapshotAndEpochIdRef,
+        StorageManager, StorageManagerTrait, StorageTrait,
     },
 };
 use clap::{App, Arg, ArgMatches};

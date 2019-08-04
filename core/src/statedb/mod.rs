@@ -24,6 +24,9 @@ pub struct StateDb<'a> {
 impl<'a> StateDb<'a> {
     pub fn new(storage: Storage<'a>) -> Self { StateDb { storage } }
 
+    #[allow(unused)]
+    pub fn get_storage_mut(&mut self) -> &mut Storage<'a> { &mut self.storage }
+
     pub fn account_key(&self, address: &Address) -> StorageKey {
         StorageKey::new_account_key(address, self.storage.get_padding())
     }

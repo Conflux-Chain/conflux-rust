@@ -5,14 +5,20 @@ ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 function check_build {
     local test_reuslt=$1
 
+    export CARGO_TARGET_DIR=$ROOT_DIR/build
+    export RUSTFLAGS="-D warnings"
+
     #rm -rf $ROOT_DIR/build && mkdir -p $ROOT_DIR/build
     pushd $ROOT_DIR > /dev/null
 
     local result
-    result=`CARGO_TARGET_DIR=$ROOT_DIR/build RUSTFLAGS="-D warnings" cargo build -v`
+    result=`cargo build -v && (cd core/benchmark/storage && cargo build -v)`
     local exit_code=$?
 
-    popd > /dev/null
+    popd $ROOT_DIR > /dev/null
+
+    unset CARGO_TARGET_DIR
+    unset RUSTFLAGS
 
     if [[ $exit_code -ne 0 ]]; then
         result="Build failed."$'\n'"$result"
