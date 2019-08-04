@@ -1648,13 +1648,11 @@ impl TxReplayer {
     pub fn commit(latest_state: &mut StateDb, txs: u64, ops: u64) -> H256 {
         warn!("Committing block at tx {}, ops {}.", txs, ops);
 
-        // We want to use the delta trie root, but we don't want to compute
-        // twice.
-        let storage =
-            unsafe { std::mem::transmute::<_, &mut Storage>(latest_state) };
-        let state_root = storage.compute_state_root().unwrap();
-        storage.commit(state_root.state_root.delta_root).unwrap();
-        state_root.state_root.delta_root
+        let storage = latest_state.get_storage_mut();
+        let state_root =
+            storage.compute_state_root().unwrap().state_root.delta_root;
+        storage.commit(state_root).unwrap();
+        state_root
     }
 
     pub fn add_tx<'a>(
@@ -2035,7 +2033,7 @@ fn main() -> errors::Result<()> {
 use cfxcore::{
     statedb::StateDb,
     storage::{
-        state_manager::StorageConfiguration, SnapshotAndEpochIdRef, Storage,
+        state_manager::StorageConfiguration, SnapshotAndEpochIdRef,
         StorageManager, StorageManagerTrait, StorageTrait,
     },
 };
