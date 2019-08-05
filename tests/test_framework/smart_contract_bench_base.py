@@ -38,7 +38,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
     def setup_contract(self):
         pass
 
-    def generate_transactions(self):
+    def generate_transactions(self, i):
         pass
 
     def run_test(self):
@@ -47,12 +47,12 @@ class SmartContractBenchBase(ConfluxTestFramework):
         block_gen_thread.start()
 
         self.setup_contract()
-        self.generate_transactions()
+        for i in range(self.options.iter):
+            self.generate_transactions(i)
 
     def __init__(self):
         super().__init__()
         self.nonce_map = {}
-        self.contract = None
         self.default_account_key = default_config["GENESIS_PRI_KEY"]
         self.default_account_address = privtoaddr(self.default_account_key)
 
@@ -64,12 +64,13 @@ class SmartContractBenchBase(ConfluxTestFramework):
             self.nonce_map[sender] += 1
         return self.nonce_map[sender]
 
-    def call_contract_function(self, name, args, sender_key, contract_addr=None, wait=False, check_status=False):
+    def call_contract_function(self, contract, name, args, sender_key, contract_addr=None, wait=False,
+                               check_status=False):
         # If contract address is empty, call the constructor.
         if contract_addr:
-            func = getattr(self.contract.functions, name)
+            func = getattr(contract.functions, name)
         else:
-            func = getattr(self.contract, name)
+            func = getattr(contract, name)
         attributes = {
             'nonce': self.get_nonce(privtoaddr(sender_key)),
             ** SmartContractBenchBase.REQUEST_BASE
@@ -90,10 +91,13 @@ class SmartContractBenchBase(ConfluxTestFramework):
         self._send_transaction(transaction, wait, check_status)
         return transaction
 
-    def new_address_and_transfer(self, amount=100000000000000, wait=False, check_status=False):
-        pri_key, pub_key = ec_random_keys()
-        transaction = self.transfer(self.default_account_key, privtoaddr(pri_key), amount, wait, check_status)
-        return pri_key, transaction
+    def new_address_and_transfer(self, count=1, amount=100000000000000, wait=False, check_status=False):
+        results = []
+        for _ in range(count):
+            pri_key, pub_key = ec_random_keys()
+            transaction = self.transfer(self.default_account_key, privtoaddr(pri_key), amount, wait, check_status)
+            results.append([pri_key, transaction])
+        return results
 
     def transfer(self, sender_key, receiver, amount, wait=False, check_status=False):
         nonce = self.get_nonce(privtoaddr(sender_key))
@@ -128,6 +132,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         for _ in range(5):
             client.generate_block()
         receipts = [self.nodes[0].gettransactionreceipt(tx.hash_hex()) for tx in all_txs]
+        self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
         return receipts

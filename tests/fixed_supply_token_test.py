@@ -11,6 +11,8 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
     def __init__(self):
         super().__init__()
         self.contract_address = ""
+        self.contract = None
+        self.accounts = []
 
     def setup_contract(self):
         solc = Solc()
@@ -19,21 +21,21 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
                                                    contract_name="FixedSupplyToken")
         self.log.info("Initializing contract")
 
-        transaction = self.call_contract_function("constructor", [], self.default_account_key)
+        transaction = self.call_contract_function(self.contract, "constructor", [], self.default_account_key)
         self.contract_address = self.wait_for_tx([transaction], True)[0]['contractCreated']
+        self.accounts = [a[0] for a in self.new_address_and_transfer(2)]
 
-    def generate_transactions(self):
-        acc1_key, _ = self.new_address_and_transfer()
-        acc2_key, _ = self.new_address_and_transfer()
-        for i in range(self.options.iter):
-            self.call_contract_function("transfer", [Web3.toChecksumAddress(privtoaddr(acc1_key)), 1000],
-                                        self.default_account_key, self.contract_address, True, True)
-            self.call_contract_function("approve", [Web3.toChecksumAddress(privtoaddr(acc2_key)), 500],
-                                        acc1_key, self.contract_address, True, True)
-            self.call_contract_function("transferFrom", [Web3.toChecksumAddress(privtoaddr(acc1_key)),
-                                                         Web3.toChecksumAddress(privtoaddr(self.default_account_key)),
-                                                         300],
-                                        acc2_key, self.contract_address, True, True)
+    def generate_transactions(self, _):
+        self.call_contract_function(self.contract, "transfer",
+                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[0])), 1000],
+                                    self.default_account_key, self.contract_address, True, True)
+        self.call_contract_function(self.contract, "approve",
+                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[1])), 500],
+                                    self.accounts[0], self.contract_address, True, True)
+        self.call_contract_function(self.contract, "transferFrom",
+                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[0])),
+                                     Web3.toChecksumAddress(privtoaddr(self.default_account_key)), 300],
+                                    self.accounts[1], self.contract_address, True, True)
 
 
 if __name__ == "__main__":
