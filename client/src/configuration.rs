@@ -4,12 +4,10 @@
 
 use cfxcore::{
     block_data_manager::DataManagerConfiguration,
-    consensus::{
-        ConsensusConfig, ConsensusInnerConfig
-    },
+    consensus::{ConsensusConfig, ConsensusInnerConfig},
+    parameters::consensus::*,
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
-    parameters::consensus::*,
 };
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;

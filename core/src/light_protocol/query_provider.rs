@@ -10,7 +10,7 @@ use cfx_types::H256;
 use primitives::{BlockHeader, EpochNumber, StateRoot};
 
 use crate::{
-    consensus::{ConsensusGraph},
+    consensus::ConsensusGraph,
     message::{Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler, NetworkService, PeerId},
     statedb::StateDb,

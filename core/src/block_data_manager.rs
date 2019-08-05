@@ -10,6 +10,7 @@ use crate::{
         COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
     },
     ext_db::SystemDB,
+    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     pow::{TargetDifficultyManager, WORKER_COMPUTATION_PARALLELISM},
     storage::{
         state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
@@ -34,7 +35,6 @@ use std::{
     sync::{mpsc::channel, Arc},
 };
 use threadpool::ThreadPool;
-use crate::parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 
 pub const NULLU64: u64 = !0;
 

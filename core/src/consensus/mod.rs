@@ -21,6 +21,7 @@ use cfx_types::{Bloom, H160, H256, U256};
 pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
+use crate::parameters::{consensus::*, consensus_internal::*};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -34,8 +35,6 @@ use std::{
     cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
     time::Duration,
 };
-use crate::parameters::consensus::*;
-use crate::parameters::consensus_internal::*;
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Meter> =

@@ -28,6 +28,7 @@ use super::{
 };
 use crate::{
     block_data_manager::{BlockStatus, NULLU64},
+    parameters::sync::*,
     sync::{
         message::{Context, DynamicCapability},
         state::SnapshotChunkSync,
@@ -49,20 +50,6 @@ lazy_static! {
     static ref BLOCK_RECOVER_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "sync:recover_block");
 }
-
-pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
-
-pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
-
-pub const MAX_HEADERS_TO_SEND: u64 = 512;
-pub const MAX_BLOCKS_TO_SEND: u64 = 256;
-pub const MAX_EPOCHS_TO_SEND: u64 = 128;
-pub const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
-lazy_static! {
-    pub static ref REQUEST_START_WAITING_TIME: Duration =
-        Duration::from_secs(1);
-}
-//const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
 
 const TX_TIMER: TimerToken = 0;
 const CHECK_REQUEST_TIMER: TimerToken = 1;

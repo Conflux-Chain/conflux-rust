@@ -4,12 +4,11 @@
 
 use crate::{
     consensus::ConsensusGraphInner,
+    parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD,
     sync::{
         message::DynamicCapability,
         state::{SnapshotChunkSync, StateSync, Status},
-        synchronization_protocol_handler::{
-            SynchronizationProtocolHandler, CATCH_UP_EPOCH_LAG_THRESHOLD,
-        },
+        synchronization_protocol_handler::SynchronizationProtocolHandler,
         synchronization_state::SynchronizationState,
         SharedSynchronizationGraph, SynchronizationGraphInner,
     },

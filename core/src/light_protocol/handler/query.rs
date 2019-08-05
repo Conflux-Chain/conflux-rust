@@ -22,7 +22,7 @@ use cfx_types::H256;
 use primitives::{BlockHeader, EpochNumber, StateRoot};
 
 use crate::{
-    consensus::{ConsensusGraph},
+    consensus::ConsensusGraph,
     light_protocol::{
         message::{
             GetStateEntry, GetStateRoot, StateEntry as GetStateEntryResponse,
@@ -32,8 +32,8 @@ use crate::{
     },
     message::{HasRequestId, Message, RequestId},
     network::{NetworkContext, PeerId},
+    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
 };
-use crate::parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 
 const POLL_PERIOD_MS: u64 = 100;
 const MAX_POLL_TIME_MS: u64 = 1000;

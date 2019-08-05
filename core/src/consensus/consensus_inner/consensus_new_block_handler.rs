@@ -13,6 +13,7 @@ use crate::{
         debug::ComputeEpochDebugRecord,
         ConsensusConfig,
     },
+    parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
     statistics::SharedStatistics,
     storage::{
@@ -31,8 +32,6 @@ use std::{
     mem,
     sync::Arc,
 };
-use crate::parameters::consensus::*;
-use crate::parameters::consensus_internal::*;
 
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,

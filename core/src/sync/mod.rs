@@ -30,8 +30,7 @@ pub use self::{
     },
     synchronization_protocol_handler::{
         LocalMessageTask, ProtocolConfiguration, SyncHandlerWorkType,
-        SynchronizationProtocolHandler, CATCH_UP_EPOCH_LAG_THRESHOLD,
-        SYNCHRONIZATION_PROTOCOL_VERSION,
+        SynchronizationProtocolHandler,
     },
     synchronization_service::{
         SharedSynchronizationService, SynchronizationService,

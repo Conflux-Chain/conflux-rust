@@ -4,12 +4,12 @@
 
 use crate::{
     message::{Message, RequestId},
+    parameters::sync::MAX_EPOCHS_TO_SEND,
     sync::{
         message::{
             Context, GetBlockHashesResponse, Handleable, Key, KeyContainer,
         },
         request_manager::Request,
-        synchronization_protocol_handler::MAX_EPOCHS_TO_SEND,
         Error, ProtocolConfiguration,
     },
 };

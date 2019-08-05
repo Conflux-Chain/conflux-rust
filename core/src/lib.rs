@@ -36,7 +36,6 @@ extern crate parity_crypto;
 extern crate rustc_hex;
 extern crate unexpected;
 
-pub mod parameters;
 pub mod block_data_manager;
 mod builtin;
 pub mod cache_config;
@@ -47,6 +46,7 @@ pub mod error;
 mod evm;
 pub mod executive;
 pub mod genesis;
+pub mod parameters;
 #[macro_use]
 pub mod message;
 pub mod light_protocol;
