@@ -7,7 +7,7 @@ use super::{
 use crate::sync::{
     message::{
         msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
-        GetCompactBlocks, GetTransactions, Key, KeyContainer, TransIndex,
+        GetCompactBlocks, GetTransactions, Key, KeyContainer,
         TransactionDigests,
     },
     Error,
@@ -243,8 +243,7 @@ impl RequestManager {
                     continue;
                 }
 
-                let index = TransIndex::new((window_index, i));
-                indices.push(index);
+                indices.push(i);
                 tx_ids.insert(fixed_bytes_vector[i]);
             }
 
@@ -255,9 +254,14 @@ impl RequestManager {
 
         let request = GetTransactions {
             request_id: 0,
+            window_index,
             indices,
             tx_ids: tx_ids.clone(),
         };
+
+        if request.is_empty() {
+            return;
+        }
 
         if let Err(e) = self.request_handler.send_request(
             io,
@@ -503,12 +507,14 @@ impl RequestManager {
     }
 
     pub fn get_sent_transactions(
-        &self, indices: &Vec<TransIndex>,
+        &self, window_index: usize, indices: &Vec<usize>,
     ) -> Vec<TransactionWithSignature> {
         let sent_transactions = self.sent_transactions.read();
         let mut txs = Vec::with_capacity(indices.len());
         for index in indices {
-            if let Some(tx) = sent_transactions.get_transaction(index) {
+            if let Some(tx) =
+                sent_transactions.get_transaction(window_index, *index)
+            {
                 txs.push(tx.transaction.clone());
             }
         }

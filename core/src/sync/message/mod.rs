@@ -47,7 +47,7 @@ pub use self::{
     status::Status,
     terminalblockhashes::GetTerminalBlockHashesResponse,
     transactions::{
-        GetTransactions, GetTransactionsResponse, TransIndex,
-        TransactionDigests, Transactions,
+        GetTransactions, GetTransactionsResponse, TransactionDigests,
+        Transactions,
     },
 };

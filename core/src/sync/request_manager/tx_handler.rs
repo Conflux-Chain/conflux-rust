@@ -1,4 +1,4 @@
-use crate::sync::message::{TransIndex, TransactionDigests};
+use crate::sync::message::TransactionDigests;
 use cfx_types::H256;
 use metrics::{register_meter_with_group, Meter};
 use primitives::{SignedTransaction, TxPropagateId};
@@ -181,35 +181,34 @@ impl SentTransactionContainer {
     }
 
     pub fn get_transaction(
-        &self, index: &TransIndex,
+        &self, window_index: usize, index: usize,
     ) -> Option<Arc<SignedTransaction>> {
         let inner = &self.inner;
-        if index.first() >= inner.base_time_tick {
-            if index.first() - inner.base_time_tick >= inner.window_size {
+        if window_index >= inner.base_time_tick {
+            if window_index - inner.base_time_tick >= inner.window_size {
                 return None;
             }
         } else {
-            if index.first() + 1 + std::usize::MAX - inner.base_time_tick
+            if window_index + 1 + std::usize::MAX - inner.base_time_tick
                 >= inner.window_size
             {
                 return None;
             }
         }
 
-        let window_index = index.first() % inner.window_size;
-        assert!(window_index < inner.time_windowed_indices.len());
-
-        let transactions = inner.time_windowed_indices[window_index].as_ref();
+        let transactions = inner.time_windowed_indices
+            [window_index % inner.window_size]
+            .as_ref();
         if transactions.is_none() {
             return None;
         }
 
         let transactions = transactions.unwrap();
-        if index.second() >= transactions.len() {
+        if index >= transactions.len() {
             return None;
         }
 
-        Some(transactions[index.second()].clone())
+        Some(transactions[index].clone())
     }
 
     pub fn append_transactions(
