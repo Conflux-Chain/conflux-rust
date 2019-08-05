@@ -17,7 +17,8 @@ mod config_macro;
 pub mod archive;
 pub mod configuration;
 pub mod full;
-mod rpc;
+pub mod rpc;
+
 #[cfg(test)]
 mod tests;
 
