@@ -32,6 +32,10 @@ pub enum BlockError {
     InvalidProofOfWork(OutOfBounds<H256>),
     /// Gas limit header field is invalid.
     InvalidGasLimit(OutOfBounds<U256>),
+    /// Total gas limits of transactions in block is out of bound.
+    InvalidBlockGasLimit(OutOfBounds<U256>),
+    /// Total rlp sizes of transactions in block is out of bound.
+    InvalidBlockSize(OutOfBounds<u64>),
     /// Timestamp header field is invalid.
     InvalidTimestamp(OutOfBounds<SystemTime>),
     /// Timestamp header field is too far in future.
@@ -74,6 +78,10 @@ impl fmt::Display for BlockError {
                 format!("Block has invalid PoW: {}", oob)
             }
             InvalidGasLimit(ref oob) => format!("Invalid gas limit: {}", oob),
+            InvalidBlockGasLimit(ref oob) => {
+                format!("Invalid block gas limit: {}", oob)
+            }
+            InvalidBlockSize(ref oob) => format!("Invalid block size: {}", oob),
             InvalidTimestamp(ref oob) => {
                 let oob =
                     oob.map(|st| st.elapsed().unwrap_or_default().as_secs());

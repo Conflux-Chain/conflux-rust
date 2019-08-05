@@ -58,11 +58,14 @@ pub mod sync {
     /// block request.
     pub const MAX_HEADERS_TO_SEND: u64 = 512;
     /// The max number of blocks that are to be sent for compact block request.
-    pub const MAX_BLOCKS_TO_SEND: u64 = 256;
+    pub const MAX_BLOCKS_TO_SEND: u64 = 128;
     /// The max number of epochs whose hashes are to be responded
     /// for request GetBlockHashesByEpoch
     pub const MAX_EPOCHS_TO_SEND: u64 = 128;
     pub const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
+
+    // The waiting time duration that will be accumulated for resending a
+    // timeout request.
     lazy_static! {
         pub static ref REQUEST_START_WAITING_TIME: Duration =
             Duration::from_secs(1);
