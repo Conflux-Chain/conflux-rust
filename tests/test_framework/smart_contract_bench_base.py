@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from test_framework.blocktools import create_transaction
 from conflux.messages import Transactions
 from eth_utils import decode_hex
