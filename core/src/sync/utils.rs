@@ -3,8 +3,10 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
-    parameters::consensus::ERA_DEFAULT_CHECKPOINT_GAP,
-    pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
+    parameters::{
+        consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
+    },
+    pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::SynchronizationGraph,

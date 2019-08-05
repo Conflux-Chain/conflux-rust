@@ -10,8 +10,10 @@ use crate::{
         COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
     },
     ext_db::SystemDB,
-    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
-    pow::{TargetDifficultyManager, WORKER_COMPUTATION_PARALLELISM},
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT, WORKER_COMPUTATION_PARALLELISM,
+    },
+    pow::TargetDifficultyManager,
     storage::{
         state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
         StorageManager,

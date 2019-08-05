@@ -2,23 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{block_data_manager::BlockDataManager, hash::keccak};
+use crate::{
+    block_data_manager::BlockDataManager, hash::keccak, parameters::pow::*,
+};
 use cfx_types::{H256, U256, U512};
 use parking_lot::RwLock;
 use rlp::RlpStream;
 use std::collections::HashMap;
-
-// This factor N controls the bound of each difficulty adjustment.
-// The new difficulty should be in the range of [(1-1/N)*D, (1+1/N)*D],
-// where D is the old difficulty.
-pub const DIFFICULTY_ADJUSTMENT_FACTOR: usize = 2;
-pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 2000;
-// Time unit is micro-second (usec)
-pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 5000000;
-pub const INITIAL_DIFFICULTY: u64 = 100_000_000;
-
-//FIXME: May be better to place in other place.
-pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {

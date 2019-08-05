@@ -76,4 +76,6 @@ pub use crate::{
     verification::REFEREE_BOUND,
 };
 pub use network::PeerInfo;
-pub use parameters::consensus as consensus_parameters;
+pub use parameters::{
+    consensus as consensus_parameters, WORKER_COMPUTATION_PARALLELISM,
+};

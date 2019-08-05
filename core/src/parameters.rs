@@ -61,3 +61,16 @@ pub mod sync {
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
 }
+
+pub mod pow {
+    // This factor N controls the bound of each difficulty adjustment.
+    // The new difficulty should be in the range of [(1-1/N)*D, (1+1/N)*D],
+    // where D is the old difficulty.
+    pub const DIFFICULTY_ADJUSTMENT_FACTOR: usize = 2;
+    pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 5000;
+    // Time unit is micro-second (usec)
+    pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 1000000;
+    pub const INITIAL_DIFFICULTY: u64 = 20_000_000;
+}
+
+pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;

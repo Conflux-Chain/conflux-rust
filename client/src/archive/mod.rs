@@ -9,11 +9,10 @@ pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 
 use cfxcore::{
-    genesis, pow::WORKER_COMPUTATION_PARALLELISM, statistics::Statistics,
-    storage::StorageManager, sync::SyncPhaseType,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
-    ConsensusGraph, SynchronizationGraph, SynchronizationService,
-    TransactionPool,
+    genesis, statistics::Statistics, storage::StorageManager,
+    sync::SyncPhaseType, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    vm_factory::VmFactory, ConsensusGraph, SynchronizationGraph,
+    SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 
 use crate::rpc::{
