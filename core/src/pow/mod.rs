@@ -2,12 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{block_data_manager::BlockDataManager, hash::keccak};
+use crate::{
+    block_data_manager::BlockDataManager, hash::keccak, parameters::pow::*,
+};
 use cfx_types::{H256, U256, U512};
 use parking_lot::RwLock;
 use rlp::RlpStream;
 use std::collections::HashMap;
-use crate::parameters::pow::*;
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {

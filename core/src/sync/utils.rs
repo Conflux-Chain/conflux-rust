@@ -3,8 +3,10 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
-    parameters::consensus::ERA_DEFAULT_CHECKPOINT_GAP,
-    pow::{ProofOfWorkConfig},
+    parameters::{
+        consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
+    },
+    pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::SynchronizationGraph,
@@ -18,7 +20,6 @@ use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc};
 use threadpool::ThreadPool;
-use crate::parameters::WORKER_COMPUTATION_PARALLELISM;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
