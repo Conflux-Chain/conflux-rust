@@ -46,7 +46,7 @@ pub mod error;
 mod evm;
 pub mod executive;
 pub mod genesis;
-pub mod parameters;
+mod parameters;
 #[macro_use]
 pub mod message;
 pub mod light_protocol;
@@ -76,3 +76,4 @@ pub use crate::{
     verification::REFEREE_BOUND,
 };
 pub use network::PeerInfo;
+pub use parameters::consensus as consensus_parameters;

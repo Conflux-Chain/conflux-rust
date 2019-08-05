@@ -5,7 +5,7 @@
 use cfxcore::{
     block_data_manager::DataManagerConfiguration,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
-    parameters::consensus::*,
+    consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
