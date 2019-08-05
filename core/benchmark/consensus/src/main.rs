@@ -10,8 +10,8 @@ use cfxcore::{
     cache_manager::CacheManager,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
     consensus_parameters::*,
-    db::NUM_COLUMNS,
-    pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
+    db::NUM_COLUMNS, WORKER_COMPUTATION_PARALLELISM,
+    pow::{ProofOfWorkConfig},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::{
