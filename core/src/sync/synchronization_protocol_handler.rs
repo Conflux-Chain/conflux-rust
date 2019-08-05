@@ -222,6 +222,7 @@ pub struct SynchronizationProtocolHandler {
     pub latest_epoch_requested: Mutex<u64>,
     pub future_blocks: FutureBlockContainer,
     pub phase_manager: SynchronizationPhaseManager,
+    pub phase_manager_lock: Mutex<u32>,
 
     // Worker task queue for recover public
     pub recover_public_queue: AsyncTaskQueue<RecoverPublicTask>,
@@ -285,6 +286,7 @@ impl SynchronizationProtocolHandler {
                 sync_graph.clone(),
                 state_sync.clone(),
             ),
+            phase_manager_lock: Mutex::new(0),
             recover_public_queue: AsyncTaskQueue::new(
                 SyncHandlerWorkType::RecoverPublic,
             ),
@@ -1067,14 +1069,17 @@ impl SynchronizationProtocolHandler {
         self.graph.update_total_weight_in_past();
     }
 
-    pub fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
-        self.phase_manager.try_initialize(io, self);
-        let current_phase = self.phase_manager.get_current_phase();
-        let next_phase_type = current_phase.next(io, self);
-        if current_phase.phase_type() != next_phase_type {
-            // Phase changed
-            self.phase_manager
-                .change_phase_to(next_phase_type, io, self);
+    pub fn update_sync_phase(&self, io: &NetworkContext) {
+        {
+            let _pm_lock = self.phase_manager_lock.lock();
+            self.phase_manager.try_initialize(io, self);
+            let current_phase = self.phase_manager.get_current_phase();
+            let next_phase_type = current_phase.next(io, self);
+            if current_phase.phase_type() != next_phase_type {
+                // Phase changed
+                self.phase_manager
+                    .change_phase_to(next_phase_type, io, self);
+            }
         }
 
         let catch_up_mode = self.catch_up_mode();
@@ -1100,8 +1105,6 @@ impl SynchronizationProtocolHandler {
 
         DynamicCapability::TxRelay(!catch_up_mode)
             .broadcast_with_peers(io, need_notify);
-
-        Some(())
     }
 
     pub fn request_missing_blocks(
