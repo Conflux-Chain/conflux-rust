@@ -141,6 +141,7 @@ impl CompressedPathRaw {
         }
     }
 
+    // FIXME: check what's the nibble order in Ethereum's proof.
     pub fn first_nibble(x: u8) -> u8 { x & Self::BITS_0_3_MASK }
 
     pub fn second_nibble(x: u8) -> u8 { (x & Self::BITS_4_7_MASK) >> 4 }

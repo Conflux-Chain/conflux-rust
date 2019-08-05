@@ -64,6 +64,24 @@ pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     pub(in super::super) cache_algo_data: CacheAlgoDataT,
 }
 
+make_parallel_field_maybe_in_place_byte_array_memory_manager!(
+    MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
+    TrieNode<CacheAlgoDataT>,
+    path_memory_manager,
+    path,
+    path_size: u16,
+    TrivialSizeFieldConverterU16,
+);
+
+make_parallel_field_maybe_in_place_byte_array_memory_manager!(
+    MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
+    TrieNode<CacheAlgoDataT>,
+    value_memory_manager,
+    value,
+    value_size: u32,
+    TrieNodeValueSizeFieldConverter,
+);
+
 impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone for TrieNode<CacheAlgoDataT> {
     fn clone(&self) -> Self {
         Self::new(
