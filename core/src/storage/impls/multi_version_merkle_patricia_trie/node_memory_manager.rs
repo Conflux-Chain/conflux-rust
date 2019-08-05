@@ -242,7 +242,7 @@ impl<
     pub unsafe fn get_in_memory_node_mut<'a>(
         allocator: AllocatorRefRef<'a, CacheAlgoDataT>, cache_slot: usize,
     ) -> &'a mut TrieNode<CacheAlgoDataT> {
-        allocator.get_unchecked(cache_slot).get_ref_mut()
+        allocator.get_unchecked(cache_slot).get_as_mut()
     }
 
     fn load_from_db<'c: 'a, 'a>(
@@ -283,7 +283,7 @@ impl<
             },
         }
         // Insert into slab as temporary, then insert into node_ref_map.
-        let slot = allocator.insert(trie_node)?;
+        let slot = allocator.insert(&trie_node)?;
         trie_cell_ref = unsafe { allocator.get_unchecked(slot) };
         let cache_insertion_result = cache_mut
             .node_ref_map
@@ -792,21 +792,6 @@ impl<
     }
 }
 
-pub trait TrieNodeCellTrait<CacheAlgoDataT: CacheAlgoDataTrait> {
-    fn get_ref(&self) -> &TrieNode<CacheAlgoDataT>;
-    unsafe fn get_ref_mut(&self) -> &mut TrieNode<CacheAlgoDataT>;
-}
-
-impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeCellTrait<CacheAlgoDataT>
-    for TrieNodeCell<CacheAlgoDataT>
-{
-    fn get_ref(&self) -> &TrieNode<CacheAlgoDataT> { unsafe { &*self.get() } }
-
-    unsafe fn get_ref_mut(&self) -> &mut TrieNode<CacheAlgoDataT> {
-        &mut *self.get()
-    }
-}
-
 use super::{
     super::{super::storage_db::delta_db::DeltaDbTrait, errors::*},
     cache::algorithm::{
@@ -817,6 +802,7 @@ use super::{
     merkle_patricia_trie::*,
     node_ref_map::*,
     slab::Slab,
+    UnsafeCellExtension,
 };
 use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use rlp::*;

@@ -51,6 +51,17 @@ pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     pub(in super::super) cache_algo_data: CacheAlgoDataT,
 }
 
+impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone for TrieNode<CacheAlgoDataT> {
+    fn clone(&self) -> Self {
+        Self::new(
+            &self.merkle_hash,
+            self.children_table.clone(),
+            self.value_clone().into_option(),
+            self.compressed_path_ref().into(),
+        )
+    }
+}
+
 /// Compiler is not sure about the pointer in MaybeInPlaceByteArray fields.
 /// It's Send because TrieNode is move only and it's impossible to change any
 /// part of it without &mut.
@@ -281,7 +292,7 @@ pub enum TrieNodeAction {
 impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
     pub fn new(
         merkle: &MerkleHash, children_table: ChildrenTableDeltaMpt,
-        maybe_value: Option<Vec<u8>>, compressed_path: CompressedPathRaw,
+        maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
     ) -> TrieNode<CacheAlgoDataT>
     {
         let mut ret = TrieNode::default();
@@ -508,7 +519,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
         Ok(TrieNode::new(
             &rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
             rlp.val_at::<ChildrenTableManagedDeltaMpt>(1)?.into(),
-            rlp.val_at::<Option<Vec<u8>>>(2)?,
+            rlp.val_at::<Option<Vec<u8>>>(2)?
+                .map(|v| v.into_boxed_slice()),
             compressed_path,
         ))
     }

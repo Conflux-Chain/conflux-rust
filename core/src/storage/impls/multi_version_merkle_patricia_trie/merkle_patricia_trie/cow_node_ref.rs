@@ -76,14 +76,14 @@ impl<'a> MaybeOwnedTrieNode<'a> {
 impl<'a> Deref for MaybeOwnedTrieNode<'a> {
     type Target = TrieNodeDeltaMpt;
 
-    fn deref(&self) -> &Self::Target { unsafe { &*self.trie_node.get() } }
+    fn deref(&self) -> &Self::Target { self.trie_node.get_ref() }
 }
 
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub unsafe fn owned_as_mut_unchecked(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        self.trie_node.get_ref_mut()
+        self.trie_node.get_as_mut()
     }
 }
 
@@ -685,7 +685,7 @@ impl CowNodeRef {
             Some(new_entry) => {
                 let (new_trie_node, output) =
                     f_ref(trie_node.as_ref().as_ref());
-                new_entry.insert(new_trie_node);
+                new_entry.insert(&new_trie_node);
                 Ok(output)
             }
         }
@@ -711,7 +711,7 @@ impl CowNodeRef {
                     .as_ref()
                     .copy_and_replace_fields(None, None, None);
                 let key = new_entry.key();
-                new_entry.insert(new_trie_node);
+                new_entry.insert(&new_trie_node);
                 Ok(NodeMemoryManagerDeltaMpt::get_in_memory_node_mut(
                     allocator, key,
                 ))
@@ -729,7 +729,7 @@ use super::{
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
-        DeltaMpt, TrieNodeCellTrait,
+        DeltaMpt, UnsafeCellExtension,
     },
     merkle::*,
     mpt_value::MptValue,
