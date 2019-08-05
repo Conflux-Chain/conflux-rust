@@ -1080,15 +1080,8 @@ impl SynchronizationProtocolHandler {
         self.graph.update_total_weight_in_past();
     }
 
-    pub fn update_sync_phase(&self, io: &NetworkContext) -> Option<()> {
-        self.phase_manager.try_initialize(io, self);
-        let current_phase = self.phase_manager.get_current_phase();
-        let next_phase_type = current_phase.next(io, self);
-        if current_phase.phase_type() != next_phase_type {
-            // Phase changed
-            self.phase_manager
-                .change_phase_to(next_phase_type, io, self);
-        }
+    pub fn update_sync_phase(&self, io: &NetworkContext) {
+        self.phase_manager.update_sync_phase(io, self);
 
         let catch_up_mode = self.catch_up_mode();
         let mut need_notify = Vec::new();
@@ -1113,8 +1106,6 @@ impl SynchronizationProtocolHandler {
 
         DynamicCapability::TxRelay(!catch_up_mode)
             .broadcast_with_peers(io, need_notify);
-
-        Some(())
     }
 
     pub fn request_missing_blocks(
