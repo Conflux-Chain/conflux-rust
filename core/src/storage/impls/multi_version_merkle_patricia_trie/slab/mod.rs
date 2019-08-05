@@ -158,15 +158,6 @@ struct AllocRelatedFields {
     next: usize,
 }
 
-/* FIXME
-/// Allow user to pass into any type which is convertible to T. The intention is
-/// that we pass &T or &mut T cross the interfaces so that we only do memcpy
-/// once.
-pub trait FromInto<T>: Sized {
-    fn from<U: Into<T>>(val: U) -> Self;
-}
-*/
-
 /// Slab physically stores a concrete type which implements EntryTrait<T> for
 /// value type T. The EntryTrait<T> is responsible to hold the value type and
 /// the next vacant link list for slab.
