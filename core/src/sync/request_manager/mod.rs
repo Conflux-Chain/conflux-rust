@@ -254,6 +254,7 @@ impl RequestManager {
 
         let request = GetTransactions {
             request_id: 0,
+            window_index,
             indices,
             tx_ids,
         };
