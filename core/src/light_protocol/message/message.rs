@@ -13,6 +13,10 @@ build_msgid! {
     STATE_ROOT = 0x02
     GET_STATE_ENTRY = 0x03
     STATE_ENTRY = 0x04
+    GET_BLOCK_HASHES_BY_EPOCH = 0x05
+    BLOCK_HASHES = 0x06
+    GET_BLOCK_HEADERS = 0x07
+    BLOCK_HEADERS = 0x08
 
     INVALID = 0xff
 }
@@ -23,6 +27,10 @@ build_msg_impl! { GetStateRoot, msgid::GET_STATE_ROOT, "GetStateRoot" }
 build_msg_impl! { StateRoot, msgid::STATE_ROOT, "StateRoot" }
 build_msg_impl! { GetStateEntry, msgid::GET_STATE_ENTRY, "GetStateEntry" }
 build_msg_impl! { StateEntry, msgid::STATE_ENTRY, "StateEntry" }
+build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
+build_msg_impl! { BlockHashes, msgid::BLOCK_HASHES, "BlockHashes" }
+build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
+build_msg_impl! { BlockHeaders, msgid::BLOCK_HEADERS, "BlockHeaders" }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }

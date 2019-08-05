@@ -4,7 +4,9 @@
 
 use crate::{message::RequestId, storage::StateProof};
 use cfx_types::H256;
-use primitives::StateRoot as PrimitiveStateRoot;
+use primitives::{
+    BlockHeader as PrimitiveBlockHeader, StateRoot as PrimitiveStateRoot,
+};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
@@ -43,4 +45,28 @@ pub struct StateEntry {
     pub state_root: PrimitiveStateRoot,
     pub entry: Option<Vec<u8>>,
     pub proof: StateProof,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetBlockHashesByEpoch {
+    pub request_id: RequestId,
+    pub epochs: Vec<u64>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct BlockHashes {
+    pub request_id: RequestId,
+    pub hashes: Vec<H256>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetBlockHeaders {
+    pub request_id: RequestId,
+    pub hashes: Vec<H256>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct BlockHeaders {
+    pub request_id: RequestId,
+    pub headers: Vec<PrimitiveBlockHeader>,
 }
