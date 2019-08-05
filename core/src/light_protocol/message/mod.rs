@@ -7,5 +7,6 @@ mod protocol;
 
 pub use message::msgid;
 pub use protocol::{
+    BlockHashes, BlockHeaders, GetBlockHashesByEpoch, GetBlockHeaders,
     GetStateEntry, GetStateRoot, StateEntry, StateRoot, Status,
 };
