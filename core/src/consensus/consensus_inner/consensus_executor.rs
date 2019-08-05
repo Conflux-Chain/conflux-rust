@@ -5,10 +5,7 @@
 use super::super::debug::*;
 use crate::{
     block_data_manager::BlockDataManager,
-    consensus::{
-        ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
-        CONFLUX_TOKEN,
-    },
+    consensus::ConsensusGraphInner,
     executive::{ExecutionError, Executive},
     machine::new_machine,
     state::{CleanupMode, State},
@@ -39,7 +36,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::consensus::{BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT};
+use crate::parameters::{consensus::*, consensus_internal::*};
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{

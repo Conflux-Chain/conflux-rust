@@ -1,10 +1,9 @@
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_config::CacheConfig,
-    consensus::{
-        ConsensusConfig, ConsensusInnerConfig, ERA_DEFAULT_CHECKPOINT_GAP,
-    },
+    consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
+    parameters::consensus::ERA_DEFAULT_CHECKPOINT_GAP,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},

@@ -10,10 +10,8 @@ use crate::{
     block_data_manager::{
         BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
     },
-    consensus::{
-        anticone_cache::AnticoneCache, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
-        BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
-    },
+    consensus::anticone_cache::AnticoneCache,
+    parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
     state::State,
     statedb::StateDb,

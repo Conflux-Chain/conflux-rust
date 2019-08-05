@@ -4,13 +4,13 @@
 
 use crate::{
     message::{Message, RequestId},
+    parameters::sync::MAX_PACKET_SIZE,
     sync::{
         message::{
             Context, GetBlocksResponse, GetBlocksWithPublicResponse,
             Handleable, Key, KeyContainer,
         },
         request_manager::Request,
-        synchronization_protocol_handler::MAX_PACKET_SIZE,
         Error, ErrorKind, ProtocolConfiguration,
     },
 };

@@ -11,9 +11,9 @@ use crate::{
             ConsensusGraphInner, NULL, NULLU64,
         },
         debug::ComputeEpochDebugRecord,
-        ConsensusConfig, ANTICONE_BARRIER_CAP, DEFERRED_STATE_EPOCH_COUNT,
-        EPOCH_SET_PERSISTENCE_DELAY, ERA_RECYCLE_TRANSACTION_DELAY,
+        ConsensusConfig,
     },
+    parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
     statistics::SharedStatistics,
     storage::{

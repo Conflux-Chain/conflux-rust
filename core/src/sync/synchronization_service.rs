@@ -4,11 +4,13 @@
 
 use super::{
     Error, SharedSynchronizationGraph, SynchronizationProtocolHandler,
-    SYNCHRONIZATION_PROTOCOL_VERSION,
 };
-use crate::sync::{
-    synchronization_phases::SyncPhaseType,
-    synchronization_protocol_handler::ProtocolConfiguration,
+use crate::{
+    parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
+    sync::{
+        synchronization_phases::SyncPhaseType,
+        synchronization_protocol_handler::ProtocolConfiguration,
+    },
 };
 use cfx_types::H256;
 use network::{NetworkService, ProtocolId};

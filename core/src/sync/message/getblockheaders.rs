@@ -4,12 +4,12 @@
 
 use crate::{
     message::{HasRequestId, Message, RequestId},
+    parameters::sync::MAX_HEADERS_TO_SEND,
     sync::{
         message::{
             Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
         },
         request_manager::Request,
-        synchronization_protocol_handler::MAX_HEADERS_TO_SEND,
         Error, ProtocolConfiguration,
     },
 };

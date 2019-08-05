@@ -4,15 +4,13 @@
 
 use crate::{
     message::{Message, RequestId},
+    parameters::sync::{MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND},
     sync::{
         message::{
             msgid, Context, GetBlocks, GetCompactBlocksResponse, Handleable,
             Key, KeyContainer,
         },
         request_manager::Request,
-        synchronization_protocol_handler::{
-            MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND,
-        },
         Error, ProtocolConfiguration,
     },
 };

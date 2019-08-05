@@ -21,6 +21,7 @@ use cfx_types::{Bloom, H160, H256, U256};
 pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
+use crate::parameters::{consensus::*, consensus_internal::*};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -34,49 +35,11 @@ use std::{
     cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
     time::Duration,
 };
+
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Meter> =
         register_meter_with_group("timer", "consensus_on_new_block_timer");
 }
-
-pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
-pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
-
-/// `REWARD_EPOCH_COUNT` needs to be larger than
-/// `ANTICONE_PENALTY_UPPER_EPOCH_COUNT`. If we cannot cache receipts of recent
-/// `REWARD_EPOCH_COUNT` epochs, the receipts will be loaded from db, which may
-/// lead to performance downgrade
-const REWARD_EPOCH_COUNT: u64 = 12;
-const ANTICONE_PENALTY_UPPER_EPOCH_COUNT: u64 = 10;
-const ANTICONE_PENALTY_RATIO: u64 = 100;
-/// 900 Conflux tokens
-const BASE_MINING_REWARD: u64 = 900;
-/// The unit of one Conflux token: 10 ** 18
-const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
-const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
-const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
-
-pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM: u64 = 2;
-pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN: u64 = 3;
-pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
-pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 240;
-
-// This is the cap of the size of the anticone barrier. If we have more than
-// this number we will use the brute_force O(n) algorithm instead.
-const ANTICONE_BARRIER_CAP: usize = 1000;
-// The number of epochs per era. Each era is a potential checkpoint position.
-// The parent_edge checking and adaptive checking are defined relative to the
-// era start blocks.
-pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
-// Here is the delay for us to recycle those orphaned blocks in the boundary of
-// eras.
-const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
-// FIXME: We should use finality to determine the checkpoint moment instead.
-pub const ERA_DEFAULT_CHECKPOINT_GAP: u64 = 50000;
-
-// A block can blame up to BLAME_BOUND ancestors that their states are
-// incorrect.
-const BLAME_BOUND: u32 = 1000;
 
 #[derive(Clone)]
 pub struct ConsensusConfig {

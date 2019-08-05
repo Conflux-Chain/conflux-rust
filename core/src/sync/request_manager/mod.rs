@@ -1,16 +1,17 @@
 use super::{
-    synchronization_protocol_handler::{
-        ProtocolConfiguration, REQUEST_START_WAITING_TIME,
-    },
+    synchronization_protocol_handler::ProtocolConfiguration,
     synchronization_state::SynchronizationState,
 };
-use crate::sync::{
-    message::{
-        msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
-        GetCompactBlocks, GetTransactions, Key, KeyContainer, TransIndex,
-        TransactionDigests,
+use crate::{
+    parameters::sync::REQUEST_START_WAITING_TIME,
+    sync::{
+        message::{
+            msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn,
+            GetBlocks, GetCompactBlocks, GetTransactions, Key, KeyContainer,
+            TransIndex, TransactionDigests,
+        },
+        Error,
     },
-    Error,
 };
 use cfx_types::H256;
 use metrics::{register_meter_with_group, Meter, MeterTimer};

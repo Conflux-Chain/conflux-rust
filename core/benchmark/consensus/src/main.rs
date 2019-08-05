@@ -8,11 +8,8 @@ use cfxcore::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration},
     cache_config::CacheConfig,
     cache_manager::CacheManager,
-    consensus::{
-        ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
-        ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-        ADAPTIVE_WEIGHT_DEFAULT_BETA,
-    },
+    consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
+    consensus_parameters::*,
     db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,

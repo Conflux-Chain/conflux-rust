@@ -4,12 +4,8 @@
 
 use cfxcore::{
     block_data_manager::DataManagerConfiguration,
-    consensus::{
-        ConsensusConfig, ConsensusInnerConfig,
-        ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-        ADAPTIVE_WEIGHT_DEFAULT_BETA, ERA_DEFAULT_CHECKPOINT_GAP,
-        ERA_DEFAULT_EPOCH_COUNT, HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO,
-    },
+    consensus::{ConsensusConfig, ConsensusInnerConfig},
+    consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
