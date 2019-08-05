@@ -135,40 +135,33 @@ impl SynchronizationPhaseManager {
         sync_manager
     }
 
-    pub fn register_phase(&self, phase: Arc<SynchronizationPhaseTrait>) {
-        self.inner.write().register_phase(phase);
-    }
-
-    pub fn get_phase(
-        &self, phase_type: SyncPhaseType,
-    ) -> Arc<SynchronizationPhaseTrait> {
-        self.inner.read().get_phase(phase_type)
-    }
-
-    pub fn get_current_phase(&self) -> Arc<SynchronizationPhaseTrait> {
-        self.inner.read().get_current_phase()
-    }
-
-    pub fn change_phase_to(
-        &self, phase_type: SyncPhaseType, io: &NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
-        self.inner.write().change_phase_to(phase_type);
-        let current_phase = self.get_current_phase();
-        current_phase.start(io, sync_handler);
-    }
-
-    pub fn try_initialize(
+    pub fn update_sync_phase(
         &self, io: &NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
-        if !self.inner.write().try_initialize() {
+        let mut inner = self.inner.write();
+        let current_phase = inner.get_current_phase();
+        if !inner.try_initialize() {
             // if not initialized
-            let current_phase = self.get_current_phase();
             current_phase.start(io, sync_handler);
         }
+
+        let next_phase_type = current_phase.next(io, sync_handler);
+        if current_phase.phase_type() != next_phase_type {
+            // Phase changed
+            inner.change_phase_to(next_phase_type);
+            let next_phase = inner.get_current_phase();
+            next_phase.start(io, sync_handler);
+        }
+    }
+
+    pub fn register_phase(&self, phase: Arc<SynchronizationPhaseTrait>) {
+        self.inner.write().register_phase(phase);
+    }
+
+    pub fn get_current_phase(&self) -> Arc<SynchronizationPhaseTrait> {
+        self.inner.read().get_current_phase()
     }
 }
 
