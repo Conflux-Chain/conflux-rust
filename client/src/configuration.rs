@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use blockgen::BlockGeneratorConfig;
 use cfxcore::{
     block_data_manager::DataManagerConfiguration,
     consensus::{
@@ -58,7 +57,6 @@ build_config! {
         (discovery_housekeeping_timeout_ms, (u64), 1000)
         (node_table_timeout, (Option<u64>), Some(300))
         (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
-        (fast_recover, (bool), true)
         (test_mode, (bool), false)
         (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
@@ -73,7 +71,6 @@ build_config! {
         (send_tx_period_ms, (u64), 1300)
         (check_request_period_ms, (u64), 1000)
         (block_cache_gc_period_ms, (u64), 5000)
-        (persist_terminal_period_ms, (u64), 60_000)
         (headers_request_timeout_ms, (u64), 10_000)
         (blocks_request_timeout_ms, (u64), 30_000)
         (transaction_request_timeout_ms, (u64), 30_000)
@@ -82,7 +79,6 @@ build_config! {
         (received_tx_index_maintain_timeout_ms, (u64), 600_000)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (request_block_with_public, (bool), false)
-        (load_test_chain, (Option<String>), None)
         (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
@@ -208,8 +204,6 @@ impl Configuration {
         Ok(network_config)
     }
 
-    pub fn fast_recover(&self) -> bool { self.raw_conf.fast_recover }
-
     pub fn cache_config(&self) -> CacheConfig {
         let mut cache_config = CacheConfig::default();
 
@@ -308,9 +302,6 @@ impl Configuration {
             block_cache_gc_period: Duration::from_millis(
                 self.raw_conf.block_cache_gc_period_ms,
             ),
-            persist_terminal_period: Duration::from_millis(
-                self.raw_conf.persist_terminal_period_ms,
-            ),
             headers_request_timeout: Duration::from_millis(
                 self.raw_conf.headers_request_timeout_ms,
             ),
@@ -339,12 +330,6 @@ impl Configuration {
                 .raw_conf
                 .future_block_buffer_capacity,
             max_download_state_peers: self.raw_conf.max_download_state_peers,
-        }
-    }
-
-    pub fn blockgen_config(&self) -> BlockGeneratorConfig {
-        BlockGeneratorConfig {
-            test_chain_path: self.raw_conf.load_test_chain.clone(),
         }
     }
 

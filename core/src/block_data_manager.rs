@@ -863,9 +863,7 @@ impl BlockDataManager {
     }
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
-        // `block_receipts_root` is not computed when recovering from db with
-        // fast_recover == false. And we should force it to recompute
-        // without checking receipts when fast_recover == false
+        // `block_receipts_root` is not computed when recovering from db
         self.get_epoch_execution_commitments(epoch_hash).is_some()
             && self
                 .storage_manager
