@@ -89,7 +89,7 @@ fn test_trie_node_encode_decode() {
     let x = TrieNode::<CacheAlgoDataDeltaMpt>::new(
         &Default::default(),
         children_table,
-        Some(b"asdf".to_vec()),
+        Some(b"asdf".to_vec().into_boxed_slice()),
         Default::default(),
     );
     let rlp_bytes = x.rlp_bytes();
