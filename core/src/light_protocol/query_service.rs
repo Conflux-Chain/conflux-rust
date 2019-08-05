@@ -11,6 +11,7 @@ use crate::{
     network::{NetworkService, PeerId},
     statedb::StorageKey,
     storage,
+    sync::SynchronizationGraph,
 };
 
 use super::{
@@ -27,10 +28,12 @@ pub struct QueryService {
 
 impl QueryService {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, network: Arc<NetworkService>,
-    ) -> Self {
+        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
+        network: Arc<NetworkService>,
+    ) -> Self
+    {
         QueryService {
-            handler: Arc::new(LightHandler::new(consensus)),
+            handler: Arc::new(LightHandler::new(consensus, graph)),
             network,
         }
     }
