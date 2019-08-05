@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 pub struct StorageManagerFullNode<SnapshotDbManager: SnapshotDbManagerTrait> {
     // FIXME: implement a new method and remove pub on fields.
     pub snapshot_db_manager: SnapshotDbManager,
