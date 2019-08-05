@@ -128,7 +128,8 @@ impl MultiVersionMerklePatriciaTrie {
                         self.node_memory_manager.get_cache_manager(),
                         &mut false,
                     )?
-                    .merkle_hash,
+                    .get_merkle()
+                    .clone(),
             )),
             None => Ok(None),
         }

@@ -37,7 +37,7 @@ impl NodeRefDeltaMptCompact {
 }
 
 impl MaybeNodeRefDeltaMptCompact {
-    const NULL: u32 = 0;
+    pub const NULL: u32 = 0;
     pub const NULL_NODE: MaybeNodeRefDeltaMptCompact =
         MaybeNodeRefDeltaMptCompact { value: Self::NULL };
 

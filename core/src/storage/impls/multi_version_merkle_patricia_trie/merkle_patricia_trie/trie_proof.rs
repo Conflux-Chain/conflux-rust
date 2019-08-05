@@ -12,7 +12,7 @@ use super::{
     children_table::CHILDREN_COUNT,
     compressed_path::CompressedPathRef,
     merkle::compute_merkle,
-    walk::{access_mode::Read, walk, KeyPart, WalkStop},
+    walk::{access_mode::Read, walk, GetChildTrait, KeyPart, WalkStop},
 };
 
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
@@ -58,11 +58,20 @@ impl TrieProofNode {
 }
 
 impl TrieProofNode {
-    fn get_child(&self, index: u8) -> Option<MerkleHash> {
+    pub fn walk<'key, 'node>(
+        &'node self, key: KeyPart<'key>,
+    ) -> WalkStop<'key, &'node MerkleHash> {
+        walk::<Read, _>(key, &self.compressed_path_ref(), self)
+    }
+}
+impl<'node> GetChildTrait<'node> for TrieProofNode {
+    type ChildIdType = &'node MerkleHash;
+
+    fn get_child(&'node self, child_index: u8) -> Option<&'node MerkleHash> {
         match self.children_table.len() {
             0 => None,
-            CHILDREN_COUNT => match self.children_table[index as usize] {
-                h if h == KECCAK_EMPTY => None,
+            CHILDREN_COUNT => match &self.children_table[child_index as usize] {
+                h if h == &KECCAK_EMPTY => None,
                 h => Some(h),
             },
             len @ _ => {
@@ -70,15 +79,6 @@ impl TrieProofNode {
                 None
             }
         }
-    }
-
-    pub fn walk<'key>(&self, key: KeyPart<'key>) -> WalkStop<'key, MerkleHash> {
-        walk::<Read, MerkleHash>(
-            key,
-            self.compressed_path_ref(),
-            self.path_end_mask,
-            &|index| self.get_child(index),
-        )
     }
 }
 
@@ -104,15 +104,14 @@ impl TrieProof {
             nodes.insert(node.merkle_hash, node);
         }
 
-        let value = value.clone().unwrap_or_default();
         let mut key = &key[..];
-        let mut hash = root;
+        let mut hash = &root;
 
         loop {
-            match nodes.get(&hash) {
+            match nodes.get(hash) {
                 // proof has missing node
                 None => {
-                    debug_assert!(hash != KECCAK_EMPTY); // this should lead to `ChildNotFound`
+                    debug_assert!(hash != &KECCAK_EMPTY); // this should lead to `ChildNotFound`
                     return false;
                 }
                 Some(node) => {
@@ -123,13 +122,13 @@ impl TrieProof {
 
                     match node.walk(key) {
                         WalkStop::Arrived => {
-                            return value == node.value;
+                            return value.is_some() && value.as_ref().unwrap().eq(&node.value);
                         }
                         WalkStop::PathDiverted { .. } => {
-                            return value == Vec::<u8>::new();
+                            return value.is_none()
                         }
                         WalkStop::ChildNotFound { .. } => {
-                            return value == Vec::<u8>::new();
+                            return value.is_none()
                         }
                         WalkStop::Descent {
                             key_remaining,

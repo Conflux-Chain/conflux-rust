@@ -119,10 +119,12 @@ impl<'a> StateDb<'a> {
             key.as_ref(),
             ::rlp::encode(value)
         );
-        self.set_raw(key, &::rlp::encode(value))
+        self.set_raw(key, ::rlp::encode(value).into_boxed_slice())
     }
 
-    pub fn set_raw(&mut self, key: &StorageKey, value: &[u8]) -> Result<()> {
+    pub fn set_raw(
+        &mut self, key: &StorageKey, value: Box<[u8]>,
+    ) -> Result<()> {
         match self.storage.set(key.as_ref(), value) {
             Ok(_) => Ok(()),
             Err(StorageError(StorageErrorKind::MPTKeyNotFound, _)) => Ok(()),
