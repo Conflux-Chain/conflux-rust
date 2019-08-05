@@ -79,40 +79,9 @@ impl RequestHandler {
         }
     }
 
-    pub fn send_request(
-        &self, io: &NetworkContext, peer: PeerId, mut msg: RequestMessage,
-    ) -> Result<(), Error> {
-        let mut peers = self.peers.lock();
-        let mut requests_queue = self.requests_queue.lock();
-        if let Some(peer_info) = peers.get_mut(&peer) {
-            if let Some(request_id) = peer_info.get_next_request_id() {
-                msg.set_request_id(request_id);
-                send_message(io, peer, msg.get_msg())?;
-                let timed_req = Arc::new(TimedSyncRequests::from_request(
-                    peer,
-                    request_id,
-                    &msg,
-                    &self.protocol_config,
-                ));
-                peer_info.append_inflight_request(
-                    request_id,
-                    msg,
-                    timed_req.clone(),
-                );
-                requests_queue.push(timed_req);
-            } else {
-                trace!("Append requests for later:{:?}", msg);
-                peer_info.append_pending_request(msg);
-            }
-            Ok(())
-        } else {
-            Err(ErrorKind::UnknownPeer.into())
-        }
-    }
-
     /// Send request to the specified peer. If peer is `None` or send request
     /// failed, return the request back to caller to handle in advance.
-    pub fn send_general_request(
+    pub fn send_request(
         &self, io: &NetworkContext, peer: Option<PeerId>,
         mut request: Box<Request>, delay: Option<Duration>,
     ) -> Result<(), Box<Request>>

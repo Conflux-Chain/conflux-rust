@@ -147,7 +147,7 @@ impl RequestManager {
             return;
         }
 
-        if let Err(e) = self.request_handler.send_general_request(
+        if let Err(e) = self.request_handler.send_request(
             io,
             peer,
             request,
@@ -256,23 +256,16 @@ impl RequestManager {
         let request = GetTransactions {
             request_id: 0,
             indices,
-            tx_ids: tx_ids.clone(),
+            tx_ids,
         };
 
-        if let Err(e) = self.request_handler.send_request(
+        if let Err(req) = self.request_handler.send_request(
             io,
-            peer_id,
-            RequestMessage::new(Box::new(request), None),
+            Some(peer_id),
+            Box::new(request),
+            None,
         ) {
-            warn!(
-                "Error requesting transactions peer={:?} count={} err={:?}",
-                peer_id,
-                tx_ids.len(),
-                e
-            );
-            for tx_id in tx_ids {
-                inflight_keys.remove(msg_type, Key::Id(tx_id));
-            }
+            req.on_removed(&mut *inflight_keys);
         }
     }
 
@@ -302,21 +295,7 @@ impl RequestManager {
             indexes,
         };
 
-        if let Err(e) = self.request_handler.send_request(
-            io,
-            peer_id,
-            RequestMessage::new(Box::new(request), None),
-        ) {
-            warn!(
-                "Error requesting blocktxn peer={:?} hash={} err={:?}",
-                peer_id, block_hash, e
-            );
-        } else {
-            debug!(
-                "Requesting blocktxn peer={:?} hash={}",
-                peer_id, block_hash
-            );
-        }
+        self.request_with_delay(io, Box::new(request), Some(peer_id), None);
     }
 
     pub fn send_request_again(
@@ -574,7 +553,7 @@ impl RequestManager {
             };
             let next_delay = delay + *REQUEST_START_WAITING_TIME;
 
-            if let Err(req) = self.request_handler.send_general_request(
+            if let Err(req) = self.request_handler.send_request(
                 io,
                 Some(chosen_peer),
                 request,

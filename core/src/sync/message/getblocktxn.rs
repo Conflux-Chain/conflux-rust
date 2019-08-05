@@ -34,7 +34,9 @@ impl Request for GetBlockTxn {
 
     fn on_removed(&self, _inflight_keys: &mut KeyContainer) {}
 
-    fn with_inflight(&mut self, _inflight_keys: &mut KeyContainer) {}
+    fn with_inflight(&mut self, _inflight_keys: &mut KeyContainer) {
+        // reuse the inflight key of GetCompactBlocks
+    }
 
     fn is_empty(&self) -> bool { false }
 
