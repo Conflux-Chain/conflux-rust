@@ -21,7 +21,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         parser.add_argument(
             "--iter",
             dest="iter",
-            default=100,
+            default=1,
             type=int,
             help=
             "The number of iterations the benchmark will be executed."
