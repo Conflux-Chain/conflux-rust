@@ -11,6 +11,18 @@ pub trait CompressedPathTrait {
     fn path_steps(&self) -> u16 {
         self.path_size() * 2 - (self.end_mask() != 0) as u16
     }
+
+    // TODO(yz): the format can be optimized to save 1 or 2 bytes: a string with
+    // 0 prefix means path_slice with even length, a string with 1 prefix
+    // means path_slice with odd length.
+    fn rlp_append_parts(&self, s: &mut RlpStream) {
+        s.append(&self.end_mask()).append(&self.path_slice());
+    }
+
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(2);
+        self.rlp_append_parts(s);
+    }
 }
 
 impl<'a> CompressedPathTrait for &'a [u8] {
@@ -25,7 +37,7 @@ pub struct CompressedPathRef<'a> {
     pub(super) end_mask: u8,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CompressedPathRaw {
     path_size: u16,
     path: MaybeInPlaceByteArray,
@@ -218,17 +230,15 @@ impl Clone for CompressedPathRaw {
     }
 }
 
-impl<'a> CompressedPathRef<'a> {
-    // TODO(yz): the format can be optimized.
-    pub fn rlp_append_parts(&self, s: &mut RlpStream) {
-        s.append(&self.end_mask).append(&self.path_slice);
+impl<'a> Encodable for CompressedPathRef<'a> {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        CompressedPathTrait::rlp_append(self, s);
     }
 }
 
-impl<'a> Encodable for CompressedPathRef<'a> {
+impl Encodable for CompressedPathRaw {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(2);
-        self.rlp_append_parts(s);
+        CompressedPathTrait::rlp_append(self, s);
     }
 }
 
@@ -240,6 +250,10 @@ impl Decodable for CompressedPathRaw {
             rlp.val_at(0)?,
         ))
     }
+}
+
+impl PartialEq<Self> for CompressedPathRaw {
+    fn eq(&self, other: &Self) -> bool { self.as_ref().eq(&other.as_ref()) }
 }
 
 impl CompressedPathRaw {

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{marker::PhantomData, ptr::null_mut, slice};
-
 /// Use FieldsOffsetMaybeInPlaceByteArrayMemoryManager and macro
 /// make_parallel_field_maybe_in_place_byte_array_memory_manager to manage
 /// construction / destruction of MaybeInPlaceByteArray.
@@ -85,7 +83,7 @@ pub trait MaybeInPlaceByteArrayMemoryManagerTrait: Drop {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
     SizeFieldType,
     SizeFieldGetterSetter: SizeFieldConverterTrait<SizeFieldType>,
@@ -228,7 +226,7 @@ pub trait SizeFieldConverterTrait<SizeFieldType> {
     fn set(size_field: &mut SizeFieldType, size: usize);
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TrivialSizeFieldConverterU16 {}
 
 impl SizeFieldConverterTrait<u16> for TrivialSizeFieldConverterU16 {
@@ -271,3 +269,17 @@ impl<
         ByteArrayOffsetAccessor::get_mut(self)
     }
 }
+
+// FIXME: it should not directly implement fmt
+impl Debug for MaybeInPlaceByteArray {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MaybeInPlaceByteArray{{{:?}}}", unsafe { self.in_place })
+    }
+}
+
+use std::{
+    fmt::{Debug, Formatter},
+    marker::PhantomData,
+    ptr::null_mut,
+    slice,
+};

@@ -17,6 +17,7 @@ pub fn compute_node_merkle(
     rlp_stream.begin_unbounded_list();
     match children_merkles {
         Some(merkles) => {
+            // TODO(yz): we may append merkle one by one so we save 2 more byte.
             rlp_stream.append_list(merkles);
         }
         _ => {}
