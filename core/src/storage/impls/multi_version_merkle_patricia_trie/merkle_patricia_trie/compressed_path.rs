@@ -48,7 +48,7 @@ mod tests {
     use super::{super::maybe_in_place_byte_array::*, *};
 
     #[test]
-    fn test_compressed_path_raw_size() {
+    fn test_compressed_path_raw_memory_manager_size() {
         assert_eq!(
             std::mem::size_of::<
                 FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
@@ -141,7 +141,6 @@ impl CompressedPathRaw {
         }
     }
 
-    // FIXME: check what's the nibble order in Ethereum's proof.
     pub fn first_nibble(x: u8) -> u8 { x & Self::BITS_0_3_MASK }
 
     pub fn second_nibble(x: u8) -> u8 { (x & Self::BITS_4_7_MASK) >> 4 }
