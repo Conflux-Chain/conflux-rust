@@ -71,6 +71,6 @@ pub use self::{
     cow_node_ref::CowNodeRef,
     node_ref::{NodeRefDeltaMpt, NodeRefDeltaMptCompact},
     subtrie_visitor::SubTrieVisitor,
-    trie_node::TrieNode,
+    trie_node::{MemOptimizedTrieNode, TrieNodeTrait, VanillaTrieNode},
 };
 use std::cell::UnsafeCell;

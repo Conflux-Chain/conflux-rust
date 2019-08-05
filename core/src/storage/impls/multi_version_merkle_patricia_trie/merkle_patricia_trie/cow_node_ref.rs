@@ -319,12 +319,8 @@ impl CowNodeRef {
         trie_node: &mut TrieNodeDeltaMpt,
     ) -> MerkleHash
     {
-        let path_merkle = compute_merkle(
-            trie_node.compressed_path_ref(),
-            children_merkles,
-            trie_node.value_as_slice().into_option(),
-        );
-        trie_node.merkle_hash = path_merkle;
+        let path_merkle = trie_node.compute_merkle(children_merkles);
+        trie_node.set_merkle(&path_merkle);
 
         path_merkle
     }
@@ -367,7 +363,7 @@ impl CowNodeRef {
                     .compute_merkle_db_loads
                     .fetch_add(1, Ordering::Relaxed);
             }
-            Ok(trie_node.merkle_hash)
+            Ok(trie_node.get_merkle().clone())
         }
     }
 
@@ -636,20 +632,25 @@ impl CowNodeRef {
     pub fn cow_replace_value_valid(
         &mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
         owned_node_set: &mut OwnedNodeSet,
-        trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam, value: &[u8],
+        trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam, value: Box<[u8]>,
     ) -> Result<MptValue<Box<[u8]>>>
     {
+        let value_to_take = Cell::new(Some(value));
+
         self.cow_modify_with_operation(
             node_memory_manager,
             &node_memory_manager.get_allocator(),
             owned_node_set,
             trie_node,
-            |owned_trie_node| owned_trie_node.replace_value_valid(value),
+            |owned_trie_node| {
+                owned_trie_node
+                    .replace_value_valid(value_to_take.replace(None).unwrap())
+            },
             |read_only_trie_node| {
                 (
                     unsafe {
                         read_only_trie_node.copy_and_replace_fields(
-                            Some(Some(value)),
+                            Some(value_to_take.replace(None)),
                             None,
                             None,
                         )

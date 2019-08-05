@@ -32,7 +32,7 @@ pub trait StateTrait {
     fn get_with_proof(
         &self, access_key: &[u8],
     ) -> Result<(Option<Box<[u8]>>, StateProof)>;
-    fn set(&mut self, access_key: &[u8], value: &[u8]) -> Result<()>;
+    fn set(&mut self, access_key: &[u8], value: Box<[u8]>) -> Result<()>;
     fn delete(&mut self, access_key: &[u8]) -> Result<Option<Box<[u8]>>>;
     // Delete everything prefixed by access_key and return deleted key value
     // pairs.

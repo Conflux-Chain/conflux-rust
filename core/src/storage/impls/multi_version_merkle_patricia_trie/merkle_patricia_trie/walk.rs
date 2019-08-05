@@ -9,7 +9,7 @@ use std::cmp::min;
 // TODO(yz): align key @8B with mask.
 pub type KeyPart<'a> = &'a [u8];
 
-pub enum WalkStop<'key, T> {
+pub enum WalkStop<'key, ChildIdType> {
     // path matching fails at some point. Want the new path_steps,
     // path_end_mask, ..., etc Basically, a new node should be created to
     // replace the current node from parent children table;
@@ -38,7 +38,7 @@ pub enum WalkStop<'key, T> {
     Descent {
         key_remaining: KeyPart<'key>,
         child_index: u8,
-        child_node: T,
+        child_node: ChildIdType,
     },
 
     // To descent, however child doesn't exists:
@@ -52,15 +52,8 @@ pub enum WalkStop<'key, T> {
     },
 }
 
-impl<'key, T> WalkStop<'key, T> {
-    fn child_not_found_uninitialized() -> Self {
-        WalkStop::ChildNotFound {
-            key_remaining: Default::default(),
-            child_index: 0,
-        }
-    }
-
-    fn path_diverted_uninitialized() -> Self {
+impl<'key, ChildIdType> WalkStop<'key, ChildIdType> {
+    pub fn path_diverted_uninitialized() -> Self {
         WalkStop::PathDiverted {
             key_child_index: None,
             key_remaining: Default::default(),
@@ -88,23 +81,38 @@ pub mod access_mode {
     }
 }
 
+pub(super) trait GetChildTrait<'node> {
+    type ChildIdType: 'node;
+
+    fn get_child(&'node self, child_index: u8) -> Option<Self::ChildIdType>;
+}
+
 /// Traverse.
 // TODO(yz): write test.
+///
+/// When a trie node start with the second nibble, the trie node has a
+/// compressed path of step 1. The nibble in the compressed path is
+/// the same as its child index.
+///
 /// The start of key is always aligned with compressed path of
 /// current node, e.g. if compressed path starts at the second-half, so
 /// should be key.
-pub(super) fn walk<'key, AM: access_mode::AccessMode, T>(
-    key: KeyPart<'key>, path: CompressedPathRef, path_end_mask: u8,
-    get_child: &Fn(u8) -> Option<T>,
-) -> WalkStop<'key, T>
-{
-    let path_slice = path.path_slice;
+pub(super) fn walk<
+    'key,
+    'node,
+    AM: access_mode::AccessMode,
+    Node: GetChildTrait<'node>,
+>(
+    key: KeyPart<'key>, path: &dyn CompressedPathTrait, node: &'node Node,
+) -> WalkStop<'key, Node::ChildIdType> {
+    let path_slice = path.path_slice();
+    let path_end_mask = path.end_mask();
 
     // Compare bytes till the last full byte. The first byte is always
     // included because even if it's the second-half, it must be
     // already matched before entering this TrieNode.
     let memcmp_len = min(
-        path_slice.len() - ((path.end_mask != 0) as usize),
+        path_slice.len() - ((path_end_mask != 0) as usize),
         key.len(),
     );
 
@@ -229,11 +237,8 @@ pub(super) fn walk<'key, AM: access_mode::AccessMode, T>(
             }
         }
 
-        match get_child(child_index) {
+        match node.get_child(child_index) {
             Option::None => {
-                if AM::is_read_only() {
-                    return WalkStop::child_not_found_uninitialized();
-                }
                 return WalkStop::ChildNotFound {
                     key_remaining,
                     child_index,
@@ -242,8 +247,8 @@ pub(super) fn walk<'key, AM: access_mode::AccessMode, T>(
             Option::Some(child_node) => {
                 return WalkStop::Descent {
                     key_remaining,
-                    child_node,
                     child_index,
+                    child_node,
                 };
             }
         }

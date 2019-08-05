@@ -159,8 +159,7 @@ impl<'a> StateTrait for State<'a> {
         self.get_from_all_tries(access_key, true)
     }
 
-    // FIXME: re-implement all other methods.
-    fn set(&mut self, access_key: &[u8], value: &[u8]) -> Result<()> {
+    fn set(&mut self, access_key: &[u8], value: Box<[u8]>) -> Result<()> {
         self.pre_modification();
 
         let root_node = self.get_or_create_root_node()?;

@@ -89,7 +89,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                     child_index: _,
                     child_node,
                 } => {
-                    node_ref = child_node;
+                    node_ref = child_node.clone().into();
                     key = key_remaining;
                 }
                 _ => {
@@ -150,7 +150,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                     child_node,
                     ..
                 } => {
-                    node_ref = child_node;
+                    node_ref = child_node.clone().into();
                     key = key_remaining;
                 }
                 _ => {
@@ -194,7 +194,7 @@ impl<'trie> SubTrieVisitor<'trie> {
             None => Ok(None),
             Some(trie_node) => {
                 if trie_node.get_compressed_path_size() == 0 {
-                    return Ok(Some(trie_node.merkle_hash));
+                    return Ok(Some(trie_node.get_merkle().clone()));
                 }
 
                 let maybe_value = trie_node.value_clone().into_option();
@@ -293,7 +293,7 @@ impl<'trie> SubTrieVisitor<'trie> {
             } => {
                 drop(trie_node_ref);
                 let result = self
-                    .new_visitor_for_subtree(child_node)
+                    .new_visitor_for_subtree(child_node.clone().into())
                     .delete(key_remaining);
                 if result.is_err() {
                     node_cow.into_child();
@@ -435,7 +435,7 @@ impl<'trie> SubTrieVisitor<'trie> {
             } => {
                 drop(trie_node_ref);
                 let result = self
-                    .new_visitor_for_subtree(child_node)
+                    .new_visitor_for_subtree(child_node.clone().into())
                     .delete_all(key, key_remaining);
                 if result.is_err() {
                     node_cow.into_child();
@@ -544,8 +544,8 @@ impl<'trie> SubTrieVisitor<'trie> {
     // later on.
     /// Insert a valid value into MPT.
     /// The visitor can only be used once to modify.
-    unsafe fn insert_checked_value<'key>(
-        mut self, key: KeyPart<'key>, value: &[u8],
+    unsafe fn insert_checked_value(
+        mut self, key: KeyPart, value: Box<[u8]>,
     ) -> Result<(bool, NodeRefDeltaMptCompact)> {
         let node_memory_manager = self.node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
@@ -577,7 +577,7 @@ impl<'trie> SubTrieVisitor<'trie> {
             } => {
                 drop(trie_node_ref);
                 let result = self
-                    .new_visitor_for_subtree(child_node)
+                    .new_visitor_for_subtree(child_node.clone().into())
                     .insert_checked_value(key_remaining, value);
                 if result.is_err() {
                     node_cow.into_child();
@@ -623,7 +623,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                         &allocator,
                         self.owned_node_set.get_mut(),
                     )?;
-                let mut new_node = TrieNode::default();
+                let mut new_node = MemOptimizedTrieNode::default();
                 // set compressed path.
                 new_node.set_compressed_path(matched_path);
 
@@ -656,7 +656,8 @@ impl<'trie> SubTrieVisitor<'trie> {
                                 &allocator,
                                 self.owned_node_set.get_mut(),
                             )?;
-                        let mut new_child_node = TrieNode::default();
+                        let mut new_child_node =
+                            MemOptimizedTrieNode::default();
                         // set compressed path.
                         new_child_node.copy_compressed_path(
                             CompressedPathRef {
@@ -691,7 +692,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                         &allocator,
                         self.owned_node_set.get_mut(),
                     )?;
-                let mut new_child_node = TrieNode::default();
+                let mut new_child_node = MemOptimizedTrieNode::default();
                 // set compressed path.
                 new_child_node.copy_compressed_path(CompressedPathRef {
                     path_slice: key_remaining,
@@ -719,9 +720,11 @@ impl<'trie> SubTrieVisitor<'trie> {
         }
     }
 
-    pub fn set(self, key: KeyPart, value: &[u8]) -> Result<NodeRefDeltaMpt> {
+    pub fn set(
+        self, key: KeyPart, value: Box<[u8]>,
+    ) -> Result<NodeRefDeltaMpt> {
         TrieNodeDeltaMpt::check_key_size(key)?;
-        TrieNodeDeltaMpt::check_value_size(value)?;
+        TrieNodeDeltaMpt::check_value_size(&value)?;
         let new_root;
         unsafe {
             new_root = self.insert_checked_value(key, value)?.1;

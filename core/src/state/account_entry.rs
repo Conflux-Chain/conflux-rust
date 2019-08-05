@@ -276,7 +276,7 @@ impl OverlayAccount {
                 if !code.is_empty() {
                     db.set_raw(
                         &db.code_key(&self.address, &self.code_hash),
-                        &code.as_ref(),
+                        code.as_ref().clone().into_boxed_slice(),
                     )?;
                 }
             }
