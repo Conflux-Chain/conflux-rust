@@ -81,12 +81,6 @@ log_conf="log.yaml"
 #
 # enable_discovery=true
 
-# `fast_recover` is used to control the behavior when a node restarts and reads blockchain data from the local database.
-# If the value is false, the node will verify all stored blocks again and reconstruct the state by replaying all transactions. 
-# Otherwise, it will trust the database and skip execution, just reconstructing the in-memory data structure.
-# 
-# fast_recover=false
-
 # `jsonrpc_http_keep_alive` is used to control whether to set KeepAlive for rpc HTTP connections.
 #
 # jsonrpc_http_keep_alive=false
@@ -119,7 +113,6 @@ log_conf="log.yaml"
 # send_tx_period_ms=1300
 # check_request_period_ms=5000
 # block_cache_gc_period_ms=5000
-# persist_terminal_period_ms=60_000
 # headers_request_timeout_ms=10_000
 # blocks_request_timeout_ms=30_000
 # transaction_request_timeout_ms=30_000

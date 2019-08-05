@@ -251,7 +251,6 @@ pub struct ProtocolConfiguration {
     pub send_tx_period: Duration,
     pub check_request_period: Duration,
     pub block_cache_gc_period: Duration,
-    pub persist_terminal_period: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,

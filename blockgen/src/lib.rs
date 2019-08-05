@@ -22,10 +22,6 @@ use std::{
 use time::{SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
 
-pub struct BlockGeneratorConfig {
-    pub test_chain_path: Option<String>,
-}
-
 enum MiningState {
     Start,
     Stop,

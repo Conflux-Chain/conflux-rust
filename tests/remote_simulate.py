@@ -24,7 +24,6 @@ class RemoteSimulate(ConfluxTestFramework):
         self.num_nodes = 1
         self.conf_parameters = {
             "log_level": "\"debug\"",
-            "fast_recover": "true",
         }
 
     def add_options(self, parser:ArgumentParser):

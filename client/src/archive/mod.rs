@@ -17,7 +17,7 @@ use cfxcore::{
 };
 
 use crate::rpc::{
-    impls::cfx::RpcImpl, setup_debug_rpc_apis, setup_public_rpc_apis, RpcBlock,
+    impls::cfx::RpcImpl, setup_debug_rpc_apis, setup_public_rpc_apis,
 };
 use cfx_types::{Address, U256};
 use cfxcore::block_data_manager::BlockDataManager;
@@ -26,13 +26,9 @@ use db::SystemDB;
 use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
-use primitives::Block;
 use secret_store::SecretStore;
 use std::{
     any::Any,
-    fs::File,
-    io::BufReader,
-    path::Path,
     str::FromStr,
     sync::{Arc, Weak},
     thread,
@@ -235,33 +231,6 @@ impl ArchiveClient {
                 U256::from_dec_str("10000000000000000").unwrap(),
                 U256::from_dec_str("10000000000000000").unwrap(),
             )));
-
-        let blockgen_config = conf.blockgen_config();
-        if let Some(chain_path) = blockgen_config.test_chain_path {
-            // make sure db recovery has completed
-            thread::sleep(Duration::from_secs(7));
-
-            let file_path = Path::new(&chain_path);
-            let file = File::open(file_path).map_err(|e| {
-                format!("Failed to open test-chain file {:?}", e)
-            })?;
-            let reader = BufReader::new(file);
-            let rpc_blocks: Vec<RpcBlock> = serde_json::from_reader(reader)
-                .map_err(|e| {
-                    format!("Failed to parse blocks from json {:?}", e)
-                })?;
-            if rpc_blocks.is_empty() {
-                return Err(format!(
-                    "Error: The json data should not be empty."
-                ));
-            }
-            for rpc_block in rpc_blocks.into_iter().skip(1) {
-                let primitive_block: Block = rpc_block.into_primitive().map_err(|e| {
-                    format!("Failed to convert from a rpc_block to primitive block {:?}", e)
-                })?;
-                sync.on_mined_block(primitive_block);
-            }
-        }
 
         let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(BlockGenerator::new(

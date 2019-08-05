@@ -6,6 +6,7 @@ if ! [ -x "$(command -v cargo)" ]; then
   exit 1
 fi
 branch=${1:-master}
+repo="${2:-https://github.com/Conflux-Chain/conflux-rust}"
 
 apt_wait () {
   while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do
@@ -32,8 +33,15 @@ fi
 
 cd conflux-rust
 git reset --hard
+if [ $repo == "https://github.com/Conflux-Chain/conflux-rust" ]; then
+    repo="origin"
+else
+    git remote add downstream $repo
+    repo="downstream"
+fi
+
 git fetch --all
-git checkout origin/$branch
+git checkout $repo/$branch
 cargo update
 cargo build --release --features "deadlock_detection"
 ./dev-support/dep_pip3.sh
