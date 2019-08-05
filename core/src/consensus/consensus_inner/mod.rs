@@ -11,8 +11,7 @@ use crate::{
         BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
     },
     consensus::{
-        anticone_cache::AnticoneCache, ANTICONE_PENALTY_UPPER_EPOCH_COUNT,
-        BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT, REWARD_EPOCH_COUNT,
+        anticone_cache::AnticoneCache,
     },
     pow::{target_difficulty, ProofOfWorkConfig},
     state::State,
@@ -34,6 +33,8 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     sync::Arc,
 };
+use crate::parameters::consensus::*;
+use crate::parameters::consensus_internal::*;
 
 const NULL: usize = !0;
 const NULLU64: u64 = !0;

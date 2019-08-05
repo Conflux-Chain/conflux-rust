@@ -10,7 +10,7 @@ use cfx_types::H256;
 use primitives::{BlockHeader, EpochNumber, StateRoot};
 
 use crate::{
-    consensus::{ConsensusGraph, DEFERRED_STATE_EPOCH_COUNT},
+    consensus::{ConsensusGraph},
     message::{Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler, NetworkService, PeerId},
     statedb::StateDb,
@@ -28,6 +28,7 @@ use super::{
     },
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
+use crate::parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 
 pub struct QueryProvider {
     consensus: Arc<ConsensusGraph>,

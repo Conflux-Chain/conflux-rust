@@ -11,8 +11,7 @@ use crate::{
             ConsensusGraphInner, NULL, NULLU64,
         },
         debug::ComputeEpochDebugRecord,
-        ConsensusConfig, ANTICONE_BARRIER_CAP, DEFERRED_STATE_EPOCH_COUNT,
-        EPOCH_SET_PERSISTENCE_DELAY, ERA_RECYCLE_TRANSACTION_DELAY,
+        ConsensusConfig,
     },
     rlp::Encodable,
     statistics::SharedStatistics,
@@ -32,6 +31,8 @@ use std::{
     mem,
     sync::Arc,
 };
+use crate::parameters::consensus::*;
+use crate::parameters::consensus_internal::*;
 
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,

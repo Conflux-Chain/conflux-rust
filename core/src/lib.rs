@@ -36,6 +36,7 @@ extern crate parity_crypto;
 extern crate rustc_hex;
 extern crate unexpected;
 
+pub mod parameters;
 pub mod block_data_manager;
 mod builtin;
 pub mod cache_config;

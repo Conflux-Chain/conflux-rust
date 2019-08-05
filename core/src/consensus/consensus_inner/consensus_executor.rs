@@ -6,8 +6,7 @@ use super::super::debug::*;
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::{
-        ConsensusGraphInner, ANTICONE_PENALTY_RATIO, BASE_MINING_REWARD,
-        CONFLUX_TOKEN,
+        ConsensusGraphInner,
     },
     executive::{ExecutionError, Executive},
     machine::new_machine,
@@ -39,13 +38,14 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::consensus::{BLAME_BOUND, DEFERRED_STATE_EPOCH_COUNT};
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
 };
+use crate::parameters::consensus::*;
+use crate::parameters::consensus_internal::*;
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<Meter> =

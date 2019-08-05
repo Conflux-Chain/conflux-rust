@@ -10,9 +10,8 @@ use cfxcore::{
     cache_manager::CacheManager,
     consensus::{
         ConsensusConfig, ConsensusGraph, ConsensusInnerConfig,
-        ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN, ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM,
-        ADAPTIVE_WEIGHT_DEFAULT_BETA,
     },
+    parameters::consensus::*,
     db::NUM_COLUMNS,
     pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
     statistics::Statistics,

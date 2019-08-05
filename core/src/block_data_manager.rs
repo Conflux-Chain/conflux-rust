@@ -5,7 +5,6 @@
 use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
-    consensus::DEFERRED_STATE_EPOCH_COUNT,
     db::{
         COL_BLOCKS, COL_BLOCK_RECEIPTS, COL_EPOCH_SET_HASHES,
         COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
@@ -35,6 +34,7 @@ use std::{
     sync::{mpsc::channel, Arc},
 };
 use threadpool::ThreadPool;
+use crate::parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 
 pub const NULLU64: u64 = !0;
 
