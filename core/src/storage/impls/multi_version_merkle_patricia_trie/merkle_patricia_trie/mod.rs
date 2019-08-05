@@ -2,6 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[macro_use]
+pub(self) mod maybe_in_place_byte_array_macro;
+
 pub mod children_table;
 pub(self) mod compressed_path;
 pub mod cow_node_ref;
