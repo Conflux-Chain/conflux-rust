@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 /// Archive nodes and full nodes react differently for snapshot management.
 pub trait SnapshotManagerTrait: GetSnapshotDbManager {
     fn new_snapshot_by_merging(

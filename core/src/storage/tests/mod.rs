@@ -24,7 +24,7 @@ impl KeyValueDB for FakeDbForStateTest {
     fn get_by_prefix(
         &self, _col: Option<u32>, _prefix: &[u8],
     ) -> Option<Box<[u8]>> {
-        unimplemented!()
+        unreachable!()
     }
 
     /// No-op
@@ -36,16 +36,16 @@ impl KeyValueDB for FakeDbForStateTest {
     fn iter<'a>(
         &'a self, _col: Option<u32>,
     ) -> Box<Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
-        unimplemented!()
+        unreachable!()
     }
 
     fn iter_from_prefix<'a>(
         &'a self, _col: Option<u32>, _prefix: &'a [u8],
     ) -> Box<Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
-        unimplemented!()
+        unreachable!()
     }
 
-    fn restore(&self, _new_db: &str) -> Result<()> { unimplemented!() }
+    fn restore(&self, _new_db: &str) -> Result<()> { unreachable!() }
 }
 
 pub fn new_state_manager_for_testing() -> StateManager {

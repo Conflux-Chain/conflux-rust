@@ -18,7 +18,7 @@ impl<GuardType, ValueType> GuardedValue<GuardType, ValueType> {
     pub fn new_with_fn<F: FnOnce(&GuardType) -> ValueType>(
         _guard: GuardType, _f: F,
     ) -> Self {
-        unimplemented!()
+        unreachable!()
     }
 
     pub fn into(self) -> (GuardType, ValueType) { (self.guard, self.value) }

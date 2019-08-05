@@ -11,7 +11,7 @@ use cfxcore::{
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
     consensus_parameters::*,
     db::NUM_COLUMNS,
-    pow::{ProofOfWorkConfig, WORKER_COMPUTATION_PARALLELISM},
+    pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::{
@@ -25,7 +25,7 @@ use cfxcore::{
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
-    TransactionPool,
+    TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use log::LevelFilter;
 use log4rs::{
