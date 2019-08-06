@@ -12,7 +12,7 @@ macro_rules! make_parallel_field_maybe_in_place_byte_array_memory_manager {
         $size_type:tt,
         $size_getter_setter_type:tt,
     ) => {
-        #[derive(Default, Clone, Debug)]
+        #[derive(Default, Clone)]
         pub struct $accessor_type$($(<$($constrain_item: $constrain)*>)?)? (
             $($(std::marker::PhantomData<$generics>,)+)?
         );

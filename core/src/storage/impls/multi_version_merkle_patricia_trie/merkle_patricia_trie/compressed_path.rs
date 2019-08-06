@@ -37,7 +37,7 @@ pub struct CompressedPathRef<'a> {
     pub(super) end_mask: u8,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct CompressedPathRaw {
     path_size: u16,
     path: MaybeInPlaceByteArray,
@@ -244,7 +244,7 @@ impl Encodable for CompressedPathRaw {
 
 impl Decodable for CompressedPathRaw {
     // TODO(yz): the format can be optimized.
-    fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(CompressedPathRaw::new(
             rlp.val_at::<Vec<u8>>(1)?.as_slice(),
             rlp.val_at(0)?,
@@ -254,6 +254,12 @@ impl Decodable for CompressedPathRaw {
 
 impl PartialEq<Self> for CompressedPathRaw {
     fn eq(&self, other: &Self) -> bool { self.as_ref().eq(&other.as_ref()) }
+}
+
+impl Debug for CompressedPathRaw {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        self.as_ref().fmt(f)
+    }
 }
 
 impl CompressedPathRaw {
@@ -271,3 +277,7 @@ impl CompressedPathRaw {
 
 use super::maybe_in_place_byte_array::*;
 use rlp::*;
+use std::{
+    fmt::{Debug, Error, Formatter},
+    result::Result,
+};

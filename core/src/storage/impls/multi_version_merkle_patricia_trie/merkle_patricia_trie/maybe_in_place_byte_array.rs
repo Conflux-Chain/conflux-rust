@@ -83,7 +83,7 @@ pub trait MaybeInPlaceByteArrayMemoryManagerTrait: Drop {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
     SizeFieldType,
     SizeFieldGetterSetter: SizeFieldConverterTrait<SizeFieldType>,
@@ -226,7 +226,7 @@ pub trait SizeFieldConverterTrait<SizeFieldType> {
     fn set(size_field: &mut SizeFieldType, size: usize);
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct TrivialSizeFieldConverterU16 {}
 
 impl SizeFieldConverterTrait<u16> for TrivialSizeFieldConverterU16 {
@@ -270,16 +270,4 @@ impl<
     }
 }
 
-// FIXME: it should not directly implement fmt
-impl Debug for MaybeInPlaceByteArray {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MaybeInPlaceByteArray{{{:?}}}", unsafe { self.in_place })
-    }
-}
-
-use std::{
-    fmt::{Debug, Formatter},
-    marker::PhantomData,
-    ptr::null_mut,
-    slice,
-};
+use std::{marker::PhantomData, ptr::null_mut, slice};
