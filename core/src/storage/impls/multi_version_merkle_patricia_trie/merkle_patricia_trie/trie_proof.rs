@@ -20,7 +20,7 @@ pub struct TrieProofNode {
     // fields necessary for traversal & hashing
     pub path_end_mask: u8,
     pub path: Vec<u8>,
-    pub value: Vec<u8>,
+    pub value: Option<Vec<u8>>,
     pub children_table: Vec<MerkleHash>,
     pub merkle_hash: MerkleHash,
 }
@@ -45,13 +45,7 @@ impl TrieProofNode {
         };
 
         // convert `value` to `Option<&[u8]>`
-        let value = match &self.value {
-            v if v == &Vec::<u8>::new() => None,
-            v => v[..].try_into().ok(),
-        };
-
-        // NOTE: conversion to option is necessary for
-        // computing the correct merkle hash
+        let value = self.value.as_ref().map(|v| &**v);
 
         compute_merkle(self.compressed_path_ref(), children_table, value)
     }
@@ -70,10 +64,12 @@ impl<'node> GetChildTrait<'node> for TrieProofNode {
     fn get_child(&'node self, child_index: u8) -> Option<&'node MerkleHash> {
         match self.children_table.len() {
             0 => None,
-            CHILDREN_COUNT => match &self.children_table[child_index as usize] {
-                h if h == &KECCAK_EMPTY => None,
-                h => Some(h),
-            },
+            CHILDREN_COUNT => {
+                match &self.children_table[child_index as usize] {
+                    h if h == &KECCAK_EMPTY => None,
+                    h => Some(h),
+                }
+            }
             len @ _ => {
                 error!("Invalid TrieProofNode child count: {}", len);
                 None
@@ -122,7 +118,7 @@ impl TrieProof {
 
                     match node.walk(key) {
                         WalkStop::Arrived => {
-                            return value.is_some() && value.as_ref().unwrap().eq(&node.value);
+                            return value.eq(&node.value);
                         }
                         WalkStop::PathDiverted { .. } => {
                             return value.is_none()

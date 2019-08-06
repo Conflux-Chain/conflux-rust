@@ -300,7 +300,9 @@ make_parallel_field_maybe_in_place_byte_array_memory_manager!(
     TrieNodeValueSizeFieldConverter,
 );
 
-impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone for MemOptimizedTrieNode<CacheAlgoDataT> {
+impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
     fn clone(&self) -> Self {
         Self::new(
             &self.merkle_hash,
@@ -459,11 +461,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
                 .path
                 .get_slice(self.get_compressed_path_size() as usize)
                 .into(),
-            value: self
-                .value_clone()
-                .into_option()
-                .map(Into::into)
-                .unwrap_or_default(),
+            value: self.value_clone().into_option().map(|b| b.to_vec()),
             children_table: Default::default(),
             merkle_hash: self.merkle_hash,
         }
