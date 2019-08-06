@@ -275,6 +275,8 @@ pub struct MemOptimizedTrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     pub(in super::super) cache_algo_data: CacheAlgoDataT,
 }
 
+#[cfg(test)]
+use super::super::node_memory_manager::TrieNodeDeltaMpt;
 #[test]
 fn test_mem_optimized_trie_node_size() {
     assert_eq!(std::mem::size_of::<TrieNodeDeltaMpt>(), 80);
@@ -312,24 +314,6 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone
         )
     }
 }
-
-make_parallel_field_maybe_in_place_byte_array_memory_manager!(
-    MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
-    TrieNode<CacheAlgoDataT>,
-    path_memory_manager,
-    path,
-    path_size: u16,
-    TrivialSizeFieldConverterU16,
-);
-
-make_parallel_field_maybe_in_place_byte_array_memory_manager!(
-    MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
-    TrieNode<CacheAlgoDataT>,
-    value_memory_manager,
-    value,
-    value_size: u32,
-    TrieNodeValueSizeFieldConverter,
-);
 
 /// Compiler is not sure about the pointer in MaybeInPlaceByteArray fields.
 /// It's Send because TrieNode is move only and it's impossible to change any
@@ -835,8 +819,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug
 
 use super::{
     super::{
-        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
-        slab::*,
+        super::errors::*, cache::algorithm::CacheAlgoDataTrait,
+        node_ref::*, slab::*,
     },
     children_table::*,
     compressed_path::*,

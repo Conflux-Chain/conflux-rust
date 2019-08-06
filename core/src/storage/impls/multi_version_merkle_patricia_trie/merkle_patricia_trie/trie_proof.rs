@@ -155,7 +155,7 @@ mod tests {
             let mut node = TrieProofNode::default();
             node.path_end_mask = 0x0f;
             node.path = vec![0x00, 0x01, 0x02];
-            node.value = vec![0x03, 0x04, 0x05];
+            node.value = Some(vec![0x03, 0x04, 0x05]);
             node.children_table = [KECCAK_EMPTY; 16].to_vec();
             node.merkle_hash = node.merkle();
             node
@@ -186,7 +186,7 @@ mod tests {
         let leaf1 = {
             let mut node = TrieProofNode::default();
             node.path = vec![0x02];
-            node.value = value1.clone();
+            node.value = Some(value1.clone());
             node.merkle_hash = node.merkle();
             node
         };
@@ -194,7 +194,7 @@ mod tests {
         let leaf2 = {
             let mut node = TrieProofNode::default();
             node.path = vec![0x03];
-            node.value = value2.clone();
+            node.value = Some(value2.clone());
             node.merkle_hash = node.merkle();
             node
         };

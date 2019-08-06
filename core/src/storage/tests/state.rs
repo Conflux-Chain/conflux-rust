@@ -62,7 +62,9 @@ fn test_set_get() {
     println!("Testing with {} set operations.", keys.len());
 
     for key in &keys {
-        state.set(key, key).expect("Failed to insert key.");
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
 
     rng.shuffle(keys.as_mut());
@@ -98,7 +100,9 @@ fn test_get_set_at_second_commit() {
     println!("Setting state_0 with {} keys.", keys_0.len());
 
     for key in keys_0 {
-        state_0.set(key, key).expect("Failed to insert key.");
+        state_0
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
 
     let mut epoch_id_0 = H256::default();;
@@ -114,7 +118,7 @@ fn test_get_set_at_second_commit() {
     for key in keys_1_new {
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(key, value.as_slice())
+            .set(key, value.into())
             .expect("Failed to insert key.");
     }
 
@@ -131,7 +135,7 @@ fn test_get_set_at_second_commit() {
         assert_eq!(equal, true);
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(key, value.as_slice())
+            .set(key, value.into())
             .expect("Failed to insert key.");
     }
 
@@ -186,7 +190,9 @@ fn test_set_delete() {
 
     // Insert part 1 and commit.
     for key in keys_0.iter() {
-        state.set(key, key).expect("Failed to insert key.");
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
     let mut epoch_id = H256::default();
     epoch_id[0] = 1;
@@ -199,7 +205,9 @@ fn test_set_delete() {
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
-        state.set(key, key).expect("Failed to insert key.");
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
 
     rng.shuffle(keys.as_mut());
@@ -241,7 +249,7 @@ fn test_set_delete_all() {
     // Insert part 1 and commit.
     for key in keys_0.iter() {
         state
-            .set(vec![&key[..], &key[..]].concat().as_slice(), key)
+            .set(vec![&key[..], &key[..]].concat().as_slice(), key[..].into())
             .expect("Failed to insert key.");
     }
     let mut epoch_id = H256::default();
@@ -256,7 +264,7 @@ fn test_set_delete_all() {
         .unwrap();
     for key in keys_1.iter() {
         state
-            .set(vec![&key[..], &key[..]].concat().as_slice(), key)
+            .set(vec![&key[..], &key[..]].concat().as_slice(), key[..].into())
             .expect("Failed to insert key.");
     }
 
@@ -327,7 +335,7 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
-            .set(&actual_key, &actual_value)
+            .set(&actual_key, actual_value.into())
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
@@ -341,7 +349,7 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
-            .set(&actual_key, &actual_value)
+            .set(&actual_key, actual_value.into())
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
@@ -355,7 +363,7 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_2
-            .set(&actual_key, &actual_value)
+            .set(&actual_key, actual_value.into())
             .expect("Failed to insert key.");
     }
     let merkle_2 = state_2.compute_state_root().unwrap();
@@ -385,7 +393,7 @@ fn test_set_order_concurrent() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
-            .set(&actual_key, &actual_value)
+            .set(&actual_key, actual_value.into())
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
@@ -407,7 +415,7 @@ fn test_set_order_concurrent() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
-            .set(&actual_key, &actual_value)
+            .set(&actual_key, actual_value.into())
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
@@ -446,7 +454,7 @@ fn test_set_order_concurrent() {
                 let actual_value =
                     vec![key_slice; 1 + (key[0] % 32) as usize].concat();
                 state_2
-                    .set(&actual_key, &actual_value)
+                    .set(&actual_key, actual_value.into())
                     .expect("Failed to insert key.");
             }
             let merkle_2 = state_2.compute_state_root().unwrap();
@@ -480,7 +488,9 @@ fn test_proofs() {
         .collect();
 
     for key in &keys {
-        state.set(key, key).expect("Failed to insert key.");
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
 
     let mut epoch_id = H256::default();
