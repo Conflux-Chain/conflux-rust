@@ -9,11 +9,10 @@
 /// The trait for database manager of Snapshot.
 pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait;
-    // FIXME: narrow down.
-    type DeltaMpt;
 
     fn new_snapshot_by_merging(
-        &self, old_snapshot_root: &MerkleHash, delta_mpt: &Self::DeltaMpt,
+        &self, old_snapshot_root: &MerkleHash, snapshot_epoch_id: EpochId,
+        height: u64, delta_mpt: DeltaMptInserter,
     ) -> Result<Arc<Self::SnapshotDb>>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId,
@@ -24,6 +23,11 @@ pub trait SnapshotDbManagerTrait {
     fn destroy_snapshot(&self, snapshot_root: &MerkleHash) -> Result<()>;
 }
 
-use super::{super::impls::errors::*, snapshot_db::*};
+use super::{
+    super::impls::{
+        errors::*, storage_manager::storage_manager::DeltaMptInserter,
+    },
+    snapshot_db::*,
+};
 use primitives::{EpochId, MerkleHash};
 use std::sync::Arc;
