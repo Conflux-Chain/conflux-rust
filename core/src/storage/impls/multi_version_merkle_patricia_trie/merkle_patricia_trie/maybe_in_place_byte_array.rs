@@ -16,6 +16,10 @@ pub union MaybeInPlaceByteArray {
     pub ptr: *mut u8,
 }
 
+impl MaybeInPlaceByteArray {
+    pub const MAX_INPLACE_SIZE: usize = 8;
+}
+
 #[test]
 fn test_maybe_inplace_byte_array_size_is_8_bytes() {
     assert_eq!(
@@ -266,9 +270,4 @@ impl<
     fn get_in_place_byte_array_mut(&mut self) -> &mut MaybeInPlaceByteArray {
         ByteArrayOffsetAccessor::get_mut(self)
     }
-}
-
-#[allow(unused)]
-impl MaybeInPlaceByteArray {
-    pub const MAX_INPLACE_SIZE: usize = 8;
 }
