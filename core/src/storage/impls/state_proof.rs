@@ -5,8 +5,7 @@
 pub use super::multi_version_merkle_patricia_trie::{
     merkle_patricia_trie::merkle::MaybeMerkleTableRef, TrieProof,
 };
-use crate::hash::KECCAK_EMPTY;
-use primitives::MerkleHash;
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
@@ -58,14 +57,14 @@ impl StateProof {
             // proof of non-existence with a single trie
             (None, Some(p1), None, None) => {
                 p1.is_valid(key, None, delta_root)
-                    && intermediate_root == KECCAK_EMPTY
-                    && snapshot_root == KECCAK_EMPTY
+                    && intermediate_root == MERKLE_NULL_NODE
+                    && snapshot_root == MERKLE_NULL_NODE
             }
             // proof of non-existence with two tries
             (None, Some(p1), Some(p2), None) => {
                 p1.is_valid(key, None, delta_root)
                     && p2.is_valid(key, None, intermediate_root)
-                    && snapshot_root == KECCAK_EMPTY
+                    && snapshot_root == MERKLE_NULL_NODE
             }
             // proof of non-existence with all tries
             (None, Some(p1), Some(p2), Some(p3)) => {
@@ -76,9 +75,9 @@ impl StateProof {
             // no proofs available
             (_, None, None, None) => {
                 value.is_none()
-                    && delta_root == KECCAK_EMPTY
-                    && intermediate_root == KECCAK_EMPTY
-                    && snapshot_root == KECCAK_EMPTY
+                    && delta_root == MERKLE_NULL_NODE
+                    && intermediate_root == MERKLE_NULL_NODE
+                    && snapshot_root == MERKLE_NULL_NODE
             }
             _ => false,
         }
