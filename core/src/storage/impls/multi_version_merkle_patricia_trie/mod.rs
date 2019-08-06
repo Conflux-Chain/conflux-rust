@@ -220,7 +220,7 @@ impl MultiVersionMerklePatriciaTrie {
         self.db.as_read_only()
     }
 
-    pub fn db_commit(&self) -> &dyn Any { self.db.as_any() }
+    pub fn db_commit(&self) -> &dyn Any { (*self.db).as_any() }
 }
 
 pub mod guarded_value;
