@@ -47,14 +47,25 @@ pub mod consensus_internal {
 pub mod sync {
     use std::time::Duration;
 
+    /// The threshold controlling whether a node is in catch-up mode.
+    /// A node is in catch-up mode if its local best epoch number is
+    /// CATCH_UP_EPOCH_LAG_THRESHOLD behind the median of the epoch
+    /// numbers of peers.
     pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
 
     pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
-
+    /// The max number of headers that are to be sent for header
+    /// block request.
     pub const MAX_HEADERS_TO_SEND: u64 = 512;
-    pub const MAX_BLOCKS_TO_SEND: u64 = 256;
+    /// The max number of blocks that are to be sent for compact block request.
+    pub const MAX_BLOCKS_TO_SEND: u64 = 128;
+    /// The max number of epochs whose hashes are to be responded
+    /// for request GetBlockHashesByEpoch
     pub const MAX_EPOCHS_TO_SEND: u64 = 128;
     pub const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
+
+    // The waiting time duration that will be accumulated for resending a
+    // timeout request.
     lazy_static! {
         pub static ref REQUEST_START_WAITING_TIME: Duration =
             Duration::from_secs(1);

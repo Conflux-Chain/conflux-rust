@@ -451,7 +451,15 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn start_sync(&self, io: &NetworkContext) {
-        if self.catch_up_mode() {
+        let current_phase_type =
+            self.phase_manager.get_current_phase().phase_type();
+        if current_phase_type == SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
+            || current_phase_type == SyncPhaseType::CatchUpRecoverBlockFromDB
+        {
+            return;
+        }
+
+        if current_phase_type != SyncPhaseType::Normal {
             self.request_epochs(io);
         } else {
             self.request_missing_terminals(io);
@@ -499,12 +507,6 @@ impl SynchronizationProtocolHandler {
                 if terminals.len() > 0 {
                     debug!("Requesting terminals {:?}", to_request);
                 }
-
-                // self.request_manager.request_block_headers(
-                //     io,
-                //     Some(peer),
-                //     to_request.clone(),
-                // );
 
                 self.request_block_headers(io, Some(peer), to_request.clone());
 

@@ -15,7 +15,13 @@ use crate::{
 };
 use network::NetworkContext;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
+        Arc,
+    },
+};
 
 ///
 /// Archive node goes through the following phases:
@@ -66,7 +72,6 @@ impl SynchronizationPhaseManagerInner {
 
     pub fn register_phase(&mut self, phase: Arc<SynchronizationPhaseTrait>) {
         self.phases.insert(phase.phase_type(), phase);
-        //self.phases[phase.phase_type()] = phase;
     }
 
     pub fn get_phase(
@@ -173,11 +178,15 @@ impl SynchronizationPhaseManager {
 
 pub struct CatchUpRecoverBlockHeaderFromDbPhase {
     pub graph: SharedSynchronizationGraph,
+    pub recovered: Arc<AtomicBool>,
 }
 
 impl CatchUpRecoverBlockHeaderFromDbPhase {
     pub fn new(graph: SharedSynchronizationGraph) -> Self {
-        CatchUpRecoverBlockHeaderFromDbPhase { graph }
+        CatchUpRecoverBlockHeaderFromDbPhase {
+            graph,
+            recovered: Arc::new(AtomicBool::new(false)),
+        }
     }
 }
 
@@ -193,6 +202,10 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
+        if self.recovered.load(AtomicOrdering::SeqCst) == false {
+            return self.phase_type();
+        }
+
         DynamicCapability::ServeHeaders(true).broadcast(io, &sync_handler.syn);
         SyncPhaseType::CatchUpSyncBlockHeader
     }
@@ -203,8 +216,14 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
     )
     {
         info!("start phase {:?}", self.name());
-        // FIXME: should dispatch to another worker thread to do this.
-        self.graph.recover_graph_from_db(true /* header_only */);
+        self.recovered.store(false, AtomicOrdering::SeqCst);
+        let recovered = self.recovered.clone();
+        let graph = self.graph.clone();
+        std::thread::spawn(move || {
+            graph.recover_graph_from_db(true /* header_only */);
+            recovered.store(true, AtomicOrdering::SeqCst);
+            info!("finish recover header graph from db");
+        });
     }
 }
 
@@ -351,11 +370,15 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
 
 pub struct CatchUpRecoverBlockFromDbPhase {
     pub graph: SharedSynchronizationGraph,
+    pub recovered: Arc<AtomicBool>,
 }
 
 impl CatchUpRecoverBlockFromDbPhase {
     pub fn new(graph: SharedSynchronizationGraph) -> Self {
-        CatchUpRecoverBlockFromDbPhase { graph }
+        CatchUpRecoverBlockFromDbPhase {
+            graph,
+            recovered: Arc::new(AtomicBool::new(false)),
+        }
     }
 }
 
@@ -371,6 +394,9 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
+        if self.recovered.load(AtomicOrdering::SeqCst) == false {
+            return self.phase_type();
+        }
         SyncPhaseType::CatchUpSyncBlock
     }
 
@@ -411,8 +437,14 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 .clear_sync_and_consensus_graph_statistics();
         }
 
-        // FIXME: should dispatch to another worker thread to do this.
-        self.graph.recover_graph_from_db(false /* header_only */);
+        self.recovered.store(false, AtomicOrdering::SeqCst);
+        let recovered = self.recovered.clone();
+        let graph = self.graph.clone();
+        std::thread::spawn(move || {
+            graph.recover_graph_from_db(false /* header_only */);
+            recovered.store(true, AtomicOrdering::SeqCst);
+            info!("finish recover block graph from db");
+        });
     }
 }
 

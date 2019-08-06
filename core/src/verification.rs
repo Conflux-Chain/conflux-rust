@@ -7,8 +7,8 @@ use crate::{
     pow,
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
-use cfx_types::H256;
-use primitives::{Block, BlockHeader};
+use cfx_types::{H256, U256};
+use primitives::{block::MAX_BLOCK_SIZE_IN_BYTES, Block, BlockHeader};
 use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
 
@@ -142,12 +142,35 @@ impl VerificationConfig {
     /// body again from others. However, if the body matches the header and
     /// the body is incorrect, this means the block is invalid, and we
     /// should discard this block and all its descendants.
-    // FIXME check block_size, gas_limit, tx_count, e.t.c.
     pub fn verify_block_basic(&self, block: &Block) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
+        let mut block_size = 0;
+        let mut block_gas_limit = U256::zero();
         for t in &block.transactions {
             t.transaction.verify_basic()?;
+            block_size += t.rlp_size();
+            block_gas_limit += *t.gas_limit();
+        }
+
+        if block_size > MAX_BLOCK_SIZE_IN_BYTES {
+            return Err(From::from(BlockError::InvalidBlockSize(
+                OutOfBounds {
+                    min: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
+                    max: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
+                    found: block_size as u64,
+                },
+            )));
+        }
+
+        if block_gas_limit > *block.block_header.gas_limit() {
+            return Err(From::from(BlockError::InvalidBlockGasLimit(
+                OutOfBounds {
+                    min: Some(*block.block_header.gas_limit()),
+                    max: Some(*block.block_header.gas_limit()),
+                    found: block_gas_limit,
+                },
+            )));
         }
 
         Ok(())
