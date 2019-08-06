@@ -18,7 +18,8 @@ RUN apt-get update && \
     libtool \
     musl-tools \
     sudo \
-    xutils-dev
+    xutils-dev \
+    libsqlite3-dev
 
 RUN apt-get install -y \
     cmake \
