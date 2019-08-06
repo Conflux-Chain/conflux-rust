@@ -4,15 +4,13 @@
 
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    block_parameters::*, pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedSynchronizationGraph, SharedSynchronizationService,
-    SharedTransactionPool, block_parameters::*,
+    SharedTransactionPool,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
-use primitives::{
-    *,
-};
+use primitives::*;
 use std::{
     cmp::max,
     sync::{mpsc, Arc},

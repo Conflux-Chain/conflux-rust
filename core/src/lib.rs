@@ -76,6 +76,6 @@ pub use crate::{
 };
 pub use network::PeerInfo;
 pub use parameters::{
-    consensus as consensus_parameters, WORKER_COMPUTATION_PARALLELISM,
-    block as block_parameters
+    block as block_parameters, consensus as consensus_parameters,
+    WORKER_COMPUTATION_PARALLELISM,
 };

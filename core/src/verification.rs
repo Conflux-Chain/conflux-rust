@@ -4,6 +4,7 @@
 
 use crate::{
     error::{BlockError, Error},
+    parameters::block::*,
     pow,
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
@@ -11,7 +12,6 @@ use cfx_types::{H256, U256};
 use primitives::{Block, BlockHeader};
 use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
-use crate::parameters::block::*;
 
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {

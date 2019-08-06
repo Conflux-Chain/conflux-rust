@@ -4,6 +4,7 @@
 
 use crate::{
     message::RequestId,
+    parameters::block::ACCEPTABLE_TIME_DRIFT,
     sync::{
         message::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
@@ -21,7 +22,6 @@ use std::{
     collections::HashSet,
     time::{SystemTime, UNIX_EPOCH},
 };
-use crate::parameters::block::ACCEPTABLE_TIME_DRIFT;
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHeadersResponse {

@@ -89,11 +89,12 @@ pub mod block {
     pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 800 * 1024;
     // The maximum number of referees allowed for each block
     pub const REFEREE_BOUND: usize = 200;
-    // If a new block is more than valid_time_drift ahead of the current system timestamp,
-    // it will be discarded (but may get received again) and the peer will be disconnected.
+    // If a new block is more than valid_time_drift ahead of the current system
+    // timestamp, it will be discarded (but may get received again) and the
+    // peer will be disconnected.
     pub const VALID_TIME_DRIFT: u64 = 10 * 60;
-    // A new block has to be less than this drift to send to the consensus graph. Otherwise,
-    // it will be queued at the synchronization layer.
+    // A new block has to be less than this drift to send to the consensus
+    // graph. Otherwise, it will be queued at the synchronization layer.
     pub const ACCEPTABLE_TIME_DRIFT: u64 = 5 * 60;
     // FIXME: a block generator parameter only. We should remove this later
     pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 20000;
