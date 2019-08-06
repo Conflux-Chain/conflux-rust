@@ -717,6 +717,14 @@ impl ConsensusGraph {
             .find_the_first_with_correct_state_of(0)
             .and_then(|index| Some(inner.arena[inner.pivot_chain[index]].hash))
     }
+
+    /// construct_pivot_state() rebuild pivot chain state info from db
+    /// avoiding intermediate redundant computation triggered by
+    /// on_new_block().
+    pub fn construct_pivot_state(&self) {
+        let inner = &mut *self.inner.write();
+        self.new_block_handler.construct_pivot_state(inner);
+    }
 }
 
 impl Drop for ConsensusGraph {

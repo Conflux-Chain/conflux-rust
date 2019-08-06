@@ -24,7 +24,9 @@ use crate::{
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
-use primitives::{BlockHeader, SignedTransaction, StateRootWithAuxInfo};
+use primitives::{
+    BlockHeader, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
+};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
@@ -144,6 +146,13 @@ impl ConsensusNewBlockHandler {
                 new_legacy_refs.insert(inner.arena[*index].hash, referees);
             }
             outside_block_hashes.push(inner.arena[*index].hash);
+            // remove useless data in BlockDataManager
+            inner
+                .data_man
+                .remove_epoch_execution_commitments(&inner.arena[*index].hash);
+            inner
+                .data_man
+                .remove_epoch_execution_context(&inner.arena[*index].hash);
         }
         inner.old_era_block_sets.push_back(outside_block_hashes);
         inner.old_era_block_sets.push_back(Vec::new());
@@ -1374,5 +1383,96 @@ impl ConsensusNewBlockHandler {
         );
         self.data_man
             .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
+    }
+
+    /// recover receipts_root and logs_bloom_hash in pivot chain
+    pub fn construct_pivot_state(&self, inner: &mut ConsensusGraphInner) {
+        if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
+            return;
+        }
+        // recover receipts_root and logs_bloom_hash from block header
+        for index in
+            DEFERRED_STATE_EPOCH_COUNT as usize..inner.pivot_chain.len()
+        {
+            let deffered_index =
+                inner.pivot_chain[index - DEFERRED_STATE_EPOCH_COUNT as usize];
+            // block header must exist in db
+            let block_header = self
+                .data_man
+                .block_header_by_hash(&inner.arena[index].hash)
+                .unwrap();
+            if inner.arena[deffered_index].hash
+                != self.data_man.true_genesis_block.hash()
+            {
+                self.data_man.insert_epoch_execution_commitments(
+                    inner.arena[deffered_index].hash,
+                    *block_header.deferred_receipts_root(),
+                    *block_header.deferred_logs_bloom_hash(),
+                );
+            }
+        }
+        // Compute state for the deferred block of the mining block,
+        // which is may not in the db
+        let pivot_arena_index = inner.pivot_chain
+            [inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize];
+        let pivot_hash = inner.arena[pivot_arena_index].hash.clone();
+        if pivot_hash == inner.data_man.true_genesis_block.hash() {
+            return;
+        }
+        let epoch_arena_indices = &inner.arena[pivot_arena_index]
+            .data
+            .ordered_executable_epoch_blocks;
+        let mut epoch_receipts = Vec::with_capacity(epoch_arena_indices.len());
+
+        let mut receipts_correct = true;
+        for i in epoch_arena_indices {
+            if let Some(r) = self.data_man.block_results_by_hash_with_epoch(
+                &inner.arena[*i].hash,
+                &pivot_hash,
+                true,
+            ) {
+                epoch_receipts.push(r.receipts);
+            } else {
+                // Constructed pivot chain does not match receipts in
+                // db, so we have to recompute
+                // the receipts of this epoch
+                receipts_correct = false;
+                break;
+            }
+        }
+        if receipts_correct {
+            let pivot_receipts_root =
+                BlockHeaderBuilder::compute_block_receipts_root(
+                    &epoch_receipts,
+                );
+            let pivot_logs_bloom_hash =
+                BlockHeaderBuilder::compute_block_logs_bloom_hash(
+                    &epoch_receipts,
+                );
+            self.data_man.insert_epoch_execution_commitments(
+                pivot_hash,
+                pivot_receipts_root,
+                pivot_logs_bloom_hash,
+            );
+        } else {
+            let reward_execution_info =
+                self.executor.get_reward_execution_info(
+                    &self.data_man,
+                    inner,
+                    pivot_arena_index,
+                );
+            let epoch_block_hashes =
+                inner.get_epoch_block_hashes(pivot_arena_index);
+            let start_block_number =
+                inner.get_epoch_start_block_number(pivot_arena_index);
+            self.executor.compute_epoch(EpochExecutionTask::new(
+                pivot_hash,
+                epoch_block_hashes,
+                start_block_number,
+                reward_execution_info,
+                true,
+                false,
+            ));
+        }
     }
 }

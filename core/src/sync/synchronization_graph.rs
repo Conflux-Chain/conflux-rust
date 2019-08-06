@@ -960,6 +960,9 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
+        if !header_only {
+            self.consensus.construct_pivot_state();
+        }
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -1263,13 +1266,20 @@ impl SynchronizationGraph {
 
         let h = inner.arena[index].block_header.hash();
         debug!("Block {:?} is graph ready", h);
-        // Make Consensus Worker handle the block in order
-        // asynchronously
-        // if recover_from_db = true, we can simply ignore body
-        self.consensus_sender
-            .lock()
-            .send((h, recover_from_db))
-            .expect("Cannot fail");
+        // If this block is recovered from db, we need to explicitly call
+        // consensus.on_new_block since we need to call
+        // consensus.construct_pivot_state after all the blocks are inserted
+        // into consensus graph; Otherwise Consensus Worker can handle the
+        // block in order asynchronously. In addition, if this block is
+        // recovered from db, we can simply ignore body.
+        if !recover_from_db {
+            self.consensus_sender
+                .lock()
+                .send((h, false))
+                .expect("Cannot fail");
+        } else {
+            self.consensus.on_new_block(&h, true);
+        }
     }
 
     /// subroutine called by `insert_block` and `remove_expire_blocks`

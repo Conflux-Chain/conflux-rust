@@ -23,6 +23,7 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Bloom, H256};
 use heapsize::HeapSizeOf;
+use kvdb::DBTransaction;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::{from_tx_hash, get_shortid_key, CompactBlock},
@@ -49,22 +50,10 @@ pub struct EpochExecutionContext {
     pub start_block_number: u64,
 }
 
-impl Encodable for EpochExecutionContext {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(1).append(&self.start_block_number);
-    }
-}
-
-impl Decodable for EpochExecutionContext {
-    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
-        Ok(EpochExecutionContext {
-            start_block_number: r.val_at(0)?,
-        })
-    }
-}
-
-impl HeapSizeOf for EpochExecutionContext {
-    fn heap_size_of_children(&self) -> usize { std::mem::size_of::<u64>() }
+#[derive(Clone)]
+pub struct EpochExecutionCommitments {
+    pub receipts_root: H256,
+    pub logs_bloom_hash: H256,
 }
 
 #[derive(Clone, RlpEncodable, RlpDecodable)]
@@ -93,7 +82,8 @@ pub struct BlockDataManager {
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
     tx_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
-    epoch_execution_commitments: RwLock<HashMap<H256, (H256, H256)>>,
+    epoch_execution_commitments:
+        RwLock<HashMap<H256, EpochExecutionCommitments>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
@@ -188,15 +178,6 @@ impl BlockDataManager {
                                     .unwrap()
                             {
                                 let cur_block = cur_block.unwrap();
-                                data_man.insert_epoch_execution_commitments(
-                                    cur_block.hash(),
-                                    *cur_block
-                                        .block_header
-                                        .deferred_receipts_root(),
-                                    *cur_block
-                                        .block_header
-                                        .deferred_logs_bloom_hash(),
-                                );
                                 cur_hash =
                                     *cur_block.block_header.parent_hash();
                             } else {
@@ -209,15 +190,6 @@ impl BlockDataManager {
                 }
             }
         }
-
-        data_man.insert_epoch_execution_commitments(
-            data_man.genesis_block.hash(),
-            *data_man.genesis_block.block_header.deferred_receipts_root(),
-            *data_man
-                .genesis_block
-                .block_header
-                .deferred_logs_bloom_hash(),
-        );
 
         data_man.insert_epoch_execution_context(
             data_man.genesis_block.hash(),
@@ -236,6 +208,14 @@ impl BlockDataManager {
                 &genesis_block.block_header.hash(),
                 LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
             );
+            data_man.insert_epoch_execution_commitments(
+                data_man.genesis_block.hash(),
+                *data_man.genesis_block.block_header.deferred_receipts_root(),
+                *data_man
+                    .genesis_block
+                    .block_header
+                    .deferred_logs_bloom_hash(),
+            );
         }
 
         *data_man.cur_consensus_era_genesis_hash.write() =
@@ -253,7 +233,7 @@ impl BlockDataManager {
             {
                 Some(instance) => {
                     let rlp = Rlp::new(&instance);
-                    Some(rlp.val_at::<u64>(0).expect("Failed to decode checkpoint hash!"))
+                    Some(rlp.val_at::<u64>(0).expect("Failed to decode instance id!"))
                 }
                 None => {
                     info!("No instance id got from db");
@@ -273,7 +253,7 @@ impl BlockDataManager {
         rlp_stream.append(&self.instance_id);
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_MISC, b"instance", &rlp_stream.drain());
-        self.db.key_value().write(dbops).expect("db error");
+        self.commit_db_transaction(dbops);
     }
 
     pub fn genesis_block(&self) -> Arc<Block> { self.genesis_block.clone() }
@@ -285,6 +265,13 @@ impl BlockDataManager {
         let block = self.block_by_hash(&address.block_hash, false)?;
         assert!(address.index < block.transactions.len());
         Some(block.transactions[address.index].clone())
+    }
+
+    fn commit_db_transaction(&self, transaction: DBTransaction) {
+        self.db
+            .key_value()
+            .write(transaction)
+            .expect("crash for db failure");
     }
 
     fn block_header_from_db(&self, hash: &H256) -> Option<BlockHeader> {
@@ -299,19 +286,13 @@ impl BlockDataManager {
     fn insert_block_header_to_db(&self, header: &BlockHeader) {
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_BLOCKS, &header.hash(), &rlp::encode(header));
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+        self.commit_db_transaction(dbops);
     }
 
     fn remove_block_header_from_db(&self, hash: &H256) {
         let mut dbops = self.db.key_value().transaction();
         dbops.delete(COL_BLOCKS, hash);
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+        self.commit_db_transaction(dbops);
     }
 
     fn block_body_key(block_hash: &H256) -> Vec<u8> {
@@ -348,7 +329,7 @@ impl BlockDataManager {
         rlp_stream.append(checkpoint_cur);
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_MISC, b"checkpoint", &rlp_stream.drain());
-        self.db.key_value().write(dbops).expect("db error");
+        self.commit_db_transaction(dbops);
     }
 
     pub fn checkpoint_hashes_from_db(&self) -> Option<(H256, H256)> {
@@ -383,7 +364,7 @@ impl BlockDataManager {
         LittleEndian::write_u64(&mut epoch_key[0..8], epoch);
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_EPOCH_SET_HASHES, &epoch_key[0..8], &rlp_stream.drain());
-        self.db.key_value().write(dbops).expect("db error");
+        self.commit_db_transaction(dbops);
     }
 
     pub fn epoch_set_hashes_from_db(&self, epoch: u64) -> Option<Vec<H256>> {
@@ -411,7 +392,7 @@ impl BlockDataManager {
         }
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_MISC, b"terminals", &rlp_stream.drain());
-        self.db.key_value().write(dbops).expect("db error");
+        self.commit_db_transaction(dbops);
     }
 
     pub fn terminals_from_db(&self) -> Option<Vec<H256>> {
@@ -447,19 +428,13 @@ impl BlockDataManager {
             &Self::block_body_key(&block.hash()),
             &block.encode_body_with_tx_public(),
         );
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+        self.commit_db_transaction(dbops);
     }
 
     fn remove_block_body_from_db(&self, hash: &H256) {
         let mut dbops = self.db.key_value().transaction();
         dbops.delete(COL_BLOCKS, &Self::block_body_key(hash));
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+        self.commit_db_transaction(dbops);
     }
 
     /// remove block body in memory cache and db
@@ -549,10 +524,7 @@ impl BlockDataManager {
             &Self::local_block_info_key(block_hash),
             &rlp::encode(&block_info),
         );
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+        self.commit_db_transaction(dbops);
     }
 
     /// Get block info from db.
@@ -567,31 +539,6 @@ impl BlockDataManager {
                 let rlp = Rlp::new(&encoded);
                 rlp.as_val().expect("Wrong block info rlp format!")
             })
-    }
-
-    fn insert_epoch_execution_context_to_db(
-        &self, hash: &H256, ctx: &EpochExecutionContext,
-    ) {
-        let mut dbops = self.db.key_value().transaction();
-        dbops.put(COL_EXECUTION_CONTEXT, hash, &rlp::encode(ctx));
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
-    }
-
-    /// Get epoch context from db.
-    pub fn epoch_execution_context_from_db(
-        &self, hash: &H256,
-    ) -> Option<EpochExecutionContext> {
-        let rlp_bytes = self
-            .db
-            .key_value()
-            .get(COL_EXECUTION_CONTEXT, hash)
-            .expect("crash for db failure")?;
-        let rlp = Rlp::new(&rlp_bytes);
-
-        Some(rlp.as_val().expect("Wrong block rlp format!"))
     }
 
     /// remove block body and block header in memory cache and db
@@ -738,10 +685,7 @@ impl BlockDataManager {
             rlp_stream.append_list(&receipts);
             rlp_stream.append(&bloom);
             dbops.put(COL_BLOCK_RECEIPTS, &hash, &rlp_stream.drain());
-            self.db
-                .key_value()
-                .write(dbops)
-                .expect("crash for db failure");
+            self.commit_db_transaction(dbops);
         }
 
         let mut block_receipts = self.block_receipts.write();
@@ -806,10 +750,7 @@ impl BlockDataManager {
             });
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_TX_ADDRESS, hash, &rlp::encode(tx_address));
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+        self.commit_db_transaction(dbops);
     }
 
     /// Return `false` if there is no executed results for given `block_hash`
@@ -827,27 +768,25 @@ impl BlockDataManager {
 
     pub fn insert_epoch_execution_commitments(
         &self, block_hash: H256, receipts_root: H256, logs_bloom_hash: H256,
-    ) -> Option<(H256, H256)> {
-        self.epoch_execution_commitments
-            .write()
-            .insert(block_hash, (receipts_root, logs_bloom_hash))
+    ) {
+        self.epoch_execution_commitments.write().insert(
+            block_hash,
+            EpochExecutionCommitments {
+                receipts_root,
+                logs_bloom_hash,
+            },
+        );
     }
 
     pub fn insert_epoch_execution_context(
         &self, hash: H256, ctx: EpochExecutionContext,
     ) {
-        self.insert_epoch_execution_context_to_db(&hash, &ctx);
-        self.epoch_execution_contexts
-            .write()
-            .insert(hash.clone(), ctx);
-        self.cache_man
-            .lock()
-            .note_used(CacheId::ExecutionContext(hash))
+        self.epoch_execution_contexts.write().insert(hash, ctx);
     }
 
     pub fn get_epoch_execution_commitments(
         &self, block_hash: &H256,
-    ) -> Option<(H256, H256)> {
+    ) -> Option<EpochExecutionCommitments> {
         self.epoch_execution_commitments
             .read()
             .get(block_hash)
@@ -861,7 +800,14 @@ impl BlockDataManager {
             .read()
             .get(hash)
             .map(Clone::clone)
-            .or_else(|| self.epoch_execution_context_from_db(hash))
+    }
+
+    pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {
+        self.epoch_execution_commitments.write().remove(block_hash);
+    }
+
+    pub fn remove_epoch_execution_context(&self, block_hash: &H256) {
+        self.epoch_execution_contexts.write().remove(block_hash);
     }
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
@@ -1008,9 +954,6 @@ impl BlockDataManager {
                     CacheId::BlockHeader(ref h) => {
                         block_headers.remove(h);
                     }
-                    CacheId::ExecutionContext(ref h) => {
-                        exeuction_contexts.remove(h);
-                    }
                 }
             }
 
@@ -1019,7 +962,6 @@ impl BlockDataManager {
                 + executed_results.heap_size_of_children()
                 + tx_address.heap_size_of_children()
                 + compact_blocks.heap_size_of_children()
-                + exeuction_contexts.heap_size_of_children()
         });
 
         block_headers.shrink_to_fit();
@@ -1308,10 +1250,7 @@ impl BlockDataManager {
             &Self::epoch_execution_result_key(hash),
             &rlp::encode(ctx),
         );
-        self.db
-            .key_value()
-            .write(dbops)
-            .expect("crash for db failure");
+        self.commit_db_transaction(dbops);
     }
 
     pub fn consensus_graph_execution_info_from_db(
