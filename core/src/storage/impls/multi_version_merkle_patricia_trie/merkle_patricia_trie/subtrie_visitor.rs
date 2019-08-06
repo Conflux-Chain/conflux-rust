@@ -168,7 +168,12 @@ impl<'trie> SubTrieVisitor<'trie> {
                 drop(trie_node);
                 let children_merkles =
                     self.retrieve_children_hashes(children)?;
-                TrieProofNode(VanillaTrieNode::new(merkle_hash, children_merkles.into(), maybe_value, compressed_path))
+                TrieProofNode(VanillaTrieNode::new(
+                    merkle_hash,
+                    children_merkles.into(),
+                    maybe_value,
+                    compressed_path,
+                ))
             });
         }
 
@@ -746,7 +751,7 @@ use super::{
     merkle::*,
     trie_node::TrieNodeAction,
     trie_proof::{TrieProof, TrieProofNode},
-    walk::{access_mode::*, KeyPart, WalkStop},
+    walk::{access_mode::*, KeyPart, TrieNodeWalkTrait, WalkStop},
     *,
 };
 use parking_lot::MutexGuard;

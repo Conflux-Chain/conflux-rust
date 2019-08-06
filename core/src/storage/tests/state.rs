@@ -543,9 +543,9 @@ fn test_proofs() {
         // invalid hash
         let mut invalid_proof = proof.clone();
         if let Some(delta_proof) = &mut invalid_proof.delta_proof {
-            let mut wrong_merkle = delta_proof.nodes[0].0.get_merkle().clone();
+            let mut wrong_merkle = delta_proof.nodes[0].get_merkle().clone();
             wrong_merkle[0] = 0x00;
-            delta_proof.nodes[0].0.set_merkle(&wrong_merkle);
+            delta_proof.nodes[0].set_merkle(&wrong_merkle);
         }
 
         assert!(!invalid_proof.is_valid(

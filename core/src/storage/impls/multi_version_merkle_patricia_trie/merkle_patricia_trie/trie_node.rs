@@ -77,7 +77,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
-impl<'node, NodeRefT: 'static + NodeRefTrait> GetChildTrait<'node>
+impl<'node, NodeRefT: 'static + NodeRefTrait> TrieNodeWalkTrait<'node>
     for VanillaTrieNode<NodeRefT>
 where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
@@ -527,7 +527,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     }
 }
 
-impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> GetChildTrait<'node>
+impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeWalkTrait<'node>
     for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     type ChildIdType = NodeRefDeltaMptCompact;
@@ -539,6 +539,8 @@ impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> GetChildTrait<'node>
     }
 }
 
+/*
+FIXME
 impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn walk<'key, 'node, AM: AccessMode>(
         &'node self, key: KeyPart<'key>,
@@ -546,6 +548,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
         walk::<AM, _>(key, &self.compressed_path_ref(), self)
     }
 }
+*/
 
 /// The action variants after a value deletion.
 pub enum TrieNodeAction {
@@ -855,7 +858,7 @@ use super::{
     maybe_in_place_byte_array::*,
     merkle::{compute_merkle, MaybeMerkleTableRef},
     mpt_value::MptValue,
-    walk::{access_mode::AccessMode, walk, GetChildTrait, KeyPart, WalkStop},
+    walk::TrieNodeWalkTrait,
     WrappedCreateFrom,
 };
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
