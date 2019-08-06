@@ -127,7 +127,9 @@ mod tests {
                 Some(Box::new([0x03, 0x04, 0x05])),
                 CompressedPathRaw::new(&[0x00, 0x01, 0x02], 0x0f),
             ));
-            node.set_merkle(&node.merkle());
+            // Use .0 to avoid annoying rust compiler error: "cannot borrow
+            // `node` as immutable because it is also borrowed as mutable"
+            node.0.set_merkle(&node.merkle());
             node
         };
 
@@ -160,7 +162,7 @@ mod tests {
                 Some(Box::new(value1)),
                 (&[0x02u8][..]).into(),
             ));
-            node.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.merkle());
             node
         };
 
@@ -171,7 +173,7 @@ mod tests {
                 Some(Box::new(value2)),
                 (&[0x03u8][..]).into(),
             ));
-            node.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.merkle());
             node
         };
 
@@ -185,7 +187,7 @@ mod tests {
                 None,
                 (&[0x00u8, 0x00u8][..]).into(),
             ));
-            node.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.merkle());
 
             node
         };
@@ -201,7 +203,7 @@ mod tests {
                 None,
                 Default::default(),
             ));
-            node.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.merkle());
 
             node
         };

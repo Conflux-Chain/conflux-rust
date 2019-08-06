@@ -87,7 +87,7 @@ fn test_trie_node_encode_decode() {
 
     // TrieNode without compressed path.
     let x = MemOptimizedTrieNode::<CacheAlgoDataDeltaMpt>::new(
-        &Default::default(),
+        Default::default(),
         children_table,
         Some(b"asdf".to_vec().into_boxed_slice()),
         Default::default(),
