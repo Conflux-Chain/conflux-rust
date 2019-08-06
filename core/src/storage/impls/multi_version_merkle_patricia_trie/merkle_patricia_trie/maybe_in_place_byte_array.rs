@@ -2,24 +2,119 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{ptr::null_mut, slice};
+use std::{marker::PhantomData, ptr::null_mut, slice};
 
+/// Use FieldsOffsetMaybeInPlaceByteArrayMemoryManager and macro
+/// make_parallel_field_maybe_in_place_byte_array_memory_manager to manage
+/// construction / destruction of MaybeInPlaceByteArray.
+///
+/// The memory manager should be placed as a parallel field in the same struct
+/// as the MaybeInPlaceByteArray. See CompressedPathRaw for example.
 pub union MaybeInPlaceByteArray {
-    in_place: [u8; 8],
-    // TODO(yz): statically assert that the ptr has size of at most 8.
-    // TODO(yz): to initialize and destruct, convert from/into Vec.
-    // TODO(yz): introduce a type to pass into template which manages the
-    // conversion from/to  Vec<A>. The type should also take the offset of
-    // u16 size from the TrieNode struct to manage memory buffer, and
-    // should offer a type for ptr here.
+    pub in_place: [u8; Self::MAX_INPLACE_SIZE],
     /// Only raw pointer is 8B.
-    ptr: *mut u8,
+    pub ptr: *mut u8,
 }
 
+impl MaybeInPlaceByteArray {
+    pub const MAX_INPLACE_SIZE: usize = 8;
+}
+
+#[test]
+fn test_maybe_inplace_byte_array_size_is_8_bytes() {
+    assert_eq!(
+        std::mem::size_of::<MaybeInPlaceByteArray>(),
+        MaybeInPlaceByteArray::MAX_INPLACE_SIZE
+    );
+}
 impl Default for MaybeInPlaceByteArray {
     fn default() -> Self {
         Self {
             in_place: Default::default(),
+        }
+    }
+}
+
+/// Trait for managing construction / destruction of MaybeInPlaceByteArray.
+/// FieldsOffsetMaybeInPlaceByteArrayMemoryManager implements this trait.
+pub trait MaybeInPlaceByteArrayMemoryManagerTrait: Drop {
+    /// Unsafe because the size isn't set to 0.
+    unsafe fn drop_value(&mut self) {
+        let size = self.get_size();
+        if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
+            self.get_in_place_byte_array_mut().ptr_into_vec(size);
+        }
+    }
+
+    fn get_size(&self) -> usize;
+    fn set_size(&mut self, size: usize);
+    fn get_in_place_byte_array(&self) -> &MaybeInPlaceByteArray;
+    fn get_in_place_byte_array_mut(&mut self) -> &mut MaybeInPlaceByteArray;
+
+    /// Unsafe because the destination may not be empty.
+    unsafe fn move_byte_array_dest_unchecked(
+        &mut self, free_dest: &mut MaybeInPlaceByteArray,
+    ) {
+        self.set_size(0);
+
+        std::ptr::copy_nonoverlapping(
+            self.get_in_place_byte_array(),
+            free_dest,
+            1,
+        );
+    }
+
+    fn move_to<T: MaybeInPlaceByteArrayMemoryManagerTrait>(
+        &mut self, dest: &mut T,
+    ) {
+        let size = self.get_size();
+
+        // Safe because the dest size is set right later.
+        unsafe {
+            dest.drop_value();
+            dest.set_size(size);
+        }
+        if size != 0 {
+            // Safe because the old content in destination is already freed.
+            unsafe {
+                self.move_byte_array_dest_unchecked(
+                    dest.get_in_place_byte_array_mut(),
+                );
+            }
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
+    SizeFieldType,
+    SizeFieldGetterSetter: SizeFieldConverterTrait<SizeFieldType>,
+    ByteArrayOffsetAccessor: ParallelFieldOffsetAccessor<Self, MaybeInPlaceByteArray>,
+    SizeFieldOffsetAccessor: ParallelFieldOffsetAccessor<Self, SizeFieldType>,
+> {
+    _marker_size_type: PhantomData<SizeFieldType>,
+    _marker_size_field_getter_setter: PhantomData<SizeFieldGetterSetter>,
+    _marker_byte_array_accessor: PhantomData<ByteArrayOffsetAccessor>,
+    _marker_size_field_accessor: PhantomData<SizeFieldOffsetAccessor>,
+}
+
+impl<
+        SizeFieldType,
+        SizeFieldGetterSetter: SizeFieldConverterTrait<SizeFieldType>,
+        ByteArrayOffsetAccessor: ParallelFieldOffsetAccessor<Self, MaybeInPlaceByteArray>,
+        SizeFieldOffsetAccessor: ParallelFieldOffsetAccessor<Self, SizeFieldType>,
+    > Drop
+    for FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
+        SizeFieldType,
+        SizeFieldGetterSetter,
+        ByteArrayOffsetAccessor,
+        SizeFieldOffsetAccessor,
+    >
+{
+    fn drop(&mut self) {
+        // Safe because on destruction it's not necessary to set size to 0
+        unsafe {
+            self.drop_value();
         }
     }
 }
@@ -74,19 +169,18 @@ impl MaybeInPlaceByteArray {
         .into_boxed_slice()
     }
 
-    fn new(mut value: Box<[u8]>, size: usize) -> Self {
+    pub fn new(mut value: Box<[u8]>, size: usize) -> Self {
         if size > Self::MAX_INPLACE_SIZE {
             let ptr = value.as_mut_ptr();
             Box::into_raw(value);
             Self { ptr }
         } else {
-            let mut x = Self {
-                in_place: Default::default(),
-            };
+            let mut in_place: [u8; Self::MAX_INPLACE_SIZE];
             unsafe {
-                x.in_place[0..size].copy_from_slice(&*value);
+                in_place = std::mem::uninitialized();
             }
-            x
+            in_place[0..size].copy_from_slice(&*value);
+            Self { in_place }
         }
     }
 
@@ -110,11 +204,70 @@ impl MaybeInPlaceByteArray {
             x
         }
     }
+
+    pub fn clone(&self, size: usize) -> Self {
+        if size > Self::MAX_INPLACE_SIZE {
+            // Safety guaranteed by condition.
+            Self::copy_from(unsafe { self.ptr_slice(size) }, size)
+        } else {
+            Self {
+                in_place: unsafe { self.in_place }.clone(),
+            }
+        }
+    }
 }
 
-#[allow(unused)]
-impl MaybeInPlaceByteArray {
-    pub const MAX_INPLACE_SIZE: usize = 8;
-    pub const MAX_SIZE_U16: usize = 0xffff;
-    pub const MAX_SIZE_U32: usize = 0xffffffff;
+pub trait ParallelFieldOffsetAccessor<FromFieldType, TargetFieldType> {
+    fn get(m: &FromFieldType) -> &TargetFieldType;
+    fn get_mut(m: &mut FromFieldType) -> &mut TargetFieldType;
+}
+
+pub trait SizeFieldConverterTrait<SizeFieldType> {
+    fn is_size_over_limit(size: usize) -> bool;
+    fn get(size_field: &SizeFieldType) -> usize;
+    fn set(size_field: &mut SizeFieldType, size: usize);
+}
+
+#[derive(Default)]
+pub struct TrivialSizeFieldConverterU16 {}
+
+impl SizeFieldConverterTrait<u16> for TrivialSizeFieldConverterU16 {
+    fn is_size_over_limit(size: usize) -> bool { size > std::u16::MAX as usize }
+
+    fn get(size_field: &u16) -> usize { (*size_field) as usize }
+
+    fn set(size_field: &mut u16, size: usize) { *size_field = size as u16; }
+}
+
+impl<
+        SizeFieldType,
+        SizeFieldGetterSetter: SizeFieldConverterTrait<SizeFieldType>,
+        ByteArrayOffsetAccessor: ParallelFieldOffsetAccessor<Self, MaybeInPlaceByteArray>,
+        SizeFieldOffsetAccessor: ParallelFieldOffsetAccessor<Self, SizeFieldType>,
+    > MaybeInPlaceByteArrayMemoryManagerTrait
+    for FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
+        SizeFieldType,
+        SizeFieldGetterSetter,
+        ByteArrayOffsetAccessor,
+        SizeFieldOffsetAccessor,
+    >
+{
+    fn get_size(&self) -> usize {
+        SizeFieldGetterSetter::get(SizeFieldOffsetAccessor::get(self))
+    }
+
+    fn set_size(&mut self, size: usize) {
+        SizeFieldGetterSetter::set(
+            SizeFieldOffsetAccessor::get_mut(self),
+            size,
+        );
+    }
+
+    fn get_in_place_byte_array(&self) -> &MaybeInPlaceByteArray {
+        ByteArrayOffsetAccessor::get(self)
+    }
+
+    fn get_in_place_byte_array_mut(&mut self) -> &mut MaybeInPlaceByteArray {
+        ByteArrayOffsetAccessor::get_mut(self)
+    }
 }

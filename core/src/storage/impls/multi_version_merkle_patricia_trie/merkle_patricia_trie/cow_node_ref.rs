@@ -541,7 +541,11 @@ impl CowNodeRef {
         // FIXME: becomes difficult.
         let child_trie_node =
             child_node_cow.get_trie_node(node_memory_manager, &allocator)?;
-        let new_path = child_trie_node.path_prepended(path_prefix, child_index);
+        let new_path = CompressedPathRaw::concat(
+            &path_prefix,
+            child_index,
+            &child_trie_node.compressed_path_ref(),
+        );
 
         // FIXME: if child_trie_node isn't owned, but node_cow is owned, modify
         // FIXME: node_cow.

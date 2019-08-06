@@ -21,7 +21,7 @@ pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     /// This field is not used in comparison because matching one more
     /// half-byte at the beginning doesn't matter.
     // TODO(yz): remove since it's unused, now it's always 0.
-    path_begin_mask: u8,
+    _path_begin_mask: u8,
     /// Can be: "no mask" (0x00), "first half" (first_nibble).
     /// When there is only one half-byte in path and it's the "second half",
     /// only path_begin_mask is set, path_end_mask is set to "no mask",
@@ -31,8 +31,15 @@ pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     path_end_mask: u8,
     /// 4 bits per step.
     /// We limit the maximum key steps by u16.
-    path_steps: u16,
+    path_size: u16,
     path: MaybeInPlaceByteArray,
+    path_memory_manager: FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
+        u16,
+        TrivialSizeFieldConverterU16,
+        MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT>,
+        MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT>,
+    >,
+
     // End of CompactPath section
     // TODO(yz): maybe unpack the fields from ChildrenTableDeltaMpt to save
     // memory. In this case create temporary ChildrenTableDeltaMpt for
@@ -44,6 +51,12 @@ pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     /// manage the length and content separately.
     value_size: u32,
     value: MaybeInPlaceByteArray,
+    value_memory_manager: FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
+        u32,
+        TrieNodeValueSizeFieldConverter,
+        MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT>,
+        MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT>,
+    >,
 
     /// The merkle hash without the compressed path.
     pub(in super::super) merkle_hash: MerkleHash,
@@ -62,6 +75,24 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone for TrieNode<CacheAlgoDataT> {
     }
 }
 
+make_parallel_field_maybe_in_place_byte_array_memory_manager!(
+    MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
+    TrieNode<CacheAlgoDataT>,
+    path_memory_manager,
+    path,
+    path_size: u16,
+    TrivialSizeFieldConverterU16,
+);
+
+make_parallel_field_maybe_in_place_byte_array_memory_manager!(
+    MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
+    TrieNode<CacheAlgoDataT>,
+    value_memory_manager,
+    value,
+    value_size: u32,
+    TrieNodeValueSizeFieldConverter,
+);
+
 /// Compiler is not sure about the pointer in MaybeInPlaceByteArray fields.
 /// It's Send because TrieNode is move only and it's impossible to change any
 /// part of it without &mut.
@@ -77,22 +108,10 @@ unsafe impl<CacheAlgoDataT: CacheAlgoDataTrait> Sync
 {
 }
 
-impl<CacheAlgoDataT: CacheAlgoDataTrait> Drop for TrieNode<CacheAlgoDataT> {
-    fn drop(&mut self) {
-        unsafe {
-            // Check whether the value of this node is already deleted
-            if self.value_size != Self::VALUE_TOMBSTONE {
-                let size = self.value_size as usize;
-                if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
-                    self.value.ptr_into_vec(size);
-                }
-            }
-            self.clear_path();
-        }
-    }
-}
+#[derive(Default)]
+struct TrieNodeValueSizeFieldConverter {}
 
-impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
+impl TrieNodeValueSizeFieldConverter {
     const MAX_VALUE_SIZE: usize = 0xfffffffe;
     /// A special value to use in Delta Mpt to indicate that the value is
     /// deleted.
@@ -101,58 +120,50 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
     /// in serialized trie node and in methods manipulating value for trie
     /// node / MPT.
     const VALUE_TOMBSTONE: u32 = 0xffffffff;
+}
 
-    pub fn get_compressed_path_size(&self) -> u16 {
-        (self.path_steps / 2)
-            + (((self.path_begin_mask | self.path_end_mask) != 0) as u16)
+impl SizeFieldConverterTrait<u32> for TrieNodeValueSizeFieldConverter {
+    fn is_size_over_limit(size: usize) -> bool { size > Self::MAX_VALUE_SIZE }
+
+    fn get(size_field: &u32) -> usize {
+        if *size_field == Self::VALUE_TOMBSTONE {
+            0
+        } else {
+            (*size_field) as usize
+        }
     }
 
+    fn set(size_field: &mut u32, size: usize) { *size_field = size as u32; }
+}
+
+impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
+    pub fn get_compressed_path_size(&self) -> u16 { self.path_size }
+
     pub fn compressed_path_ref(&self) -> CompressedPathRef {
-        let size = self.get_compressed_path_size();
+        let size = self.path_size;
         CompressedPathRef {
             path_slice: self.path.get_slice(size as usize),
             end_mask: self.path_end_mask,
         }
     }
 
-    unsafe fn clear_path(&mut self) {
-        let size = self.get_compressed_path_size() as usize;
-        if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
-            self.path.ptr_into_vec(size);
-        }
-    }
-
-    fn compute_path_steps(path_size: u16, end_mask: u8) -> u16 {
-        path_size * 2 - (end_mask != 0) as u16
-    }
-
     pub fn copy_compressed_path(&mut self, new_path: CompressedPathRef) {
-        let path_slice = new_path.path_slice;
-
-        // Remove old path.
+        // Remove old path. Not unsafe because the path size is set right later.
         unsafe {
-            self.clear_path();
+            self.path_memory_manager.drop_value();
         }
-
-        self.path_steps = Self::compute_path_steps(
-            path_slice.len() as u16,
-            new_path.end_mask,
-        );
+        self.path_size = new_path.path_size();
         self.path_end_mask = new_path.end_mask;
+        let path_slice = new_path.path_slice;
         self.path =
             MaybeInPlaceByteArray::copy_from(path_slice, path_slice.len());
     }
 
-    pub fn set_compressed_path(&mut self, path: CompressedPathRaw) {
-        // Remove old path.
-        unsafe {
-            self.clear_path();
-        }
-
-        self.path_steps =
-            Self::compute_path_steps(path.path_size, path.end_mask());
+    pub fn set_compressed_path(&mut self, mut path: CompressedPathRaw) {
         self.path_end_mask = path.end_mask();
-        self.path = path.path;
+
+        path.byte_array_memory_manager
+            .move_to(&mut self.path_memory_manager);
     }
 
     pub fn has_value(&self) -> bool { self.value_size > 0 }
@@ -165,7 +176,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         let size = self.value_size;
         if size == 0 {
             MptValue::None
-        } else if size == Self::VALUE_TOMBSTONE {
+        } else if size == TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE {
             MptValue::TombStone
         } else {
             MptValue::Some(self.value.get_slice(size as usize))
@@ -176,7 +187,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         let size = self.value_size;
         if size == 0 {
             MptValue::None
-        } else if size == Self::VALUE_TOMBSTONE {
+        } else if size == TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE {
             MptValue::TombStone
         } else {
             MptValue::Some(self.value.get_slice(size as usize).into())
@@ -192,7 +203,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         if size == 0 {
             maybe_value = MptValue::None;
         } else {
-            if size == Self::VALUE_TOMBSTONE {
+            if size == TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE {
                 maybe_value = MptValue::TombStone
             } else {
                 maybe_value =
@@ -209,7 +220,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         let old_value = self.value_into_boxed_slice();
         let value_size = valid_value.len();
         if value_size == 0 {
-            self.value_size = Self::VALUE_TOMBSTONE;
+            self.value_size = TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE;
         } else {
             self.value =
                 MaybeInPlaceByteArray::copy_from(valid_value, value_size);
@@ -221,7 +232,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
 
     pub fn check_value_size(value: &[u8]) -> Result<()> {
         let value_size = value.len();
-        if value_size > Self::MAX_VALUE_SIZE {
+        if TrieNodeValueSizeFieldConverter::is_size_over_limit(value_size) {
             // TODO(yz): value too long.
             return Err(Error::from_kind(ErrorKind::MPTInvalidValue));
         }
@@ -233,7 +244,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
 
     pub fn check_key_size(access_key: &[u8]) -> Result<()> {
         let key_size = access_key.len();
-        if key_size > MaybeInPlaceByteArray::MAX_SIZE_U16 {
+        if TrivialSizeFieldConverterU16::is_size_over_limit(key_size) {
             // TODO(yz): key too long.
             return Err(Error::from_kind(ErrorKind::MPTInvalidKey));
         }
@@ -353,40 +364,6 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         }
 
         ret
-    }
-
-    pub fn path_prepended(
-        &self, prefix: CompressedPathRaw, child_index: u8,
-    ) -> CompressedPathRaw {
-        let prefix_size = prefix.path_slice().len();
-        let path_size = self.get_compressed_path_size();
-        // TODO(yz): it happens to be the same no matter what end_mask is,
-        // because u8 = 2 nibbles. When we switch to u32 as path unit
-        // the concated size may vary.
-        let concated_size = prefix_size as u16 + path_size;
-
-        let path = self.compressed_path_ref();
-
-        let mut new_path =
-            CompressedPathRaw::new_zeroed(concated_size, path.end_mask);
-
-        {
-            let slice = new_path.path.get_slice_mut(concated_size as usize);
-            if prefix.end_mask() == 0 {
-                slice[0..prefix_size].copy_from_slice(prefix.path_slice());
-                slice[prefix_size..].copy_from_slice(path.path_slice);
-            } else {
-                slice[0..prefix_size - 1]
-                    .copy_from_slice(&prefix.path_slice()[0..prefix_size - 1]);
-                slice[prefix_size - 1] = CompressedPathRaw::set_second_nibble(
-                    prefix.path_slice()[prefix_size - 1],
-                    child_index,
-                );
-                slice[prefix_size..].copy_from_slice(path.path_slice);
-            }
-        }
-
-        new_path
     }
 
     /// Delete value when we know that it already exists.
@@ -551,7 +528,7 @@ use super::{
     },
     children_table::*,
     compressed_path::*,
-    maybe_in_place_byte_array::MaybeInPlaceByteArray,
+    maybe_in_place_byte_array::*,
     mpt_value::MptValue,
     trie_proof::TrieProofNode,
     walk::{access_mode::AccessMode, walk, KeyPart, WalkStop},
