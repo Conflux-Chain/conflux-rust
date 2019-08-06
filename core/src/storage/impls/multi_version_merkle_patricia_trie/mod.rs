@@ -225,8 +225,8 @@ impl MultiVersionMerklePatriciaTrie {
 
 pub mod guarded_value;
 pub(self) mod node_ref_map;
-/// Fork of upstream slab in order to compact data and to provide internal
-/// mutability.
+/// Fork of upstream slab in order to compact data and be thread-safe without
+/// giant lock.
 mod slab;
 
 pub use self::node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell};

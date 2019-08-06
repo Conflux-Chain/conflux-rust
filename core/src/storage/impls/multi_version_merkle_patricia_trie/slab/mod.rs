@@ -119,8 +119,8 @@ use std::{
 };
 
 /// Pre-allocated storage for a uniform data type.
-/// The modified slab offers internal mutability which mimics the behavior of
-/// independent pointer at best.
+/// The modified slab offers thread-safety without giant lock by mimicing the
+/// behavior of independent pointer at best.
 ///
 /// Resizing the slab itself requires &mut, other operatios can be done with &.
 ///
