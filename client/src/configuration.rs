@@ -59,6 +59,7 @@ build_config! {
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (generate_tx, (bool), false)
         (generate_tx_period_us, (Option<u64>), Some(100_000))
+        (storage_db_path, (String), "./storage_db".to_string())
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
@@ -96,7 +97,8 @@ build_config! {
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
         (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
-        (debug_dump_dir_invalid_state_root, (String), "./invalid_state_root/".to_string())
+        // FIXME: break into two options: one for enable, one for path.
+        (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 5000)
         (metrics_output_file, (String), "metrics.log".to_string())

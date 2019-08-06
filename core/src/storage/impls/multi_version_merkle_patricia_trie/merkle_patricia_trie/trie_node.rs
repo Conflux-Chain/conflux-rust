@@ -173,7 +173,6 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
-#[allow(unused)]
 impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     pub fn new(
         merkle: &MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
@@ -195,7 +194,6 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     }
 }
 
-#[allow(unused)]
 impl VanillaTrieNode<MerkleHash> {
     pub fn get_children_merkle(&self) -> MaybeMerkleTableRef {
         if self.get_children_count() > 0 {
@@ -819,8 +817,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug
 
 use super::{
     super::{
-        super::errors::*, cache::algorithm::CacheAlgoDataTrait,
-        node_ref::*, slab::*,
+        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
+        slab::*,
     },
     children_table::*,
     compressed_path::*,

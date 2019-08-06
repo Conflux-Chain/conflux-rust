@@ -11,7 +11,8 @@ error_chain! {
     foreign_links {
         Io(io::Error);
         ParseIntError(num::ParseIntError);
-        RlpDecodeError(::rlp::DecoderError);
+        RlpDecodeError(rlp::DecoderError);
+        SqliteError(rusqlite::Error);
     }
 
     errors {
@@ -55,6 +56,21 @@ error_chain! {
         StateCommitWithoutMerkleHash {
             description("State commit called before computing Merkle hash."),
             display("State commit called before computing Merkle hash."),
+        }
+
+        SnapshotCowCreation {
+            description("Failed to create new snapshot by COW."),
+            display("Failed to create new snapshot by COW. Use XFS on linux or APFS on Mac."),
+        }
+
+        SnapshotNotFound {
+            description("Snapshot file not found."),
+            display("Snapshot file not found."),
+        }
+
+        MPTMergeTrieNodeNotFound {
+            description("Trie node not found when merging Snapshot MPT and Delta."),
+            display("Trie node not found when merging Snapshot MPT and Delta."),
         }
     }
 }

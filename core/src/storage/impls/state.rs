@@ -128,7 +128,7 @@ impl<'a> Drop for State<'a> {
 }
 
 impl<'a> StateTrait for State<'a> {
-    fn does_exist(&self) -> bool { self.get_root_node().is_some() }
+    fn does_exist(&self) -> bool { self.get_delta_root_node().is_some() }
 
     fn get_padding(&self) -> &KeyPadding { &self.delta_trie.padding }
 
@@ -137,7 +137,7 @@ impl<'a> StateTrait for State<'a> {
         // owned_node_set.
         let mut empty_owned_node_set: Option<OwnedNodeSet> =
             Some(Default::default());
-        match self.get_root_node() {
+        match self.get_delta_root_node() {
             None => Ok(None),
             Some(root_node) => SubTrieVisitor::new(
                 &self.delta_trie,
@@ -177,7 +177,7 @@ impl<'a> StateTrait for State<'a> {
     fn delete(&mut self, access_key: &[u8]) -> Result<Option<Box<[u8]>>> {
         self.pre_modification();
 
-        match self.get_root_node() {
+        match self.get_delta_root_node() {
             None => Ok(None),
             Some(old_root_node) => {
                 let (old_value, _, root_node) = SubTrieVisitor::new(
@@ -198,7 +198,7 @@ impl<'a> StateTrait for State<'a> {
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
         self.pre_modification();
 
-        match self.get_root_node() {
+        match self.get_delta_root_node() {
             None => Ok(None),
             Some(old_root_node) => {
                 let (deleted, _, root_node) = SubTrieVisitor::new(
@@ -275,8 +275,7 @@ impl<'a> State<'a> {
         self.delta_trie.get_node_memory_manager().enlarge().ok();
     }
 
-    // FIXME: move to merkle_patricia_trie mod
-    fn get_root_node(&self) -> Option<NodeRefDeltaMpt> {
+    fn get_delta_root_node(&self) -> Option<NodeRefDeltaMpt> {
         self.delta_trie_root.clone()
     }
 
@@ -296,7 +295,7 @@ impl<'a> State<'a> {
         }
 
         // Safe because in either branch the result is Some.
-        Ok(self.get_root_node().unwrap())
+        Ok(self.get_delta_root_node().unwrap())
     }
 
     fn compute_merkle_root(&mut self) -> Result<MerkleHash> {
@@ -317,6 +316,7 @@ impl<'a> State<'a> {
                     &self.delta_trie,
                     self.owned_node_set.as_mut().unwrap(),
                     &allocator,
+                    self.delta_trie.db_read_only(),
                 )?;
                 cow_root.into_child();
 
@@ -342,7 +342,7 @@ impl<'a> State<'a> {
                 // benefits performance because without a coarse lock all
                 // threads may not be able to do anything else when they compete
                 // with each other on slow db writing.
-                let mut commit_transaction = self.manager.start_commit();
+                let mut commit_transaction = self.delta_trie.start_commit()?;
                 let start_row_number = commit_transaction.info.row_number.value;
 
                 let mut cow_root = CowNodeRef::new(
@@ -383,14 +383,13 @@ impl<'a> State<'a> {
                     // TODO: failure. may have to commit last_row_number
                     // TODO: separately in worst case.
                     commit_transaction.transaction.put(
-                        COL_DELTA_TRIE,
                         "last_row_number".as_bytes(),
                         commit_transaction
                             .info
                             .row_number
                             .to_string()
                             .as_bytes(),
-                    );
+                    )?;
                 }
 
                 let db_key = *{
@@ -405,7 +404,6 @@ impl<'a> State<'a> {
                 };
 
                 commit_transaction.transaction.put(
-                    COL_DELTA_TRIE,
                     [
                         "state_root_db_key_for_epoch_id_".as_bytes(),
                         epoch_id.as_ref(),
@@ -413,12 +411,11 @@ impl<'a> State<'a> {
                     .concat()
                     .as_slice(),
                     db_key.to_string().as_bytes(),
-                );
+                )?;
 
-                self.manager
-                    .db
-                    .key_value()
-                    .write(commit_transaction.transaction)?;
+                commit_transaction
+                    .transaction
+                    .commit(self.delta_trie.db_commit())?;
 
                 self.manager.number_committed_nodes.fetch_add(
                     (commit_transaction.info.row_number.value
@@ -452,9 +449,7 @@ impl<'a> State<'a> {
 }
 
 use super::{
-    super::{
-        super::db::COL_DELTA_TRIE, state::*, state_manager::*, storage_db::*,
-    },
+    super::{state::*, state_manager::*, storage_db::*},
     errors::*,
     multi_version_merkle_patricia_trie::{
         merkle_patricia_trie::*, DeltaMpt, TrieProof,

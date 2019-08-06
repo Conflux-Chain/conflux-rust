@@ -98,7 +98,7 @@ impl QueryService {
 
         // calculate corresponding state trie key
         let key = {
-            let padding = storage::padding(
+            let padding = storage::MultiVersionMerklePatriciaTrie::padding(
                 &state_root.snapshot_root,
                 &state_root.intermediate_delta_root,
             );
