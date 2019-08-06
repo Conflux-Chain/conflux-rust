@@ -57,6 +57,12 @@ impl<'a> From<&'a [u8]> for CompressedPathRaw {
     fn from(x: &'a [u8]) -> Self { CompressedPathRaw::new(x, 0) }
 }
 
+impl<'a> From<CompressedPathRef<'a>> for CompressedPathRaw {
+    fn from(x: CompressedPathRef<'a>) -> Self {
+        CompressedPathRaw::new(x.path_slice, x.end_mask)
+    }
+}
+
 impl CompressedPathRaw {
     pub fn new(path_slice: &[u8], end_mask: u8) -> Self {
         let path_size = path_slice.len();

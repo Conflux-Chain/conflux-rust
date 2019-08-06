@@ -108,9 +108,15 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
 #![doc(html_root_url = "https://docs.rs/slab/0.4.1")]
 
-use super::super::errors::*;
+use super::{
+    super::errors::*,
+    merkle_patricia_trie::{UnsafeCellExtension, WrappedCreateFrom},
+};
 use parking_lot::Mutex;
-use std::{fmt, iter::IntoIterator, marker::PhantomData, mem, ops, ptr, slice};
+use std::{
+    cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, mem, ops,
+    ptr, slice,
+};
 
 /// Pre-allocated storage for a uniform data type.
 /// The modified slab offers internal mutability which mimics the behavior of
@@ -126,7 +132,7 @@ use std::{fmt, iter::IntoIterator, marker::PhantomData, mem, ops, ptr, slice};
 ///
 /// Allocation and Deallocation are serialized by mutex because they modify the
 /// slab link-list.
-pub struct Slab<T, E: EntryTrait<T> = Entry<T>> {
+pub struct Slab<T, E: EntryTrait<EntryType = T> = Entry<T>> {
     /// Chunk of memory
     // entries is always kept full in order to prevent changing vector
     // when allocating space for new element. We would like to keep the size of
@@ -152,32 +158,26 @@ struct AllocRelatedFields {
     next: usize,
 }
 
-/// Methods which check if the entry holds a value and return reference to the
-/// value. The methods should ont panic.
-pub trait IntoOption<T> {
-    fn into_option_mut(&mut self) -> Option<&mut T>;
-    fn into_option_ref(&self) -> Option<&T>;
-}
-
-/// Allow user to pass into any type which is convertible to T. The intention is
-/// that we pass &T or &mut T cross the interfaces so that we only do memcpy
-/// once.
-pub trait FromInto<T>: Sized {
-    fn from<U: Into<T>>(val: U) -> Self;
-}
-
 /// Slab physically stores a concrete type which implements EntryTrait<T> for
 /// value type T. The EntryTrait<T> is responsible to hold the value type and
 /// the next vacant link list for slab.
-pub trait EntryTrait<T>: IntoOption<T> + FromInto<T> + Sized + Default {
+pub trait EntryTrait: Sized + Default {
+    type EntryType;
+
+    fn from_value(value: Self::EntryType) -> Self;
+
     fn from_vacant_index(next: usize) -> Self;
 
-    fn take_occupied_and_replace(&mut self, new: Self) -> T {
+    fn is_vacant(&self) -> bool;
+
+    fn take_occupied_and_replace_with_vacant_index(
+        &mut self, next: usize,
+    ) -> Self::EntryType {
         unsafe {
             let ret = ptr::read(self.get_occupied_mut());
             // Semantically, val is moved into ret and self is dropped.
 
-            ptr::write(self, new);
+            ptr::write(self, Self::from_vacant_index(next));
             // Semantically, new is dropped, self now holds new.
 
             ret
@@ -185,12 +185,59 @@ pub trait EntryTrait<T>: IntoOption<T> + FromInto<T> + Sized + Default {
     }
 
     fn get_next_vacant_index(&self) -> usize;
-    fn get_occupied_ref(&self) -> &T;
-    fn get_occupied_mut(&mut self) -> &mut T;
+    fn get_occupied_ref(&self) -> &Self::EntryType;
+    fn get_occupied_mut(&mut self) -> &mut Self::EntryType;
 }
 
-impl<T> EntryTrait<T> for Entry<T> {
+impl<T: EntryTrait<EntryType = T>> EntryTrait for UnsafeCell<T> {
+    type EntryType = UnsafeCell<T>;
+
+    fn from_value(value: UnsafeCell<T>) -> Self {
+        UnsafeCell::new(T::from_value(value.into_inner()))
+    }
+
+    fn from_vacant_index(next: usize) -> Self {
+        UnsafeCell::new(T::from_vacant_index(next))
+    }
+
+    fn is_vacant(&self) -> bool { self.get_ref().is_vacant() }
+
+    fn take_occupied_and_replace_with_vacant_index(
+        &mut self, next: usize,
+    ) -> UnsafeCell<T> {
+        unsafe {
+            let ret = ptr::read(self.get_occupied_mut());
+            // Semantically, val is moved into ret and self is dropped.
+
+            ptr::write(self.get_mut(), T::from_vacant_index(next));
+            // Semantically, new is dropped, self now holds new.
+
+            ret
+        }
+    }
+
+    fn get_next_vacant_index(&self) -> usize {
+        self.get_ref().get_next_vacant_index()
+    }
+
+    fn get_occupied_ref(&self) -> &UnsafeCell<T> { self }
+
+    fn get_occupied_mut(&mut self) -> &mut UnsafeCell<T> { self }
+}
+
+impl<T> EntryTrait for Entry<T> {
+    type EntryType = T;
+
+    fn from_value(value: T) -> Self { Entry::Occupied(value) }
+
     fn from_vacant_index(index: usize) -> Self { Entry::Vacant(index) }
+
+    fn is_vacant(&self) -> bool {
+        match &self {
+            Entry::Vacant(_) => true,
+            _ => false,
+        }
+    }
 
     fn get_next_vacant_index(&self) -> usize {
         match *self {
@@ -214,24 +261,54 @@ impl<T> EntryTrait<T> for Entry<T> {
     }
 }
 
-impl<T> IntoOption<T> for Entry<T> {
-    fn into_option_ref(&self) -> Option<&T> {
-        match self {
-            Entry::Occupied(ref val) => Some(val),
-            Entry::Vacant(_index) => None,
-        }
-    }
+impl<E: EntryTrait> WrappedCreateFrom<E::EntryType, E> for E {
+    fn take(val: E::EntryType) -> E { E::from_value(val) }
+}
 
-    fn into_option_mut(&mut self) -> Option<&mut T> {
-        match self {
-            Entry::Occupied(ref mut val) => Some(val),
-            Entry::Vacant(_index) => None,
+// TODO: Check future rust compiler support. It's quite unfortunate that the
+// TODO: current rust compiler think that the commented out code conflict with
+// TODO: the one above. We implemented UnsafeCell EntryTrait in
+// TODO: super::merkle_patricia_trie.
+/*
+impl<'x, E: EntryTrait> WrappedCreateFrom<&'x E::EntryType, E> for E where E::EntryType : Clone {
+    fn take(val: &'x E::EntryType) -> E {
+        E::from_value(val.clone())
+    }
+}
+*/
+
+impl<'x, T: Clone> WrappedCreateFrom<&'x T, Entry<T>> for Entry<T> {
+    fn take(val: &'x T) -> Self { Entry::Occupied(val.clone()) }
+
+    fn take_from(dest: &mut Entry<T>, val: &'x T) {
+        match dest {
+            Entry::Occupied(t_dest) => {
+                t_dest.clone_from(val);
+            }
+            Entry::Vacant(_) => {
+                *dest = Entry::Occupied(val.clone());
+            }
         }
     }
 }
 
-impl<T> FromInto<T> for Entry<T> {
-    fn from<U: Into<T>>(val: U) -> Self { Entry::Occupied(val.into()) }
+impl<'x, T: Clone> WrappedCreateFrom<&'x T, Entry<UnsafeCell<T>>>
+    for Entry<UnsafeCell<T>>
+{
+    fn take(val: &'x T) -> Self {
+        Entry::Occupied(UnsafeCell::new(val.clone()))
+    }
+
+    fn take_from(dest: &mut Entry<UnsafeCell<T>>, val: &'x T) {
+        match dest {
+            Entry::Occupied(unsafecell_dest) => {
+                unsafecell_dest.get_mut().clone_from(val);
+            }
+            Entry::Vacant(_) => {
+                *dest = Entry::Occupied(UnsafeCell::new(val.clone()));
+            }
+        }
+    }
 }
 
 /// A handle to a vacant entry in a `Slab`.
@@ -258,7 +335,7 @@ impl<T> FromInto<T> for Entry<T> {
 /// assert_eq!("hello", slab[hello].1);
 /// ```
 #[derive(Debug)]
-pub struct VacantEntry<'a, T: 'a, E: 'a + EntryTrait<T>> {
+pub struct VacantEntry<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> {
     slab: &'a Slab<T, E>,
     key: usize,
     // Panic if insert is not called at all because the allocated slot must be
@@ -266,19 +343,14 @@ pub struct VacantEntry<'a, T: 'a, E: 'a + EntryTrait<T>> {
     inserted: bool,
 }
 
-impl<'a, T: 'a, E: 'a + EntryTrait<T>> Drop for VacantEntry<'a, T, E> {
+impl<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> Drop
+    for VacantEntry<'a, T, E>
+{
     fn drop(&mut self) { assert_eq!(self.inserted, true) }
 }
 
-/// An iterator over the values stored in the `Slab`
-pub struct Iter<'a, T: 'a, E: 'a + EntryTrait<T>> {
-    entries: slice::Iter<'a, E>,
-    curr: usize,
-    value_type: PhantomData<T>,
-}
-
 /// A mutable iterator over the values stored in the `Slab`
-pub struct IterMut<'a, T: 'a, E: 'a + EntryTrait<T>> {
+pub struct IterMut<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> {
     entries: slice::IterMut<'a, E>,
     curr: usize,
     value_type: PhantomData<T>,
@@ -294,7 +366,7 @@ impl<T> Default for Entry<T> {
     fn default() -> Self { Entry::Vacant(0) }
 }
 
-impl<T, E: EntryTrait<T>> Default for Slab<T, E> {
+impl<T, E: EntryTrait<EntryType = T>> Default for Slab<T, E> {
     fn default() -> Self {
         Self {
             entries: Default::default(),
@@ -304,7 +376,7 @@ impl<T, E: EntryTrait<T>> Default for Slab<T, E> {
     }
 }
 
-impl<T, E: EntryTrait<T>> Slab<T, E> {
+impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// Construct a new, empty `Slab` with the specified capacity.
     ///
     /// The returned slab will be able to store exactly `capacity` without
@@ -386,7 +458,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         let need_add = self.len() + additional - old_capacity;
         self.entries.reserve(need_add);
         // TODO(yz): should return error instead of panic, however, try_reserve*
-        // is only in nightly.        self.entries.
+        // is only in nightly.
+        // self.entries.
         // try_reserve(need_add).chain_err(|| ErrorKind::OutOfMem)?;
         let capacity = self.capacity();
         self.resize_up(old_capacity, capacity);
@@ -427,7 +500,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         }
         let need_add = self.len() + additional - old_capacity;
         // TODO(yz): should return error instead of panic, however, try_reserve*
-        // is only in nightly.        self.entries.
+        // is only in nightly.
+        // self.entries.
         // try_reserve_exact(need_add).chain_err(|| ErrorKind::OutOfMem)?;
         self.entries.reserve_exact(need_add);
         let capacity = self.capacity();
@@ -548,40 +622,6 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// ```
     pub fn is_empty(&self) -> bool { self.len() == 0 }
 
-    /// Return an iterator over the slab.
-    ///
-    /// This function should generally be **avoided** as it is not efficient.
-    /// Iterators must iterate over every slot in the slab even if it is
-    /// vacant. As such, a slab with a capacity of 1 million but only one
-    /// stored value must still iterate the million slots.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # extern crate slab;
-    /// # use slab::*;
-    /// let mut slab = Slab::new();
-    ///
-    /// for i in 0..3 {
-    ///     slab.insert(i);
-    /// }
-    ///
-    /// let mut iterator = slab.iter();
-    ///
-    /// assert_eq!(iterator.next(), Some((0, &0)));
-    /// assert_eq!(iterator.next(), Some((1, &1)));
-    /// assert_eq!(iterator.next(), Some((2, &2)));
-    /// assert_eq!(iterator.next(), None);
-    /// ```
-    // TODO(yz): let the iter stop at the size_initialized.
-    pub fn iter(&self) -> Iter<T, E> {
-        Iter {
-            entries: self.entries.iter(),
-            curr: 0,
-            value_type: PhantomData,
-        }
-    }
-
     /// Return an iterator that allows modifying each value.
     ///
     /// This function should generally be **avoided** as it is not efficient.
@@ -608,10 +648,11 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab[key1], 2);
     /// assert_eq!(slab[key2], 1);
     /// ```
-    // TODO(yz): let the iter stop at the size_initialized.
     pub fn iter_mut(&mut self) -> IterMut<T, E> {
         IterMut {
-            entries: self.entries.iter_mut(),
+            entries: self.entries
+                [0..self.alloc_fields.get_mut().size_initialized]
+                .iter_mut(),
             curr: 0,
             value_type: PhantomData,
         }
@@ -634,9 +675,13 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert_eq!(slab.get(123), None);
     /// ```
     pub fn get(&self, key: usize) -> Option<&T> {
-        self.entries
-            .get(key)
-            .and_then(|entry| entry.into_option_ref())
+        self.entries.get(key).and_then(|entry| {
+            if entry.is_vacant() {
+                None
+            } else {
+                Some(entry.get_occupied_ref())
+            }
+        })
     }
 
     /// Return a mutable reference to the value associated with the given key.
@@ -659,9 +704,13 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// ```
     // This method is unsafe because user may pass the same key to get_mut at
     // the same time.
-    pub unsafe fn get_mut(&self, key: usize) -> Option<&mut T> {
-        self.entries.get(key).and_then(|entry| {
-            Self::cast_element_ref_mut(entry).into_option_mut()
+    pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
+        self.entries.get_mut(key).and_then(|entry| {
+            if entry.is_vacant() {
+                None
+            } else {
+                Some(entry.get_occupied_mut())
+            }
         })
     }
 
@@ -683,7 +732,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// }
     /// ```
     pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-        self.get_element_at(key).get_occupied_ref()
+        self.entries.get_unchecked(key).get_occupied_ref()
     }
 
     /// Return a mutable reference to the value associated with the given key
@@ -706,16 +755,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     ///
     /// assert_eq!(slab[key], 13);
     /// ```
-    pub unsafe fn get_unchecked_mut(&self, key: usize) -> &mut T {
-        self.get_element_at(key).get_occupied_mut()
-    }
-
-    fn cast_element_ref_mut(r: &E) -> &mut E {
-        unsafe { &mut *((r as *const E) as *mut E) }
-    }
-
-    fn get_element_at(&self, key: usize) -> &mut E {
-        unsafe { Self::cast_element_ref_mut(self.entries.get_unchecked(key)) }
+    pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
+        self.entries.get_unchecked_mut(key).get_occupied_mut()
     }
 
     /// Insert a value in the slab, returning key assigned to the value.
@@ -738,7 +779,8 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// let key = slab.insert("hello");
     /// assert_eq!(slab[key], "hello");
     /// ```
-    pub fn insert<U: Into<T>>(&self, val: U) -> Result<usize> {
+    pub fn insert<U>(&self, val: U) -> Result<usize>
+    where E: WrappedCreateFrom<U, E> {
         let key = self.allocate()?;
         self.insert_at(key, val);
         Ok(key)
@@ -761,8 +803,19 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
         }
     }
 
-    fn insert_at<U: Into<T>>(&self, key: usize, val: U) {
-        *self.get_element_at(key) = E::from(val);
+    /// Cast an entry to ref mut when creating value into the slot or freeing
+    /// value from the slot.
+    fn cast_entry_ref_mut(&self, key: usize) -> &mut E {
+        unsafe {
+            &mut *((self.entries.get_unchecked(key) as *const E) as *mut E)
+        }
+    }
+
+    fn insert_at<U>(&self, key: usize, val: U) -> &mut T
+    where E: WrappedCreateFrom<U, E> {
+        let entry = self.cast_entry_ref_mut(key);
+        E::take_from(entry, val);
+        entry.get_occupied_mut()
     }
 
     /// Return a handle to a vacant entry allowing for further manipulation.
@@ -819,22 +872,21 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     /// assert!(!slab.contains(hello));
     /// ```
     pub fn remove(&self, key: usize) -> Result<T> {
+        if key > self.entries.len() {
+            // Index out of range.
+            return Err(Error::from_kind(ErrorKind::SlabKeyError));
+        }
         let mut alloc_fields = self.alloc_fields.lock();
         let next = alloc_fields.next;
-        let old_value = match self.entries.get(key) {
-            Some(ref val) => {
-                alloc_fields.used -= 1;
-                alloc_fields.next = key;
-                Self::cast_element_ref_mut(val)
-                    .take_occupied_and_replace(E::from_vacant_index(next))
-            }
-            None => {
-                // Index out of range.
-                return Err(Error::from_kind(ErrorKind::SlabKeyError));
-            }
-        };
-
-        Ok(old_value)
+        let entry = self.cast_entry_ref_mut(key);
+        if entry.is_vacant() {
+            // Trying to free unallocated space.
+            return Err(Error::from_kind(ErrorKind::SlabKeyError));
+        } else {
+            alloc_fields.used -= 1;
+            alloc_fields.next = key;
+            Ok(entry.take_occupied_and_replace_with_vacant_index(next))
+        }
     }
 
     /// Return `true` if a value is associated with the given key.
@@ -883,7 +935,7 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     pub fn retain<F>(&mut self, mut f: F)
     where F: FnMut(usize, &mut T) -> bool {
         for i in 0..self.entries.len() {
-            let keep = unsafe { self.get_mut(i).map_or(true, |v| f(i, v)) };
+            let keep = self.get_mut(i).map_or(true, |v| f(i, v));
 
             if !keep {
                 self.remove(i).unwrap();
@@ -892,27 +944,20 @@ impl<T, E: EntryTrait<T>> Slab<T, E> {
     }
 }
 
-impl<T, E: EntryTrait<T>> ops::Index<usize> for Slab<T, E> {
+impl<T, E: EntryTrait<EntryType = T>> ops::Index<usize> for Slab<T, E> {
     type Output = T;
 
     fn index(&self, key: usize) -> &T { self.entries[key].get_occupied_ref() }
 }
 
-impl<'a, T, E: EntryTrait<T>> IntoIterator for &'a Slab<T, E> {
-    type IntoIter = Iter<'a, T, E>;
-    type Item = (usize, &'a T);
-
-    fn into_iter(self) -> Iter<'a, T, E> { self.iter() }
-}
-
-impl<'a, T, E: EntryTrait<T>> IntoIterator for &'a mut Slab<T, E> {
+impl<'a, T, E: EntryTrait<EntryType = T>> IntoIterator for &'a mut Slab<T, E> {
     type IntoIter = IterMut<'a, T, E>;
     type Item = (usize, &'a mut T);
 
     fn into_iter(self) -> IterMut<'a, T, E> { self.iter_mut() }
 }
 
-impl<T, E: EntryTrait<T>> fmt::Debug for Slab<T, E>
+impl<T, E: EntryTrait<EntryType = T>> fmt::Debug for Slab<T, E>
 where T: fmt::Debug
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -925,18 +970,7 @@ where T: fmt::Debug
     }
 }
 
-impl<'a, T: 'a, E: EntryTrait<T>> fmt::Debug for Iter<'a, T, E>
-where T: fmt::Debug
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("Iter")
-            .field("curr", &self.curr)
-            .field("remaining", &self.entries.len())
-            .finish()
-    }
-}
-
-impl<'a, T: 'a, E: EntryTrait<T>> fmt::Debug for IterMut<'a, T, E>
+impl<'a, T: 'a, E: EntryTrait<EntryType = T>> fmt::Debug for IterMut<'a, T, E>
 where T: fmt::Debug
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -949,7 +983,7 @@ where T: fmt::Debug
 
 // ===== VacantEntry =====
 
-impl<'a, T, E: EntryTrait<T>> VacantEntry<'a, T, E> {
+impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     /// Insert a value in the entry, returning a mutable reference to the value.
     ///
     /// To get the key associated with the value, use `key` prior to calling
@@ -974,10 +1008,9 @@ impl<'a, T, E: EntryTrait<T>> VacantEntry<'a, T, E> {
     /// assert_eq!("hello", slab[hello].1);
     /// ```
     pub fn insert<U>(mut self, val: U) -> &'a mut T
-    where T: From<U> {
+    where E: WrappedCreateFrom<U, E> {
         self.inserted = true;
-        self.slab.insert_at(self.key, val);
-        unsafe { self.slab.get_unchecked_mut(self.key) }
+        self.slab.insert_at(self.key, val)
     }
 
     /// Return the key associated with this entry.
@@ -1005,28 +1038,9 @@ impl<'a, T, E: EntryTrait<T>> VacantEntry<'a, T, E> {
     pub fn key(&self) -> usize { self.key }
 }
 
-// ===== Iter =====
-
-impl<'a, T, E: EntryTrait<T>> Iterator for Iter<'a, T, E> {
-    type Item = (usize, &'a T);
-
-    fn next(&mut self) -> Option<(usize, &'a T)> {
-        while let Some(entry) = self.entries.next() {
-            let curr = self.curr;
-            self.curr += 1;
-
-            if let Some(ref_v) = entry.into_option_ref() {
-                return Some((curr, ref_v));
-            }
-        }
-
-        None
-    }
-}
-
 // ===== IterMut =====
 
-impl<'a, T, E: EntryTrait<T>> Iterator for IterMut<'a, T, E> {
+impl<'a, T, E: EntryTrait<EntryType = T>> Iterator for IterMut<'a, T, E> {
     type Item = (usize, &'a mut T);
 
     fn next(&mut self) -> Option<(usize, &'a mut T)> {
@@ -1034,8 +1048,8 @@ impl<'a, T, E: EntryTrait<T>> Iterator for IterMut<'a, T, E> {
             let curr = self.curr;
             self.curr += 1;
 
-            if let Some(ref_mut_v) = entry.into_option_mut() {
-                return Some((curr, ref_mut_v));
+            if !entry.is_vacant() {
+                return Some((curr, entry.get_occupied_mut()));
             }
         }
 

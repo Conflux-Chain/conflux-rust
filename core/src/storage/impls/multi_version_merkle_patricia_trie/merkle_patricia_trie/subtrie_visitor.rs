@@ -665,7 +665,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                             },
                         );
                         new_child_node.replace_value_valid(value);
-                        child_node_entry.insert(new_child_node);
+                        child_node_entry.insert(&new_child_node);
 
                         // It's safe because it's guaranteed that
                         // key_child_index != unmatched_child_index
@@ -677,7 +677,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                         );
                     }
                 }
-                new_node_entry.insert(new_node);
+                new_node_entry.insert(&new_node);
                 Ok((true, new_node_cow.into_child().unwrap()))
             }
             WalkStop::ChildNotFound {
@@ -698,7 +698,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                     end_mask: 0,
                 });
                 new_child_node.replace_value_valid(value);
-                child_node_entry.insert(new_child_node);
+                child_node_entry.insert(&new_child_node);
 
                 let node_ref_changed = !is_owned;
                 let trie_node = GuardedValue::take(trie_node_ref);
