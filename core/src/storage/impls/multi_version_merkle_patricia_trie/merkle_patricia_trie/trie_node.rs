@@ -58,10 +58,10 @@ pub trait TrieNodeTrait: Default {
 // This trie node isn't memory efficient.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VanillaTrieNode<NodeRefT: NodeRefTrait> {
-    pub compressed_path: CompressedPathRaw,
-    pub maybe_value: Option<Box<[u8]>>,
-    pub children_table: VanillaChildrenTable<NodeRefT>,
-    pub merkle_hash: MerkleHash,
+    compressed_path: CompressedPathRaw,
+    maybe_value: Option<Box<[u8]>>,
+    children_table: VanillaChildrenTable<NodeRefT>,
+    merkle_hash: MerkleHash,
 }
 
 impl<NodeRefT: 'static + NodeRefTrait> Default for VanillaTrieNode<NodeRefT>
@@ -176,7 +176,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 #[allow(unused)]
 impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     pub fn new(
-        merkle: &MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
+        merkle: MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
     ) -> Self
     {
@@ -307,7 +307,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone
 {
     fn clone(&self) -> Self {
         Self::new(
-            &self.merkle_hash,
+            self.merkle_hash.clone(),
             self.children_table.clone(),
             self.value_clone().into_option(),
             self.compressed_path_ref().into(),
@@ -561,13 +561,13 @@ pub enum TrieNodeAction {
 /// We'd like to keep as many of them as possible in memory.
 impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn new(
-        merkle: &MerkleHash, children_table: ChildrenTableDeltaMpt,
+        merkle: MerkleHash, children_table: ChildrenTableDeltaMpt,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
     ) -> MemOptimizedTrieNode<CacheAlgoDataT>
     {
         let mut ret = MemOptimizedTrieNode::default();
 
-        ret.merkle_hash = *merkle;
+        ret.merkle_hash = merkle;
         ret.children_table = children_table;
         match maybe_value {
             None => {}
@@ -773,7 +773,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
         }
 
         Ok(MemOptimizedTrieNode::new(
-            &rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
             rlp.val_at::<ChildrenTableManagedDeltaMpt>(1)?.into(),
             rlp.val_at::<Option<Vec<u8>>>(2)?
                 .map(|v| v.into_boxed_slice()),
@@ -814,7 +814,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
         }
 
         Ok(VanillaTrieNode::new(
-            &rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
             rlp.val_at::<VanillaChildrenTable<NodeRefT>>(1)?,
             rlp.val_at::<Option<Vec<u8>>>(2)?
                 .map(|v| v.into_boxed_slice()),

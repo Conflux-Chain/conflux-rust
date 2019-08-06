@@ -168,12 +168,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                 drop(trie_node);
                 let children_merkles =
                     self.retrieve_children_hashes(children)?;
-                TrieProofNode(VanillaTrieNode {
-                    compressed_path,
-                    maybe_value,
-                    children_table: children_merkles.into(),
-                    merkle_hash,
-                })
+                TrieProofNode(VanillaTrieNode::new(merkle_hash, children_merkles.into(), maybe_value, compressed_path))
             });
         }
 
