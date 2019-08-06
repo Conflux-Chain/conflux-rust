@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::{marker::PhantomData, ptr::null_mut, slice};
+
 /// Use FieldsOffsetMaybeInPlaceByteArrayMemoryManager and macro
 /// make_parallel_field_maybe_in_place_byte_array_memory_manager to manage
 /// construction / destruction of MaybeInPlaceByteArray.
@@ -269,5 +271,3 @@ impl<
         ByteArrayOffsetAccessor::get_mut(self)
     }
 }
-
-use std::{marker::PhantomData, ptr::null_mut, slice};

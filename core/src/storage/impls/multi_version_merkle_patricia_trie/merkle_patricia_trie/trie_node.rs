@@ -539,17 +539,6 @@ impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeWalkTrait<'node>
     }
 }
 
-/*
-FIXME
-impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
-    pub fn walk<'key, 'node, AM: AccessMode>(
-        &'node self, key: KeyPart<'key>,
-    ) -> WalkStop<'key, NodeRefDeltaMptCompact> {
-        walk::<AM, _>(key, &self.compressed_path_ref(), self)
-    }
-}
-*/
-
 /// The action variants after a value deletion.
 pub enum TrieNodeAction {
     Modify,
