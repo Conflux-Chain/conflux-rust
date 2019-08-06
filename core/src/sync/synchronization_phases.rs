@@ -222,6 +222,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
         std::thread::spawn(move || {
             graph.recover_graph_from_db(true /* header_only */);
             recovered.store(true, AtomicOrdering::SeqCst);
+            info!("finish recover header graph from db");
         });
     }
 }
@@ -442,6 +443,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
         std::thread::spawn(move || {
             graph.recover_graph_from_db(false /* header_only */);
             recovered.store(true, AtomicOrdering::SeqCst);
+            info!("finish recover block graph from db");
         });
     }
 }
