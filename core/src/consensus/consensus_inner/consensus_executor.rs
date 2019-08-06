@@ -663,15 +663,15 @@ impl ConsensusExecutor {
             {
                 match maybe_cached_state {
                     Some(cached_state) => {
-                        if let Some((receipts_root, logs_bloom_hash)) = self
+                        if let Some(epoch_execution_commitments) = self
                             .handler
                             .data_man
                             .get_epoch_execution_commitments(&block_hash)
                         {
                             return Ok((
                                 cached_state.get_state_root().unwrap().unwrap(),
-                                receipts_root,
-                                logs_bloom_hash,
+                                epoch_execution_commitments.receipts_root,
+                                epoch_execution_commitments.logs_bloom_hash,
                             ));
                         }
                     }
@@ -846,13 +846,17 @@ impl ConsensusExecutionHandler {
             .unwrap()
             .unwrap();
 
-        let (receipts_root, logs_bloom_hash) = self
+        let epoch_execution_commitments = self
             .data_man
             .get_epoch_execution_commitments(&task.epoch_hash)
             .unwrap();
 
         task.sender
-            .send((state_root, receipts_root, logs_bloom_hash))
+            .send((
+                state_root,
+                epoch_execution_commitments.receipts_root,
+                epoch_execution_commitments.logs_bloom_hash,
+            ))
             .expect("Consensus Worker fails");
     }
 
@@ -943,13 +947,13 @@ impl ConsensusExecutionHandler {
         } else {
             state.commit(*epoch_hash).unwrap();
         };
-        let (receipts_root, logs_bloom_hash) = self
+        let epoch_execution_commitments = self
             .data_man
             .get_epoch_execution_commitments(&epoch_hash)
             .unwrap();
         debug!(
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
-            on_local_pivot, epoch_hash, state_root, receipts_root, logs_bloom_hash,
+            on_local_pivot, epoch_hash, state_root, epoch_execution_commitments.receipts_root, epoch_execution_commitments.logs_bloom_hash,
         );
     }
 
