@@ -10,16 +10,17 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         handle_error,
-        message::{msgid, Status},
-        Error, ErrorKind,
+        message::{msgid, NodeType, Status},
+        peers::Peers,
+        Error, ErrorKind, LIGHT_PROTOCOL_VERSION,
     },
-    message::MsgId,
+    message::{Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler, PeerId},
 };
 
 use cfx_types::H256;
 
-use super::{peers::Peers, query::QueryHandler, sync::SyncHandler};
+use super::{query::QueryHandler, sync::SyncHandler};
 
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
@@ -36,7 +37,7 @@ impl Handler {
 
         Handler {
             consensus: consensus.clone(),
-            peers: Arc::new(Peers::default()),
+            peers: Arc::new(Peers::new()),
             query: QueryHandler::new(consensus, next_request_id.clone()),
             sync: SyncHandler::new(next_request_id),
         }
@@ -47,12 +48,38 @@ impl Handler {
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
 
+        // TODO(thegaram): check if peer is known
+
         match msg_id {
             msgid::STATUS => self.on_status(io, peer, &rlp),
             msgid::STATE_ROOT => self.query.on_state_root(io, peer, &rlp),
             msgid::STATE_ENTRY => self.query.on_state_entry(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
+    }
+
+    fn send_status(
+        &self, io: &NetworkContext, peer: PeerId,
+    ) -> Result<(), Error> {
+        let best_info = self.consensus.get_best_info();
+        let genesis_hash = self.consensus.data_man.true_genesis_block.hash();
+
+        let terminals = match &best_info.terminal_block_hashes {
+            Some(x) => x.clone(),
+            None => best_info.bounded_terminal_block_hashes.clone(),
+        };
+
+        let msg: Box<dyn Message> = Box::new(Status {
+            best_epoch: best_info.best_epoch_number,
+            genesis_hash,
+            network_id: 0x0,
+            node_type: NodeType::Light,
+            protocol_version: LIGHT_PROTOCOL_VERSION,
+            terminals,
+        });
+
+        msg.send(io, peer)?;
+        Ok(())
     }
 
     #[inline]
@@ -81,9 +108,10 @@ impl Handler {
         let peer_state = self.peers.insert(peer);
         let mut state = peer_state.write();
 
-        state.protocol_version = status.protocol_version;
-        state.genesis_hash = status.genesis_hash;
         state.best_epoch = status.best_epoch;
+        state.genesis_hash = status.genesis_hash;
+        state.node_type = status.node_type;
+        state.protocol_version = status.protocol_version;
         state.terminals = status.terminals.into_iter().collect();
 
         Ok(())
@@ -112,9 +140,23 @@ impl NetworkProtocolHandler for Handler {
         }
     }
 
-    fn on_peer_connected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
         info!("on_peer_connected: peer={:?}", peer);
-        self.peers.insert(peer);
+
+        match self.send_status(io, peer) {
+            Ok(_) => {
+                self.peers.insert(peer);
+            }
+            Err(e) => {
+                warn!("Error while sending status: {}", e);
+                handle_error(
+                    io,
+                    peer,
+                    msgid::INVALID,
+                    ErrorKind::SendStatusFailed.into(),
+                );
+            }
+        }
     }
 
     fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {

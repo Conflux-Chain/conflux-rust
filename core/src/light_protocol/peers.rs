@@ -12,13 +12,15 @@ use rand::Rng;
 
 use cfx_types::H256;
 
+use super::message::NodeType;
 use crate::network::PeerId;
 
 #[derive(Default)]
-pub(super) struct PeerState {
-    pub protocol_version: u8,
-    pub genesis_hash: H256,
+pub struct PeerState {
     pub best_epoch: u64,
+    pub genesis_hash: H256,
+    pub node_type: NodeType,
+    pub protocol_version: u8,
     pub terminals: HashSet<H256>,
 }
 
@@ -26,7 +28,9 @@ pub(super) struct PeerState {
 pub struct Peers(RwLock<HashMap<PeerId, Arc<RwLock<PeerState>>>>);
 
 impl Peers {
-    pub(super) fn insert(&self, peer: PeerId) -> Arc<RwLock<PeerState>> {
+    pub fn new() -> Peers { Self::default() }
+
+    pub fn insert(&self, peer: PeerId) -> Arc<RwLock<PeerState>> {
         self.0
             .write()
             .entry(peer)
@@ -34,12 +38,27 @@ impl Peers {
             .clone()
     }
 
-    pub(super) fn remove(&self, peer: &PeerId) { self.0.write().remove(&peer); }
+    pub fn remove(&self, peer: &PeerId) { self.0.write().remove(&peer); }
 
     pub fn all_peers_shuffled(&self) -> Vec<PeerId> {
         let mut rand = rand::thread_rng();
         let mut peers: Vec<_> = self.0.read().keys().cloned().collect();
         rand.shuffle(&mut peers[..]);
         peers
+    }
+
+    pub fn all_peers_satisfying<F>(&self, predicate: F) -> Vec<PeerId>
+    where F: Fn(&PeerState) -> bool {
+        self.0
+            .read()
+            .iter()
+            .filter_map(|(id, state)| {
+                if predicate(&*state.read()) {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }

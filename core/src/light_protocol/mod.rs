@@ -5,6 +5,7 @@
 mod error;
 mod handler;
 mod message;
+mod peers;
 mod query_provider;
 mod query_service;
 
