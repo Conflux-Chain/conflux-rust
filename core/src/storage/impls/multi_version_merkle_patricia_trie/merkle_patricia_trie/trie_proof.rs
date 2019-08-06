@@ -12,7 +12,7 @@ use super::{
     children_table::CHILDREN_COUNT,
     compressed_path::CompressedPathRef,
     merkle::compute_merkle,
-    walk::{access_mode::Read, walk, KeyPart, WalkStop},
+    walk::{access_mode::Read, walk, GetChildTrait, KeyPart, WalkStop},
 };
 
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
@@ -20,7 +20,7 @@ pub struct TrieProofNode {
     // fields necessary for traversal & hashing
     pub path_end_mask: u8,
     pub path: Vec<u8>,
-    pub value: Vec<u8>,
+    pub value: Option<Vec<u8>>,
     pub children_table: Vec<MerkleHash>,
     pub merkle_hash: MerkleHash,
 }
@@ -45,40 +45,36 @@ impl TrieProofNode {
         };
 
         // convert `value` to `Option<&[u8]>`
-        let value = match &self.value {
-            v if v == &Vec::<u8>::new() => None,
-            v => v[..].try_into().ok(),
-        };
-
-        // NOTE: conversion to option is necessary for
-        // computing the correct merkle hash
+        let value = self.value.as_ref().map(|v| &**v);
 
         compute_merkle(self.compressed_path_ref(), children_table, value)
     }
 }
 
 impl TrieProofNode {
-    fn get_child(&self, index: u8) -> Option<MerkleHash> {
+    pub fn walk<'key, 'node>(
+        &'node self, key: KeyPart<'key>,
+    ) -> WalkStop<'key, &'node MerkleHash> {
+        walk::<Read, _>(key, &self.compressed_path_ref(), self)
+    }
+}
+impl<'node> GetChildTrait<'node> for TrieProofNode {
+    type ChildIdType = &'node MerkleHash;
+
+    fn get_child(&'node self, child_index: u8) -> Option<&'node MerkleHash> {
         match self.children_table.len() {
             0 => None,
-            CHILDREN_COUNT => match self.children_table[index as usize] {
-                h if h == KECCAK_EMPTY => None,
-                h => Some(h),
-            },
+            CHILDREN_COUNT => {
+                match &self.children_table[child_index as usize] {
+                    h if h == &KECCAK_EMPTY => None,
+                    h => Some(h),
+                }
+            }
             len @ _ => {
                 error!("Invalid TrieProofNode child count: {}", len);
                 None
             }
         }
-    }
-
-    pub fn walk<'key>(&self, key: KeyPart<'key>) -> WalkStop<'key, MerkleHash> {
-        walk::<Read, MerkleHash>(
-            key,
-            self.compressed_path_ref(),
-            self.path_end_mask,
-            &|index| self.get_child(index),
-        )
     }
 }
 
@@ -104,15 +100,14 @@ impl TrieProof {
             nodes.insert(node.merkle_hash, node);
         }
 
-        let value = value.clone().unwrap_or_default();
         let mut key = &key[..];
-        let mut hash = root;
+        let mut hash = &root;
 
         loop {
-            match nodes.get(&hash) {
+            match nodes.get(hash) {
                 // proof has missing node
                 None => {
-                    debug_assert!(hash != KECCAK_EMPTY); // this should lead to `ChildNotFound`
+                    debug_assert!(hash != &KECCAK_EMPTY); // this should lead to `ChildNotFound`
                     return false;
                 }
                 Some(node) => {
@@ -123,13 +118,13 @@ impl TrieProof {
 
                     match node.walk(key) {
                         WalkStop::Arrived => {
-                            return value == node.value;
+                            return value.eq(&node.value);
                         }
                         WalkStop::PathDiverted { .. } => {
-                            return value == Vec::<u8>::new();
+                            return value.is_none()
                         }
                         WalkStop::ChildNotFound { .. } => {
-                            return value == Vec::<u8>::new();
+                            return value.is_none()
                         }
                         WalkStop::Descent {
                             key_remaining,
@@ -160,7 +155,7 @@ mod tests {
             let mut node = TrieProofNode::default();
             node.path_end_mask = 0x0f;
             node.path = vec![0x00, 0x01, 0x02];
-            node.value = vec![0x03, 0x04, 0x05];
+            node.value = Some(vec![0x03, 0x04, 0x05]);
             node.children_table = [KECCAK_EMPTY; 16].to_vec();
             node.merkle_hash = node.merkle();
             node
@@ -191,7 +186,7 @@ mod tests {
         let leaf1 = {
             let mut node = TrieProofNode::default();
             node.path = vec![0x02];
-            node.value = value1.clone();
+            node.value = Some(value1.clone());
             node.merkle_hash = node.merkle();
             node
         };
@@ -199,7 +194,7 @@ mod tests {
         let leaf2 = {
             let mut node = TrieProofNode::default();
             node.path = vec![0x03];
-            node.value = value2.clone();
+            node.value = Some(value2.clone());
             node.merkle_hash = node.merkle();
             node
         };

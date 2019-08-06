@@ -2,13 +2,162 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::node_ref::NodeRefDeltaMptCompact;
-use rlp::*;
-use std::{fmt::*, marker::PhantomData, mem, ptr::null_mut, slice};
-
 pub trait NodeRefTrait:
-    Clone + Encodable + Decodable + PartialEq + Debug
+    Copy + Clone + Encodable + Decodable + PartialEq + Debug
 {
+}
+
+impl NodeRefTrait for MerkleHash {}
+
+#[derive(Clone)]
+pub struct VanillaChildrenTable<NodeRefT: NodeRefTrait> {
+    table: [NodeRefT; CHILDREN_COUNT],
+    children_count: u8,
+}
+
+impl From<ChildrenMerkleTable> for VanillaChildrenTable<MerkleHash> {
+    fn from(x: ChildrenMerkleTable) -> Self {
+        let mut children_count = 0;
+        for merkle in &x {
+            if !merkle.eq(ChildrenTableItem::<MerkleHash>::no_child()) {
+                children_count += 1;
+            }
+        }
+        Self {
+            table: x,
+            children_count,
+        }
+    }
+}
+
+impl From<MaybeMerkleTable> for VanillaChildrenTable<MerkleHash> {
+    fn from(x: MaybeMerkleTable) -> Self {
+        match x {
+            None => Self::default(),
+            Some(t) => t.into(),
+        }
+    }
+}
+
+pub trait DefaultChildrenItem<NodeRefT: NodeRefTrait> {
+    fn no_child() -> &'static NodeRefT;
+}
+
+pub struct ChildrenTableItem<NodeRefT: NodeRefTrait> {
+    _marker: PhantomData<NodeRefT>,
+}
+
+impl DefaultChildrenItem<MerkleHash> for ChildrenTableItem<MerkleHash> {
+    fn no_child() -> &'static MerkleHash { &MERKLE_NULL_NODE }
+}
+
+impl<NodeRefT: NodeRefTrait> WrappedCreateFrom<NodeRefT, NodeRefT>
+    for ChildrenTableItem<NodeRefT>
+{
+    fn take(x: NodeRefT) -> NodeRefT { x }
+}
+
+impl<'x, NodeRefT: NodeRefTrait> WrappedCreateFrom<&'x NodeRefT, NodeRefT>
+    for ChildrenTableItem<NodeRefT>
+{
+    fn take(x: &'x NodeRefT) -> NodeRefT { x.clone() }
+
+    fn take_from(dest: &mut NodeRefT, x: &'x NodeRefT) { dest.clone_from(x); }
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> Default
+    for VanillaChildrenTable<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn default() -> Self {
+        Self {
+            children_count: 0,
+            table: [ChildrenTableItem::<NodeRefT>::no_child().clone();
+                CHILDREN_COUNT],
+        }
+    }
+}
+
+#[allow(unused)]
+impl<NodeRefT: 'static + NodeRefTrait> VanillaChildrenTable<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    // FIXME: put most method in a trait.
+
+    pub fn new_from_one_child(child_index: u8, child: &NodeRefT) -> Self {
+        let mut table = VanillaChildrenTable::default();
+        table.children_count = 1;
+        table.table[child_index as usize] = child.clone();
+        table
+    }
+
+    pub fn get_children_table(&self) -> &[NodeRefT; CHILDREN_COUNT] {
+        &self.table
+    }
+
+    pub fn get_children_count(&self) -> u8 { self.children_count }
+
+    pub fn get_children_count_mut(&mut self) -> &mut u8 {
+        &mut self.children_count
+    }
+
+    pub fn get_child(&self, child_index: u8) -> Option<&NodeRefT> {
+        let child_ref =
+            unsafe { self.table.get_unchecked(child_index as usize) };
+        if child_ref.eq(ChildrenTableItem::<NodeRefT>::no_child()) {
+            None
+        } else {
+            Some(child_ref)
+        }
+    }
+
+    pub unsafe fn get_child_mut_unchecked(
+        &mut self, child_index: u8,
+    ) -> &mut NodeRefT {
+        self.table.get_unchecked_mut(child_index as usize)
+    }
+
+    pub fn iter(&self) -> VanillaChildrenTableIterator<NodeRefT> {
+        VanillaChildrenTableIterator {
+            next_child_index: 0,
+            table: &self.table,
+        }
+    }
+}
+
+pub struct VanillaChildrenTableIterator<'a, NodeRefT: NodeRefTrait> {
+    next_child_index: u8,
+    table: &'a [NodeRefT; CHILDREN_COUNT],
+}
+
+impl<'a, NodeRefT: 'static + NodeRefTrait> Iterator
+    for VanillaChildrenTableIterator<'a, NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    type Item = (u8, &'a NodeRefT);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while (self.next_child_index as usize) < CHILDREN_COUNT {
+            let child_index = self.next_child_index;
+            let child_ref = unsafe {
+                self.table.get_unchecked(self.next_child_index as usize)
+            };
+            self.next_child_index = child_index + 1;
+            if !child_ref.eq(ChildrenTableItem::<NodeRefT>::no_child()) {
+                return Some((child_index, child_ref));
+            }
+        }
+        None
+    }
+}
+
+impl<'a, NodeRefT: NodeRefTrait> ChildrenTableIteratorStartIndex
+    for VanillaChildrenTableIterator<'a, NodeRefT>
+{
+    fn set_start_index(mut self, index: u8) -> Self {
+        self.next_child_index = index;
+        self
+    }
 }
 
 /// NodeRefT for delta MPT and persistent MPT can be different.
@@ -286,7 +435,11 @@ impl<NodeRefT: NodeRefTrait> PartialEq for CompactedChildrenTable<NodeRefT> {
     fn eq(&self, other: &Self) -> bool { self.to_ref() == other.to_ref() }
 }
 
-trait CompactedChildrenTableIteratorTrait {
+pub trait ChildrenTableIteratorStartIndex {
+    fn set_start_index(self, index: u8) -> Self;
+}
+
+trait CompactedChildrenTableIteratorTrait: ChildrenTableIteratorStartIndex {
     type NodeRefT: NodeRefTrait;
     type RefType;
 
@@ -303,10 +456,16 @@ trait CompactedChildrenTableIteratorTrait {
     fn advance_elements(&mut self);
 }
 
-trait CompactedChildrenTableIteratorNonSkipNextTrait:
+trait CompactedChildrenTableIteratorNonSkipImplTrait:
     CompactedChildrenTableIteratorTrait
 {
-    fn next(&mut self, child_index: u8) -> Option<(u8, Option<Self::RefType>)> {
+    fn set_start_index_impl(&mut self, index: u8) {
+        self.set_next_child_index(index);
+    }
+
+    fn next_impl(
+        &mut self, child_index: u8,
+    ) -> Option<(u8, Option<Self::RefType>)> {
         if child_index as usize == CHILDREN_COUNT {
             return None;
         }
@@ -327,10 +486,19 @@ trait CompactedChildrenTableIteratorNonSkipNextTrait:
     }
 }
 
-trait CompactedChildrenTableIteratorNextTrait:
+trait CompactedChildrenTableIteratorImplTrait:
     CompactedChildrenTableIteratorTrait
 {
-    fn next(&mut self) -> Option<(u8, Self::RefType)> {
+    fn set_start_index_impl(&mut self, index: u8) {
+        self.set_bitmap(
+            self.get_bitmap()
+                & !CompactedChildrenTable::<Self::NodeRefT>::lower_bits(
+                    index.into(),
+                ),
+        );
+    }
+
+    fn next_impl(&mut self) -> Option<(u8, Self::RefType)> {
         let ret;
         if self.get_bitmap() != 0 {
             ret = Some((
@@ -385,7 +553,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     }
 }
 
-impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorNonSkipNextTrait
+impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorNonSkipImplTrait
     for CompactedChildrenTableIteratorNonSkip<'a, NodeRefT>
 {
 }
@@ -396,10 +564,16 @@ impl<'a, NodeRefT: NodeRefTrait> Iterator
     type Item = (u8, Option<&'a NodeRefT>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        <Self as CompactedChildrenTableIteratorNonSkipNextTrait>::next(
-            self,
-            self.next_child_index,
-        )
+        self.next_impl(self.next_child_index)
+    }
+}
+
+impl<'a, NodeRefT: NodeRefTrait> ChildrenTableIteratorStartIndex
+    for CompactedChildrenTableIteratorNonSkip<'a, NodeRefT>
+{
+    fn set_start_index(mut self, index: u8) -> Self {
+        self.set_start_index_impl(index);
+        self
     }
 }
 
@@ -436,7 +610,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     }
 }
 
-impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorNonSkipNextTrait
+impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorNonSkipImplTrait
     for CompactedChildrenTableIteratorNonSkipMut<'a, NodeRefT>
 {
 }
@@ -447,10 +621,16 @@ impl<'a, NodeRefT: NodeRefTrait> Iterator
     type Item = (u8, Option<&'a mut NodeRefT>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        <Self as CompactedChildrenTableIteratorNonSkipNextTrait>::next(
-            self,
-            self.next_child_index,
-        )
+        self.next_impl(self.next_child_index)
+    }
+}
+
+impl<'a, NodeRefT: NodeRefTrait> ChildrenTableIteratorStartIndex
+    for CompactedChildrenTableIteratorNonSkipMut<'a, NodeRefT>
+{
+    fn set_start_index(mut self, index: u8) -> Self {
+        self.set_start_index_impl(index);
+        self
     }
 }
 
@@ -482,7 +662,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     }
 }
 
-impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorNextTrait
+impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorImplTrait
     for CompactedChildrenTableIterator<'a, NodeRefT>
 {
 }
@@ -492,8 +672,15 @@ impl<'a, NodeRefT: NodeRefTrait> Iterator
 {
     type Item = (u8, &'a NodeRefT);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        <Self as CompactedChildrenTableIteratorNextTrait>::next(self)
+    fn next(&mut self) -> Option<Self::Item> { self.next_impl() }
+}
+
+impl<'a, NodeRefT: NodeRefTrait> ChildrenTableIteratorStartIndex
+    for CompactedChildrenTableIterator<'a, NodeRefT>
+{
+    fn set_start_index(mut self, index: u8) -> Self {
+        self.set_start_index_impl(index);
+        self
     }
 }
 
@@ -527,7 +714,7 @@ impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorTrait
     }
 }
 
-impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorNextTrait
+impl<'a, NodeRefT: NodeRefTrait> CompactedChildrenTableIteratorImplTrait
     for CompactedChildrenTableIteratorMut<'a, NodeRefT>
 {
 }
@@ -537,8 +724,15 @@ impl<'a, NodeRefT: NodeRefTrait> Iterator
 {
     type Item = (u8, &'a mut NodeRefT);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        <Self as CompactedChildrenTableIteratorNextTrait>::next(self)
+    fn next(&mut self) -> Option<Self::Item> { self.next_impl() }
+}
+
+impl<'a, NodeRefT: NodeRefTrait> ChildrenTableIteratorStartIndex
+    for CompactedChildrenTableIteratorMut<'a, NodeRefT>
+{
+    fn set_start_index(mut self, index: u8) -> Self {
+        self.set_start_index_impl(index);
+        self
     }
 }
 
@@ -603,3 +797,12 @@ impl<NodeRefT: NodeRefTrait> Decodable for ChildrenTable<NodeRefT> {
         })
     }
 }
+
+use super::{
+    merkle::{ChildrenMerkleTable, MaybeMerkleTable},
+    node_ref::NodeRefDeltaMptCompact,
+    WrappedCreateFrom,
+};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use rlp::*;
+use std::{fmt::*, marker::PhantomData, mem, ptr::null_mut, slice};

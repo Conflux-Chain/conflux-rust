@@ -4,19 +4,15 @@
 
 pub type ActualSlabIndex = u32;
 
-pub type VacantEntry<'a, TrieNode> = super::slab::VacantEntry<
-    'a,
-    TrieNode,
-    // FIXME: implement EntryTrait for TrieNode.
-    super::slab::Entry<TrieNode>,
->;
+pub type VacantEntry<'a, TrieNode> =
+    super::slab::VacantEntry<'a, TrieNode, TrieNode>;
 
-// It contains UnsafeCell because an element might be changed when shared.
-pub type TrieNodeCell<CacheAlgoDataT> = UnsafeCell<TrieNode<CacheAlgoDataT>>;
-type Allocator<CacheAlgoDataT> = Slab<
-    TrieNodeCell<CacheAlgoDataT>,
-    super::slab::Entry<TrieNodeCell<CacheAlgoDataT>>,
->;
+// We use UnsafeCell in Slab because we hold references and mutable references
+// of Slab entries independently.
+pub type TrieNodeCell<CacheAlgoDataT> =
+    UnsafeCell<MemOptimizedTrieNode<CacheAlgoDataT>>;
+type Allocator<CacheAlgoDataT> =
+    Slab<TrieNodeCell<CacheAlgoDataT>, TrieNodeCell<CacheAlgoDataT>>;
 pub type AllocatorRef<'a, CacheAlgoDataT> =
     RwLockReadGuard<'a, Allocator<CacheAlgoDataT>>;
 pub type AllocatorRefRef<'a, CacheAlgoDataT> =
@@ -27,7 +23,7 @@ pub type CacheAlgorithmDeltaMpt = LRU<RLFUPosT, DeltaMptDbKey>;
 pub type CacheAlgoDataDeltaMpt =
     <CacheAlgorithmDeltaMpt as CacheAlgorithm>::CacheAlgoData;
 
-pub type TrieNodeDeltaMpt = TrieNode<CacheAlgoDataDeltaMpt>;
+pub type TrieNodeDeltaMpt = MemOptimizedTrieNode<CacheAlgoDataDeltaMpt>;
 pub type TrieNodeDeltaMptCell = TrieNodeCell<CacheAlgoDataDeltaMpt>;
 
 pub type SlabVacantEntryDeltaMpt<'a> = VacantEntry<'a, TrieNodeDeltaMptCell>;
@@ -241,7 +237,7 @@ impl<
 
     pub unsafe fn get_in_memory_node_mut<'a>(
         allocator: AllocatorRefRef<'a, CacheAlgoDataT>, cache_slot: usize,
-    ) -> &'a mut TrieNode<CacheAlgoDataT> {
+    ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT> {
         allocator.get_unchecked(cache_slot).get_as_mut()
     }
 
@@ -260,7 +256,7 @@ impl<
         // We never save null node in db.
         let rlp_bytes = self.db.get(db_key.to_string().as_bytes())?.unwrap();
         let rlp = Rlp::new(rlp_bytes.as_ref());
-        let mut trie_node = TrieNode::decode(&rlp)?;
+        let mut trie_node = MemOptimizedTrieNode::decode(&rlp)?;
 
         let mut cache_manager_locked = cache_manager.lock();
         let trie_cell_ref: &TrieNodeCell<CacheAlgoDataT>;
@@ -409,7 +405,7 @@ impl<
     pub unsafe fn dirty_node_as_mut_unchecked<'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: &mut NodeRefDeltaMpt,
-    ) -> &'a mut TrieNode<CacheAlgoDataT>
+    ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT>
     {
         match node {
             NodeRefDeltaMpt::Committed { db_key: _ } => {
@@ -543,7 +539,7 @@ impl<
     unsafe fn get_cached_node_mut_unchecked<'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         slot: DeltaMptDbKey,
-    ) -> &'a mut TrieNode<CacheAlgoDataT>
+    ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT>
     {
         NodeMemoryManager::<CacheAlgoDataT, CacheAlgorithmT>::get_in_memory_node_mut(
             &allocator,
@@ -600,7 +596,7 @@ impl<
             Option<
                 MutexGuard<'c, CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
             >,
-            &'a TrieNode<CacheAlgoDataT>,
+            &'a MemOptimizedTrieNode<CacheAlgoDataT>,
         >,
     >
     {
