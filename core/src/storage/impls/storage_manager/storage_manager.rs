@@ -82,11 +82,12 @@ impl StorageManager {
         intermediate_delta_root: &MerkleHash, conf: StorageConfiguration,
     ) -> Result<Arc<DeltaMpt>>
     {
-        let db = storage_manager.delta_db_manager.new_empty_delta_db(
-            &DeltaDbManager::delta_db_name(snapshot_root),
-        )?;
+        let db =
+            Arc::new(storage_manager.delta_db_manager.new_empty_delta_db(
+                &DeltaDbManager::delta_db_name(snapshot_root),
+            )?);
         Ok(Arc::new(DeltaMpt::new(
-            Arc::new(db),
+            db,
             conf,
             DeltaMpt::padding(snapshot_root, intermediate_delta_root),
             snapshot_root.clone(),
