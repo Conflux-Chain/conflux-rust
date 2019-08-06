@@ -77,18 +77,6 @@ impl Handleable for Transactions {
 }
 
 /////////////////////////////////////////////////////////////////////
-
-#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
-pub struct TransIndex(usize, usize);
-
-impl TransIndex {
-    pub fn new(index: (usize, usize)) -> Self { TransIndex(index.0, index.1) }
-
-    pub fn first(&self) -> usize { self.0 }
-
-    pub fn second(&self) -> usize { self.1 }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct TransactionDigests {
     pub window_index: usize,
@@ -211,7 +199,8 @@ impl TransactionDigests {
 #[derive(Debug, PartialEq)]
 pub struct GetTransactions {
     pub request_id: RequestId,
-    pub indices: Vec<TransIndex>,
+    pub window_index: usize,
+    pub indices: Vec<usize>,
     pub tx_ids: HashSet<TxPropagateId>,
 }
 
@@ -254,7 +243,7 @@ impl Handleable for GetTransactions {
         let transactions = ctx
             .manager
             .request_manager
-            .get_sent_transactions(&self.indices);
+            .get_sent_transactions(self.window_index, &self.indices);
         let response = GetTransactionsResponse {
             request_id: self.request_id.clone(),
             transactions,
@@ -272,21 +261,23 @@ impl Handleable for GetTransactions {
 impl Encodable for GetTransactions {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(2)
+            .begin_list(3)
             .append(&self.request_id)
+            .append(&self.window_index)
             .append_list(&self.indices);
     }
 }
 
 impl Decodable for GetTransactions {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 2 {
+        if rlp.item_count()? != 3 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
         Ok(GetTransactions {
             request_id: rlp.val_at(0)?,
-            indices: rlp.list_at(1)?,
+            window_index: rlp.val_at(1)?,
+            indices: rlp.list_at(2)?,
             tx_ids: HashSet::new(),
         })
     }
