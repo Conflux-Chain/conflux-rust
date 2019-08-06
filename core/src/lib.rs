@@ -73,9 +73,9 @@ pub use crate::{
         SynchronizationGraph, SynchronizationService,
     },
     transaction_pool::{SharedTransactionPool, TransactionPool},
-    verification::REFEREE_BOUND,
 };
 pub use network::PeerInfo;
 pub use parameters::{
-    consensus as consensus_parameters, WORKER_COMPUTATION_PARALLELISM,
+    block as block_parameters, consensus as consensus_parameters,
+    WORKER_COMPUTATION_PARALLELISM,
 };

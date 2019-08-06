@@ -14,14 +14,16 @@ use super::consensus::consensus_inner::{
 use crate::{
     block_data_manager::BlockDataManager, pow::ProofOfWorkConfig, state::State,
     statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
-    vm_factory::VmFactory, REFEREE_BOUND,
+    vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
 pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
-use crate::parameters::{consensus::*, consensus_internal::*};
+use crate::parameters::{
+    block::REFEREE_BOUND, consensus::*, consensus_internal::*,
+};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{

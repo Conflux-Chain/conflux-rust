@@ -4,19 +4,14 @@
 
 use crate::{
     error::{BlockError, Error},
+    parameters::block::*,
     pow,
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
 use cfx_types::{H256, U256};
-use primitives::{block::MAX_BLOCK_SIZE_IN_BYTES, Block, BlockHeader};
+use primitives::{Block, BlockHeader};
 use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
-
-// The maximum number of referees allowed for each block
-pub const REFEREE_BOUND: usize = 200;
-
-const VALID_TIME_DRIFT: u64 = 10 * 60;
-pub const ACCEPTABLE_TIME_DRIFT: u64 = 5 * 60;
 
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {

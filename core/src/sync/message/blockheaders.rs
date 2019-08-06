@@ -4,6 +4,7 @@
 
 use crate::{
     message::RequestId,
+    parameters::block::ACCEPTABLE_TIME_DRIFT,
     sync::{
         message::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
@@ -12,7 +13,6 @@ use crate::{
         msg_sender::NULL,
         Error,
     },
-    verification::ACCEPTABLE_TIME_DRIFT,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
