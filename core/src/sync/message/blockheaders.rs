@@ -12,7 +12,6 @@ use crate::{
         msg_sender::NULL,
         Error,
     },
-    verification::ACCEPTABLE_TIME_DRIFT,
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
@@ -22,6 +21,7 @@ use std::{
     collections::HashSet,
     time::{SystemTime, UNIX_EPOCH},
 };
+use crate::parameters::block::ACCEPTABLE_TIME_DRIFT;
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHeadersResponse {

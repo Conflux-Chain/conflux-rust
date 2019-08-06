@@ -15,7 +15,7 @@ use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
     PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    SharedTransactionPool, block_parameters::MAX_BLOCK_SIZE_IN_BYTES,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use network::{
@@ -26,7 +26,7 @@ use network::{
 };
 use parking_lot::{Condvar, Mutex};
 use primitives::{
-    block::MAX_BLOCK_SIZE_IN_BYTES, filter::FilterError, Action,
+    filter::FilterError, Action,
     SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;

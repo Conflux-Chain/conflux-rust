@@ -6,12 +6,11 @@ use cfx_types::{Address, H256, U256};
 use cfxcore::{
     pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedSynchronizationGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    SharedTransactionPool, block_parameters::*,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
     *,
 };
 use std::{

@@ -14,7 +14,7 @@ use super::consensus::consensus_inner::{
 use crate::{
     block_data_manager::BlockDataManager, pow::ProofOfWorkConfig, state::State,
     statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
-    vm_factory::VmFactory, REFEREE_BOUND,
+    vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
@@ -35,6 +35,7 @@ use std::{
     cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
     time::Duration,
 };
+use crate::parameters::block::REFEREE_BOUND;
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Meter> =
