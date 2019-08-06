@@ -99,6 +99,10 @@ pub struct NetworkConfiguration {
     pub max_outgoing_peers: u32,
     /// Maximum number of incoming peers
     pub max_incoming_peers: usize,
+    /// Maximum number of incoming non-light peers
+    pub max_incoming_nonlight_peers: usize,
+    /// Maximum number of light peers
+    pub max_incoming_light_peers: usize,
     /// Maximum number of ongoing handshakes
     pub max_handshakes: u32,
     /// List of reserved node addresses.
@@ -141,7 +145,9 @@ impl NetworkConfiguration {
             boot_nodes: Vec::new(),
             use_secret: None,
             max_outgoing_peers: 16,
-            max_incoming_peers: 32,
+            max_incoming_peers: 38, // 32 + 6
+            max_incoming_nonlight_peers: 32,
+            max_incoming_light_peers: 6,
             max_handshakes: 64,
             reserved_nodes: Vec::new(),
             ip_filter: IpFilter::default(),
@@ -252,6 +258,7 @@ pub struct SessionMetadata {
     pub capabilities: Vec<Capability>,
     pub peer_capabilities: Vec<Capability>,
     pub originated: bool,
+    pub is_light: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -29,6 +29,10 @@ pub struct SessionManager {
     sessions: RwLock<Slab<Arc<RwLock<Session>>, usize>>,
     max_ingress_sessions: usize,
     cur_ingress_sessions: AtomicUsize,
+    max_incoming_nonlight_sessions: usize,
+    cur_incoming_nonlight_sessions: AtomicUsize,
+    max_incoming_light_sessions: usize,
+    cur_incoming_light_sessions: AtomicUsize,
     node_id_index: RwLock<HashMap<NodeId, usize>>,
     ip_limit: RwLock<Box<SessionIpLimit>>,
 }
@@ -36,6 +40,8 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn new(
         offset: usize, capacity: usize, max_ingress_sessions: usize,
+        max_incoming_nonlight_sessions: usize,
+        max_incoming_light_sessions: usize,
         ip_limit_config: &SessionIpLimitConfig,
     ) -> Self
     {
@@ -43,9 +49,39 @@ impl SessionManager {
             sessions: RwLock::new(Slab::new_starting_at(offset, capacity)),
             max_ingress_sessions,
             cur_ingress_sessions: AtomicUsize::new(0),
+            max_incoming_nonlight_sessions,
+            cur_incoming_nonlight_sessions: AtomicUsize::new(0),
+            max_incoming_light_sessions,
+            cur_incoming_light_sessions: AtomicUsize::new(0),
             node_id_index: RwLock::new(HashMap::new()),
             ip_limit: RwLock::new(new_session_ip_limit(ip_limit_config)),
         }
+    }
+
+    pub fn get_current_light_session_count(&self) -> usize {
+        self.cur_incoming_light_sessions.load(Ordering::Relaxed)
+    }
+
+    pub fn get_max_light_session_count(&self) -> usize {
+        self.max_incoming_light_sessions
+    }
+
+    pub fn inc_current_light_session_count(&self) {
+        self.cur_incoming_light_sessions
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn get_current_incoming_nonlight_session_count(&self) -> usize {
+        self.cur_incoming_nonlight_sessions.load(Ordering::Relaxed)
+    }
+
+    pub fn get_max_incoming_nonlight_session_count(&self) -> usize {
+        self.max_incoming_nonlight_sessions
+    }
+
+    pub fn inc_current_incoming_nonlight_session_count(&self) {
+        self.cur_incoming_nonlight_sessions
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn count(&self) -> usize { self.sessions.read().count() }
@@ -187,6 +223,16 @@ impl SessionManager {
 
             if !session.metadata.originated {
                 self.cur_ingress_sessions.fetch_sub(1, Ordering::Relaxed);
+            }
+
+            if let Some(is_light) = session.metadata.is_light {
+                if is_light {
+                    self.cur_incoming_light_sessions
+                        .fetch_sub(1, Ordering::Relaxed);
+                } else {
+                    self.cur_incoming_nonlight_sessions
+                        .fetch_sub(1, Ordering::Relaxed);
+                }
             }
 
             debug!("SessionManager.remove: session removed");

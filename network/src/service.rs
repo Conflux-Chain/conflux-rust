@@ -491,6 +491,8 @@ impl NetworkServiceInner {
                 FIRST_SESSION,
                 MAX_SESSIONS,
                 config.max_incoming_peers,
+                config.max_incoming_nonlight_peers,
+                config.max_incoming_light_peers,
                 &config.session_ip_limit_config,
             ),
             handlers: RwLock::new(HashMap::new()),

@@ -89,6 +89,7 @@ impl Session {
                 capabilities: Vec::new(),
                 peer_capabilities: Vec::new(),
                 originated,
+                is_light: None,
             },
             address,
             connection: Connection::new(token, socket),
@@ -269,7 +270,6 @@ impl Session {
     ) -> Result<(), Error>
     {
         let peer_caps: Vec<Capability> = rlp.list_at(0)?;
-
         let mut caps: Vec<Capability> = Vec::new();
         for hc in host.metadata.capabilities.read().iter() {
             if peer_caps
@@ -298,6 +298,29 @@ impl Session {
             }
         }
         caps.sort();
+
+        let is_peer_light = !peer_caps.iter().any(|c| c.protocol == *b"cfx");
+        if is_peer_light {
+            if host.sessions.get_current_light_session_count()
+                >= host.sessions.get_max_light_session_count()
+            {
+                return Err(
+                    self.disconnect(io, DisconnectReason::TooManyLightPeers)
+                );
+            }
+            host.sessions.inc_current_light_session_count();
+            self.metadata.is_light = Some(true);
+        } else {
+            if host.sessions.get_current_incoming_nonlight_session_count()
+                >= host.sessions.get_max_incoming_nonlight_session_count()
+            {
+                return Err(
+                    self.disconnect(io, DisconnectReason::TooManyNonLightPeers)
+                );
+            }
+            host.sessions.inc_current_incoming_nonlight_session_count();
+            self.metadata.is_light = Some(false);
+        }
 
         self.metadata.capabilities = caps;
         self.metadata.peer_capabilities = peer_caps;
@@ -336,7 +359,9 @@ impl Session {
             return Err(self.disconnect(io, DisconnectReason::IpLimited));
         } else {
             debug!("Received valid endpoint {:?}, session = {:?}", entry, self);
-            host.node_db.write().insert_with_token(entry, self.token());
+            if !is_peer_light {
+                host.node_db.write().insert_with_token(entry, self.token());
+            }
         }
 
         self.send_ping(io)?;
