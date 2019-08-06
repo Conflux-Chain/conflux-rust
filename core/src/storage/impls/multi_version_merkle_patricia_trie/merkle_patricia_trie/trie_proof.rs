@@ -112,7 +112,11 @@ impl TrieProof {
 
 #[cfg(test)]
 mod tests {
-    use super::{TrieProof, TrieProofNode};
+    use super::{
+        super::{CompressedPathRaw, VanillaTrieNode},
+        TrieProof, TrieProofNode,
+    };
+    use primitives::MERKLE_NULL_NODE;
 
     #[test]
     fn test_rlp() {
@@ -120,12 +124,13 @@ mod tests {
         assert_eq!(node1, rlp::decode(&rlp::encode(&node1)).unwrap());
 
         let node2 = {
-            let mut node = TrieProofNode::default();
-            node.path_end_mask = 0x0f;
-            node.path = vec![0x00, 0x01, 0x02];
-            node.value = Some(vec![0x03, 0x04, 0x05]);
-            node.children_table = [KECCAK_EMPTY; 16].to_vec();
-            node.merkle_hash = node.merkle();
+            let mut node = TrieProofNode(VanillaTrieNode::new(
+                &MERKLE_NULL_NODE,
+                Default::default(),
+                Some(Box::new([0x03, 0x04, 0x05])),
+                CompressedPathRaw::new(&[0x00, 0x01, 0x02], 0x0f),
+            ));
+            node.0.set_merkle(&node.merkle());
             node
         };
 
@@ -152,29 +157,39 @@ mod tests {
         let (key2, value2) = ([0x00, 0x00, 0x03], [0x00, 0x00, 0x03]);
 
         let leaf1 = {
-            let mut node = TrieProofNode::default();
-            node.path = Box::new([0x02]);
-            node.value = Some(Box::new(value1.clone()));
-            node.merkle_hash = node.merkle();
+            let mut node = TrieProofNode(VanillaTrieNode::new(
+                &MERKLE_NULL_NODE,
+                Default::default(),
+                Some(Box::new(value1)),
+                (&[0x02u8][..]).into(),
+            ));
+            node.0.set_merkle(&node.merkle());
             node
         };
 
         let leaf2 = {
-            let mut node = TrieProofNode::default();
-            node.path = Box::new([0x03]);
-            node.value = Some(Box::new(value2.clone()));
-            node.merkle_hash = node.merkle();
+            let mut node = TrieProofNode(VanillaTrieNode::new(
+                &MERKLE_NULL_NODE,
+                Default::default(),
+                Some(Box::new(value2)),
+                (&[0x03u8][..]).into(),
+            ));
+            node.0.set_merkle(&node.merkle());
             node
         };
 
         let ext = {
             let mut children = [MERKLE_NULL_NODE; 16];
-            children[0x03] = leaf2.merkle();
+            children[0x03] = leaf2.0.get_merkle().clone();
 
-            let mut node = TrieProofNode::default();
-            node.path = Box::new([0x00, 0x00]);
-            node.children_table = Some(children);
-            node.merkle_hash = node.merkle();
+            let mut node = TrieProofNode(VanillaTrieNode::new(
+                &MERKLE_NULL_NODE,
+                children.into(),
+                None,
+                (&[0x00u8, 0x00u8][..]).into(),
+            ));
+            node.0.set_merkle(&node.merkle());
+
             node
         };
 
@@ -183,10 +198,14 @@ mod tests {
             children[0x00] = ext.merkle();
             children[0x02] = leaf1.merkle();
 
-            let mut node = TrieProofNode::default();
-            node.path = Box::new([]);
-            node.children_table = Some(children);
-            node.merkle_hash = node.merkle();
+            let mut node = TrieProofNode(VanillaTrieNode::new(
+                &MERKLE_NULL_NODE,
+                children.into(),
+                None,
+                Default::default(),
+            ));
+            node.0.set_merkle(&node.merkle());
+
             node
         };
 
@@ -218,7 +237,9 @@ mod tests {
 
         // wrong hash
         let mut leaf2_wrong = leaf2;
-        leaf2_wrong.merkle_hash[0] = 0x00;
+        let mut wrong_merkle = leaf2_wrong.0.get_merkle().clone();
+        wrong_merkle[0] = 0x00;
+        leaf2_wrong.0.set_merkle(&wrong_merkle);
 
         let proof = TrieProof::new(vec![leaf1, leaf2_wrong, ext, branch]);
         assert!(!proof.is_valid(&key2, Some(&value2), root));

@@ -847,8 +847,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug
 
 use super::{
     super::{
-        super::errors::*, cache::algorithm::CacheAlgoDataTrait,
-        node_ref::*, slab::*,
+        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
+        slab::*,
     },
     children_table::*,
     compressed_path::*,
