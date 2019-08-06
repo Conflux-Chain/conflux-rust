@@ -17,6 +17,7 @@ build_msgid! {
     BLOCK_HASHES = 0x06
     GET_BLOCK_HEADERS = 0x07
     BLOCK_HEADERS = 0x08
+    NEW_BLOCK_HASHES = 0x09
 
     INVALID = 0xff
 }
@@ -31,6 +32,7 @@ build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetB
 build_msg_impl! { BlockHashes, msgid::BLOCK_HASHES, "BlockHashes" }
 build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
 build_msg_impl! { BlockHeaders, msgid::BLOCK_HEADERS, "BlockHeaders" }
+build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }

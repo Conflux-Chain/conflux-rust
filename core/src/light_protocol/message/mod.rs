@@ -3,10 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 mod message;
+mod node_type;
 mod protocol;
 
 pub use message::msgid;
+pub use node_type::NodeType;
 pub use protocol::{
     BlockHashes, BlockHeaders, GetBlockHashesByEpoch, GetBlockHeaders,
-    GetStateEntry, GetStateRoot, StateEntry, StateRoot, Status,
+    GetStateEntry, GetStateRoot, NewBlockHashes, StateEntry, StateRoot, Status,
 };

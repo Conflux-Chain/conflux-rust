@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::NodeType;
 use crate::{message::RequestId, storage::StateProof};
 use cfx_types::H256;
 use primitives::{
@@ -11,10 +12,11 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct Status {
-    pub protocol_version: u8,
-    pub network_id: u8,
-    pub genesis_hash: H256,
     pub best_epoch: u64,
+    pub genesis_hash: H256,
+    pub network_id: u8,
+    pub node_type: NodeType,
+    pub protocol_version: u8,
     pub terminals: Vec<H256>,
 }
 
@@ -69,4 +71,9 @@ pub struct GetBlockHeaders {
 pub struct BlockHeaders {
     pub request_id: RequestId,
     pub headers: Vec<PrimitiveBlockHeader>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct NewBlockHashes {
+    pub hashes: Vec<H256>,
 }

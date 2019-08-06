@@ -6,6 +6,7 @@ use super::{
     random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
+    light_protocol::QueryProvider,
     message::{HasRequestId, Message, MsgId},
     sync::message::{
         handle_rlp_message, msgid, GetBlockHeadersResponse, NewBlock,
@@ -232,6 +233,9 @@ pub struct SynchronizationProtocolHandler {
 
     // state sync for any checkpoint
     pub state_sync: Arc<SnapshotChunkSync>,
+
+    // provider for serving light protocol queries
+    light_provider: Arc<QueryProvider>,
 }
 
 #[derive(Clone)]
@@ -258,6 +262,7 @@ impl SynchronizationProtocolHandler {
         is_full_node: bool, protocol_config: ProtocolConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
+        light_provider: Arc<QueryProvider>,
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(is_full_node));
@@ -294,6 +299,7 @@ impl SynchronizationProtocolHandler {
                 SyncHandlerWorkType::LocalMessage,
             ),
             state_sync,
+            light_provider,
         }
     }
 
@@ -850,7 +856,7 @@ impl SynchronizationProtocolHandler {
         if !need_to_relay.is_empty() && !self.catch_up_mode() {
             let new_block_hash_msg: Box<dyn Message> =
                 Box::new(NewBlockHashes {
-                    block_hashes: need_to_relay,
+                    block_hashes: need_to_relay.clone(),
                 });
             self.broadcast_message(
                 io,
@@ -860,6 +866,12 @@ impl SynchronizationProtocolHandler {
             .unwrap_or_else(|e| {
                 warn!("Error broadcasting blocks, err={:?}", e);
             });
+
+            self.light_provider
+                .relay_hashes(io, need_to_relay)
+                .unwrap_or_else(|e| {
+                    warn!("Error relaying blocks to light provider: {:?}", e);
+                });
         }
 
         Ok(())

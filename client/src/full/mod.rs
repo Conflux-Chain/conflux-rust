@@ -9,10 +9,11 @@ pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 
 use cfxcore::{
-    genesis, statistics::Statistics, storage::StorageManager,
-    sync::SyncPhaseType, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, SynchronizationGraph,
-    SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
+    genesis, light_protocol::QueryProvider, statistics::Statistics,
+    storage::StorageManager, sync::SyncPhaseType,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
+    ConsensusGraph, SynchronizationGraph, SynchronizationService,
+    TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 
 use crate::rpc::{
@@ -198,6 +199,10 @@ impl FullClient {
             Arc::new(network)
         };
 
+        let light_provider =
+            Arc::new(QueryProvider::new(consensus.clone(), sync_graph.clone()));
+        light_provider.clone().register(network.clone()).unwrap();
+
         let initial_sync_phase = SyncPhaseType::CatchUpRecoverBlockHeaderFromDB;
         let sync = Arc::new(SynchronizationService::new(
             true,
@@ -205,6 +210,7 @@ impl FullClient {
             sync_graph.clone(),
             protocol_config,
             initial_sync_phase,
+            light_provider,
         ));
         sync.register().unwrap();
 

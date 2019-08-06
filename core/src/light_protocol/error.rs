@@ -53,6 +53,11 @@ error_chain! {
             display("Pivot hash mismatch"),
         }
 
+        SendStatusFailed {
+            description("Send status failed"),
+            display("Send status failed"),
+        }
+
         UnexpectedRequestId {
             description("Unexpected request id"),
             display("Unexpected request id"),
@@ -92,11 +97,16 @@ pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     // NOTE: do not use wildcard; this way, the compiler
     // will help covering all the cases.
     match e.0 {
-        // NOTE: to help with backward-compatibility, we
-        // should not disconnect on `UnknownMessage`
         ErrorKind::NoResponse
         | ErrorKind::InternalError
         | ErrorKind::PivotHashMismatch
+
+        // NOTE: in order to let other protocols run,
+        // we should not disconnect on protocol failure
+        | ErrorKind::SendStatusFailed
+
+        // NOTE: to help with backward-compatibility, we
+        // should not disconnect on `UnknownMessage`
         | ErrorKind::UnknownMessage => disconnect = false,
 
         ErrorKind::GenesisMismatch
