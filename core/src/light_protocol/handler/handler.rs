@@ -3,8 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use io::TimerToken;
+use parking_lot::RwLock;
 use rlp::Rlp;
 use std::{
+    collections::HashSet,
     sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
@@ -13,7 +15,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         handle_error,
-        message::{msgid, NodeType, Status},
+        message::{msgid, NodeType, StatusPing, StatusPong},
         peers::Peers,
         Error, ErrorKind, LIGHT_PROTOCOL_VERSION,
     },
@@ -32,6 +34,14 @@ const REQUEST_CLEANUP_TIMER: TimerToken = 1;
 const SYNC_PERIOD_MS: u64 = 5000;
 const CLEANUP_PERIOD_MS: u64 = 1000;
 
+#[derive(Default)]
+pub struct FullPeerState {
+    pub best_epoch: u64,
+    pub handshake_completed: bool,
+    pub protocol_version: u8,
+    pub terminals: HashSet<H256>,
+}
+
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
 pub struct Handler {
@@ -39,7 +49,7 @@ pub struct Handler {
     consensus: Arc<ConsensusGraph>,
 
     // collection of all peers available
-    pub peers: Arc<Peers>,
+    pub peers: Arc<Peers<FullPeerState>>,
 
     // sub-handler serving light queries (e.g. state entries, transactions)
     pub query: QueryHandler,
@@ -73,16 +83,44 @@ impl Handler {
         }
     }
 
+    #[inline]
+    fn get_existing_peer_state(
+        &self, peer: &PeerId,
+    ) -> Result<Arc<RwLock<FullPeerState>>, Error> {
+        match self.peers.get(&peer) {
+            Some(state) => Ok(state),
+            None => {
+                // NOTE: this should not happen as we register
+                // all peers in `on_peer_connected`
+                error!("Received message from unknown peer={:?}", peer);
+                Err(ErrorKind::InternalError.into())
+            }
+        }
+    }
+
+    #[inline]
+    fn validate_peer_state(
+        &self, peer: PeerId, msg_id: MsgId,
+    ) -> Result<(), Error> {
+        let state = self.get_existing_peer_state(&peer)?;
+
+        if msg_id != msgid::STATUS_PONG && !state.read().handshake_completed {
+            warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
+            return Err(ErrorKind::UnexpectedMessage.into());
+        }
+
+        Ok(())
+    }
+
     #[rustfmt::skip]
     fn dispatch_message(
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
-
-        // TODO(thegaram): check if peer is known
+        self.validate_peer_state(peer, msg_id)?;
 
         match msg_id {
-            msgid::STATUS => self.on_status(io, peer, &rlp),
+            msgid::STATUS_PONG => self.on_status(io, peer, &rlp),
             msgid::STATE_ROOT => self.query.on_state_root(io, peer, &rlp),
             msgid::STATE_ENTRY => self.query.on_state_entry(io, peer, &rlp),
             msgid::BLOCK_HASHES => self.sync.on_block_hashes(io, peer, &rlp),
@@ -95,21 +133,11 @@ impl Handler {
     fn send_status(
         &self, io: &NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
-        let best_info = self.consensus.get_best_info();
-        let genesis_hash = self.consensus.data_man.true_genesis_block.hash();
-
-        let terminals = match &best_info.terminal_block_hashes {
-            Some(x) => x.clone(),
-            None => best_info.bounded_terminal_block_hashes.clone(),
-        };
-
-        let msg: Box<dyn Message> = Box::new(Status {
-            best_epoch: best_info.best_epoch_number,
-            genesis_hash,
+        let msg: Box<dyn Message> = Box::new(StatusPing {
+            genesis_hash: self.consensus.data_man.true_genesis_block.hash(),
             network_id: 0x0,
             node_type: NodeType::Light,
             protocol_version: LIGHT_PROTOCOL_VERSION,
-            terminals,
         });
 
         msg.send(io, peer)?;
@@ -130,24 +158,29 @@ impl Handler {
         }
     }
 
+    #[inline]
+    fn validate_peer_type(&self, node_type: &NodeType) -> Result<(), Error> {
+        match node_type {
+            NodeType::Full => Ok(()),
+            _ => Err(ErrorKind::UnexpectedPeerType.into()),
+        }
+    }
+
     fn on_status(
         &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let status: Status = rlp.as_val()?;
+        let status: StatusPong = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
 
+        self.validate_peer_type(&status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
-        // TODO(thegaram): check protocol version
 
-        let peer_state = self.peers.insert(peer);
-        let mut state = peer_state.write();
-
+        let state = self.get_existing_peer_state(&peer)?;
+        let mut state = state.write();
         state.best_epoch = status.best_epoch;
-        state.genesis_hash = status.genesis_hash;
-        state.node_type = status.node_type;
+        state.handshake_completed = true;
         state.protocol_version = status.protocol_version;
         state.terminals = status.terminals.into_iter().collect();
-
         Ok(())
     }
 }
@@ -188,9 +221,7 @@ impl NetworkProtocolHandler for Handler {
         info!("on_peer_connected: peer={:?}", peer);
 
         match self.send_status(io, peer) {
-            Ok(_) => {
-                self.peers.insert(peer);
-            }
+            Ok(_) => self.peers.insert(peer), // insert handshaking peer
             Err(e) => {
                 warn!("Error while sending status: {}", e);
                 handle_error(

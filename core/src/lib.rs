@@ -2,7 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+// Recursion limit raised for error_chain
+#![recursion_limit = "128"]
 #![allow(deprecated)]
+
 extern crate cfx_bytes as bytes;
 extern crate core;
 extern crate elastic_array;

@@ -2,53 +2,41 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{
-    cmp,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-
 use parking_lot::RwLock;
 use rand::Rng;
+use std::{collections::HashMap, sync::Arc};
 
-use cfx_types::H256;
-
-use super::message::NodeType;
 use crate::network::PeerId;
 
 #[derive(Default)]
-pub struct PeerState {
-    pub best_epoch: u64,
-    pub genesis_hash: H256,
-    pub node_type: NodeType,
-    pub protocol_version: u8,
-    pub terminals: HashSet<H256>,
-}
+pub struct Peers<T: Default>(RwLock<HashMap<PeerId, Arc<RwLock<T>>>>);
 
-#[derive(Default)]
-pub struct Peers(RwLock<HashMap<PeerId, Arc<RwLock<PeerState>>>>);
+impl<T> Peers<T>
+where T: Default
+{
+    pub fn new() -> Peers<T> { Self::default() }
 
-impl Peers {
-    pub fn new() -> Peers { Self::default() }
-
-    pub fn get(&self, peer: &PeerId) -> Option<Arc<RwLock<PeerState>>> {
+    pub fn get(&self, peer: &PeerId) -> Option<Arc<RwLock<T>>> {
         self.0.read().get(&peer).cloned()
     }
 
-    pub fn insert(&self, peer: PeerId) -> Arc<RwLock<PeerState>> {
+    pub fn insert(&self, peer: PeerId) {
         self.0
             .write()
             .entry(peer)
-            .or_insert(Arc::new(RwLock::new(PeerState::default())))
-            .clone()
+            .or_insert(Arc::new(RwLock::new(T::default())));
     }
 
     pub fn is_empty(&self) -> bool { self.0.read().is_empty() }
 
+    pub fn contains(&self, peer: &PeerId) -> bool {
+        self.0.read().contains_key(&peer)
+    }
+
     pub fn remove(&self, peer: &PeerId) { self.0.write().remove(&peer); }
 
     pub fn all_peers_satisfying<F>(&self, predicate: F) -> Vec<PeerId>
-    where F: Fn(&PeerState) -> bool {
+    where F: Fn(&T) -> bool {
         self.0
             .read()
             .iter()
@@ -62,61 +50,25 @@ impl Peers {
             .collect()
     }
 
+    pub fn random_peer_satisfying<F>(&self, predicate: F) -> Option<PeerId>
+    where F: Fn(&T) -> bool {
+        let options = self.all_peers_satisfying(predicate);
+        rand::thread_rng().choose(&options).cloned()
+    }
+
     pub fn all_peers_shuffled(&self) -> Vec<PeerId> {
-        let mut rand = rand::thread_rng();
         let mut peers: Vec<_> = self.0.read().keys().cloned().collect();
-        rand.shuffle(&mut peers);
+        rand::thread_rng().shuffle(&mut peers);
         peers
     }
 
     pub fn random_peer(&self) -> Option<PeerId> {
-        let mut rand = rand::thread_rng();
         let peers: Vec<_> = self.0.read().keys().cloned().collect();
-        rand.choose(&peers).cloned()
+        rand::thread_rng().choose(&peers).cloned()
     }
 
-    pub fn random_peer_with_epoch(&self, epoch: u64) -> Option<PeerId> {
-        let mut rand = rand::thread_rng();
-        let options = self.all_peers_satisfying(|s| s.best_epoch >= epoch);
-        rand.choose(&options).cloned()
-    }
-
-    pub fn best_epoch(&self) -> u64 {
-        self.0.read().values().fold(0, |current_best, state| {
-            let best_for_peer = state.read().best_epoch;
-            cmp::max(current_best, best_for_peer)
-        })
-    }
-
-    pub fn median_epoch(&self) -> Option<u64> {
-        let mut best_epochs: Vec<_> = self
-            .0
-            .read()
-            .values()
-            .map(|s| s.read().best_epoch)
-            .collect();
-
-        best_epochs.sort();
-
-        match best_epochs.len() {
-            0 => None,
-            n => Some(best_epochs[n / 2]),
-        }
-    }
-
-    pub fn collect_all_terminals(&self) -> Vec<H256> {
-        self.0
-            .read()
-            .values()
-            .map(|s| {
-                let mut state = s.write();
-                let ts = state.terminals.clone();
-                state.terminals.clear();
-                ts
-            })
-            .fold(vec![], |mut res, sub| {
-                res.extend(sub);
-                res
-            })
+    pub fn fold<B, F>(&self, init: B, f: F) -> B
+    where F: FnMut(B, &Arc<RwLock<T>>) -> B {
+        self.0.write().values().fold(init, f)
     }
 }
