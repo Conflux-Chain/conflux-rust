@@ -199,8 +199,11 @@ impl ArchiveClient {
             Arc::new(network)
         };
 
-        let light_provider =
-            Arc::new(QueryProvider::new(consensus.clone(), sync_graph.clone()));
+        let light_provider = Arc::new(QueryProvider::new(
+            consensus.clone(),
+            sync_graph.clone(),
+            Arc::downgrade(&network),
+        ));
         light_provider.clone().register(network.clone()).unwrap();
 
         let initial_sync_phase = SyncPhaseType::CatchUpRecoverBlockFromDB;
