@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity ^0.5.0;
 
 contract DummyErc20 {
     string public name = "BasicErc20Token";
