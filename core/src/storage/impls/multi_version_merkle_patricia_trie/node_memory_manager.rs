@@ -103,16 +103,14 @@ pub struct NodeMemoryManager<
     /// write lock and it could be very slow, which we don't want to wait
     /// for inside critical section.
     allocator: RwLock<Allocator<CacheAlgoDataT>>,
+    // TODO(yz): Do we share cache space between different DeltaMPT?
     cache: Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
     /// To prevent multiple db load to happen for the same key, and make sure
     /// that the get is always successful when exiting the critical
     /// section.
     db_load_lock: Mutex<()>,
-    /// This db access is read only.
-    db: Arc<DeltaDbTrait + Send + Sync>,
 
-    // TODO(yz): use other atomic integer types when they becomes
-    // available in rust stable.
+    // FIXME use other atomic integer types as they are in rust stable.
     db_load_counter: AtomicUsize,
     uncached_leaf_load_times: AtomicUsize,
     uncached_leaf_db_loads: AtomicUsize,
@@ -165,7 +163,6 @@ impl<
     pub fn new(
         cache_start_size: u32, cache_size: u32, idle_size: u32,
         node_map_size: u32, cache_algorithm: CacheAlgorithmT,
-        kvdb: Arc<DeltaDbTrait + Send + Sync>,
     ) -> Self
     {
         let size_limit = cache_size + idle_size;
@@ -181,8 +178,6 @@ impl<
                 cache_algorithm,
             }),
             db_load_lock: Default::default(),
-            db: kvdb,
-
             db_load_counter: Default::default(),
             uncached_leaf_db_loads: Default::default(),
             uncached_leaf_load_times: Default::default(),
@@ -244,7 +239,7 @@ impl<
     fn load_from_db<'c: 'a, 'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db_key: DeltaMptDbKey,
+        db: &KeyValueDbTraitRead, db_key: DeltaMptDbKey,
     ) -> Result<
         GuardedValue<
             MutexGuard<'c, CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
@@ -254,7 +249,7 @@ impl<
     {
         self.db_load_counter.fetch_add(1, Ordering::Relaxed);
         // We never save null node in db.
-        let rlp_bytes = self.db.get(db_key.to_string().as_bytes())?.unwrap();
+        let rlp_bytes = db.get_with_number_key(db_key.into())?.unwrap();
         let rlp = Rlp::new(rlp_bytes.as_ref());
         let mut trie_node = MemOptimizedTrieNode::decode(&rlp)?;
 
@@ -426,7 +421,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        is_loaded_from_db: &mut bool,
+        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -502,6 +497,7 @@ impl<
                                 .load_from_db(
                                     allocator,
                                     cache_manager,
+                                    db,
                                     *db_key,
                                 )?
                                 .into();
@@ -553,7 +549,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        is_loaded_from_db: &mut bool,
+        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -569,6 +565,7 @@ impl<
                     allocator,
                     node,
                     cache_manager,
+                    db,
                     is_loaded_from_db,
                 )
             },
@@ -590,7 +587,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        is_loaded_from_db: &mut bool,
+        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -604,6 +601,7 @@ impl<
             allocator,
             node,
             cache_manager,
+            db,
             is_loaded_from_db,
         )
         .map(|gv| {
@@ -789,7 +787,7 @@ impl<
 }
 
 use super::{
-    super::{super::storage_db::delta_db::DeltaDbTrait, errors::*},
+    super::{super::storage_db::key_value_db::KeyValueDbTraitRead, errors::*},
     cache::algorithm::{
         lru::LRU, CacheAccessResult, CacheAlgoDataTrait, CacheAlgorithm,
         CacheIndexTrait, CacheStoreUtil,
@@ -806,8 +804,5 @@ use std::{
     cell::UnsafeCell,
     hint::unreachable_unchecked,
     mem,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };

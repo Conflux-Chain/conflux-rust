@@ -94,7 +94,6 @@ pub(super) trait TrieNodeWalkTrait<'node>: TrieNodeTrait {
 }
 
 /// Traverse.
-// TODO(yz): write test.
 ///
 /// When a trie node start with the second nibble, the trie node has a
 /// compressed path of step 1. The nibble in the compressed path is
