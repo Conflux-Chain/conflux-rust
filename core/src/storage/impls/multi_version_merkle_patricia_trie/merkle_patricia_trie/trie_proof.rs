@@ -20,11 +20,13 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 pub struct TrieProofNode(pub VanillaTrieNode<MerkleHash>);
 
 impl TrieProofNode {
-    pub fn is_valid(&self) -> bool { self.merkle().eq(self.get_merkle()) }
+    pub fn is_valid(&self) -> bool {
+        self.compute_merkle().eq(self.get_merkle())
+    }
 
     // \w  path: keccak([mask, [path...], keccak(rlp([[children...]?, value]))])
     // \wo path: keccak(rlp([[children...]?, value]))
-    pub fn merkle(&self) -> MerkleHash {
+    pub fn compute_merkle(&self) -> MerkleHash {
         compute_merkle(
             self.compressed_path_ref(),
             self.get_children_merkle(),
@@ -129,7 +131,7 @@ mod tests {
             ));
             // Use .0 to avoid annoying rust compiler error: "cannot borrow
             // `node` as immutable because it is also borrowed as mutable"
-            node.0.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.compute_merkle());
             node
         };
 
@@ -162,7 +164,7 @@ mod tests {
                 Some(Box::new(value1)),
                 (&[0x02u8][..]).into(),
             ));
-            node.0.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.compute_merkle());
             node
         };
 
@@ -173,7 +175,7 @@ mod tests {
                 Some(Box::new(value2)),
                 (&[0x03u8][..]).into(),
             ));
-            node.0.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.compute_merkle());
             node
         };
 
@@ -187,15 +189,15 @@ mod tests {
                 None,
                 (&[0x00u8, 0x00u8][..]).into(),
             ));
-            node.0.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.compute_merkle());
 
             node
         };
 
         let branch = {
             let mut children = [MERKLE_NULL_NODE; 16];
-            children[0x00] = ext.merkle();
-            children[0x02] = leaf1.merkle();
+            children[0x00] = ext.compute_merkle();
+            children[0x02] = leaf1.compute_merkle();
 
             let mut node = TrieProofNode(VanillaTrieNode::new(
                 MERKLE_NULL_NODE,
@@ -203,7 +205,7 @@ mod tests {
                 None,
                 Default::default(),
             ));
-            node.0.set_merkle(&node.merkle());
+            node.0.set_merkle(&node.compute_merkle());
 
             node
         };
@@ -211,7 +213,7 @@ mod tests {
         // empty proof
         let proof = TrieProof::new(vec![]);
         assert!(proof.is_valid(&[0x00], None, MERKLE_NULL_NODE));
-        assert!(!proof.is_valid(&[0x00], None, leaf1.merkle()));
+        assert!(!proof.is_valid(&[0x00], None, leaf1.compute_merkle()));
         assert!(!proof.is_valid(&key1, Some(&[0x00]), MERKLE_NULL_NODE));
 
         // valid proof
@@ -222,13 +224,13 @@ mod tests {
             branch.clone(),
         ]);
 
-        let root = branch.merkle();
+        let root = branch.compute_merkle();
         assert!(proof.is_valid(&key1, Some(&value1), root));
         assert!(proof.is_valid(&key2, Some(&value2), root));
         assert!(proof.is_valid(&[0x01], None, root));
 
         // wrong root
-        assert!(!proof.is_valid(&key2, Some(&value2), leaf1.merkle()));
+        assert!(!proof.is_valid(&key2, Some(&value2), leaf1.compute_merkle()));
 
         // missing node
         let proof = TrieProof::new(vec![ext.clone(), branch.clone()]);

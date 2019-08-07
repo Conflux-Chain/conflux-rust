@@ -819,8 +819,9 @@ impl<'a, NodeRefT: NodeRefTrait> Encodable for ChildrenTableRef<'a, NodeRefT> {
             0 => s.begin_list(0),
             // Skip bitmap if list has length of 16.
             16 => s.append_list(self.table),
-            // TODO(yz): [bitmap, child_0, ... , child_n]. When N == 15:
-            // [bitmap, 0, child_0, ... , child_15] to save 2 bytes.
+            // TODO(yz): Instead, use [bitmap, child_0, ... , child_n] for N @
+            // 1..14; when N == 15: [bitmap, 0, child_0, ... ,
+            // child_15] to save 2 bytes.
             _ => s.begin_list(2).append(&self.bitmap).append_list(self.table),
         };
     }

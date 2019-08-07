@@ -737,8 +737,6 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Encodable
     for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     fn rlp_append(&self, s: &mut RlpStream) {
-        // Format: [ merkle, children_table ([] or [*16], value (maybe empty) ]
-        // ( + [compressed_path] )
         s.begin_unbounded_list()
             .append(self.get_merkle())
             .append(&self.get_children_table_ref().to_ref())
@@ -757,12 +755,11 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
     for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
-        let compressed_path;
-        if rlp.item_count()? != 4 {
-            compressed_path = CompressedPathRaw::new(&[], 0);
+        let compressed_path = if rlp.item_count()? != 4 {
+            CompressedPathRaw::new(&[], 0)
         } else {
-            compressed_path = rlp.val_at(3)?;
-        }
+            rlp.val_at(3)?
+        };
 
         Ok(MemOptimizedTrieNode::new(
             rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
@@ -778,8 +775,6 @@ impl<NodeRefT: 'static + NodeRefTrait> Encodable for VanillaTrieNode<NodeRefT>
 where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
     fn rlp_append(&self, s: &mut RlpStream) {
-        // Format: [ merkle, children_table ([] or [*16], value (maybe empty) ]
-        // ( + [compressed_path] )
         s.begin_unbounded_list()
             .append(self.get_merkle())
             .append(self.get_children_table_ref())
