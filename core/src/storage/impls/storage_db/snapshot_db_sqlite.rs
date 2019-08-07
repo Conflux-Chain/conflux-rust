@@ -124,15 +124,11 @@ impl SnapshotDbSqlite {
         }
     }
 
-    // FIXME: change back to &Self
-    fn open_snapshot_mpt_read_only(&self) -> SnapshotMpt<Self, &mut Self> {
-        self.open_snapshot_mpt_for_write()
-        /*
+    fn open_snapshot_mpt_read_only(&self) -> SnapshotMpt<Self, &Self> {
         SnapshotMpt {
             db: &self,
             _marker_db_type: Default::default(),
         }
-        */
     }
 
     // FIXME: add rate limit.
@@ -180,20 +176,30 @@ impl SnapshotDbSqlite {
             &[(":version", &self.height.to_string())]
         )?;
 
-        MptMerger::new(&self.open_snapshot_mpt_for_write(), None)
-            .merge(delta_mpt)
+        {
+            let mut mpt_to_modify = self.open_snapshot_mpt_for_write();
+            let mpt_to_modify_as_trait = Some(
+                &mut mpt_to_modify as &mut dyn SnapshotMptTraitSingleWriter,
+            );
+            let mut mpt_merger = MptMerger::new(None, mpt_to_modify_as_trait);
+            mpt_merger.merge(delta_mpt)
+        }
     }
 
     pub fn copy_and_merge(
         &self, old_snapshot_db: &SnapshotDbSqlite, delta_mpt: &DeltaMptInserter,
     ) -> Result<MerkleHash> {
         // FIXME: implement db copy..
-
-        MptMerger::new(
-            &old_snapshot_db.open_snapshot_mpt_read_only(),
-            Some(&self.open_snapshot_mpt_for_write()),
-        )
-        .merge(delta_mpt)
+        {
+            let base_mpt = old_snapshot_db.open_snapshot_mpt_read_only();
+            let base_mpt_as_trait = &base_mpt as &SnapshotMptTraitReadOnly;
+            let mut save_as_mpt = self.open_snapshot_mpt_for_write();
+            let save_as_mpt_as_trait =
+                Some(&mut save_as_mpt as &mut dyn SnapshotMptTraitSingleWriter);
+            let mut mpt_merger =
+                MptMerger::new(Some(base_mpt_as_trait), save_as_mpt_as_trait);
+            mpt_merger.merge(delta_mpt)
+        }
     }
 }
 
@@ -230,6 +236,7 @@ use super::{
     super::{
         super::storage_db::{
             KeyValueDbTraitRead, KeyValueDbTraitSingleWriter, SnapshotDbTrait,
+            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
         },
         errors::*,
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{
