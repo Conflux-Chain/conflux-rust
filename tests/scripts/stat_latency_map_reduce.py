@@ -23,10 +23,11 @@ class BlockLatencyType(enum.Enum):
 
 
 class Transaction:
-    def __init__(self, hash:str, timestamp:float, by_block=False):
+    def __init__(self, hash:str, timestamp:float, by_block=False, packed_timestamps=None):
         self.hash = hash
-        self.timestamps = [timestamp]
+        self.received_timestamps = [timestamp]
         self.by_block = by_block
+        self.packed_timestamps = [packed_timestamps]
 
     @staticmethod
     def receive(log_line:str):
@@ -34,9 +35,13 @@ class Transaction:
         tx_hash = parse_value(log_line, "Sampled transaction ", " ")
         if "in block" in log_line:
             by_block = True
+            return Transaction(tx_hash, log_timestamp, by_block)
+        elif "in packing block":
+            by_block =False
+            return Transaction(tx_hash, log_timestamp, by_block,log_timestamp)
         else:
             by_block = False
-        return Transaction(tx_hash, log_timestamp, by_block)
+            return Transaction(tx_hash, log_timestamp, by_block)
 
     @staticmethod
     def add_or_merge(txs:dict, tx):
@@ -52,15 +57,28 @@ class Transaction:
         elif tx.timestamps[0] < txs[tx.hash].timestamps[0]:
             txs[tx.hash] = tx
 
+        #when a node is packing a transaction, it should already received it, thus the packing transaction timesstamp should be added only once.
+        if tx.packed_timestamps[0] is not None:
+            txs[tx.hash].packed_timestamps[0] = tx.packed_timestamps[0]
+
     def merge(self, tx):
-        self.timestamps.extend(tx.timestamps)
+        self.received_timestamps.extend(tx.timestamps)
+        if tx.packed_timestamps[0] is not None:
+            self.packed_timestamps.extend(tx.packed_timestamps)
 
     def get_latencies(self):
-        min_ts = min(self.timestamps)
-        return [ts - min_ts for ts in self.timestamps]
+        min_ts = min(self.received_timestamps)
+        return [ts - min_ts for ts in self.received_timestamps]
+
+    def get_packed_to_block_latencies(self):
+        min_ts = min(self.received_timestamps)
+        return [ts - min_ts for ts in self.packed_timestamps]
+
+    def get_min_packed_to_block_latency(self):
+        return min(self.packed_timestamps) - min(self.received_timestamps)
 
     def latency_count(self):
-        return len(self.timestamps)
+        return len(self.received_timestamps)
 
 class Block:
     def __init__(self, hash:str, parent_hash:str, timestamp:float, height:int, referees:list):
@@ -302,6 +320,8 @@ class LogAggregator:
         for t in BlockLatencyType:
             self.block_latency_stats[t.name] = {}
         self.tx_latency_stats = {}
+        self.tx_packed_to_block_latency = {}
+        self.min_tx_packed_to_block_latency = []
         self.host_by_block_ratio = []
 
     def add_host(self, host_log:HostLogReducer):
@@ -326,12 +346,16 @@ class LogAggregator:
                 print("sync graph missed block {}: received = {}, total = {}".format(block_hash, count_sync, num_nodes))
                 del self.blocks[block_hash]
         missing_tx = 0
+        unpacked_tx=0
         for tx_hash in list(self.txs.keys()):
             if self.txs[tx_hash].latency_count() != num_nodes:
-                del self.txs[tx_hash]
                 missing_tx += 1
-        print("Removed tx count", missing_tx)
-        print("Remaining tx count", len(self.txs))
+            if self.txs[tx_hash].packed_timestamps[0] is None:
+                unpacked_tx += 1
+
+        print("Removed tx count (txs have not fully propagated)", missing_tx) #not counted in tx broadcast
+        print("Unpacked tx count",unpacked_tx) #not counted in tx packed to block latency
+        print("Total tx count", len(self.txs))
 
     def stat_sync_cons_gap(self, p:Percentile):
         data = []
@@ -345,8 +369,14 @@ class LogAggregator:
         for b in self.blocks.values():
             for t in BlockLatencyType:
                 self.block_latency_stats[t.name][b.hash] = Statistics(b.get_latencies(t))
+
+        num_nodes = len(self.sync_cons_gap_stats)
         for tx in self.txs.values():
-            self.tx_latency_stats[tx.hash] = Statistics(tx.get_latencies())
+            if tx.latency_count() == num_nodes:
+                self.tx_latency_stats[tx.hash] = Statistics(tx.get_latencies())
+            if tx.packed_timestamps[0] is not None:
+                self.tx_packed_to_block_latency[tx.hash] = Statistics(tx.get_packed_to_block_latencies())
+                self.min_tx_packed_to_block_latency.append(tx.get_packed_to_block_latencies)
 
     def stat_block_latency(self, t:BlockLatencyType, p:Percentile):
         data = []
@@ -363,6 +393,17 @@ class LogAggregator:
             data.append(tx_stat.get(p))
 
         return Statistics(data)
+
+    def stat_tx_packed_to_block_latency(self, p:Percentile):
+        data =[]
+
+        for tx_stat in self.tx_packed_to_block_latency.values():
+            data.append(tx_stat.get(p))
+
+        return Statistics(data)
+
+    def stat_min_tx_packed_to_block_latency(self):
+        return Statistics(self.min_tx_packed_to_block_latency)
 
     def stat_tx_ratio(self):
         return Statistics(self.host_by_block_ratio)

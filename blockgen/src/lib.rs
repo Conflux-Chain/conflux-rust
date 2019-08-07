@@ -22,6 +22,9 @@ use std::{
 use time::{SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
 
+#[macro_use]
+extern crate log;
+
 enum MiningState {
     Start,
     Stop,
@@ -277,6 +280,13 @@ impl BlockGenerator {
                 block_gas_limit,
                 additional_transactions,
             );
+
+        for tx in &transactions {
+            let tx_hash = tx.hash();
+            if tx_hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in packing block", tx_hash);
+            }
+        }
 
         let (
             blame,
