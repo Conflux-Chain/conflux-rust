@@ -39,6 +39,10 @@ impl KeyValueDbTraitRead for KvdbSqlite {
 }
 
 impl KeyValueDbTrait for KvdbSqlite {
+    fn delete(&self, _key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+        unimplemented!()
+    }
+
     fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> { unimplemented!() }
 
     fn put_with_number_key(&self, _key: i64, _value: &[u8]) -> Result<()> {
@@ -63,6 +67,10 @@ impl KeyValueDbTraitRead for KvdbSqliteTransaction {
 }
 
 impl KeyValueDbTraitSingleWriter for KvdbSqliteTransaction {
+    fn delete(&mut self, _key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+        unimplemented!()
+    }
+
     fn put(&mut self, _key: &[u8], _value: &[u8]) -> Result<()> {
         unimplemented!()
     }

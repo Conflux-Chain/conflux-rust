@@ -12,7 +12,9 @@ pub trait KeyValueDbTraitRead: KeyValueDbAsReadTrait {
 
 /// Multi-reader, single-writer.
 pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitRead {
-    // FIXME: delete.
+    /// Return Some(maybe_old_value) or None if the db don't support reading the
+    /// old value at deletion.
+    fn delete(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>>;
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()>;
     fn put_with_number_key(&mut self, key: i64, value: &[u8]) -> Result<()> {
         self.put(key.to_string().as_bytes(), value)
@@ -20,7 +22,9 @@ pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitRead {
 }
 
 pub trait KeyValueDbTrait: KeyValueDbTraitRead + KeyValueDbAsAnyTrait {
-    // FIXME: delete.
+    /// Return Some(maybe_old_value) or None if the db don't support reading the
+    /// old value at deletion.
+    fn delete(&self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>>;
     fn put(&self, key: &[u8], value: &[u8]) -> Result<()>;
     fn put_with_number_key(&self, key: i64, value: &[u8]) -> Result<()> {
         self.put(key.to_string().as_bytes(), value)
