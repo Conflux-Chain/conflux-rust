@@ -336,7 +336,7 @@ class ConfluxTestFramework:
             sleep_time = 0.1
             retry = 0
             max_retry = wait_time / sleep_time
-            while node.current_sync_phase() != "NormalSyncPhase" and retry <= max_retry:
+            while node.current_sync_phase() not in ["NormalSyncPhase", "CatchUpSyncBlockPhase"] and retry <= max_retry:
                 time.sleep(0.1)
                 retry += 1
             if retry > max_retry:
