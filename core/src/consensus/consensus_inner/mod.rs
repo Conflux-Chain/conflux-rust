@@ -620,10 +620,6 @@ impl ConsensusGraphInner {
             }
 
             let next_step = step + 1;
-            if next_step >= BLAME_BOUND {
-                continue;
-            }
-
             for child in &self.arena[index].children {
                 queue.push_back((*child, next_step));
             }
@@ -1829,7 +1825,7 @@ impl ConsensusGraphInner {
             .push(exec_result.0.state_root.compute_state_root_hash());
         receipt_blame_vec.push(exec_result.1.clone());
         bloom_blame_vec.push(exec_result.2.clone());
-        while blame < BLAME_BOUND {
+        loop {
             let exec_info_opt = self.execution_info_cache.get(&cur);
             if exec_info_opt.is_none() {
                 return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
@@ -1839,10 +1835,11 @@ impl ConsensusGraphInner {
                 break;
             }
             blame += 1;
-            if cur == self.cur_era_genesis_block_arena_index
-                && blame < BLAME_BOUND
-            {
-                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
+            if cur == self.cur_era_genesis_block_arena_index {
+                return Err(
+                    "Failed to compute blame and state due to out of era"
+                        .to_owned(),
+                );
             }
             state_blame_vec
                 .push(exec_info.original_deferred_state_root.clone());

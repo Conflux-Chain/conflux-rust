@@ -440,14 +440,9 @@ impl ConsensusExecutor {
     fn collect_blocks_missing_execution_info(
         &self, me: usize, inner: &ConsensusGraphInner,
     ) -> Result<Vec<(H256, H256)>, String> {
-        let mut missing_block_cnt = 0;
         let mut cur = me;
         let mut waiting_blocks = Vec::new();
         while !inner.execution_info_cache.contains_key(&cur) {
-            missing_block_cnt += 1;
-            if missing_block_cnt >= BLAME_BOUND {
-                break;
-            }
             let cur_hash = inner.arena[cur].hash.clone();
             let state_hash = inner
                 .get_state_block_with_delay(
@@ -456,9 +451,7 @@ impl ConsensusExecutor {
                 )?
                 .clone();
             waiting_blocks.push((cur_hash, state_hash));
-            if missing_block_cnt >= BLAME_BOUND
-                || cur == inner.cur_era_genesis_block_arena_index
-            {
+            if cur == inner.cur_era_genesis_block_arena_index {
                 break;
             }
             cur = inner.arena[cur].parent;

@@ -109,6 +109,12 @@ impl GetBlockHeadersResponse {
             .as_secs();
         for header in block_headers {
             let hash = header.hash();
+            if ctx.manager.graph.contains_block_header(&hash) {
+                // A block header might be loaded from db and sent to the local
+                // queue multiple times, but we should only
+                // process it and request its dependence once.
+                continue;
+            }
             returned_headers.insert(hash);
             // check timestamp drift
             if ctx.manager.graph.verification_config.verify_timestamp {

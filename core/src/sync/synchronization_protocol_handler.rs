@@ -612,8 +612,6 @@ impl SynchronizationProtocolHandler {
         );
     }
 
-    // FIXME This is actually a recursive DFS to traverse all block headers in
-    // the db
     pub fn request_block_headers(
         &self, io: &NetworkContext, peer: Option<usize>,
         mut header_hashes: Vec<H256>, ignore_db: bool,
@@ -695,6 +693,12 @@ impl SynchronizationProtocolHandler {
         let mut received_blocks = HashSet::new();
         for mut block in task.blocks {
             let hash = block.hash();
+            if self.graph.contains_block(&hash) {
+                // A block might be loaded from db and sent to the local queue
+                // multiple times, but we should only process it and request its
+                // dependence once.
+                continue;
+            }
             if !task.requested.contains(&hash) {
                 warn!("Response has not requested block {:?}", hash);
                 continue;

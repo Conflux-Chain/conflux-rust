@@ -39,9 +39,11 @@ pub mod consensus_internal {
     // Here is the delay for us to recycle those orphaned blocks in the boundary
     // of eras.
     pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
-    // A block can blame up to BLAME_BOUND ancestors that their states are
-    // incorrect.
-    pub const BLAME_BOUND: u32 = 1000;
+
+    // FIXME Use another method to prevent DDoS attacks if attackers control the
+    // pivot chain A block can blame up to BLAME_BOUND ancestors that their
+    // states are incorrect.
+    //    pub const BLAME_BOUND: u32 = 1000;
 }
 
 pub mod sync {
