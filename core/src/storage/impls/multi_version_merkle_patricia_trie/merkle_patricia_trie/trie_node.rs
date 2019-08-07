@@ -56,7 +56,7 @@ pub trait TrieNodeTrait: Default {
 }
 
 // This trie node isn't memory efficient.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VanillaTrieNode<NodeRefT: NodeRefTrait> {
     compressed_path: CompressedPathRaw,
     maybe_value: Option<Box<[u8]>>,
@@ -77,7 +77,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
-impl<'node, NodeRefT: 'static + NodeRefTrait> GetChildTrait<'node>
+impl<'node, NodeRefT: 'static + NodeRefTrait> TrieNodeWalkTrait<'node>
     for VanillaTrieNode<NodeRefT>
 where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
@@ -176,7 +176,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 #[allow(unused)]
 impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     pub fn new(
-        merkle: &MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
+        merkle: MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
     ) -> Self
     {
@@ -307,7 +307,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone
 {
     fn clone(&self) -> Self {
         Self::new(
-            &self.merkle_hash,
+            self.merkle_hash.clone(),
             self.children_table.clone(),
             self.value_clone().into_option(),
             self.compressed_path_ref().into(),
@@ -330,7 +330,7 @@ unsafe impl<CacheAlgoDataT: CacheAlgoDataTrait> Sync
 {
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct TrieNodeValueSizeFieldConverter {}
 
 impl TrieNodeValueSizeFieldConverter {
@@ -437,19 +437,6 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
 
         Ok(())
     }
-
-    pub fn create_proof_node(&self) -> TrieProofNode {
-        TrieProofNode {
-            path_end_mask: self.path_end_mask,
-            path: self
-                .path
-                .get_slice(self.get_compressed_path_size() as usize)
-                .into(),
-            value: self.value_clone().into_option().map(|b| b.to_vec()),
-            children_table: Default::default(),
-            merkle_hash: self.merkle_hash,
-        }
-    }
 }
 
 impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
@@ -535,12 +522,12 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
         old_value
     }
 
-    fn get_children_table_ref(&self) -> &ChildrenTableDeltaMpt {
+    fn get_children_table_ref(&self) -> &Self::ChildrenTableType {
         &self.children_table
     }
 }
 
-impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> GetChildTrait<'node>
+impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeWalkTrait<'node>
     for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     type ChildIdType = NodeRefDeltaMptCompact;
@@ -549,14 +536,6 @@ impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> GetChildTrait<'node>
         &'node self, child_index: u8,
     ) -> Option<NodeRefDeltaMptCompact> {
         self.children_table.get_child(child_index)
-    }
-}
-
-impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
-    pub fn walk<'key, 'node, AM: AccessMode>(
-        &'node self, key: KeyPart<'key>,
-    ) -> WalkStop<'key, NodeRefDeltaMptCompact> {
-        walk::<AM, _>(key, &self.compressed_path_ref(), self)
     }
 }
 
@@ -574,13 +553,13 @@ pub enum TrieNodeAction {
 /// We'd like to keep as many of them as possible in memory.
 impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn new(
-        merkle: &MerkleHash, children_table: ChildrenTableDeltaMpt,
+        merkle: MerkleHash, children_table: ChildrenTableDeltaMpt,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
     ) -> MemOptimizedTrieNode<CacheAlgoDataT>
     {
         let mut ret = MemOptimizedTrieNode::default();
 
-        ret.merkle_hash = *merkle;
+        ret.merkle_hash = merkle;
         ret.children_table = children_table;
         match maybe_value {
             None => {}
@@ -758,15 +737,13 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Encodable
     for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     fn rlp_append(&self, s: &mut RlpStream) {
-        // Format: [ merkle, children_table ([] or [*16], value (maybe empty) ]
-        // ( + [compressed_path] )
         s.begin_unbounded_list()
-            .append(&self.merkle_hash)
-            .append(&self.children_table.to_ref())
+            .append(self.get_merkle())
+            .append(&self.get_children_table_ref().to_ref())
             .append(&self.value_as_slice().into_option());
 
         let compressed_path_ref = self.compressed_path_ref();
-        if compressed_path_ref.path_slice.len() > 0 {
+        if compressed_path_ref.path_size() > 0 {
             s.append(&compressed_path_ref);
         }
 
@@ -778,6 +755,44 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
     for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
+        let compressed_path = if rlp.item_count()? != 4 {
+            CompressedPathRaw::new(&[], 0)
+        } else {
+            rlp.val_at(3)?
+        };
+
+        Ok(MemOptimizedTrieNode::new(
+            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            rlp.val_at::<ChildrenTableManagedDeltaMpt>(1)?.into(),
+            rlp.val_at::<Option<Vec<u8>>>(2)?
+                .map(|v| v.into_boxed_slice()),
+            compressed_path,
+        ))
+    }
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> Encodable for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_unbounded_list()
+            .append(self.get_merkle())
+            .append(self.get_children_table_ref())
+            .append(&self.value_as_slice().into_option());
+
+        let compressed_path_ref = self.compressed_path_ref();
+        if compressed_path_ref.path_size() > 0 {
+            s.append(&compressed_path_ref);
+        }
+
+        s.complete_unbounded_list();
+    }
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> Decodable for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
         let compressed_path;
         if rlp.item_count()? != 4 {
             compressed_path = CompressedPathRaw::new(&[], 0);
@@ -785,9 +800,9 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
             compressed_path = rlp.val_at(3)?;
         }
 
-        Ok(MemOptimizedTrieNode::new(
-            &rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
-            rlp.val_at::<ChildrenTableManagedDeltaMpt>(1)?.into(),
+        Ok(VanillaTrieNode::new(
+            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            rlp.val_at::<VanillaChildrenTable<NodeRefT>>(1)?,
             rlp.val_at::<Option<Vec<u8>>>(2)?
                 .map(|v| v.into_boxed_slice()),
             compressed_path,
@@ -819,16 +834,15 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug
 
 use super::{
     super::{
-        super::errors::*, cache::algorithm::CacheAlgoDataTrait,
-        node_ref::*, slab::*,
+        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
+        slab::*,
     },
     children_table::*,
     compressed_path::*,
     maybe_in_place_byte_array::*,
     merkle::{compute_merkle, MaybeMerkleTableRef},
     mpt_value::MptValue,
-    trie_proof::TrieProofNode,
-    walk::{access_mode::AccessMode, walk, GetChildTrait, KeyPart, WalkStop},
+    walk::TrieNodeWalkTrait,
     WrappedCreateFrom,
 };
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

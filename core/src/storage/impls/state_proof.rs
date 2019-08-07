@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub use super::multi_version_merkle_patricia_trie::TrieProof;
-use crate::hash::KECCAK_EMPTY;
-use primitives::MerkleHash;
+pub use super::multi_version_merkle_patricia_trie::{
+    merkle_patricia_trie::merkle::MaybeMerkleTableRef, TrieProof,
+};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
@@ -28,7 +29,7 @@ impl StateProof {
     }
 
     pub fn is_valid(
-        &self, key: &Vec<u8>, value: &Option<Vec<u8>>, delta_root: MerkleHash,
+        &self, key: &Vec<u8>, value: Option<&[u8]>, delta_root: MerkleHash,
         intermediate_root: MerkleHash, snapshot_root: MerkleHash,
     ) -> bool
     {
@@ -44,39 +45,39 @@ impl StateProof {
             }
             // proof of existence for key in intermediate trie
             (Some(_), Some(p1), Some(p2), None) => {
-                p1.is_valid(key, &None, delta_root)
+                p1.is_valid(key, None, delta_root)
                     && p2.is_valid(key, value, intermediate_root)
             }
             // proof of existence for key in snapshot
             (Some(_), Some(p1), Some(p2), Some(p3)) => {
-                p1.is_valid(key, &None, delta_root)
-                    && p2.is_valid(key, &None, intermediate_root)
+                p1.is_valid(key, None, delta_root)
+                    && p2.is_valid(key, None, intermediate_root)
                     && p3.is_valid(key, value, snapshot_root)
             }
             // proof of non-existence with a single trie
             (None, Some(p1), None, None) => {
-                p1.is_valid(key, &None, delta_root)
-                    && intermediate_root == KECCAK_EMPTY
-                    && snapshot_root == KECCAK_EMPTY
+                p1.is_valid(key, None, delta_root)
+                    && intermediate_root == MERKLE_NULL_NODE
+                    && snapshot_root == MERKLE_NULL_NODE
             }
             // proof of non-existence with two tries
             (None, Some(p1), Some(p2), None) => {
-                p1.is_valid(key, &None, delta_root)
-                    && p2.is_valid(key, &None, intermediate_root)
-                    && snapshot_root == KECCAK_EMPTY
+                p1.is_valid(key, None, delta_root)
+                    && p2.is_valid(key, None, intermediate_root)
+                    && snapshot_root == MERKLE_NULL_NODE
             }
             // proof of non-existence with all tries
             (None, Some(p1), Some(p2), Some(p3)) => {
-                p1.is_valid(key, &None, delta_root)
-                    && p2.is_valid(key, &None, intermediate_root)
-                    && p3.is_valid(key, &None, snapshot_root)
+                p1.is_valid(key, None, delta_root)
+                    && p2.is_valid(key, None, intermediate_root)
+                    && p3.is_valid(key, None, snapshot_root)
             }
             // no proofs available
             (_, None, None, None) => {
                 value.is_none()
-                    && delta_root == KECCAK_EMPTY
-                    && intermediate_root == KECCAK_EMPTY
-                    && snapshot_root == KECCAK_EMPTY
+                    && delta_root == MERKLE_NULL_NODE
+                    && intermediate_root == MERKLE_NULL_NODE
+                    && snapshot_root == MERKLE_NULL_NODE
             }
             _ => false,
         }

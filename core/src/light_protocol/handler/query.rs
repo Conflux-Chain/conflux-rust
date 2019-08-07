@@ -171,7 +171,7 @@ impl QueryHandler {
         // validate proof
         if !resp.proof.is_valid(
             &req.key,
-            &resp.entry,
+            resp.entry.as_ref().map(|v| &**v),
             resp.state_root.delta_root,
             resp.state_root.intermediate_delta_root,
             resp.state_root.snapshot_root,

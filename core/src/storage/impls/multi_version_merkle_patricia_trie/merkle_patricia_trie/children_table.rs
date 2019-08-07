@@ -9,9 +9,11 @@ pub trait NodeRefTrait:
 
 impl NodeRefTrait for MerkleHash {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VanillaChildrenTable<NodeRefT: NodeRefTrait> {
     table: [NodeRefT; CHILDREN_COUNT],
+    // TODO(yz): Use bitmap to save space for rlp format.
+    // TODO(yz): the proof format may differ.
     children_count: u8,
 }
 
@@ -121,6 +123,47 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
         VanillaChildrenTableIterator {
             next_child_index: 0,
             table: &self.table,
+        }
+    }
+}
+
+// TODO(yz): Use bitmap to save space for rlp format.
+// TODO(yz): the proof format may differ.
+impl<NodeRefT: 'static + NodeRefTrait> Encodable
+    for VanillaChildrenTable<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn rlp_append(&self, s: &mut RlpStream) {
+        if self.children_count == 0 {
+            s.begin_list(0);
+        } else {
+            s.append_list(&self.table[..]);
+        };
+    }
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> Decodable
+    for VanillaChildrenTable<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        if rlp.is_empty() {
+            Ok(Default::default())
+        } else {
+            let mut table: [NodeRefT; CHILDREN_COUNT] =
+                unsafe { std::mem::uninitialized() };
+            let mut children_count = 0;
+            for i in 0..16 {
+                table[i] = rlp.val_at::<NodeRefT>(i)?;
+                if !table[i].eq(ChildrenTableItem::<NodeRefT>::no_child()) {
+                    children_count += 1;
+                }
+            }
+
+            Ok(VanillaChildrenTable {
+                table,
+                children_count,
+            })
         }
     }
 }
@@ -776,6 +819,9 @@ impl<'a, NodeRefT: NodeRefTrait> Encodable for ChildrenTableRef<'a, NodeRefT> {
             0 => s.begin_list(0),
             // Skip bitmap if list has length of 16.
             16 => s.append_list(self.table),
+            // TODO(yz): Instead, use [bitmap, child_0, ... , child_n] for N @
+            // 1..14; when N == 15: [bitmap, 0, child_0, ... ,
+            // child_15] to save 2 bytes.
             _ => s.begin_list(2).append(&self.bitmap).append_list(self.table),
         };
     }

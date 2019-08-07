@@ -509,7 +509,7 @@ fn test_proofs() {
             state.get_with_proof(key).expect("Failed to get key.");
 
         let key = &key.to_vec();
-        let value = &value.map(Into::into);
+        let value = value.as_ref().map(|b| &**b);
 
         // valid proof
         assert!(proof.is_valid(
@@ -534,7 +534,7 @@ fn test_proofs() {
         // invalid value
         assert!(!proof.is_valid(
             key,
-            &Some(vec![0x00; 100]),
+            Some(&[0x00; 100][..]),
             delta_root,
             intermediate_root,
             snapshot_root,
@@ -543,7 +543,9 @@ fn test_proofs() {
         // invalid hash
         let mut invalid_proof = proof.clone();
         if let Some(delta_proof) = &mut invalid_proof.delta_proof {
-            delta_proof.nodes[0].merkle_hash[0] = 0x00;
+            let mut wrong_merkle = delta_proof.nodes[0].get_merkle().clone();
+            wrong_merkle[0] = 0x00;
+            delta_proof.nodes[0].set_merkle(&wrong_merkle);
         }
 
         assert!(!invalid_proof.is_valid(
@@ -578,7 +580,7 @@ fn test_proofs() {
         // valid non-existence proof
         assert!(proof.is_valid(
             &key.to_vec(),
-            &None,
+            None,
             delta_root,
             intermediate_root,
             snapshot_root,

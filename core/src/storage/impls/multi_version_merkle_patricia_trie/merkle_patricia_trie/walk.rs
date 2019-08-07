@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::compressed_path::*;
+use super::{compressed_path::*, trie_node::TrieNodeTrait};
 use std::cmp::min;
 
 /// Key length should be multiple of 8.
@@ -81,10 +81,16 @@ pub mod access_mode {
     }
 }
 
-pub(super) trait GetChildTrait<'node> {
+pub(super) trait TrieNodeWalkTrait<'node>: TrieNodeTrait {
     type ChildIdType: 'node;
 
     fn get_child(&'node self, child_index: u8) -> Option<Self::ChildIdType>;
+
+    fn walk<'key, AM: access_mode::AccessMode>(
+        &'node self, key: KeyPart<'key>,
+    ) -> WalkStop<'key, Self::ChildIdType> {
+        walk::<AM, _>(key, &self.compressed_path_ref(), self)
+    }
 }
 
 /// Traverse.
@@ -101,7 +107,7 @@ pub(super) fn walk<
     'key,
     'node,
     AM: access_mode::AccessMode,
-    Node: GetChildTrait<'node>,
+    Node: TrieNodeWalkTrait<'node>,
 >(
     key: KeyPart<'key>, path: &dyn CompressedPathTrait, node: &'node Node,
 ) -> WalkStop<'key, Node::ChildIdType> {

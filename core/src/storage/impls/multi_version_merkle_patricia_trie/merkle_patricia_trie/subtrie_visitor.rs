@@ -160,14 +160,20 @@ impl<'trie> SubTrieVisitor<'trie> {
 
             // create proof node
             proof_nodes.push({
-                let mut n = trie_node.create_proof_node();
+                let merkle_hash = trie_node.get_merkle().clone();
+                let maybe_value = trie_node.value_clone().into_option();
+                let compressed_path = trie_node.compressed_path_ref().into();
+
                 let children = trie_node.children_table.clone();
                 drop(trie_node);
-                n.children_table = self
-                    .retrieve_children_hashes(children)?
-                    .map(|x| x.to_vec())
-                    .unwrap_or_default();
-                n
+                let children_merkles =
+                    self.retrieve_children_hashes(children)?;
+                TrieProofNode(VanillaTrieNode::new(
+                    merkle_hash,
+                    children_merkles.into(),
+                    maybe_value,
+                    compressed_path,
+                ))
             });
         }
 
@@ -744,8 +750,8 @@ use super::{
     children_table::ChildrenTableDeltaMpt,
     merkle::*,
     trie_node::TrieNodeAction,
-    trie_proof::TrieProof,
-    walk::{access_mode::*, KeyPart, WalkStop},
+    trie_proof::{TrieProof, TrieProofNode},
+    walk::{access_mode::*, KeyPart, TrieNodeWalkTrait, WalkStop},
     *,
 };
 use parking_lot::MutexGuard;
