@@ -22,6 +22,12 @@ impl KeyValueDbTraitRead for KvdbRocksdb {
 }
 
 impl KeyValueDbTrait for KvdbRocksdb {
+    fn delete(&self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+        let mut transaction = self.kvdb.transaction();
+        transaction.delete(COL_DELTA_TRIE, key);
+        Ok(None)
+    }
+
     fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
         let mut transaction = self.kvdb.transaction();
         transaction.put(COL_DELTA_TRIE, key, value);
@@ -30,6 +36,11 @@ impl KeyValueDbTrait for KvdbRocksdb {
 }
 
 impl KeyValueDbTraitSingleWriter for KvdbRocksDbTransaction {
+    fn delete(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+        self.pending.delete(COL_DELTA_TRIE, key);
+        Ok(None)
+    }
+
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
         Ok(self.pending.put(COL_DELTA_TRIE, key, value))
     }

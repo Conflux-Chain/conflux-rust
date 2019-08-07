@@ -33,12 +33,30 @@ impl KeyValueDbTraitRead for SnapshotDbSqlite {
 }
 
 impl KeyValueDbTraitSingleWriter for SnapshotDbSqlite {
+    fn delete(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+        match &self.sqlite {
+            None => Err(Error::from(ErrorKind::SnapshotNotFound)),
+            Some(_) => {
+                let locked_sql = self.lock_sqlite();
+                locked_sql.execute_named(
+                    "DELETE FROM snapshot_key_value WHERE key = :key",
+                    &[(":key", &key)],
+                )?;
+                locked_sql.execute_named(
+                    "INSERT INTO snapshot_key_value_delete (:key, :version)",
+                    &[(":key", &key), (":version", &self.height.to_string())],
+                )?;
+                Ok(None)
+            }
+        }
+    }
+
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
         match &self.sqlite {
             None => Err(Error::from(ErrorKind::SnapshotNotFound)),
             Some(_) => {
                 self.lock_sqlite().execute_named(
-                    "INSERT INTO snapshot_key_value (key, value, version)",
+                    "INSERT INTO snapshot_key_value (:key, :value, :version)",
                     &[
                         (":key", &key),
                         (":value", &value),
