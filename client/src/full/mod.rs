@@ -225,6 +225,7 @@ impl FullClient {
         let txgen = Arc::new(TransactionGenerator::new(
             consensus.clone(),
             txpool.clone(),
+            sync.clone(),
             secret_store.clone(),
             network.net_key_pair().ok(),
         ));
@@ -343,8 +344,8 @@ impl FullClient {
     /// Use a Weak pointer to ensure that other Arc pointers are released
     fn wait_for_drop<T>(w: Weak<T>) {
         let sleep_duration = Duration::from_secs(1);
-        let warn_timeout = Duration::from_secs(10);
-        let max_timeout = Duration::from_secs(60);
+        let warn_timeout = Duration::from_secs(5);
+        let max_timeout = Duration::from_secs(10);
         let instant = Instant::now();
         let mut warned = false;
         while instant.elapsed() < max_timeout {
@@ -357,7 +358,7 @@ impl FullClient {
             }
             thread::sleep(sleep_duration);
         }
-        warn!("Shutdown timeout reached, exiting uncleanly.");
+        eprintln!("Shutdown timeout reached, exiting uncleanly.");
     }
 
     pub fn close(handle: FullClientHandle) {

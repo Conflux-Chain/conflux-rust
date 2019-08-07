@@ -54,4 +54,7 @@ pub trait DebugRpc {
 
     #[rpc(name = "net_high_priority_packets")]
     fn net_high_priority_packets(&self) -> RpcResult<usize>;
+
+    #[rpc(name = "current_sync_phase")]
+    fn current_sync_phase(&self) -> RpcResult<String>;
 }

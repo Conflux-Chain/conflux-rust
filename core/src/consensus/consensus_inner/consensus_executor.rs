@@ -239,6 +239,7 @@ impl ConsensusExecutor {
             )
         } else {
             let (sender, receiver) = channel();
+            debug!("Wait for execution result of epoch {:?}", epoch_hash);
             self.sender
                 .lock()
                 .send(ExecutionTask::GetResult(GetExecutionResultTask {

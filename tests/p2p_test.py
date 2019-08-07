@@ -25,7 +25,7 @@ class P2PTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def run_test(self):
-        block_number = 4000
+        block_number = 1000
 
         # Setup balance for each node
         client = RpcClient(self.nodes[0])
@@ -37,6 +37,10 @@ class P2PTest(ConfluxTestFramework):
             client.send_tx(tx)
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
+            if random.random() <= 0.01:
+                self.log.info("stop %s", chosen_peer)
+                self.stop_node(chosen_peer)
+                self.start_node(chosen_peer)
             self.log.debug("%d try to generate", chosen_peer)
             block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
             self.log.info("%d generate block %s", chosen_peer, block_hash)

@@ -11,6 +11,7 @@ use crate::{
     sync::{
         synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
+        SynchronizationPhaseTrait,
     },
 };
 use cfx_types::H256;
@@ -53,6 +54,10 @@ impl SynchronizationService {
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.protocol_handler.get_synchronization_graph()
+    }
+
+    pub fn current_sync_phase(&self) -> Arc<SynchronizationPhaseTrait> {
+        self.protocol_handler.phase_manager.get_current_phase()
     }
 
     pub fn append_received_transactions(

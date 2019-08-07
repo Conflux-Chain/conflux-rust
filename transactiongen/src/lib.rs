@@ -17,7 +17,7 @@ use crate::bytes::Bytes;
 use cfx_types::{Address, H256, H512, U256, U512};
 use cfxcore::{
     executive::contract_address, vm::CreateContractAddress,
-    SharedConsensusGraph, SharedTransactionPool,
+    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
 use hex::*;
 use keylib::{public_to_address, Generator, KeyPair, Random};
@@ -71,6 +71,7 @@ impl TransactionGeneratorConfig {
 
 pub struct TransactionGenerator {
     pub consensus: SharedConsensusGraph,
+    sync: SharedSynchronizationService,
     txpool: SharedTransactionPool,
     secret_store: SharedSecretStore,
     state: RwLock<TransGenState>,
@@ -82,12 +83,14 @@ pub type SharedTransactionGenerator = Arc<TransactionGenerator>;
 impl TransactionGenerator {
     pub fn new(
         consensus: SharedConsensusGraph, txpool: SharedTransactionPool,
-        secret_store: SharedSecretStore, key_pair: Option<KeyPair>,
+        sync: SharedSynchronizationService, secret_store: SharedSecretStore,
+        key_pair: Option<KeyPair>,
     ) -> Self
     {
         TransactionGenerator {
             consensus,
             txpool,
+            sync,
             secret_store,
             state: RwLock::new(TransGenState::Start),
             key_pair,
@@ -170,6 +173,16 @@ impl TransactionGenerator {
         let mut tx_n = 0;
         // Wait for initial tx
         loop {
+            match *txgen.state.read() {
+                TransGenState::Stop => return Ok(()),
+                _ => {}
+            }
+
+            // Do not generate tx in catch_up_mode
+            if txgen.sync.catch_up_mode() {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
             let state = txgen.consensus.get_best_state();
             let sender_address = initial_key_pair.address();
             let sender_balance = state.balance(&sender_address).ok();

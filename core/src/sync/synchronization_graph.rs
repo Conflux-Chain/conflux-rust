@@ -1318,6 +1318,8 @@ impl SynchronizationGraph {
                     );
                     queue.push_back(*referrer);
                 }
+            } else {
+                debug!("Block index {:?} not block_graph_ready, current frontier: {:?}", index, inner.not_ready_blocks_frontier);
             }
         }
 
@@ -1455,7 +1457,10 @@ impl SynchronizationGraph {
     ) -> Vec<H256> {
         let inner = &mut *self.inner.write();
         let mut to_relay_blocks = Vec::new();
-
+        debug!(
+            "not_ready_blocks_frontier: {:?}",
+            inner.not_ready_blocks_frontier
+        );
         if recover {
             let (
                 new_graph_ready_blocks,
