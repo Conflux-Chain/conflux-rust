@@ -64,6 +64,13 @@ pub mod sync {
     pub const MAX_EPOCHS_TO_SEND: u64 = 128;
     pub const MAX_PACKET_SIZE: usize = 15 * 1024 * 1024 + 512 * 1024; // 15.5 MB
 
+    /// The threshold controlling whether we should query local_block_info in
+    /// disk when requesting block header or block. If the difference
+    /// between height of the block and current best height is less than
+    /// LOCAL_BLOCK_INFO_QUERY_THRESHOLD, we can request block directly through
+    /// network, otherwise we should check disk first.
+    pub const LOCAL_BLOCK_INFO_QUERY_THRESHOLD: u64 = 5;
+
     // The waiting time duration that will be accumulated for resending a
     // timeout request.
     lazy_static! {

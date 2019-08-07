@@ -142,10 +142,22 @@ fn test_remove_expire_blocks() {
                     );
                     inner.not_ready_blocks_frontier.insert(me);
                 }
+                if graph_status[i as usize] != 4
+                    && childrens[i as usize].is_empty()
+                {
+                    inner.not_ready_blocks_terminal.insert(me);
+                }
             }
             inner.not_ready_blocks_count = 8;
 
-            println!("{:?}", inner.not_ready_blocks_frontier);
+            println!(
+                "not_ready_blocks_frontier={:?}",
+                inner.not_ready_blocks_frontier
+            );
+            println!(
+                "not_ready_blocks_terminal={:?}",
+                inner.not_ready_blocks_terminal
+            );
             assert!(inner.arena.len() == 12);
             assert!(inner.hash_to_arena_indices.len() == 12);
             assert!(inner.not_ready_blocks_count == 8);
@@ -174,10 +186,15 @@ fn test_remove_expire_blocks() {
             assert!(inner.not_ready_blocks_frontier.contains(&(11 as usize)));
         }
 
-        // expire [9, 10, 14]
+        // expire [9, 10, 11]
         {
             let mut inner = sync.inner.write();
-            inner.arena[9].last_update_timestamp = SystemTime::now()
+            inner.arena[11].last_update_timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                - 1000;
+            inner.arena[10].last_update_timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs()

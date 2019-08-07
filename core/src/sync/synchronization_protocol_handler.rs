@@ -486,7 +486,12 @@ impl SynchronizationProtocolHandler {
             missing_hashes.clear();
         }
         let chosen_peer = self.syn.get_random_peer(&HashSet::new());
-        self.request_block_headers(io, chosen_peer, to_request);
+        self.request_block_headers(
+            io,
+            chosen_peer,
+            to_request,
+            false, /* ignore_db */
+        );
     }
 
     pub fn request_missing_terminals(&self, io: &NetworkContext) {
@@ -514,7 +519,12 @@ impl SynchronizationProtocolHandler {
                     debug!("Requesting terminals {:?}", to_request);
                 }
 
-                self.request_block_headers(io, Some(peer), to_request.clone());
+                self.request_block_headers(
+                    io,
+                    Some(peer),
+                    to_request.clone(),
+                    false, /* ignore_db */
+                );
 
                 requested.extend(to_request);
             }
@@ -545,7 +555,12 @@ impl SynchronizationProtocolHandler {
                 if self.need_requesting_blocks() {
                     self.request_blocks(io, None, epoch_hashes);
                 } else {
-                    self.request_block_headers(io, None, epoch_hashes);
+                    self.request_block_headers(
+                        io,
+                        None,
+                        epoch_hashes,
+                        false, /* ignore_db */
+                    );
                 }
                 *latest_requested += 1;
                 continue;
@@ -605,10 +620,13 @@ impl SynchronizationProtocolHandler {
     // the db
     pub fn request_block_headers(
         &self, io: &NetworkContext, peer: Option<usize>,
-        mut header_hashes: Vec<H256>,
+        mut header_hashes: Vec<H256>, ignore_db: bool,
     )
     {
-        header_hashes.retain(|hash| !self.try_request_header_from_db(io, hash));
+        if !ignore_db {
+            header_hashes
+                .retain(|hash| !self.try_request_header_from_db(io, hash));
+        }
         // Headers may have been inserted into sync graph before as dependent
         // blocks
         header_hashes.retain(|h| !self.graph.contains_block_header(h));
@@ -1160,6 +1178,17 @@ impl SynchronizationProtocolHandler {
     ) -> bool {
         if self.graph.contains_block(hash) {
             return true;
+        }
+
+        if let Some(height) = self.graph.block_height_by_hash(hash) {
+            let best_height = self.graph.consensus.best_epoch_number();
+            if height > best_height
+                || best_height - height <= LOCAL_BLOCK_INFO_QUERY_THRESHOLD
+            {
+                return false;
+            }
+        } else {
+            return false;
         }
 
         if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
