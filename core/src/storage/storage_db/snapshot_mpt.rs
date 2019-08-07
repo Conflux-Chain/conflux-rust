@@ -12,13 +12,10 @@ pub trait SnapshotMptTraitReadOnly {
     ) -> Box<dyn SnapshotMptIteraterTrait>;
 }
 
-// FIXME: We only need a single writer however we must use ReturnAfterUse in
-// MptMerger FIXME: to be able to be pragmatically comply to the single &mut
-// rule. So for now we FIXME: use &self instead of &mut self.
-pub trait SnapshotMptTrait: SnapshotMptTraitReadOnly {
-    fn delete_node(&self, path: &dyn CompressedPathTrait) -> Result<()>;
+pub trait SnapshotMptTraitSingleWriter: SnapshotMptTraitReadOnly {
+    fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()>;
     fn write_node(
-        &self, path: &dyn CompressedPathTrait,
+        &mut self, path: &dyn CompressedPathTrait,
         trie_node: &VanillaTrieNode<MerkleHash>,
     ) -> Result<()>;
 }

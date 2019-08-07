@@ -40,15 +40,15 @@ impl<DbType: KeyValueDbTraitRead, BorrowType: Borrow<DbType>>
 }
 
 impl<DbType: KeyValueDbTraitSingleWriter, BorrowType: BorrowMut<DbType>>
-    SnapshotMptTrait for SnapshotMpt<DbType, BorrowType>
+    SnapshotMptTraitSingleWriter for SnapshotMpt<DbType, BorrowType>
 {
-    fn delete_node(&self, path: &CompressedPathTrait) -> Result<()> {
+    fn delete_node(&mut self, path: &CompressedPathTrait) -> Result<()> {
         let _key = compressed_path_to_db_key(path);
         unimplemented!()
     }
 
     fn write_node(
-        &self, path: &CompressedPathTrait,
+        &mut self, path: &CompressedPathTrait,
         _trie_node: &VanillaTrieNode<MerkleHash>,
     ) -> Result<()>
     {
@@ -61,8 +61,8 @@ use super::super::{
     super::storage_db::{
         key_value_db::{KeyValueDbTraitRead, KeyValueDbTraitSingleWriter},
         snapshot_mpt::{
-            SnapshotMptIteraterTrait, SnapshotMptTrait,
-            SnapshotMptTraitReadOnly,
+            SnapshotMptIteraterTrait, SnapshotMptTraitReadOnly,
+            SnapshotMptTraitSingleWriter,
         },
     },
     errors::*,

@@ -20,20 +20,35 @@
 // TODO(yz): In future merge can be made into multiple threads easily by merging
 // different children in parallel then combine the root node.
 pub struct MptMerger<'a> {
-    base_mpt: &'a dyn SnapshotMptTrait,
-    save_as_mpt: Option<&'a dyn SnapshotMptTrait>,
+    base_mpt: Option<&'a dyn SnapshotMptTraitReadOnly>,
+    out_mpt: Option<&'a mut dyn SnapshotMptTraitSingleWriter>,
     path_nodes: Vec<NodeInMerge<'a>>,
 
     io_error: Cell<bool>,
+}
+
+// FIXME: use this struct instead, so that we are relieved by
+// FIXME: employing separated struct field borrow check.
+#[allow(unused)]
+struct MptsInRequest<'a> {
+    base_mpt: Option<&'a dyn SnapshotMptTraitReadOnly>,
+    out_mpt: Option<&'a mut dyn SnapshotMptTraitSingleWriter>,
 }
 
 trait SetIoError {
     fn set_has_io_error(&self);
 
     fn load_node_wrapper(
-        &self, mpt: &dyn SnapshotMptTrait, path: &CompressedPathRaw,
-    ) -> Result<VanillaTrieNode<MerkleHash>> {
-        let result = mpt.load_node(path);
+        &self, maybe_readonly_mpt: Option<&dyn SnapshotMptTraitReadOnly>,
+        out_mpt: &mut dyn SnapshotMptTraitSingleWriter,
+        path: &CompressedPathRaw,
+    ) -> Result<VanillaTrieNode<MerkleHash>>
+    {
+        let result = if maybe_readonly_mpt.is_some() {
+            maybe_readonly_mpt.unwrap().load_node(path)
+        } else {
+            out_mpt.load_node(path)
+        };
         if result.is_err() {
             self.set_has_io_error();
         }
@@ -45,10 +60,13 @@ impl<'a> SetIoError for MptMerger<'a> {
     fn set_has_io_error(&self) { self.io_error.replace(true); }
 }
 
+impl<'a> MptsInRequest<'a> {}
+
 impl<'a> MptMerger<'a> {
     fn copy_subtree_without_root(
-        dest_mpt: &'a dyn SnapshotMptTrait,
-        source_mpt: &'a dyn SnapshotMptTrait, subtree_root: &NodeInMerge<'a>,
+        dest_mpt: &mut dyn SnapshotMptTraitSingleWriter,
+        source_mpt: &dyn SnapshotMptTraitReadOnly,
+        subtree_root: &NodeInMerge<'a>,
     ) -> Result<()>
     {
         let mut iter = source_mpt.iterate_subtree_trie_nodes_without_root(
@@ -78,8 +96,8 @@ impl<'a> MptMerger<'a> {
 impl CacheAlgoDataTrait for () {}
 
 struct NodeInMerge<'a> {
-    base_mpt: &'a dyn SnapshotMptTrait,
-    save_as_mpt: Option<&'a dyn SnapshotMptTrait>,
+    base_mpt: Option<&'a dyn SnapshotMptTraitReadOnly>,
+    out_mpt: Option<&'a mut dyn SnapshotMptTraitSingleWriter>,
 
     trie_node: VanillaTrieNode<MerkleHash>,
     // path_start_steps is changed when compressed path changes happen, but it
@@ -123,12 +141,15 @@ impl<'a> SetIoError for NodeInMerge<'a> {
 
 impl<'a> NodeInMerge<'a> {
     fn new_root(
-        mpt: &'a dyn SnapshotMptTrait, mpt_merger: &MptMerger<'a>,
-        supposed_merkle_root: &MerkleHash,
-    ) -> Result<NodeInMerge<'a>>
-    {
-        let root_trie_node =
-            mpt_merger.load_node_wrapper(mpt, &CompressedPathRaw::default())?;
+        mpt_merger: &mut MptMerger<'a>, supposed_merkle_root: &MerkleHash,
+    ) -> Result<NodeInMerge<'a>> {
+        let mut out_mpt = mpt_merger.out_mpt.take();
+
+        let root_trie_node = mpt_merger.load_node_wrapper(
+            mpt_merger.base_mpt,
+            *out_mpt.as_mut().unwrap(),
+            &CompressedPathRaw::default(),
+        )?;
 
         assert_eq!(
             root_trie_node.get_merkle(),
@@ -140,7 +161,7 @@ impl<'a> NodeInMerge<'a> {
 
         Ok(Self {
             base_mpt: mpt_merger.base_mpt,
-            save_as_mpt: mpt_merger.save_as_mpt.clone(),
+            out_mpt,
             trie_node: root_trie_node,
             path_start_steps: 0,
             full_path_to_node: Default::default(),
@@ -154,8 +175,8 @@ impl<'a> NodeInMerge<'a> {
     }
 
     fn new_loaded(
-        mpt: &'a dyn SnapshotMptTrait, parent_node: &NodeInMerge<'a>,
-        node_child_index: u8, supposed_merkle_root: &MerkleHash,
+        parent_node: &mut NodeInMerge<'a>, node_child_index: u8,
+        supposed_merkle_root: &MerkleHash,
     ) -> Result<NodeInMerge<'a>>
     {
         let path_db_key = CompressedPathRaw::concat(
@@ -164,7 +185,13 @@ impl<'a> NodeInMerge<'a> {
             &CompressedPathRaw::default(),
         );
 
-        let trie_node = parent_node.load_node_wrapper(mpt, &path_db_key)?;
+        let mut out_mpt = parent_node.out_mpt.take();
+
+        let trie_node = parent_node.load_node_wrapper(
+            parent_node.base_mpt,
+            *out_mpt.as_mut().unwrap(),
+            &path_db_key,
+        )?;
         assert_eq!(
             trie_node.get_merkle(),
             supposed_merkle_root,
@@ -181,7 +208,7 @@ impl<'a> NodeInMerge<'a> {
 
         Ok(Self {
             base_mpt: parent_node.base_mpt,
-            save_as_mpt: parent_node.save_as_mpt.clone(),
+            out_mpt,
             trie_node,
             path_start_steps: parent_node.full_path_to_node.path_steps() + 1,
             full_path_to_node,
@@ -196,7 +223,7 @@ impl<'a> NodeInMerge<'a> {
 
     fn new(
         trie_node: VanillaTrieNode<MerkleHash>,
-        parent: &NodeInMerge<'a>,
+        parent: &mut NodeInMerge<'a>,
         child_index: u8,
         // path_db_key: CompressedPathRaw,
     ) -> NodeInMerge<'a>
@@ -208,7 +235,7 @@ impl<'a> NodeInMerge<'a> {
         );
         Self {
             base_mpt: parent.base_mpt,
-            save_as_mpt: parent.save_as_mpt.clone(),
+            out_mpt: parent.out_mpt.take(),
             trie_node,
             path_start_steps: parent.full_path_to_node.path_steps() + 1,
             full_path_to_node,
@@ -232,32 +259,27 @@ impl<'a> NodeInMerge<'a> {
         // path compression changes, because db changes is as simple as
         // data overwriting / deletion / creation.
         if self.is_node_empty() {
-            if self.save_as_mpt.is_none() {
-                let result = self.base_mpt.delete_node(&self.path_db_key);
+            // In-place mode.
+            if self.base_mpt.is_none() {
+                let result = self
+                    .out_mpt
+                    .as_mut()
+                    .unwrap()
+                    .delete_node(&self.path_db_key);
                 if result.is_err() {
                     self.set_has_io_error();
                     return result;
                 }
             }
         } else {
-            if self.save_as_mpt.is_none() {
-                let result = self
-                    .base_mpt
-                    .write_node(&self.path_db_key, &self.trie_node);
-                if result.is_err() {
-                    self.set_has_io_error();
-                    return result;
-                }
-            } else {
-                let result = self
-                    .save_as_mpt
-                    .clone()
-                    .unwrap()
-                    .write_node(&self.path_db_key, &self.trie_node);
-                if result.is_err() {
-                    self.set_has_io_error();
-                    return result;
-                }
+            let result = self
+                .out_mpt
+                .as_mut()
+                .unwrap()
+                .write_node(&self.path_db_key, &self.trie_node);
+            if result.is_err() {
+                self.set_has_io_error();
+                return result;
             }
         }
 
@@ -316,11 +338,10 @@ impl<'a> NodeInMerge<'a> {
     }
 
     fn skip_till_child_index(&mut self, child_index: u8) -> Result<()> {
-        for (this_child_index, this_child_node_merkle_ref) in self
-            .trie_node
-            .get_children_table_ref()
-            .iter()
-            .set_start_index(self.next_child_index)
+        // FIXME: use MptsInRequest to prevent unnecessary clone.
+        let children_table = self.trie_node.get_children_table_ref().clone();
+        for (this_child_index, this_child_node_merkle_ref) in
+            children_table.iter().set_start_index(self.next_child_index)
         {
             if this_child_index < child_index {
                 // Handle compressed path logics.
@@ -331,15 +352,15 @@ impl<'a> NodeInMerge<'a> {
                         // later children are deleted.
                         self.first_realized_child_index = this_child_index;
                         let child_node = NodeInMerge::new_loaded(
-                            self.base_mpt,
                             self,
                             this_child_index,
                             this_child_node_merkle_ref,
                         )?;
-                        if self.save_as_mpt.is_some() {
+                        // Save-as mode.
+                        if self.base_mpt.is_some() {
                             MptMerger::copy_subtree_without_root(
-                                *self.save_as_mpt.as_ref().unwrap(),
-                                self.base_mpt,
+                                *self.out_mpt.as_mut().unwrap(),
+                                self.base_mpt.clone().unwrap(),
                                 &child_node,
                             )?;
                         }
@@ -350,16 +371,16 @@ impl<'a> NodeInMerge<'a> {
                         Self::write_out_pending_child(
                             &mut self.the_first_child,
                         )?;
-                        if self.save_as_mpt.is_some() {
+                        // Save-as mode.
+                        if self.base_mpt.is_some() {
                             let child_node = NodeInMerge::new_loaded(
-                                self.base_mpt,
                                 self,
                                 this_child_index,
                                 this_child_node_merkle_ref,
                             )?;
                             MptMerger::copy_subtree_without_root(
-                                self.save_as_mpt.clone().unwrap(),
-                                self.base_mpt,
+                                *self.out_mpt.as_mut().unwrap(),
+                                self.base_mpt.clone().unwrap(),
                                 &child_node,
                             )?;
                             child_node.write_out()?;
@@ -386,13 +407,14 @@ impl<'a> NodeInMerge<'a> {
             .trie_node
             .get_children_table_ref()
             .get_child(child_index)
+            // FIXME: use MptsInRequest to remove this to_owned()
+            .cloned()
         {
             None => Ok(None),
             Some(supposed_merkle_hash) => Ok(Some(NodeInMerge::new_loaded(
-                self.base_mpt,
                 self,
                 child_index,
-                supposed_merkle_hash,
+                &supposed_merkle_hash,
             )?)),
         }
     }
@@ -478,21 +500,15 @@ enum MptMergerPopNodesRemaining<'key> {
     PathDiverted(WalkStop<'key, ()>),
 }
 
-// FIXME: MptMerger requires only single writer db with &mut write, however the
-// FIXME: current code can not work with &mut well because in in-place mode,
-// FIXME: base_mpt is writeable (&mut), but in save-as mode, base_mpt is
-// FIXME: read (&), and save_as_mpt is write(&mut). However we can not split
-// FIXME: base_mpt into FIXME: two different references. The solution seems to
-// FIXME: be change to a &mut mpt_write with an optional &mpt_base.
 impl<'a> MptMerger<'a> {
     pub fn new(
-        base_mpt: &'a dyn SnapshotMptTrait,
-        save_as_mpt: Option<&'a dyn SnapshotMptTrait>,
+        base_mpt: Option<&'a dyn SnapshotMptTraitReadOnly>,
+        out_mpt: Option<&'a mut dyn SnapshotMptTraitSingleWriter>,
     ) -> Self
     {
         Self {
             base_mpt,
-            save_as_mpt,
+            out_mpt,
             io_error: Cell::new(false),
             path_nodes: vec![],
         }
@@ -643,16 +659,17 @@ impl<'a> MptMerger<'a> {
                         None => {
                             // Create a new node for child_index, key_remaining
                             // and value.
-                            self.path_nodes.push(NodeInMerge::new(
+                            let new_node = NodeInMerge::new(
                                 VanillaTrieNode::new(
                                     &MERKLE_NULL_NODE,
                                     Default::default(),
                                     Some(value),
                                     key_remaining.into(),
                                 ),
-                                self.path_nodes.last().unwrap(),
+                                self.path_nodes.last_mut().unwrap(),
                                 child_index,
-                            ));
+                            );
+                            self.path_nodes.push(new_node);
                             return Ok(());
                         }
                     };
@@ -712,7 +729,7 @@ impl<'a> MptMerger<'a> {
                         // update and close the old node, then create
                         // a new node.
                         let mut last_node = self.path_nodes.pop().unwrap();
-                        let parent_node = self.path_nodes.last().unwrap();
+                        let parent_node = self.path_nodes.last_mut().unwrap();
 
                         last_node
                             .trie_node
@@ -759,7 +776,7 @@ impl<'a> MptMerger<'a> {
                                         value_last_step_diverted,
                                         key_remaining.into(),
                                     ),
-                                    &fork_node,
+                                    &mut fork_node,
                                     child_index,
                                 );
 
@@ -884,26 +901,37 @@ impl<'a> MptMerger<'a> {
         self.pop_root()
     }
 
+    fn get_merkle_root_before_merge(&self) -> &MerkleHash {
+        if self.base_mpt.is_some() {
+            self.base_mpt.clone().unwrap().get_merkle_root()
+        } else {
+            self.out_mpt.as_ref().unwrap().get_merkle_root()
+        }
+    }
+
     // TODO(yz): Invent a trait for inserter to generalize.
     pub fn merge(&mut self, inserter: &DeltaMptInserter) -> Result<MerkleHash> {
         // Load root node.
-        self.path_nodes.push(NodeInMerge::new_root(
-            self.base_mpt,
-            self,
-            self.base_mpt.get_merkle_root(),
-        )?);
+        let merkle_root_before_merge =
+            self.get_merkle_root_before_merge().clone();
+        let root_node = NodeInMerge::new_root(self, &merkle_root_before_merge)?;
+        self.path_nodes.push(root_node);
 
         struct Merger<'x, 'a: 'x> {
             merger: &'x mut MptMerger<'a>,
         };
 
-        impl<'x, 'a> KVInserter<(Vec<u8>, Box<[u8]>)> for Merger<'x, 'a> {
+        impl<'x, 'a: 'x> Merger<'x, 'a> {
+            fn merger_mut(&mut self) -> &mut MptMerger<'a> { self.merger }
+        }
+
+        impl<'x, 'a: 'x> KVInserter<(Vec<u8>, Box<[u8]>)> for Merger<'x, 'a> {
             fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
                 let (key, value) = v;
                 if value.len() > 0 {
-                    self.merger.insert(&key, value)?;
+                    self.merger_mut().insert(&key, value)?;
                 } else {
-                    self.merger.delete(&key)?;
+                    self.merger_mut().delete(&key)?;
                 }
                 Ok(())
             }
@@ -923,11 +951,10 @@ impl<'a> MptMerger<'a> {
     ) -> Result<MerkleHash>
     {
         // Load root node.
-        self.path_nodes.push(NodeInMerge::new_root(
-            self.base_mpt,
-            self,
-            self.base_mpt.get_merkle_root(),
-        )?);
+        let merkle_root_before_merge =
+            self.get_merkle_root_before_merge().clone();
+        let root_node = NodeInMerge::new_root(self, &merkle_root_before_merge)?;
+        self.path_nodes.push(root_node);
 
         let mut key_to_delete = delete_keys_iter.next();
         let mut key_value_to_insert = insert_keys_iter.next();
@@ -976,7 +1003,10 @@ impl<'a> MptMerger<'a> {
 use super::{
     super::{
         super::{
-            super::storage_db::snapshot_mpt::SnapshotMptTrait, errors::*,
+            super::storage_db::snapshot_mpt::{
+                SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+            },
+            errors::*,
             storage_manager::DeltaMptInserter,
         },
         cache::algorithm::CacheAlgoDataTrait,
