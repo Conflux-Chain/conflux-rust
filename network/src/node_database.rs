@@ -236,6 +236,16 @@ impl NodeDatabase {
         })
     }
 
+    pub fn get_mut(&mut self, id: &NodeId) -> Option<&mut Node> {
+        if let Some(node) = self.trusted_nodes.get_mut(id) {
+            Some(node)
+        } else if let Some(node) = self.untrusted_nodes.get_mut(id) {
+            Some(node)
+        } else {
+            None
+        }
+    }
+
     pub fn get_with_trusty(&self, id: &NodeId) -> Option<(bool, &Node)> {
         if let Some(node) = self.trusted_nodes.get(id) {
             Some((true, node))

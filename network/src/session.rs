@@ -197,6 +197,16 @@ impl Session {
                 let signed = &data[(32 + 65)..];
                 let signature = H520::from_slice(&data[32..(32 + 65)]);
                 let node_id = recover(&signature.into(), &keccak(signed))?;
+
+                // disconnect the remote peer if blacklisted
+                if let Some(node) = host.node_db.read().get(&node_id, false) {
+                    if node.is_blacklisted() {
+                        return Err(
+                            self.disconnect(io, DisconnectReason::Blacklisted)
+                        );
+                    }
+                }
+
                 if self.metadata.id.is_none() {
                     if let Err(reason) = host
                         .sessions

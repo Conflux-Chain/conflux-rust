@@ -1004,7 +1004,11 @@ impl NetworkServiceInner {
                             self.node_db.write().note_failure(&id, true, false);
                         }
                         UpdateNodeOperation::Remove => {
-                            self.node_db.write().remove(&id);
+                            if let Some(node) =
+                                self.node_db.write().get_mut(&id)
+                            {
+                                node.set_blacklisted();
+                            }
                         }
                     }
                 }
@@ -1589,6 +1593,20 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                 work_type,
             })
             .expect("Error sending network IO message");
+    }
+
+    fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str) {
+        let id = self.network_service.get_peer_node_id(peer);
+        if let Some(node) = self.network_service.node_db.write().get_mut(&id) {
+            node.tags.insert(key.into(), value.into());
+        }
+    }
+
+    fn remove_peer_node_tag(&self, peer: PeerId, key: &str) {
+        let id = self.network_service.get_peer_node_id(peer);
+        if let Some(node) = self.network_service.node_db.write().get_mut(&id) {
+            node.tags.remove(key);
+        }
     }
 }
 

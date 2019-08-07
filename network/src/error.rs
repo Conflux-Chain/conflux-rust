@@ -14,6 +14,7 @@ pub enum DisconnectReason {
     WrongEndpointInfo,
     IpLimited,
     UpdateNodeIdFailed,
+    Blacklisted,
     Unknown,
 }
 
@@ -25,6 +26,7 @@ impl DisconnectReason {
             2 => DisconnectReason::WrongEndpointInfo,
             3 => DisconnectReason::IpLimited,
             4 => DisconnectReason::UpdateNodeIdFailed,
+            5 => DisconnectReason::Blacklisted,
             _ => DisconnectReason::Unknown,
         }
     }
@@ -38,6 +40,7 @@ impl fmt::Display for DisconnectReason {
             DisconnectReason::WrongEndpointInfo => "wrong node id",
             DisconnectReason::IpLimited => "IP limited",
             DisconnectReason::UpdateNodeIdFailed => "Update node id failed",
+            DisconnectReason::Blacklisted => "blacklisted",
             DisconnectReason::Unknown => "unknown",
         };
 
