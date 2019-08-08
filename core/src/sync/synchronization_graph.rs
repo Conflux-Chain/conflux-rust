@@ -973,6 +973,8 @@ impl SynchronizationGraph {
         if !header_only {
             self.consensus.construct_pivot_state();
         }
+        self.consensus
+            .update_best_info(&*self.consensus.inner.read());
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
