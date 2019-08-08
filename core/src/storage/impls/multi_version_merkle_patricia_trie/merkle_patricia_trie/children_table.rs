@@ -80,7 +80,6 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
-#[allow(unused)]
 impl<NodeRefT: 'static + NodeRefTrait> VanillaChildrenTable<NodeRefT>
 where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {

@@ -94,6 +94,7 @@ pub struct SynchronizationGraphInner {
     pub pow_config: ProofOfWorkConfig,
     /// the indices of blocks whose graph_status is not GRAPH_READY
     pub not_ready_blocks_frontier: HashSet<usize>,
+    pub not_ready_blocks_terminal: HashSet<usize>,
     pub not_ready_blocks_count: usize,
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
@@ -114,6 +115,7 @@ impl SynchronizationGraphInner {
             referrers_by_hash: HashMap::new(),
             pow_config,
             not_ready_blocks_frontier: HashSet::new(),
+            not_ready_blocks_terminal: HashSet::new(),
             not_ready_blocks_count: 0,
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
@@ -670,11 +672,19 @@ impl SynchronizationGraphInner {
         for index in invalid_set {
             let hash = self.arena[*index].block_header.hash();
             self.not_ready_blocks_frontier.remove(index);
+            self.not_ready_blocks_terminal.remove(index);
             self.not_ready_blocks_count -= 1;
             self.old_era_blocks_frontier_set.remove(index);
 
             let parent = self.arena[*index].parent;
             if parent != NULL {
+                // parent may become a new terminal
+                if self.arena[parent].graph_status != BLOCK_GRAPH_READY
+                    && self.arena[parent].graph_status != BLOCK_INVALID
+                    && self.arena[parent].children.len() == 1
+                {
+                    self.not_ready_blocks_terminal.insert(parent);
+                }
                 self.arena[parent].children.retain(|&x| x != *index);
             }
             let parent_hash = *self.arena[*index].block_header.parent_hash();
@@ -1207,6 +1217,12 @@ impl SynchronizationGraph {
                     inner.not_ready_blocks_frontier.remove(&x);
                 }
             }
+            inner
+                .not_ready_blocks_terminal
+                .remove(&inner.arena[me].parent);
+            if inner.arena[me].children.is_empty() {
+                inner.not_ready_blocks_terminal.insert(me);
+            }
         }
 
         debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
@@ -1257,9 +1273,12 @@ impl SynchronizationGraph {
             inner.old_era_blocks_frontier_set.insert(index);
         }
 
-        // maintain not_ready_blocks_frontier set
+        // maintain not_ready_blocks_frontier and not_ready_blocks_terminal
         inner.not_ready_blocks_count -= 1;
         inner.not_ready_blocks_frontier.remove(&index);
+        if inner.arena[index].children.is_empty() {
+            inner.not_ready_blocks_terminal.remove(&index);
+        }
         for child in &inner.arena[index].children {
             inner.not_ready_blocks_frontier.insert(*child);
         }
@@ -1450,6 +1469,15 @@ impl SynchronizationGraph {
     /// only used in test.
     pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
 
+    /// remove all blocks which have not been updated for a long time
+    /// we maintain two sets `not_ready_blocks_terminal` and
+    /// `not_ready_blocks_frontier`, the former is the leaf nodes and the latter
+    /// is the root nodes in the parental tree formed by not graph ready blocks.
+    /// Usually the `last_updated_timestamp` of blocks in
+    /// `not_ready_blocks_terminal` will smaller than all other blocks. We can
+    /// find all these blocks and find corresponding blocks in
+    /// `not_ready_blocks_frontier` and remove all blocks can be reached by
+    /// these frontiers.
     pub fn remove_expire_blocks(
         &self, expire_time: u64, recover: bool,
     ) -> Vec<H256> {
@@ -1525,11 +1553,28 @@ impl SynchronizationGraph {
             .as_secs();
         let mut queue = VecDeque::new();
         let mut expire_set = HashSet::new();
-        for index in &inner.not_ready_blocks_frontier {
+        // find the frontier reached by expired terminal
+        for index in &inner.not_ready_blocks_terminal {
             if now - inner.arena[*index].last_update_timestamp > expire_time {
                 queue.push_back(*index);
                 expire_set.insert(*index);
             }
+        }
+        debug!("expire terminal: {:?}", expire_set);
+        while let Some(index) = queue.pop_front() {
+            let parent = inner.arena[index].parent;
+            if parent != NULL
+                && inner.arena[parent].graph_status != BLOCK_GRAPH_READY
+                && !expire_set.contains(&parent)
+            {
+                queue.push_back(parent);
+                expire_set.insert(parent);
+            }
+        }
+
+        // find all blocks reached by expire frontier
+        for index in expire_set.iter() {
+            queue.push_back(*index);
         }
         while let Some(index) = queue.pop_front() {
             inner.arena[index].graph_status = BLOCK_INVALID;

@@ -37,6 +37,7 @@ bn = { git = "https://github.com/paritytech/bn", default-features = false }
 lru = "0.1.11"
 threadpool = "1.0"
 rayon = "1.0"
+rusqlite = "0.19"
 link-cut-tree = { path = "../util/link-cut-tree" }
 fenwick-tree = { path = "../util/fenwick-tree" }
 priority-send-queue = { path = "../util/priority-send-queue" }

@@ -40,6 +40,7 @@ impl Handleable for NewBlock {
             ctx.io,
             Some(ctx.peer),
             headers_to_request,
+            true, /* ignore_db */
         );
 
         let need_to_relay = on_new_decoded_block(ctx, block, true, true)?;

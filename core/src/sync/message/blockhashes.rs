@@ -50,16 +50,11 @@ impl Handleable for GetBlockHashesResponse {
         // correct, the request for epoch 5 should recursively request
         // all dependent blocks (see on_block_headers_response)
 
-        // self.request_manager.request_block_headers(
-        //     io,
-        //     Some(peer),
-        //     missing_headers,
-        // );
-
         ctx.manager.request_block_headers(
             ctx.io,
             Some(ctx.peer),
             missing_headers,
+            true, /* ignore_db */
         );
 
         // TODO: handle empty response

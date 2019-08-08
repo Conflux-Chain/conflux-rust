@@ -81,11 +81,15 @@ pub mod access_mode {
     }
 }
 
-pub(super) trait TrieNodeWalkTrait<'node>: TrieNodeTrait {
+pub(super) trait GetChildTrait<'node> {
     type ChildIdType: 'node;
 
     fn get_child(&'node self, child_index: u8) -> Option<Self::ChildIdType>;
+}
 
+pub(super) trait TrieNodeWalkTrait<'node>:
+    TrieNodeTrait + GetChildTrait<'node>
+{
     fn walk<'key, AM: access_mode::AccessMode>(
         &'node self, key: KeyPart<'key>,
     ) -> WalkStop<'key, Self::ChildIdType> {
@@ -94,7 +98,6 @@ pub(super) trait TrieNodeWalkTrait<'node>: TrieNodeTrait {
 }
 
 /// Traverse.
-// TODO(yz): write test.
 ///
 /// When a trie node start with the second nibble, the trie node has a
 /// compressed path of step 1. The nibble in the compressed path is
@@ -107,7 +110,7 @@ pub(super) fn walk<
     'key,
     'node,
     AM: access_mode::AccessMode,
-    Node: TrieNodeWalkTrait<'node>,
+    Node: GetChildTrait<'node>,
 >(
     key: KeyPart<'key>, path: &dyn CompressedPathTrait, node: &'node Node,
 ) -> WalkStop<'key, Node::ChildIdType> {

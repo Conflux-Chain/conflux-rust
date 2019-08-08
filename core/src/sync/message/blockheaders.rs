@@ -4,7 +4,9 @@
 
 use crate::{
     message::RequestId,
-    parameters::block::ACCEPTABLE_TIME_DRIFT,
+    parameters::{
+        block::ACCEPTABLE_TIME_DRIFT, sync::LOCAL_BLOCK_INFO_QUERY_THRESHOLD,
+    },
     sync::{
         message::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
@@ -96,9 +98,11 @@ impl GetBlockHeadersResponse {
     )
     {
         let mut hashes = HashSet::new();
-        let mut dependent_hashes = HashSet::new();
+        let mut dependent_hashes_bounded = HashSet::new();
+        let mut dependent_hashes_unbounded = HashSet::new();
         let mut need_to_relay = HashSet::new();
         let mut returned_headers = HashSet::new();
+        let best_height = ctx.manager.graph.consensus.best_epoch_number();
         let now_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -142,12 +146,19 @@ impl GetBlockHeadersResponse {
             // check missing dependencies
             let parent = header.parent_hash();
             if !ctx.manager.graph.contains_block_header(parent) {
-                dependent_hashes.insert(*parent);
+                if header.height() > best_height
+                    || best_height - header.height()
+                        < LOCAL_BLOCK_INFO_QUERY_THRESHOLD
+                {
+                    dependent_hashes_bounded.insert(*parent);
+                } else {
+                    dependent_hashes_unbounded.insert(*parent);
+                }
             }
 
             for referee in header.referee_hashes() {
                 if !ctx.manager.graph.contains_block_header(referee) {
-                    dependent_hashes.insert(*referee);
+                    dependent_hashes_unbounded.insert(*referee);
                 }
             }
             need_to_relay.extend(to_relay);
@@ -159,9 +170,14 @@ impl GetBlockHeadersResponse {
         }
 
         // do not request headers we just received
-        dependent_hashes.remove(&H256::default());
+        dependent_hashes_bounded.remove(&H256::default());
+        dependent_hashes_unbounded.remove(&H256::default());
         for hash in &returned_headers {
-            dependent_hashes.remove(hash);
+            dependent_hashes_bounded.remove(hash);
+            dependent_hashes_unbounded.remove(hash);
+        }
+        for hash in &dependent_hashes_bounded {
+            dependent_hashes_unbounded.remove(hash);
         }
 
         debug!(
@@ -180,7 +196,14 @@ impl GetBlockHeadersResponse {
         ctx.manager.request_block_headers(
             ctx.io,
             chosen_peer,
-            dependent_hashes.into_iter().collect(),
+            dependent_hashes_bounded.into_iter().collect(),
+            true, /* ignore_db */
+        );
+        ctx.manager.request_block_headers(
+            ctx.io,
+            chosen_peer,
+            dependent_hashes_unbounded.into_iter().collect(),
+            false, /* ignore_db */
         );
 
         if ctx.manager.need_requesting_blocks() {
