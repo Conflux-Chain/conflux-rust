@@ -1102,8 +1102,8 @@ impl ConsensusGraphInner {
             .collect();
         // FIXME Double check if it's okay to use cur_era_genesis instead of
         // two_era_block        let two_era_block =
-        // self.get_era_block_with_parent(            
-        // self.arena[pivot].parent,            
+        // self.get_era_block_with_parent(
+        // self.arena[pivot].parent,
         // self.inner_conf.era_epoch_count,        );
         let two_era_block = self.cur_era_genesis_block_arena_index;
         self.arena[pivot].data.num_epoch_blocks_in_2era = self.arena[pivot]
