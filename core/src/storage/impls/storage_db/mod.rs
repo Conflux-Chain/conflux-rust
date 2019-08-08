@@ -8,3 +8,5 @@ pub mod delta_db_manager_sqlite;
 pub mod kvdb_rocksdb;
 pub mod kvdb_sqlite;
 pub mod snapshot_db_manager_sqlite;
+pub mod snapshot_db_sqlite;
+pub mod snapshot_mpt;
