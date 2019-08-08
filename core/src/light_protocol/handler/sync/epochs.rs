@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::{max_of_collection, Peers};
+use super::{super::handler::FullPeerState, max_of_collection, Peers};
 use crate::{consensus::ConsensusGraph, message::RequestId};
 
 const EPOCH_REQUEST_TIMEOUT_MS: u64 = 2000;
@@ -46,17 +46,27 @@ pub(super) struct Epochs {
     latest: AtomicU64,
 
     // collection of all peers available
-    peers: Arc<Peers>,
+    peers: Arc<Peers<FullPeerState>>,
 }
 
 impl Epochs {
-    pub fn new(consensus: Arc<ConsensusGraph>, peers: Arc<Peers>) -> Self {
+    pub fn new(
+        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
+    ) -> Self {
         Epochs {
             consensus,
             in_flight: RwLock::new(HashMap::new()),
             latest: AtomicU64::new(0),
             peers,
         }
+    }
+
+    #[inline]
+    pub fn best_peer_epoch(&self) -> u64 {
+        self.peers.fold(0, |current_best, state| {
+            let best_for_peer = state.read().best_epoch;
+            cmp::max(current_best, best_for_peer)
+        })
     }
 
     pub fn num_requests_in_flight(&self) -> usize {
@@ -90,7 +100,7 @@ impl Epochs {
         let my_best = self.consensus.best_epoch_number();
         let requested = self.latest.load(Ordering::Relaxed);
         let start_from = cmp::max(my_best, requested) + 1;
-        let peer_best = self.peers.best_epoch();
+        let peer_best = self.best_peer_epoch();
 
         (start_from..peer_best)
             .take(NUM_EPOCHS_TO_REQUEST)

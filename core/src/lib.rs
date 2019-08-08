@@ -2,8 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// This recursion limit is added because of too many errors defined in
-// error_chain. TODO: Remove when it's no longer a issue.
+// Recursion limit raised for error_chain
 #![recursion_limit = "128"]
 #![allow(deprecated)]
 

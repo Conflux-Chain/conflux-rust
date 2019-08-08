@@ -7,8 +7,9 @@ use crate::message::{HasRequestId, Message, MsgId, RequestId};
 use std::any::Any;
 
 // generate `pub mod msgid`
+// TODO(thegaram): reorder message ids
 build_msgid! {
-    STATUS = 0x00
+    STATUS_PING = 0x00
     GET_STATE_ROOT = 0x01
     STATE_ROOT = 0x02
     GET_STATE_ENTRY = 0x03
@@ -18,12 +19,14 @@ build_msgid! {
     GET_BLOCK_HEADERS = 0x07
     BLOCK_HEADERS = 0x08
     NEW_BLOCK_HASHES = 0x09
+    STATUS_PONG = 0x0a
 
     INVALID = 0xff
 }
 
 // generate `impl Message for _` for each message type
-build_msg_impl! { Status, msgid::STATUS, "Status" }
+build_msg_impl! { StatusPing, msgid::STATUS_PING, "StatusPing" }
+build_msg_impl! { StatusPong, msgid::STATUS_PONG, "StatusPong" }
 build_msg_impl! { GetStateRoot, msgid::GET_STATE_ROOT, "GetStateRoot" }
 build_msg_impl! { StateRoot, msgid::STATE_ROOT, "StateRoot" }
 build_msg_impl! { GetStateEntry, msgid::GET_STATE_ENTRY, "GetStateEntry" }

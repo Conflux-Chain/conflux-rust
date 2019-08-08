@@ -58,6 +58,16 @@ error_chain! {
             display("Send status failed"),
         }
 
+        UnexpectedMessage {
+            description("Unexpected message"),
+            display("Unexpected message"),
+        }
+
+        UnexpectedPeerType {
+            description("Unexpected peer type"),
+            display("Unexpected peer type"),
+        }
+
         UnexpectedRequestId {
             description("Unexpected request id"),
             display("Unexpected request id"),
@@ -110,6 +120,8 @@ pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         | ErrorKind::UnknownMessage => disconnect = false,
 
         ErrorKind::GenesisMismatch
+        | ErrorKind::UnexpectedMessage
+        | ErrorKind::UnexpectedPeerType
         | ErrorKind::UnknownPeer
         | ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
 

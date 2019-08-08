@@ -34,6 +34,8 @@ use crate::{
     sync::SynchronizationGraph,
 };
 
+use super::handler::FullPeerState;
+
 use epochs::Epochs;
 use headers::{HashSource, Headers};
 
@@ -80,13 +82,13 @@ pub(super) struct SyncHandler {
     next_request_id: Arc<AtomicU64>,
 
     // collection of all peers available
-    peers: Arc<Peers>,
+    peers: Arc<Peers<FullPeerState>>,
 }
 
 impl SyncHandler {
     pub(super) fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-        next_request_id: Arc<AtomicU64>, peers: Arc<Peers>,
+        next_request_id: Arc<AtomicU64>, peers: Arc<Peers<FullPeerState>>,
     ) -> Self
     {
         graph.recover_graph_from_db(true /* header_only */);
@@ -112,8 +114,23 @@ impl SyncHandler {
     }
 
     #[inline]
+    pub fn median_peer_epoch(&self) -> Option<u64> {
+        let mut best_epochs = self.peers.fold(vec![], |mut res, state| {
+            res.push(state.read().best_epoch);
+            res
+        });
+
+        best_epochs.sort();
+
+        match best_epochs.len() {
+            0 => None,
+            n => Some(best_epochs[n / 2]),
+        }
+    }
+
+    #[inline]
     fn catch_up_mode(&self) -> bool {
-        match self.peers.median_epoch() {
+        match self.median_peer_epoch() {
             None => true,
             Some(epoch) => {
                 let my_epoch = self.consensus.best_epoch_number();
@@ -136,7 +153,14 @@ impl SyncHandler {
 
     #[inline]
     fn collect_terminals(&self) {
-        let terminals = self.peers.collect_all_terminals().into_iter();
+        let terminals = self.peers.fold(vec![], |mut res, state| {
+            let mut state = state.write();
+            res.extend(state.terminals.iter());
+            state.terminals.clear();
+            res
+        });
+
+        let terminals = terminals.into_iter();
         self.headers.insert_waiting(terminals, HashSource::NewHash);
     }
 
@@ -282,7 +306,8 @@ impl SyncHandler {
             let max = max_of_collection(batch.iter()).expect("chunk not empty");
 
             // choose random peer that has the epochs we need
-            let peer = match self.peers.random_peer_with_epoch(*max) {
+            let predicate = |s: &FullPeerState| s.best_epoch >= *max;
+            let peer = match self.peers.random_peer_satisfying(predicate) {
                 Some(peer) => peer,
                 None => {
                     warn!("No peers available; aborting sync");

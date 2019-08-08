@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use io::TimerToken;
+use parking_lot::RwLock;
 use rand::Rng;
 use rlp::Rlp;
 use std::sync::{Arc, Weak};
@@ -31,7 +32,7 @@ use super::{
         BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
         GetBlockHeaders, GetStateEntry, GetStateRoot, NewBlockHashes, NodeType,
         StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
-        Status,
+        StatusPing, StatusPong,
     },
     peers::Peers,
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
@@ -40,6 +41,12 @@ use crate::parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 
 pub const MAX_EPOCHS_TO_SEND: usize = 128;
 pub const MAX_HEADERS_TO_SEND: usize = 512;
+
+#[derive(Default)]
+pub struct LightPeerState {
+    pub handshake_completed: bool,
+    pub protocol_version: u8,
+}
 
 pub struct QueryProvider {
     // shared consensus graph
@@ -53,7 +60,7 @@ pub struct QueryProvider {
     network: Weak<NetworkService>,
 
     // collection of all peers available
-    peers: Peers,
+    peers: Peers<LightPeerState>,
 }
 
 impl QueryProvider {
@@ -86,22 +93,56 @@ impl QueryProvider {
             })
     }
 
+    #[inline]
+    fn get_existing_peer_state(
+        &self, peer: &PeerId,
+    ) -> Result<Arc<RwLock<LightPeerState>>, Error> {
+        match self.peers.get(&peer) {
+            Some(state) => Ok(state),
+            None => {
+                // NOTE: this should not happen as we register
+                // all peers in `on_peer_connected`
+                error!("Received message from unknown peer={:?}", peer);
+                Err(ErrorKind::InternalError.into())
+            }
+        }
+    }
+
+    #[inline]
+    fn validate_peer_state(
+        &self, peer: PeerId, msg_id: MsgId,
+    ) -> Result<(), Error> {
+        let state = self.get_existing_peer_state(&peer)?;
+
+        if msg_id != msgid::STATUS_PING && !state.read().handshake_completed {
+            warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
+            return Err(ErrorKind::UnexpectedMessage.into());
+        }
+
+        Ok(())
+    }
+
     #[rustfmt::skip]
     fn dispatch_message(
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
-
-        // TODO(thegaram): check if peer is known
+        self.validate_peer_state(peer, msg_id)?;
 
         match msg_id {
-            msgid::STATUS => self.on_status(io, peer, &rlp),
+            msgid::STATUS_PING => self.on_status(io, peer, &rlp),
             msgid::GET_STATE_ROOT => self.on_get_state_root(io, peer, &rlp),
             msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
             msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, &rlp),
             msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
+    }
+
+    #[inline]
+    fn all_light_peers(&self) -> Vec<PeerId> {
+        // peers completing the handshake are guaranteed to be light peers
+        self.peers.all_peers_satisfying(|s| s.handshake_completed)
     }
 
     #[inline]
@@ -160,7 +201,7 @@ impl QueryProvider {
             None => best_info.bounded_terminal_block_hashes.clone(),
         };
 
-        let msg: Box<dyn Message> = Box::new(Status {
+        let msg: Box<dyn Message> = Box::new(StatusPong {
             best_epoch: best_info.best_epoch_number,
             genesis_hash,
             network_id: 0x0,
@@ -187,24 +228,32 @@ impl QueryProvider {
         }
     }
 
+    #[inline]
+    fn validate_peer_type(&self, node_type: &NodeType) -> Result<(), Error> {
+        match node_type {
+            NodeType::Light => Ok(()),
+            _ => Err(ErrorKind::UnexpectedPeerType.into()),
+        }
+    }
+
     fn on_status(
-        &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let status: Status = rlp.as_val()?;
+        let status: StatusPing = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
 
+        self.validate_peer_type(&status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
-        // TODO(thegaram): check protocol version
 
-        let peer_state = self.peers.insert(peer);
-        let mut state = peer_state.write();
+        if let Err(e) = self.send_status(io, peer) {
+            warn!("Failed to send status to peer={:?}: {:?}", peer, e);
+            return Err(ErrorKind::SendStatusFailed.into());
+        };
 
-        state.best_epoch = status.best_epoch;
-        state.genesis_hash = status.genesis_hash;
-        state.node_type = status.node_type;
+        let state = self.get_existing_peer_state(&peer)?;
+        let mut state = state.write();
+        state.handshake_completed = true;
         state.protocol_version = status.protocol_version;
-        state.terminals = status.terminals.into_iter().collect();
-
         Ok(())
     }
 
@@ -332,26 +381,24 @@ impl QueryProvider {
             return Ok(());
         }
 
-        let peers = self
-            .peers
-            .all_peers_satisfying(|state| state.node_type == NodeType::Light);
-
-        let msg: Box<dyn Message> = Box::new(NewBlockHashes { hashes });
-
-        match self.network.upgrade() {
+        // check network availability
+        let network = match self.network.upgrade() {
+            Some(network) => network,
             None => {
                 error!("Network unavailable, not relaying hashes");
+                return Err(ErrorKind::InternalError.into());
             }
-            Some(network) => {
-                let res = network.with_context(LIGHT_PROTOCOL_ID, |io| {
-                    self.broadcast(io, peers, msg.as_ref())
-                });
+        };
 
-                if let Err(e) = res {
-                    warn!("Error broadcasting blocks: {:?}", e);
-                };
-            }
-        }
+        // broadcast message
+        let res = network.with_context(LIGHT_PROTOCOL_ID, |io| {
+            let msg: Box<dyn Message> = Box::new(NewBlockHashes { hashes });
+            self.broadcast(io, self.all_light_peers(), msg.as_ref())
+        });
+
+        if let Err(e) = res {
+            warn!("Error broadcasting blocks: {:?}", e);
+        };
 
         Ok(())
     }
@@ -379,23 +426,11 @@ impl NetworkProtocolHandler for QueryProvider {
         }
     }
 
-    fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, _io: &NetworkContext, peer: PeerId) {
         info!("on_peer_connected: peer={:?}", peer);
 
-        match self.send_status(io, peer) {
-            Ok(_) => {
-                self.peers.insert(peer);
-            }
-            Err(e) => {
-                warn!("Error while sending status: {}", e);
-                handle_error(
-                    io,
-                    peer,
-                    msgid::INVALID,
-                    ErrorKind::SendStatusFailed.into(),
-                );
-            }
-        }
+        // insert handshaking peer, wait for StatusPing
+        self.peers.insert(peer);
     }
 
     fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {
