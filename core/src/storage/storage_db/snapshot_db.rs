@@ -2,9 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub trait SnapshotDbTrait: KeyValueDbTraitRead {
-    // FIXME: other snapshot related methods.
+pub trait SnapshotDbTrait {
+    fn get(&self, key: &[u8]) -> Result<Option<Box<[u8]>>>;
 }
 
-//use super::{super::impls::errors::*, key_value_db::KeyValueDbTraitRead};
-use super::key_value_db::KeyValueDbTraitRead;
+use super::super::impls::errors::*;

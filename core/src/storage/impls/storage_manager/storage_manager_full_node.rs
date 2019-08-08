@@ -10,6 +10,7 @@ pub struct StorageManagerFullNode<SnapshotDbManager: SnapshotDbManagerTrait> {
 impl<SnapshotDbManager: SnapshotDbManagerTrait> GetSnapshotDbManager
     for StorageManagerFullNode<SnapshotDbManager>
 {
+    type DeltaMpt = SnapshotDbManager::DeltaMpt;
     type SnapshotDb = SnapshotDbManager::SnapshotDb;
     type SnapshotDbManager = SnapshotDbManager;
 

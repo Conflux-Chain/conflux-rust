@@ -29,14 +29,6 @@ pub struct MaybeOwnedTrieNodeAsCowCallParam {
     trie_node: *mut TrieNodeDeltaMpt,
 }
 
-pub trait KVInserter<Value> {
-    fn push(&mut self, v: Value) -> Result<()>;
-}
-
-impl<Value> KVInserter<Value> for Vec<Value> {
-    fn push(&mut self, v: Value) -> Result<()> { Ok((*self).push(v)) }
-}
-
 impl MaybeOwnedTrieNodeAsCowCallParam {
     // Returns a mutable reference to trie node when the trie_node is owned,
     // however the precondition is unchecked.
@@ -175,7 +167,7 @@ impl CowNodeRef {
     /// prevent any further calls on self.
     pub fn get_trie_node<'a, 'c: 'a>(
         &'a mut self, node_memory_manager: &'c NodeMemoryManagerDeltaMpt,
-        allocator: AllocatorRefRefDeltaMpt<'a>, db: &KeyValueDbTraitRead,
+        allocator: AllocatorRefRefDeltaMpt<'a>,
     ) -> Result<
         GuardedValue<
             Option<MutexGuard<'c, CacheManagerDeltaMpt>>,
@@ -188,7 +180,6 @@ impl CowNodeRef {
                 &allocator,
                 self.node_ref.clone(),
                 node_memory_manager.get_cache_manager(),
-                db,
                 &mut false,
             )?,
         ))
@@ -226,7 +217,6 @@ impl CowNodeRef {
         mut self, trie: &DeltaMpt, owned_node_set: &OwnedNodeSet,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
-        db: &KeyValueDbTraitRead,
     ) -> Result<()>
     {
         if self.owned {
@@ -249,11 +239,8 @@ impl CowNodeRef {
             for (i, node_ref) in children_table.iter() {
                 let mut cow_child_node =
                     Self::new((*node_ref).into(), owned_node_set);
-                let child_node = cow_child_node.get_trie_node(
-                    node_memory_manager,
-                    &allocator,
-                    db,
-                )?;
+                let child_node = cow_child_node
+                    .get_trie_node(node_memory_manager, &allocator)?;
                 let key_prefix = CompressedPathRaw::concat(
                     &key_prefix,
                     i,
@@ -266,7 +253,6 @@ impl CowNodeRef {
                     child_node,
                     key_prefix,
                     values,
-                    db,
                 )?;
             }
 
@@ -280,17 +266,18 @@ impl CowNodeRef {
                 guarded_trie_node,
                 key_prefix,
                 values,
-                db,
             )
         }
     }
 
-    fn commit_dirty_recurse_into_children<
-        Transaction: BorrowMut<KeyValueDbTransactionTrait>,
-    >(
+    // FIXME: Revisit methods including a trie parameter are subject
+    // FIXME: to refactor because we are going to separate node
+    // FIXME: memory manager from mpt, and we are probably going
+    // FIXME: to have a new trait for a MPT.
+    fn commit_dirty_recurse_into_children(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
-        commit_transaction: &mut AtomicCommitTransaction<Transaction>,
+        commit_transaction: &mut AtomicCommitTransaction,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<()>
@@ -341,7 +328,7 @@ impl CowNodeRef {
     /// Get if unowned, compute if owned.
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
-        allocator_ref: AllocatorRefRefDeltaMpt, db: &KeyValueDbTraitRead,
+        allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -356,7 +343,6 @@ impl CowNodeRef {
                 owned_node_set,
                 trie_node,
                 allocator_ref,
-                db,
             )?;
 
             let merkle = self.set_merkle(children_merkles.as_ref(), trie_node);
@@ -370,7 +356,6 @@ impl CowNodeRef {
                     allocator_ref,
                     self.node_ref.clone(),
                     trie.get_node_memory_manager().get_cache_manager(),
-                    db,
                     &mut load_from_db,
                 )?;
             if load_from_db {
@@ -385,7 +370,7 @@ impl CowNodeRef {
     fn get_or_compute_children_merkles(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
-        allocator_ref: AllocatorRefRefDeltaMpt, db: &KeyValueDbTraitRead,
+        allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<MaybeMerkleTable>
     {
         match trie_node.children_table.get_children_count() {
@@ -406,7 +391,6 @@ impl CowNodeRef {
                                 trie,
                                 owned_node_set,
                                 allocator_ref,
-                                db,
                             );
                             // There is no change to the child reference so the
                             // return value is dropped.
@@ -425,13 +409,10 @@ impl CowNodeRef {
     // FIXME: It's unnecessary to use owned_node_set for read-only access.
     // FIXME: Where to put which method? CowNodeRef, MVMPT / MPT,
     // FIXME: SubTrieVisitor?
-    pub fn iterate_internal<
-        KVInserterType: KVInserter<(Vec<u8>, Box<[u8]>)>,
-    >(
+    pub fn iterate_internal(
         &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
-        key_prefix: CompressedPathRaw, values: &mut KVInserterType,
-        db: &KeyValueDbTraitRead,
+        key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
     ) -> Result<()>
     {
         if guarded_trie_node.as_ref().as_ref().has_value() {
@@ -439,7 +420,7 @@ impl CowNodeRef {
             values.push((
                 key_prefix.path_slice().to_vec(),
                 guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
-            ))?;
+            ));
         }
 
         let children_table =
@@ -453,11 +434,8 @@ impl CowNodeRef {
         for (i, node_ref) in children_table.iter() {
             let mut cow_child_node =
                 Self::new((*node_ref).into(), owned_node_set);
-            let child_node = cow_child_node.get_trie_node(
-                node_memory_manager,
-                &allocator,
-                db,
-            )?;
+            let child_node = cow_child_node
+                .get_trie_node(node_memory_manager, &allocator)?;
             let key_prefix = CompressedPathRaw::concat(
                 &key_prefix,
                 i,
@@ -470,7 +448,6 @@ impl CowNodeRef {
                 child_node,
                 key_prefix,
                 values,
-                db,
             )?;
         }
 
@@ -478,12 +455,10 @@ impl CowNodeRef {
     }
 
     /// Recursively commit dirty nodes.
-    pub fn commit_dirty_recursively<
-        Transaction: BorrowMut<KeyValueDbTransactionTrait>,
-    >(
+    pub fn commit_dirty_recursively(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
-        commit_transaction: &mut AtomicCommitTransaction<Transaction>,
+        commit_transaction: &mut AtomicCommitTransaction,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<bool>
@@ -499,13 +474,11 @@ impl CowNodeRef {
             )?;
 
             let db_key = commit_transaction.info.row_number.value;
-            commit_transaction
-                .transaction
-                .borrow_mut()
-                .put_with_number_key(
-                    commit_transaction.info.row_number.value.into(),
-                    trie_node.rlp_bytes().as_slice(),
-                )?;
+            commit_transaction.transaction.put(
+                COL_DELTA_TRIE,
+                commit_transaction.info.row_number.to_string().as_bytes(),
+                trie_node.rlp_bytes().as_slice(),
+            );
             commit_transaction.info.row_number =
                 commit_transaction.info.row_number.get_next()?;
 
@@ -540,7 +513,6 @@ impl CowNodeRef {
         self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         child_node_ref: NodeRefDeltaMpt, child_index: u8,
-        db: &KeyValueDbTraitRead,
     ) -> Result<CowNodeRef>
     {
         let node_memory_manager = trie.get_node_memory_manager();
@@ -563,11 +535,8 @@ impl CowNodeRef {
         // FIXME: value or itself isn't dirty as well. However if a
         // FIXME: dirty child node was removed, recovering the state
         // FIXME: becomes difficult.
-        let child_trie_node = child_node_cow.get_trie_node(
-            node_memory_manager,
-            &allocator,
-            db,
-        )?;
+        let child_trie_node =
+            child_node_cow.get_trie_node(node_memory_manager, &allocator)?;
         let new_path = CompressedPathRaw::concat(
             &path_prefix,
             child_index,
@@ -759,15 +728,13 @@ impl CowNodeRef {
 use super::{
     super::{
         super::{
-            super::storage_db::key_value_db::{
-                KeyValueDbTraitRead, KeyValueDbTransactionTrait,
-            },
             errors::*,
             state::OwnedNodeSet,
+            state_manager::{AtomicCommitTransaction, COL_DELTA_TRIE},
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
-        AtomicCommitTransaction, DeltaMpt, UnsafeCellExtension,
+        DeltaMpt, UnsafeCellExtension,
     },
     merkle::*,
     mpt_value::MptValue,
@@ -777,6 +744,5 @@ use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
-    borrow::BorrowMut, cell::Cell, hint::unreachable_unchecked, ops::Deref,
-    sync::atomic::Ordering,
+    cell::Cell, hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
 };

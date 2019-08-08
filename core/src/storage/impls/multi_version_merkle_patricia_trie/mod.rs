@@ -12,19 +12,6 @@ pub use self::node_ref_map::DEFAULT_NODE_MAP_SIZE;
 
 pub type DeltaMpt = MultiVersionMerklePatriciaTrie;
 
-#[derive(Default)]
-pub struct AtomicCommit {
-    pub row_number: RowNumber,
-}
-
-pub struct AtomicCommitTransaction<
-    'a,
-    Transaction: BorrowMut<KeyValueDbTransactionTrait>,
-> {
-    pub info: MutexGuard<'a, AtomicCommit>,
-    pub transaction: Transaction,
-}
-
 pub struct MultiVersionMerklePatriciaTrie {
     // TODO(yz): revisit the comment below. With snapshot we may have special
     // TODO(yz): api to create empty epoch.
@@ -43,9 +30,11 @@ pub struct MultiVersionMerklePatriciaTrie {
     /// out from memory because persistence isn't necessary.
     /// (So far we don't have write-back implementation. For write-back we
     /// should think more about roots in disk db.)
+    // TODO(yz): we should separate disk db from node_memory_manager because
+    // TODO(yz): in different delta we don't share cache & db but we share
+    // TODO(yz): memory.
+    // FIXME: this is a big refactor. Add snapshot to storage manager first.
     node_memory_manager: NodeMemoryManagerDeltaMpt,
-    /// This db access is read only. // FIXME: pub
-    db: Arc<KeyValueDbTraitTransactionalDyn + Send + Sync>,
     /// The padding is uniquely generated for each DeltaMPT, and it's used to
     /// compute padding bytes for address and storage_key. The padding setup
     /// is against an attack where adversary artificially build deep paths in
@@ -54,11 +43,16 @@ pub struct MultiVersionMerklePatriciaTrie {
     /// Take care of database clean-ups for DeltaMpt.
     // The variable is used in drop. Variable with non-trivial dtor shouldn't
     // trigger the compiler warning.
+    #[allow(unused)]
     delta_mpts_releaser: DeltaDbReleaser,
-    commit_lock: Mutex<AtomicCommit>,
 }
 
 unsafe impl Sync for MultiVersionMerklePatriciaTrie {}
+
+// expose padding so that other modules can compute keys too
+pub fn padding(snapshot: &MerkleHash, intermediate: &MerkleHash) -> KeyPadding {
+    MultiVersionMerklePatriciaTrie::padding(&snapshot, &intermediate)
+}
 
 impl MultiVersionMerklePatriciaTrie {
     pub fn padding(
@@ -72,32 +66,12 @@ impl MultiVersionMerklePatriciaTrie {
         keccak(&buffer).0
     }
 
-    pub fn get_snapshot_root(&self) -> &MerkleHash {
-        &self.delta_mpts_releaser.snapshot_root
-    }
-
-    pub fn start_commit(
-        &self,
-    ) -> Result<AtomicCommitTransaction<Box<dyn KeyValueDbTransactionTrait>>>
-    {
-        Ok(AtomicCommitTransaction {
-            info: self.commit_lock.lock(),
-            transaction: self.db.start_transaction_dyn()?,
-        })
-    }
-
     pub fn new(
-        kvdb: Arc<KeyValueDbTraitTransactionalDyn + Send + Sync>,
-        conf: StorageConfiguration, padding: KeyPadding,
-        snapshot_root: MerkleHash, storage_manager: Arc<StorageManager>,
+        kvdb: Arc<DeltaDbTrait + Send + Sync>, conf: StorageConfiguration,
+        padding: KeyPadding, snapshot_root: MerkleHash,
+        storage_manager: Arc<StorageManager>,
     ) -> Self
     {
-        let row_number =
-            Self::parse_row_number(kvdb.get("last_row_number".as_bytes()))
-                // unwrap() on new is fine.
-                .unwrap()
-                .unwrap_or_default();
-
         Self {
             root_by_version: Default::default(),
             node_memory_manager: NodeMemoryManagerDeltaMpt::new(
@@ -106,48 +80,13 @@ impl MultiVersionMerklePatriciaTrie {
                 conf.idle_size,
                 conf.node_map_size,
                 LRU::<RLFUPosT, DeltaMptDbKey>::new(conf.cache_size),
+                kvdb,
             ),
             padding,
             delta_mpts_releaser: DeltaDbReleaser {
                 snapshot_root,
                 storage_manager,
             },
-            db: kvdb,
-            commit_lock: Mutex::new(AtomicCommit {
-                row_number: RowNumber { value: row_number },
-            }),
-        }
-    }
-
-    fn load_state_root_node_ref_from_db(
-        &self, epoch_id: &EpochId,
-    ) -> Result<Option<NodeRefDeltaMpt>> {
-        let db_key_result = Self::parse_row_number(
-            self.db.get(
-                [
-                    "state_root_db_key_for_epoch_id_".as_bytes(),
-                    epoch_id.as_ref(),
-                ]
-                .concat()
-                .as_slice(),
-            ),
-        )?;
-        match db_key_result {
-            Some(db_key) => {
-                Ok(Some(self.loaded_root_at_epoch(epoch_id, db_key)))
-            }
-            None => Ok(None),
-        }
-    }
-
-    pub fn get_state_root_node_ref(
-        &self, epoch_id: &EpochId,
-    ) -> Result<Option<NodeRefDeltaMpt>> {
-        let node_ref = self.get_root_at_epoch(epoch_id);
-        if node_ref.is_none() {
-            self.load_state_root_node_ref_from_db(epoch_id)
-        } else {
-            Ok(node_ref)
         }
     }
 
@@ -165,10 +104,10 @@ impl MultiVersionMerklePatriciaTrie {
     }
 
     pub fn loaded_root_at_epoch(
-        &self, epoch_id: &EpochId, db_key: DeltaMptDbKey,
+        &self, epoch_id: EpochId, db_key: DeltaMptDbKey,
     ) -> NodeRefDeltaMpt {
         let root = NodeRefDeltaMpt::Committed { db_key };
-        self.set_epoch_root(*epoch_id, root.clone());
+        self.set_epoch_root(epoch_id, root.clone());
 
         root
     }
@@ -187,7 +126,6 @@ impl MultiVersionMerklePatriciaTrie {
                         &self.node_memory_manager.get_allocator(),
                         node,
                         self.node_memory_manager.get_cache_manager(),
-                        self.db.as_read_only(),
                         &mut false,
                     )?
                     .get_merkle()
@@ -200,50 +138,26 @@ impl MultiVersionMerklePatriciaTrie {
     pub fn log_usage(&self) { self.node_memory_manager.log_usage(); }
 }
 
-// Utility function.
-impl MultiVersionMerklePatriciaTrie {
-    fn parse_row_number(
-        x: Result<Option<Box<[u8]>>>,
-    ) -> Result<Option<RowNumberUnderlyingType>> {
-        Ok(match x?.as_ref() {
-            None => None,
-            Some(row_number_bytes) => Some(
-                unsafe {
-                    std::str::from_utf8_unchecked(row_number_bytes.as_ref())
-                }
-                .parse::<RowNumberUnderlyingType>()?,
-            ),
-        })
-    }
-
-    pub fn db_read_only(&self) -> &dyn KeyValueDbTraitRead {
-        self.db.as_read_only()
-    }
-
-    pub fn db_commit(&self) -> &dyn Any { (*self.db).as_any() }
-}
-
 pub mod guarded_value;
 pub(self) mod node_ref_map;
-/// Fork of upstream slab in order to compact data and be thread-safe without
-/// giant lock.
+/// Fork of upstream slab in order to compact data and to provide internal
+/// mutability.
 mod slab;
 
-pub use self::node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell};
 pub use merkle_patricia_trie::trie_proof::TrieProof;
 
 use self::{
     cache::algorithm::lru::LRU, merkle_patricia_trie::*,
-    node_memory_manager::*, node_ref_map::DeltaMptDbKey, row_number::*,
+    node_memory_manager::*, node_ref_map::DeltaMptDbKey,
 };
 use super::{
-    super::storage_db::key_value_db::*, errors::*,
+    super::storage_db::delta_db::DeltaDbTrait, errors::*,
     storage_manager::storage_manager::*,
 };
 use crate::{
     statedb::KeyPadding, storage::state_manager::StorageConfiguration,
 };
 use keccak_hash::keccak;
-use parking_lot::{Mutex, MutexGuard, RwLock};
+use parking_lot::RwLock;
 use primitives::{EpochId, MerkleHash};
-use std::{any::Any, borrow::BorrowMut, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};

@@ -14,6 +14,7 @@ use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
     Serialize, Serializer,
 };
+use serde_derive::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
 
