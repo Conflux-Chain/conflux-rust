@@ -140,6 +140,12 @@ impl QueryProvider {
     }
 
     #[inline]
+    fn all_light_peers(&self) -> Vec<PeerId> {
+        // peers completing the handshake are guaranteed to be light peers
+        self.peers.all_peers_satisfying(|s| s.handshake_completed)
+    }
+
+    #[inline]
     fn get_local_pivot_hash(&self, epoch: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(epoch);
         let pivot_hash = self.consensus.get_hash_from_epoch_number(epoch)?;
@@ -375,23 +381,24 @@ impl QueryProvider {
             return Ok(());
         }
 
-        let peers = self.peers.all_peers_shuffled();
-        let msg: Box<dyn Message> = Box::new(NewBlockHashes { hashes });
-
-        match self.network.upgrade() {
+        // check network availability
+        let network = match self.network.upgrade() {
+            Some(network) => network,
             None => {
                 error!("Network unavailable, not relaying hashes");
+                return Err(ErrorKind::InternalError.into());
             }
-            Some(network) => {
-                let res = network.with_context(LIGHT_PROTOCOL_ID, |io| {
-                    self.broadcast(io, peers, msg.as_ref())
-                });
+        };
 
-                if let Err(e) = res {
-                    warn!("Error broadcasting blocks: {:?}", e);
-                };
-            }
-        }
+        // broadcast message
+        let res = network.with_context(LIGHT_PROTOCOL_ID, |io| {
+            let msg: Box<dyn Message> = Box::new(NewBlockHashes { hashes });
+            self.broadcast(io, self.all_light_peers(), msg.as_ref())
+        });
+
+        if let Err(e) = res {
+            warn!("Error broadcasting blocks: {:?}", e);
+        };
 
         Ok(())
     }
