@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    ip::{NodeIpLimit, ValidateInsertResult},
+    ip::{NodeIpLimit, NodeTagIndex, ValidateInsertResult},
     node_table::{Node, NodeContact, NodeEntry, NodeId, NodeTable},
     IpFilter,
 };
@@ -76,6 +76,14 @@ pub struct NodeDatabase {
     trusted_nodes: NodeTable,
     untrusted_nodes: NodeTable,
     ip_limit: NodeIpLimit,
+
+    // Only used for sampling trusted nodes with desired tag.
+    // It is updated in following cases:
+    // 1. add tag indices when initialize the trusted node table
+    // 2. add tag indices when promote a node
+    // 3. remove tag indices when demote a node
+    // 4. remove tag indices when delete a trusted node
+    trusted_node_tag_index: NodeTagIndex,
 }
 
 impl NodeDatabase {
@@ -83,11 +91,14 @@ impl NodeDatabase {
         let trusted_nodes = NodeTable::new(path.clone(), true);
         let untrusted_nodes = NodeTable::new(path.clone(), false);
         let ip_limit = NodeIpLimit::new(subnet_quota);
+        let trusted_node_tag_index =
+            NodeTagIndex::new_with_node_table(&trusted_nodes);
 
         let mut db = NodeDatabase {
             trusted_nodes,
             untrusted_nodes,
             ip_limit,
+            trusted_node_tag_index,
         };
 
         db.init(false);
@@ -150,6 +161,7 @@ impl NodeDatabase {
             if let Some(old_node) = self.promote_with_untrusted(&node.id, ip) {
                 node.last_connected = old_node.last_connected;
                 node.stream_token = old_node.stream_token;
+                self.trusted_node_tag_index.add_node(&node);
                 self.trusted_nodes.add_node(node, false);
             }
         } else if self.insert_ip_limit(node.id.clone(), ip, true) {
@@ -195,6 +207,7 @@ impl NodeDatabase {
                 node.last_contact = old_node.last_contact;
                 node.last_connected = old_node.last_connected;
                 node.stream_token = old_node.stream_token;
+                self.trusted_node_tag_index.add_node(&node);
                 self.trusted_nodes.add_node(node, false);
             }
         } else if self.insert_ip_limit(node.id.clone(), ip, true) {
@@ -277,6 +290,18 @@ impl NodeDatabase {
         }
     }
 
+    // todo call this method to sample Archive nodes for outgoing connection
+    #[allow(dead_code)]
+    pub fn sample_trusted_node_ids_with_tag(
+        &self, count: u32, key: &String, value: &String,
+    ) -> HashSet<NodeId> {
+        // todo always enable ip_limit and remove the legacy sampling methods in
+        // node table
+        self.trusted_node_tag_index
+            .sample(count, key, value)
+            .unwrap_or_else(|| HashSet::new())
+    }
+
     /// Persist trust and untrusted node tables and clear all useless nodes.
     pub fn save(&mut self) {
         self.trusted_nodes.save();
@@ -300,6 +325,7 @@ impl NodeDatabase {
                             self.untrusted_nodes.remove_with_id(id)
                         {
                             // IP address not changed and always allow to add.
+                            self.trusted_node_tag_index.add_node(&removed_node);
                             self.trusted_nodes.add_node(removed_node, false);
                         }
                     }
@@ -313,16 +339,22 @@ impl NodeDatabase {
         if let Some(removed_trusted_node) =
             self.trusted_nodes.remove_with_id(node_id)
         {
+            self.trusted_node_tag_index
+                .remove_node(&removed_trusted_node);
             self.untrusted_nodes.add_node(removed_trusted_node, false);
         }
     }
 
     /// Remove node from database for the specified id
     pub fn remove(&mut self, id: &NodeId) -> Option<Node> {
-        let node = self
-            .trusted_nodes
-            .remove_with_id(id)
-            .or_else(|| self.untrusted_nodes.remove_with_id(id))?;
+        let node = if let Some(node) = self.trusted_nodes.remove_with_id(id) {
+            self.trusted_node_tag_index.remove_node(&node);
+            node
+        } else if let Some(node) = self.untrusted_nodes.remove_with_id(id) {
+            node
+        } else {
+            return None;
+        };
 
         self.ip_limit.remove(id);
 
@@ -384,6 +416,48 @@ impl NodeDatabase {
                 }
             }
         }
+    }
+
+    pub fn set_tag(&mut self, id: NodeId, key: &str, value: &str) {
+        let (trusted, node) =
+            if let Some(node) = self.trusted_nodes.get_mut(&id) {
+                (true, node)
+            } else if let Some(node) = self.untrusted_nodes.get_mut(&id) {
+                (false, node)
+            } else {
+                return;
+            };
+
+        // add or update tag for node
+        let removed = node.tags.insert(key.into(), value.into());
+
+        // do not update tag index for untrusted node
+        if !trusted {
+            return;
+        }
+
+        let subnet = self
+            .ip_limit
+            .subnet(&id)
+            .expect("node index should always exist");
+
+        // remove the old tag index
+        if let Some(removed) = removed {
+            self.trusted_node_tag_index.remove(
+                &id,
+                subnet,
+                &key.into(),
+                &removed,
+            );
+        }
+
+        // add new tag index
+        self.trusted_node_tag_index.insert(
+            id,
+            subnet,
+            key.into(),
+            value.into(),
+        );
     }
 }
 
