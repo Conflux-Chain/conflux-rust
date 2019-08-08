@@ -178,10 +178,10 @@ impl SnapshotDbSqlite {
 
         {
             let mut mpt_to_modify = self.open_snapshot_mpt_for_write();
-            let mpt_to_modify_as_trait = Some(
+            let mut mpt_merger = MptMerger::new(
+                None,
                 &mut mpt_to_modify as &mut dyn SnapshotMptTraitSingleWriter,
             );
-            let mut mpt_merger = MptMerger::new(None, mpt_to_modify_as_trait);
             mpt_merger.merge(delta_mpt)
         }
     }
@@ -192,12 +192,11 @@ impl SnapshotDbSqlite {
         // FIXME: implement db copy..
         {
             let base_mpt = old_snapshot_db.open_snapshot_mpt_read_only();
-            let base_mpt_as_trait = &base_mpt as &SnapshotMptTraitReadOnly;
             let mut save_as_mpt = self.open_snapshot_mpt_for_write();
-            let save_as_mpt_as_trait =
-                Some(&mut save_as_mpt as &mut dyn SnapshotMptTraitSingleWriter);
-            let mut mpt_merger =
-                MptMerger::new(Some(base_mpt_as_trait), save_as_mpt_as_trait);
+            let mut mpt_merger = MptMerger::new(
+                Some(&base_mpt as &SnapshotMptTraitReadOnly),
+                &mut save_as_mpt as &mut dyn SnapshotMptTraitSingleWriter,
+            );
             mpt_merger.merge(delta_mpt)
         }
     }
