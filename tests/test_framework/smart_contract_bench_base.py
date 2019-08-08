@@ -43,6 +43,9 @@ class SmartContractBenchBase(ConfluxTestFramework):
         pass
 
     def run_test(self):
+        # Prevent easysolc from configuring the root logger to print to stderr
+        self.log.propagate = False
+
         start_p2p_connection(self.nodes)
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
