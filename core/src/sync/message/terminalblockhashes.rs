@@ -24,15 +24,18 @@ impl Handleable for GetTerminalBlockHashesResponse {
 
         ctx.match_request(self.request_id)?;
 
-        for hash in self.hashes {
-            if !ctx.manager.graph.contains_block_header(&hash) {
-                ctx.manager.request_block_headers(
-                    ctx.io,
-                    Some(ctx.peer),
-                    vec![hash],
-                );
-            }
-        }
+        let missing_hash = self
+            .hashes
+            .iter()
+            .filter(|x| !ctx.manager.graph.contains_block_header(&x))
+            .cloned()
+            .collect::<Vec<H256>>();
+        ctx.manager.request_block_headers(
+            ctx.io,
+            Some(ctx.peer),
+            missing_hash,
+            true, /* ignore_db */
+        );
 
         Ok(())
     }

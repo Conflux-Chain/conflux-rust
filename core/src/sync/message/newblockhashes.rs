@@ -35,16 +35,11 @@ impl Handleable for NewBlockHashes {
             .cloned()
             .collect::<Vec<_>>();
 
-        // self.request_manager.request_block_headers(
-        //     io,
-        //     Some(peer),
-        //     headers_to_request,
-        // );
-
         ctx.manager.request_block_headers(
             ctx.io,
             Some(ctx.peer),
             headers_to_request,
+            true, /* ignore_db */
         );
 
         Ok(())
