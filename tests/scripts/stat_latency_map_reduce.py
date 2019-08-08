@@ -55,7 +55,11 @@ class Transaction:
         if txs.get(tx.hash) is None:
             txs[tx.hash] = tx
         elif tx.received_timestamps[0] < txs[tx.hash].received_timestamps[0]:
+            packed_time = None
+            if txs[tx.hash].packed_timestamps[0] is not None:
+                packed_time = txs[tx.hash].packed_timestamps[0]
             txs[tx.hash] = tx
+            txs[tx.hash].packed_timestamps[0] = packed_time
 
         #when a node is packing a transaction, it should already received it, thus the packing transaction timesstamp should be added only once.
         if tx.packed_timestamps[0] is not None:
