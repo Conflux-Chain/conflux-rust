@@ -62,7 +62,7 @@ class Transaction:
             txs[tx.hash].packed_timestamps[0] = tx.packed_timestamps[0]
 
     def merge(self, tx):
-        self.received_timestamps.extend(tx.timestamps)
+        self.received_timestamps.extend(tx.received_timestamps)
         if tx.packed_timestamps[0] is not None:
             self.packed_timestamps.extend(tx.packed_timestamps)
 
