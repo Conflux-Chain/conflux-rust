@@ -985,10 +985,10 @@ impl ConsensusNewBlockHandler {
         let era_block = inner.get_era_block_with_parent(parent, 0);
 
         let pending = {
-            let me_stable_index =
+            let me_stable_arena_index =
                 inner.ancestor_at(parent, inner.cur_era_stable_height);
-            me_stable_index == NULL
-                || me_stable_index
+            me_stable_arena_index == NULL
+                || me_stable_arena_index
                     != inner.get_pivot_block_arena_index(
                         inner.cur_era_stable_height,
                     )
