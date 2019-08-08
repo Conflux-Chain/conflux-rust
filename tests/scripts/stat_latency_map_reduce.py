@@ -68,7 +68,11 @@ class Transaction:
     def merge(self, tx):
         self.received_timestamps.extend(tx.received_timestamps)
         if tx.packed_timestamps[0] is not None:
-            self.packed_timestamps.extend(tx.packed_timestamps)
+            if self.packed_timestamps[0] is None:
+                self.packed_timestamps[0]=tx.packed_timestamps[0]
+            else:
+                self.packed_timestamps.extend(tx.packed_timestamps)
+
 
     def get_latencies(self):
         min_ts = min(self.received_timestamps)
