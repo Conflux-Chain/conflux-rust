@@ -376,7 +376,7 @@ class LogAggregator:
                 self.tx_latency_stats[tx.hash] = Statistics(tx.get_latencies())
             if tx.packed_timestamps[0] is not None:
                 self.tx_packed_to_block_latency[tx.hash] = Statistics(tx.get_packed_to_block_latencies())
-                self.min_tx_packed_to_block_latency.append(tx.get_packed_to_block_latencies)
+                self.min_tx_packed_to_block_latency.append(tx.packed_timestamps)
 
     def stat_block_latency(self, t:BlockLatencyType, p:Percentile):
         data = []
