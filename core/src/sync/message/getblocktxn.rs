@@ -5,9 +5,7 @@
 use crate::{
     message::{Message, RequestId},
     sync::{
-        message::{
-            Context, GetBlockTxnResponse, GetBlocks, Handleable, KeyContainer,
-        },
+        message::{Context, GetBlockTxnResponse, Handleable, KeyContainer},
         request_manager::Request,
         Error, ErrorKind, ProtocolConfiguration,
     },
@@ -16,7 +14,7 @@ use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
-#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable, Clone)]
 pub struct GetBlockTxn {
     pub request_id: RequestId,
     pub block_hash: H256,
@@ -40,13 +38,7 @@ impl Request for GetBlockTxn {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<Request>> {
-        Some(Box::new(GetBlocks {
-            request_id: 0,
-            with_public: true,
-            hashes: vec![self.block_hash.clone()],
-        }))
-    }
+    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
 }
 
 impl Handleable for GetBlockTxn {

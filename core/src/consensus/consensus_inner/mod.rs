@@ -400,6 +400,8 @@ impl ConsensusGraphInner {
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .data
             .epoch_number = 0;
+        inner.arena[inner.cur_era_genesis_block_arena_index]
+            .last_pivot_in_past = genesis_block.block_header.height();
         inner
             .pivot_chain
             .push(inner.cur_era_genesis_block_arena_index);
@@ -504,6 +506,10 @@ impl ConsensusGraphInner {
         }
         let height = self.arena[parent].height;
         let era_height = self.get_era_height(height, offset);
+        debug!(
+            "height={} era_height={} era_genesis_height={}",
+            height, era_height, self.cur_era_genesis_height
+        );
         self.ancestor_at(parent, era_height)
     }
 
@@ -1094,10 +1100,12 @@ impl ConsensusGraphInner {
             .filter(|idx| self.is_same_era(**idx, pivot))
             .map(|idx| *idx)
             .collect();
-        let two_era_block = self.get_era_block_with_parent(
-            self.arena[pivot].parent,
-            self.inner_conf.era_epoch_count,
-        );
+        // FIXME Double check if it's okay to use cur_era_genesis instead of
+        // two_era_block        let two_era_block =
+        // self.get_era_block_with_parent(
+        // self.arena[pivot].parent,
+        // self.inner_conf.era_epoch_count,        );
+        let two_era_block = self.cur_era_genesis_block_arena_index;
         self.arena[pivot].data.num_epoch_blocks_in_2era = self.arena[pivot]
             .data
             .blockset_in_own_view_of_epoch
@@ -1215,12 +1223,12 @@ impl ConsensusGraphInner {
             let weight_in_my_epoch = self.total_weight_in_own_epoch(
                 &self.arena[index].data.blockset_in_own_view_of_epoch,
                 false,
-                Some(graph_era_stable_genesis),
+                graph_era_stable_genesis,
             );
             let weight_era_in_my_epoch = self.total_weight_in_own_epoch(
                 &self.arena[index].data.blockset_in_own_view_of_epoch,
                 false,
-                Some(era_genesis),
+                era_genesis,
             );
             let past_weight = self.arena[parent].past_weight
                 + self.block_weight(parent, false)
@@ -2009,11 +2017,11 @@ impl ConsensusGraphInner {
     /// my_hash.
     fn total_weight_in_own_epoch(
         &self, blockset_in_own_epoch: &HashSet<usize>, inclusive: bool,
-        genesis_opt: Option<usize>,
+        genesis: usize,
     ) -> i128
     {
-        let gen_arena_index = if let Some(x) = genesis_opt {
-            x
+        let gen_arena_index = if genesis != NULL {
+            genesis
         } else {
             self.cur_era_genesis_block_arena_index
         };
@@ -2033,5 +2041,83 @@ impl ConsensusGraphInner {
             total_weight += self.block_weight(*index, inclusive);
         }
         total_weight
+    }
+
+    /// Recompute metadata associated information on pivot chain changes
+    pub fn recompute_metadata(
+        &mut self, start_at: u64, mut to_update: HashSet<usize>,
+    ) {
+        self.pivot_chain_metadata
+            .resize_with(self.pivot_chain.len(), Default::default);
+        let pivot_height = self.get_pivot_height();
+        for i in start_at..pivot_height {
+            let me = self.get_pivot_block_arena_index(i);
+            self.arena[me].last_pivot_in_past = i;
+            let i_pivot_index = self.height_to_pivot_index(i);
+            self.pivot_chain_metadata[i_pivot_index]
+                .last_pivot_in_past_blocks
+                .clear();
+            self.pivot_chain_metadata[i_pivot_index]
+                .last_pivot_in_past_blocks
+                .insert(me);
+            to_update.remove(&me);
+        }
+        let mut stack = Vec::new();
+        let to_visit = to_update.clone();
+        for i in &to_update {
+            stack.push((0, *i));
+        }
+        while !stack.is_empty() {
+            let (stage, me) = stack.pop().unwrap();
+            if !to_visit.contains(&me) {
+                continue;
+            }
+            let parent = self.arena[me].parent;
+            if stage == 0 {
+                if to_update.contains(&me) {
+                    to_update.remove(&me);
+                    stack.push((1, me));
+                    stack.push((0, parent));
+                    for referee in &self.arena[me].referees {
+                        stack.push((0, *referee));
+                    }
+                }
+            } else if stage == 1 && me != self.cur_era_genesis_block_arena_index
+            {
+                let mut last_pivot = self.arena[parent].last_pivot_in_past;
+                for referee in &self.arena[me].referees {
+                    let x = self.arena[*referee].last_pivot_in_past;
+                    last_pivot = max(last_pivot, x);
+                }
+                self.arena[me].last_pivot_in_past = last_pivot;
+                let last_pivot_index = self.height_to_pivot_index(last_pivot);
+                self.pivot_chain_metadata[last_pivot_index]
+                    .last_pivot_in_past_blocks
+                    .insert(me);
+            }
+        }
+    }
+
+    /// This function force the pivot chain to follow our previous stable
+    /// genesis choice. It assumes that the era_genesis_block should be the
+    /// ancestor of stable_block, and the past of stable_block should have
+    /// been inserted into consensus.
+    pub fn set_pivot_to_stable(&mut self, stable: &H256) {
+        let stable_index = *self
+            .hash_to_arena_indices
+            .get(stable)
+            .expect("Era stable genesis inserted");
+        let mut new_pivot_chain = Vec::new();
+        let mut to_update = HashSet::new();
+        let mut pivot = stable_index;
+        while pivot != NULL {
+            new_pivot_chain.push(pivot);
+            to_update.insert(pivot);
+            pivot = self.arena[pivot].parent;
+        }
+        new_pivot_chain.reverse();
+        self.pivot_chain = new_pivot_chain;
+        // TODO Double check if this is needed
+        self.recompute_metadata(self.cur_era_genesis_height, to_update);
     }
 }

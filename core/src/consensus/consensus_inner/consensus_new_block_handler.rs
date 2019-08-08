@@ -111,7 +111,7 @@ impl ConsensusNewBlockHandler {
                     let weight_in_my_epoch = inner.total_weight_in_own_epoch(
                         &inner.arena[*child].data.blockset_in_own_view_of_epoch,
                         false,
-                        Some(stable_era_genesis),
+                        stable_era_genesis,
                     );
                     inner.arena[*child].past_weight = inner.arena[x]
                         .past_weight
@@ -750,65 +750,6 @@ impl ConsensusNewBlockHandler {
         return true;
     }
 
-    /// Recompute metadata associated information on pivot chain changes
-    fn recompute_metadata(
-        &self, inner: &mut ConsensusGraphInner, start_at: u64,
-        mut to_update: HashSet<usize>,
-    )
-    {
-        inner
-            .pivot_chain_metadata
-            .resize_with(inner.pivot_chain.len(), Default::default);
-        let pivot_height = inner.get_pivot_height();
-        for i in start_at..pivot_height {
-            let me = inner.get_pivot_block_arena_index(i);
-            inner.arena[me].last_pivot_in_past = i;
-            let i_pivot_index = inner.height_to_pivot_index(i);
-            inner.pivot_chain_metadata[i_pivot_index]
-                .last_pivot_in_past_blocks
-                .clear();
-            inner.pivot_chain_metadata[i_pivot_index]
-                .last_pivot_in_past_blocks
-                .insert(me);
-            to_update.remove(&me);
-        }
-        let mut stack = Vec::new();
-        let to_visit = to_update.clone();
-        for i in &to_update {
-            stack.push((0, *i));
-        }
-        while !stack.is_empty() {
-            let (stage, me) = stack.pop().unwrap();
-            if !to_visit.contains(&me) {
-                continue;
-            }
-            let parent = inner.arena[me].parent;
-            if stage == 0 {
-                if to_update.contains(&me) {
-                    to_update.remove(&me);
-                    stack.push((1, me));
-                    stack.push((0, parent));
-                    for referee in &inner.arena[me].referees {
-                        stack.push((0, *referee));
-                    }
-                }
-            } else if stage == 1
-                && me != inner.cur_era_genesis_block_arena_index
-            {
-                let mut last_pivot = inner.arena[parent].last_pivot_in_past;
-                for referee in &inner.arena[me].referees {
-                    let x = inner.arena[*referee].last_pivot_in_past;
-                    last_pivot = max(last_pivot, x);
-                }
-                inner.arena[me].last_pivot_in_past = last_pivot;
-                let last_pivot_index = inner.height_to_pivot_index(last_pivot);
-                inner.pivot_chain_metadata[last_pivot_index]
-                    .last_pivot_in_past_blocks
-                    .insert(me);
-            }
-        }
-    }
-
     /// Subroutine called by on_new_block()
     fn insert_block_initial(
         &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
@@ -1043,8 +984,15 @@ impl ConsensusNewBlockHandler {
         };
         let era_block = inner.get_era_block_with_parent(parent, 0);
 
-        let pending = inner.ancestor_at(parent, inner.cur_era_stable_height)
-            != inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
+        let pending = {
+            let me_stable_arena_index =
+                inner.ancestor_at(parent, inner.cur_era_stable_height);
+            me_stable_arena_index == NULL
+                || me_stable_arena_index
+                    != inner.get_pivot_block_arena_index(
+                        inner.cur_era_stable_height,
+                    )
+        };
 
         let anticone_barrier =
             ConsensusNewBlockHandler::compute_anticone(inner, me);
@@ -1111,6 +1059,7 @@ impl ConsensusNewBlockHandler {
         let mut fork_at =
             inner.pivot_index_to_height(inner.pivot_chain.len() + 1);
         let old_pivot_chain_len = inner.pivot_chain.len();
+        // FIXME Do not allow pivot chain to switch past stable block.
         if fully_valid && !pending {
             meter.aggregate_total_weight_in_past(my_weight);
 
@@ -1212,10 +1161,9 @@ impl ConsensusNewBlockHandler {
                         last_pivot_to_update.insert(*x);
                     }
                 }
-                self.recompute_metadata(inner, fork_at, last_pivot_to_update);
+                inner.recompute_metadata(fork_at, last_pivot_to_update);
             } else {
-                self.recompute_metadata(
-                    inner,
+                inner.recompute_metadata(
                     inner.get_pivot_height(),
                     last_pivot_to_update,
                 );

@@ -139,6 +139,7 @@ impl RequestManager {
             // todo remove the request if waiting time is too long?
             // E.g. attacker may broadcast many many invalid block hashes,
             // and no peer could return the corresponding block header.
+            debug!("request_with_delay: add request to waiting_requests, peer={:?}, request={:?}, delay={:?}", peer, request, cur_delay);
             self.waiting_requests.lock().push(TimedWaitingRequest::new(
                 Instant::now() + cur_delay,
                 WaitingRequest(request, next_delay),
@@ -154,6 +155,7 @@ impl RequestManager {
             request,
             Some(next_delay),
         ) {
+            debug!("request_with_delay: send_request fails, peer={:?}, request={:?}", peer, e);
             self.waiting_requests.lock().push(TimedWaitingRequest::new(
                 Instant::now() + cur_delay,
                 WaitingRequest(e, next_delay),
@@ -306,10 +308,12 @@ impl RequestManager {
     pub fn send_request_again(
         &self, io: &NetworkContext, msg: &RequestMessage,
     ) {
+        debug!("send_request_again, request={:?}", msg.request);
         if let Some(request) = msg.request.resend() {
             let chosen_peer = self
                 .syn
                 .get_random_peer_with_cap(request.required_capability());
+            debug!("send_request_again with new request, peer={:?}, new request={:?}", chosen_peer, request);
             self.request_with_delay(io, request, chosen_peer, msg.delay);
         }
     }
@@ -546,6 +550,8 @@ impl RequestManager {
             let chosen_peer = match maybe_peer {
                 Some(p) => p,
                 None => {
+                    debug!("No peer to send request, wait for next time");
+                    waiting_requests.push(req);
                     break;
                 }
             };
@@ -566,7 +572,7 @@ impl RequestManager {
                 request,
                 Some(next_delay),
             ) {
-                self.waiting_requests.lock().push(TimedWaitingRequest::new(
+                waiting_requests.push(TimedWaitingRequest::new(
                     Instant::now() + delay,
                     WaitingRequest(req, next_delay),
                     None,

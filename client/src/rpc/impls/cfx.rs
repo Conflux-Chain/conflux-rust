@@ -788,6 +788,10 @@ impl RpcImpl {
     fn net_high_priority_packets(&self) -> RpcResult<usize> {
         Ok(get_high_priority_packets())
     }
+
+    fn current_sync_phase(&self) -> RpcResult<String> {
+        Ok(self.sync.current_sync_phase().name().into())
+    }
 }
 
 fn grouped_txs<T, F>(
@@ -1085,5 +1089,9 @@ impl DebugRpc for DebugRpcImpl {
 
     fn net_high_priority_packets(&self) -> RpcResult<usize> {
         self.rpc_impl.net_high_priority_packets()
+    }
+
+    fn current_sync_phase(&self) -> RpcResult<String> {
+        self.rpc_impl.current_sync_phase()
     }
 }

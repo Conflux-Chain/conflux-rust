@@ -239,6 +239,7 @@ impl ConsensusExecutor {
             )
         } else {
             let (sender, receiver) = channel();
+            debug!("Wait for execution result of epoch {:?}", epoch_hash);
             self.sender
                 .lock()
                 .send(ExecutionTask::GetResult(GetExecutionResultTask {
@@ -1202,7 +1203,6 @@ impl ConsensusExecutionHandler {
                         .get_epoch_execution_context(&reward_epoch_hash)
                         .unwrap();
 
-                    debug_assert!(!on_local_pivot);
                     // We need to return receipts instead of getting it through
                     // function get_receipts, because it's
                     // possible that the computed receipts is deleted by garbage

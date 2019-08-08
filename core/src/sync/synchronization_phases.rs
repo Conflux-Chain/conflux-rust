@@ -440,11 +440,14 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
         self.recovered.store(false, AtomicOrdering::SeqCst);
         let recovered = self.recovered.clone();
         let graph = self.graph.clone();
-        std::thread::spawn(move || {
-            graph.recover_graph_from_db(false /* header_only */);
-            recovered.store(true, AtomicOrdering::SeqCst);
-            info!("finish recover block graph from db");
-        });
+        std::thread::Builder::new()
+            .name("recover_blocks".into())
+            .spawn(move || {
+                graph.recover_graph_from_db(false /* header_only */);
+                recovered.store(true, AtomicOrdering::SeqCst);
+                info!("finish recover block graph from db");
+            })
+            .expect("Thread spawn failure");
     }
 }
 

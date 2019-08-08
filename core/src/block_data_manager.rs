@@ -87,6 +87,7 @@ pub struct BlockDataManager {
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
+    cur_consensus_era_stable_hash: RwLock<H256>,
     instance_id: u64,
 
     config: DataManagerConfiguration,
@@ -143,13 +144,15 @@ impl BlockDataManager {
             config,
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
+            cur_consensus_era_stable_hash: RwLock::new(genesis_hash),
             worker_pool,
             tx_cache_man,
         };
 
         data_man.initialize_instance_id();
 
-        if let Some((checkpoint_hash, _)) = data_man.checkpoint_hashes_from_db()
+        if let Some((checkpoint_hash, stable_hash)) =
+            data_man.checkpoint_hashes_from_db()
         {
             if checkpoint_hash != genesis_block.block_header.hash() {
                 if let Some(checkpoint_block) =
@@ -185,6 +188,10 @@ impl BlockDataManager {
                             }
                         }
 
+                        *data_man.cur_consensus_era_genesis_hash.write() =
+                            checkpoint_hash;
+                        *data_man.cur_consensus_era_stable_hash.write() =
+                            stable_hash;
                         data_man.genesis_block = checkpoint_block;
                     }
                 }
@@ -217,9 +224,6 @@ impl BlockDataManager {
                     .deferred_logs_bloom_hash(),
             );
         }
-
-        *data_man.cur_consensus_era_genesis_hash.write() =
-            data_man.genesis_block().block_header.hash();
 
         data_man
     }
@@ -995,11 +999,17 @@ impl BlockDataManager {
         self.insert_checkpoint_hashes_to_db(cur_era_hash, next_era_hash);
 
         let mut era_hash = self.cur_consensus_era_genesis_hash.write();
+        let mut stable_hash = self.cur_consensus_era_stable_hash.write();
         *era_hash = cur_era_hash.clone();
+        *stable_hash = next_era_hash.clone();
     }
 
     pub fn get_cur_consensus_era_genesis_hash(&self) -> H256 {
         self.cur_consensus_era_genesis_hash.read().clone()
+    }
+
+    pub fn get_cur_consensus_era_stable_hash(&self) -> H256 {
+        self.cur_consensus_era_stable_hash.read().clone()
     }
 
     /// Recover the public keys for uncached transactions in `transactions`.
