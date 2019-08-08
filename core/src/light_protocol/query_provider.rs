@@ -5,7 +5,7 @@
 use io::TimerToken;
 use rand::Rng;
 use rlp::Rlp;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use cfx_types::H256;
 use primitives::{BlockHeader, EpochNumber, StateRoot};
@@ -42,20 +42,32 @@ pub const MAX_EPOCHS_TO_SEND: usize = 128;
 pub const MAX_HEADERS_TO_SEND: usize = 512;
 
 pub struct QueryProvider {
+    // shared consensus graph
     consensus: Arc<ConsensusGraph>,
+
+    // shared synchronization graph
     graph: Arc<SynchronizationGraph>,
+
+    // shared network service
+    // NOTE: use weak pointer in order to avoid circular references
+    network: Weak<NetworkService>,
+
+    // collection of all peers available
     peers: Peers,
 }
 
 impl QueryProvider {
     pub fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-    ) -> Self {
+        network: Weak<NetworkService>,
+    ) -> Self
+    {
         let peers = Peers::new();
 
         QueryProvider {
             consensus,
             graph,
+            network,
             peers,
         }
     }
@@ -291,6 +303,8 @@ impl QueryProvider {
     fn broadcast(
         &self, io: &NetworkContext, mut peers: Vec<PeerId>, msg: &Message,
     ) -> Result<(), Error> {
+        info!("broadcast peers={:?}", peers);
+
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
         let total = peers.len();
         let allowed = (total as f64 * throttle_ratio) as usize;
@@ -311,9 +325,9 @@ impl QueryProvider {
         Ok(())
     }
 
-    pub fn relay_hashes(
-        &self, io: &NetworkContext, hashes: Vec<H256>,
-    ) -> Result<(), Error> {
+    pub fn relay_hashes(&self, hashes: Vec<H256>) -> Result<(), Error> {
+        info!("relay_hashes hashes={:?}", hashes);
+
         if hashes.is_empty() {
             return Ok(());
         }
@@ -324,9 +338,20 @@ impl QueryProvider {
 
         let msg: Box<dyn Message> = Box::new(NewBlockHashes { hashes });
 
-        if let Err(e) = self.broadcast(io, peers, msg.as_ref()) {
-            warn!("Error broadcasting blocks: {:?}", e);
-        };
+        match self.network.upgrade() {
+            None => {
+                error!("Network unavailable, not relaying hashes");
+            }
+            Some(network) => {
+                let res = network.with_context(LIGHT_PROTOCOL_ID, |io| {
+                    self.broadcast(io, peers, msg.as_ref())
+                });
+
+                if let Err(e) = res {
+                    warn!("Error broadcasting blocks: {:?}", e);
+                };
+            }
+        }
 
         Ok(())
     }

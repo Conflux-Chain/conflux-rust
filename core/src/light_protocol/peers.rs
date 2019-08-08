@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use std::{
+    cmp,
     collections::{HashMap, HashSet},
     sync::Arc,
 };
@@ -30,6 +31,10 @@ pub struct Peers(RwLock<HashMap<PeerId, Arc<RwLock<PeerState>>>>);
 impl Peers {
     pub fn new() -> Peers { Self::default() }
 
+    pub fn get(&self, peer: &PeerId) -> Option<Arc<RwLock<PeerState>>> {
+        self.0.read().get(&peer).cloned()
+    }
+
     pub fn insert(&self, peer: PeerId) -> Arc<RwLock<PeerState>> {
         self.0
             .write()
@@ -38,14 +43,9 @@ impl Peers {
             .clone()
     }
 
-    pub fn remove(&self, peer: &PeerId) { self.0.write().remove(&peer); }
+    pub fn is_empty(&self) -> bool { self.0.read().is_empty() }
 
-    pub fn all_peers_shuffled(&self) -> Vec<PeerId> {
-        let mut rand = rand::thread_rng();
-        let mut peers: Vec<_> = self.0.read().keys().cloned().collect();
-        rand.shuffle(&mut peers[..]);
-        peers
-    }
+    pub fn remove(&self, peer: &PeerId) { self.0.write().remove(&peer); }
 
     pub fn all_peers_satisfying<F>(&self, predicate: F) -> Vec<PeerId>
     where F: Fn(&PeerState) -> bool {
@@ -60,5 +60,63 @@ impl Peers {
                 }
             })
             .collect()
+    }
+
+    pub fn all_peers_shuffled(&self) -> Vec<PeerId> {
+        let mut rand = rand::thread_rng();
+        let mut peers: Vec<_> = self.0.read().keys().cloned().collect();
+        rand.shuffle(&mut peers);
+        peers
+    }
+
+    pub fn random_peer(&self) -> Option<PeerId> {
+        let mut rand = rand::thread_rng();
+        let peers: Vec<_> = self.0.read().keys().cloned().collect();
+        rand.choose(&peers).cloned()
+    }
+
+    pub fn random_peer_with_epoch(&self, epoch: u64) -> Option<PeerId> {
+        let mut rand = rand::thread_rng();
+        let options = self.all_peers_satisfying(|s| s.best_epoch >= epoch);
+        rand.choose(&options).cloned()
+    }
+
+    pub fn best_epoch(&self) -> u64 {
+        self.0.read().values().fold(0, |current_best, state| {
+            let best_for_peer = state.read().best_epoch;
+            cmp::max(current_best, best_for_peer)
+        })
+    }
+
+    pub fn median_epoch(&self) -> Option<u64> {
+        let mut best_epochs: Vec<_> = self
+            .0
+            .read()
+            .values()
+            .map(|s| s.read().best_epoch)
+            .collect();
+
+        best_epochs.sort();
+
+        match best_epochs.len() {
+            0 => None,
+            n => Some(best_epochs[n / 2]),
+        }
+    }
+
+    pub fn collect_all_terminals(&self) -> Vec<H256> {
+        self.0
+            .read()
+            .values()
+            .map(|s| {
+                let mut state = s.write();
+                let ts = state.terminals.clone();
+                state.terminals.clear();
+                ts
+            })
+            .fold(vec![], |mut res, sub| {
+                res.extend(sub);
+                res
+            })
     }
 }

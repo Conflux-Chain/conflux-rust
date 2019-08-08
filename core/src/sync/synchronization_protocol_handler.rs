@@ -868,7 +868,7 @@ impl SynchronizationProtocolHandler {
             });
 
             self.light_provider
-                .relay_hashes(io, need_to_relay)
+                .relay_hashes(need_to_relay)
                 .unwrap_or_else(|e| {
                     warn!("Error relaying blocks to light provider: {:?}", e);
                 });
