@@ -36,7 +36,7 @@ class Transaction:
         if "in block" in log_line:
             by_block = True
             return Transaction(tx_hash, log_timestamp, by_block)
-        elif "in packing block":
+        elif "in packing block" in log_line:
             by_block =False
             return Transaction(tx_hash, log_timestamp, by_block,log_timestamp)
         else:
@@ -150,6 +150,8 @@ class Block:
 class Percentile(enum.Enum):
     Min = 0
     Avg = "avg"
+    P10 = 0.1
+    P30 = 0.3
     P50 = 0.5
     P80 = 0.8
     P90 = 0.9
