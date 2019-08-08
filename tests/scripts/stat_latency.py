@@ -83,7 +83,7 @@ class LogAnalyzer:
             name = "tx broadcast latency ({})".format(p.name)
             table.add_stat(name, "%.2f", self.agg.stat_tx_latency(p))
             name_tx_packed_to_block ="tx packed to block latency ({})".format(p.name)
-            table.add_stat(name_tx_packed_to_block, "%.2f", self.agg.stat_tx_packed_to_block_latency).format(p.name)
+            table.add_stat(name_tx_packed_to_block, "%.2f", self.agg.stat_tx_packed_to_block_latency(p)).format(p.name)
         table.add_stat("min tx packed to block latency", "%.2f", self.agg.stat_min_tx_packed_to_block_latency())
         table.add_stat("by_block_ratio", "%.2f", self.agg.stat_tx_ratio())
 
