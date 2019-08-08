@@ -8,6 +8,7 @@ mod headers;
 use rlp::Rlp;
 use std::{
     cmp,
+    collections::HashSet,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -135,7 +136,7 @@ impl SyncHandler {
 
     #[inline]
     fn collect_terminals(&self) {
-        let terminals = self.peers.collect_all_terminals();
+        let terminals = self.peers.collect_all_terminals().into_iter();
         self.headers.insert_waiting(terminals, HashSource::NewHash);
     }
 
@@ -178,7 +179,7 @@ impl SyncHandler {
     }
 
     fn handle_headers(&self, headers: Vec<BlockHeader>) {
-        let mut missing = vec![];
+        let mut missing = HashSet::new();
 
         // TODO(thegaram): validate header timestamps
         for header in headers {
@@ -207,13 +208,14 @@ impl SyncHandler {
             }
 
             // store missing dependencies
-            missing.push(*header.parent_hash());
+            missing.insert(*header.parent_hash());
 
             for referee in header.referee_hashes() {
-                missing.push(*referee);
+                missing.insert(*referee);
             }
         }
 
+        let missing = missing.into_iter();
         self.headers.insert_waiting(missing, HashSource::Reference);
     }
 
@@ -235,7 +237,7 @@ impl SyncHandler {
                 Some(peer) => peer,
                 None => {
                     warn!("No peers available");
-                    self.headers.reinsert_waiting(batch.to_vec());
+                    self.headers.reinsert_waiting(batch.to_owned().into_iter());
 
                     // NOTE: cannot do early return as that way headers
                     // in subsequent batches would be lost
@@ -247,7 +249,7 @@ impl SyncHandler {
 
             match self.request_headers(io, peer, hashes) {
                 Ok(_) => {
-                    self.headers.insert_in_flight(batch.to_vec());
+                    self.headers.insert_in_flight(batch.to_owned().into_iter());
                 }
                 Err(e) => {
                     warn!(
@@ -255,7 +257,7 @@ impl SyncHandler {
                         batch, peer, e
                     );
 
-                    self.headers.reinsert_waiting(batch.to_vec());
+                    self.headers.reinsert_waiting(batch.to_owned().into_iter());
                 }
             }
         }
@@ -313,7 +315,9 @@ impl SyncHandler {
         info!("on_block_hashes resp={:?}", resp);
 
         self.epochs.remove_in_flight(&resp.request_id);
-        self.headers.insert_waiting(resp.hashes, HashSource::Epoch);
+
+        let hashes = resp.hashes.into_iter();
+        self.headers.insert_waiting(hashes, HashSource::Epoch);
 
         self.start_sync(io)?;
         Ok(())
@@ -345,7 +349,9 @@ impl SyncHandler {
             return Ok(());
         }
 
-        self.headers.insert_waiting(msg.hashes, HashSource::NewHash);
+        let hashes = msg.hashes.into_iter();
+        self.headers.insert_waiting(hashes, HashSource::NewHash);
+
         self.start_sync(io)?;
         Ok(())
     }

@@ -105,10 +105,9 @@ impl Headers {
 
     pub fn num_in_flight(&self) -> usize { self.in_flight.read().len() }
 
-    pub fn insert_in_flight(&self, missing: Vec<MissingHeader>) {
-        let new = missing
-            .into_iter()
-            .map(|h| (h.hash.clone(), HeaderRequest::new(h)));
+    pub fn insert_in_flight<I>(&self, missing: I)
+    where I: Iterator<Item = MissingHeader> {
+        let new = missing.map(|h| (h.hash.clone(), HeaderRequest::new(h)));
         self.in_flight.write().extend(new);
     }
 
@@ -116,21 +115,18 @@ impl Headers {
         self.in_flight.write().remove(&hash);
     }
 
-    pub fn insert_waiting(&self, hashes: Vec<H256>, source: HashSource) {
-        let headers: Vec<_> = hashes
-            .into_iter()
-            .map(|h| MissingHeader::new(h, source.clone()))
-            .collect();
-
+    pub fn insert_waiting<I>(&self, hashes: I, source: HashSource)
+    where I: Iterator<Item = H256> {
+        let headers = hashes.map(|h| MissingHeader::new(h, source.clone()));
         self.reinsert_waiting(headers);
     }
 
-    pub fn reinsert_waiting(&self, headers: Vec<MissingHeader>) {
+    pub fn reinsert_waiting<I>(&self, headers: I)
+    where I: Iterator<Item = MissingHeader> {
         let in_flight = self.in_flight.read();
         let mut waiting = self.waiting.write();
 
         let missing = headers
-            .into_iter()
             .filter(|h| !in_flight.contains_key(&h.hash))
             .filter(|h| !self.graph.contains_block_header(&h.hash));
 
@@ -189,7 +185,7 @@ impl Headers {
 
     pub fn clean_up(&self) {
         let headers = self.remove_timeout_requests();
-        self.reinsert_waiting(headers);
+        self.reinsert_waiting(headers.into_iter());
     }
 }
 
