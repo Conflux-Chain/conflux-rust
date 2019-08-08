@@ -175,6 +175,17 @@ class TestNode:
         self._raise_assertion_error("failed to get RPC proxy: index = {}, ip = {}, rpchost = {}, p2pport={}, rpcport = {}, rpc_url = {}".format(
             self.index, self.ip, self.rpchost, self.port, self.rpcport, rpc_url(self.index, self.rpchost, self.rpcport)
         ))
+    
+    def wait_for_recovery(self, wait_time):
+        sleep_time = 0.1
+        retry = 0
+        max_retry = wait_time / sleep_time
+        while self.current_sync_phase() not in ["NormalSyncPhase", "CatchUpSyncBlockPhase"] and retry <= max_retry:
+            time.sleep(0.1)
+            retry += 1
+        if retry > max_retry:
+            raise AssertionError("Node {} not recovered to normal phase after {} seconds"
+                                    .format(self.index, wait_time))
 
     def wait_for_nodeid(self):
         pubkey, x, y = get_nodeid(self)

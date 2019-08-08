@@ -218,4 +218,15 @@ impl SynchronizationState {
         peer_best_epoches.sort();
         Some(peer_best_epoches[peer_best_epoches.len() / 2])
     }
+
+    pub fn best_peer_epoch(&self) -> Option<u64> {
+        self.peers
+            .read()
+            .iter()
+            .map(|(_, state)| state.read().best_epoch)
+            .fold(None, |max, x| match max {
+                None => Some(x),
+                Some(max) => Some(if x > max { x } else { max }),
+            })
+    }
 }

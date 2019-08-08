@@ -792,6 +792,11 @@ impl RpcImpl {
     fn current_sync_phase(&self) -> RpcResult<String> {
         Ok(self.sync.current_sync_phase().name().into())
     }
+
+    fn expire_block_gc(&self, timeout: u64) -> RpcResult<()> {
+        self.sync.expire_block_gc(timeout);
+        Ok(())
+    }
 }
 
 fn grouped_txs<T, F>(
@@ -1032,6 +1037,10 @@ impl TestRpc for TestRpcImpl {
             block_size_limit,
             blame_info,
         )
+    }
+
+    fn expire_block_gc(&self, timeout: u64) -> RpcResult<()> {
+        self.rpc_impl.expire_block_gc(timeout)
     }
 }
 
