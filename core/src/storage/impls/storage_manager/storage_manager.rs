@@ -2,11 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// FIXME: correctly order code blocks.
 pub struct StorageManager {
     delta_db_manager: DeltaDbManager,
     snapshot_manager: Box<
         dyn SnapshotManagerTrait<
+                DeltaMpt = DeltaMpt,
                 SnapshotDb = SnapshotDb,
                 SnapshotDbManager = SnapshotDbManager,
             > + Send
@@ -27,20 +27,13 @@ unsafe impl Sync for MaybeDbDestroyErrors {}
 
 impl StorageManager {
     // FIXME: should load persistent storage from disk.
-    pub fn new(
-        delta_db_manager: DeltaDbManager, /* , node type, full node or
-                                          * archive node */
-    ) -> Self
-    {
+    pub fn new(delta_db_manager: DeltaDbManager, /* , node type */) -> Self {
         Self {
             delta_db_manager,
             snapshot_manager: Box::new(StorageManagerFullNode::<
                 SnapshotDbManager,
             > {
-                // FIXME: path from param.
-                snapshot_db_manager: SnapshotDbManager::new(
-                    "./storage_db/snapshot/".to_string(),
-                ),
+                snapshot_db_manager: SnapshotDbManager::new(),
             }),
             maybe_db_destroy_errors: MaybeDbDestroyErrors {
                 error_1: Cell::new(None),
@@ -82,12 +75,11 @@ impl StorageManager {
         intermediate_delta_root: &MerkleHash, conf: StorageConfiguration,
     ) -> Result<Arc<DeltaMpt>>
     {
-        let db =
-            Arc::new(storage_manager.delta_db_manager.new_empty_delta_db(
-                &DeltaDbManager::delta_db_name(snapshot_root),
-            )?);
+        let db = storage_manager.delta_db_manager.new_empty_delta_db(
+            &DeltaDbManager::delta_db_name(snapshot_root),
+        )?;
         Ok(Arc::new(DeltaMpt::new(
-            db,
+            Arc::new(db),
             conf,
             DeltaMpt::padding(snapshot_root, intermediate_delta_root),
             snapshot_root.clone(),
@@ -127,7 +119,11 @@ impl StorageManager {
     }
 }
 
+// FIXME: What is the best way to wrap around a storage manager?
+// FIXME: this method basically chooses a storage manager based
+// FIXME: on a FULL_NODE / ARCHIVE_NODE flag.
 impl GetSnapshotDbManager for StorageManager {
+    type DeltaMpt = DeltaMpt;
     type SnapshotDb = SnapshotDb;
     type SnapshotDbManager = SnapshotDbManager;
 
@@ -154,43 +150,6 @@ impl SnapshotManagerTrait for StorageManager {
     }
 }
 
-#[derive(Clone)]
-pub struct DeltaMptInserter {
-    pub mpt: Arc<DeltaMpt>,
-    pub maybe_root_node: Option<NodeRefDeltaMpt>,
-}
-
-impl DeltaMptInserter {
-    pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
-        &self, mut dumper: DeltaMptDumper,
-    ) -> Result<()> {
-        match &self.maybe_root_node {
-            None => {}
-            Some(root_node) => {
-                let db = self.mpt.db_read_only();
-                let owned_node_set = Default::default();
-                let mut cow_root_node =
-                    CowNodeRef::new(root_node.clone(), &owned_node_set);
-                let guarded_trie_node =
-                    GuardedValue::take(cow_root_node.get_trie_node(
-                        self.mpt.get_node_memory_manager(),
-                        &self.mpt.get_node_memory_manager().get_allocator(),
-                        db,
-                    )?);
-                cow_root_node.iterate_internal(
-                    &owned_node_set,
-                    &self.mpt,
-                    guarded_trie_node,
-                    CompressedPathRaw::new_zeroed(0, 0),
-                    &mut dumper,
-                    db,
-                )?;
-            }
-        }
-        Ok(())
-    }
-}
-
 use super::{
     super::{
         super::{
@@ -198,14 +157,7 @@ use super::{
             storage_db::delta_db_manager::*,
         },
         errors::*,
-        multi_version_merkle_patricia_trie::{
-            guarded_value::GuardedValue,
-            merkle_patricia_trie::{
-                cow_node_ref::KVInserter, CompressedPathRaw, CowNodeRef,
-                NodeRefDeltaMpt,
-            },
-            DeltaMpt,
-        },
+        multi_version_merkle_patricia_trie::DeltaMpt,
         state_manager::*,
     },
     *,

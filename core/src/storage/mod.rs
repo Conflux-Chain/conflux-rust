@@ -18,7 +18,7 @@ pub use self::{
         defaults,
         errors::{Error, ErrorKind, Result},
         multi_version_merkle_patricia_trie::{
-            guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
+            guarded_value::GuardedValue, padding,
         },
     },
     state::{State as Storage, StateTrait as StorageTrait},

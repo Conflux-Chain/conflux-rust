@@ -10,6 +10,17 @@ pub use super::super::super::db::COL_DELTA_TRIE;
 /// block starts a new snapshot by looking at consensus graph.
 pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 1_000_000_000_000_000;
 
+// FIXME: commit is per DeltaMPT.
+#[derive(Default)]
+pub struct AtomicCommit {
+    pub row_number: RowNumber,
+}
+
+pub struct AtomicCommitTransaction<'a> {
+    pub info: MutexGuard<'a, AtomicCommit>,
+    pub transaction: DBTransaction,
+}
+
 pub type DeltaDbManager = DeltaDbManagerRocksdb;
 pub type SnapshotDbManager = SnapshotDbManagerSqlite;
 pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
@@ -27,10 +38,51 @@ pub struct StateManager {
     delta_trie: Arc<DeltaMpt>,
     pub db: Arc<SystemDB>,
     storage_manager: Arc<StorageManager>,
+    commit_lock: Mutex<AtomicCommit>,
     pub number_committed_nodes: AtomicUsize,
 }
 
 impl StateManager {
+    pub fn start_commit(&self) -> AtomicCommitTransaction {
+        AtomicCommitTransaction {
+            info: self.commit_lock.lock().unwrap(),
+            transaction: self.db.key_value().transaction(),
+        }
+    }
+
+    fn load_state_root_node_ref_from_db(
+        &self, epoch_id: &EpochId,
+    ) -> Result<Option<NodeRefDeltaMpt>> {
+        let db_key_result = Self::parse_row_number(
+            self.db.key_value().get(
+                COL_DELTA_TRIE,
+                [
+                    "state_root_db_key_for_epoch_id_".as_bytes(),
+                    epoch_id.as_ref(),
+                ]
+                .concat()
+                .as_slice(),
+            ),
+        )?;
+        match db_key_result {
+            Some(db_key) => Ok(Some(
+                self.delta_trie.loaded_root_at_epoch(*epoch_id, db_key),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    fn get_state_root_node_ref(
+        &self, delta_mpt: &DeltaMpt, epoch_id: &EpochId,
+    ) -> Result<Option<NodeRefDeltaMpt>> {
+        let node_ref = delta_mpt.get_root_at_epoch(epoch_id);
+        if node_ref.is_none() {
+            self.load_state_root_node_ref_from_db(epoch_id)
+        } else {
+            Ok(node_ref)
+        }
+    }
+
     // TODO(ming): Should prevent from committing at existing epoch because
     // otherwise the overwritten trie nodes can not be reachable from db.
     // The current codebase overwrites because it didn't check if the state
@@ -49,16 +101,33 @@ impl StateManager {
         }
     }
 
+    fn parse_row_number(
+        x: io::Result<Option<DBValue>>,
+    ) -> Result<Option<RowNumberUnderlyingType>> {
+        Ok(match x?.as_ref() {
+            None => None,
+            Some(row_number_bytes) => Some(
+                unsafe { str::from_utf8_unchecked(row_number_bytes.as_ref()) }
+                    .parse::<RowNumberUnderlyingType>()?,
+            ),
+        })
+    }
+
     // FIXME: change the parameter.
     pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Self {
+        let row_number = Self::parse_row_number(
+            db.key_value()
+                .get(COL_DELTA_TRIE, "last_row_number".as_bytes()),
+        )
+        // unwrap() on new is fine.
+        .unwrap()
+        .unwrap_or_default();
         debug!("Storage conf {:?}", conf);
 
         let storage_manager = Arc::new(StorageManager::new(
             DeltaDbManagerRocksdb::new(db.clone()),
         ));
 
-        // FIXME: move the commit_lock into delta_mpt, along with the row_number
-        // FIXME: reading into the new_delta_mpt method.
         Self {
             delta_trie: StorageManager::new_delta_mpt(
                 storage_manager.clone(),
@@ -69,8 +138,11 @@ impl StateManager {
             // It's fine to unwrap in initialization.
             .unwrap(),
             db,
-            storage_manager,
+            commit_lock: Mutex::new(AtomicCommit {
+                row_number: RowNumber { value: row_number },
+            }),
             number_committed_nodes: Default::default(),
+            storage_manager,
         }
     }
 
@@ -143,8 +215,8 @@ impl StateManager {
             None => Ok(None),
             Some(snapshot) => {
                 let intermediate_root = None;
-                let maybe_delta_root =
-                    delta_mpt.get_state_root_node_ref(epoch_id.epoch_id)?;
+                let maybe_delta_root = self
+                    .get_state_root_node_ref(&delta_mpt, epoch_id.epoch_id)?;
                 if maybe_delta_root.is_none() {
                     Ok(None)
                 } else {
@@ -184,8 +256,10 @@ impl StateManager {
             maybe_snapshot = self
                 .storage_manager
                 .get_snapshot(&parent_epoch_id.snapshot_root)?;
-            delta_root =
-                delta_mpt.get_state_root_node_ref(parent_epoch_id.epoch_id)?;
+            delta_root = self.get_state_root_node_ref(
+                &delta_mpt,
+                parent_epoch_id.epoch_id,
+            )?;
             if delta_root.is_none() {
                 return Ok(None);
             }
@@ -270,7 +344,7 @@ use super::{
     },
     errors::*,
     multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::NodeRefDeltaMpt, *,
+        merkle_patricia_trie::NodeRefDeltaMpt, row_number::*, *,
     },
     storage_db::{
         delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
@@ -280,13 +354,15 @@ use super::{
 };
 use crate::{ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb};
 use cfx_types::{Address, U256};
+use kvdb::{DBTransaction, DBValue};
 use primitives::{
     Account, Block, BlockHeaderBuilder, EpochId, MerkleHash, MERKLE_NULL_NODE,
 };
 use std::{
     collections::HashMap,
+    io, str,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex, MutexGuard,
     },
 };

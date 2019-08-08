@@ -8,8 +8,7 @@ pub(super) mod state;
 pub(super) mod state_manager;
 pub(super) mod state_proof;
 pub(self) mod storage_db;
-// FIXME: scope
-pub(super) mod storage_manager;
+pub(self) mod storage_manager;
 
 pub mod defaults {
     pub use super::multi_version_merkle_patricia_trie::DEFAULT_NODE_MAP_SIZE;

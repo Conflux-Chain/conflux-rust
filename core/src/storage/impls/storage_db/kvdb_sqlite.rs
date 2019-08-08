@@ -17,10 +17,6 @@ impl Default for KvdbSqlite {
     }
 }
 
-pub struct KvdbSqliteTransaction {
-    // FIXME: implement
-}
-
 impl KvdbSqlite {
     fn get(&self, _key: &[u8]) -> Result<Option<Box<[u8]>>> {
         if self.empty && self.readonly {
@@ -30,65 +26,15 @@ impl KvdbSqlite {
     }
 }
 
-impl KeyValueDbTraitRead for KvdbSqlite {
+impl DeltaDbTrait for KvdbSqlite {
     fn get(&self, key: &[u8]) -> Result<Option<Box<[u8]>>> { self.get(key) }
-
-    fn get_with_number_key(&self, _key: i64) -> Result<Option<Box<[u8]>>> {
-        unimplemented!()
-    }
 }
 
-impl KeyValueDbTrait for KvdbSqlite {
-    fn delete(&self, _key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
-        unimplemented!()
-    }
-
-    fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> { unimplemented!() }
-
-    fn put_with_number_key(&self, _key: i64, _value: &[u8]) -> Result<()> {
-        unimplemented!()
-    }
+impl SnapshotDbTrait for KvdbSqlite {
+    fn get(&self, key: &[u8]) -> Result<Option<Box<[u8]>>> { self.get(key) }
 }
 
-impl KeyValueDbTraitTransactional for KvdbSqlite {
-    type TransactionType = KvdbSqliteTransaction;
-
-    fn start_transaction(&self) -> Result<KvdbSqliteTransaction> {
-        unimplemented!()
-    }
-}
-
-impl KeyValueDbTraitRead for KvdbSqliteTransaction {
-    fn get(&self, _key: &[u8]) -> Result<Option<Box<[u8]>>> { unimplemented!() }
-
-    fn get_with_number_key(&self, _key: i64) -> Result<Option<Box<[u8]>>> {
-        unimplemented!()
-    }
-}
-
-impl KeyValueDbTraitSingleWriter for KvdbSqliteTransaction {
-    fn delete(&mut self, _key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
-        unimplemented!()
-    }
-
-    fn put(&mut self, _key: &[u8], _value: &[u8]) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn put_with_number_key(&mut self, _key: i64, _value: &[u8]) -> Result<()> {
-        unimplemented!()
-    }
-}
-
-impl Drop for KvdbSqliteTransaction {
-    fn drop(&mut self) { unimplemented!() }
-}
-
-impl KeyValueDbTransactionTrait for KvdbSqliteTransaction {
-    fn commit(&mut self, _db: &dyn Any) -> Result<()> { unimplemented!() }
-
-    fn revert(&mut self) { unimplemented!() }
-}
-
-use super::super::{super::storage_db::key_value_db::*, errors::*};
-use std::any::Any;
+use super::super::{
+    super::storage_db::{delta_db::DeltaDbTrait, snapshot_db::SnapshotDbTrait},
+    errors::*,
+};

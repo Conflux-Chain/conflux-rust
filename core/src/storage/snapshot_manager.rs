@@ -5,18 +5,11 @@
 /// Archive nodes and full nodes react differently for snapshot management.
 pub trait SnapshotManagerTrait: GetSnapshotDbManager {
     fn new_snapshot_by_merging(
-        &self, old_snapshot_root: &MerkleHash, snapshot_epoch_id: EpochId,
-        height: u64, delta_db: DeltaMptInserter,
+        &self, old_snapshot_root: &MerkleHash, delta_db: &Self::DeltaMpt,
     ) -> Result<Arc<Self::SnapshotDb>>
-    where
-        Self: Sized,
-    {
-        self.get_snapshot_db_manager().new_snapshot_by_merging(
-            old_snapshot_root,
-            snapshot_epoch_id,
-            height,
-            delta_db,
-        )
+    where Self: Sized {
+        self.get_snapshot_db_manager()
+            .new_snapshot_by_merging(old_snapshot_root, delta_db)
     }
 
     fn get_snapshot(
@@ -45,15 +38,17 @@ pub trait SnapshotManagerTrait: GetSnapshotDbManager {
 
 pub trait GetSnapshotDbManager {
     type SnapshotDb: SnapshotDbTrait;
+    type DeltaMpt;
     type SnapshotDbManager: SnapshotDbManagerTrait<
         SnapshotDb = Self::SnapshotDb,
+        DeltaMpt = Self::DeltaMpt,
     >;
 
     fn get_snapshot_db_manager(&self) -> &Self::SnapshotDbManager;
 }
 
 use super::{
-    impls::{errors::*, storage_manager::storage_manager::DeltaMptInserter},
+    impls::errors::*,
     storage_db::{snapshot_db::*, snapshot_db_manager::*},
 };
 use primitives::{EpochId, MerkleHash};

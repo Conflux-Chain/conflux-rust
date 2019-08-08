@@ -4,7 +4,7 @@
 
 // The trait for database manager of Delta MPT.
 pub trait DeltaDbManagerTrait {
-    type DeltaDb: KeyValueDbTraitRead;
+    type DeltaDb: DeltaDbTrait;
 
     // TODO: Should we add epoch number to db name?
     fn delta_db_name(snapshot_root: &MerkleHash) -> String {
@@ -22,5 +22,5 @@ pub trait DeltaDbManagerTrait {
     fn destroy_delta_db(&self, delta_db_name: &String) -> Result<()>;
 }
 
-use super::{super::impls::errors::*, key_value_db::KeyValueDbTraitRead};
+use super::{super::impls::errors::*, delta_db::DeltaDbTrait};
 use primitives::MerkleHash;

@@ -173,6 +173,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
+#[allow(unused)]
 impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     pub fn new(
         merkle: MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
@@ -194,6 +195,7 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     }
 }
 
+#[allow(unused)]
 impl VanillaTrieNode<MerkleHash> {
     pub fn get_children_merkle(&self) -> MaybeMerkleTableRef {
         if self.get_children_count() > 0 {
