@@ -446,7 +446,8 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 graph.recover_graph_from_db(false /* header_only */);
                 recovered.store(true, AtomicOrdering::SeqCst);
                 info!("finish recover block graph from db");
-            }).expect("Thread spawn failure");
+            })
+            .expect("Thread spawn failure");
     }
 }
 

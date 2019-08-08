@@ -434,6 +434,8 @@ impl ConsensusGraph {
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone());
         } else {
+            // This `ignore_body` case will only be used during recovery from
+            // checkpoint, either from db or from remote peers
             let header = self.data_man.block_header_by_hash(hash).unwrap();
             debug!(
                 "insert new block_header into consensus: block_header={:?}",
@@ -448,6 +450,9 @@ impl ConsensusGraph {
                 None,
             );
             self.update_best_info(inner);
+            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
+                inner.set_pivot_to_stable(hash);
+            }
         }
     }
 
