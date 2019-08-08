@@ -54,7 +54,7 @@ impl Handleable for GetBlockHashesResponse {
             ctx.io,
             Some(ctx.peer),
             missing_headers,
-            false, /* ignore_db */
+            true, /* ignore_db */
         );
 
         // TODO: handle empty response

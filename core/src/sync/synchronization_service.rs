@@ -83,10 +83,6 @@ impl SynchronizationService {
         self.protocol_handler.on_mined_block(block);
         self.relay_blocks(vec![hash]);
     }
-
-    pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
-        self.protocol_handler.block_by_hash(hash)
-    }
 }
 
 pub type SharedSynchronizationService = Arc<SynchronizationService>;

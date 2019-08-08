@@ -34,7 +34,7 @@ impl Handleable for GetTerminalBlockHashesResponse {
             ctx.io,
             Some(ctx.peer),
             missing_hash,
-            false, /* ignore_db */
+            true, /* ignore_db */
         );
 
         Ok(())

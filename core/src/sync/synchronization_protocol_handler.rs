@@ -335,10 +335,6 @@ impl SynchronizationProtocolHandler {
             .append_received_transactions(transactions);
     }
 
-    pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
-        self.graph.block_by_hash(hash)
-    }
-
     fn best_peer_epoch(&self) -> Option<u64> {
         self.syn
             .peers
@@ -490,7 +486,7 @@ impl SynchronizationProtocolHandler {
             io,
             chosen_peer,
             to_request,
-            false, /* ignore_db */
+            true, /* ignore_db */
         );
     }
 
@@ -523,7 +519,7 @@ impl SynchronizationProtocolHandler {
                     io,
                     Some(peer),
                     to_request.clone(),
-                    false, /* ignore_db */
+                    true, /* ignore_db */
                 );
 
                 requested.extend(to_request);
@@ -559,7 +555,7 @@ impl SynchronizationProtocolHandler {
                         io,
                         None,
                         epoch_hashes,
-                        false, /* ignore_db */
+                        true, /* ignore_db */
                     );
                 }
                 *latest_requested += 1;

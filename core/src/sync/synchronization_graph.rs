@@ -678,6 +678,13 @@ impl SynchronizationGraphInner {
 
             let parent = self.arena[*index].parent;
             if parent != NULL {
+                // parent may become a new terminal
+                if self.arena[parent].graph_status != BLOCK_GRAPH_READY
+                    && self.arena[parent].graph_status != BLOCK_INVALID
+                    && self.arena[parent].children.len() == 1
+                {
+                    self.not_ready_blocks_terminal.insert(parent);
+                }
                 self.arena[parent].children.retain(|&x| x != *index);
             }
             let parent_hash = *self.arena[*index].block_header.parent_hash();
@@ -1269,7 +1276,9 @@ impl SynchronizationGraph {
         // maintain not_ready_blocks_frontier and not_ready_blocks_terminal
         inner.not_ready_blocks_count -= 1;
         inner.not_ready_blocks_frontier.remove(&index);
-        inner.not_ready_blocks_terminal.remove(&index);
+        if inner.arena[index].children.is_empty() {
+            inner.not_ready_blocks_terminal.remove(&index);
+        }
         for child in &inner.arena[index].children {
             inner.not_ready_blocks_frontier.insert(*child);
         }
@@ -1562,11 +1571,6 @@ impl SynchronizationGraph {
                 expire_set.insert(parent);
             }
         }
-        let mut expire_set: HashSet<_> = expire_set
-            .intersection(&inner.not_ready_blocks_frontier)
-            .cloned()
-            .collect();
-        debug!("expire frontier: {:?}", expire_set);
 
         // find all blocks reached by expire frontier
         for index in expire_set.iter() {

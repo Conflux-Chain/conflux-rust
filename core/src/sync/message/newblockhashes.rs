@@ -39,7 +39,7 @@ impl Handleable for NewBlockHashes {
             ctx.io,
             Some(ctx.peer),
             headers_to_request,
-            false, /* ignore_db */
+            true, /* ignore_db */
         );
 
         Ok(())
