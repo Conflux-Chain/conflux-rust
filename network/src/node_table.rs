@@ -24,7 +24,6 @@ use std::{
     str::FromStr,
     time::{self, Duration, SystemTime},
 };
-use strum::IntoEnumIterator;
 
 /// Node public key
 pub type NodeId = H512;
@@ -317,8 +316,6 @@ enum NodeReputation {
     Failure = 2,
 }
 
-const NODE_REPUTATION_LEVEL_COUNT: usize = 3;
-
 impl Default for NodeReputation {
     fn default() -> Self { NodeReputation::Unknown }
 }
@@ -403,57 +400,6 @@ impl NodeTable {
                 warn!("Error reading node table file: {:?}", e);
             }
         }
-    }
-
-    pub fn sample_nodes(
-        &self, count: u32, _filter: &IpFilter,
-    ) -> Vec<NodeEntry> {
-        let mut nodes: Vec<NodeEntry> = Vec::new();
-        for _i in 0..count {
-            let mut rng = rand::thread_rng();
-            let node_rep_idx = rng.gen::<usize>() % NODE_REPUTATION_LEVEL_COUNT;
-            let node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
-            let node_rep_vec = &self.node_reputation_table[node_rep];
-            if !node_rep_vec.is_empty() {
-                let idx = rng.gen::<usize>() % node_rep_vec.len();
-                let n = &node_rep_vec[idx];
-                nodes.push(NodeEntry {
-                    id: n.id,
-                    endpoint: n.endpoint.clone(),
-                });
-            }
-        }
-        let mut unique_nodes: Vec<NodeEntry> = Vec::new();
-        let mut nodes_set: HashSet<NodeId> = HashSet::new();
-        for n in nodes {
-            if !nodes_set.contains(&n.id) {
-                nodes_set.insert(n.id);
-                unique_nodes.push(n);
-            }
-        }
-        unique_nodes
-    }
-
-    /// Return a random sample set of nodes inside the table
-    pub fn sample_node_ids(
-        &self, count: u32, _filter: &IpFilter,
-    ) -> HashSet<NodeId> {
-        let mut node_id_set: HashSet<NodeId> = HashSet::new();
-        let mut rng = rand::thread_rng();
-        for _i in 0..count {
-            let node_rep_idx = rng.gen::<usize>() % NODE_REPUTATION_LEVEL_COUNT;
-            let node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
-            let node_rep_vec = &self.node_reputation_table[node_rep];
-            if !node_rep_vec.is_empty() {
-                let idx = rng.gen::<usize>() % node_rep_vec.len();
-                let n = &node_rep_vec[idx];
-                if !node_id_set.contains(&n.id) {
-                    node_id_set.insert(n.id);
-                }
-            }
-        }
-
-        node_id_set
     }
 
     // If node exists, update last contact, insert otherwise.

@@ -267,7 +267,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "storage_cache_start_size": "200000",
                         "storage_node_map_size": "200000",
                         "start_mining":"false",
-                        "subnet_quota": "0",
+                        "subnet_quota": "99999999",
                         "session_ip_limits": "\"0,0,0,0\"",
                         "enable_discovery": "false",
                         "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),

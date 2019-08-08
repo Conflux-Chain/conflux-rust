@@ -41,6 +41,8 @@ pub struct NodeIpLimit {
 
 impl NodeIpLimit {
     pub fn new(subnet_quota: usize) -> Self {
+        assert!(subnet_quota > 0, "subnet quota should be greater than 0");
+
         NodeIpLimit {
             subnet_type: SubnetType::C,
             subnet_quota,
@@ -52,16 +54,9 @@ impl NodeIpLimit {
         }
     }
 
-    #[inline]
-    pub fn is_enabled(&self) -> bool { self.subnet_quota > 0 }
-
     /// Remove the specified node `id` and return `true` if removed
     /// successfully. If not found, return `false`.
     pub fn remove(&mut self, id: &NodeId) -> bool {
-        if !self.is_enabled() {
-            return true;
-        }
-
         let ip = match self.node_index.remove(id) {
             Some(ip) => ip,
             None => return false,
@@ -91,10 +86,6 @@ impl NodeIpLimit {
     /// Randomly select `n` trusted nodes. Note, it may return less than `n`
     /// nodes.
     pub fn sample_trusted(&self, n: u32) -> HashSet<NodeId> {
-        if !self.is_enabled() {
-            return HashSet::new();
-        }
-
         let mut sampled = HashSet::new();
         if self.buckets.is_empty() {
             return sampled;
@@ -125,10 +116,6 @@ impl NodeIpLimit {
     pub fn validate_insertion(
         &self, id: &NodeId, ip: &IpAddr, db: &NodeDatabase,
     ) -> ValidateInsertResult {
-        if !self.is_enabled() {
-            return ValidateInsertResult::QuotaEnough;
-        }
-
         // node exists nd ip not changed.
         if let Some(cur_ip) = self.node_index.get(&id) {
             if cur_ip == ip {
@@ -160,10 +147,6 @@ impl NodeIpLimit {
         evictee: Option<NodeId>,
     ) -> bool
     {
-        if !self.is_enabled() {
-            return true;
-        }
-
         // node exists and ip not changed.
         if let Some(cur_ip) = self.node_index.get(&id) {
             if *cur_ip == ip {

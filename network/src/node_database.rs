@@ -247,12 +247,8 @@ impl NodeDatabase {
     }
 
     pub fn sample_trusted_nodes(
-        &self, count: u32, filter: &IpFilter,
+        &self, count: u32, _filter: &IpFilter,
     ) -> Vec<NodeEntry> {
-        if !self.ip_limit.is_enabled() {
-            return self.trusted_nodes.sample_nodes(count, filter);
-        }
-
         let mut entries = Vec::new();
 
         for id in self.ip_limit.sample_trusted(count) {
@@ -268,13 +264,9 @@ impl NodeDatabase {
     }
 
     pub fn sample_trusted_node_ids(
-        &self, count: u32, filter: &IpFilter,
+        &self, count: u32, _filter: &IpFilter,
     ) -> HashSet<NodeId> {
-        if self.ip_limit.is_enabled() {
-            self.ip_limit.sample_trusted(count)
-        } else {
-            self.trusted_nodes.sample_node_ids(count, filter)
-        }
+        self.ip_limit.sample_trusted(count)
     }
 
     /// Persist trust and untrusted node tables and clear all useless nodes.

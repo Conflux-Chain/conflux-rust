@@ -135,8 +135,8 @@ log_conf="log.yaml"
 # 
 # session_ip_limits="1,8,4,2"
 
-# `subnet_quota` limits the number of nodes for a subnet B (e.g. 192.168.xxx.xxx/16) stored in database.
+# `subnet_quota` limits the number of nodes for a subnet C (e.g. 192.168.100.xxx/16) stored in database.
 # Nodes in database are used to establish outgoing TCP connections for P2P communications.
-# Note, 0 represents unlimited.
+# The valid value range is [1, 255]
 #
 # subnet_quota=32
