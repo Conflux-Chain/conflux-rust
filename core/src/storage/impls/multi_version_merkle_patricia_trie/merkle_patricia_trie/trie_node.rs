@@ -77,7 +77,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
-impl<'node, NodeRefT: 'static + NodeRefTrait> TrieNodeWalkTrait<'node>
+impl<'node, NodeRefT: 'static + NodeRefTrait> GetChildTrait<'node>
     for VanillaTrieNode<NodeRefT>
 where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
@@ -86,6 +86,12 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     fn get_child(&'node self, child_index: u8) -> Option<&'node NodeRefT> {
         self.children_table.get_child(child_index)
     }
+}
+
+impl<'node, NodeRefT: 'static + NodeRefTrait> TrieNodeWalkTrait<'node>
+    for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
 }
 
 impl<NodeRefT: 'static + NodeRefTrait> TrieNodeTrait
@@ -525,7 +531,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     }
 }
 
-impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeWalkTrait<'node>
+impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> GetChildTrait<'node>
     for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     type ChildIdType = NodeRefDeltaMptCompact;
@@ -535,6 +541,11 @@ impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeWalkTrait<'node>
     ) -> Option<NodeRefDeltaMptCompact> {
         self.children_table.get_child(child_index)
     }
+}
+
+impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeWalkTrait<'node>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
 }
 
 /// The action variants after a value deletion.
@@ -840,7 +851,7 @@ use super::{
     maybe_in_place_byte_array::*,
     merkle::{compute_merkle, MaybeMerkleTableRef},
     mpt_value::MptValue,
-    walk::TrieNodeWalkTrait,
+    walk::*,
     WrappedCreateFrom,
 };
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

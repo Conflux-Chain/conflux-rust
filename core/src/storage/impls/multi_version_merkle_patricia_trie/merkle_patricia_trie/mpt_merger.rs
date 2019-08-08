@@ -661,7 +661,7 @@ impl<'a> MptMerger<'a> {
                             // and value.
                             let new_node = NodeInMerge::new(
                                 VanillaTrieNode::new(
-                                    &MERKLE_NULL_NODE,
+                                    MERKLE_NULL_NODE,
                                     Default::default(),
                                     Some(value),
                                     key_remaining.into(),
@@ -737,7 +737,7 @@ impl<'a> MptMerger<'a> {
 
                         let mut fork_node = NodeInMerge::new(
                             VanillaTrieNode::new(
-                                &MERKLE_NULL_NODE,
+                                MERKLE_NULL_NODE,
                                 VanillaChildrenTable::new_from_one_child(
                                     unmatched_child_index,
                                     &MERKLE_NULL_NODE,
@@ -771,7 +771,7 @@ impl<'a> MptMerger<'a> {
 
                                 let value_node = NodeInMerge::new(
                                     VanillaTrieNode::new(
-                                        &MERKLE_NULL_NODE,
+                                        MERKLE_NULL_NODE,
                                         Default::default(),
                                         value_last_step_diverted,
                                         key_remaining.into(),
