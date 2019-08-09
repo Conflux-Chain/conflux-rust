@@ -209,11 +209,7 @@ class NodeLogMapper:
 
     def map(self):
         with open(self.log_file, "r", encoding='UTF-8') as file:
-            start = False
             for line in file.readlines():
-                if not start and "Start Generating Workload" in line:
-                    start = True
-                elif start:
                     self.parse_log_line(line)
 
     def parse_log_line(self, line:str):
