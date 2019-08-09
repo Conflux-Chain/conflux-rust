@@ -20,7 +20,10 @@ mod traits;
 mod types;
 
 use self::{
-    impls::cfx::{CfxHandler, DebugRpcImpl, RpcImpl, TestRpcImpl},
+    impls::{
+        cfx::{CfxHandler, DebugRpcImpl, RpcImpl, TestRpcImpl},
+        common::RpcImpl as CommonImpl,
+    },
     traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
 };
 
@@ -83,24 +86,29 @@ impl HttpConfiguration {
     }
 }
 
-pub fn setup_public_rpc_apis(rpc_impl: Arc<RpcImpl>) -> IoHandler {
-    let mut handler = IoHandler::new();
+pub fn setup_public_rpc_apis(
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>,
+) -> IoHandler {
+    let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
-    //    handler.extend_with(TestRpcImpl::new(rpc_impl.clone()).to_delegate());
-    handler.extend_with(CfxHandler::new(rpc_impl.clone()).to_delegate());
-
+    let mut handler = IoHandler::new();
+    handler.extend_with(cfx);
     handler
 }
 
-pub fn setup_debug_rpc_apis(rpc_impl: Arc<RpcImpl>) -> IoHandler {
-    let mut handler = IoHandler::new();
+pub fn setup_debug_rpc_apis(
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>,
+) -> IoHandler {
+    let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+    let test = TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
+    let debug = DebugRpcImpl::new(common.clone(), rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
-    handler.extend_with(CfxHandler::new(rpc_impl.clone()).to_delegate());
-    handler.extend_with(TestRpcImpl::new(rpc_impl.clone()).to_delegate());
-    handler.extend_with(DebugRpcImpl::new(rpc_impl).to_delegate());
-
+    let mut handler = IoHandler::new();
+    handler.extend_with(cfx);
+    handler.extend_with(test);
+    handler.extend_with(debug);
     handler
 }
 

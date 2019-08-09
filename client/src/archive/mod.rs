@@ -17,7 +17,8 @@ use cfxcore::{
 };
 
 use crate::rpc::{
-    impls::cfx::RpcImpl, setup_debug_rpc_apis, setup_public_rpc_apis,
+    impls::{cfx::RpcImpl, common::RpcImpl as CommonImpl},
+    setup_debug_rpc_apis, setup_public_rpc_apis,
 };
 use cfx_types::{Address, U256};
 use cfxcore::block_data_manager::BlockDataManager;
@@ -289,8 +290,13 @@ impl ArchiveClient {
             sync.clone(),
             blockgen.clone(),
             txpool.clone(),
+        ));
+
+        let common_impl = Arc::new(CommonImpl::new(
             exit,
+            consensus.clone(),
             network.clone(),
+            txpool.clone(),
         ));
 
         let debug_rpc_http_server = super::rpc::new_http(
@@ -300,7 +306,7 @@ impl ArchiveClient {
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            setup_debug_rpc_apis(rpc_impl.clone()),
+            setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone()),
         )?;
 
         let rpc_tcp_server = super::rpc::new_tcp(
@@ -309,9 +315,9 @@ impl ArchiveClient {
                 conf.raw_conf.jsonrpc_tcp_port,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(rpc_impl.clone())
+                setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone())
             } else {
-                setup_public_rpc_apis(rpc_impl.clone())
+                setup_public_rpc_apis(common_impl.clone(), rpc_impl.clone())
             },
         )?;
 
@@ -323,9 +329,9 @@ impl ArchiveClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(rpc_impl.clone())
+                setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone())
             } else {
-                setup_public_rpc_apis(rpc_impl.clone())
+                setup_public_rpc_apis(common_impl.clone(), rpc_impl.clone())
             },
         )?;
 
