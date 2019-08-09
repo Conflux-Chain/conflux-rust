@@ -14,6 +14,7 @@ pub enum DisconnectReason {
     WrongEndpointInfo,
     IpLimited,
     UpdateNodeIdFailed,
+    Blacklisted,
     Custom(String),
     Unknown,
 }
@@ -26,7 +27,8 @@ impl DisconnectReason {
             DisconnectReason::WrongEndpointInfo => 2,
             DisconnectReason::IpLimited => 3,
             DisconnectReason::UpdateNodeIdFailed => 4,
-            DisconnectReason::Custom(_) => 5,
+            DisconnectReason::Blacklisted => 5,
+            DisconnectReason::Custom(_) => 100,
             DisconnectReason::Unknown => 0xff,
         }
     }
@@ -58,7 +60,8 @@ impl Decodable for DisconnectReason {
             2 => Ok(DisconnectReason::WrongEndpointInfo),
             3 => Ok(DisconnectReason::IpLimited),
             4 => Ok(DisconnectReason::UpdateNodeIdFailed),
-            5 => match std::str::from_utf8(&raw[1..]) {
+            5 => Ok(DisconnectReason::Blacklisted),
+            100 => match std::str::from_utf8(&raw[1..]) {
                 Err(_) => {
                     Err(DecoderError::Custom("Unable to decode message part"))
                 }
@@ -77,6 +80,7 @@ impl fmt::Display for DisconnectReason {
             DisconnectReason::WrongEndpointInfo => "wrong node id",
             DisconnectReason::IpLimited => "IP limited",
             DisconnectReason::UpdateNodeIdFailed => "Update node id failed",
+            DisconnectReason::Blacklisted => "blacklisted",
             DisconnectReason::Custom(ref msg) => &msg[..],
             DisconnectReason::Unknown => "unknown",
         };
