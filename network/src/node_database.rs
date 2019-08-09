@@ -683,15 +683,20 @@ mod tests {
         // set to blacklisted
         db.set_blacklisted(&n.id);
         assert_eq!(db.evaluate_blacklisted(&n.id), true);
+        assert_eq!(db.get(&n.id, false), None);
+    }
 
-        // evaluate blacklisted node that exceeds the lifetime
-        let mut db2 = NodeDatabase::new(None, 2);
-        db2.blacklisted_lifetime = Duration::from_millis(1);
-        db2.insert_trusted(n.clone());
+    #[test]
+    fn test_blacklisted_lifetime() {
+        let mut db = NodeDatabase::new(None, 2);
+
+        let n = new_entry("127.0.0.1:999");
+        db.insert_trusted(n.clone());
         db.set_blacklisted(&n.id);
-        assert_eq!(db.evaluate_blacklisted(&n.id), true);
 
+        db.blacklisted_lifetime = Duration::from_millis(1);
         std::thread::sleep(Duration::from_millis(2));
+
         assert_eq!(db.evaluate_blacklisted(&n.id), false);
         assert_eq!(db.get(&n.id, false), None);
     }
