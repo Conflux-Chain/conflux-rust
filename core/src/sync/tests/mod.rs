@@ -142,11 +142,6 @@ fn test_remove_expire_blocks() {
                     );
                     inner.not_ready_blocks_frontier.insert(me);
                 }
-                if graph_status[i as usize] != 4
-                    && childrens[i as usize].is_empty()
-                {
-                    inner.not_ready_blocks_terminal.insert(me);
-                }
             }
             inner.not_ready_blocks_count = 8;
 
@@ -154,25 +149,15 @@ fn test_remove_expire_blocks() {
                 "not_ready_blocks_frontier={:?}",
                 inner.not_ready_blocks_frontier
             );
-            println!(
-                "not_ready_blocks_terminal={:?}",
-                inner.not_ready_blocks_terminal
-            );
             assert!(inner.arena.len() == 12);
             assert!(inner.hash_to_arena_indices.len() == 12);
             assert!(inner.not_ready_blocks_count == 8);
             assert!(inner.not_ready_blocks_frontier.len() == 5);
-            assert!(inner.not_ready_blocks_terminal.len() == 5);
             assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(9 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(5 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(6 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(8 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(10 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(11 as usize)));
         }
 
         // not expire any blocks
@@ -183,20 +168,14 @@ fn test_remove_expire_blocks() {
             assert!(inner.hash_to_arena_indices.len() == 12);
             assert!(inner.not_ready_blocks_count == 8);
             assert!(inner.not_ready_blocks_frontier.len() == 5);
-            assert!(inner.not_ready_blocks_terminal.len() == 5);
             assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(9 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(5 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(6 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(8 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(10 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(11 as usize)));
         }
 
-        // expire [9, 10, 11]
+        // expire [10, 11]
         {
             let mut inner = sync.inner.write();
             inner.arena[10].last_update_timestamp = SystemTime::now()
@@ -208,25 +187,26 @@ fn test_remove_expire_blocks() {
         {
             sync.remove_expire_blocks(500, false);
             let inner = sync.inner.read();
-            assert!(inner.arena.len() == 9);
-            assert!(inner.hash_to_arena_indices.len() == 9);
-            assert!(inner.not_ready_blocks_count == 5);
-            assert!(inner.not_ready_blocks_frontier.len() == 4);
-            assert!(inner.not_ready_blocks_terminal.len() == 4);
+            assert!(inner.arena.len() == 10);
+            assert!(inner.hash_to_arena_indices.len() == 10);
+            assert!(inner.not_ready_blocks_count == 6);
+            assert!(inner.not_ready_blocks_frontier.len() == 5);
             assert!(inner.not_ready_blocks_frontier.contains(&(4 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(6 as usize)));
             assert!(inner.not_ready_blocks_frontier.contains(&(7 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(5 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(6 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(7 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(8 as usize)));
+            assert!(inner.not_ready_blocks_frontier.contains(&(9 as usize)));
         }
 
-        // expire [7]
+        // expire [9, 7]
         {
             let mut inner = sync.inner.write();
             inner.arena[7].last_update_timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                - 1000;
+            inner.arena[9].last_update_timestamp = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs()
@@ -239,9 +219,7 @@ fn test_remove_expire_blocks() {
             assert!(inner.hash_to_arena_indices.len() == 5);
             assert!(inner.not_ready_blocks_count == 1);
             assert!(inner.not_ready_blocks_frontier.len() == 1);
-            assert!(inner.not_ready_blocks_terminal.len() == 1);
             assert!(inner.not_ready_blocks_frontier.contains(&(5 as usize)));
-            assert!(inner.not_ready_blocks_terminal.contains(&(5 as usize)));
         }
     }
 

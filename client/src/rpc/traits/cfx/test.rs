@@ -93,4 +93,7 @@ pub trait TestRpc {
     fn get_transaction_receipt(
         &self, tx_hash: H256,
     ) -> RpcResult<Option<RpcReceipt>>;
+
+    #[rpc(name = "expireblockgc")]
+    fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
 }

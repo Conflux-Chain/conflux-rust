@@ -88,6 +88,12 @@ impl SynchronizationService {
         self.protocol_handler.on_mined_block(block);
         self.relay_blocks(vec![hash]);
     }
+
+    pub fn expire_block_gc(&self, timeout: u64) {
+        let _res = self.network.with_context(self.protocol, |io| {
+            self.protocol_handler.expire_block_gc(io, timeout)
+        });
+    }
 }
 
 pub type SharedSynchronizationService = Arc<SynchronizationService>;

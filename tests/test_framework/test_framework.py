@@ -333,16 +333,7 @@ class ConfluxTestFramework:
         node.wait_for_rpc_connection()
         node.wait_for_nodeid()
         if wait_for_recovery:
-            sleep_time = 0.1
-            retry = 0
-            max_retry = wait_time / sleep_time
-            while node.current_sync_phase() not in ["NormalSyncPhase", "CatchUpSyncBlockPhase"] and retry <= max_retry:
-                time.sleep(0.1)
-                retry += 1
-            if retry > max_retry:
-                raise AssertionError("Node {} not recovered to normal phase after {} seconds"
-                                     .format(i, wait_time))
-
+            node.wait_for_recovery(wait_time)
 
         if self.options.coveragedir is not None:
             coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
@@ -356,6 +347,7 @@ class ConfluxTestFramework:
             for node in self.nodes:
                 node.wait_for_rpc_connection()
                 node.wait_for_nodeid()
+                node.wait_for_recovery(10)
         except:
             # If one node failed to start, stop the others
             self.stop_nodes()

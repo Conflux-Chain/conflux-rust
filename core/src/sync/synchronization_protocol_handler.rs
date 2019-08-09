@@ -335,18 +335,6 @@ impl SynchronizationProtocolHandler {
             .append_received_transactions(transactions);
     }
 
-    fn best_peer_epoch(&self) -> Option<u64> {
-        self.syn
-            .peers
-            .read()
-            .iter()
-            .map(|(_, state)| state.read().best_epoch)
-            .fold(None, |max, x| match max {
-                None => Some(x),
-                Some(max) => Some(if x > max { x } else { max }),
-            })
-    }
-
     fn dispatch_message(
         &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
@@ -534,7 +522,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_epochs(&self, io: &NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
-        let best_peer_epoch = self.best_peer_epoch().unwrap_or(0);
+        let best_peer_epoch = self.syn.best_peer_epoch().unwrap_or(0);
         let my_best_epoch = self.graph.consensus.best_epoch_number();
 
         while self.request_manager.num_epochs_in_flight()
@@ -1265,10 +1253,11 @@ impl SynchronizationProtocolHandler {
         self.catch_up_mode() && self.protocol_config.request_block_with_public
     }
 
-    fn expire_block_gc(&self, io: &NetworkContext) {
-        // remove expire blocks every 450 seconds
-        let need_to_relay = self.graph.remove_expire_blocks(15 * 30, true);
-        self.relay_blocks(io, need_to_relay).ok();
+    pub fn expire_block_gc(
+        &self, io: &NetworkContext, timeout: u64,
+    ) -> Result<(), Error> {
+        let need_to_relay = self.graph.remove_expire_blocks(timeout, true);
+        self.relay_blocks(io, need_to_relay)
     }
 }
 
@@ -1406,7 +1395,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 }
             }
             EXPIRE_BLOCK_GC_TIMER => {
-                self.expire_block_gc(io);
+                // remove expire blocks every 450 seconds
+                self.expire_block_gc(io, 450).ok();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
