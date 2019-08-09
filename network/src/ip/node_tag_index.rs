@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
 pub struct NodeTagIndex {
-    // map<tag_key, map<tag_value, map<subnet, map<subnet, set<node_id>>>>>
+    // map<tag_key, map<tag_value, map<subnet, set<node_id>>>>
     items: HashMap<
         String,
         HashMap<String, SampleHashMap<u32, SampleHashSet<NodeId>>>,
