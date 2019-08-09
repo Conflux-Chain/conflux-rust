@@ -1590,6 +1590,11 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
             })
             .expect("Error sending network IO message");
     }
+
+    fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str) {
+        let id = self.network_service.get_peer_node_id(peer);
+        self.network_service.node_db.write().set_tag(id, key, value);
+    }
 }
 
 fn save_key(path: &Path, key: &Secret) {

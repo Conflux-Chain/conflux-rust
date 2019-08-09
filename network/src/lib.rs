@@ -244,6 +244,8 @@ pub trait NetworkContext {
     ) -> Result<(), Error>;
 
     fn dispatch_work(&self, work_type: HandlerWorkType);
+
+    fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str);
 }
 
 #[derive(Debug, Clone)]

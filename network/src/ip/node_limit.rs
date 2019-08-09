@@ -55,6 +55,11 @@ impl NodeIpLimit {
     #[inline]
     pub fn is_enabled(&self) -> bool { self.subnet_quota > 0 }
 
+    pub fn subnet(&self, id: &NodeId) -> Option<u32> {
+        let ip = self.node_index.get(id)?;
+        Some(self.subnet_type.subnet(ip))
+    }
+
     /// Remove the specified node `id` and return `true` if removed
     /// successfully. If not found, return `false`.
     pub fn remove(&mut self, id: &NodeId) -> bool {

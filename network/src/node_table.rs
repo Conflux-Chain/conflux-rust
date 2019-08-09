@@ -239,6 +239,14 @@ pub struct Node {
     // does not need to be made persistent.
     pub last_connected: Option<NodeContact>,
     pub stream_token: Option<StreamToken>,
+    // Generally, it is used by protocol handler layer to attach
+    // some tags to node, so as to:
+    // 1. Sampling nodes with special tags, e.g.
+    //     - archive nodes first
+    //     - good credit nodes first
+    //     - good network nodes first
+    // 2. Refuse incoming connection from node with special tags.
+    pub tags: HashMap<String, String>,
 }
 
 impl Node {
@@ -249,6 +257,7 @@ impl Node {
             last_contact: None,
             last_connected: None,
             stream_token: None,
+            tags: Default::default(),
         }
     }
 }
@@ -290,6 +299,7 @@ impl FromStr for Node {
             last_contact: None,
             last_connected: None,
             stream_token: None,
+            tags: Default::default(),
         })
     }
 }
@@ -855,6 +865,7 @@ mod json {
     pub struct Node {
         pub url: String,
         pub last_contact: Option<NodeContact>,
+        pub tags: HashMap<String, String>,
     }
 
     impl Node {
@@ -863,6 +874,7 @@ mod json {
                 Ok(mut node) => {
                     node.last_contact =
                         self.last_contact.map(NodeContact::into_node_contact);
+                    node.tags = self.tags;
                     Some(node)
                 }
                 _ => None,
@@ -886,6 +898,7 @@ mod json {
             Node {
                 url: format!("{}", node),
                 last_contact,
+                tags: node.tags.clone(),
             }
         }
     }
