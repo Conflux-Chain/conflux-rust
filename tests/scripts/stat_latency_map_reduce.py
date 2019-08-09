@@ -52,7 +52,8 @@ class Transaction:
 
     @staticmethod
     def add_or_replace(txs:dict, tx):
-        if txs.get(tx.hash) is None:
+        #if a trasnaction is received before "Start Generating Workload", packing message should be discarded.
+        if txs.get(tx.hash) is None and tx.packed_timestamps[0] is None:
             txs[tx.hash] = tx
         elif tx.received_timestamps[0] < txs[tx.hash].received_timestamps[0]:
             packed_time = None
@@ -60,10 +61,10 @@ class Transaction:
                 packed_time = txs[tx.hash].packed_timestamps[0]
             txs[tx.hash] = tx
             txs[tx.hash].packed_timestamps[0] = packed_time
-
-        #when a node is packing a transaction, it should already received it, thus the packing transaction timesstamp should be added only once.
-        if tx.packed_timestamps[0] is not None:
-            txs[tx.hash].packed_timestamps[0] = tx.packed_timestamps[0]
+        else:
+            #when a node is packing a transaction, it should already received it, thus the packing transaction timesstamp should be added only once.
+            if tx.packed_timestamps[0] is not None:
+                txs[tx.hash].packed_timestamps[0] = tx.packed_timestamps[0]
 
     def merge(self, tx):
         self.received_timestamps.extend(tx.received_timestamps)
