@@ -32,11 +32,11 @@ use crate::{
     },
     message::{HasRequestId, Message, RequestId},
     network::{NetworkContext, PeerId},
-    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{MAX_POLL_TIME_MS, POLL_PERIOD_MS},
+    },
 };
-
-const POLL_PERIOD_MS: u64 = 100;
-const MAX_POLL_TIME_MS: u64 = 1000;
 
 #[derive(Debug)]
 pub enum QueryResult {

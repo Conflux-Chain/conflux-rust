@@ -30,6 +30,10 @@ use crate::{
     },
     message::{Message, RequestId},
     network::{NetworkContext, PeerId},
+    parameters::light::{
+        CATCH_UP_EPOCH_LAG_THRESHOLD, EPOCH_REQUEST_BATCH_SIZE,
+        HEADER_REQUEST_BATCH_SIZE, NUM_WAITING_HEADERS_THRESHOLD,
+    },
     primitives::BlockHeader,
     sync::SynchronizationGraph,
 };
@@ -38,11 +42,6 @@ use super::handler::FullPeerState;
 
 use epochs::Epochs;
 use headers::{HashSource, Headers};
-
-const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
-const EPOCH_REQUEST_BATCH_SIZE: usize = 30;
-const HEADER_REQUEST_BATCH_SIZE: usize = 30;
-const NUM_WAITING_HEADERS_THRESHOLD: usize = 1000;
 
 fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
 where I: Iterator<Item = T> {

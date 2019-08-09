@@ -18,6 +18,7 @@ use crate::{
         throttling::THROTTLING_SERVICE, NetworkContext, NetworkProtocolHandler,
         NetworkService, PeerId,
     },
+    parameters::light::{MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND},
     statedb::StateDb,
     storage::{
         state_manager::StateManagerTrait, SnapshotAndEpochIdRef, StateProof,
@@ -38,9 +39,6 @@ use super::{
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
 use crate::parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
-
-pub const MAX_EPOCHS_TO_SEND: usize = 128;
-pub const MAX_HEADERS_TO_SEND: usize = 512;
 
 #[derive(Default)]
 pub struct LightPeerState {

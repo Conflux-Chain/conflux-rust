@@ -21,6 +21,7 @@ use crate::{
     },
     message::{Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler, PeerId},
+    parameters::light::{CLEANUP_PERIOD_MS, SYNC_PERIOD_MS},
     sync::SynchronizationGraph,
 };
 
@@ -30,9 +31,6 @@ use super::{query::QueryHandler, sync::SyncHandler};
 
 const SYNC_TIMER: TimerToken = 0;
 const REQUEST_CLEANUP_TIMER: TimerToken = 1;
-
-const SYNC_PERIOD_MS: u64 = 5000;
-const CLEANUP_PERIOD_MS: u64 = 1000;
 
 #[derive(Default)]
 pub struct FullPeerState {
