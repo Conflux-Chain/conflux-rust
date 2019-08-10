@@ -162,7 +162,6 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
             size,
         );
 
-        THROTTLING_SERVICE.write().on_dequeue(size);
         WRITE_METER.mark(size);
         Ok(size)
     }

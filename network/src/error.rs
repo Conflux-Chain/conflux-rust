@@ -19,7 +19,7 @@ pub enum DisconnectReason {
 }
 
 impl DisconnectReason {
-    pub fn code(&self) -> u8 {
+    fn code(&self) -> u8 {
         match self {
             DisconnectReason::DisconnectRequested => 0,
             DisconnectReason::UselessPeer => 1,
@@ -34,8 +34,7 @@ impl DisconnectReason {
 
 impl Encodable for DisconnectReason {
     fn rlp_append(&self, s: &mut RlpStream) {
-        let mut raw = vec![];
-        raw.push(self.code());
+        let mut raw = vec![self.code()];
 
         if let DisconnectReason::Custom(msg) = self {
             raw.extend(msg.bytes());
