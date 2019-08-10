@@ -14,11 +14,14 @@ use std::{
 };
 
 use super::{super::handler::FullPeerState, max_of_collection, Peers};
-use crate::{consensus::ConsensusGraph, message::RequestId};
-
-const EPOCH_REQUEST_TIMEOUT_MS: u64 = 2000;
-const MAX_PARALLEL_EPOCH_REQUESTS: usize = 10;
-const NUM_EPOCHS_TO_REQUEST: usize = 200;
+use crate::{
+    consensus::ConsensusGraph,
+    message::RequestId,
+    parameters::light::{
+        EPOCH_REQUEST_TIMEOUT_MS, MAX_PARALLEL_EPOCH_REQUESTS,
+        NUM_EPOCHS_TO_REQUEST,
+    },
+};
 
 #[derive(Debug)]
 struct EpochRequest {

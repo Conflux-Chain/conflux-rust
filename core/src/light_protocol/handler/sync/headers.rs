@@ -10,11 +10,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::sync::SynchronizationGraph;
+use crate::{
+    parameters::light::{HEADER_REQUEST_TIMEOUT_MS, MAX_HEADERS_IN_FLIGHT},
+    sync::SynchronizationGraph,
+};
 use cfx_types::H256;
-
-const MAX_HEADERS_IN_FLIGHT: usize = 500;
-const REQUEST_TIMEOUT_MS: u64 = 2000;
 
 // NOTE: order defines priority: Epoch < Reference < NewHash
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -164,7 +164,7 @@ impl Headers {
 
     fn remove_timeout_requests(&self) -> Vec<MissingHeader> {
         let mut in_flight = self.in_flight.write();
-        let timeout = Duration::from_millis(REQUEST_TIMEOUT_MS);
+        let timeout = Duration::from_millis(HEADER_REQUEST_TIMEOUT_MS);
 
         // collect timed-out requests
         let headers: Vec<_> = in_flight

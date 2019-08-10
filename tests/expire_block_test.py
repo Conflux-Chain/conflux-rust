@@ -42,6 +42,7 @@ class ExpireBlockTest(ConfluxTestFramework):
         wait_until(lambda: node.getbestblockhash() == new_hash)
         out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51, referee_hashes=[bytes.fromhex(blocks[400][2:])])
         self.send_msg(node, NewBlock(block=out_block))
+        time.sleep(3)
         node.expireblockgc(2)
         wait_until(lambda: node.getblockcount() == 402)
 
