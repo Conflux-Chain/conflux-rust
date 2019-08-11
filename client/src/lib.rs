@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#![recursion_limit = "512"]
 #![allow(deprecated)]
+
 use jsonrpc_http_server as http;
 use jsonrpc_tcp_server as tcp;
 
