@@ -201,7 +201,7 @@ impl Session {
                 // refuse incoming session if the node is blacklisted
                 if host.node_db.write().evaluate_blacklisted(&node_id) {
                     return Err(
-                        self.disconnect(io, DisconnectReason::Blacklisted)
+                        self.send_disconnect(DisconnectReason::Blacklisted)
                     );
                 }
 
