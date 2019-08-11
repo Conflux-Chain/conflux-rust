@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::DisconnectReason;
 use crate::{
     discovery::{Discovery, DISCOVER_NODES_COUNT},
     io::*,
@@ -373,6 +374,7 @@ impl DelayedQueue {
                     &context.io,
                     true,
                     Some(UpdateNodeOperation::Failure),
+                    None,
                 );
             }
         };
@@ -718,6 +720,7 @@ impl NetworkServiceInner {
                 io,
                 true,
                 Some(UpdateNodeOperation::Failure),
+                None,
             );
         }
         w.clear();
@@ -836,6 +839,7 @@ impl NetworkServiceInner {
             io,
             true,
             Some(UpdateNodeOperation::Failure),
+            None,
         );
     }
 
@@ -894,6 +898,7 @@ impl NetworkServiceInner {
                 io,
                 true,
                 Some(UpdateNodeOperation::Failure),
+                None,
             );
         }
 
@@ -965,6 +970,7 @@ impl NetworkServiceInner {
     fn kill_connection(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
         remote: bool, op: Option<UpdateNodeOperation>,
+        msg: Option<&'static str>,
     )
     {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
@@ -979,6 +985,14 @@ impl NetworkServiceInner {
                         for (p, _) in self.handlers.read().iter() {
                             if sess.have_capability(*p) {
                                 to_disconnect.push(*p);
+
+                                if let Some(msg) = msg {
+                                    sess.send_disconnect(
+                                        DisconnectReason::Custom(
+                                            msg.to_owned(),
+                                        ),
+                                    );
+                                };
                             }
                         }
                     }
@@ -992,6 +1006,7 @@ impl NetworkServiceInner {
                 );
             }
         }
+
         if let Some(id) = failure_id {
             if remote {
                 if let Some(op) = op {
@@ -1010,6 +1025,7 @@ impl NetworkServiceInner {
                 }
             }
         }
+
         for p in to_disconnect {
             if let Some(h) = self.handlers.read().get(&p).clone() {
                 h.on_peer_disconnected(
@@ -1018,6 +1034,7 @@ impl NetworkServiceInner {
                 );
             }
         }
+
         if deregister {
             io.deregister_stream(token).unwrap_or_else(|e| {
                 debug!("Error deregistering stream {:?}", e);
@@ -1142,7 +1159,7 @@ impl NetworkServiceInner {
         }
 
         for (token, op) in disconnect_peers {
-            self.kill_connection(token, io, true, op);
+            self.kill_connection(token, io, true, op, None);
         }
     }
 }
@@ -1562,9 +1579,13 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         Ok(())
     }
 
-    fn disconnect_peer(&self, peer: PeerId, op: Option<UpdateNodeOperation>) {
+    fn disconnect_peer(
+        &self, peer: PeerId, op: Option<UpdateNodeOperation>,
+        reason: Option<&'static str>,
+    )
+    {
         self.network_service
-            .kill_connection(peer, self.io, true, op);
+            .kill_connection(peer, self.io, true, op, reason);
     }
 
     fn register_timer(

@@ -169,6 +169,7 @@ impl RequestHandler {
                         io.disconnect_peer(
                             peer_id,
                             Some(UpdateNodeOperation::Demotion),
+                            None,
                         );
                     }
                 }

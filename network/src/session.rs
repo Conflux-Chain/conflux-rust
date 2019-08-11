@@ -206,8 +206,7 @@ impl Session {
                             "failed to update node id of ingress session, reason = {:?}, session = {:?}",
                             reason, self
                         );
-                        return Err(self.disconnect(
-                            io,
+                        return Err(self.send_disconnect(
                             DisconnectReason::UpdateNodeIdFailed,
                         ));
                     }
@@ -215,8 +214,7 @@ impl Session {
                     self.metadata.id = Some(node_id);
                 } else {
                     if Some(node_id) != self.metadata.id {
-                        return Err(self.disconnect(
-                            io,
+                        return Err(self.send_disconnect(
                             DisconnectReason::WrongEndpointInfo,
                         ));
                     }
@@ -227,14 +225,12 @@ impl Session {
             }
             PACKET_DISCONNECT => {
                 let rlp = Rlp::new(&data);
-                let reason: u8 = rlp.val_at(0)?;
+                let reason: DisconnectReason = rlp.as_val()?;
                 debug!(
                     "read packet DISCONNECT, reason = {}, session = {:?}",
-                    DisconnectReason::from_u8(reason),
-                    self
+                    reason, self
                 );
-                Err(ErrorKind::Disconnect(DisconnectReason::from_u8(reason))
-                    .into())
+                Err(ErrorKind::Disconnect(reason).into())
             }
             PACKET_PING => {
                 self.send_pong(io)?;
@@ -303,7 +299,7 @@ impl Session {
         self.metadata.peer_capabilities = peer_caps;
         if self.metadata.capabilities.is_empty() {
             debug!("No common capabilities with remote peer, peer_node_id = {:?}, session = {:?}", id, self);
-            return Err(self.disconnect(io, DisconnectReason::UselessPeer));
+            return Err(self.send_disconnect(DisconnectReason::UselessPeer));
         }
 
         let mut hello_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
@@ -324,7 +320,7 @@ impl Session {
         if !entry.endpoint.is_valid() {
             debug!("Got invalid endpoint {:?}, session = {:?}", entry, self);
             return Err(
-                self.disconnect(io, DisconnectReason::WrongEndpointInfo)
+                self.send_disconnect(DisconnectReason::WrongEndpointInfo)
             );
         } else if !(entry.endpoint.is_allowed(host.get_ip_filter())
             && entry.id != *host.metadata.id())
@@ -333,7 +329,7 @@ impl Session {
                 "Address not allowed, endpoint = {:?}, session = {:?}",
                 entry, self
             );
-            return Err(self.disconnect(io, DisconnectReason::IpLimited));
+            return Err(self.send_disconnect(DisconnectReason::IpLimited));
         } else {
             debug!("Received valid endpoint {:?}, session = {:?}", entry, self);
             host.node_db.write().insert_with_token(entry, self.token());
@@ -345,13 +341,9 @@ impl Session {
         Ok(())
     }
 
-    pub fn send_packet<Message>(
-        &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
-        packet_id: u8, data: &[u8], priority: SendQueuePriority,
-    ) -> Result<SendQueueStatus, Error>
-    where
-        Message: Send + Sync + Clone,
-    {
+    pub fn prepare_packet(
+        &self, protocol: Option<ProtocolId>, packet_id: u8, data: &[u8],
+    ) -> Result<BytesMut, Error> {
         if protocol.is_some()
             && (self.metadata.capabilities.is_empty()
                 || self.had_hello.is_none())
@@ -385,23 +377,28 @@ impl Session {
             packet.put_slice(&protocol);
         }
         packet.put_slice(&data);
+        Ok(packet)
+    }
 
+    pub fn send_packet<Message: Send + Sync + Clone>(
+        &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
+        packet_id: u8, data: &[u8], priority: SendQueuePriority,
+    ) -> Result<SendQueueStatus, Error>
+    {
+        let packet = self.prepare_packet(protocol, packet_id, data)?;
         self.connection.send(io, &packet[..], priority)
     }
 
-    pub fn disconnect<Message: Send + Sync + Clone>(
-        &mut self, io: &IoContext<Message>, reason: DisconnectReason,
-    ) -> Error {
-        let mut rlp = RlpStream::new();
-        rlp.begin_list(1).append(&(reason as u32));
-        self.send_packet(
-            io,
-            None,
-            PACKET_DISCONNECT,
-            &rlp.drain(),
-            SendQueuePriority::High,
-        )
-        .ok();
+    pub fn send_packet_immediately(
+        &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: &[u8],
+    ) -> Result<usize, Error> {
+        let packet = self.prepare_packet(protocol, packet_id, data)?;
+        self.connection.write_raw_data(&packet[..])
+    }
+
+    pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
+        let packet = rlp::encode(&reason);
+        let _ = self.send_packet_immediately(None, PACKET_DISCONNECT, &packet);
         ErrorKind::Disconnect(reason).into()
     }
 

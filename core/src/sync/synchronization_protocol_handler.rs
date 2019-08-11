@@ -367,7 +367,7 @@ impl SynchronizationProtocolHandler {
 
         if !handle_rlp_message(msg_id, &ctx, &rlp)? {
             warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
-            io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove));
+            io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove), None);
         }
 
         Ok(())
@@ -436,7 +436,7 @@ impl SynchronizationProtocolHandler {
         }
 
         if disconnect {
-            io.disconnect_peer(peer, op);
+            io.disconnect_peer(peer, op, None);
         }
     }
 
@@ -1340,7 +1340,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
-            io.disconnect_peer(peer, Some(UpdateNodeOperation::Failure));
+            io.disconnect_peer(peer, Some(UpdateNodeOperation::Failure), None);
         } else {
             self.syn
                 .handshaking_peers
@@ -1391,6 +1391,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                     io.disconnect_peer(
                         peer,
                         Some(UpdateNodeOperation::Failure),
+                        None,
                     );
                 }
             }

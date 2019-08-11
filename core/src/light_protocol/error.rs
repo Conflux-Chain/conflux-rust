@@ -165,6 +165,6 @@ pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     };
 
     if disconnect {
-        io.disconnect_peer(peer, op);
+        io.disconnect_peer(peer, op, None);
     }
 }

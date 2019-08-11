@@ -147,7 +147,26 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
         }
     }
 
-    fn write(&mut self) -> Result<WriteStatus, Error> {
+    pub fn write_raw_data(&mut self, data: &[u8]) -> Result<usize, Error> {
+        trace!(
+            "Sending raw buffer, token = {}, data = {:?}",
+            self.token,
+            data
+        );
+
+        let size = self.socket.write(data)?;
+
+        trace!(
+            "Succeed to send socket data, token = {}, size = {}",
+            self.token,
+            size,
+        );
+
+        WRITE_METER.mark(size);
+        Ok(size)
+    }
+
+    fn write_next_from_queue(&mut self) -> Result<WriteStatus, Error> {
         if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
             && has_high_priority_packets()
         {
@@ -188,6 +207,10 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
         THROTTLING_SERVICE.write().on_dequeue(size);
         WRITE_METER.mark(size);
 
+        // NOTE: the line below does not work due the error:
+        // `cannot borrow `*self` as mutable more than once at a time`
+        // let size = self.write_raw_data(&buf.0)?;
+
         if pos + size < len {
             buf.1 += size;
             Ok(WriteStatus::Ongoing)
@@ -201,7 +224,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
     pub fn writable<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
-        let status = self.write();
+        let status = self.write_next_from_queue();
 
         if let Ok(WriteStatus::Complete) = status {
             self.send_queue.pop_front();
