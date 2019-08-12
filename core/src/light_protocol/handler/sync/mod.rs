@@ -242,13 +242,13 @@ impl SyncHandler {
         self.headers.insert_waiting(missing, HashSource::Reference);
     }
 
-    fn sync_headers(&self, io: &NetworkContext) -> Result<(), Error> {
+    fn sync_headers(&self, io: &NetworkContext) {
         info!("sync_headers; statistics: {:?}", self.get_statistics());
 
         // check if there are any peers available
         if self.peers.is_empty() {
             warn!("No peers available; aborting sync");
-            return Ok(());
+            return;
         }
 
         // choose set of hashes to request
@@ -284,16 +284,14 @@ impl SyncHandler {
                 }
             }
         }
-
-        Ok(())
     }
 
-    fn sync_epochs(&self, io: &NetworkContext) -> Result<(), Error> {
+    fn sync_epochs(&self, io: &NetworkContext) {
         info!("sync_epochs; statistics: {:?}", self.get_statistics());
 
         // return if we already have enough hashes in the pipeline
         if self.headers.num_waiting() >= NUM_WAITING_HEADERS_THRESHOLD {
-            return Ok(());
+            return;
         }
 
         // choose set of epochs to request
@@ -328,8 +326,6 @@ impl SyncHandler {
                 }
             }
         }
-
-        Ok(())
     }
 
     pub(super) fn on_block_hashes(
@@ -343,7 +339,7 @@ impl SyncHandler {
         let hashes = resp.hashes.into_iter();
         self.headers.insert_waiting(hashes, HashSource::Epoch);
 
-        self.start_sync(io)?;
+        self.start_sync(io);
         Ok(())
     }
 
@@ -355,7 +351,7 @@ impl SyncHandler {
 
         self.handle_headers(resp.headers);
 
-        self.start_sync(io)?;
+        self.start_sync(io);
         Ok(())
     }
 
@@ -376,25 +372,23 @@ impl SyncHandler {
         let hashes = msg.hashes.into_iter();
         self.headers.insert_waiting(hashes, HashSource::NewHash);
 
-        self.start_sync(io)?;
+        self.start_sync(io);
         Ok(())
     }
 
-    pub(super) fn start_sync(&self, io: &NetworkContext) -> Result<(), Error> {
+    pub(super) fn start_sync(&self, io: &NetworkContext) {
         info!("start_sync; statistics: {:?}", self.get_statistics());
 
         match self.catch_up_mode() {
             true => {
-                self.sync_headers(io)?;
-                self.sync_epochs(io)?;
+                self.sync_headers(io);
+                self.sync_epochs(io);
             }
             false => {
                 self.collect_terminals();
-                self.sync_headers(io)?;
+                self.sync_headers(io);
             }
         };
-
-        Ok(())
     }
 
     pub(super) fn clean_up_requests(&self) {

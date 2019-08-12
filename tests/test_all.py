@@ -27,10 +27,18 @@ TEST_SCRIPTS = []
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
 
-# By default, run all *_test.py files in the same folder of this file.
-for file in os.listdir(test_dir):
-    if file.endswith("_test.py"):
-        TEST_SCRIPTS.append(file)
+test_subdirs = [
+    "", # include test_dir itself
+    "light",
+]
+
+# By default, run all *_test.py files in the specified subfolders.
+for subdir in test_subdirs:
+    subdir_path = os.path.join(test_dir, subdir)
+    for file in os.listdir(subdir_path):
+        if file.endswith("_test.py"):
+            rel_path = os.path.join(subdir, file)
+            TEST_SCRIPTS.append(rel_path)
 
 failed = set()
 for script in TEST_SCRIPTS:
