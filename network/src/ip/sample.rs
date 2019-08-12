@@ -6,13 +6,18 @@ use rand::{Rng, ThreadRng};
 use std::{collections::HashMap, hash::Hash, slice::Iter};
 
 /// HashMap that provide sampling in O(1) complexity.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SampleHashMap<K: Hash + Eq, V> {
     items: Vec<(K, V)>,
     index: HashMap<K, usize>,
 }
 
 impl<K: Hash + Eq + Clone, V> SampleHashMap<K, V> {
+    pub fn get(&self, k: &K) -> Option<&V> {
+        let pos = self.index.get(k)?;
+        Some(&self.items[*pos].1)
+    }
+
     pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
         let pos = self.index.get(k)?;
         Some(&mut self.items[*pos].1)

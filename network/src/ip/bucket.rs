@@ -10,21 +10,11 @@ use std::{slice::Iter, time::Duration};
 /// and support to sample any node from bucket.
 #[derive(Default, Debug)]
 pub struct NodeBucket {
-    subnet: u32,
     trusted_nodes: SampleHashSet<NodeId>,
     untrusted_nodes: SampleHashSet<NodeId>,
 }
 
 impl NodeBucket {
-    pub fn new(subnet: u32) -> Self {
-        let mut bucket = NodeBucket::default();
-        bucket.subnet = subnet;
-        bucket
-    }
-
-    #[inline]
-    pub fn subnet(&self) -> u32 { self.subnet }
-
     #[inline]
     pub fn count(&self) -> usize {
         self.trusted_nodes.len() + self.untrusted_nodes.len()
@@ -139,21 +129,17 @@ mod tests {
         bucket: &NodeBucket, id: &NodeId, trusted: bool,
     ) {
         if trusted {
-            assert_eq!(bucket.untrusted_index.contains_key(id), false);
-            assert_eq!(bucket.trusted_index.contains_key(id), true);
-            let index = bucket.trusted_index[id];
-            assert_eq!(&bucket.trusted_nodes[index], id);
+            assert_eq!(bucket.untrusted_nodes.contains(id), false);
+            assert_eq!(bucket.trusted_nodes.contains(id), true);
         } else {
-            assert_eq!(bucket.trusted_index.contains_key(id), false);
-            assert_eq!(bucket.untrusted_index.contains_key(id), true);
-            let index = bucket.untrusted_index[id];
-            assert_eq!(&bucket.untrusted_nodes[index], id);
+            assert_eq!(bucket.trusted_nodes.contains(id), false);
+            assert_eq!(bucket.untrusted_nodes.contains(id), true);
         }
     }
 
     #[test]
     fn test_add_remove() {
-        let mut bucket = NodeBucket::new(0);
+        let mut bucket = NodeBucket::default();
         assert_eq!(bucket.count(), 0);
 
         // add n1 as trusted
@@ -198,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_sample() {
-        let mut bucket = NodeBucket::new(0);
+        let mut bucket = NodeBucket::default();
         let mut rng = thread_rng();
 
         // sample None if bucket is empty
