@@ -8,7 +8,7 @@ use cfxcore::{
     SharedSynchronizationGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
@@ -21,9 +21,6 @@ use std::{
 };
 use time::{SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
-
-#[macro_use]
-extern crate log;
 
 enum MiningState {
     Start,
