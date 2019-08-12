@@ -406,7 +406,7 @@ impl ConsensusNewBlockHandler {
         let mut valid = true;
         let parent = inner.arena[me].parent;
         let parent_height = inner.arena[parent].height;
-        let era_height = inner.get_era_height(parent_height, 0);
+        let era_genesis_height = inner.get_era_genesis_height(parent_height, 0);
 
         // Check the pivot selection decision.
         for consensus_arena_index_in_epoch in
@@ -422,7 +422,7 @@ impl ConsensusNewBlockHandler {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
             // If it is outside current era, we will skip!
-            if inner.arena[lca].height < era_height {
+            if inner.arena[lca].height < era_genesis_height {
                 continue;
             }
             if lca == parent {
@@ -466,7 +466,7 @@ impl ConsensusNewBlockHandler {
         let mut valid = true;
         let parent = inner.arena[me].parent;
         let parent_height = inner.arena[parent].height;
-        let era_height = inner.get_era_height(parent_height, 0);
+        let era_genesis_height = inner.get_era_genesis_height(parent_height, 0);
 
         let mut weight_delta = HashMap::new();
 
@@ -494,7 +494,7 @@ impl ConsensusNewBlockHandler {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
             // If it is outside the era, we will skip!
-            if inner.arena[lca].height < era_height {
+            if inner.arena[lca].height < era_genesis_height {
                 continue;
             }
             if lca == parent {
@@ -918,12 +918,13 @@ impl ConsensusNewBlockHandler {
             return inner.cur_era_genesis_block_arena_index;
         }
         let stable_height = best_height - inner.inner_conf.era_checkpoint_gap;
-        let stable_era_height = inner.get_era_height(stable_height - 1, 0);
-        if stable_era_height < inner.inner_conf.era_epoch_count {
+        let stable_era_genesis_height =
+            inner.get_era_genesis_height(stable_height - 1, 0);
+        if stable_era_genesis_height < inner.inner_conf.era_epoch_count {
             return inner.cur_era_genesis_block_arena_index;
         }
         let safe_era_height =
-            stable_era_height - inner.inner_conf.era_epoch_count;
+            stable_era_genesis_height - inner.inner_conf.era_epoch_count;
         if inner.cur_era_genesis_height > safe_era_height {
             return inner.cur_era_genesis_block_arena_index;
         }
@@ -972,17 +973,18 @@ impl ConsensusNewBlockHandler {
 
         let me = self.insert_block_initial(inner, &block_header);
         let parent = inner.arena[me].parent;
-        let era_height = inner.get_era_height(inner.arena[parent].height, 0);
+        let era_genesis_height =
+            inner.get_era_genesis_height(inner.arena[parent].height, 0);
         let mut fully_valid = true;
         let cur_pivot_era_block = if inner
             .pivot_index_to_height(inner.pivot_chain.len())
-            > era_height
+            > era_genesis_height
         {
-            inner.get_pivot_block_arena_index(era_height)
+            inner.get_pivot_block_arena_index(era_genesis_height)
         } else {
             NULL
         };
-        let era_block = inner.get_era_block_with_parent(parent, 0);
+        let era_block = inner.get_era_genesis_block_with_parent(parent, 0);
 
         let pending = {
             let me_stable_arena_index =
@@ -1207,8 +1209,10 @@ impl ConsensusNewBlockHandler {
         // value will become obsolete
         let old_pivot_chain_height =
             inner.pivot_index_to_height(old_pivot_chain_len);
-        let new_pivot_era_block = inner
-            .get_era_block_with_parent(*inner.pivot_chain.last().unwrap(), 0);
+        let new_pivot_era_block = inner.get_era_genesis_block_with_parent(
+            *inner.pivot_chain.last().unwrap(),
+            0,
+        );
         let new_era_height = inner.arena[new_pivot_era_block].height;
         let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
         if new_checkpoint_era_genesis != inner.cur_era_genesis_block_arena_index

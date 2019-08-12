@@ -170,7 +170,7 @@ impl Default for ConsensusGraphPivotData {
 /// PastW(b)
 ///
 /// Note that for a given block b, PastW(b) is a constant,
-/// so in order to calculate stable, it is suffice to calculate
+/// so in order to calculate stable, it is sufficient to calculate
 /// argmin{d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent)}.
 /// Therefore, in the stable_tree, the value for x is
 /// d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent).
@@ -198,6 +198,20 @@ impl Default for ConsensusGraphPivotData {
 /// need to update the values of all of those nodes A such that A is the child
 /// of one of the node in the path from Genesis to X.
 ///
+/// Note that when computing stable we only consider the view under the single
+/// current era, while when computing adaptive we consider both the current and
+/// the last eras. The reason is as follows. Here we are going to handle split
+/// attack and balance attack. The split attack requires stable detection since
+/// it requires information about non-past. And it also requires attacker to
+/// keep creating unstable situations along with graph growing, therefore it
+/// can be detected in the current latest era. In contrast, balance attack may
+/// only require subtree information, so it mainly needs to detect adaptive. And
+/// balance attack may incurs adaptive case only once, which could be just
+/// before the beginning of the latest current era, to generate two balanced era
+/// subtrees, while these two era trees themselves can look healthy. Therefore,
+/// to handle balance attack, we also need to consider adaptive situation in the
+/// last/previous era.
+
 /// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
 /// each node has an internal index. This enables fast internal implementation
 /// to use integer index instead of H256 block hashes.
@@ -489,28 +503,30 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_era_height(&self, parent_height: u64, offset: u64) -> u64 {
-        let era_height = if parent_height > offset {
+    fn get_era_genesis_height(&self, parent_height: u64, offset: u64) -> u64 {
+        let era_genesis_height = if parent_height > offset {
             (parent_height - offset) / self.inner_conf.era_epoch_count
                 * self.inner_conf.era_epoch_count
         } else {
             0
         };
-        era_height
+        era_genesis_height
     }
 
     #[inline]
-    fn get_era_block_with_parent(&self, parent: usize, offset: u64) -> usize {
+    fn get_era_genesis_block_with_parent(
+        &self, parent: usize, offset: u64,
+    ) -> usize {
         if parent == NULL {
             return 0;
         }
         let height = self.arena[parent].height;
-        let era_height = self.get_era_height(height, offset);
+        let era_genesis_height = self.get_era_genesis_height(height, offset);
         debug!(
             "height={} era_height={} era_genesis_height={}",
-            height, era_height, self.cur_era_genesis_height
+            height, era_genesis_height, self.cur_era_genesis_height
         );
-        self.ancestor_at(parent, era_height)
+        self.ancestor_at(parent, era_genesis_height)
     }
 
     #[inline]
@@ -697,16 +713,16 @@ impl ConsensusGraphInner {
         let mut stable = true;
 
         let height = self.arena[parent].height;
-        let era_height = self.get_era_height(height, 0);
-        let two_era_height =
-            self.get_era_height(height, self.inner_conf.era_epoch_count);
-        let era_genesis = self.ancestor_at(parent, era_height);
+        let era_genesis_height = self.get_era_genesis_height(height, 0);
+        let two_era_genesis_height = self
+            .get_era_genesis_height(height, self.inner_conf.era_epoch_count);
+        let era_genesis = self.ancestor_at(parent, era_genesis_height);
 
         let total_weight = subtree_weight[era_genesis];
         let adjusted_beta =
             (self.inner_conf.adaptive_weight_beta as i128) * difficulty;
 
-        while self.arena[parent].height != era_height {
+        while self.arena[parent].height != era_genesis_height {
             let grandparent = self.arena[parent].parent;
             let past_era_weight = if grandparent == era_genesis {
                 0
@@ -731,7 +747,7 @@ impl ConsensusGraphInner {
         let mut adaptive = false;
         if !stable {
             parent = parent_0;
-            while self.arena[parent].height != era_height {
+            while self.arena[parent].height != era_genesis_height {
                 let grandparent = self.arena[parent].parent;
                 let w = subtree_weight[grandparent];
                 if w > adjusted_beta {
@@ -748,7 +764,7 @@ impl ConsensusGraphInner {
             }
         }
         if !adaptive {
-            while self.arena[parent].height != two_era_height {
+            while self.arena[parent].height != two_era_genesis_height {
                 let grandparent = self.arena[parent].parent;
                 let w = subtree_inclusive_weight[grandparent];
                 if w > adjusted_beta {
@@ -838,13 +854,14 @@ impl ConsensusGraphInner {
             );
         }
 
-        let era_height = self.get_era_height(self.arena[parent].height, 0);
-        let two_era_height = self.get_era_height(
+        let era_genesis_height =
+            self.get_era_genesis_height(self.arena[parent].height, 0);
+        let two_era_genesis_height = self.get_era_genesis_height(
             self.arena[parent].height,
             self.inner_conf.era_epoch_count,
         );
-        let era_genesis = self.ancestor_at(parent, era_height);
-        let two_era_genesis = self.ancestor_at(parent, two_era_height);
+        let era_genesis = self.ancestor_at(parent, era_genesis_height);
+        let two_era_genesis = self.ancestor_at(parent, two_era_genesis_height);
 
         let total_weight = self.weight_tree.get(era_genesis);
         debug!("total_weight before insert: {}", total_weight);
@@ -853,9 +870,9 @@ impl ConsensusGraphInner {
             (self.inner_conf.adaptive_weight_beta as i128) * difficulty;
 
         let mut high = self.arena[parent].height;
-        let mut low = era_height + 1;
+        let mut low = era_genesis_height + 1;
         // [low, high]
-        let mut best = era_height;
+        let mut best = era_genesis_height;
 
         while low <= high {
             let mid = (low + high) / 2;
@@ -876,7 +893,7 @@ impl ConsensusGraphInner {
             }
         }
 
-        let stable = if best != era_height {
+        let stable = if best != era_genesis_height {
             parent = self.ancestor_at(parent, best);
 
             let a = self.stable_tree.path_aggregate_chop(parent, era_genesis);
@@ -901,8 +918,8 @@ impl ConsensusGraphInner {
             parent = parent_0;
 
             let mut high = self.arena[parent].height;
-            let mut low = era_height + 1;
-            let mut best = era_height;
+            let mut low = era_genesis_height + 1;
+            let mut best = era_genesis_height;
 
             while low <= high {
                 let mid = (low + high) / 2;
@@ -917,7 +934,7 @@ impl ConsensusGraphInner {
                 }
             }
 
-            if best != era_height {
+            if best != era_genesis_height {
                 parent = self.ancestor_at(parent, best);
                 let min_agg =
                     self.adaptive_tree.path_aggregate_chop(parent, era_genesis);
@@ -929,9 +946,9 @@ impl ConsensusGraphInner {
         }
 
         if !adaptive {
-            let mut high = era_height;
-            let mut low = two_era_height + 1;
-            let mut best = two_era_height;
+            let mut high = era_genesis_height;
+            let mut low = two_era_genesis_height + 1;
+            let mut best = two_era_genesis_height;
 
             while low <= high {
                 let mid = (low + high) / 2;
@@ -947,7 +964,7 @@ impl ConsensusGraphInner {
                 }
             }
 
-            if best != two_era_height {
+            if best != two_era_genesis_height {
                 parent = self.ancestor_at(parent, best);
                 let min_agg = self
                     .inclusive_adaptive_tree
@@ -1098,7 +1115,7 @@ impl ConsensusGraphInner {
             .collect();
         // FIXME Double check if it's okay to use cur_era_genesis instead of
         // two_era_block        let two_era_block =
-        // self.get_era_block_with_parent(
+        // self.get_era_genesis_block_with_parent(
         // self.arena[pivot].parent,
         // self.inner_conf.era_epoch_count,        );
         let two_era_block = self.cur_era_genesis_block_arena_index;
@@ -1191,7 +1208,7 @@ impl ConsensusGraphInner {
             adaptive: block_header.adaptive(),
             parent,
             last_pivot_in_past: 0,
-            era_block: self.get_era_block_with_parent(parent, 0),
+            era_block: self.get_era_genesis_block_with_parent(parent, 0),
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
@@ -1212,7 +1229,7 @@ impl ConsensusGraphInner {
         self.collect_blockset_in_own_view_of_epoch(index);
 
         if parent != NULL {
-            let era_genesis = self.get_era_block_with_parent(parent, 0);
+            let era_genesis = self.get_era_genesis_block_with_parent(parent, 0);
             let graph_era_stable_genesis =
                 self.ancestor_at(parent, self.cur_era_stable_height);
 
