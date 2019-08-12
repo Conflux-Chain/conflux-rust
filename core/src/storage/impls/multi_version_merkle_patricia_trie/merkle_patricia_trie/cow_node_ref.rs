@@ -393,20 +393,91 @@ impl CowNodeRef {
         allocator_ref: AllocatorRefRefDeltaMpt, db: &KeyValueDbTraitRead,
     ) -> Result<MaybeMerkleTable>
     {
-        match trie_node.children_table.get_children_count() {
-            0 => Ok(None),
-            _ => {
-                let mut merkles = ChildrenMerkleTable::default();
-                for (i, maybe_node_ref_mut) in
-                    trie_node.children_table.iter_non_skip()
-                {
-                    match maybe_node_ref_mut {
-                        None => merkles[i as usize] = MERKLE_NULL_NODE,
-                        Some(node_ref_mut) => {
-                            let mut cow_child_node = Self::new(
-                                (*node_ref_mut).into(),
-                                owned_node_set,
-                            );
+        let original_db_key = match self.node_ref {
+            NodeRefDeltaMpt::Dirty { index } => {
+                owned_node_set.get_original_db_key(index)
+            }
+            NodeRefDeltaMpt::Committed { .. } => unreachable!(),
+        };
+        match (
+            trie_node.children_table.get_children_count(),
+            original_db_key,
+        ) {
+            (0, _) => Ok(None),
+            (_, None) => self.compute_children_merkles(
+                trie,
+                owned_node_set,
+                trie_node,
+                allocator_ref,
+                db,
+                None,
+            ),
+            (_, Some(original_db_key)) => {
+                let node_memory_manager = trie.get_node_memory_manager();
+                let cache_manager = node_memory_manager.get_cache_manager();
+                let num_uncached: u32 = trie_node
+                    .children_table
+                    .iter()
+                    .map(|(_i, node_ref)| {
+                        let node_ref = NodeRefDeltaMpt::from(*node_ref);
+                        match node_ref {
+                            NodeRefDeltaMpt::Committed { db_key } => {
+                                // FIXME(mk) don't lock
+                                if cache_manager.lock().query(db_key) {
+                                    1
+                                } else {
+                                    0
+                                }
+                            }
+                            NodeRefDeltaMpt::Dirty { .. } => 0,
+                        }
+                    })
+                    .sum();
+                let known_merkles = if num_uncached <= 1 {
+                    None
+                } else {
+                    node_memory_manager
+                        .load_children_merkles_from_db(db, original_db_key)?
+                };
+
+                self.compute_children_merkles(
+                    trie,
+                    owned_node_set,
+                    trie_node,
+                    allocator_ref,
+                    db,
+                    known_merkles,
+                )
+            }
+        }
+    }
+
+    #[inline]
+    fn compute_children_merkles(
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
+        trie_node: &mut TrieNodeDeltaMpt,
+        allocator_ref: AllocatorRefRefDeltaMpt, db: &KeyValueDbTraitRead,
+        known_merkles: Option<CompactedChildrenTable<MerkleHash>>,
+    ) -> Result<MaybeMerkleTable>
+    {
+        let known = known_merkles.is_some();
+        let known_merkles = known_merkles.unwrap_or_default();
+        let mut merkles = [MERKLE_NULL_NODE; CHILDREN_COUNT];
+
+        for (i, maybe_node_ref_mut) in trie_node.children_table.iter_non_skip()
+        {
+            match maybe_node_ref_mut {
+                None => merkles[i as usize] = MERKLE_NULL_NODE,
+                Some(node_ref_mut) => {
+                    let node_ref_mut = NodeRefDeltaMpt::from(*node_ref_mut);
+                    match (known, node_ref_mut) {
+                        (true, NodeRefDeltaMpt::Committed { .. }) => {
+                            merkles[i as usize] =
+                                known_merkles.get_child(i).unwrap_or_default();
+                        }
+                        (_, node_ref_mut @ _) => {
+                            let mut cow_child_node =
+                                Self::new(node_ref_mut, owned_node_set);
                             let result = cow_child_node.get_or_compute_merkle(
                                 trie,
                                 owned_node_set,
@@ -421,9 +492,15 @@ impl CowNodeRef {
                         }
                     }
                 }
-                Ok(Some(merkles))
             }
         }
+
+        // if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
+        //     children_merkle_map.insert(index,
+        // VanillaChildrenTable::<MerkleHash>::from(merkles)); }
+
+        // FIXME(mk) change to ref
+        Ok(Some(merkles))
     }
 
     // FIXME: unit test.
@@ -774,6 +851,7 @@ use super::{
         node_memory_manager::*,
         AtomicCommitTransaction, DeltaMpt, UnsafeCellExtension,
     },
+    children_table::*,
     merkle::*,
     mpt_value::MptValue,
     *,

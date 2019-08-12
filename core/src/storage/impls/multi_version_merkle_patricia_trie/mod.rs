@@ -11,6 +11,8 @@ pub(super) mod row_number;
 pub use self::node_ref_map::DEFAULT_NODE_MAP_SIZE;
 
 pub type DeltaMpt = MultiVersionMerklePatriciaTrie;
+pub type ChildrenMerkleMap =
+    BTreeMap<ActualSlabIndex, CompactedChildrenTable<MerkleHash>>;
 
 #[derive(Default)]
 pub struct AtomicCommit {
@@ -56,6 +58,7 @@ pub struct MultiVersionMerklePatriciaTrie {
     // trigger the compiler warning.
     delta_mpts_releaser: DeltaDbReleaser,
     commit_lock: Mutex<AtomicCommit>,
+    //children_merkle_map: RwLock<ChildrenMerkleMap>,
 }
 
 unsafe impl Sync for MultiVersionMerklePatriciaTrie {}
@@ -246,4 +249,5 @@ use crate::{
 use keccak_hash::keccak;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use primitives::{EpochId, MerkleHash};
-use std::{any::Any, borrow::BorrowMut, collections::HashMap, sync::Arc};
+use std::{any::Any, borrow::BorrowMut, collections::{HashMap, BTreeMap}, sync::Arc};
+use crate::storage::impls::multi_version_merkle_patricia_trie::merkle_patricia_trie::children_table::CompactedChildrenTable;
