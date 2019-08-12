@@ -70,7 +70,7 @@ pub mod test_helpers;
 
 pub use crate::{
     consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
-    light_protocol::QueryService,
+    light_protocol::{QueryProvider, QueryService},
     sync::{
         SharedSynchronizationGraph, SharedSynchronizationService,
         SynchronizationGraph, SynchronizationService,

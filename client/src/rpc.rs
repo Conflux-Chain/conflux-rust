@@ -23,6 +23,10 @@ use self::{
     impls::{
         cfx::{CfxHandler, DebugRpcImpl, RpcImpl, TestRpcImpl},
         common::RpcImpl as CommonImpl,
+        light::{
+            CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
+            RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
+        },
     },
     traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
 };
@@ -103,6 +107,32 @@ pub fn setup_debug_rpc_apis(
     let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
     let test = TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
     let debug = DebugRpcImpl::new(common.clone(), rpc).to_delegate();
+
+    // extend_with maps each method in RpcImpl object into a RPC handler
+    let mut handler = IoHandler::new();
+    handler.extend_with(cfx);
+    handler.extend_with(test);
+    handler.extend_with(debug);
+    handler
+}
+
+pub fn setup_public_rpc_apis_light(
+    common: Arc<CommonImpl>, rpc: Arc<LightImpl>,
+) -> IoHandler {
+    let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+
+    // extend_with maps each method in RpcImpl object into a RPC handler
+    let mut handler = IoHandler::new();
+    handler.extend_with(cfx);
+    handler
+}
+
+pub fn setup_debug_rpc_apis_light(
+    common: Arc<CommonImpl>, rpc: Arc<LightImpl>,
+) -> IoHandler {
+    let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+    let test = LightTestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
+    let debug = LightDebugRpcImpl::new(common.clone(), rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = IoHandler::new();
