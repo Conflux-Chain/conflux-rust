@@ -184,10 +184,7 @@ impl Handler {
 
         // NOTE: `start_sync` acquires read locks on peer states so
         // we need to make sure to release locks before calling it
-        if let Err(e) = self.sync.start_sync(io) {
-            warn!("Failed to trigger sync: {:?}", e);
-        }
-
+        self.sync.start_sync(io);
         Ok(())
     }
 }
@@ -249,14 +246,8 @@ impl NetworkProtocolHandler for Handler {
     fn on_timeout(&self, io: &NetworkContext, timer: TimerToken) {
         trace!("Timeout: timer={:?}", timer);
         match timer {
-            SYNC_TIMER => {
-                if let Err(e) = self.sync.start_sync(io) {
-                    warn!("Failed to trigger sync: {:?}", e);
-                }
-            }
-            REQUEST_CLEANUP_TIMER => {
-                self.sync.clean_up_requests();
-            }
+            SYNC_TIMER => self.sync.start_sync(io),
+            REQUEST_CLEANUP_TIMER => self.sync.clean_up_requests(),
             // TODO(thegaram): add other timers (e.g. data_man gc)
             _ => warn!("Unknown timer {} triggered.", timer),
         }

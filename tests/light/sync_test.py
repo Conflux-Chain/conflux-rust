@@ -32,7 +32,8 @@ class LightSyncTest(ConfluxTestFramework):
 
         # connect archive nodes, wait for phase changes to complete
         connect_nodes(self.nodes, FULLNODE0, FULLNODE1)
-        time.sleep(3)
+        self.nodes[FULLNODE0].wait_for_phase(["NormalSyncPhase"])
+        self.nodes[FULLNODE1].wait_for_phase(["NormalSyncPhase"])
 
     def connect_light_node(self, nodes):
         for n in nodes:
@@ -66,14 +67,14 @@ class LightSyncTest(ConfluxTestFramework):
 
         self.connect_light_node([FULLNODE0, FULLNODE1])
         wait_for_block_count(self.nodes[LIGHTNODE], 1 * block_batch_size + 1)
-        self.log.info("Pass 1")
+        self.log.info(f"Pass 1 - catch up {block_batch_size} blocks from 2 peers")
 
         # keep up
         self.generate_blocks(block_batch_size)
         wait_for_block_count(self.nodes[FULLNODE0], 2 * block_batch_size + 1)
         wait_for_block_count(self.nodes[FULLNODE1], 2 * block_batch_size + 1)
         wait_for_block_count(self.nodes[LIGHTNODE], 2 * block_batch_size + 1)
-        self.log.info("Pass 2")
+        self.log.info(f"Pass 2 - keep up with 2 peers for {block_batch_size} blocks")
 
         # catch up again
         self.disconnect_light_node([FULLNODE0, FULLNODE1])
@@ -84,7 +85,7 @@ class LightSyncTest(ConfluxTestFramework):
 
         self.connect_light_node([FULLNODE0])
         wait_for_block_count(self.nodes[LIGHTNODE], 3 * block_batch_size + 1)
-        self.log.info("Pass 3")
+        self.log.info(f"Pass 3 - catch up {block_batch_size} blocks from 1 peer")
 
 
 if __name__ == "__main__":
