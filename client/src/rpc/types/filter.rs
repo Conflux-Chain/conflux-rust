@@ -68,7 +68,7 @@ where T: DeserializeOwned
     }
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Filter {
     /// Search will be applied from this epoch number.

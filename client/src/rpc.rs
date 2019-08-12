@@ -24,7 +24,7 @@ use self::{
         cfx::{CfxHandler, DebugRpcImpl, RpcImpl, TestRpcImpl},
         common::RpcImpl as CommonImpl,
     },
-    traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
+    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
 };
 
 pub use self::types::Block as RpcBlock;

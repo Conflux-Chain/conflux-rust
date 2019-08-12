@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::super::types::{
+use super::super::types::{
     Block, Bytes, EpochNumber, Filter as RpcFilter, Log as RpcLog, Transaction,
     Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
     U256 as RpcU256, U64 as RpcU64,

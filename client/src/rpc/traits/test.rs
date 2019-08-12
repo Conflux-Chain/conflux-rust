@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::super::types::{
+use super::super::types::{
     BlameInfo, Block, Bytes, Receipt as RpcReceipt, Status as RpcStatus,
 };
 use cfx_types::H256;
