@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use rand::{Rng, ThreadRng};
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, slice::Iter};
 
 /// HashMap that provide sampling in O(1) complexity.
 #[derive(Default)]
@@ -57,7 +57,7 @@ impl<K: Hash + Eq + Clone, V> SampleHashMap<K, V> {
 }
 
 /// HashSet that provide sampling in O(1) complexity.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SampleHashSet<T: Hash + Eq> {
     items: Vec<T>,
     index: HashMap<T, usize>,
@@ -99,5 +99,15 @@ impl<T: Hash + Eq + Clone> SampleHashSet<T> {
         Some(self.items[index].clone())
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool { self.items.is_empty() }
+
+    #[inline]
+    pub fn len(&self) -> usize { self.items.len() }
+
+    #[inline]
+    pub fn contains(&self, value: &T) -> bool { self.items.contains(value) }
+
+    #[inline]
+    pub fn iter(&self) -> Iter<T> { self.items.iter() }
 }
