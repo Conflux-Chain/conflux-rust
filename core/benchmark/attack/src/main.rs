@@ -3,8 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfxcore::sync::utils::{
-    create_simple_block, 
-    initialize_synchronization_graph,
+    create_simple_block, initialize_synchronization_graph,
 };
 use std::{env, str::FromStr, thread, time};
 

@@ -44,10 +44,6 @@ name = "consensus_bench"
 path = "core/benchmark/consensus/src/main.rs"
 
 [[bin]]
-name = "consensus_attack"
-path = "core/benchmark/attack/src/main.rs"
-
-[[bin]]
 name = "cfx-gen-dot"
 path = "tools/cfx-gen-dot/main.rs"
 
