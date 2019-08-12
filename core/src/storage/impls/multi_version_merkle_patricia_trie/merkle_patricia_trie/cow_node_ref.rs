@@ -103,7 +103,7 @@ impl CowNodeRef {
     {
         let (node_ref, new_entry) =
             NodeMemoryManagerDeltaMpt::new_node(allocator)?;
-        owned_node_set.insert(node_ref.clone());
+        owned_node_set.insert(node_ref.clone(), None);
 
         Ok((
             Self {
@@ -155,10 +155,15 @@ impl CowNodeRef {
         if self.owned {
             Ok(None)
         } else {
-            // Similar to Self::new_uninitialized_node().
+            // Similar to Self::new_uninitialized_node(), but considers the
+            // original db key.
             let (node_ref, new_entry) =
                 NodeMemoryManagerDeltaMpt::new_node(&allocator)?;
-            owned_node_set.insert(node_ref.clone());
+            let original_db_key = match self.node_ref {
+                NodeRefDeltaMpt::Committed { db_key } => db_key,
+                NodeRefDeltaMpt::Dirty { .. } => unreachable!(),
+            };
+            owned_node_set.insert(node_ref.clone(), Some(original_db_key));
             self.node_ref = node_ref;
             self.owned = true;
 
@@ -514,7 +519,7 @@ impl CowNodeRef {
                 _ => unsafe { unreachable_unchecked() },
             };
             let committed_node_ref = NodeRefDeltaMpt::Committed { db_key };
-            owned_node_set.insert(committed_node_ref.clone());
+            owned_node_set.insert(committed_node_ref.clone(), None);
             // We insert the new node_ref into owned_node_set first because in
             // general inserting to a set may fail, even though it
             // doesn't fail for the current implementation.
@@ -763,7 +768,7 @@ use super::{
                 KeyValueDbTraitRead, KeyValueDbTransactionTrait,
             },
             errors::*,
-            state::OwnedNodeSet,
+            owned_node_set::OwnedNodeSet,
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,

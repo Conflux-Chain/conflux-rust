@@ -4,6 +4,7 @@
 
 pub(super) mod errors;
 pub(super) mod multi_version_merkle_patricia_trie;
+pub(self) mod owned_node_set;
 pub(super) mod state;
 pub(super) mod state_manager;
 pub(super) mod state_proof;

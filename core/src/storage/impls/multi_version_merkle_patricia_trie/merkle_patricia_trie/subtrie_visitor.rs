@@ -760,7 +760,7 @@ use super::{
     super::{
         super::{
             super::storage_db::key_value_db::KeyValueDbTraitRead, errors::*,
-            state::OwnedNodeSet,
+            owned_node_set::OwnedNodeSet,
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,

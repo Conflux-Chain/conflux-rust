@@ -224,7 +224,7 @@ impl MultiVersionMerklePatriciaTrie {
 }
 
 pub mod guarded_value;
-pub(self) mod node_ref_map;
+pub(super) mod node_ref_map;
 /// Fork of upstream slab in order to compact data and be thread-safe without
 /// giant lock.
 mod slab;
