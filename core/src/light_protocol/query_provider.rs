@@ -406,6 +406,8 @@ impl NetworkProtocolHandler for QueryProvider {
     fn initialize(&self, _io: &NetworkContext) {}
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+        trace!("on_message: peer={:?}, raw={:?}", peer, raw);
+
         if raw.len() < 2 {
             return handle_error(
                 io,

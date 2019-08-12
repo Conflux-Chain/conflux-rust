@@ -165,7 +165,7 @@ impl Handler {
     }
 
     fn on_status(
-        &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let status: StatusPong = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
@@ -173,12 +173,21 @@ impl Handler {
         self.validate_peer_type(&status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
 
-        let state = self.get_existing_peer_state(&peer)?;
-        let mut state = state.write();
-        state.best_epoch = status.best_epoch;
-        state.handshake_completed = true;
-        state.protocol_version = status.protocol_version;
-        state.terminals = status.terminals.into_iter().collect();
+        {
+            let state = self.get_existing_peer_state(&peer)?;
+            let mut state = state.write();
+            state.best_epoch = status.best_epoch;
+            state.handshake_completed = true;
+            state.protocol_version = status.protocol_version;
+            state.terminals = status.terminals.into_iter().collect();
+        }
+
+        // NOTE: `start_sync` acquires read locks on peer states so
+        // we need to make sure to release locks before calling it
+        if let Err(e) = self.sync.start_sync(io) {
+            warn!("Failed to trigger sync: {:?}", e);
+        }
+
         Ok(())
     }
 }
@@ -195,7 +204,7 @@ impl NetworkProtocolHandler for Handler {
     }
 
     fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
-        debug!("on_message: peer={:?}, raw={:?}", peer, raw);
+        trace!("on_message: peer={:?}, raw={:?}", peer, raw);
 
         if raw.len() < 2 {
             return handle_error(
