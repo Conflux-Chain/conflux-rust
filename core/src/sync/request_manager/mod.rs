@@ -481,7 +481,7 @@ impl RequestManager {
     /// transactions
     pub fn transactions_received(
         &self, received_transactions: &HashSet<TxPropagateId>,
-        signed_transactionis: Vec<Arc<SignedTransaction>>,
+        signed_transactions: Vec<Arc<SignedTransaction>>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
@@ -490,7 +490,7 @@ impl RequestManager {
         for tx in received_transactions {
             inflight_keys.remove(msg_type, Key::Id(*tx));
         }
-        self.append_received_transactions(signed_transactionis);
+        self.append_received_transactions(signed_transactions);
     }
 
     pub fn get_sent_transactions(
