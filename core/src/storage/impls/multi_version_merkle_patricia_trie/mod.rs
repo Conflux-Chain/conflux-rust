@@ -12,7 +12,7 @@ pub use self::node_ref_map::DEFAULT_NODE_MAP_SIZE;
 
 pub type DeltaMpt = MultiVersionMerklePatriciaTrie;
 pub type ChildrenMerkleMap =
-    BTreeMap<ActualSlabIndex, CompactedChildrenTable<MerkleHash>>;
+    BTreeMap<ActualSlabIndex, VanillaChildrenTable<MerkleHash>>;
 
 #[derive(Default)]
 pub struct AtomicCommit {
@@ -58,7 +58,9 @@ pub struct MultiVersionMerklePatriciaTrie {
     // trigger the compiler warning.
     delta_mpts_releaser: DeltaDbReleaser,
     commit_lock: Mutex<AtomicCommit>,
-    //children_merkle_map: RwLock<ChildrenMerkleMap>,
+    /// Children merkle hashes. Accumulated from calls to
+    /// `get_or_compute_merkle`; stashed until committing.
+    pub children_merkle_map: Mutex<ChildrenMerkleMap>,
 }
 
 unsafe impl Sync for MultiVersionMerklePatriciaTrie {}
@@ -119,6 +121,7 @@ impl MultiVersionMerklePatriciaTrie {
             commit_lock: Mutex::new(AtomicCommit {
                 row_number: RowNumber { value: row_number },
             }),
+            children_merkle_map: Mutex::new(ChildrenMerkleMap::new()),
         }
     }
 
@@ -236,8 +239,11 @@ pub use self::node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell};
 pub use merkle_patricia_trie::trie_proof::TrieProof;
 
 use self::{
-    cache::algorithm::lru::LRU, merkle_patricia_trie::*,
-    node_memory_manager::*, node_ref_map::DeltaMptDbKey, row_number::*,
+    cache::algorithm::lru::LRU,
+    merkle_patricia_trie::{children_table::*, *},
+    node_memory_manager::*,
+    node_ref_map::DeltaMptDbKey,
+    row_number::*,
 };
 use super::{
     super::storage_db::key_value_db::*, errors::*,
@@ -249,5 +255,9 @@ use crate::{
 use keccak_hash::keccak;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use primitives::{EpochId, MerkleHash};
-use std::{any::Any, borrow::BorrowMut, collections::{HashMap, BTreeMap}, sync::Arc};
-use crate::storage::impls::multi_version_merkle_patricia_trie::merkle_patricia_trie::children_table::CompactedChildrenTable;
+use std::{
+    any::Any,
+    borrow::BorrowMut,
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};

@@ -495,9 +495,12 @@ impl CowNodeRef {
             }
         }
 
-        // if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
-        //     children_merkle_map.insert(index,
-        // VanillaChildrenTable::<MerkleHash>::from(merkles)); }
+        if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
+            trie.children_merkle_map.lock().insert(
+                index,
+                VanillaChildrenTable::<MerkleHash>::from(merkles),
+            );
+        }
 
         // FIXME(mk) change to ref
         Ok(Some(merkles))
@@ -591,10 +594,19 @@ impl CowNodeRef {
             commit_transaction.info.row_number =
                 commit_transaction.info.row_number.get_next()?;
 
+            let mut children_merkle_map = trie.children_merkle_map.lock();
             let slot = match &self.node_ref {
                 NodeRefDeltaMpt::Dirty { index } => *index,
                 _ => unsafe { unreachable_unchecked() },
             };
+            if let Some(children_merkles) = children_merkle_map.get(&slot) {
+                commit_transaction.transaction.borrow_mut().put(
+                    format!("children_merkles_for_{}", db_key).as_bytes(),
+                    &children_merkles.rlp_bytes(),
+                )?;
+            }
+            children_merkle_map.remove(&slot);
+
             let committed_node_ref = NodeRefDeltaMpt::Committed { db_key };
             owned_node_set.insert(committed_node_ref.clone(), None);
             // We insert the new node_ref into owned_node_set first because in

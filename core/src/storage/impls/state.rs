@@ -373,6 +373,7 @@ impl<'a> State<'a> {
                             .lock(),
                         &allocator,
                     );
+                    self.delta_trie.children_merkle_map.lock().clear();
                     self.delta_trie_root =
                         cow_root.into_child().map(|r| r.into());
                     result?;
