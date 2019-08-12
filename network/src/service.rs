@@ -1019,7 +1019,7 @@ impl NetworkServiceInner {
                             self.node_db.write().note_failure(&id, true, false);
                         }
                         UpdateNodeOperation::Remove => {
-                            self.node_db.write().remove(&id);
+                            self.node_db.write().set_blacklisted(&id);
                         }
                     }
                 }
