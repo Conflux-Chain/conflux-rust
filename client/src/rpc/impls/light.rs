@@ -6,8 +6,8 @@ use delegate::delegate;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
-use cfx_types::H256;
-use cfxcore::PeerInfo;
+use cfx_types::{H160, H256};
+use cfxcore::{light_protocol::QueryService, ConsensusGraph, PeerInfo};
 
 use network::{
     node_table::{Node, NodeId},
@@ -26,17 +26,42 @@ use crate::rpc::{
 
 use super::common::RpcImpl as CommonImpl;
 
-pub struct RpcImpl {}
+pub struct RpcImpl {
+    consensus: Arc<ConsensusGraph>,
+    light: Arc<QueryService>,
+}
 
 impl RpcImpl {
-    pub fn new() -> Self { RpcImpl {} }
+    pub fn new(
+        consensus: Arc<ConsensusGraph>, light: Arc<QueryService>,
+    ) -> Self {
+        RpcImpl { consensus, light }
+    }
 
-    #[allow(unused_variables)]
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
-        // TODO
-        unimplemented!()
+        let num = num.unwrap_or(EpochNumber::LatestState).into();
+
+        let epoch = self
+            .consensus
+            .get_height_from_epoch_number(num)
+            .map_err(RpcError::invalid_params)?;
+
+        let address: H160 = address.into();
+
+        info!(
+            "RPC Request: cfx_getBalance address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        let balance = self
+            .light
+            .get_account(epoch, address)
+            .map(|account| account.balance.into())
+            .unwrap_or_default();
+
+        Ok(balance)
     }
 
     #[allow(unused_variables)]

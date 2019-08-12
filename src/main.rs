@@ -8,7 +8,9 @@ extern crate log4rs;
 extern crate parking_lot;
 
 use clap::{App, Arg};
-use client::{archive::ArchiveClient, configuration::Configuration};
+use client::{
+    archive::ArchiveClient, configuration::Configuration, light::LightClient,
+};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -312,9 +314,9 @@ fn main() -> Result<(), String> {
     if matches.is_present("light") {
         //FIXME: implement light client later
         info!("Starting light client...");
-        let client_handle = ArchiveClient::start(conf, exit.clone())
+        let client_handle = LightClient::start(conf, exit.clone())
             .map_err(|e| format!("failed to start light client: {:?}", e))?;
-        ArchiveClient::run_until_closed(exit, client_handle);
+        LightClient::run_until_closed(exit, client_handle);
     } else if matches.is_present("archive") {
         info!("Starting archive client...");
         let client_handle = ArchiveClient::start(conf, exit.clone())
