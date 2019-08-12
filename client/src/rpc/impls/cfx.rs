@@ -5,7 +5,7 @@
 use delegate::delegate;
 
 use crate::rpc::{
-    traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
+    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
         BlameInfo, Block as RpcBlock, Bytes, EpochNumber, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
