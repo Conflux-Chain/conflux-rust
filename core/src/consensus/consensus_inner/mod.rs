@@ -1101,6 +1101,10 @@ impl ConsensusGraphInner {
         // self.get_era_block_with_parent(
         // self.arena[pivot].parent,
         // self.inner_conf.era_epoch_count,        );
+
+        // Here `num_epoch_blocks_in_2era` might be incorrect for pending blocks (either really
+        // pending because it's past stable block or just pending because it's being inserted during
+        // recovery.
         let two_era_block = self.cur_era_genesis_block_arena_index;
         self.arena[pivot].data.num_epoch_blocks_in_2era = self.arena[pivot]
             .data
@@ -1947,6 +1951,7 @@ impl ConsensusGraphInner {
     {
         let lca = self.lca(me, pivot_arena_index);
         let lca_height = self.arena[lca].height;
+        debug!("compute_vote_valid_for_pivot_block: lca={}, lca_height={}", lca, lca_height);
         let mut stack = Vec::new();
         stack.push((0, me, 0));
         while !stack.is_empty() {
@@ -1975,6 +1980,7 @@ impl ConsensusGraphInner {
                         let mut cur = lca;
                         let mut vote_valid = true;
                         while cur_height > start_height {
+                            debug!("compute_vote_valid_for_pivot_block: cur={}, cur_height={}, start_height={}", cur, cur_height, start_height);
                             if self
                                 .execution_info_cache
                                 .get(&cur)
