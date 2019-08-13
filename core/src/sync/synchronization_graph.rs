@@ -1552,11 +1552,11 @@ impl SynchronizationGraph {
                 //                if inner.arena[*index].parent == NULL {
                 //                    // make sure this block will be insert
                 // into                    //
-                // old_era_blocks_frontier later                
+                // old_era_blocks_frontier later
                 // inner.arena[*index].parent_reclaimed = true;
                 //                }
                 //                inner.arena[*index].graph_status =
-                // BLOCK_HEADER_GRAPH_READY;                
+                // BLOCK_HEADER_GRAPH_READY;
                 // inner.arena[*index].pending_referee_count = 0;
                 to_relay_blocks.push(inner.arena[*index].block_header.hash());
             }
