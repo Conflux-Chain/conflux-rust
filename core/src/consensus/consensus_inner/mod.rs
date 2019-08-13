@@ -1036,6 +1036,12 @@ impl ConsensusGraphInner {
     }
 
     fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
+        let parent = self.arena[pivot].parent;
+        // This indicates `pivot` is partial_invalid and for partial invalid
+        // block we don't need to calculate and store the blockset
+        if parent != NULL && self.arena[parent].data.partial_invalid {
+            return;
+        }
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
         for referee in &self.arena[pivot].referees {

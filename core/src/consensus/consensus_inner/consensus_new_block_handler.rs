@@ -103,7 +103,9 @@ impl ConsensusNewBlockHandler {
             for child in children.iter() {
                 queue.push_back(*child);
                 new_era_block_arena_index_set.insert(*child);
-                if inner.arena[*child].height <= new_era_stable_height {
+                if inner.arena[*child].height <= new_era_stable_height
+                    || inner.arena[*child].data.partial_invalid
+                {
                     inner.arena[*child].past_weight = 0;
                 } else {
                     let stable_era_genesis =
@@ -1024,6 +1026,13 @@ impl ConsensusNewBlockHandler {
                 &anticone_barrier,
                 weight_tuple.as_ref(),
             );
+
+            if !fully_valid {
+                inner.arena[me].data.blockset_in_own_view_of_epoch =
+                    Default::default();
+                inner.arena[me].data.ordered_executable_epoch_blocks =
+                    Default::default();
+            }
 
             inner.arena[me].stable = stable;
             if self.conf.bench_mode && fully_valid {
