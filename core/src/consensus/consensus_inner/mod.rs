@@ -87,10 +87,6 @@ pub struct ConsensusGraphNodeData {
     /// It indicates whether the blame voting information of this block is
     /// correct or not.
     vote_valid: bool,
-    /// It indicates the previous index (including itself) of partial_invalid
-    /// block whose size of `blockset_in_own_view_of_epoch`
-    /// exceeds `BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP`.
-    prev_blockset_cleared_index: usize,
 }
 
 impl ConsensusGraphNodeData {
@@ -107,7 +103,6 @@ impl ConsensusGraphNodeData {
             sequence_number,
             exec_info_lca_height: NULLU64,
             vote_valid: true,
-            prev_blockset_cleared_index: NULL,
         }
     }
 }
@@ -1023,14 +1018,13 @@ impl ConsensusGraphInner {
         self.arena[me].era_block == self.arena[pivot].era_block
     }
 
-    /// Find the `blockset_in_own_view_of_epoch` of current `pivot` block,
-    /// assume that all cleared `blockset_in_own_view_of_epoch` of the
-    /// blocks along the path from `pivot` to
-    /// `cur_era_genesis_block_arena_index` are stored in HashSet `past`
-    fn collect_blockset_in_own_view_of_epoch_with_hint(
-        &mut self, past: &HashSet<usize>, pivot: usize,
-    ) -> Vec<usize> {
-        let mut blockset_in_own_view_of_epoch = Vec::new();
+    fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
+        let parent = self.arena[pivot].parent;
+        // This indicates `pivot` is partial_invalid and for partial invalid
+        // block we don't need to calculate and store the blockset
+        if parent != NULL && self.arena[parent].data.partial_invalid {
+            return;
+        }
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
         for referee in &self.arena[pivot].referees {
@@ -1052,7 +1046,6 @@ impl ConsensusGraphInner {
             }
 
             loop {
-                // TODO: try make a case to slow down this loop
                 assert!(parent != NULL);
 
                 if self.arena[parent].height
@@ -1068,7 +1061,6 @@ impl ConsensusGraphInner {
                         .data
                         .blockset_in_own_view_of_epoch
                         .contains(&index)
-                    || past.contains(&index)
                 {
                     in_old_epoch = true;
                     break;
@@ -1097,55 +1089,11 @@ impl ConsensusGraphInner {
                     self.arena[index].data.max_epoch_in_other_views,
                     self.arena[pivot].height,
                 );
-                blockset_in_own_view_of_epoch.push(index);
+                self.arena[pivot]
+                    .data
+                    .blockset_in_own_view_of_epoch
+                    .insert(index);
             }
-        }
-        blockset_in_own_view_of_epoch
-    }
-
-    /// Find the union of cleared `blockset_in_own_view_of_epoch` along the path from
-    /// `pivot` to `cur_era_genesis_block_arena_index`
-    fn collect_past_cleared_blockset_in_own_view_of_epoch(
-        &mut self, pivot: usize,
-    ) -> HashSet<usize> {
-        let mut past = HashSet::new();
-        let mut blockset_cleared_indices = Vec::new();
-        let mut parent = self.arena[pivot].parent;
-        while parent != NULL {
-            let blockset_cleared_index =
-                self.arena[parent].data.prev_blockset_cleared_index;
-            if blockset_cleared_index != NULL {
-                blockset_cleared_indices.push(blockset_cleared_index);
-                parent = self.arena[blockset_cleared_index].parent;
-            } else {
-                break;
-            }
-        }
-        blockset_cleared_indices.reverse();
-        for blockset_cleared_index in blockset_cleared_indices {
-            let blockset_in_own_view_of_epoch = self
-                .collect_blockset_in_own_view_of_epoch_with_hint(
-                    &past,
-                    blockset_cleared_index,
-                );
-            for index in blockset_in_own_view_of_epoch {
-                past.insert(index);
-            }
-            past.insert(blockset_cleared_index);
-        }
-        past
-    }
-
-    fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
-        let past =
-            self.collect_past_cleared_blockset_in_own_view_of_epoch(pivot);
-        let blockset_in_own_view_of_epoch =
-            self.collect_blockset_in_own_view_of_epoch_with_hint(&past, pivot);
-        for index in blockset_in_own_view_of_epoch {
-            self.arena[pivot]
-                .data
-                .blockset_in_own_view_of_epoch
-                .insert(index);
         }
         let filtered_blockset = self.arena[pivot]
             .data
