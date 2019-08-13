@@ -133,7 +133,7 @@ impl SyncHandler {
             None => true,
             Some(epoch) => {
                 let my_epoch = self.consensus.best_epoch_number();
-                my_epoch < epoch - CATCH_UP_EPOCH_LAG_THRESHOLD
+                my_epoch + CATCH_UP_EPOCH_LAG_THRESHOLD < epoch
             }
         }
     }
