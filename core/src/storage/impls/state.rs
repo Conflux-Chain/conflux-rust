@@ -315,6 +315,7 @@ impl<'a> State<'a> {
                     self.owned_node_set.as_mut().unwrap(),
                     &allocator,
                     self.delta_trie.db_read_only(),
+                    0,
                 )?;
                 cow_root.into_child();
 

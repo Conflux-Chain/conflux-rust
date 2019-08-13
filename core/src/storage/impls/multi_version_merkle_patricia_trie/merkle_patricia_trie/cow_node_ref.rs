@@ -3,8 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 /// Load children merkles only when the number of uncached children nodes is
-/// above this threshold.
-const CHILDREN_MERKLE_THRESHOLD: u32 = 4;
+/// above this threshold. Note that a small value will result in worse
+/// performance.
+const CHILDREN_MERKLE_UNCACHED_THRESHOLD: u32 = 8;
+
+/// Load/store children merkles only when the depth of current node is above
+/// this threshold. This is motivated by the fact that lower (deeper) nodes will
+/// be read less frequently than high nodes. The root node has depth 0. Note
+/// that a small value will result in worse performance.
+/// Depth 5 = 69905 (70k) nodes.
+/// Depth 6 = 1118481 (1.1 million) nodes.
+/// Depth 7 = 17895697 (18 million) nodes.
+const CHILDREN_MERKLE_DEPTH_THRESHOLD: u8 = 6;
 
 /// CowNodeRef facilities access and modification to trie nodes in multi-version
 /// MPT. It offers read-only access to the original trie node, and creates an
@@ -351,6 +361,7 @@ impl CowNodeRef {
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         allocator_ref: AllocatorRefRefDeltaMpt, db: &KeyValueDbTraitRead,
+        depth: u8,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -366,6 +377,7 @@ impl CowNodeRef {
                 trie_node,
                 allocator_ref,
                 db,
+                depth,
             )?;
 
             let merkle = self.set_merkle(children_merkles.as_ref(), trie_node);
@@ -395,6 +407,7 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt, db: &KeyValueDbTraitRead,
+        depth: u8,
     ) -> Result<MaybeMerkleTable>
     {
         let original_db_key = match self.node_ref {
@@ -415,6 +428,7 @@ impl CowNodeRef {
                 allocator_ref,
                 db,
                 None,
+                depth,
             ),
             (_, Some(original_db_key)) => {
                 let node_memory_manager = trie.get_node_memory_manager();
@@ -433,7 +447,9 @@ impl CowNodeRef {
                         }
                     })
                     .sum();
-                let known_merkles = if num_uncached <= CHILDREN_MERKLE_THRESHOLD
+                let known_merkles = if num_uncached
+                    <= CHILDREN_MERKLE_UNCACHED_THRESHOLD
+                    && depth <= CHILDREN_MERKLE_DEPTH_THRESHOLD
                 {
                     None
                 } else {
@@ -448,6 +464,7 @@ impl CowNodeRef {
                     allocator_ref,
                     db,
                     known_merkles,
+                    depth,
                 )
             }
         }
@@ -458,7 +475,7 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt, db: &KeyValueDbTraitRead,
-        known_merkles: Option<CompactedChildrenTable<MerkleHash>>,
+        known_merkles: Option<CompactedChildrenTable<MerkleHash>>, depth: u8,
     ) -> Result<MaybeMerkleTable>
     {
         let known = known_merkles.is_some();
@@ -484,6 +501,7 @@ impl CowNodeRef {
                                 owned_node_set,
                                 allocator_ref,
                                 db,
+                                depth + 1,
                             );
                             // There is no change to the child reference so the
                             // return value is dropped.
@@ -496,14 +514,15 @@ impl CowNodeRef {
             }
         }
 
-        if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
-            trie.children_merkle_map.lock().insert(
-                index,
-                VanillaChildrenTable::<MerkleHash>::from(merkles),
-            );
+        if depth > CHILDREN_MERKLE_DEPTH_THRESHOLD {
+            if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
+                trie.children_merkle_map.lock().insert(
+                    index,
+                    VanillaChildrenTable::<MerkleHash>::from(merkles),
+                );
+            }
         }
 
-        // FIXME(mk) change to ref
         Ok(Some(merkles))
     }
 
