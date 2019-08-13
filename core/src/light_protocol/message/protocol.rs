@@ -87,6 +87,6 @@ pub struct NewBlockHashes {
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct RelayRawTx {
+pub struct SendRawTx {
     pub raw: Vec<u8>,
 }

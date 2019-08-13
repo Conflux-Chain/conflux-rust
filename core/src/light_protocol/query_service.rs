@@ -143,15 +143,17 @@ impl QueryService {
     }
 
     /// Relay raw transaction to all peers.
-    pub fn relay_raw_tx(&self, raw: Vec<u8>) -> bool {
-        debug!("relay_raw_tx raw={:?}", raw);
+    // TODO(thegaram): consider returning TxStatus instead of bool,
+    // e.g. Failed, Sent/Pending, Confirmed, etc.
+    pub fn send_raw_tx(&self, raw: Vec<u8>) -> bool {
+        debug!("send_raw_tx raw={:?}", raw);
 
         let mut success = false;
 
         for peer in self.handler.peers.all_peers_shuffled() {
             // relay to peer
             let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-                self.handler.relay_raw_tx(io, peer, raw.clone())
+                self.handler.send_raw_tx(io, peer, raw.clone())
             });
 
             // check error

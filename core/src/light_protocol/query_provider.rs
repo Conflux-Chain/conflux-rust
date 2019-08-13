@@ -35,7 +35,7 @@ use super::{
         msgid, BlockHashes as GetBlockHashesResponse,
         BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
         GetBlockHeaders, GetStateEntry, GetStateRoot, NewBlockHashes, NodeType,
-        RelayRawTx, StateEntry as GetStateEntryResponse,
+        SendRawTx, StateEntry as GetStateEntryResponse,
         StateRoot as GetStateRootResponse, StatusPing, StatusPong,
     },
     peers::Peers,
@@ -140,7 +140,7 @@ impl QueryProvider {
             msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
             msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, &rlp),
             msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
-            msgid::RELAY_RAW_TX => self.on_relay_raw_tx(io, peer, &rlp),
+            msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -355,11 +355,11 @@ impl QueryProvider {
         Ok(())
     }
 
-    fn on_relay_raw_tx(
+    fn on_send_raw_tx(
         &self, _io: &NetworkContext, _peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let req: RelayRawTx = rlp.as_val()?;
-        info!("on_relay_raw_tx req={:?}", req);
+        let req: SendRawTx = rlp.as_val()?;
+        info!("on_send_raw_tx req={:?}", req);
         let tx: TransactionWithSignature = rlp::decode(&req.raw)?;
 
         let (passed, failed) = self.tx_pool.insert_new_transactions(&vec![tx]);

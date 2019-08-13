@@ -121,7 +121,11 @@ impl RpcImpl {
 
         debug!("Deserialized tx: {:?}", tx);
 
-        match /* success = */ self.light.relay_raw_tx(raw) {
+        // TODO(thegaram): consider adding a light node specific tx pool;
+        // light nodes would track those txs and maintain their statuses
+        // for future queries
+
+        match /* success = */ self.light.send_raw_tx(raw) {
             true => Ok(tx.hash().into()),
             false => Err(RpcError::invalid_params("Unable to relay tx")),
         }

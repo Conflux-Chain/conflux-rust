@@ -15,7 +15,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         handle_error,
-        message::{msgid, NodeType, RelayRawTx, StatusPing, StatusPong},
+        message::{msgid, NodeType, SendRawTx, StatusPing, StatusPong},
         peers::Peers,
         Error, ErrorKind, LIGHT_PROTOCOL_VERSION,
     },
@@ -188,10 +188,10 @@ impl Handler {
         Ok(())
     }
 
-    pub fn relay_raw_tx(
+    pub fn send_raw_tx(
         &self, io: &NetworkContext, peer: PeerId, raw: Vec<u8>,
     ) -> Result<(), Error> {
-        let msg: Box<dyn Message> = Box::new(RelayRawTx { raw });
+        let msg: Box<dyn Message> = Box::new(SendRawTx { raw });
         msg.send(io, peer)?;
         Ok(())
     }
