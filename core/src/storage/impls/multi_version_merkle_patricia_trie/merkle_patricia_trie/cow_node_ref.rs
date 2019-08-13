@@ -601,7 +601,7 @@ impl CowNodeRef {
             };
             if let Some(children_merkles) = children_merkle_map.get(&slot) {
                 commit_transaction.transaction.borrow_mut().put(
-                    format!("children_merkles_for_{}", db_key).as_bytes(),
+                    format!("cm{}", db_key).as_bytes(),
                     &children_merkles.rlp_bytes(),
                 )?;
             }
