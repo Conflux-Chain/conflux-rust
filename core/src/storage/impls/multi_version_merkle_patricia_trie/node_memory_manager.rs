@@ -115,6 +115,7 @@ pub struct NodeMemoryManager<
     uncached_leaf_load_times: AtomicUsize,
     uncached_leaf_db_loads: AtomicUsize,
     pub compute_merkle_db_loads: AtomicUsize,
+    children_merkle_db_loads: AtomicUsize,
 }
 
 #[allow(unused)]
@@ -182,6 +183,7 @@ impl<
             uncached_leaf_db_loads: Default::default(),
             uncached_leaf_load_times: Default::default(),
             compute_merkle_db_loads: Default::default(),
+            children_merkle_db_loads: Default::default(),
         }
     }
 
@@ -292,6 +294,8 @@ impl<
     pub fn load_children_merkles_from_db(
         &self, db: &KeyValueDbTraitRead, db_key: DeltaMptDbKey,
     ) -> Result<Option<CompactedChildrenTable<MerkleHash>>> {
+        self.children_merkle_db_loads
+            .fetch_add(1, Ordering::Relaxed);
         let rlp_bytes = match db
             .get(format!("children_merkles_for_{}", db_key).as_bytes())?
         {
@@ -694,7 +698,11 @@ impl<
         debug!(
             "number of db loads for merkle computation {}",
             self.compute_merkle_db_loads.load(Ordering::Relaxed)
-        )
+        );
+        debug!(
+            "number of db loads for children merkles {}",
+            self.children_merkle_db_loads.load(Ordering::Relaxed)
+        );
     }
 }
 
