@@ -34,16 +34,14 @@ impl Request for GetCompactBlocks {
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let inflight_keys = inflight_keys.get_or_insert(msgid::GET_BLOCKS);
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys = inflight_keys.write(msgid::GET_BLOCKS);
         for hash in self.hashes.iter() {
             inflight_keys.remove(&Key::Hash(*hash));
         }
     }
 
     fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
-        let inflight_keys = inflight_keys.get_or_insert(msgid::GET_BLOCKS);
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys = inflight_keys.write(msgid::GET_BLOCKS);
         self.hashes.retain(|h| inflight_keys.insert(Key::Hash(*h)));
     }
 

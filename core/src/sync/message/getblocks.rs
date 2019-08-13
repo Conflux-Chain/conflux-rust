@@ -36,16 +36,14 @@ impl Request for GetBlocks {
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys = inflight_keys.write(self.msg_id());
         for hash in self.hashes.iter() {
             inflight_keys.remove(&Key::Hash(*hash));
         }
     }
 
     fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
-        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys = inflight_keys.write(self.msg_id());
         self.hashes.retain(|h| inflight_keys.insert(Key::Hash(*h)));
     }
 

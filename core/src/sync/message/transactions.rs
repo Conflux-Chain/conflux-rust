@@ -214,16 +214,14 @@ impl Request for GetTransactions {
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys = inflight_keys.write(self.msg_id());
         for tx_id in self.tx_ids.iter() {
             inflight_keys.remove(&Key::Id(*tx_id));
         }
     }
 
     fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
-        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys = inflight_keys.write(self.msg_id());
 
         let mut tx_ids: HashSet<TxPropagateId> = HashSet::new();
         for id in self.tx_ids.iter() {

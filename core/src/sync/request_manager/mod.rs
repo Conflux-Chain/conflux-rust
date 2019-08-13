@@ -106,7 +106,9 @@ impl RequestManager {
     }
 
     pub fn num_epochs_in_flight(&self) -> u64 {
-        self.inflight_keys.len(msgid::GET_BLOCK_HASHES_BY_EPOCH) as u64
+        self.inflight_keys
+            .read(msgid::GET_BLOCK_HASHES_BY_EPOCH)
+            .len() as u64
     }
 
     /// Send request to remote peer with delay mechanism. If failed,
@@ -215,9 +217,8 @@ impl RequestManager {
             return;
         }
 
-        let inflight_keys =
-            self.inflight_keys.get_or_insert(msgid::GET_TRANSACTIONS);
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys =
+            self.inflight_keys.write(msgid::GET_TRANSACTIONS);
         let received_transactions = self.received_transactions.read();
 
         INFLIGHT_TX_POOL_METER.mark(inflight_keys.len());
@@ -346,9 +347,8 @@ impl RequestManager {
             req_hashes, received_headers
         );
         let missing_headers = {
-            let inflight_keys =
-                self.inflight_keys.get_or_insert(msgid::GET_BLOCK_HEADERS);
-            let mut inflight_keys = inflight_keys.write();
+            let mut inflight_keys =
+                self.inflight_keys.write(msgid::GET_BLOCK_HEADERS);
             let mut missing_headers = Vec::new();
             for req_hash in &req_hashes {
                 if !received_headers.remove(req_hash) {
@@ -385,10 +385,8 @@ impl RequestManager {
             req_epochs, received_epochs
         );
         let missing_epochs = {
-            let inflight_keys = self
-                .inflight_keys
-                .get_or_insert(msgid::GET_BLOCK_HASHES_BY_EPOCH);
-            let mut inflight_keys = inflight_keys.write();
+            let mut inflight_keys =
+                self.inflight_keys.write(msgid::GET_BLOCK_HASHES_BY_EPOCH);
             let mut missing_epochs = Vec::new();
             for epoch_number in &req_epochs {
                 if !received_epochs.remove(epoch_number) {
@@ -432,9 +430,7 @@ impl RequestManager {
             req_hashes, received_blocks, peer
         );
         let missing_blocks = {
-            let inflight_keys =
-                self.inflight_keys.get_or_insert(msgid::GET_BLOCKS);
-            let mut inflight_keys = inflight_keys.write();
+            let mut inflight_keys = self.inflight_keys.write(msgid::GET_BLOCKS);
             let mut missing_blocks = Vec::new();
             for req_hash in &req_hashes {
                 if !received_blocks.remove(req_hash) {
@@ -480,9 +476,8 @@ impl RequestManager {
         &self, received_transactions: &HashSet<TxPropagateId>,
     ) {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
-        let inflight_keys =
-            self.inflight_keys.get_or_insert(msgid::GET_TRANSACTIONS);
-        let mut inflight_keys = inflight_keys.write();
+        let mut inflight_keys =
+            self.inflight_keys.write(msgid::GET_TRANSACTIONS);
         for tx in received_transactions {
             inflight_keys.remove(&Key::Id(*tx));
         }
