@@ -14,7 +14,7 @@ pub enum Key {
     Id(u32),
 }
 
-/// Common key container for all inflight requests. The supported message type
+/// Common key container for all inflight requests. The supported message types
 /// are all registered in the Default constructor.
 pub struct KeyContainer {
     keys: HashMap<u8, RwLock<HashSet<Key>>>,
