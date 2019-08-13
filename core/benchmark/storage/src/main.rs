@@ -1631,13 +1631,7 @@ impl TxReplayer {
                 let manager = storage_manager_log_weak_ptr.upgrade();
                 match manager {
                     None => return,
-                    Some(manager) => {
-                        unsafe {
-                            debug!("disk read {}", proc_disk_read_bytes());
-                            debug!("disk write {}", proc_disk_written_bytes());
-                        }
-                        manager.log_usage();
-                    }
+                    Some(manager) => manager.log_usage(),
                 };
             } else {
             }
@@ -1760,14 +1754,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let mut latest_state;
     let mut last_state_root;
 
-    if tx_replayer
-        .storage_manager
-        .start_commit()
-        .info
-        .row_number
-        .value
-        == 0
-    {
+    if matches.value_of("last_state_root").is_none() {
         last_state_root = H256::default();
         latest_state = StateDb::new(
             tx_replayer.storage_manager.get_state_for_genesis_write(),
@@ -2082,4 +2069,3 @@ use std::{
     time::Duration,
     vec::Vec,
 };
-use rusage::*;
