@@ -15,7 +15,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         handle_error,
-        message::{msgid, NodeType, StatusPing, StatusPong},
+        message::{msgid, NodeType, SendRawTx, StatusPing, StatusPong},
         peers::Peers,
         Error, ErrorKind, LIGHT_PROTOCOL_VERSION,
     },
@@ -185,6 +185,14 @@ impl Handler {
         // NOTE: `start_sync` acquires read locks on peer states so
         // we need to make sure to release locks before calling it
         self.sync.start_sync(io);
+        Ok(())
+    }
+
+    pub fn send_raw_tx(
+        &self, io: &NetworkContext, peer: PeerId, raw: Vec<u8>,
+    ) -> Result<(), Error> {
+        let msg: Box<dyn Message> = Box::new(SendRawTx { raw });
+        msg.send(io, peer)?;
         Ok(())
     }
 }

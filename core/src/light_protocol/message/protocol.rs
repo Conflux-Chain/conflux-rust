@@ -85,3 +85,8 @@ pub struct BlockHeaders {
 pub struct NewBlockHashes {
     pub hashes: Vec<H256>,
 }
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct SendRawTx {
+    pub raw: Vec<u8>,
+}

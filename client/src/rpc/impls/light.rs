@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use cfx_types::{H160, H256};
 use cfxcore::{light_protocol::QueryService, ConsensusGraph, PeerInfo};
+use primitives::TransactionWithSignature;
 
 use network::{
     node_table::{Node, NodeId},
@@ -38,22 +39,46 @@ impl RpcImpl {
         RpcImpl { consensus, light }
     }
 
+    fn epoch_to_height(&self, epoch: EpochNumber) -> Result<u64, String> {
+        // NOTE: The epoch returned by consensus.best_state_epoch_number() is
+        // not guaranteed to exist, so we use the previous one instead. This
+        // way, the block `best_with_state_root + DEFERRED_STATE_EPOCH_COUNT`
+        // exists and we can safely use its `deferred_state_root` field for
+        // state validation.
+        let best_with_state_root = self.consensus.best_state_epoch_number() - 1;
+
+        match epoch {
+            EpochNumber::Earliest => Ok(0),
+            EpochNumber::LatestMined => Ok(best_with_state_root),
+            EpochNumber::LatestState => Ok(best_with_state_root),
+            EpochNumber::Num(num) => {
+                if num > best_with_state_root {
+                    return Err(format!(
+                        "Epoch number too large. Received: {}. Largest: {}.",
+                        num, best_with_state_root
+                    ));
+                }
+                Ok(num)
+            }
+        }
+    }
+
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
+        let address: H160 = address.into();
         let num = num.unwrap_or(EpochNumber::LatestState).into();
 
+        info!(
+            "RPC Request: cfx_getBalance address={:?} num={:?}",
+            address, num
+        );
+
         let epoch = self
-            .consensus
-            .get_height_from_epoch_number(num)
+            .epoch_to_height(num)
             .map_err(RpcError::invalid_params)?;
 
-        let address: H160 = address.into();
-
-        info!(
-            "RPC Request: cfx_getBalance address={:?} epoch={:?}",
-            address, epoch
-        );
+        debug!("Epoch number is {}", epoch);
 
         let balance = self
             .light
@@ -84,10 +109,26 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    #[allow(unused_variables)]
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
-        // TODO
-        unimplemented!()
+        info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
+        let raw: Vec<u8> = raw.into_vec();
+
+        // decode tx so that we have its hash
+        // this way we also avoid spamming peers with invalid txs
+        let tx: TransactionWithSignature = rlp::decode(&raw.clone())
+            .map_err(|e| format!("Failed to decode tx: {:?}", e))
+            .map_err(RpcError::invalid_params)?;
+
+        debug!("Deserialized tx: {:?}", tx);
+
+        // TODO(thegaram): consider adding a light node specific tx pool;
+        // light nodes would track those txs and maintain their statuses
+        // for future queries
+
+        match /* success = */ self.light.send_raw_tx(raw) {
+            true => Ok(tx.hash().into()),
+            false => Err(RpcError::invalid_params("Unable to relay tx")),
+        }
     }
 }
 

@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 
-from eth_utils import decode_hex, encode_hex
-
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
-import os, sys, inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
-from test_framework.blocktools import create_block, create_transaction
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
@@ -24,7 +19,7 @@ class LightSyncTest(ConfluxTestFramework):
         self.num_nodes = 3
 
     def setup_network(self):
-        self.add_nodes(3)
+        self.add_nodes(self.num_nodes)
 
         self.start_node(FULLNODE0, ["--archive"])
         self.start_node(FULLNODE1, ["--archive"])

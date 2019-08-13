@@ -20,6 +20,7 @@ build_msgid! {
     BLOCK_HEADERS = 0x08
     NEW_BLOCK_HASHES = 0x09
     STATUS_PONG = 0x0a
+    SEND_RAW_TX = 0x0b
 
     INVALID = 0xff
 }
@@ -36,6 +37,7 @@ build_msg_impl! { BlockHashes, msgid::BLOCK_HASHES, "BlockHashes" }
 build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
 build_msg_impl! { BlockHeaders, msgid::BLOCK_HEADERS, "BlockHeaders" }
 build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
+build_msg_impl! { SendRawTx, msgid::SEND_RAW_TX, "SendRawTx" }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }

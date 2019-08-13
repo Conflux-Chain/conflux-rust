@@ -9,7 +9,9 @@ use rlp::Rlp;
 use std::sync::{Arc, Weak};
 
 use cfx_types::H256;
-use primitives::{BlockHeader, EpochNumber, StateRoot};
+use primitives::{
+    BlockHeader, EpochNumber, StateRoot, TransactionWithSignature,
+};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -24,6 +26,7 @@ use crate::{
         state_manager::StateManagerTrait, SnapshotAndEpochIdRef, StateProof,
     },
     sync::SynchronizationGraph,
+    TransactionPool,
 };
 
 use super::{
@@ -32,8 +35,8 @@ use super::{
         msgid, BlockHashes as GetBlockHashesResponse,
         BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
         GetBlockHeaders, GetStateEntry, GetStateRoot, NewBlockHashes, NodeType,
-        StateEntry as GetStateEntryResponse, StateRoot as GetStateRootResponse,
-        StatusPing, StatusPong,
+        SendRawTx, StateEntry as GetStateEntryResponse,
+        StateRoot as GetStateRootResponse, StatusPing, StatusPong,
     },
     peers::Peers,
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
@@ -59,12 +62,15 @@ pub struct QueryProvider {
 
     // collection of all peers available
     peers: Peers<LightPeerState>,
+
+    // shared transaction pool
+    tx_pool: Arc<TransactionPool>,
 }
 
 impl QueryProvider {
     pub fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-        network: Weak<NetworkService>,
+        network: Weak<NetworkService>, tx_pool: Arc<TransactionPool>,
     ) -> Self
     {
         let peers = Peers::new();
@@ -74,6 +80,7 @@ impl QueryProvider {
             graph,
             network,
             peers,
+            tx_pool,
         }
     }
 
@@ -133,6 +140,7 @@ impl QueryProvider {
             msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
             msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, &rlp),
             msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
+            msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -345,6 +353,41 @@ impl QueryProvider {
 
         msg.send(io, peer)?;
         Ok(())
+    }
+
+    fn on_send_raw_tx(
+        &self, _io: &NetworkContext, _peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: SendRawTx = rlp.as_val()?;
+        info!("on_send_raw_tx req={:?}", req);
+        let tx: TransactionWithSignature = rlp::decode(&req.raw)?;
+
+        let (passed, failed) = self.tx_pool.insert_new_transactions(&vec![tx]);
+
+        match (passed.len(), failed.len()) {
+            (0, 0) => {
+                info!("Tx already inserted, ignoring");
+                Ok(())
+            }
+            (0, 1) => {
+                let err = failed.values().next().expect("Not empty");
+                warn!("Failed to insert tx: {}", err);
+                Ok(())
+            }
+            (1, 0) => {
+                info!("Tx inserted successfully");
+                // TODO(thegaram): consider relaying to peers
+                Ok(())
+            }
+            _ => {
+                // NOTE: this should not happen
+                error!(
+                    "insert_new_transactions failed: {:?}, {:?}",
+                    passed, failed
+                );
+                Err(ErrorKind::InternalError.into())
+            }
+        }
     }
 
     fn broadcast(
