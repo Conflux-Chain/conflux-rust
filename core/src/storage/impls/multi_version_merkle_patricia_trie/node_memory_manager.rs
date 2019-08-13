@@ -297,9 +297,7 @@ impl<
         self.children_merkle_db_loads
             .fetch_add(1, Ordering::Relaxed);
         // cm stands for children merkles, abbreviated to save space
-        let rlp_bytes = match db
-            .get(format!("cm{}", db_key).as_bytes())?
-        {
+        let rlp_bytes = match db.get(format!("cm{}", db_key).as_bytes())? {
             None => return Ok(None),
             Some(rlp_bytes) => rlp_bytes,
         };

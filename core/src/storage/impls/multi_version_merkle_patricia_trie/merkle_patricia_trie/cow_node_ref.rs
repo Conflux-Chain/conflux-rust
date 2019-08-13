@@ -433,7 +433,8 @@ impl CowNodeRef {
                         }
                     })
                     .sum();
-                let known_merkles = if num_uncached <= CHILDREN_MERKLE_THRESHOLD {
+                let known_merkles = if num_uncached <= CHILDREN_MERKLE_THRESHOLD
+                {
                     None
                 } else {
                     node_memory_manager
