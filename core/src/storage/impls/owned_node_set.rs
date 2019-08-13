@@ -65,19 +65,6 @@ impl OwnedNodeSet {
     }
 }
 
-impl NodeRefDeltaMpt {
-    pub fn original_db_key(
-        &self, owned_node_set: &OwnedNodeSet,
-    ) -> Option<DeltaMptDbKey> {
-        match self {
-            NodeRefDeltaMpt::Committed { .. } => None,
-            NodeRefDeltaMpt::Dirty { index } => {
-                owned_node_set.get_original_db_key(*index)
-            }
-        }
-    }
-}
-
 pub struct Iter<'a> {
     committed_iter:
         std::iter::Fuse<std::collections::btree_set::Iter<'a, DeltaMptDbKey>>,
