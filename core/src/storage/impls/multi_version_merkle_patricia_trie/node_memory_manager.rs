@@ -643,8 +643,9 @@ impl<
             NodeRefDeltaMpt::Dirty { ref index } => *index,
         };
 
-        // This unwrap is fine because we return early if slot doesn't exist.
-        self.get_allocator().remove(slot as usize).unwrap();
+        // In extreme cases we may remove a slot more than once, so we don't
+        // assert the return value of the removal.
+        self.get_allocator().remove(slot as usize).ok();
     }
 
     pub fn log_usage(&self) {
