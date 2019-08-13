@@ -39,10 +39,6 @@ pub mod consensus_internal {
     // Here is the delay for us to recycle those orphaned blocks in the boundary
     // of eras.
     pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
-    /// This is the capacity of the size of the `blockset_in_own_view_of_epoch`.
-    /// If we have more than this number, we will not store it in memory and
-    /// recalculate it when needed.
-    pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: usize = 1000;
 
     // FIXME Use another method to prevent DDoS attacks if attackers control the
     // pivot chain A block can blame up to BLAME_BOUND ancestors that their
