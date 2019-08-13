@@ -90,6 +90,9 @@ impl SyncHandler {
         next_request_id: Arc<AtomicU64>, peers: Arc<Peers<FullPeerState>>,
     ) -> Self
     {
+        // TODO(thegaram): At this point the light node does not persist
+        // anything. Need to make sure we persist the checkpoint hashes,
+        // along with a Merkle-root for headers in each era.
         graph.recover_graph_from_db(true /* header_only */);
 
         let duplicate_count = AtomicU64::new(0);

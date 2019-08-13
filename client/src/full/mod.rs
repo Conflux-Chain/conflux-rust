@@ -204,6 +204,7 @@ impl FullClient {
             consensus.clone(),
             sync_graph.clone(),
             Arc::downgrade(&network),
+            txpool.clone(),
         ));
         light_provider.clone().register(network.clone()).unwrap();
 

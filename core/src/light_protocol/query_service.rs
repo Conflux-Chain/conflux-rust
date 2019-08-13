@@ -126,6 +126,7 @@ impl QueryService {
         info!("get_account epoch={:?} address={:?}", epoch, address);
 
         // try each peer until we succeed
+        // TODO(thegaram): only query peers who already have `epoch`
         for peer in self.handler.peers.all_peers_shuffled() {
             match self.query_account(peer, epoch, address) {
                 Ok(account) => return account,
@@ -139,5 +140,30 @@ impl QueryService {
         }
 
         None
+    }
+
+    /// Relay raw transaction to all peers.
+    pub fn relay_raw_tx(&self, raw: Vec<u8>) -> bool {
+        debug!("relay_raw_tx raw={:?}", raw);
+
+        let mut success = false;
+
+        for peer in self.handler.peers.all_peers_shuffled() {
+            // relay to peer
+            let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
+                self.handler.relay_raw_tx(io, peer, raw.clone())
+            });
+
+            // check error
+            match res {
+                Err(e) => warn!("Failed to relay to peer={:?}: {:?}", peer, e),
+                Ok(_) => {
+                    debug!("Tx relay to peer {:?} successful", peer);
+                    success = true;
+                }
+            }
+        }
+
+        success
     }
 }
