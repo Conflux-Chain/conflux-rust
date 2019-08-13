@@ -304,10 +304,9 @@ impl<
             Some(rlp_bytes) => rlp_bytes,
         };
         let rlp = Rlp::new(rlp_bytes.as_ref());
-        let table =
-            CompactedChildrenTable::from_managed(
-                ChildrenTable::<MerkleHash>::decode(&rlp)?,
-            );
+        let table = CompactedChildrenTable::from(
+            ChildrenTable::<MerkleHash>::decode(&rlp)?,
+        );
         Ok(Some(table))
     }
 

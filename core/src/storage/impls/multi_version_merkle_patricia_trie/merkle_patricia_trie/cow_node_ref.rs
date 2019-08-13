@@ -2,6 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+/// Load children merkles only when the number of uncached children nodes is
+/// above this threshold.
+const CHILDREN_MERKLE_THRESHOLD: u32 = 4;
+
 /// CowNodeRef facilities access and modification to trie nodes in multi-version
 /// MPT. It offers read-only access to the original trie node, and creates an
 /// unique owned trie node once there is any modification. The ownership is
@@ -419,21 +423,17 @@ impl CowNodeRef {
                     .children_table
                     .iter()
                     .map(|(_i, node_ref)| {
-                        let node_ref = NodeRefDeltaMpt::from(*node_ref);
-                        match node_ref {
-                            NodeRefDeltaMpt::Committed { db_key } => {
-                                // FIXME(mk) don't lock
-                                if cache_manager.lock().query(db_key) {
-                                    1
-                                } else {
-                                    0
-                                }
+                        match NodeRefDeltaMpt::from(*node_ref) {
+                            NodeRefDeltaMpt::Committed { db_key }
+                                if !cache_manager.lock().query(db_key) =>
+                            {
+                                1
                             }
-                            NodeRefDeltaMpt::Dirty { .. } => 0,
+                            _ => 0,
                         }
                     })
                     .sum();
-                let known_merkles = if num_uncached <= 1 {
+                let known_merkles = if num_uncached <= CHILDREN_MERKLE_THRESHOLD {
                     None
                 } else {
                     node_memory_manager
