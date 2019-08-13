@@ -1631,7 +1631,13 @@ impl TxReplayer {
                 let manager = storage_manager_log_weak_ptr.upgrade();
                 match manager {
                     None => return,
-                    Some(manager) => manager.log_usage(),
+                    Some(manager) => {
+                        unsafe {
+                            debug!("disk read {}", proc_disk_read_bytes());
+                            debug!("disk write {}", proc_disk_written_bytes());
+                        }
+                        manager.log_usage();
+                    }
                 };
             } else {
             }
@@ -2076,3 +2082,4 @@ use std::{
     time::Duration,
     vec::Vec,
 };
+use rusage::*;
