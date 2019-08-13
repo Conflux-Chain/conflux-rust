@@ -643,7 +643,8 @@ impl<
             NodeRefDeltaMpt::Dirty { ref index } => *index,
         };
 
-        // This unwrap is fine because we return early if slot doesn't exist.
+        // A strong assertion that the remove should success. Otherwise it's a
+        // bug.
         self.get_allocator().remove(slot as usize).unwrap();
     }
 
