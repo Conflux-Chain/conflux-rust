@@ -229,19 +229,25 @@ impl SynchronizationGraphInner {
     }
 
     fn try_recover_expire_block(
-        &mut self,
+        &mut self, genesis_seq_number: Option<u64>,
     ) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
         let mut graph_ready_blocks = Vec::new();
         let mut header_graph_ready_blocks = Vec::new();
         let mut invalid_blocks = Vec::new();
 
+        let data_man = self.data_man.as_ref();
         let mut is_block_graph_ready = |hash: &H256, index: &usize| {
-            if let Some(info) = self.data_man.local_block_info_from_db(hash) {
+            if let Some(info) = data_man.local_block_info_from_db(hash) {
                 if info.get_status() == BlockStatus::Invalid {
                     invalid_blocks.push(*index);
                     false
                 } else {
-                    info.get_instance_id() == self.data_man.get_instance_id()
+                    if let Some(gen_seq) = genesis_seq_number {
+                        if info.get_seq_num() < gen_seq {
+                            return true;
+                        }
+                    }
+                    info.get_instance_id() == data_man.get_instance_id()
                         || info.get_instance_id() == NULLU64
                 }
             } else {
@@ -254,9 +260,7 @@ impl SynchronizationGraphInner {
 
             // parent and referees are all in memory, status must be
             // BLOCK_HEADER_GRAPH_READY no need to recover
-            if self.arena[*index].parent != NULL
-                && self.arena[*index].pending_referee_count == 0
-            {
+            if self.arena[*index].graph_status >= BLOCK_HEADER_GRAPH_READY {
                 continue;
             }
 
@@ -279,6 +283,8 @@ impl SynchronizationGraphInner {
 
             if !parent_graph_ready {
                 continue;
+            } else if self.arena[*index].parent == NULL {
+                self.arena[*index].parent_reclaimed = true;
             }
 
             // check whether referees are BLOCK_GRAPH_READY
@@ -881,7 +887,6 @@ impl SynchronizationGraph {
         debug!("Get terminals {:?}", terminals);
 
         let genesis_hash = self.data_man.genesis_block().hash();
-        debug!("Get current genesis_block hash {:?}", genesis_hash);
 
         let genesis_local_info =
             self.data_man.local_block_info_from_db(&genesis_hash);
@@ -896,9 +901,14 @@ impl SynchronizationGraph {
             .inner
             .write()
             .set_initial_sequence_number(genesis_seq_num);
+        debug!(
+            "Get current genesis_block hash={:?}, seq_num={}",
+            genesis_hash, genesis_seq_num
+        );
 
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
+        let mut out_of_era_blocks = HashSet::new();
         for terminal in terminals {
             queue.push_back(terminal);
             visited_blocks.insert(terminal);
@@ -917,7 +927,19 @@ impl SynchronizationGraph {
                 self.data_man.local_block_info_from_db(&hash)
             {
                 if block_local_info.get_seq_num() < genesis_seq_num {
+                    out_of_era_blocks.insert(hash);
+                    debug!(
+                        "Skip block {:?} before checkpoint: seq_num={}",
+                        hash,
+                        block_local_info.get_seq_num()
+                    );
                     continue;
+                } else {
+                    debug!(
+                        "Handle block {:?} seq_num={}",
+                        hash,
+                        block_local_info.get_seq_num()
+                    );
                 }
             }
 
@@ -959,12 +981,21 @@ impl SynchronizationGraph {
         }
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
+        self.remove_expire_blocks(
+            0,
+            true,
+            Some(genesis_seq_num),
+            Some(out_of_era_blocks),
+        );
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
         if !header_only {
             self.consensus.construct_pivot_state();
         }
         self.consensus
             .update_best_info(&*self.consensus.inner.read());
+        self.consensus
+            .txpool
+            .notify_new_best_info(self.consensus.best_info());
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
@@ -1117,6 +1148,8 @@ impl SynchronizationGraph {
                         }
                     }
                 } else if inner.new_to_be_header_parental_tree_ready(index) {
+                    debug!("BlockIndex {} parent_index {} hash {} is header parental tree ready", index,
+                           inner.arena[index].parent, inner.arena[index].block_header.hash());
                     if index == header_index_to_insert {
                         self.data_man.insert_block_header(
                             inner.arena[index].block_header.hash(),
@@ -1135,6 +1168,12 @@ impl SynchronizationGraph {
                         queue.push_back(*child);
                     }
                 } else {
+                    debug!(
+                        "BlockIndex {} parent_index {} hash {} is not ready",
+                        index,
+                        inner.arena[index].parent,
+                        inner.arena[index].block_header.hash()
+                    );
                     if index == header_index_to_insert {
                         self.data_man.insert_block_header(
                             inner.arena[index].block_header.hash(),
@@ -1199,15 +1238,15 @@ impl SynchronizationGraph {
                     == BLOCK_GRAPH_READY
             {
                 inner.not_ready_blocks_frontier.insert(me);
-                let mut to_be_removed = Vec::new();
-                for child in &inner.arena[me].children {
-                    if inner.not_ready_blocks_frontier.contains(child) {
-                        to_be_removed.push(*child);
-                    }
+            }
+            let mut to_be_removed = Vec::new();
+            for child in &inner.arena[me].children {
+                if inner.not_ready_blocks_frontier.contains(child) {
+                    to_be_removed.push(*child);
                 }
-                for x in to_be_removed {
-                    inner.not_ready_blocks_frontier.remove(&x);
-                }
+            }
+            for x in to_be_removed {
+                inner.not_ready_blocks_frontier.remove(&x);
             }
         }
 
@@ -1460,8 +1499,39 @@ impl SynchronizationGraph {
     /// blocks which can be reeached by `not_ready_blocks_frontier`.
     pub fn remove_expire_blocks(
         &self, expire_time: u64, recover: bool,
-    ) -> Vec<H256> {
+        genesis_seq_number: Option<u64>,
+        maybe_out_of_era_blocks: Option<HashSet<H256>>,
+    ) -> Vec<H256>
+    {
         let inner = &mut *self.inner.write();
+        if let Some(out_of_era_blocks) = maybe_out_of_era_blocks {
+            for h in out_of_era_blocks {
+                if let Some(referrers) = inner.referrers_by_hash.get(&h) {
+                    for referrer in referrers {
+                        debug!(
+                            "Remove pending_referee_count for {}, child={}",
+                            h, referrer
+                        );
+                        assert!(
+                            inner.arena[*referrer].pending_referee_count > 0
+                        );
+                        inner.arena[*referrer].pending_referee_count -= 1;
+                    }
+                }
+                if let Some(children) = inner.children_by_hash.get(&h) {
+                    for child in children {
+                        debug!(
+                            "Set parent_reclaimed for {}, child={}",
+                            h, child
+                        );
+                        assert!(inner
+                            .not_ready_blocks_frontier
+                            .contains(child));
+                        inner.arena[*child].parent_reclaimed = true;
+                    }
+                }
+            }
+        }
         let mut to_relay_blocks = Vec::new();
         debug!(
             "not_ready_blocks_frontier: {:?}",
@@ -1472,23 +1542,28 @@ impl SynchronizationGraph {
                 new_graph_ready_blocks,
                 mut new_header_graph_ready_blocks,
                 invalid_blocks,
-            ) = inner.try_recover_expire_block();
+            ) = inner.try_recover_expire_block(genesis_seq_number);
+            debug!(
+                "Recover blocks into graph_ready {:?}",
+                new_graph_ready_blocks
+            );
 
             for index in &new_graph_ready_blocks {
-                if inner.arena[*index].parent == NULL {
-                    // make sure this block will be insert into
-                    // old_era_blocks_frontier later
-                    inner.arena[*index].parent_reclaimed = true;
-                }
-                inner.arena[*index].graph_status = BLOCK_HEADER_GRAPH_READY;
-                inner.arena[*index].pending_referee_count = 0;
+                //                if inner.arena[*index].parent == NULL {
+                //                    // make sure this block will be insert
+                // into                    //
+                // old_era_blocks_frontier later                
+                // inner.arena[*index].parent_reclaimed = true;
+                //                }
+                //                inner.arena[*index].graph_status =
+                // BLOCK_HEADER_GRAPH_READY;                
+                // inner.arena[*index].pending_referee_count = 0;
                 to_relay_blocks.push(inner.arena[*index].block_header.hash());
             }
 
+            new_header_graph_ready_blocks
+                .append(&mut new_graph_ready_blocks.clone());
             for index in &new_header_graph_ready_blocks {
-                if inner.arena[*index].parent == NULL {
-                    inner.arena[*index].parent_reclaimed = true;
-                }
                 inner.arena[*index].pending_referee_count = 0;
             }
 
@@ -1520,7 +1595,7 @@ impl SynchronizationGraph {
             let invalid_set = self.propagate_graph_status(
                 inner,
                 new_graph_ready_blocks,
-                false,
+                genesis_seq_number.is_some(),
             );
             debug_assert!(invalid_set.len() == 0);
         }

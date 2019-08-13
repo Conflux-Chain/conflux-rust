@@ -90,7 +90,7 @@ class TpsWorker(threading.Thread):
 
 def load_boot_nodes():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_file_path = os.path.abspath(os.path.join(current_dir, "..", "..", "run", "default.toml"))
+    config_file_path = os.path.abspath(os.path.join(current_dir, "..", "..", "run", "conflux_inner.toml"))
     if not os.path.exists(config_file_path):
         print("file not found:", config_file_path)
         sys.exit(1)
