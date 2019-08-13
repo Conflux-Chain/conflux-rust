@@ -31,17 +31,19 @@ impl Request for GetBlockHashesByEpoch {
         conf.headers_request_timeout
     }
 
-    fn on_removed(&self, inflight_keys: &mut KeyContainer) {
-        let msg_type = self.msg_id().into();
+    fn on_removed(&self, inflight_keys: &KeyContainer) {
+        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
+        let mut inflight_keys = inflight_keys.write();
         for epoch in self.epochs.iter() {
-            inflight_keys.remove(msg_type, Key::Num(*epoch));
+            inflight_keys.remove(&Key::Num(*epoch));
         }
     }
 
-    fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
-        let msg_type = self.msg_id().into();
+    fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
+        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
+        let mut inflight_keys = inflight_keys.write();
         self.epochs
-            .retain(|epoch| inflight_keys.add(msg_type, Key::Num(*epoch)));
+            .retain(|epoch| inflight_keys.insert(Key::Num(*epoch)));
     }
 
     fn is_empty(&self) -> bool { self.epochs.is_empty() }

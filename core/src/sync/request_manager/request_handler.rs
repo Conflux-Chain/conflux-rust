@@ -368,11 +368,11 @@ pub trait Request: Send + Debug + HasRequestId {
 
     /// Cleanup the inflight request items when peer disconnected or invalid
     /// message received.
-    fn on_removed(&self, inflight_keys: &mut KeyContainer);
+    fn on_removed(&self, inflight_keys: &KeyContainer);
     /// Before send a request, check if its items already in flight.
     /// If in flight, do not request duplicated items.
     /// Otherwise, insert the item key into `inflight_keys`.
-    fn with_inflight(&mut self, inflight_keys: &mut KeyContainer);
+    fn with_inflight(&mut self, inflight_keys: &KeyContainer);
     /// If all requested items are already in flight, then do not send request
     /// to remote peer.
     fn is_empty(&self) -> bool;

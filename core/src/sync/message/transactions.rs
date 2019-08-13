@@ -213,19 +213,21 @@ impl Request for GetTransactions {
         conf.transaction_request_timeout
     }
 
-    fn on_removed(&self, inflight_keys: &mut KeyContainer) {
-        let msg_type = self.msg_id().into();
+    fn on_removed(&self, inflight_keys: &KeyContainer) {
+        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
+        let mut inflight_keys = inflight_keys.write();
         for tx_id in self.tx_ids.iter() {
-            inflight_keys.remove(msg_type, Key::Id(*tx_id));
+            inflight_keys.remove(&Key::Id(*tx_id));
         }
     }
 
-    fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
-        let msg_type = self.msg_id().into();
+    fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
+        let inflight_keys = inflight_keys.get_or_insert(self.msg_id());
+        let mut inflight_keys = inflight_keys.write();
 
         let mut tx_ids: HashSet<TxPropagateId> = HashSet::new();
         for id in self.tx_ids.iter() {
-            if inflight_keys.add(msg_type, Key::Id(*id)) {
+            if inflight_keys.insert(Key::Id(*id)) {
                 tx_ids.insert(*id);
             }
         }

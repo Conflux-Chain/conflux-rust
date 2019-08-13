@@ -55,9 +55,9 @@ impl Request for SnapshotChunkRequest {
         conf.blocks_request_timeout
     }
 
-    fn on_removed(&self, _inflight_keys: &mut KeyContainer) {}
+    fn on_removed(&self, _inflight_keys: &KeyContainer) {}
 
-    fn with_inflight(&mut self, _inflight_keys: &mut KeyContainer) {}
+    fn with_inflight(&mut self, _inflight_keys: &KeyContainer) {}
 
     fn is_empty(&self) -> bool { false }
 
