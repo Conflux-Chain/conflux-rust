@@ -87,6 +87,10 @@ pub struct ConsensusGraphNodeData {
     /// It indicates whether the blame voting information of this block is
     /// correct or not.
     vote_valid: bool,
+    /// It indicates the previous index (including itself) of partial_invalid
+    /// block whose size of `blockset_in_own_view_of_epoch`
+    /// exceeds `BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP`.
+    prev_blockset_cleared_index: usize,
 }
 
 impl ConsensusGraphNodeData {
@@ -103,6 +107,7 @@ impl ConsensusGraphNodeData {
             sequence_number,
             exec_info_lca_height: NULLU64,
             vote_valid: true,
+            prev_blockset_cleared_index: NULL,
         }
     }
 }
@@ -1018,136 +1023,129 @@ impl ConsensusGraphInner {
         self.arena[me].era_block == self.arena[pivot].era_block
     }
 
-    fn collect_blockset_in_own_view_of_epoch_brutal(&mut self, pivot: usize) {
+    /// Find the `blockset_in_own_view_of_epoch` of current `pivot` block,
+    /// assume that all cleared `blockset_in_own_view_of_epoch` of the
+    /// blocks along the path from `pivot` to
+    /// `cur_era_genesis_block_arena_index` are stored in HashSet `past`
+    fn collect_blockset_in_own_view_of_epoch_with_hint(
+        &mut self, past: &HashSet<usize>, pivot: usize,
+    ) -> Vec<usize> {
+        let mut blockset_in_own_view_of_epoch = Vec::new();
+        let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
-        let mut path = Vec::new();
-        let mut index = pivot;
-        while index != NULL {
-            path.push(index);
-            index = self.arena[index].parent;
+        for referee in &self.arena[pivot].referees {
+            visited.insert(*referee);
+            queue.push_back(*referee);
         }
-        for ancestor_index in path {
-            if !self.arena[ancestor_index]
-                .data
-                .blockset_in_own_view_of_epoch
-                .is_empty()
+
+        while let Some(index) = queue.pop_front() {
+            let mut in_old_epoch = false;
+            let mut parent = self.arena[pivot].parent;
+
+            if self.arena[parent].height
+                > self.arena[index].data.max_epoch_in_other_views
             {
-                for index in &self.arena[ancestor_index]
-                    .data
-                    .blockset_in_own_view_of_epoch
+                parent = self.ancestor_at(
+                    parent,
+                    self.arena[index].data.max_epoch_in_other_views,
+                );
+            }
+
+            loop {
+                // TODO: try make a case to slow down this loop
+                assert!(parent != NULL);
+
+                if self.arena[parent].height
+                    < self.arena[index].data.min_epoch_in_other_views
+                    || (self.arena[index].data.sequence_number
+                        > self.arena[parent].data.sequence_number)
                 {
-                    visited.insert(*index);
+                    break;
                 }
-            } else {
-                let mut queue = VecDeque::new();
-                for referee in &self.arena[ancestor_index].referees {
+
+                if parent == index
+                    || self.arena[parent]
+                        .data
+                        .blockset_in_own_view_of_epoch
+                        .contains(&index)
+                    || past.contains(&index)
+                {
+                    in_old_epoch = true;
+                    break;
+                }
+
+                parent = self.arena[parent].parent;
+            }
+
+            if !in_old_epoch {
+                let parent = self.arena[index].parent;
+                if !visited.contains(&parent) {
+                    visited.insert(parent);
+                    queue.push_back(parent);
+                }
+                for referee in &self.arena[index].referees {
                     if !visited.contains(referee) {
                         visited.insert(*referee);
                         queue.push_back(*referee);
                     }
                 }
-                while let Some(index) = queue.pop_front() {
-                    if ancestor_index == pivot {
-                        self.arena[pivot]
-                            .data
-                            .blockset_in_own_view_of_epoch
-                            .insert(index);
-                    }
-                    let parent = self.arena[index].parent;
-                    if parent != NULL && !visited.contains(&parent) {
-                        visited.insert(parent);
-                        queue.push_back(parent);
-                    }
-                    for referee in &self.arena[index].referees {
-                        if !visited.contains(referee) {
-                            visited.insert(*referee);
-                            queue.push_back(*referee);
-                        }
-                    }
-                }
+                self.arena[index].data.min_epoch_in_other_views = min(
+                    self.arena[index].data.min_epoch_in_other_views,
+                    self.arena[pivot].height,
+                );
+                self.arena[index].data.max_epoch_in_other_views = max(
+                    self.arena[index].data.max_epoch_in_other_views,
+                    self.arena[pivot].height,
+                );
+                blockset_in_own_view_of_epoch.push(index);
             }
-            visited.insert(ancestor_index);
         }
+        blockset_in_own_view_of_epoch
+    }
+
+    /// Find the union of cleared `blockset_in_own_view_of_epoch` along the path from
+    /// `pivot` to `cur_era_genesis_block_arena_index`
+    fn collect_past_cleared_blockset_in_own_view_of_epoch(
+        &mut self, pivot: usize,
+    ) -> HashSet<usize> {
+        let mut past = HashSet::new();
+        let mut blockset_cleared_indices = Vec::new();
+        let mut parent = self.arena[pivot].parent;
+        while parent != NULL {
+            let blockset_cleared_index =
+                self.arena[parent].data.prev_blockset_cleared_index;
+            if blockset_cleared_index != NULL {
+                blockset_cleared_indices.push(blockset_cleared_index);
+                parent = self.arena[blockset_cleared_index].parent;
+            } else {
+                break;
+            }
+        }
+        blockset_cleared_indices.reverse();
+        for blockset_cleared_index in blockset_cleared_indices {
+            let blockset_in_own_view_of_epoch = self
+                .collect_blockset_in_own_view_of_epoch_with_hint(
+                    &past,
+                    blockset_cleared_index,
+                );
+            for index in blockset_in_own_view_of_epoch {
+                past.insert(index);
+            }
+            past.insert(blockset_cleared_index);
+        }
+        past
     }
 
     fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
-        let parent = self.arena[pivot].parent;
-        if parent != NULL {
-            // if parent is partial_invalid, we compute the blockset bruteforce
-            if self.arena[parent].data.partial_invalid {
-                self.collect_blockset_in_own_view_of_epoch_brutal(pivot);
-            } else {
-                let mut queue = VecDeque::new();
-                let mut visited = HashSet::new();
-                for referee in &self.arena[pivot].referees {
-                    visited.insert(*referee);
-                    queue.push_back(*referee);
-                }
-
-                while let Some(index) = queue.pop_front() {
-                    let mut in_old_epoch = false;
-                    let mut parent = self.arena[pivot].parent;
-
-                    if self.arena[parent].height
-                        > self.arena[index].data.max_epoch_in_other_views
-                    {
-                        parent = self.ancestor_at(
-                            parent,
-                            self.arena[index].data.max_epoch_in_other_views,
-                        );
-                    }
-
-                    loop {
-                        assert!(parent != NULL);
-
-                        if self.arena[parent].height
-                            < self.arena[index].data.min_epoch_in_other_views
-                            || (self.arena[index].data.sequence_number
-                                > self.arena[parent].data.sequence_number)
-                        {
-                            break;
-                        }
-
-                        if parent == index
-                            || self.arena[parent]
-                                .data
-                                .blockset_in_own_view_of_epoch
-                                .contains(&index)
-                        {
-                            in_old_epoch = true;
-                            break;
-                        }
-
-                        parent = self.arena[parent].parent;
-                    }
-
-                    if !in_old_epoch {
-                        let parent = self.arena[index].parent;
-                        if !visited.contains(&parent) {
-                            visited.insert(parent);
-                            queue.push_back(parent);
-                        }
-                        for referee in &self.arena[index].referees {
-                            if !visited.contains(referee) {
-                                visited.insert(*referee);
-                                queue.push_back(*referee);
-                            }
-                        }
-                        self.arena[index].data.min_epoch_in_other_views = min(
-                            self.arena[index].data.min_epoch_in_other_views,
-                            self.arena[pivot].height,
-                        );
-                        self.arena[index].data.max_epoch_in_other_views = max(
-                            self.arena[index].data.max_epoch_in_other_views,
-                            self.arena[pivot].height,
-                        );
-                        self.arena[pivot]
-                            .data
-                            .blockset_in_own_view_of_epoch
-                            .insert(index);
-                    }
-                }
-            }
+        let past =
+            self.collect_past_cleared_blockset_in_own_view_of_epoch(pivot);
+        let blockset_in_own_view_of_epoch =
+            self.collect_blockset_in_own_view_of_epoch_with_hint(&past, pivot);
+        for index in blockset_in_own_view_of_epoch {
+            self.arena[pivot]
+                .data
+                .blockset_in_own_view_of_epoch
+                .insert(index);
         }
         let filtered_blockset = self.arena[pivot]
             .data

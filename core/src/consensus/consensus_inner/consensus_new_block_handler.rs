@@ -104,6 +104,14 @@ impl ConsensusNewBlockHandler {
         while let Some(x) = queue.pop_front() {
             inner.arena[x].past_weight = 0;
             let parent_inside_stable = block_indices_inside_stable.contains(&x);
+            let prev_blockset_cleared_index =
+                inner.arena[x].data.prev_blockset_cleared_index;
+            if prev_blockset_cleared_index != NULL
+                && inner.arena[prev_blockset_cleared_index].height
+                    <= new_era_height
+            {
+                inner.arena[x].data.prev_blockset_cleared_index = NULL;
+            }
             for child in &inner.arena[x].children {
                 queue.push_back(*child);
                 new_era_block_arena_index_set.insert(*child);
@@ -115,16 +123,12 @@ impl ConsensusNewBlockHandler {
         let mut stack = Vec::new();
         let mut visited = HashSet::new();
         stack.push((0, stable_era_genesis, Vec::new()));
-        while let Some((state, index, mut blockset)) = stack.pop() {
+        while let Some((state, me, mut blockset)) = stack.pop() {
             if state == 0 {
                 // compute blockset_in_own_view_of_epoch first
-                if !inner.arena[index]
-                    .data
-                    .blockset_in_own_view_of_epoch
-                    .is_empty()
-                {
+                if inner.arena[me].data.prev_blockset_cleared_index != me {
                     for index in
-                        &inner.arena[index].data.blockset_in_own_view_of_epoch
+                        &inner.arena[me].data.blockset_in_own_view_of_epoch
                     {
                         if block_indices_inside_stable.contains(index)
                             && !visited.contains(index)
@@ -135,7 +139,7 @@ impl ConsensusNewBlockHandler {
                     }
                 } else {
                     let mut queue = VecDeque::new();
-                    for referee in &inner.arena[index].referees {
+                    for referee in &inner.arena[me].referees {
                         if !visited.contains(referee) {
                             visited.insert(*referee);
                             queue.push_back(*referee);
@@ -162,26 +166,26 @@ impl ConsensusNewBlockHandler {
                 }
 
                 // compute past_weight
-                let parent = inner.arena[index].parent;
+                let parent = inner.arena[me].parent;
                 if block_indices_inside_stable.contains(&parent) {
-                    inner.arena[index].past_weight = inner.arena[parent]
+                    inner.arena[me].past_weight = inner.arena[parent]
                         .past_weight
                         + inner.block_weight(parent, false);
                 } else {
-                    inner.arena[index].past_weight = 0;
+                    inner.arena[me].past_weight = 0;
                 }
                 for index in &blockset {
                     inner.arena[*index].past_weight +=
                         inner.block_weight(*index, false);
                 }
 
-                stack.push((1, index, blockset));
-                visited.insert(index);
-                for child in &inner.arena[index].children {
+                stack.push((1, me, blockset));
+                visited.insert(me);
+                for child in &inner.arena[me].children {
                     stack.push((0, *child, Vec::new()));
                 }
             } else {
-                visited.remove(&index);
+                visited.remove(&me);
                 for index in blockset {
                     visited.remove(&index);
                 }
@@ -1090,11 +1094,18 @@ impl ConsensusNewBlockHandler {
                 weight_tuple.as_ref(),
             );
 
-            if !fully_valid {
+            if !fully_valid
+                && inner.arena[me].data.blockset_in_own_view_of_epoch.len()
+                    > BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP
+            {
                 inner.arena[me].data.blockset_in_own_view_of_epoch =
                     Default::default();
                 inner.arena[me].data.ordered_executable_epoch_blocks =
                     Default::default();
+                inner.arena[me].data.prev_blockset_cleared_index = me;
+            } else if parent != NULL {
+                inner.arena[me].data.prev_blockset_cleared_index =
+                    inner.arena[parent].data.prev_blockset_cleared_index;
             }
 
             inner.arena[me].stable = stable;
