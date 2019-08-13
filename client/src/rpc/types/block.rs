@@ -297,6 +297,53 @@ impl Block {
     }
 }
 
+/// Block header representation.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Header {
+    /// Hash of the block
+    pub hash: Option<H256>,
+    /// Hash of the parent
+    pub parent_hash: H256,
+    /// Distance to genesis
+    pub height: U256,
+    /// Miner's address
+    pub miner: H160,
+    /// State root hash
+    pub deferred_state_root: H256,
+    /// The state_root_with_aux not considering blame
+    pub deferred_state_root_with_aux: StateRootWithAuxInfo,
+    /// Root hash of all receipts in this block's epoch
+    pub deferred_receipts_root: H256,
+    /// Hash of aggregrated bloom filter of all receipts in the block's epoch
+    pub deferred_logs_bloom_hash: H256,
+    /// Blame indicates the number of ancestors whose
+    /// state_root/receipts_root/logs_bloom_hash/blame are not correct.
+    /// It acts as a vote to help light client determining the
+    /// state_root/receipts_root/logs_bloom_hash are correct or not.
+    pub blame: u32,
+    /// Transactions root hash
+    pub transactions_root: H256,
+    /// Epoch number
+    pub epoch_number: Option<U256>,
+    /// Gas Limit
+    pub gas_limit: U256,
+    /// Timestamp
+    pub timestamp: U256,
+    /// Difficulty
+    pub difficulty: U256,
+    /// Referee hashes
+    pub referee_hashes: Vec<H256>,
+    /// Stable
+    pub stable: Option<bool>,
+    /// Adaptive
+    pub adaptive: bool,
+    /// Nonce of the block
+    pub nonce: U256,
+    /// Size in bytes
+    pub size: Option<U256>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Block, BlockTransactions};

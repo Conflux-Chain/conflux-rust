@@ -28,7 +28,7 @@ use self::{
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
     },
-    traits::cfx::{debug::DebugRpc, public::Cfx, test::TestRpc},
+    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
 };
 
 pub use self::types::Block as RpcBlock;

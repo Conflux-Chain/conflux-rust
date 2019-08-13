@@ -2,9 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::super::types::{
-    Transaction as RpcTransaction, H256 as RpcH256,
-};
+use super::super::types::{Transaction as RpcTransaction, H256 as RpcH256};
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use network::{
