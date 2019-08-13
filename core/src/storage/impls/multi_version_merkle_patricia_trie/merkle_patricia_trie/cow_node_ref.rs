@@ -410,53 +410,50 @@ impl CowNodeRef {
         depth: u8,
     ) -> Result<MaybeMerkleTable>
     {
-        let original_db_key = match self.node_ref {
-            NodeRefDeltaMpt::Dirty { index } => {
-                owned_node_set.get_original_db_key(index)
-            }
-            NodeRefDeltaMpt::Committed { .. } => unreachable!(),
-        };
-        match (
-            trie_node.children_table.get_children_count(),
-            original_db_key,
-        ) {
-            (0, _) => Ok(None),
-            (_, None) => self.compute_children_merkles(
-                trie,
-                owned_node_set,
-                trie_node,
-                allocator_ref,
-                db,
-                None,
-                depth,
-            ),
-            (_, Some(original_db_key)) => {
-                let node_memory_manager = trie.get_node_memory_manager();
-                let cache_manager = node_memory_manager.get_cache_manager();
-                let num_uncached: u32 = trie_node
-                    .children_table
-                    .iter()
-                    .map(|(_i, node_ref)| {
-                        match NodeRefDeltaMpt::from(*node_ref) {
-                            NodeRefDeltaMpt::Committed { db_key }
-                                if !cache_manager.lock().query(db_key) =>
-                            {
-                                1
-                            }
-                            _ => 0,
-                        }
-                    })
-                    .sum();
-                let known_merkles = if num_uncached
-                    <= CHILDREN_MERKLE_UNCACHED_THRESHOLD
-                    && depth <= CHILDREN_MERKLE_DEPTH_THRESHOLD
-                {
-                    None
-                } else {
-                    node_memory_manager
-                        .load_children_merkles_from_db(db, original_db_key)?
+        match trie_node.children_table.get_children_count() {
+            0 => Ok(None),
+            _ => {
+                let original_db_key = match self.node_ref {
+                    NodeRefDeltaMpt::Dirty { index } => {
+                        owned_node_set.get_original_db_key(index)
+                    }
+                    NodeRefDeltaMpt::Committed { .. } => unreachable!(),
                 };
-
+                let known_merkles = match original_db_key {
+                    Some(original_db_key)
+                        if depth > CHILDREN_MERKLE_DEPTH_THRESHOLD =>
+                    {
+                        let node_memory_manager =
+                            trie.get_node_memory_manager();
+                        let cache_manager =
+                            node_memory_manager.get_cache_manager();
+                        let num_uncached: u32 = trie_node
+                            .children_table
+                            .iter()
+                            .map(|(_i, node_ref)| {
+                                match NodeRefDeltaMpt::from(*node_ref) {
+                                    NodeRefDeltaMpt::Committed { db_key }
+                                        if !cache_manager
+                                            .lock()
+                                            .query(db_key) =>
+                                    {
+                                        1
+                                    }
+                                    _ => 0,
+                                }
+                            })
+                            .sum();
+                        if num_uncached > CHILDREN_MERKLE_UNCACHED_THRESHOLD {
+                            node_memory_manager.load_children_merkles_from_db(
+                                db,
+                                original_db_key,
+                            )?
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
                 self.compute_children_merkles(
                     trie,
                     owned_node_set,
