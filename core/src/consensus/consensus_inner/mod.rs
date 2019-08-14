@@ -1629,18 +1629,11 @@ impl ConsensusGraphInner {
         if height >= self.cur_era_genesis_height {
             Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
         } else {
-            let mut hash =
-                self.arena[self.cur_era_genesis_block_arena_index].hash;
-            let step = self.cur_era_genesis_height - height;
-            for _ in 0..step {
-                hash = self
-                    .data_man
-                    .block_header_by_hash(&hash)
-                    .unwrap()
-                    .parent_hash()
-                    .clone();
-            }
-            Ok(hash)
+            self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
+                format!("get_hash_from_epoch_number: Epoch hash set not in db, epoch_number={}", epoch_number).into()
+            ).and_then(|epoch_hashes|
+                epoch_hashes.last().map(Clone::clone).ok_or("Epoch set is empty".into())
+            )
         }
     }
 
@@ -1652,15 +1645,23 @@ impl ConsensusGraphInner {
             epoch_number,
             self.pivot_chain.len()
         );
-        self.get_arena_index_from_epoch_number(epoch_number)
-            .and_then(|index| {
-                Ok(self.arena[index]
-                    .data
-                    .ordered_executable_epoch_blocks
-                    .iter()
-                    .map(|index| self.arena[*index].hash)
-                    .collect())
-            })
+        match self.get_arena_index_from_epoch_number(epoch_number) {
+            Ok(pivot_arena_index) => Ok(self.arena[pivot_arena_index]
+                .data
+                .ordered_executable_epoch_blocks
+                .iter()
+                .map(|index| self.arena[*index].hash)
+                .collect()),
+            Err(e) => {
+                self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
+                    format!(
+                    "Epoch hash set not in db epoch_number={}, in mem err={:?}",
+                    epoch_number, e
+                )
+                    .into(),
+                )
+            }
+        }
     }
 
     fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
@@ -1732,15 +1733,33 @@ impl ConsensusGraphInner {
         hashes
     }
 
+    /// Return the block receipts in the current pivot view.
+    ///
+    /// If `hash` is not maintained in the memory, we just return the receipts
+    /// in the db without checking the pivot assumption.
+    /// TODO Check if its receipts matches our current pivot view for this
+    /// not-in-memory case.
     pub fn block_receipts_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<Arc<Vec<Receipt>>> {
-        self.get_epoch_hash_for_block(hash).and_then(|epoch| {
-            trace!("Block {} is in epoch {}", hash, epoch);
-            self.data_man
-                .block_results_by_hash_with_epoch(hash, &epoch, update_cache)
-                .map(|r| r.receipts)
-        })
+        match self.get_epoch_hash_for_block(hash) {
+            Some(epoch) => {
+                trace!("Block {} is in epoch {}", hash, epoch);
+                self.data_man
+                    .block_results_by_hash_with_epoch(
+                        hash,
+                        &epoch,
+                        update_cache,
+                    )
+                    .map(|r| r.receipts)
+            }
+            None => {
+                debug!("Block {:?} not in mem, try to read from db", hash);
+                self.data_man
+                    .block_results_by_hash_from_db(hash)
+                    .map(|r| r.1.receipts)
+            }
+        }
     }
 
     pub fn is_stable(&self, block_hash: &H256) -> Option<bool> {
