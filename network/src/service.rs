@@ -682,9 +682,14 @@ impl NetworkServiceInner {
                 &allow_ips,
             );
         }
+        let sampled_archive_nodes = self.sample_archive_nodes();
         let reserved_nodes = self.reserved_nodes.read();
         // Try to connect all reserved peers and trusted peers
-        let nodes = reserved_nodes.iter().cloned().chain(samples);
+        let nodes = reserved_nodes
+            .iter()
+            .cloned()
+            .chain(sampled_archive_nodes)
+            .chain(samples);
 
         let max_handshakes_per_round = max_handshakes / 2;
         let mut started: usize = 0;
@@ -704,6 +709,33 @@ impl NetworkServiceInner {
             handshake_count,
             started
         );
+    }
+
+    /// Sample archive nodes for outgoing connections if not enough.
+    fn sample_archive_nodes(&self) -> HashSet<NodeId> {
+        if self.config.max_outgoing_peers_archive == 0 {
+            return HashSet::new();
+        }
+
+        // TODO use const variable instead when archive node feature defined
+        let key: String = "node_type".into();
+        let value: String = "archive".into();
+
+        let connecting_nodes = self.sessions.all_nodes();
+        let node_db = self.node_db.read();
+        let connecting_count = connecting_nodes
+            .iter()
+            .filter_map(|id| node_db.get(id, false)) // exists in db
+            .filter_map(|n| n.tags.get(&key)) // tag key match
+            .filter(|v| *v == &value) // tag value match
+            .count();
+
+        if connecting_count >= self.config.max_outgoing_peers_archive {
+            return HashSet::new();
+        }
+
+        let count = self.config.max_outgoing_peers_archive - connecting_count;
+        node_db.sample_trusted_node_ids_with_tag(count as u32, &key, &value)
     }
 
     // Kill connections of all dropped peers

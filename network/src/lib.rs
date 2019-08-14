@@ -97,6 +97,9 @@ pub struct NetworkConfiguration {
     pub use_secret: Option<Secret>,
     /// Maximum number of outgoing peers
     pub max_outgoing_peers: u32,
+    /// Maximum number of outgoing connections to archive nodes.
+    /// 0 presents not required to connect to archive nodes.
+    pub max_outgoing_peers_archive: usize,
     /// Maximum number of incoming peers
     pub max_incoming_peers: usize,
     /// Maximum number of ongoing handshakes
@@ -141,6 +144,7 @@ impl NetworkConfiguration {
             boot_nodes: Vec::new(),
             use_secret: None,
             max_outgoing_peers: 16,
+            max_outgoing_peers_archive: 0,
             max_incoming_peers: 32,
             max_handshakes: 64,
             reserved_nodes: Vec::new(),

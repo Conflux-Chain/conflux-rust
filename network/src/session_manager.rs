@@ -64,6 +64,10 @@ impl SessionManager {
         self.sessions.read().iter().map(|s| s.clone()).collect()
     }
 
+    pub fn all_nodes(&self) -> Vec<NodeId> {
+        self.node_id_index.read().keys().cloned().collect()
+    }
+
     /// Retrieves the session count of handshakes, egress and ingress.
     pub fn stat(&self) -> (usize, usize, usize) {
         let mut handshakes = 0;
