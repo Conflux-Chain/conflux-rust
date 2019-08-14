@@ -562,6 +562,8 @@ impl ConsensusGraphInner {
     pub fn find_first_index_with_correct_state_of(
         &self, pivot_index: usize,
     ) -> Option<usize> {
+        // this is the earliest block we need to consider; blocks before `from`
+        // cannot have any information about the state root of `pivot_index`
         let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
 
         // get pivot index of first trusted block based on the blame fields
@@ -571,12 +573,13 @@ impl ConsensusGraphInner {
                 Some(index) => index,
             };
 
-        // iteratively search for smallest trusted index after `pivot_index`
-        while trusted_index != pivot_index {
+        // iteratively search for the smallest trusted index greater than
+        // or equal to `from`
+        while trusted_index != from {
             let blame = self.get_blame_with_pivot_index(trusted_index);
             let prev_trusted = trusted_index - blame as usize - 1;
 
-            if prev_trusted < pivot_index {
+            if prev_trusted < from {
                 break;
             }
 
