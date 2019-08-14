@@ -162,7 +162,7 @@ fn test_remove_expire_blocks() {
 
         // not expire any blocks
         {
-            sync.remove_expire_blocks(1000, false);
+            sync.remove_expire_blocks(1000, false, None);
             let inner = sync.inner.read();
             assert!(inner.arena.len() == 12);
             assert!(inner.hash_to_arena_indices.len() == 12);
@@ -185,7 +185,7 @@ fn test_remove_expire_blocks() {
                 - 1000;
         }
         {
-            sync.remove_expire_blocks(500, false);
+            sync.remove_expire_blocks(500, false, None);
             let inner = sync.inner.read();
             assert!(inner.arena.len() == 10);
             assert!(inner.hash_to_arena_indices.len() == 10);
@@ -213,7 +213,7 @@ fn test_remove_expire_blocks() {
                 - 1000;
         }
         {
-            sync.remove_expire_blocks(500, false);
+            sync.remove_expire_blocks(500, false, None);
             let inner = sync.inner.read();
             assert!(inner.arena.len() == 5);
             assert!(inner.hash_to_arena_indices.len() == 5);

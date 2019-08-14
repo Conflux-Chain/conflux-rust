@@ -271,7 +271,7 @@ pub struct ConsensusGraphInner {
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
     // The cache to store execution information of nodes in the consensus graph
-    execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
+    pub execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     // Block set of each old era. It will garbage collected by sync graph
@@ -436,6 +436,16 @@ impl ConsensusGraphInner {
         inner
             .anticone_cache
             .update(inner.cur_era_genesis_block_arena_index, &BitSet::new());
+        if let Some(exe_info) = inner
+            .data_man
+            .consensus_graph_execution_info_from_db(cur_era_genesis_block_hash)
+        {
+            inner
+                .execution_info_cache
+                .insert(genesis_arena_index, exe_info);
+        } else {
+            error!("No execution info for cur_era_genesis in db!");
+        }
         inner
     }
 
@@ -483,7 +493,10 @@ impl ConsensusGraphInner {
 
     #[inline]
     pub fn set_initial_sequence_number(&mut self, initial_sn: u64) {
-        self.sequence_number_of_block_entrance = initial_sn;
+        self.arena[self.cur_era_genesis_block_arena_index]
+            .data
+            .sequence_number = initial_sn;
+        self.sequence_number_of_block_entrance = initial_sn + 1;
     }
 
     #[inline]
@@ -1124,6 +1137,10 @@ impl ConsensusGraphInner {
         // self.get_era_genesis_block_with_parent(
         // self.arena[pivot].parent,
         // self.inner_conf.era_epoch_count,        );
+
+        // Here `num_epoch_blocks_in_2era` might be incorrect for pending blocks
+        // (either really pending because it's past stable block or just
+        // pending because it's being inserted during recovery.
         let two_era_block = self.cur_era_genesis_block_arena_index;
         self.arena[pivot].data.num_epoch_blocks_in_2era = self.arena[pivot]
             .data
@@ -1575,6 +1592,7 @@ impl ConsensusGraphInner {
         }
         let mut idx = *idx_opt.unwrap();
         for _i in 0..delay {
+            trace!("get_state_block_with_delay: idx={}", idx);
             if idx == self.cur_era_genesis_block_arena_index {
                 // If it is the original genesis, we just break
                 if self.arena[self.cur_era_genesis_block_arena_index].height
@@ -1582,7 +1600,10 @@ impl ConsensusGraphInner {
                 {
                     break;
                 } else {
-                    return Err("Parent hash is too old for computing the deferred state".to_owned());
+                    return Err(
+                        "Parent is too old for computing the deferred state"
+                            .to_owned(),
+                    );
                 }
             }
             idx = self.arena[idx].parent;
@@ -1989,6 +2010,10 @@ impl ConsensusGraphInner {
     {
         let lca = self.lca(me, pivot_arena_index);
         let lca_height = self.arena[lca].height;
+        debug!(
+            "compute_vote_valid_for_pivot_block: lca={}, lca_height={}",
+            lca, lca_height
+        );
         let mut stack = Vec::new();
         stack.push((0, me, 0));
         while !stack.is_empty() {
@@ -2156,7 +2181,16 @@ impl ConsensusGraphInner {
         }
         new_pivot_chain.reverse();
         self.pivot_chain = new_pivot_chain;
+        debug!(
+            "set_pivot_to_stable: stable={:?}, chain_len={}",
+            stable,
+            self.pivot_chain.len()
+        );
         // TODO Double check if this is needed
         self.recompute_metadata(self.cur_era_genesis_height, to_update);
+    }
+
+    pub fn total_processed_block_count(&self) -> u64 {
+        self.sequence_number_of_block_entrance
     }
 }

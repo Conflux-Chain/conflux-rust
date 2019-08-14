@@ -25,7 +25,7 @@ use crate::parameters::{
     block::REFEREE_BOUND, consensus::*, consensus_internal::*,
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -109,9 +109,6 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
-
-    /// The number of full blocks inserted
-    block_count: Mutex<u64>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -153,7 +150,6 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
-            block_count: Mutex::new(1),
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -181,11 +177,6 @@ impl ConsensusGraph {
             pow_config,
             &genesis_hash,
         )
-    }
-
-    pub fn clear_block_count(&self) {
-        let block_count = &mut *self.block_count.lock();
-        *block_count = 1;
     }
 
     /// Compute the expected difficulty of a new block given its parent
@@ -409,7 +400,6 @@ impl ConsensusGraph {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
-        *self.block_count.lock() += 1;
 
         if !ignore_body {
             let block = self.data_man.block_by_hash(hash, true).unwrap();
@@ -441,18 +431,37 @@ impl ConsensusGraph {
                 "insert new block_header into consensus: block_header={:?}",
                 header
             );
-            let inner = &mut *self.inner.write();
-            self.new_block_handler.on_new_block(
-                inner,
-                &self.confirmation_meter,
-                hash,
-                header.as_ref(),
-                None,
-            );
-            self.update_best_info(inner);
-            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
-                inner.set_pivot_to_stable(hash);
+            {
+                let inner = &mut *self.inner.write();
+                self.new_block_handler.on_new_block(
+                    inner,
+                    &self.confirmation_meter,
+                    hash,
+                    header.as_ref(),
+                    None,
+                );
+                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
+                {
+                    if let Some(exe_info) = self
+                        .data_man
+                        .consensus_graph_execution_info_from_db(hash)
+                    {
+                        inner
+                            .execution_info_cache
+                            .insert(*arena_index, exe_info);
+                    }
+                }
+
+                // If we have recovered all blocks in the past of stable block,
+                // we should reset the pivot chain. And later
+                // processed blocks may not be pending.
+                if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
+                    inner.set_pivot_to_stable(hash);
+                }
+                self.update_best_info(inner);
             }
+            self.txpool
+                .notify_new_best_info(self.best_info.read().clone());
         }
     }
 
@@ -510,8 +519,15 @@ impl ConsensusGraph {
             .expect("Best state has been executed")
     }
 
-    /// Returns the total number of blocks in consensus graph
-    pub fn block_count(&self) -> u64 { *self.block_count.lock() }
+    /// Returns the total number of blocks processed in consensus graph.
+    ///
+    /// This function should only be used in tests.
+    /// If the process crashes and recovered, the blocks in the anticone of the
+    /// current checkpoint may not be counted since they will not be
+    /// inserted into consensus in the recover process.
+    pub fn block_count(&self) -> u64 {
+        self.inner.read_recursive().total_processed_block_count()
+    }
 
     /// Estimate the gas of a transaction
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
@@ -729,6 +745,10 @@ impl ConsensusGraph {
     pub fn construct_pivot_state(&self) {
         let inner = &mut *self.inner.write();
         self.new_block_handler.construct_pivot_state(inner);
+    }
+
+    pub fn best_info(&self) -> Arc<BestInformation> {
+        self.best_info.read().clone()
     }
 }
 

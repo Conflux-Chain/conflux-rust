@@ -191,10 +191,15 @@ impl ConsensusNewBlockHandler {
             inner.arena[me].referees = new_referees;
             // We no longer need to consider blocks outside our era when
             // computing blockset_in_epoch
-            inner.arena[me].data.min_epoch_in_other_views = max(
-                inner.arena[me].data.min_epoch_in_other_views,
-                new_era_height + 1,
-            );
+            inner.arena[me].data.min_epoch_in_other_views =
+                if me != new_era_block_arena_index {
+                    max(
+                        inner.arena[me].data.min_epoch_in_other_views,
+                        new_era_height + 1,
+                    )
+                } else {
+                    new_era_height
+                };
             assert!(
                 inner.arena[me].data.max_epoch_in_other_views >= new_era_height
             );
@@ -989,9 +994,12 @@ impl ConsensusNewBlockHandler {
         let era_block = inner.get_era_genesis_block_with_parent(parent, 0);
 
         let pending = {
+            // It's pending if it has a different stable block or is before our
+            // stable block or we are still recovering
             let me_stable_arena_index =
                 inner.ancestor_at(parent, inner.cur_era_stable_height);
-            me_stable_arena_index == NULL
+            (inner.pivot_chain.len() as u64 - 1) + inner.cur_era_genesis_height
+                < inner.cur_era_stable_height
                 || me_stable_arena_index
                     != inner.get_pivot_block_arena_index(
                         inner.cur_era_stable_height,
@@ -1070,7 +1078,6 @@ impl ConsensusNewBlockHandler {
         let mut fork_at =
             inner.pivot_index_to_height(inner.pivot_chain.len() + 1);
         let old_pivot_chain_len = inner.pivot_chain.len();
-        // FIXME Do not allow pivot chain to switch past stable block.
         if fully_valid && !pending {
             meter.aggregate_total_weight_in_past(my_weight);
 
@@ -1088,64 +1095,73 @@ impl ConsensusNewBlockHandler {
                 fork_at = inner.pivot_index_to_height(old_pivot_chain_len)
             } else {
                 let lca = inner.lca(last, me);
-                fork_at = inner.arena[lca].height + 1;
-                let prev = inner.get_pivot_block_arena_index(fork_at);
-                let prev_weight = inner.weight_tree.get(prev);
-                let new = inner.ancestor_at(me, fork_at);
-                let new_weight = inner.weight_tree.get(new);
-
-                if ConsensusGraphInner::is_heavier(
-                    (new_weight, &inner.arena[new].hash),
-                    (prev_weight, &inner.arena[prev].hash),
-                ) {
-                    // The new subtree is heavier, update pivot chain
-                    for discarded_idx in inner
-                        .pivot_chain
-                        .split_off(inner.height_to_pivot_index(fork_at))
-                    {
-                        // Reset the epoch_number of the discarded fork
-                        ConsensusNewBlockHandler::reset_epoch_number_in_epoch(
-                            inner,
-                            discarded_idx,
-                        )
-                    }
-                    let mut u = new;
-                    loop {
-                        inner.pivot_chain.push(u);
-                        ConsensusNewBlockHandler::set_epoch_number_in_epoch(
-                            inner,
-                            u,
-                            inner
-                                .pivot_index_to_height(inner.pivot_chain.len())
-                                - 1,
-                        );
-                        let mut heaviest = NULL;
-                        let mut heaviest_weight = 0;
-                        for index in &inner.arena[u].children {
-                            let weight = inner.weight_tree.get(*index);
-                            if heaviest == NULL
-                                || ConsensusGraphInner::is_heavier(
-                                    (weight, &inner.arena[*index].hash),
-                                    (
-                                        heaviest_weight,
-                                        &inner.arena[heaviest].hash,
-                                    ),
-                                )
-                            {
-                                heaviest = *index;
-                                heaviest_weight = weight;
-                            }
-                        }
-                        if heaviest == NULL {
-                            break;
-                        }
-                        u = heaviest;
-                    }
-                    pivot_changed = true;
-                } else {
-                    // The previous subtree is still heavier, nothing is updated
-                    debug!("Old pivot chain is heavier, pivot chain unchanged");
+                if inner.arena[lca].height < inner.cur_era_stable_height {
+                    debug!("Fork point is past stable block, do not switch pivot chain");
                     fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
+                } else {
+                    fork_at = inner.arena[lca].height + 1;
+                    let prev = inner.get_pivot_block_arena_index(fork_at);
+                    let prev_weight = inner.weight_tree.get(prev);
+                    let new = inner.ancestor_at(me, fork_at);
+                    let new_weight = inner.weight_tree.get(new);
+
+                    if ConsensusGraphInner::is_heavier(
+                        (new_weight, &inner.arena[new].hash),
+                        (prev_weight, &inner.arena[prev].hash),
+                    ) {
+                        // The new subtree is heavier, update pivot chain
+                        for discarded_idx in inner
+                            .pivot_chain
+                            .split_off(inner.height_to_pivot_index(fork_at))
+                        {
+                            // Reset the epoch_number of the discarded fork
+                            ConsensusNewBlockHandler::reset_epoch_number_in_epoch(
+                                    inner,
+                                    discarded_idx,
+                                )
+                        }
+                        let mut u = new;
+                        loop {
+                            inner.pivot_chain.push(u);
+                            ConsensusNewBlockHandler::set_epoch_number_in_epoch(
+                                inner,
+                                u,
+                                inner.pivot_index_to_height(
+                                    inner.pivot_chain.len(),
+                                ) - 1,
+                            );
+                            let mut heaviest = NULL;
+                            let mut heaviest_weight = 0;
+                            for index in &inner.arena[u].children {
+                                let weight = inner.weight_tree.get(*index);
+                                if heaviest == NULL
+                                    || ConsensusGraphInner::is_heavier(
+                                        (weight, &inner.arena[*index].hash),
+                                        (
+                                            heaviest_weight,
+                                            &inner.arena[heaviest].hash,
+                                        ),
+                                    )
+                                {
+                                    heaviest = *index;
+                                    heaviest_weight = weight;
+                                }
+                            }
+                            if heaviest == NULL {
+                                break;
+                            }
+                            u = heaviest;
+                        }
+                        pivot_changed = true;
+                    } else {
+                        // The previous subtree is still heavier, nothing is
+                        // updated
+                        debug!(
+                            "Old pivot chain is heavier, pivot chain unchanged"
+                        );
+                        fork_at =
+                            inner.pivot_index_to_height(old_pivot_chain_len);
+                    }
                 }
             };
             debug!(
@@ -1352,21 +1368,22 @@ impl ConsensusNewBlockHandler {
             return;
         }
         // recover receipts_root and logs_bloom_hash from block header
-        for index in
+        for pivot_index in
             DEFERRED_STATE_EPOCH_COUNT as usize..inner.pivot_chain.len()
         {
-            let deffered_index =
-                inner.pivot_chain[index - DEFERRED_STATE_EPOCH_COUNT as usize];
+            let arena_index = inner.pivot_chain[pivot_index];
+            let deffered_arena_index = inner.pivot_chain
+                [pivot_index - DEFERRED_STATE_EPOCH_COUNT as usize];
             // block header must exist in db
             let block_header = self
                 .data_man
-                .block_header_by_hash(&inner.arena[index].hash)
+                .block_header_by_hash(&inner.arena[arena_index].hash)
                 .unwrap();
-            if inner.arena[deffered_index].hash
+            if inner.arena[deffered_arena_index].hash
                 != self.data_man.true_genesis_block.hash()
             {
                 self.data_man.insert_epoch_execution_commitments(
-                    inner.arena[deffered_index].hash,
+                    inner.arena[deffered_arena_index].hash,
                     *block_header.deferred_receipts_root(),
                     *block_header.deferred_logs_bloom_hash(),
                 );
