@@ -559,37 +559,34 @@ impl ConsensusGraphInner {
         self.get_blame(arena_index)
     }
 
-    pub fn find_the_first_with_correct_state_of(
+    pub fn find_first_index_with_correct_state_of(
         &self, pivot_index: usize,
     ) -> Option<usize> {
-        let trusted_blame_pivot_index =
-            self.find_the_first_trusted_blame_after(pivot_index);
-        if trusted_blame_pivot_index.is_none() {
-            return None;
-        }
+        let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
 
-        let mut trusted_blame_pivot_index = trusted_blame_pivot_index.unwrap();
-        if trusted_blame_pivot_index != pivot_index {
-            loop {
-                let blame =
-                    self.get_blame_with_pivot_index(trusted_blame_pivot_index);
-                let prev_trusted_pivot_index =
-                    trusted_blame_pivot_index - blame as usize - 1;
-                if prev_trusted_pivot_index == pivot_index {
-                    trusted_blame_pivot_index = pivot_index;
-                    break;
-                } else if prev_trusted_pivot_index < pivot_index {
-                    break;
-                } else {
-                    trusted_blame_pivot_index = prev_trusted_pivot_index;
-                }
+        // get pivot index of first trusted block based on the blame fields
+        let mut trusted_index =
+            match self.find_first_with_trusted_blame_starting_from(from) {
+                None => return None,
+                Some(index) => index,
+            };
+
+        // iteratively search for smallest trusted index after `pivot_index`
+        while trusted_index != pivot_index {
+            let blame = self.get_blame_with_pivot_index(trusted_index);
+            let prev_trusted = trusted_index - blame as usize - 1;
+
+            if prev_trusted < pivot_index {
+                break;
             }
+
+            trusted_index = prev_trusted;
         }
 
-        Some(trusted_blame_pivot_index)
+        Some(trusted_index)
     }
 
-    fn find_the_first_trusted_blame_after(
+    fn find_first_with_trusted_blame_starting_from(
         &self, pivot_index: usize,
     ) -> Option<usize> {
         let mut cur_pivot_index = pivot_index;
