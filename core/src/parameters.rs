@@ -39,6 +39,10 @@ pub mod consensus_internal {
     // Here is the delay for us to recycle those orphaned blocks in the boundary
     // of eras.
     pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
+    /// This is the bound for `min/max_epoch_in_other_views`. If we have more
+    /// than this number, we will use the brute_force O(n) algorithm to collect
+    /// blockset instead.
+    pub const EPOCH_IN_OTHER_VIEWS_GAP_BOUND: u64 = 1000;
 
     // FIXME Use another method to prevent DDoS attacks if attackers control the
     // pivot chain A block can blame up to BLAME_BOUND ancestors that their
