@@ -9,9 +9,7 @@ use rlp::Rlp;
 use std::sync::{Arc, Weak};
 
 use cfx_types::H256;
-use primitives::{
-    BlockHeader, EpochNumber, StateRoot, TransactionWithSignature,
-};
+use primitives::{BlockHeader, EpochNumber, TransactionWithSignature};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -36,7 +34,8 @@ use super::{
         BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
         GetBlockHeaders, GetStateEntry, GetStateRoot, NewBlockHashes, NodeType,
         SendRawTx, StateEntry as GetStateEntryResponse,
-        StateRoot as GetStateRootResponse, StatusPing, StatusPong,
+        StateRoot as GetStateRootResponse, StateRootWithProof, StatusPing,
+        StatusPong,
     },
     peers::Peers,
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
@@ -167,9 +166,46 @@ impl QueryProvider {
     }
 
     #[inline]
-    fn get_local_state_root(&self, epoch: u64) -> Result<StateRoot, Error> {
-        let h = self.get_local_header(epoch + DEFERRED_STATE_EPOCH_COUNT)?;
-        Ok(h.state_root_with_aux_info.state_root.clone())
+    fn get_local_state_root(
+        &self, epoch: u64,
+    ) -> Result<StateRootWithProof, Error> {
+        // find the first header that can verify the state root requested
+        let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
+
+        let witness = match witness {
+            Some(epoch) => epoch,
+            None => {
+                warn!("Unable to produce state proof for epoch {}", epoch);
+                return Err(ErrorKind::UnableToProduceProof.into());
+            }
+        };
+
+        let witness_header = self.get_local_header(witness)?;
+        let blame = witness_header.blame() as u64;
+
+        // assumption: the state root requested can be verified by the witness
+        assert!(witness - epoch - DEFERRED_STATE_EPOCH_COUNT <= blame);
+
+        // find the state root requested
+        let root = self
+            .get_local_header(epoch + DEFERRED_STATE_EPOCH_COUNT)?
+            .state_root_with_aux_info
+            .state_root
+            .clone();
+
+        // collect all hashes required to verify `witness.deferred_state_root`
+        // NOTE: this iterator will short-circuit on the first failure
+        let proof = (0..(blame + 1))
+            .map(|ii| {
+                Ok(self
+                    .get_local_header(witness - ii)?
+                    .state_root_with_aux_info
+                    .state_root
+                    .compute_state_root_hash())
+            })
+            .collect::<Result<Vec<H256>, Error>>()?;
+
+        Ok(StateRootWithProof { root, proof })
     }
 
     #[inline]
