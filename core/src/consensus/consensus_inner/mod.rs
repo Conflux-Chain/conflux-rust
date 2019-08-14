@@ -2153,4 +2153,8 @@ impl ConsensusGraphInner {
         // TODO Double check if this is needed
         self.recompute_metadata(self.cur_era_genesis_height, to_update);
     }
+
+    pub fn total_processed_block_count(&self) -> u64 {
+        self.sequence_number_of_block_entrance
+    }
 }

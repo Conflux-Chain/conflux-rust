@@ -519,8 +519,15 @@ impl ConsensusGraph {
             .expect("Best state has been executed")
     }
 
-    /// Returns the total number of blocks in consensus graph
-    pub fn block_count(&self) -> u64 { self.inner.read().arena.len() as u64 }
+    /// Returns the total number of blocks processed in consensus graph.
+    ///
+    /// This function should only be used in tests.
+    /// If the process crashes and recovered, the blocks in the anticone of the
+    /// current checkpoint may not be counted since they will not be
+    /// inserted into consensus in the recover process.
+    pub fn block_count(&self) -> u64 {
+        self.inner.read_recursive().total_processed_block_count()
+    }
 
     /// Estimate the gas of a transaction
     pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
