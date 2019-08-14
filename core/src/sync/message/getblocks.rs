@@ -35,17 +35,16 @@ impl Request for GetBlocks {
         conf.blocks_request_timeout
     }
 
-    fn on_removed(&self, inflight_keys: &mut KeyContainer) {
-        let msg_type = self.msg_id().into();
+    fn on_removed(&self, inflight_keys: &KeyContainer) {
+        let mut inflight_keys = inflight_keys.write(self.msg_id());
         for hash in self.hashes.iter() {
-            inflight_keys.remove(msg_type, Key::Hash(*hash));
+            inflight_keys.remove(&Key::Hash(*hash));
         }
     }
 
-    fn with_inflight(&mut self, inflight_keys: &mut KeyContainer) {
-        let msg_type = self.msg_id().into();
-        self.hashes
-            .retain(|h| inflight_keys.add(msg_type, Key::Hash(*h)));
+    fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
+        let mut inflight_keys = inflight_keys.write(self.msg_id());
+        self.hashes.retain(|h| inflight_keys.insert(Key::Hash(*h)));
     }
 
     fn is_empty(&self) -> bool { self.hashes.is_empty() }

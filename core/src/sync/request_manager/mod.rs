@@ -61,7 +61,7 @@ struct WaitingRequest(Box<Request>, Duration); // (request, delay)
 // need garbage collect
 pub struct RequestManager {
     // used to avoid send duplicated requests.
-    inflight_keys: Mutex<KeyContainer>,
+    inflight_keys: KeyContainer,
 
     /// Each element is (timeout_time, request, chosen_peer)
     waiting_requests: Mutex<BinaryHeap<TimedWaitingRequest>>,
@@ -107,8 +107,8 @@ impl RequestManager {
 
     pub fn num_epochs_in_flight(&self) -> u64 {
         self.inflight_keys
-            .lock()
-            .len(msgid::GET_BLOCK_HASHES_BY_EPOCH) as u64
+            .read(msgid::GET_BLOCK_HASHES_BY_EPOCH)
+            .len() as u64
     }
 
     /// Send request to remote peer with delay mechanism. If failed,
@@ -118,11 +118,8 @@ impl RequestManager {
         peer: Option<PeerId>, delay: Option<Duration>,
     )
     {
-        {
-            // retain the request items that not in flight.
-            let mut inflight_keys = self.inflight_keys.lock();
-            request.with_inflight(&mut inflight_keys);
-        }
+        // retain the request items that not in flight.
+        request.with_inflight(&self.inflight_keys);
 
         if request.is_empty() {
             return;
@@ -219,11 +216,12 @@ impl RequestManager {
         if fixed_bytes_vector.is_empty() {
             return;
         }
-        let mut inflight_keys = self.inflight_keys.lock();
+
+        let mut inflight_keys =
+            self.inflight_keys.write(msgid::GET_TRANSACTIONS);
         let received_transactions = self.received_transactions.read();
 
-        let msg_type = msgid::GET_TRANSACTIONS;
-        INFLIGHT_TX_POOL_METER.mark(inflight_keys.len(msg_type));
+        INFLIGHT_TX_POOL_METER.mark(inflight_keys.len());
         TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
         let (indices, tx_ids) = {
@@ -240,8 +238,7 @@ impl RequestManager {
                     continue;
                 }
 
-                if !inflight_keys.add(msg_type, Key::Id(fixed_bytes_vector[i]))
-                {
+                if !inflight_keys.insert(Key::Id(fixed_bytes_vector[i])) {
                     // Already being requested
                     continue;
                 }
@@ -259,20 +256,21 @@ impl RequestManager {
             request_id: 0,
             window_index,
             indices,
-            tx_ids,
+            tx_ids: tx_ids.clone(),
         };
 
         if request.is_empty() {
             return;
         }
 
-        if let Err(req) = self.request_handler.send_request(
-            io,
-            Some(peer_id),
-            Box::new(request),
-            None,
-        ) {
-            req.on_removed(&mut *inflight_keys);
+        if self
+            .request_handler
+            .send_request(io, Some(peer_id), Box::new(request), None)
+            .is_err()
+        {
+            for id in tx_ids {
+                inflight_keys.remove(&Key::Id(id));
+            }
         }
     }
 
@@ -321,11 +319,7 @@ impl RequestManager {
     pub fn remove_mismatch_request(
         &self, io: &NetworkContext, req: &RequestMessage,
     ) {
-        {
-            let mut inflight_keys = self.inflight_keys.lock();
-            req.request.on_removed(&mut inflight_keys);
-        }
-
+        req.request.on_removed(&self.inflight_keys);
         self.send_request_again(io, req);
     }
 
@@ -353,8 +347,8 @@ impl RequestManager {
             req_hashes, received_headers
         );
         let missing_headers = {
-            let mut inflight_keys = self.inflight_keys.lock();
-            let msg_type = msgid::GET_BLOCK_HEADERS;
+            let mut inflight_keys =
+                self.inflight_keys.write(msgid::GET_BLOCK_HEADERS);
             let mut missing_headers = Vec::new();
             for req_hash in &req_hashes {
                 if !received_headers.remove(req_hash) {
@@ -362,15 +356,15 @@ impl RequestManager {
                     // been received or requested
                     // again by another thread, so we do not need to request it
                     // in that case
-                    if inflight_keys.remove(msg_type, Key::Hash(*req_hash)) {
+                    if inflight_keys.remove(&Key::Hash(*req_hash)) {
                         missing_headers.push(*req_hash);
                     }
                 } else {
-                    inflight_keys.remove(msg_type, Key::Hash(*req_hash));
+                    inflight_keys.remove(&Key::Hash(*req_hash));
                 }
             }
             for h in &received_headers {
-                inflight_keys.remove(msg_type, Key::Hash(*h));
+                inflight_keys.remove(&Key::Hash(*h));
             }
             missing_headers
         };
@@ -391,8 +385,8 @@ impl RequestManager {
             req_epochs, received_epochs
         );
         let missing_epochs = {
-            let mut inflight_keys = self.inflight_keys.lock();
-            let msg_type = msgid::GET_BLOCK_HASHES_BY_EPOCH;
+            let mut inflight_keys =
+                self.inflight_keys.write(msgid::GET_BLOCK_HASHES_BY_EPOCH);
             let mut missing_epochs = Vec::new();
             for epoch_number in &req_epochs {
                 if !received_epochs.remove(epoch_number) {
@@ -400,15 +394,15 @@ impl RequestManager {
                     // has been received or requested
                     // again by another thread, so we do not need to request it
                     // in that case
-                    if inflight_keys.remove(msg_type, Key::Num(*epoch_number)) {
+                    if inflight_keys.remove(&Key::Num(*epoch_number)) {
                         missing_epochs.push(*epoch_number);
                     }
                 } else {
-                    inflight_keys.remove(msg_type, Key::Num(*epoch_number));
+                    inflight_keys.remove(&Key::Num(*epoch_number));
                 }
             }
             for epoch_number in &received_epochs {
-                inflight_keys.remove(msg_type, Key::Num(*epoch_number));
+                inflight_keys.remove(&Key::Num(*epoch_number));
             }
             missing_epochs
         };
@@ -436,8 +430,7 @@ impl RequestManager {
             req_hashes, received_blocks, peer
         );
         let missing_blocks = {
-            let mut inflight_keys = self.inflight_keys.lock();
-            let msg_type = msgid::GET_BLOCKS;
+            let mut inflight_keys = self.inflight_keys.write(msgid::GET_BLOCKS);
             let mut missing_blocks = Vec::new();
             for req_hash in &req_hashes {
                 if !received_blocks.remove(req_hash) {
@@ -445,15 +438,15 @@ impl RequestManager {
                     // been received or requested
                     // again by another thread, so we do not need to request it
                     // in that case
-                    if inflight_keys.remove(msg_type, Key::Hash(*req_hash)) {
+                    if inflight_keys.remove(&Key::Hash(*req_hash)) {
                         missing_blocks.push(*req_hash);
                     }
                 } else {
-                    inflight_keys.remove(msg_type, Key::Hash(*req_hash));
+                    inflight_keys.remove(&Key::Hash(*req_hash));
                 }
             }
             for h in &received_blocks {
-                inflight_keys.remove(msg_type, Key::Hash(*h));
+                inflight_keys.remove(&Key::Hash(*h));
             }
             missing_blocks
         };
@@ -483,10 +476,10 @@ impl RequestManager {
         &self, received_transactions: &HashSet<TxPropagateId>,
     ) {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
-        let mut inflight_keys = self.inflight_keys.lock();
-        let msg_type = msgid::GET_TRANSACTIONS;
+        let mut inflight_keys =
+            self.inflight_keys.write(msgid::GET_TRANSACTIONS);
         for tx in received_transactions {
-            inflight_keys.remove(msg_type, Key::Id(*tx));
+            inflight_keys.remove(&Key::Id(*tx));
         }
     }
 
@@ -590,9 +583,8 @@ impl RequestManager {
             self.request_handler.remove_peer(peer)
         {
             {
-                let mut inflight_keys = self.inflight_keys.lock();
                 for msg in &unfinished_requests {
-                    msg.request.on_removed(&mut inflight_keys);
+                    msg.request.on_removed(&self.inflight_keys);
                 }
             }
             for msg in unfinished_requests.iter_mut() {
