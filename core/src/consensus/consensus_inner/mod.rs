@@ -1971,8 +1971,6 @@ impl ConsensusGraphInner {
         );
         let mut stack = Vec::new();
         stack.push((0, me, 0));
-        // FIXME This may find blocks before the current checkpoint even when
-        // blame is bounded
         while !stack.is_empty() {
             let (stage, index, a) = stack.pop().unwrap();
             if stage == 0 {
@@ -1999,7 +1997,6 @@ impl ConsensusGraphInner {
                         let mut cur = lca;
                         let mut vote_valid = true;
                         while cur_height > start_height {
-                            debug!("compute_vote_valid_for_pivot_block: cur={}, cur_height={}, start_height={}", cur, cur_height, start_height);
                             if self
                                 .execution_info_cache
                                 .get(&cur)

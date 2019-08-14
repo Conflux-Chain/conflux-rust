@@ -1490,7 +1490,6 @@ impl SynchronizationGraph {
     /// blocks which can be reeached by `not_ready_blocks_frontier`.
     pub fn remove_expire_blocks(
         &self, expire_time: u64, recover: bool,
-        genesis_seq_number: Option<u64>,
         maybe_out_of_era_blocks: Option<HashSet<H256>>,
     ) -> Vec<H256>
     {
@@ -1575,7 +1574,7 @@ impl SynchronizationGraph {
             let invalid_set = self.propagate_graph_status(
                 inner,
                 new_graph_ready_blocks,
-                genesis_seq_number.is_some(),
+                maybe_out_of_era_blocks.is_some(),
             );
             debug_assert!(invalid_set.len() == 0);
         }
