@@ -385,10 +385,8 @@ impl ConsensusGraph {
                 }
                 tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
                 tmp.split_off(REFEREE_BOUND);
-                let bounded_hashes = tmp
-                    .iter()
-                    .map(|(_, b)| (*b).clone())
-                    .collect();
+                let bounded_hashes =
+                    tmp.iter().map(|(_, b)| (*b).clone()).collect();
                 (Some(terminal_hashes), bounded_hashes)
             } else {
                 (None, terminal_hashes)
