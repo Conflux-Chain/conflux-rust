@@ -515,19 +515,20 @@ impl CowNodeRef {
             };
             let committed_node_ref = NodeRefDeltaMpt::Committed { db_key };
             owned_node_set.insert(committed_node_ref.clone());
+            owned_node_set.remove(&self.node_ref);
             // We insert the new node_ref into owned_node_set first because in
             // general inserting to a set may fail, even though it
             // doesn't fail for the current implementation.
             //
-            // When it fails to insert into cache, it's fine to have an extra
-            // entry in owned_node_set because there is no-op in reverting in
-            // this case.
+            // It would be more difficult to deal with if the insertion to
+            // node_ref_map below fails while we haven't updated information
+            // about the current node: we may forget to rollback the insertion
+            // into node_ref_map and cache algorithm.
             cache_manager.insert_to_node_ref_map_and_call_cache_access(
                 db_key,
                 slot,
                 trie.get_node_memory_manager(),
             )?;
-            owned_node_set.remove(&self.node_ref);
             self.node_ref = committed_node_ref;
 
             Ok(true)
