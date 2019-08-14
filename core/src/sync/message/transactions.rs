@@ -312,10 +312,6 @@ impl Handleable for GetTransactionsResponse {
             ctx.peer
         );
 
-        ctx.manager
-            .request_manager
-            .transactions_received(&req.tx_ids);
-
         let (signed_trans, _) = ctx
             .manager
             .graph
@@ -325,7 +321,7 @@ impl Handleable for GetTransactionsResponse {
 
         ctx.manager
             .request_manager
-            .append_received_transactions(signed_trans);
+            .transactions_received(&req.tx_ids, signed_trans);
 
         debug!("Transactions successfully inserted to transaction pool");
 
