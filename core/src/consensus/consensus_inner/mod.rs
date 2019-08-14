@@ -479,7 +479,10 @@ impl ConsensusGraphInner {
 
     #[inline]
     pub fn set_initial_sequence_number(&mut self, initial_sn: u64) {
-        self.sequence_number_of_block_entrance = initial_sn;
+        self.arena[self.cur_era_genesis_block_arena_index]
+            .data
+            .sequence_number = initial_sn;
+        self.sequence_number_of_block_entrance = initial_sn + 1;
     }
 
     #[inline]

@@ -440,11 +440,11 @@ impl ConsensusGraph {
                     header.as_ref(),
                     None,
                 );
-                if let Some(exe_info) =
-                    self.data_man.consensus_graph_execution_info_from_db(hash)
+                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
                 {
-                    if let Some(arena_index) =
-                        inner.hash_to_arena_indices.get(hash)
+                    if let Some(exe_info) = self
+                        .data_man
+                        .consensus_graph_execution_info_from_db(hash)
                     {
                         inner
                             .execution_info_cache
