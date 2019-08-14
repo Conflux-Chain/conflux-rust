@@ -384,8 +384,8 @@ impl ConsensusGraph {
                     tmp.push((inner.arena[a_lca].height, hash));
                 }
                 tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
+                tmp.split_off(REFEREE_BOUND);
                 let bounded_hashes = tmp
-                    .split_off(REFEREE_BOUND)
                     .iter()
                     .map(|(_, b)| (*b).clone())
                     .collect();
