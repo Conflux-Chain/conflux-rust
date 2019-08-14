@@ -376,7 +376,7 @@ def connect_nodes(nodes, a, node_num):
     wait_until(lambda: check_handshake(from_connection, peer_addr))
 
 
-def sync_blocks(rpc_connections, *, wait=1, timeout=60):
+def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
     """
     Wait until everybody has the same tip.
 
@@ -388,7 +388,7 @@ def sync_blocks(rpc_connections, *, wait=1, timeout=60):
     while time.time() <= stop_time:
         best_hash = [x.getbestblockhash() for x in rpc_connections]
         block_count = [x.getblockcount() for x in rpc_connections]
-        if best_hash.count(best_hash[0]) == len(rpc_connections) and block_count.count(block_count[0]) == len(rpc_connections):
+        if best_hash.count(best_hash[0]) == len(rpc_connections) and (not sync_count or block_count.count(block_count[0]) == len(rpc_connections)):
             return
         time.sleep(wait)
     raise AssertionError("Block sync timed out:{}".format("".join(

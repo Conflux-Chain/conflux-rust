@@ -526,7 +526,7 @@ impl ConsensusGraph {
     /// current checkpoint may not be counted since they will not be
     /// inserted into consensus in the recover process.
     pub fn block_count(&self) -> u64 {
-        self.inner.read_recursive().total_processed_block_count()
+        self.inner.read_recursive().arena.len() as u64
     }
 
     /// Estimate the gas of a transaction

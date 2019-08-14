@@ -229,7 +229,7 @@ impl SynchronizationGraphInner {
     }
 
     fn try_recover_expire_block(
-        &mut self, genesis_seq_number: Option<u64>,
+        &mut self,
     ) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
         let mut graph_ready_blocks = Vec::new();
         let mut header_graph_ready_blocks = Vec::new();
@@ -242,11 +242,6 @@ impl SynchronizationGraphInner {
                     invalid_blocks.push(*index);
                     false
                 } else {
-                    if let Some(gen_seq) = genesis_seq_number {
-                        if info.get_seq_num() < gen_seq {
-                            return true;
-                        }
-                    }
                     info.get_instance_id() == data_man.get_instance_id()
                         || info.get_instance_id() == NULLU64
                 }
@@ -258,19 +253,21 @@ impl SynchronizationGraphInner {
         for index in &self.not_ready_blocks_frontier {
             let parent_hash = self.arena[*index].block_header.parent_hash();
 
-            // parent and referees are all in memory, status must be
-            // BLOCK_HEADER_GRAPH_READY no need to recover
+            // No need to recover BLOCK_HEADER_GRAPH_READY blocks
             if self.arena[*index].graph_status >= BLOCK_HEADER_GRAPH_READY {
                 continue;
             }
 
             // check whether parent is BLOCK_GRAPH_READY
-            // 1. parent not in memory and not invalid in disk (assume this
+            // 1. `parent_reclaimed==true`, during recovery, parent is not in
+            // the future of the current checkpoint.
+            // 2. parent not in memory and not invalid in disk (assume this
             // block was BLOCK_GRAPH_READY)
-            // 2. parent in memory and status is BLOCK_GRAPH_READY
+            // 3. parent in memory and status is BLOCK_GRAPH_READY
             let parent_graph_ready: bool = {
                 if self.arena[*index].parent == NULL {
-                    is_block_graph_ready(parent_hash, index)
+                    self.arena[*index].parent_reclaimed
+                        || is_block_graph_ready(parent_hash, index)
                 } else if self.arena[*index].parent != NULL
                     && self.arena[self.arena[*index].parent].graph_status
                         == BLOCK_GRAPH_READY
@@ -326,12 +323,12 @@ impl SynchronizationGraphInner {
                 if r.is_err() {
                     continue;
                 }
+                // recover all ready blocks as BLOCK_HEADER_GRAPH_READY first so
+                // that the status can be properly propagated
+                header_graph_ready_blocks.push(*index);
                 if self.arena[*index].block_ready {
                     // recover as BLOCK_GRAPH_READY
                     graph_ready_blocks.push(*index);
-                } else {
-                    // recover as BLOCK_HEADER_GRAPH_READY
-                    header_graph_ready_blocks.push(*index);
                 }
             }
         }
@@ -934,12 +931,6 @@ impl SynchronizationGraph {
                         block_local_info.get_seq_num()
                     );
                     continue;
-                } else {
-                    debug!(
-                        "Handle block {:?} seq_num={}",
-                        hash,
-                        block_local_info.get_seq_num()
-                    );
                 }
             }
 
@@ -1148,7 +1139,7 @@ impl SynchronizationGraph {
                         }
                     }
                 } else if inner.new_to_be_header_parental_tree_ready(index) {
-                    debug!("BlockIndex {} parent_index {} hash {} is header parental tree ready", index,
+                    trace!("BlockIndex {} parent_index {} hash {} is header parental tree ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
                     if index == header_index_to_insert {
                         self.data_man.insert_block_header(
@@ -1168,7 +1159,7 @@ impl SynchronizationGraph {
                         queue.push_back(*child);
                     }
                 } else {
-                    debug!(
+                    trace!(
                         "BlockIndex {} parent_index {} hash {} is not ready",
                         index,
                         inner.arena[index].parent,
@@ -1542,27 +1533,16 @@ impl SynchronizationGraph {
                 new_graph_ready_blocks,
                 mut new_header_graph_ready_blocks,
                 invalid_blocks,
-            ) = inner.try_recover_expire_block(genesis_seq_number);
+            ) = inner.try_recover_expire_block();
             debug!(
                 "Recover blocks into graph_ready {:?}",
                 new_graph_ready_blocks
             );
 
             for index in &new_graph_ready_blocks {
-                //                if inner.arena[*index].parent == NULL {
-                //                    // make sure this block will be insert
-                // into                    //
-                // old_era_blocks_frontier later
-                // inner.arena[*index].parent_reclaimed = true;
-                //                }
-                //                inner.arena[*index].graph_status =
-                // BLOCK_HEADER_GRAPH_READY;
-                // inner.arena[*index].pending_referee_count = 0;
                 to_relay_blocks.push(inner.arena[*index].block_header.hash());
             }
 
-            new_header_graph_ready_blocks
-                .append(&mut new_graph_ready_blocks.clone());
             for index in &new_header_graph_ready_blocks {
                 inner.arena[*index].pending_referee_count = 0;
             }

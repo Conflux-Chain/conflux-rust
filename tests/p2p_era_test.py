@@ -48,7 +48,7 @@ class P2PTest(ConfluxTestFramework):
             self.log.info("%d generate block %s", chosen_peer, block_hash)
             time.sleep(random.random()/15)
         # wait_for_block_count(self.nodes[0], block_number)
-        sync_blocks(self.nodes, timeout=30)
+        sync_blocks(self.nodes, timeout=30, sync_count=False)
         self.log.info("block count:%d", self.nodes[0].getblockcount())
         hasha = self.nodes[0].getbestblockhash()
         block_a = client.block_by_hash(hasha)

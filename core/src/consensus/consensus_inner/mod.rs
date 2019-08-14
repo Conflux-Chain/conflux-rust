@@ -422,6 +422,16 @@ impl ConsensusGraphInner {
         inner
             .anticone_cache
             .update(inner.cur_era_genesis_block_arena_index, &BitSet::new());
+        if let Some(exe_info) = inner
+            .data_man
+            .consensus_graph_execution_info_from_db(cur_era_genesis_block_hash)
+        {
+            inner
+                .execution_info_cache
+                .insert(genesis_arena_index, exe_info);
+        } else {
+            error!("No execution info for cur_era_genesis in db!");
+        }
         inner
     }
 
@@ -1556,7 +1566,7 @@ impl ConsensusGraphInner {
         }
         let mut idx = *idx_opt.unwrap();
         for _i in 0..delay {
-            debug!("get_state_block_with_delay: idx={}", idx);
+            trace!("get_state_block_with_delay: idx={}", idx);
             if idx == self.cur_era_genesis_block_arena_index {
                 // If it is the original genesis, we just break
                 if self.arena[self.cur_era_genesis_block_arena_index].height
@@ -2001,22 +2011,6 @@ impl ConsensusGraphInner {
                             }
                             cur_height -= 1;
                             cur = self.arena[cur].parent;
-                            if cur == NULL
-                                || cur == self.cur_era_genesis_block_arena_index
-                            {
-                                // FIXME This may cause inconsistency.
-                                // And `execution_info_cache` does not include
-                                // cur_era_genesis
-                                return true;
-                            }
-                        }
-                        if cur == NULL
-                            || cur == self.cur_era_genesis_block_arena_index
-                        {
-                            // FIXME This may cause inconsistency.
-                            // And `execution_info_cache` does not include
-                            // cur_era_genesis
-                            return true;
                         }
                         if vote_valid
                             && !self

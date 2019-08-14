@@ -44,7 +44,7 @@ class ExpireBlockTest(ConfluxTestFramework):
         self.send_msg(node, NewBlock(block=out_block))
         time.sleep(3)
         node.expireblockgc(2)
-        wait_until(lambda: node.getblockcount() == 402)
+        wait_until(lambda: node.getblockcount() == 202)
 
     def test_expire_block_gc(self):
         node = self.nodes[0]
