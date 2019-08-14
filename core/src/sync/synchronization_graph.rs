@@ -1489,9 +1489,9 @@ impl SynchronizationGraph {
     ) -> Vec<H256>
     {
         let inner = &mut *self.inner.write();
-        if let Some(out_of_era_blocks) = maybe_out_of_era_blocks {
+        if let Some(out_of_era_blocks) = &maybe_out_of_era_blocks {
             for h in out_of_era_blocks {
-                if let Some(referrers) = inner.referrers_by_hash.get(&h) {
+                if let Some(referrers) = inner.referrers_by_hash.get(h) {
                     for referrer in referrers {
                         debug!(
                             "Remove pending_referee_count for {}, child={}",
@@ -1503,7 +1503,7 @@ impl SynchronizationGraph {
                         inner.arena[*referrer].pending_referee_count -= 1;
                     }
                 }
-                if let Some(children) = inner.children_by_hash.get(&h) {
+                if let Some(children) = inner.children_by_hash.get(h) {
                     for child in children {
                         debug!(
                             "Set parent_reclaimed for {}, child={}",
