@@ -972,12 +972,7 @@ impl SynchronizationGraph {
         }
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
-        self.remove_expire_blocks(
-            0,
-            true,
-            Some(genesis_seq_num),
-            Some(out_of_era_blocks),
-        );
+        self.remove_expire_blocks(0, true, Some(out_of_era_blocks));
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
         if !header_only {
             self.consensus.construct_pivot_state();
