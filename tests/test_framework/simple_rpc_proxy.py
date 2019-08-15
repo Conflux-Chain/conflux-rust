@@ -7,7 +7,6 @@ class SessionTimeoutFix(requests.Session):
     local_timeout = RPC_WAIT_TIMEOUT
 
     def request(self, *args, **kwargs):
-        print("Fix called")
         timeout = kwargs.pop('timeout', self.local_timeout)
         return super().request(*args, **kwargs, timeout=timeout)
 
