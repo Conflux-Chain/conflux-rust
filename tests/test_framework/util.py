@@ -14,6 +14,9 @@ import time
 import socket
 import threading
 
+import jsonrpcclient.exceptions
+
+from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
 
@@ -125,14 +128,15 @@ def try_rpc(code, message, fun, *args, **kwds):
     Returns whether a JSONRPCException was raised."""
     try:
         fun(*args, **kwds)
-    except JSONRPCException as e:
+    except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+        error = e.response
         # JSONRPCException was thrown as expected. Check the code and message values are correct.
-        if (code is not None) and (code != e.error["code"]):
+        if (code is not None) and (code != error.code):
             raise AssertionError(
-                "Unexpected JSONRPC error code %i" % e.error["code"])
-        if (message is not None) and (message not in e.error['message']):
+                "Unexpected JSONRPC error code %i" % error.code)
+        if (message is not None) and (message not in error.message):
             raise AssertionError("Expected substring not found:" +
-                                 e.error['message'])
+                                 error.message)
         return True
     except Exception as e:
         raise AssertionError("Unexpected exception raised: " +
@@ -475,6 +479,10 @@ def get_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT, coveragedi
         coveragedir, node_number) if coveragedir else None
 
     return coverage.AuthServiceProxyWrapper(proxy, coverage_logfile)
+
+
+def get_simple_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
+    return SimpleRpcProxy(url, timeout)
 
 
 def p2p_port(n):

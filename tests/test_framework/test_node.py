@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import tempfile
+import requests
 import time
 import urllib.parse
 
@@ -152,7 +153,7 @@ class TestNode:
                         'conflux exited with status {} during initialization'.
                         format(self.process.returncode)))
             try:
-                self.rpc = get_rpc_proxy(
+                self.rpc = get_simple_rpc_proxy(
                     rpc_url(self.index, self.rpchost, self.rpcport),
                     self.index,
                     timeout=self.rpc_timeout)
@@ -162,6 +163,9 @@ class TestNode:
                 self.url = self.rpc.url
                 self.log.debug("RPC successfully started")
                 return
+            except requests.exceptions.ConnectionError as e:
+                # TODO check if it's ECONNREFUSED`
+                pass
             except IOError as e:
                 if e.errno != errno.ECONNREFUSED:  # Port not yet open?
                     raise  # unknown IO error

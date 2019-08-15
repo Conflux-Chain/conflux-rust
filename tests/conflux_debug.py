@@ -31,7 +31,7 @@ class MessageTest(ConfluxTestFramework):
         default_node.wait_for_status()
 
         # Start rpc connection
-        self.rpc = get_rpc_proxy(
+        self.rpc = get_simple_rpc_proxy(
             "http://127.0.0.1:11000",
             1)
         challenge = random.randint(0, 2**32-1)
