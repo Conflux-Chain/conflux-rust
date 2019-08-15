@@ -11,10 +11,14 @@ import os
 import re
 import subprocess
 import tempfile
+
+import requests
 import time
 import urllib.parse
 
 import eth_utils
+import urllib3
+from urllib3.exceptions import NewConnectionError
 
 from conflux.utils import get_nodeid, sha3, encode_int32
 from .authproxy import JSONRPCException
@@ -145,14 +149,14 @@ class TestNode:
         """Sets up an RPC connection to the conflux process. Returns False if unable to connect."""
         # Poll at a rate of four times per second
         poll_per_s = 4
-        for _ in range(poll_per_s * self.rpc_timeout):
+        for _ in range(poll_per_s * 10):
             if not self.remote and self.process.poll() is not None:
                 raise FailedToStartError(
                     self._node_msg(
                         'conflux exited with status {} during initialization'.
                         format(self.process.returncode)))
             try:
-                self.rpc = get_rpc_proxy(
+                self.rpc = get_simple_rpc_proxy(
                     rpc_url(self.index, self.rpchost, self.rpcport),
                     self.index,
                     timeout=self.rpc_timeout)
@@ -162,6 +166,9 @@ class TestNode:
                 self.url = self.rpc.url
                 self.log.debug("RPC successfully started")
                 return
+            except requests.exceptions.ConnectionError as e:
+                # TODO check if it's ECONNREFUSED`
+                pass
             except IOError as e:
                 if e.errno != errno.ECONNREFUSED:  # Port not yet open?
                     raise  # unknown IO error

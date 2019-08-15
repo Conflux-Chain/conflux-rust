@@ -2,8 +2,11 @@
 """An example functional test
 """
 
+
+
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+
 
 
 class ExampleTest(ConfluxTestFramework):

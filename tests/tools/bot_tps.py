@@ -12,7 +12,7 @@ sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from conflux.utils import privtoaddr
-from test_framework.util import get_rpc_proxy, assert_equal
+from test_framework.util import assert_equal, get_simple_rpc_proxy
 
 DRIPS_PER_CFX = 10**18
 
@@ -105,7 +105,7 @@ def load_boot_nodes():
     return nodes
 
 def new_client(rpc_url):
-    return RpcClient(node=get_rpc_proxy(rpc_url, 3))
+    return RpcClient(node=get_simple_rpc_proxy(rpc_url, 3))
 
 def work(faucet_addr, faucet_priv_key_hex, rpc_urls:list, num_threads:int, num_receivers:int):
     # init faucet

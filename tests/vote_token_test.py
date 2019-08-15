@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from conflux.utils import privtoaddr
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from easysolc import Solc

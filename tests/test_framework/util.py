@@ -14,6 +14,8 @@ import time
 import socket
 import threading
 
+
+from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
 
@@ -475,6 +477,10 @@ def get_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT, coveragedi
         coveragedir, node_number) if coveragedir else None
 
     return coverage.AuthServiceProxyWrapper(proxy, coverage_logfile)
+
+
+def get_simple_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
+    return SimpleRpcProxy(url, timeout)
 
 
 def p2p_port(n):
