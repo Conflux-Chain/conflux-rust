@@ -121,7 +121,7 @@ impl Default for ConsensusGraphPivotData {
     }
 }
 
-/// Implementation details of Eras and Checkpoints
+/// [Implementation details of Eras and Checkpoints]
 ///
 /// Era in Conflux is defined based on the height of a block. Every
 /// epoch_block_count height corresponds to one era. For example, if
@@ -211,6 +211,74 @@ impl Default for ConsensusGraphPivotData {
 /// subtrees, while these two era trees themselves can look healthy. Therefore,
 /// to handle balance attack, we also need to consider adaptive situation in the
 /// last/previous era.
+
+/// [Introduction of blaming mechanism]
+///
+/// Blaming is used to provide proof for state root of a specific pivot block.
+/// The rationale behind is as follows. Verifying state roots of blocks off
+/// pivot chain is very costly. It is preferred to avoid this verification if
+/// possible. Normally, Conflux only needs to store correct state root in
+/// header of pivot block to provide proof for light node. However, the pivot
+/// chain may oscillate at the place close to ledger tail, which means that
+/// a block that is off pivot at some point may become pivot block in the
+/// future. If we do not verify the state root in the header of that block, when
+/// it becomes a pivot block later, we cannot guarantee the correctness of the
+/// state root in its header. Therefore, if we do not verify the state root in
+/// off-pivot block, we cannot guarantee the correctness of state root in pivot
+/// block. Of course, one may argue that you can switch pivot chain when
+/// incorrect state root in pivot block is observed. However, this makes the
+/// check for the correct parent selection rely on state root checking, which in
+/// turn will require state root verification on any blocks including off-pivot
+/// ones. This violates the original goal to save cost of verification of state
+/// root in off-pivot blocks.
+///
+/// We therefore allow incorrect state root in pivot block header, and use the
+/// blaming mechanism to enable the proof generation of the correct state root.
+/// A full/archive node verifies the deferred state root and the blaming
+/// information stored in the header of each pivot block. It blames the blocks
+/// with incorrect information and stores the blaming result in the header of
+/// the newly mined block. The blaming result is simply a count which represents
+/// the distance (in the number of blocks) between the last correct block on the
+/// pivot chain and the newly mined block. For example, consider the blocks
+/// Bi-1, Bi, Bi+1, Bi+2, Bi+3. Assume the blaming count in Bi+3 is 2.
+/// This means when Bi+3 was mined, the node thinks Bi's information is correct,
+/// while the information in Bi+1 and Bi+2 are wrong. Therefore, the node
+/// recovers the true deferred state roots (DSR) of Bi+1, Bi+2, and Bi+3 by
+/// computing locally, and then computes the keccak hash of [DSRi+3, DSRi+2,
+/// DSRi+1] and stores the hash into the header of Bi+3 as its final deferred
+/// state root. A special case is if the blaming count is 0, the final deferred
+/// state root of the block is simply the original deferred state root, i.e.,
+/// DSRi+3 for block Bi+3 in the above case.
+///
+/// To provide proof of state root to light node (or a full node when it tries
+/// to recover from a checkpoint), the protocol goes through the following
+/// steps. Let's assume the verifier has a subtree of block headers which
+/// includes the block whose state root is to be verified.
+/// 1. The verifier node gets a merkle path whose merkle root corresponds
+/// to the state root after executing block Bi. Let's call it the path root
+/// which is to be verified.
+///
+/// 2. Assume deferred count is 2, the verifier node gets block header Bi+2
+/// whose deferred state root should be the state root of Bi.
+///
+/// 3. The verifier node locally searches for the first block whose information
+/// in header is correct, starting from block Bi+2 along with the pivot
+/// chain. The correctness of header information of a block is decided based
+/// on the ratio of the number of blamers in the subtree of the block. If the
+/// ratio is small enough, the information is correct. Assume the first such
+/// block is block Bj.
+///
+/// 4. The verifier then searches backward along the pivot chain from Bj for
+/// the block whose blaming count is larger than or equal to the distance
+/// between block Bi+2 and it. Let's call this block as Bk.
+///
+/// 5. The verifier asks the prover which is a full or archive node to get the
+/// deferred state root of block Bk and its DSR vector, i.e., [..., DSRi+2,
+/// ...].
+///
+/// 6. The verifier verifies the keccak hash of [..., DSRi+2, ...] equals
+/// to deferred state root of Bk, and then verifies that DSRi+2 equals to the
+/// path root of Bi.
 
 /// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
 /// each node has an internal index. This enables fast internal implementation
