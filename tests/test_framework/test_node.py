@@ -11,14 +11,11 @@ import os
 import re
 import subprocess
 import tempfile
-
 import requests
 import time
 import urllib.parse
 
 import eth_utils
-import urllib3
-from urllib3.exceptions import NewConnectionError
 
 from conflux.utils import get_nodeid, sha3, encode_int32
 from .authproxy import JSONRPCException
@@ -149,7 +146,7 @@ class TestNode:
         """Sets up an RPC connection to the conflux process. Returns False if unable to connect."""
         # Poll at a rate of four times per second
         poll_per_s = 4
-        for _ in range(poll_per_s * 10):
+        for _ in range(poll_per_s * self.rpc_timeout):
             if not self.remote and self.process.poll() is not None:
                 raise FailedToStartError(
                     self._node_msg(

@@ -14,7 +14,6 @@ import time
 import socket
 import threading
 
-
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
