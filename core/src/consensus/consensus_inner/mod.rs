@@ -1048,6 +1048,53 @@ impl ConsensusGraphInner {
         self.arena[me].era_block == self.arena[pivot].era_block
     }
 
+    fn collect_blockset_in_own_view_of_epoch_brutal(&mut self, pivot: usize) {
+        let mut path_to_genesis = Vec::new();
+        let mut parent = pivot;
+        while parent != NULL {
+            path_to_genesis.push(parent);
+            parent = self.arena[parent].parent;
+        }
+        path_to_genesis.reverse();
+        let mut visited = BitSet::with_capacity(self.arena.len() as u32);
+        for ancestor_arena_index in path_to_genesis {
+            if ancestor_arena_index != pivot {
+                for index in &self.arena[ancestor_arena_index]
+                    .data
+                    .blockset_in_own_view_of_epoch
+                {
+                    visited.add(*index as u32);
+                }
+                visited.add(ancestor_arena_index as u32);
+            } else {
+                let mut queue = VecDeque::new();
+                for referee in &self.arena[ancestor_arena_index].referees {
+                    if !visited.contains(*referee as u32) {
+                        visited.add(*referee as u32);
+                        queue.push_back(*referee);
+                    }
+                }
+                while let Some(index) = queue.pop_front() {
+                    self.arena[pivot]
+                        .data
+                        .blockset_in_own_view_of_epoch
+                        .insert(index);
+                    let parent = self.arena[index].parent;
+                    if !visited.contains(parent as u32) {
+                        visited.add(parent as u32);
+                        queue.push_back(parent);
+                    }
+                    for referee in &self.arena[index].referees {
+                        if !visited.contains(*referee as u32) {
+                            visited.add(*referee as u32);
+                            queue.push_back(*referee);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
         let parent = self.arena[pivot].parent;
         // This indicates `pivot` is partial_invalid and for partial invalid
@@ -1055,6 +1102,7 @@ impl ConsensusGraphInner {
         if parent != NULL && self.arena[parent].data.partial_invalid {
             return;
         }
+        let mut use_brutal_method = false;
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
         for referee in &self.arena[pivot].referees {
@@ -1074,8 +1122,10 @@ impl ConsensusGraphInner {
                     self.arena[index].data.max_epoch_in_other_views,
                 );
             }
+            let mut loop_cnt = 0;
 
             loop {
+                loop_cnt += 1;
                 assert!(parent != NULL);
 
                 if self.arena[parent].height
@@ -1097,6 +1147,11 @@ impl ConsensusGraphInner {
                 }
 
                 parent = self.arena[parent].parent;
+            }
+
+            if loop_cnt > EPOCH_IN_OTHER_VIEWS_GAP_BOUND {
+                use_brutal_method = true;
+                break;
             }
 
             if !in_old_epoch {
@@ -1125,6 +1180,12 @@ impl ConsensusGraphInner {
                     .insert(index);
             }
         }
+
+        if use_brutal_method {
+            self.arena[pivot].data.blockset_in_own_view_of_epoch.clear();
+            self.collect_blockset_in_own_view_of_epoch_brutal(pivot);
+        }
+
         let filtered_blockset = self.arena[pivot]
             .data
             .blockset_in_own_view_of_epoch
