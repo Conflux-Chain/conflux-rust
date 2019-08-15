@@ -240,13 +240,15 @@ impl Default for ConsensusGraphPivotData {
 /// the newly mined block. The blaming result is simply a count which represents
 /// the distance (in the number of blocks) between the last correct block on the
 /// pivot chain and the newly mined block. For example, consider the blocks
-/// Bi-1, Bi, Bi+1, Bi+2, Bi+3. Assume the blaming information in Bi+3 is 2.
+/// Bi-1, Bi, Bi+1, Bi+2, Bi+3. Assume the blaming count in Bi+3 is 2.
 /// This means when Bi+3 was mined, the node thinks Bi's information is correct,
 /// while the information in Bi+1 and Bi+2 are wrong. Therefore, the node
 /// recovers the true deferred state roots (DSR) of Bi+1, Bi+2, and Bi+3 by
 /// computing locally, and then computes the keccak hash of [DSRi+3, DSRi+2,
 /// DSRi+1] and stores the hash into the header of Bi+3 as its final deferred
-/// state root.
+/// state root. A special case is if the blaming count is 0, the final deferred
+/// state root of the block is simply the original deferred state root, i.e.,
+/// DSRi+3 for block Bi+3 in the above case.
 ///
 /// To provide proof of state root to light node (or a full node when it tries
 /// to recover from a checkpoint), the protocol goes through the following
