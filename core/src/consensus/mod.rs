@@ -224,7 +224,7 @@ impl ConsensusGraph {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.best_state_epoch_number(),
+            EpochNumber::LatestState => self.executed_best_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.best_epoch_number() {
@@ -307,7 +307,8 @@ impl ConsensusGraph {
                 return Err("Latest mined epoch is not executed".into());
             }
             EpochNumber::Number(num) => {
-                let latest_state_epoch = self.best_state_epoch_number();
+                let latest_state_epoch =
+                    self.executed_best_state_epoch_number();
                 if *num > latest_state_epoch {
                     return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
                 }
@@ -467,8 +468,11 @@ impl ConsensusGraph {
         self.best_info.read_recursive().best_block_hash
     }
 
-    pub fn best_state_epoch_number(&self) -> u64 {
-        self.inner.read_recursive().best_state_epoch_number()
+    /// Returns the latest epoch with executed state.
+    pub fn executed_best_state_epoch_number(&self) -> u64 {
+        self.inner
+            .read_recursive()
+            .executed_best_state_epoch_number()
     }
 
     pub fn get_hash_from_epoch_number(

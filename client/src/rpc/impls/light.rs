@@ -40,12 +40,8 @@ impl RpcImpl {
     }
 
     fn epoch_to_height(&self, epoch: EpochNumber) -> Result<u64, String> {
-        // NOTE: The epoch returned by consensus.best_state_epoch_number() is
-        // not guaranteed to exist, so we use the previous one instead. This
-        // way, the block `best_with_state_root + DEFERRED_STATE_EPOCH_COUNT`
-        // exists and we can safely use its `deferred_state_root` field for
-        // state validation.
-        let best_with_state_root = self.consensus.best_state_epoch_number() - 1;
+        let best_with_state_root =
+            self.consensus.executed_best_state_epoch_number();
 
         match epoch {
             EpochNumber::Earliest => Ok(0),
