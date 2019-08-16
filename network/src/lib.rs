@@ -79,6 +79,9 @@ use std::{
     time::Duration,
 };
 
+pub const NODE_TAG_NODE_TYPE: &str = "node_type";
+pub const NODE_TAG_ARCHIVE: &str = "archive";
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkConfiguration {
     /// Directory path to store general network configuration. None means
@@ -96,11 +99,15 @@ pub struct NetworkConfiguration {
     /// Use provided node key instead of default
     pub use_secret: Option<Secret>,
     /// Maximum number of outgoing peers
-    pub max_outgoing_peers: u32,
+    pub max_outgoing_peers: usize,
+    /// Maximum number of outgoing connections to archive nodes. 0 represents
+    /// not required to connect to archive nodes. E.g. light node or full node
+    /// need not to connect to archive nodes.
+    pub max_outgoing_peers_archive: usize,
     /// Maximum number of incoming peers
     pub max_incoming_peers: usize,
     /// Maximum number of ongoing handshakes
-    pub max_handshakes: u32,
+    pub max_handshakes: usize,
     /// List of reserved node addresses.
     pub reserved_nodes: Vec<String>,
     /// IP filter
@@ -141,6 +148,7 @@ impl NetworkConfiguration {
             boot_nodes: Vec::new(),
             use_secret: None,
             max_outgoing_peers: 16,
+            max_outgoing_peers_archive: 0,
             max_incoming_peers: 32,
             max_handshakes: 64,
             reserved_nodes: Vec::new(),

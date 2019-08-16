@@ -102,7 +102,8 @@ impl ArchiveClient {
             WORKER_COMPUTATION_PARALLELISM,
         )));
 
-        let network_config = conf.net_config()?;
+        let mut network_config = conf.net_config()?;
+        network_config.max_outgoing_peers_archive = 8;
         let cache_config = conf.cache_config();
 
         let db_config = conf.db_config();
