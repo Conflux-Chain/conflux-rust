@@ -14,7 +14,7 @@ use mio::net::TcpStream;
 use parking_lot::RwLock;
 use slab::Slab;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -31,6 +31,7 @@ pub struct SessionManager {
     cur_ingress_sessions: AtomicUsize,
     node_id_index: RwLock<HashMap<NodeId, usize>>,
     ip_limit: RwLock<Box<SessionIpLimit>>,
+    tag_index: RwLock<SessionTagIndex>,
 }
 
 impl SessionManager {
@@ -45,6 +46,7 @@ impl SessionManager {
             cur_ingress_sessions: AtomicUsize::new(0),
             node_id_index: RwLock::new(HashMap::new()),
             ip_limit: RwLock::new(new_session_ip_limit(ip_limit_config)),
+            tag_index: Default::default(),
         }
     }
 
@@ -62,6 +64,14 @@ impl SessionManager {
 
     pub fn all(&self) -> Vec<Arc<RwLock<Session>>> {
         self.sessions.read().iter().map(|s| s.clone()).collect()
+    }
+
+    pub fn add_tag(&self, idx: usize, key: String, value: String) {
+        self.tag_index.write().add(idx, key, value);
+    }
+
+    pub fn count_with_tag(&self, key: &String, value: &String) -> usize {
+        self.tag_index.read().count_with_tag(key, value)
     }
 
     /// Retrieves the session count of handshakes, egress and ingress.
@@ -189,6 +199,8 @@ impl SessionManager {
                 self.cur_ingress_sessions.fetch_sub(1, Ordering::Relaxed);
             }
 
+            self.tag_index.write().remove(session.token());
+
             debug!("SessionManager.remove: session removed");
         }
 
@@ -223,5 +235,135 @@ impl SessionManager {
         debug!("SessionManager.update_ingress_node_id: leave");
 
         Ok(())
+    }
+}
+
+#[derive(Default)]
+struct SessionTagIndex {
+    tag_key_to_value_to_sessions:
+        HashMap<String, HashMap<String, HashSet<usize>>>,
+    session_to_tags: HashMap<usize, HashMap<String, String>>,
+}
+
+impl SessionTagIndex {
+    fn remove(&mut self, idx: usize) -> Option<()> {
+        let tags = self.session_to_tags.remove(&idx)?;
+
+        for (key, value) in tags {
+            assert!(self.remove_with_tag(idx, &key, &value).is_some());
+        }
+
+        Some(())
+    }
+
+    fn remove_with_tag(
+        &mut self, idx: usize, key: &String, value: &String,
+    ) -> Option<()> {
+        let value_to_sessions =
+            self.tag_key_to_value_to_sessions.get_mut(key)?;
+        let sessions = value_to_sessions.get_mut(value)?;
+
+        if !sessions.remove(&idx) {
+            return None;
+        }
+
+        if sessions.is_empty() {
+            value_to_sessions.remove(value);
+        }
+
+        if value_to_sessions.is_empty() {
+            self.tag_key_to_value_to_sessions.remove(key);
+        }
+
+        Some(())
+    }
+
+    fn add(&mut self, idx: usize, key: String, value: String) {
+        let removed_tag_value = self
+            .session_to_tags
+            .entry(idx)
+            .or_insert_with(|| Default::default())
+            .insert(key.clone(), value.clone());
+
+        if let Some(removed_tag_value) = removed_tag_value {
+            if &removed_tag_value == &value {
+                return;
+            }
+
+            assert!(self
+                .remove_with_tag(idx, &key, &removed_tag_value)
+                .is_some());
+        }
+
+        assert!(self
+            .tag_key_to_value_to_sessions
+            .entry(key)
+            .or_insert_with(|| Default::default())
+            .entry(value)
+            .or_insert_with(|| Default::default())
+            .insert(idx));
+    }
+
+    fn count_with_tag(&self, key: &String, value: &String) -> usize {
+        match self.tag_key_to_value_to_sessions.get(key) {
+            Some(value_to_sessions) => match value_to_sessions.get(value) {
+                Some(sessions) => sessions.len(),
+                None => 0,
+            },
+            None => 0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::session_manager::SessionTagIndex;
+
+    #[test]
+    fn test_tag_index() {
+        let mut index = SessionTagIndex::default();
+
+        let k1: String = "k1".into();
+        let k2: String = "k2".into();
+        let v1: String = "v1".into();
+        let v2: String = "v2".into();
+
+        // empty
+        assert_eq!(index.count_with_tag(&k1, &v1), 0);
+
+        // add session 5 with tag <k1, v1>
+        index.add(5, k1.clone(), v1.clone());
+        assert_eq!(index.count_with_tag(&k1, &v1), 1);
+
+        // duplicate
+        index.add(5, k1.clone(), v1.clone());
+        assert_eq!(index.count_with_tag(&k1, &v1), 1);
+
+        // add session 8 with tag <k1, v1>
+        index.add(8, k1.clone(), v1.clone());
+        assert_eq!(index.count_with_tag(&k1, &v1), 2);
+
+        // update session 5, change tag <k1, v1> to <k1, v2>
+        index.add(5, k1.clone(), v2.clone());
+        assert_eq!(index.count_with_tag(&k1, &v1), 1);
+        assert_eq!(index.count_with_tag(&k1, &v2), 1);
+
+        // update session 8, add tag <k2, v1>
+        index.add(8, k2.clone(), v1.clone());
+        assert_eq!(index.count_with_tag(&k1, &v1), 1);
+        assert_eq!(index.count_with_tag(&k1, &v2), 1);
+        assert_eq!(index.count_with_tag(&k2, &v1), 1);
+
+        // remove session 5
+        index.remove(5);
+        assert_eq!(index.count_with_tag(&k1, &v1), 1);
+        assert_eq!(index.count_with_tag(&k1, &v2), 0);
+        assert_eq!(index.count_with_tag(&k2, &v1), 1);
+
+        // remove session 8
+        index.remove(8);
+        assert_eq!(index.count_with_tag(&k1, &v1), 0);
+        assert_eq!(index.count_with_tag(&k1, &v2), 0);
+        assert_eq!(index.count_with_tag(&k2, &v1), 0);
     }
 }
