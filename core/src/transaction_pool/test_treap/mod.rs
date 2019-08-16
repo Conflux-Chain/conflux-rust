@@ -203,7 +203,7 @@ fn test_insert_remove_query_random() {
         let operation = match operation_rng.gen::<u32>() % 6 {
             0 => Operation::Len,
             1 => Operation::ContainsKey,
-            2...3 => Operation::Insert,
+            2..=3 => Operation::Insert,
             4 => Operation::GetByWeight,
             5 => Operation::Remove,
             _ => panic!(),

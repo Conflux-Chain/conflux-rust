@@ -194,7 +194,7 @@ impl SnapshotDbSqlite {
             let base_mpt = old_snapshot_db.open_snapshot_mpt_read_only();
             let mut save_as_mpt = self.open_snapshot_mpt_for_write();
             let mut mpt_merger = MptMerger::new(
-                Some(&base_mpt as &SnapshotMptTraitReadOnly),
+                Some(&base_mpt as &dyn SnapshotMptTraitReadOnly),
                 &mut save_as_mpt as &mut dyn SnapshotMptTraitSingleWriter,
             );
             mpt_merger.merge(delta_mpt)

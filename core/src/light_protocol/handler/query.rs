@@ -139,7 +139,7 @@ impl QueryHandler {
     }
 
     pub(super) fn on_state_root(
-        &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateRootResponse = rlp.as_val()?;
         info!("on_state_root resp={:?}", resp);
@@ -157,7 +157,7 @@ impl QueryHandler {
     }
 
     pub(super) fn on_state_entry(
-        &self, _io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateEntryResponse = rlp.as_val()?;
         info!("on_state_entry resp={:?}", resp);
@@ -188,7 +188,7 @@ impl QueryHandler {
 
     /// Send `req` to `peer` and wait for result.
     pub fn execute<T>(
-        &self, io: &NetworkContext, peer: PeerId, mut req: T,
+        &self, io: &dyn NetworkContext, peer: PeerId, mut req: T,
     ) -> Result<QueryResult, Error>
     where T: Message + HasRequestId + Clone + 'static {
         // set request id

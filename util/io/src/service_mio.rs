@@ -60,7 +60,7 @@ where Message: Send + Sized
     Shutdown,
     /// Register a new protocol handler.
     AddHandler {
-        handler: Arc<IoHandler<Message> + Send>,
+        handler: Arc<dyn IoHandler<Message> + Send>,
     },
     RemoveHandler {
         handler_id: HandlerId,
@@ -235,7 +235,7 @@ pub struct IoManager<Message>
 where Message: Send + Sync
 {
     timers: Arc<RwLock<HashMap<HandlerId, UserTimer>>>,
-    handlers: Arc<RwLock<Slab<Arc<IoHandler<Message>>>>>,
+    handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
     workers: Vec<Worker>,
     worker_channel: chase_lev::Worker<Work<Message>>,
     work_ready: Arc<SCondvar>,
@@ -248,7 +248,7 @@ where Message: Send + Sync + 'static
     /// Creates a new instance and registers it with the event loop.
     pub fn start(
         event_loop: &mut EventLoop<IoManager<Message>>,
-        handlers: Arc<RwLock<Slab<Arc<IoHandler<Message>>>>>,
+        handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
     ) -> Result<(), IoError>
     {
         let (worker, stealer) = chase_lev::deque();
@@ -496,8 +496,8 @@ where Message: Send + Sync + 'static
 enum Handlers<Message>
 where Message: Send
 {
-    SharedCollection(Weak<RwLock<Slab<Arc<IoHandler<Message>>>>>),
-    Single(Weak<IoHandler<Message>>),
+    SharedCollection(Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>),
+    Single(Weak<dyn IoHandler<Message>>),
 }
 
 impl<Message: Send> Clone for Handlers<Message> {
@@ -587,7 +587,9 @@ where Message: Send + Sync + 'static
     }
 
     /// Create a new synchronous channel to a given handler.
-    pub fn to_handler(handler: Weak<IoHandler<Message>>) -> IoChannel<Message> {
+    pub fn to_handler(
+        handler: Weak<dyn IoHandler<Message>>,
+    ) -> IoChannel<Message> {
         IoChannel {
             channel: None,
             handlers: Handlers::Single(handler),
@@ -596,7 +598,7 @@ where Message: Send + Sync + 'static
 
     fn new(
         channel: Sender<IoMessage<Message>>,
-        handlers: Weak<RwLock<Slab<Arc<IoHandler<Message>>>>>,
+        handlers: Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
     ) -> IoChannel<Message>
     {
         IoChannel {
@@ -613,7 +615,7 @@ where Message: Send + Sync + 'static
 {
     thread: Mutex<Option<JoinHandle<()>>>,
     host_channel: Mutex<Sender<IoMessage<Message>>>,
-    handlers: Arc<RwLock<Slab<Arc<IoHandler<Message>>>>>,
+    handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
 }
 
 impl<Message> IoService<Message>
@@ -660,7 +662,7 @@ where Message: Send + Sync + 'static
 
     /// Regiter an IO handler with the event loop.
     pub fn register_handler(
-        &self, handler: Arc<IoHandler<Message> + Send>,
+        &self, handler: Arc<dyn IoHandler<Message> + Send>,
     ) -> Result<(), IoError> {
         self.host_channel
             .lock()

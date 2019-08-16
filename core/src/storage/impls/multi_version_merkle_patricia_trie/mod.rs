@@ -19,7 +19,7 @@ pub struct AtomicCommit {
 
 pub struct AtomicCommitTransaction<
     'a,
-    Transaction: BorrowMut<KeyValueDbTransactionTrait>,
+    Transaction: BorrowMut<dyn KeyValueDbTransactionTrait>,
 > {
     pub info: MutexGuard<'a, AtomicCommit>,
     pub transaction: Transaction,
@@ -45,7 +45,7 @@ pub struct MultiVersionMerklePatriciaTrie {
     /// should think more about roots in disk db.)
     node_memory_manager: NodeMemoryManagerDeltaMpt,
     /// This db access is read only. // FIXME: pub
-    db: Arc<KeyValueDbTraitTransactionalDyn + Send + Sync>,
+    db: Arc<dyn KeyValueDbTraitTransactionalDyn + Send + Sync>,
     /// The padding is uniquely generated for each DeltaMPT, and it's used to
     /// compute padding bytes for address and storage_key. The padding setup
     /// is against an attack where adversary artificially build deep paths in
@@ -87,7 +87,7 @@ impl MultiVersionMerklePatriciaTrie {
     }
 
     pub fn new(
-        kvdb: Arc<KeyValueDbTraitTransactionalDyn + Send + Sync>,
+        kvdb: Arc<dyn KeyValueDbTraitTransactionalDyn + Send + Sync>,
         conf: StorageConfiguration, padding: KeyPadding,
         snapshot_root: MerkleHash, storage_manager: Arc<StorageManager>,
     ) -> Self

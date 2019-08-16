@@ -22,14 +22,14 @@ pub trait Meter: Send + Sync {
     fn rate5(&self) -> f64 { 0.0 }
     fn rate15(&self) -> f64 { 0.0 }
     fn rate_mean(&self) -> f64 { 0.0 }
-    fn snapshot(&self) -> Arc<Meter> { Arc::new(MeterSnapshot::default()) }
+    fn snapshot(&self) -> Arc<dyn Meter> { Arc::new(MeterSnapshot::default()) }
     fn stop(&self) {}
 }
 
 struct NoopMeter;
 impl Meter for NoopMeter {}
 
-pub fn register_meter(name: &'static str) -> Arc<Meter> {
+pub fn register_meter(name: &'static str) -> Arc<dyn Meter> {
     if !is_enabled() {
         return Arc::new(NoopMeter);
     }
@@ -45,7 +45,7 @@ pub fn register_meter(name: &'static str) -> Arc<Meter> {
 
 pub fn register_meter_with_group(
     group: &'static str, name: &'static str,
-) -> Arc<Meter> {
+) -> Arc<dyn Meter> {
     if !is_enabled() {
         return Arc::new(NoopMeter);
     }
@@ -85,7 +85,7 @@ impl Meter for MeterSnapshot {
 
     fn rate_mean(&self) -> f64 { f64::from_bits(self.rates[3]) }
 
-    fn snapshot(&self) -> Arc<Meter> { Arc::new(self.clone()) }
+    fn snapshot(&self) -> Arc<dyn Meter> { Arc::new(self.clone()) }
 }
 
 pub struct StandardMeter {
@@ -149,7 +149,9 @@ impl Meter for StandardMeter {
 
     fn rate_mean(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[3]) }
 
-    fn snapshot(&self) -> Arc<Meter> { Arc::new(self.snapshot.read().clone()) }
+    fn snapshot(&self) -> Arc<dyn Meter> {
+        Arc::new(self.snapshot.read().clone())
+    }
 
     fn stop(&self) {
         if !self.stopped.compare_and_swap(false, true, ORDER) {
@@ -203,7 +205,7 @@ impl Default for MeterArbiter {
 
 /// A struct used to measure time in metrics.
 pub struct MeterTimer {
-    meter: &'static Meter,
+    meter: &'static dyn Meter,
     start: Instant,
 }
 
@@ -211,7 +213,7 @@ impl MeterTimer {
     /// Call this to measure the time to run to the end of the current scope.
     /// It will add the time from the function called till the returned
     /// instance is dropped to `meter`.
-    pub fn time_func(meter: &'static Meter) -> Self {
+    pub fn time_func(meter: &'static dyn Meter) -> Self {
         Self {
             meter,
             start: Instant::now(),

@@ -100,7 +100,7 @@ pub struct SnapshotChunkSync {
 impl StateSync for SnapshotChunkSync {
     fn start(
         &self, checkpoint: H256, trusted_blame_block: H256,
-        io: &NetworkContext, sync_handler: &SynchronizationProtocolHandler,
+        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
     )
     {
         let mut inner = self.inner.write();

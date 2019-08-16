@@ -17,13 +17,13 @@ pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
 pub const TIME_WINDOW: u64 = 100;
 
 lazy_static! {
-    static ref TX_POOL_RECALCULATE: Arc<Meter> =
+    static ref TX_POOL_RECALCULATE: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::recalculate");
-    static ref TX_POOL_INNER_INSERT_TIMER: Arc<Meter> =
+    static ref TX_POOL_INNER_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::inner_insert");
-    static ref TX_POOL_INNER_FAILED_GARBAGE_COLLECTED: Arc<Meter> =
+    static ref TX_POOL_INNER_FAILED_GARBAGE_COLLECTED: Arc<dyn Meter> =
         register_meter_with_group("txpool", "failed_garbage_collected");
-    static ref DEFERRED_POOL_INNER_INSERT: Arc<Meter> =
+    static ref DEFERRED_POOL_INNER_INSERT: Arc<dyn Meter> =
         register_meter_with_group("timer", "deferred_pool::inner_insert");
 }
 

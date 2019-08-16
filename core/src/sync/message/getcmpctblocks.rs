@@ -25,9 +25,9 @@ pub struct GetCompactBlocks {
 }
 
 impl Request for GetCompactBlocks {
-    fn as_message(&self) -> &Message { self }
+    fn as_message(&self) -> &dyn Message { self }
 
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
@@ -47,7 +47,7 @@ impl Request for GetCompactBlocks {
 
     fn is_empty(&self) -> bool { self.hashes.is_empty() }
 
-    fn resend(&self) -> Option<Box<Request>> {
+    fn resend(&self) -> Option<Box<dyn Request>> {
         Some(Box::new(GetBlocks {
             request_id: 0,
             with_public: true,

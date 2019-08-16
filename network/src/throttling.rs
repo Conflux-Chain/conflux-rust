@@ -13,7 +13,7 @@ use std::sync::Arc;
 lazy_static! {
     pub static ref THROTTLING_SERVICE: RwLock<Service> =
         RwLock::new(Service::new());
-    static ref QUEUE_SIZE_GAUGE: Arc<Gauge<usize>> =
+    static ref QUEUE_SIZE_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register("network_throttling_queue_size");
 }
 

@@ -36,7 +36,7 @@ impl Factory {
     /// Might choose implementation depending on supplied gas.
     pub fn create(
         &self, params: ActionParams, spec: &Spec, depth: usize,
-    ) -> Box<Exec> {
+    ) -> Box<dyn Exec> {
         match self.evm {
             VMType::Interpreter => {
                 if Self::can_fit_in_usize(&params.gas) {

@@ -39,7 +39,7 @@ use std::{
 };
 
 lazy_static! {
-    static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Meter> =
+    static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "consensus_on_new_block_timer");
 }
 

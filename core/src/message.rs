@@ -26,7 +26,7 @@ macro_rules! build_msgid {
 }
 
 pub trait Message: Send + Sync + Encodable {
-    fn as_any(&self) -> &Any;
+    fn as_any(&self) -> &dyn Any;
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
     fn msg_id(&self) -> MsgId;
@@ -34,13 +34,13 @@ pub trait Message: Send + Sync + Encodable {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
     fn send(
-        &self, io: &NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<usize, NetworkError> {
         self.send_with_throttling(io, peer, false)
     }
 
     fn send_with_throttling(
-        &self, io: &NetworkContext, peer: PeerId, throttling_disabled: bool,
+        &self, io: &dyn NetworkContext, peer: PeerId, throttling_disabled: bool,
     ) -> Result<usize, NetworkError> {
         if !throttling_disabled && self.is_size_sensitive() {
             if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
@@ -72,7 +72,7 @@ pub trait Message: Send + Sync + Encodable {
 macro_rules! build_msg_impl {
     ($name:ident, $msg:expr, $name_str:literal) => {
         impl Message for $name {
-            fn as_any(&self) -> &Any { self }
+            fn as_any(&self) -> &dyn Any { self }
 
             fn msg_id(&self) -> MsgId { $msg }
 

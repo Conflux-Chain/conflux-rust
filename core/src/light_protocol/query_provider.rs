@@ -129,7 +129,7 @@ impl QueryProvider {
 
     #[rustfmt::skip]
     fn dispatch_message(
-        &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
@@ -197,7 +197,7 @@ impl QueryProvider {
     }
 
     fn send_status(
-        &self, io: &NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
         let best_info = self.consensus.get_best_info();
         let genesis_hash = self.consensus.data_man.true_genesis_block.hash();
@@ -243,7 +243,7 @@ impl QueryProvider {
     }
 
     fn on_status(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let status: StatusPing = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
@@ -264,7 +264,7 @@ impl QueryProvider {
     }
 
     fn on_get_state_root(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetStateRoot = rlp.as_val()?;
         info!("on_get_state_root req={:?}", req);
@@ -284,7 +284,7 @@ impl QueryProvider {
     }
 
     fn on_get_state_entry(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetStateEntry = rlp.as_val()?;
         info!("on_get_state_entry req={:?}", req);
@@ -309,7 +309,7 @@ impl QueryProvider {
     }
 
     fn on_get_block_hashes_by_epoch(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetBlockHashesByEpoch = rlp.as_val()?;
         info!("on_get_block_hashes_by_epoch req={:?}", req);
@@ -333,7 +333,7 @@ impl QueryProvider {
     }
 
     fn on_get_block_headers(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetBlockHeaders = rlp.as_val()?;
         info!("on_get_block_headers req={:?}", req);
@@ -356,7 +356,7 @@ impl QueryProvider {
     }
 
     fn on_send_raw_tx(
-        &self, _io: &NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, _io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: SendRawTx = rlp.as_val()?;
         info!("on_send_raw_tx req={:?}", req);
@@ -391,8 +391,10 @@ impl QueryProvider {
     }
 
     fn broadcast(
-        &self, io: &NetworkContext, mut peers: Vec<PeerId>, msg: &Message,
-    ) -> Result<(), Error> {
+        &self, io: &dyn NetworkContext, mut peers: Vec<PeerId>,
+        msg: &dyn Message,
+    ) -> Result<(), Error>
+    {
         info!("broadcast peers={:?}", peers);
 
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
@@ -446,9 +448,9 @@ impl QueryProvider {
 }
 
 impl NetworkProtocolHandler for QueryProvider {
-    fn initialize(&self, _io: &NetworkContext) {}
+    fn initialize(&self, _io: &dyn NetworkContext) {}
 
-    fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
         trace!("on_message: peer={:?}, raw={:?}", peer, raw);
 
         if raw.len() < 2 {
@@ -469,19 +471,19 @@ impl NetworkProtocolHandler for QueryProvider {
         }
     }
 
-    fn on_peer_connected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: PeerId) {
         info!("on_peer_connected: peer={:?}", peer);
 
         // insert handshaking peer, wait for StatusPing
         self.peers.insert(peer);
     }
 
-    fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: PeerId) {
         info!("on_peer_disconnected: peer={:?}", peer);
         self.peers.remove(&peer);
     }
 
-    fn on_timeout(&self, _io: &NetworkContext, _timer: TimerToken) {
+    fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {
         // EMPTY
     }
 }

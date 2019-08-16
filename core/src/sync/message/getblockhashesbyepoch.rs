@@ -23,9 +23,9 @@ pub struct GetBlockHashesByEpoch {
 }
 
 impl Request for GetBlockHashesByEpoch {
-    fn as_message(&self) -> &Message { self }
+    fn as_message(&self) -> &dyn Message { self }
 
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.headers_request_timeout
@@ -46,7 +46,9 @@ impl Request for GetBlockHashesByEpoch {
 
     fn is_empty(&self) -> bool { self.epochs.is_empty() }
 
-    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
+    fn resend(&self) -> Option<Box<dyn Request>> {
+        Some(Box::new(self.clone()))
+    }
 }
 
 impl Handleable for GetBlockHashesByEpoch {

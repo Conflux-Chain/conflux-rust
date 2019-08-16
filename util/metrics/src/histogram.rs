@@ -17,7 +17,7 @@ pub trait Histogram: Send + Sync {
     fn mean(&self) -> f64 { 0.0 }
     fn min(&self) -> usize { 0 }
     fn percentile(&self, _p: f64) -> usize { 0 }
-    fn snapshot(&self) -> Arc<Histogram> { Arc::new(Snapshot::default()) }
+    fn snapshot(&self) -> Arc<dyn Histogram> { Arc::new(Snapshot::default()) }
     fn stddev(&self) -> f64 { self.variance().sqrt() }
     fn sum(&self) -> usize { 0 }
     fn update(&self, _v: usize) {}
@@ -32,7 +32,7 @@ pub enum Sample {
 impl Sample {
     pub fn register(
         &self, name: &'static str, reservoir_size: usize,
-    ) -> Arc<Histogram> {
+    ) -> Arc<dyn Histogram> {
         if !is_enabled() {
             return Arc::new(NoopHistogram);
         }
@@ -60,7 +60,7 @@ impl Sample {
 
     pub fn register_with_group(
         &self, group: &'static str, name: &'static str, reservoir_size: usize,
-    ) -> Arc<Histogram> {
+    ) -> Arc<dyn Histogram> {
         if !is_enabled() {
             return Arc::new(NoopHistogram);
         }
@@ -117,7 +117,7 @@ impl Histogram for Snapshot {
 
     fn percentile(&self, p: f64) -> usize { sample_percentile(&self.values, p) }
 
-    fn snapshot(&self) -> Arc<Histogram> { Arc::new(self.clone()) }
+    fn snapshot(&self) -> Arc<dyn Histogram> { Arc::new(self.clone()) }
 
     fn sum(&self) -> usize { self.values.iter().sum() }
 
@@ -184,7 +184,9 @@ impl Histogram for UniformSample {
         sample_percentile(&data.values, p)
     }
 
-    fn snapshot(&self) -> Arc<Histogram> { Arc::new(self.data.read().clone()) }
+    fn snapshot(&self) -> Arc<dyn Histogram> {
+        Arc::new(self.data.read().clone())
+    }
 
     fn sum(&self) -> usize { self.data.read().sum() }
 
@@ -281,7 +283,7 @@ impl Histogram for ExpDecaySample {
         sample_percentile(&values, p)
     }
 
-    fn snapshot(&self) -> Arc<Histogram> {
+    fn snapshot(&self) -> Arc<dyn Histogram> {
         let data = self.data.read();
         let mut values: Vec<usize> =
             data.values.iter().map(|item| item.v).collect();

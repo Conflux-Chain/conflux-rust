@@ -34,7 +34,7 @@ struct PacketSizer;
 
 impl PacketSizerTrait for PacketSizer {
     fn packet_size(raw_packet: &Bytes) -> usize {
-        let buf = &mut raw_packet.into_buf() as &mut Buf;
+        let buf = &mut raw_packet.into_buf() as &mut dyn Buf;
         if buf.remaining() >= 3 {
             let size = buf.get_uint_le(3) as usize;
             if buf.remaining() >= size {
