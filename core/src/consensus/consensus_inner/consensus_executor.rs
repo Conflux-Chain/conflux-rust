@@ -514,11 +514,19 @@ impl ConsensusExecutor {
         // We go up and find all states whose execution_infos are missing
         waiting_blocks =
             self.collect_blocks_missing_execution_info(me, inner)?;
+        trace!(
+            "wait_and_compute_execution_info_locked: waiting_blocks={:?}",
+            waiting_blocks
+        );
         let mut waiting_result = Vec::new();
         for (cur_hash_opt, state_block_hash) in waiting_blocks {
             let res = self.wait_for_result(state_block_hash);
             waiting_result.push((cur_hash_opt, res));
         }
+        trace!(
+            "wait_and_compute_execution_info_locked: waiting_result={:?}",
+            waiting_result
+        );
         // Now we need to wait for the execution information of all missing
         // blocks to come back
         self.compute_execution_info_for_blocks(waiting_result, inner)?;

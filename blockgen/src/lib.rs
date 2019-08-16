@@ -8,7 +8,7 @@ use cfxcore::{
     SharedSynchronizationGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use primitives::*;
 use std::{
@@ -274,6 +274,13 @@ impl BlockGenerator {
                 block_gas_limit,
                 additional_transactions,
             );
+
+        for tx in &transactions {
+            let tx_hash = tx.hash();
+            if tx_hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in packing block", tx_hash);
+            }
+        }
 
         let (
             blame,

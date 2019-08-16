@@ -19,7 +19,7 @@ use std::{
         Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6,
         ToSocketAddrs,
     },
-    path::PathBuf,
+    path::{Path, PathBuf},
     slice,
     str::FromStr,
     time::{self, Duration, SystemTime},
@@ -317,8 +317,6 @@ impl Hash for Node {
 }
 
 const MAX_NODES: usize = 4096;
-const TRUSTED_NODES_FILE: &str = "trusted_nodes.json";
-const UNTRUSTED_NODES_FILE: &str = "untrusted_nodes.json";
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter)]
 enum NodeReputation {
@@ -343,18 +341,22 @@ pub struct NodeTable {
     /// Map node id to the reputation level and the index in the above table
     node_index: HashMap<NodeId, NodeReputationIndex>,
     useless_nodes: HashSet<NodeId>,
-    path: Option<String>,
-    trusted: bool,
+    path: Option<PathBuf>,
 }
 
 impl NodeTable {
-    pub fn new(path: Option<String>, trusted: bool) -> NodeTable {
+    pub fn new(dir: Option<String>, filename: &str) -> NodeTable {
+        let path = dir.and_then(|dir| {
+            let mut buf = PathBuf::from(dir);
+            buf.push(filename);
+            Some(buf)
+        });
+
         let mut node_table = NodeTable {
             node_reputation_table: EnumMap::default(),
             node_index: HashMap::new(),
-            path: path.clone(),
+            path,
             useless_nodes: HashSet::new(),
-            trusted,
         };
 
         node_table.load_from_file();
@@ -374,19 +376,12 @@ impl NodeTable {
     }
 
     fn load_from_file(&mut self) {
-        let path = self.path.clone();
-        let path = match path {
-            Some(path) => {
-                if self.trusted {
-                    PathBuf::from(path).join(TRUSTED_NODES_FILE)
-                } else {
-                    PathBuf::from(path).join(UNTRUSTED_NODES_FILE)
-                }
-            }
+        let path = match self.path {
+            Some(ref path) => path,
             None => return,
         };
 
-        let file = match fs::File::open(&path) {
+        let file = match fs::File::open(path) {
             Ok(file) => file,
             Err(e) => {
                 debug!("node table file not found: {:?}", e);
@@ -778,19 +773,18 @@ impl NodeTable {
 
     /// Save the (un)trusted_nodes.json file.
     pub fn save(&self) {
-        let mut path = match self.path {
-            Some(ref path) => PathBuf::from(path),
+        let path = match self.path {
+            Some(ref path) => Path::new(path),
             None => return,
         };
-        if let Err(e) = fs::create_dir_all(&path) {
-            warn!("Error creating node table directory: {:?}", e);
-            return;
+
+        if let Some(dir) = path.parent() {
+            if let Err(e) = fs::create_dir_all(dir) {
+                warn!("Error creating node table directory: {:?}", e);
+                return;
+            }
         }
-        if self.trusted {
-            path.push(TRUSTED_NODES_FILE);
-        } else {
-            path.push(UNTRUSTED_NODES_FILE);
-        }
+
         let node_ids = self.nodes(&IpFilter::default());
         let nodes = node_ids
             .into_iter()

@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import tempfile
+import requests
 import time
 import urllib.parse
 
@@ -152,7 +153,7 @@ class TestNode:
                         'conflux exited with status {} during initialization'.
                         format(self.process.returncode)))
             try:
-                self.rpc = get_rpc_proxy(
+                self.rpc = get_simple_rpc_proxy(
                     rpc_url(self.index, self.rpchost, self.rpcport),
                     self.index,
                     timeout=self.rpc_timeout)
@@ -162,6 +163,9 @@ class TestNode:
                 self.url = self.rpc.url
                 self.log.debug("RPC successfully started")
                 return
+            except requests.exceptions.ConnectionError as e:
+                # TODO check if it's ECONNREFUSED`
+                pass
             except IOError as e:
                 if e.errno != errno.ECONNREFUSED:  # Port not yet open?
                     raise  # unknown IO error
@@ -175,17 +179,21 @@ class TestNode:
         self._raise_assertion_error("failed to get RPC proxy: index = {}, ip = {}, rpchost = {}, p2pport={}, rpcport = {}, rpc_url = {}".format(
             self.index, self.ip, self.rpchost, self.port, self.rpcport, rpc_url(self.index, self.rpchost, self.rpcport)
         ))
-    
+
     def wait_for_recovery(self, wait_time):
+        self.wait_for_phase(["NormalSyncPhase", "CatchUpSyncBlockPhase"], wait_time=wait_time)
+
+    def wait_for_phase(self, phases, wait_time=10):
         sleep_time = 0.1
         retry = 0
         max_retry = wait_time / sleep_time
-        while self.current_sync_phase() not in ["NormalSyncPhase", "CatchUpSyncBlockPhase"] and retry <= max_retry:
+
+        while self.current_sync_phase() not in phases and retry <= max_retry:
             time.sleep(0.1)
             retry += 1
+
         if retry > max_retry:
-            raise AssertionError("Node {} not recovered to normal phase after {} seconds"
-                                    .format(self.index, wait_time))
+            raise AssertionError(f"Node did not reach any of {phases} after {wait_time} seconds")
 
     def wait_for_nodeid(self):
         pubkey, x, y = get_nodeid(self)

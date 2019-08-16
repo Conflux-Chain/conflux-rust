@@ -1,9 +1,9 @@
 use crate::{
-    ip::{bucket::NodeBucket, util::SubnetType},
+    ip::{bucket::NodeBucket, sample::SampleHashMap, util::SubnetType},
     node_database::NodeDatabase,
     node_table::NodeId,
 };
-use rand::{thread_rng, Rng};
+use rand::thread_rng;
 use std::{
     collections::{HashMap, HashSet},
     net::IpAddr,
@@ -31,10 +31,9 @@ pub enum ValidateInsertResult {
 #[derive(Debug)]
 pub struct NodeIpLimit {
     subnet_type: SubnetType,
-    subnet_quota: usize,               // quota for a subnet
-    evict_timeout: Duration,           // used to evict out-of-date node
-    buckets: Vec<NodeBucket>,          // one bucket for each subnet
-    subnet_index: HashMap<u32, usize>, // use HashMap + Vec for O(1) sample
+    subnet_quota: usize,     // quota for a subnet
+    evict_timeout: Duration, // used to evict out-of-date node
+    buckets: SampleHashMap<u32, NodeBucket>, // one bucket for each subnet
     ip_index: HashMap<IpAddr, NodeId>,
     node_index: HashMap<NodeId, IpAddr>,
 }
@@ -45,8 +44,7 @@ impl NodeIpLimit {
             subnet_type: SubnetType::C,
             subnet_quota,
             evict_timeout: DEFAULT_EVICT_TIMEOUT,
-            buckets: Vec::new(),
-            subnet_index: HashMap::new(),
+            buckets: Default::default(),
             ip_index: HashMap::new(),
             node_index: HashMap::new(),
         }
@@ -75,19 +73,14 @@ impl NodeIpLimit {
         self.ip_index.remove(&ip);
 
         let subnet = self.subnet_type.subnet(&ip);
-        let pos = self.subnet_index[&subnet];
-        let bucket = &mut self.buckets[pos];
+        let bucket = self
+            .buckets
+            .get_mut(&subnet)
+            .expect("node bucket should exist");
         bucket.remove(id);
 
         if bucket.count() == 0 {
-            // remove on empty
-            self.subnet_index.remove(&subnet);
-            self.buckets.swap_remove(pos);
-
-            // update the index of swapped bucket
-            if let Some(bucket) = self.buckets.get(pos) {
-                self.subnet_index.insert(bucket.subnet(), pos);
-            }
+            self.buckets.remove(&subnet);
         }
 
         true
@@ -108,9 +101,10 @@ impl NodeIpLimit {
         let mut rng = thread_rng();
 
         for _ in 0..n {
-            let index = rng.gen_range(0, self.buckets.len());
-            if let Some(node) = self.buckets[index].sample_trusted(&mut rng) {
-                sampled.insert(node);
+            if let Some(bucket) = self.buckets.sample(&mut rng) {
+                if let Some(id) = bucket.sample_trusted(&mut rng) {
+                    sampled.insert(id);
+                }
             }
         }
 
@@ -134,7 +128,7 @@ impl NodeIpLimit {
             return ValidateInsertResult::QuotaEnough;
         }
 
-        // node exists nd ip not changed.
+        // node exists and ip not changed.
         if let Some(cur_ip) = self.node_index.get(&id) {
             if cur_ip == ip {
                 return ValidateInsertResult::AlreadyExists;
@@ -204,27 +198,19 @@ impl NodeIpLimit {
         self.ip_index.insert(ip, id.clone());
 
         let subnet = self.subnet_type.subnet(&ip);
-
-        match self.subnet_index.get(&subnet) {
-            Some(pos) => {
-                assert!(self.buckets[*pos].count() < self.subnet_quota);
-                self.buckets[*pos].add(id, trusted);
-            }
-            None => {
-                self.subnet_index.insert(subnet, self.buckets.len());
-                let mut bucket = NodeBucket::new(subnet);
-                bucket.add(id, trusted);
-                self.buckets.push(bucket);
-            }
-        }
+        let bucket = self
+            .buckets
+            .get_mut_or_insert_with(subnet, || NodeBucket::default());
+        assert!(bucket.count() < self.subnet_quota);
+        bucket.add(id, trusted);
     }
 
     /// Check whether the subnet quota is enough for the specified IP address .
     fn is_quota_allowed(&self, ip: &IpAddr) -> bool {
         let subnet = self.subnet_type.subnet(ip);
 
-        match self.subnet_index.get(&subnet) {
-            Some(pos) => self.buckets[*pos].count() < self.subnet_quota,
+        match self.buckets.get(&subnet) {
+            Some(bucket) => bucket.count() < self.subnet_quota,
             None => return true,
         }
     }
@@ -232,8 +218,8 @@ impl NodeIpLimit {
     /// Select a node to evict.
     fn select_evictee(&self, ip: &IpAddr, db: &NodeDatabase) -> Option<NodeId> {
         let subnet = self.subnet_type.subnet(&ip);
-        let pos = self.subnet_index.get(&subnet)?;
-        self.buckets[*pos].select_evictee(db, self.evict_timeout)
+        let bucket = self.buckets.get(&subnet)?;
+        bucket.select_evictee(db, self.evict_timeout)
     }
 }
 

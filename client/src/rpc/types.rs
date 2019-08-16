@@ -17,10 +17,12 @@ mod status;
 mod transaction;
 mod uint;
 
+pub mod pubsub;
+
 pub use self::{
     account::Account,
     blame_info::BlameInfo,
-    block::{Block, BlockTransactions},
+    block::{Block, BlockTransactions, Header},
     bytes::Bytes,
     call_request::CallRequest,
     epoch_number::EpochNumber,

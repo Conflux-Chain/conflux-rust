@@ -290,7 +290,9 @@ impl RpcImpl {
 
     pub fn get_block_count(&self) -> RpcResult<u64> {
         info!("RPC Request: get_block_count()");
-        Ok(self.consensus.block_count())
+        let count = self.consensus.block_count();
+        info!("RPC Response: get_block_count={}", count);
+        Ok(count)
     }
 
     pub fn get_goodput(&self) -> RpcResult<isize> {

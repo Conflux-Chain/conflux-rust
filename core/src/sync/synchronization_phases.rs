@@ -431,11 +431,14 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             );
             *old_sync_inner = new_sync_inner;
 
-            self.graph.consensus.clear_block_count();
             self.graph
                 .statistics
                 .clear_sync_and_consensus_graph_statistics();
         }
+        self.graph
+            .consensus
+            .txpool
+            .notify_new_best_info(self.graph.consensus.best_info());
 
         self.recovered.store(false, AtomicOrdering::SeqCst);
         let recovered = self.recovered.clone();

@@ -197,6 +197,14 @@ impl Session {
                 let signed = &data[(32 + 65)..];
                 let signature = H520::from_slice(&data[32..(32 + 65)]);
                 let node_id = recover(&signature.into(), &keccak(signed))?;
+
+                // refuse incoming session if the node is blacklisted
+                if host.node_db.write().evaluate_blacklisted(&node_id) {
+                    return Err(
+                        self.send_disconnect(DisconnectReason::Blacklisted)
+                    );
+                }
+
                 if self.metadata.id.is_none() {
                     if let Err(reason) = host
                         .sessions

@@ -109,6 +109,13 @@ pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     match e.0 {
         ErrorKind::NoResponse
         | ErrorKind::InternalError
+
+        // NOTE: we should be tolerant of non-critical errors,
+        // e.g. do not disconnect on requesting non-existing epoch
+        | ErrorKind::Msg(_)
+
+        // NOTE: this can happen in normal scenarios
+        // where the pivot chain has not converged
         | ErrorKind::PivotHashMismatch
 
         // NOTE: in order to let other protocols run,
@@ -122,8 +129,7 @@ pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         ErrorKind::GenesisMismatch
         | ErrorKind::UnexpectedMessage
         | ErrorKind::UnexpectedPeerType
-        | ErrorKind::UnknownPeer
-        | ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
+        | ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
 
         ErrorKind::UnexpectedRequestId | ErrorKind::UnexpectedResponse => {
             op = Some(UpdateNodeOperation::Demotion)

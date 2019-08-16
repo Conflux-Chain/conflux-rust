@@ -10,6 +10,10 @@ use crate::{
 use io::StreamToken;
 use std::{collections::HashSet, net::IpAddr, time::Duration};
 
+const TRUSTED_NODES_FILE: &str = "trusted_nodes.json";
+const UNTRUSTED_NODES_FILE: &str = "untrusted_nodes.json";
+const BLACKLISTED_NODES_FILE: &str = "blacklisted_nodes.json";
+
 /// Node database maintains all P2P nodes in trusted and untrusted node tables,
 /// and supports to limit the number of nodes for the same IP address.
 ///
@@ -73,8 +77,22 @@ use std::{collections::HashSet, net::IpAddr, time::Duration};
 /// 2. Select node that has been contacted long time ago.
 /// 3. Randomly select one without "fresher" bias.
 pub struct NodeDatabase {
+    // Trusted nodes to establish outgoing connections.
+    // A trusted node comes in 2 ways:
+    // 1. Incoming TCP connection for a long time.
+    // 2. Received trusted neighbors from UDP discovery.
     trusted_nodes: NodeTable,
+
+    // Add or updated by incoming TCP connection or PING discovery message.
     untrusted_nodes: NodeTable,
+
+    // Blacklisted nodes are refused to connect or update via UDP discovery.
+    // Generally, node is blacklisted due to protocol mismatch in runtime.
+    blacklisted_nodes: NodeTable,
+    // Maximum duration to blacklist a node since last contact.
+    blacklisted_lifetime: Duration,
+
+    // IP address/subnet index for trusted and untrusted nodes.
     ip_limit: NodeIpLimit,
 
     // Only used for sampling trusted nodes with desired tag.
@@ -88,8 +106,9 @@ pub struct NodeDatabase {
 
 impl NodeDatabase {
     pub fn new(path: Option<String>, subnet_quota: usize) -> Self {
-        let trusted_nodes = NodeTable::new(path.clone(), true);
-        let untrusted_nodes = NodeTable::new(path.clone(), false);
+        let trusted_nodes = NodeTable::new(path.clone(), TRUSTED_NODES_FILE);
+        let untrusted_nodes =
+            NodeTable::new(path.clone(), UNTRUSTED_NODES_FILE);
         let ip_limit = NodeIpLimit::new(subnet_quota);
         let trusted_node_tag_index =
             NodeTagIndex::new_with_node_table(&trusted_nodes);
@@ -97,6 +116,8 @@ impl NodeDatabase {
         let mut db = NodeDatabase {
             trusted_nodes,
             untrusted_nodes,
+            blacklisted_nodes: NodeTable::new(path, BLACKLISTED_NODES_FILE),
+            blacklisted_lifetime: Duration::from_secs(7 * 24 * 3600),
             ip_limit,
             trusted_node_tag_index,
         };
@@ -112,6 +133,10 @@ impl NodeDatabase {
     pub fn insert_with_token(
         &mut self, entry: NodeEntry, stream_token: StreamToken,
     ) {
+        if self.evaluate_blacklisted(&entry.id) {
+            return;
+        }
+
         let mut node = Node::new(entry.id, entry.endpoint);
         node.last_contact = Some(NodeContact::success());
         node.last_connected = Some(NodeContact::success());
@@ -152,6 +177,10 @@ impl NodeDatabase {
     /// node with the specified `entry`, and promote the node to trusted if it
     /// is untrusted.
     pub fn insert_with_promotion(&mut self, entry: NodeEntry) {
+        if self.evaluate_blacklisted(&entry.id) {
+            return;
+        }
+
         let mut node = Node::new(entry.id, entry.endpoint);
         node.last_contact = Some(NodeContact::success());
 
@@ -195,6 +224,10 @@ impl NodeDatabase {
     /// Add a new trusted node if not exists, or promote the existing untrusted
     /// node.
     pub fn insert_trusted(&mut self, entry: NodeEntry) {
+        if self.evaluate_blacklisted(&entry.id) {
+            return;
+        }
+
         if self.trusted_nodes.contains(&entry.id) {
             return;
         }
@@ -249,6 +282,7 @@ impl NodeDatabase {
         })
     }
 
+    /// Get node from trusted/untrusted node tables for the specified id.
     pub fn get_with_trusty(&self, id: &NodeId) -> Option<(bool, &Node)> {
         if let Some(node) = self.trusted_nodes.get(id) {
             Some((true, node))
@@ -309,6 +343,8 @@ impl NodeDatabase {
 
         self.untrusted_nodes.save();
         self.untrusted_nodes.clear_useless();
+
+        self.blacklisted_nodes.save();
     }
 
     /// Promote untrusted nodes to trusted with the given duration.
@@ -347,18 +383,18 @@ impl NodeDatabase {
 
     /// Remove node from database for the specified id
     pub fn remove(&mut self, id: &NodeId) -> Option<Node> {
-        let node = if let Some(node) = self.trusted_nodes.remove_with_id(id) {
+        if let Some(node) = self.trusted_nodes.remove_with_id(id) {
             self.trusted_node_tag_index.remove_node(&node);
-            node
+            self.ip_limit.remove(id);
+            Some(node)
         } else if let Some(node) = self.untrusted_nodes.remove_with_id(id) {
-            node
+            self.ip_limit.remove(id);
+            Some(node)
+        } else if let Some(node) = self.blacklisted_nodes.remove_with_id(id) {
+            Some(node)
         } else {
-            return None;
-        };
-
-        self.ip_limit.remove(id);
-
-        Some(node)
+            None
+        }
     }
 
     fn init(&mut self, trusted: bool) {
@@ -459,13 +495,54 @@ impl NodeDatabase {
             value.into(),
         );
     }
+
+    /// Set the specified node to blacklisted.
+    pub fn set_blacklisted(&mut self, id: &NodeId) {
+        // update the last failure time
+        self.note_failure(id, true, false);
+
+        // move to blacklisted node table
+        if let Some(node) = self.remove(id) {
+            self.blacklisted_nodes.add_node(node, false);
+        }
+    }
+
+    /// Check if the specified node is blacklisted.
+    /// If blacklisted for a long time, it will be removed from blacklisted node
+    /// table.
+    pub fn evaluate_blacklisted(&mut self, id: &NodeId) -> bool {
+        let node = match self.blacklisted_nodes.get_mut(id) {
+            Some(node) => node,
+            None => return false,
+        };
+
+        let last_contact = match node.last_contact {
+            Some(contact) => contact.time(),
+            None => {
+                // By default, the last_contact should not be empty.
+                // If changed to None (e.g. manually), just treat
+                // the node as non-blacklisted.
+                self.blacklisted_nodes.remove_with_id(id);
+                return false;
+            }
+        };
+
+        if let Ok(elapsed) = last_contact.elapsed() {
+            if elapsed > self.blacklisted_lifetime {
+                self.blacklisted_nodes.remove_with_id(id);
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::NodeDatabase;
     use crate::node_table::{NodeEndpoint, NodeEntry, NodeId};
-    use std::str::FromStr;
+    use std::{str::FromStr, time::Duration};
 
     fn new_entry(addr: &str) -> NodeEntry {
         NodeEntry {
@@ -592,5 +669,35 @@ mod tests {
 
         assert_eq!(db.get(&entry1.id, true), None);
         assert_eq!(db.get(&entry2.id, false), None);
+    }
+
+    #[test]
+    fn test_blacklisted() {
+        let mut db = NodeDatabase::new(None, 2);
+
+        let n = new_entry("127.0.0.1:999");
+        db.insert_trusted(n.clone());
+        assert_eq!(db.get(&n.id, true).unwrap().id, n.id);
+        assert_eq!(db.evaluate_blacklisted(&n.id), false);
+
+        // set to blacklisted
+        db.set_blacklisted(&n.id);
+        assert_eq!(db.evaluate_blacklisted(&n.id), true);
+        assert_eq!(db.get(&n.id, false), None);
+    }
+
+    #[test]
+    fn test_blacklisted_lifetime() {
+        let mut db = NodeDatabase::new(None, 2);
+
+        let n = new_entry("127.0.0.1:999");
+        db.insert_trusted(n.clone());
+        db.set_blacklisted(&n.id);
+
+        db.blacklisted_lifetime = Duration::from_millis(1);
+        std::thread::sleep(Duration::from_millis(2));
+
+        assert_eq!(db.evaluate_blacklisted(&n.id), false);
+        assert_eq!(db.get(&n.id, false), None);
     }
 }
