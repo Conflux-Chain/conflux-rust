@@ -67,22 +67,20 @@ impl QueryHandler {
     }
 
     #[inline]
-    fn get_local_pivot_hash(&self, epoch: u64) -> Result<H256, Error> {
+    fn pivot_hash_of(&self, epoch: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(epoch);
-        let pivot_hash = self.consensus.get_hash_from_epoch_number(epoch)?;
-        Ok(pivot_hash)
+        Ok(self.consensus.get_hash_from_epoch_number(epoch)?)
     }
 
     #[inline]
-    fn get_local_header(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
-        let epoch = EpochNumber::Number(epoch);
-        let hash = self.consensus.get_hash_from_epoch_number(epoch)?;
-        let header = self.consensus.data_man.block_header_by_hash(&hash);
+    fn pivot_header_of(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
+        let pivot = self.pivot_hash_of(epoch)?;
+        let header = self.consensus.data_man.block_header_by_hash(&pivot);
         header.ok_or(ErrorKind::InternalError.into())
     }
 
     fn validate_pivot_hash(&self, epoch: u64, hash: H256) -> Result<(), Error> {
-        match self.get_local_pivot_hash(epoch)? {
+        match self.pivot_hash_of(epoch)? {
             h if h == hash => Ok(()),
             h => {
                 // NOTE: this can happen in normal scenarios
@@ -114,11 +112,11 @@ impl QueryHandler {
             }
         };
 
-        let witness_header = self.get_local_header(witness)?;
+        let witness_header = self.pivot_header_of(witness)?;
         let blame = witness_header.blame() as u64;
 
         // assumption: the target state root can be verified by the witness
-        assert!(witness - epoch - DEFERRED_STATE_EPOCH_COUNT <= blame);
+        assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
 
         // validate the number of hashes provided against local witness blame
         if state_root.proof.len() as u64 != blame + 1 {
