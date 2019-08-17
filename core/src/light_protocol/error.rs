@@ -58,6 +58,11 @@ error_chain! {
             display("Send status failed"),
         }
 
+        UnableToProduceProof {
+            description("Unable to produce proof"),
+            display("Unable to produce proof"),
+        }
+
         UnexpectedMessage {
             description("Unexpected message"),
             display("Unexpected message"),
@@ -121,6 +126,11 @@ pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         // NOTE: in order to let other protocols run,
         // we should not disconnect on protocol failure
         | ErrorKind::SendStatusFailed
+
+        // NOTE: if we do not have a confirmed (non-blamed) block
+        // with the info needed to produce a state root proof, we
+        // should not disconnect the peer
+        | ErrorKind::UnableToProduceProof
 
         // NOTE: to help with backward-compatibility, we
         // should not disconnect on `UnknownMessage`

@@ -11,5 +11,5 @@ pub use node_type::NodeType;
 pub use protocol::{
     BlockHashes, BlockHeaders, GetBlockHashesByEpoch, GetBlockHeaders,
     GetStateEntry, GetStateRoot, NewBlockHashes, SendRawTx, StateEntry,
-    StateRoot, StatusPing, StatusPong,
+    StateRoot, StateRootWithProof, StatusPing, StatusPong,
 };

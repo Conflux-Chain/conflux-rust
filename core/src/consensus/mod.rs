@@ -737,6 +737,21 @@ impl ConsensusGraph {
             .and_then(|index| Some(inner.arena[inner.pivot_chain[index]].hash))
     }
 
+    pub fn first_epoch_with_correct_state_of(&self, epoch: u64) -> Option<u64> {
+        // TODO(thegaram): change logic to work with arbitrary height, not just
+        // the ones from the current era (i.e. use epoch instead of pivot index)
+        let inner = self.inner.read();
+
+        // for now, make sure to avoid underflow
+        let pivot_index = match epoch {
+            h if h < inner.get_cur_era_genesis_height() => return None,
+            h => inner.height_to_pivot_index(h),
+        };
+
+        let trusted = inner.find_first_index_with_correct_state_of(pivot_index);
+        trusted.map(|index| inner.pivot_index_to_height(index))
+    }
+
     /// construct_pivot_state() rebuild pivot chain state info from db
     /// avoiding intermediate redundant computation triggered by
     /// on_new_block().

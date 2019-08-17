@@ -23,7 +23,9 @@ use crate::{
     parameters::light::{MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND},
     statedb::StateDb,
     storage::{
-        state_manager::StateManagerTrait, SnapshotAndEpochIdRef, StateProof,
+        state::{State, StateTrait},
+        state_manager::StateManagerTrait,
+        SnapshotAndEpochIdRef, StateProof,
     },
     sync::SynchronizationGraph,
     TransactionPool,
@@ -36,7 +38,8 @@ use super::{
         BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
         GetBlockHeaders, GetStateEntry, GetStateRoot, NewBlockHashes, NodeType,
         SendRawTx, StateEntry as GetStateEntryResponse,
-        StateRoot as GetStateRootResponse, StatusPing, StatusPong,
+        StateRoot as GetStateRootResponse, StateRootWithProof, StatusPing,
+        StatusPong,
     },
     peers::Peers,
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
@@ -152,48 +155,106 @@ impl QueryProvider {
     }
 
     #[inline]
-    fn get_local_pivot_hash(&self, epoch: u64) -> Result<H256, Error> {
+    fn pivot_hash_of(&self, epoch: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(epoch);
-        let pivot_hash = self.consensus.get_hash_from_epoch_number(epoch)?;
-        Ok(pivot_hash)
+        Ok(self.consensus.get_hash_from_epoch_number(epoch)?)
     }
 
     #[inline]
-    fn get_local_header(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
-        let epoch = EpochNumber::Number(epoch);
-        let hash = self.consensus.get_hash_from_epoch_number(epoch)?;
-        let header = self.consensus.data_man.block_header_by_hash(&hash);
+    fn pivot_header_of(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
+        let pivot = self.pivot_hash_of(epoch)?;
+        let header = self.consensus.data_man.block_header_by_hash(&pivot);
         header.ok_or(ErrorKind::InternalError.into())
     }
 
     #[inline]
-    fn get_local_state_root(&self, epoch: u64) -> Result<StateRoot, Error> {
-        let h = self.get_local_header(epoch + DEFERRED_STATE_EPOCH_COUNT)?;
-        Ok(h.state_root_with_aux_info.state_root.clone())
+    fn headers_needed_to_verify(&self, epoch: u64) -> Result<Vec<u64>, Error> {
+        // find the first header that can verify the state root requested
+        let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
+
+        let witness = match witness {
+            Some(epoch) => epoch,
+            None => {
+                warn!("Unable to produce state proof for epoch {}", epoch);
+                return Err(ErrorKind::UnableToProduceProof.into());
+            }
+        };
+
+        let blame = self.pivot_header_of(witness)?.blame() as u64;
+
+        // assumption: the state root requested can be verified by the witness
+        assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
+
+        // collect all header heights that were used to compute DSR of `witness`
+        Ok((0..(blame + 1))
+            .map(|ii| {
+                // assumption: majority will not approve incorrect blame fields
+                assert!(witness >= ii);
+                witness - ii
+            })
+            .collect())
     }
 
     #[inline]
-    fn get_local_state_entry(
-        &self, hash: H256, key: &Vec<u8>,
-    ) -> Result<(Option<Vec<u8>>, StateProof), Error> {
-        let maybe_state = self
+    fn state_of(&self, epoch: u64) -> Result<State, Error> {
+        let pivot = self.pivot_hash_of(epoch)?;
+
+        let state = self
             .consensus
             .data_man
             .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
-            .map_err(|e| format!("Failed to get state, err={:?}", e))?;
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(&pivot, None));
 
-        match maybe_state {
-            None => Err(ErrorKind::InternalError.into()),
-            Some(state) => {
-                let (value, proof) = StateDb::new(state)
-                    .get_raw_with_proof(key)
-                    .or(Err(ErrorKind::InternalError))?;
-
-                let value = value.map(|x| x.to_vec());
-                Ok((value, proof))
-            }
+        match state {
+            Ok(Some(state)) => Ok(state),
+            _ => Err(ErrorKind::InternalError.into()),
         }
+    }
+
+    #[inline]
+    fn state_root_of(&self, epoch: u64) -> Result<StateRoot, Error> {
+        match self.state_of(epoch)?.get_state_root() {
+            Ok(Some(root)) => Ok(root.state_root),
+            _ => Err(ErrorKind::InternalError.into()),
+        }
+    }
+
+    #[inline]
+    fn correct_deferred_state_root_hash_of(
+        &self, height: u64,
+    ) -> Result<H256, Error> {
+        let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
+        let root = self.state_root_of(epoch)?;
+        Ok(root.compute_state_root_hash())
+    }
+
+    #[inline]
+    fn state_root_with_proof_at(
+        &self, epoch: u64,
+    ) -> Result<StateRootWithProof, Error> {
+        let root = self.state_root_of(epoch)?;
+
+        let proof = self
+            .headers_needed_to_verify(epoch)?
+            .into_iter()
+            .map(|h| self.correct_deferred_state_root_hash_of(h))
+            .collect::<Result<Vec<H256>, Error>>()?;
+
+        Ok(StateRootWithProof { root, proof })
+    }
+
+    #[inline]
+    fn state_entry_at(
+        &self, epoch: u64, key: &Vec<u8>,
+    ) -> Result<(Option<Vec<u8>>, StateProof), Error> {
+        let state = self.state_of(epoch)?;
+
+        let (value, proof) = StateDb::new(state)
+            .get_raw_with_proof(key)
+            .or(Err(ErrorKind::InternalError))?;
+
+        let value = value.map(|x| x.to_vec());
+        Ok((value, proof))
     }
 
     fn send_status(
@@ -270,8 +331,8 @@ impl QueryProvider {
         info!("on_get_state_root req={:?}", req);
         let request_id = req.request_id;
 
-        let pivot_hash = self.get_local_pivot_hash(req.epoch)?;
-        let state_root = self.get_local_state_root(req.epoch)?;
+        let pivot_hash = self.pivot_hash_of(req.epoch)?;
+        let state_root = self.state_root_with_proof_at(req.epoch)?;
 
         let msg: Box<dyn Message> = Box::new(GetStateRootResponse {
             request_id,
@@ -290,10 +351,9 @@ impl QueryProvider {
         info!("on_get_state_entry req={:?}", req);
         let request_id = req.request_id;
 
-        let pivot_hash = self.get_local_pivot_hash(req.epoch)?;
-        let state_root = self.get_local_state_root(req.epoch)?;
-        let (entry, proof) =
-            self.get_local_state_entry(pivot_hash, &req.key)?;
+        let pivot_hash = self.pivot_hash_of(req.epoch)?;
+        let state_root = self.state_root_with_proof_at(req.epoch)?;
+        let (entry, proof) = self.state_entry_at(req.epoch, &req.key)?;
         let entry = entry.map(|x| x.to_vec());
 
         let msg: Box<dyn Message> = Box::new(GetStateEntryResponse {
