@@ -669,7 +669,7 @@ impl FindNodeMessage {
     fn sample(
         &self, node_db: &NodeDatabase, ip_filter: &IpFilter,
     ) -> Result<Vec<NodeEntry>, Error> {
-        let key = match self.tag_value {
+        let key = match self.tag_key {
             Some(ref key) => key,
             None => {
                 return Ok(node_db
