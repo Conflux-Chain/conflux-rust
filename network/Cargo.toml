@@ -12,6 +12,7 @@ io = { path = "../util/io" }
 error-chain = { version = "0.12", default-features = false }
 bytes = "0.4"
 rlp = "0.3.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 ipnetwork = "0.12.6"
 serde = "1.0"
 serde_json = "1.0"

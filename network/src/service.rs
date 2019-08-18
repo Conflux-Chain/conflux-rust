@@ -647,9 +647,15 @@ impl NetworkServiceInner {
         Ok(())
     }
 
-    fn has_enough_outgoing_peers(&self) -> bool {
-        let (_, egress_count, _) = self.sessions.stat();
-        return egress_count >= self.config.max_outgoing_peers;
+    fn has_enough_outgoing_peers(
+        &self, tag: Option<(&str, &str)>, max: usize,
+    ) -> bool {
+        let count = match tag {
+            Some((k, v)) => self.sessions.count_with_tag(&k.into(), &v.into()),
+            None => self.sessions.stat().1, // egress count
+        };
+
+        count >= max
     }
 
     fn on_housekeeping(&self, io: &IoContext<NetworkIoMessage>) {
@@ -1239,8 +1245,20 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             HOUSEKEEPING => self.on_housekeeping(io),
             DISCOVERY_REFRESH => {
                 // Run the _slow_ discovery if enough peers are connected
-                if self.has_enough_outgoing_peers() {
-                    self.discovery.lock().as_mut().map(|d| d.refresh());
+                let disc_general = self.has_enough_outgoing_peers(
+                    None,
+                    self.config.max_outgoing_peers,
+                );
+                let disc_archive = self.has_enough_outgoing_peers(
+                    Some((NODE_TAG_NODE_TYPE, NODE_TAG_ARCHIVE)),
+                    self.config.max_outgoing_peers_archive,
+                );
+                if disc_general || disc_archive {
+                    self.discovery.lock().as_mut().map(|d| {
+                        d.disc_option.general = disc_general;
+                        d.disc_option.archive = disc_archive;
+                        d.refresh();
+                    });
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
@@ -1248,8 +1266,20 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             }
             FAST_DISCOVERY_REFRESH => {
                 // Run the fast discovery if not enough peers are connected
-                if !self.has_enough_outgoing_peers() {
-                    self.discovery.lock().as_mut().map(|d| d.refresh());
+                let disc_general = !self.has_enough_outgoing_peers(
+                    None,
+                    self.config.max_outgoing_peers,
+                );
+                let disc_archive = !self.has_enough_outgoing_peers(
+                    Some((NODE_TAG_NODE_TYPE, NODE_TAG_ARCHIVE)),
+                    self.config.max_outgoing_peers_archive,
+                );
+                if disc_general || disc_archive {
+                    self.discovery.lock().as_mut().map(|d| {
+                        d.disc_option.general = disc_general;
+                        d.disc_option.archive = disc_archive;
+                        d.refresh();
+                    });
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
