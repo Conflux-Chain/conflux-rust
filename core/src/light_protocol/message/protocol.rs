@@ -2,15 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::H256;
+use rlp_derive::{RlpDecodable, RlpEncodable};
+
 use super::NodeType;
 use crate::{message::RequestId, storage::StateProof};
-use cfx_types::H256;
+
 use primitives::{
     BlockHeader as PrimitiveBlockHeader, StateRoot as PrimitiveStateRoot,
 };
-use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StateRootWithProof {
+    pub root: PrimitiveStateRoot,
+    pub proof: Vec<H256>, // witness + blamed deferred state root hashes
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StatusPing {
     pub genesis_hash: H256,
     pub network_id: u8,
@@ -18,7 +26,7 @@ pub struct StatusPing {
     pub protocol_version: u8,
 }
 
-#[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StatusPong {
     pub best_epoch: u64,
     pub genesis_hash: H256,
@@ -28,7 +36,7 @@ pub struct StatusPong {
     pub terminals: Vec<H256>,
 }
 
-#[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct GetStateRoot {
     pub request_id: RequestId,
     pub epoch: u64,
@@ -38,10 +46,10 @@ pub struct GetStateRoot {
 pub struct StateRoot {
     pub request_id: RequestId,
     pub pivot_hash: H256,
-    pub state_root: PrimitiveStateRoot,
+    pub state_root: StateRootWithProof,
 }
 
-#[derive(Clone, Debug, PartialEq, RlpEncodable, RlpDecodable)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct GetStateEntry {
     pub request_id: RequestId,
     pub epoch: u64,
@@ -52,7 +60,7 @@ pub struct GetStateEntry {
 pub struct StateEntry {
     pub request_id: RequestId,
     pub pivot_hash: H256,
-    pub state_root: PrimitiveStateRoot,
+    pub state_root: StateRootWithProof,
     pub entry: Option<Vec<u8>>,
     pub proof: StateProof,
 }

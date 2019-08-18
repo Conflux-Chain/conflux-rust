@@ -324,8 +324,6 @@ impl NodeDatabase {
         }
     }
 
-    // todo call this method to sample Archive nodes for outgoing connection
-    #[allow(dead_code)]
     pub fn sample_trusted_node_ids_with_tag(
         &self, count: u32, key: &String, value: &String,
     ) -> HashSet<NodeId> {
@@ -334,6 +332,18 @@ impl NodeDatabase {
         self.trusted_node_tag_index
             .sample(count, key, value)
             .unwrap_or_else(|| HashSet::new())
+    }
+
+    pub fn get_nodes(
+        &self, ids: HashSet<NodeId>, trusted_only: bool,
+    ) -> Vec<NodeEntry> {
+        ids.iter()
+            .filter_map(|id| self.get(id, trusted_only))
+            .map(|n| NodeEntry {
+                id: n.id.clone(),
+                endpoint: n.endpoint.clone(),
+            })
+            .collect()
     }
 
     /// Persist trust and untrusted node tables and clear all useless nodes.

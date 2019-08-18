@@ -595,6 +595,11 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    pub fn get_cur_era_genesis_height(&self) -> u64 {
+        self.cur_era_genesis_height
+    }
+
+    #[inline]
     fn get_era_genesis_block_with_parent(
         &self, parent: usize, offset: u64,
     ) -> usize {

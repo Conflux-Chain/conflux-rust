@@ -19,14 +19,14 @@ use futures::{
 };
 
 use cfx_types::H256;
-use primitives::{BlockHeader, EpochNumber, StateRoot};
+use primitives::{BlockHeader, BlockHeaderBuilder, EpochNumber, StateRoot};
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         message::{
             GetStateEntry, GetStateRoot, StateEntry as GetStateEntryResponse,
-            StateRoot as GetStateRootResponse,
+            StateRoot as GetStateRootResponse, StateRootWithProof,
         },
         Error, ErrorKind,
     },
@@ -67,28 +67,20 @@ impl QueryHandler {
     }
 
     #[inline]
-    fn get_local_pivot_hash(&self, epoch: u64) -> Result<H256, Error> {
+    fn pivot_hash_of(&self, epoch: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(epoch);
-        let pivot_hash = self.consensus.get_hash_from_epoch_number(epoch)?;
-        Ok(pivot_hash)
+        Ok(self.consensus.get_hash_from_epoch_number(epoch)?)
     }
 
     #[inline]
-    fn get_local_header(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
-        let epoch = EpochNumber::Number(epoch);
-        let hash = self.consensus.get_hash_from_epoch_number(epoch)?;
-        let header = self.consensus.data_man.block_header_by_hash(&hash);
+    fn pivot_header_of(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
+        let pivot = self.pivot_hash_of(epoch)?;
+        let header = self.consensus.data_man.block_header_by_hash(&pivot);
         header.ok_or(ErrorKind::InternalError.into())
     }
 
-    #[inline]
-    fn get_local_state_root_hash(&self, epoch: u64) -> Result<H256, Error> {
-        let h = self.get_local_header(epoch + DEFERRED_STATE_EPOCH_COUNT)?;
-        Ok(h.deferred_state_root().clone())
-    }
-
     fn validate_pivot_hash(&self, epoch: u64, hash: H256) -> Result<(), Error> {
-        match self.get_local_pivot_hash(epoch)? {
+        match self.pivot_hash_of(epoch)? {
             h if h == hash => Ok(()),
             h => {
                 // NOTE: this can happen in normal scenarios
@@ -99,18 +91,82 @@ impl QueryHandler {
         }
     }
 
+    // 1. When validating a state root, we first find the witness - the block
+    //    header that can be used to verify the state root. This selection is
+    //    done based on the blame fields.
+    // 2. Then we validate the integrity of the provided hash set against the
+    //    deferred state root field of the witness.
+    // 3. Finally, we validate the state root against the corresponding state
+    //    root hash provided.
     fn validate_state_root(
-        &self, epoch: u64, state_root: &StateRoot,
+        &self, epoch: u64, state_root: &StateRootWithProof,
     ) -> Result<(), Error> {
-        let hash = state_root.compute_state_root_hash();
+        // find the first header that can verify the state root requested
+        let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
 
-        match self.get_local_state_root_hash(epoch)? {
-            h if h == hash => Ok(()),
-            h => {
-                info!("State root mismatch: local={}, response={}", h, hash);
-                return Err(ErrorKind::InvalidStateRoot.into());
+        let witness = match witness {
+            Some(epoch) => epoch,
+            None => {
+                warn!("Unable to verify state proof for epoch {}", epoch);
+                return Err(ErrorKind::UnableToProduceProof.into());
             }
+        };
+
+        let witness_header = self.pivot_header_of(witness)?;
+        let blame = witness_header.blame() as u64;
+
+        // assumption: the target state root can be verified by the witness
+        assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
+
+        // validate the number of hashes provided against local witness blame
+        if state_root.proof.len() as u64 != blame + 1 {
+            info!(
+                "Invalid number of hashes provided: expected={}, received={}",
+                blame + 1,
+                state_root.proof.len()
+            );
+            return Err(ErrorKind::InvalidStateRoot.into());
         }
+
+        // compute witness deferred state root hash from the hashes provided
+        let received_witness_root_hash = match blame {
+            0 => state_root.proof[0],
+            _ => {
+                let hashes = state_root.proof.clone();
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(hashes)
+            }
+        };
+
+        // validate against local witness deferred state root hash
+        let local_witness_root_hash = *witness_header.deferred_state_root();
+
+        if received_witness_root_hash != local_witness_root_hash {
+            info!(
+                "Witness root hash mismatch: local={}, received={}",
+                local_witness_root_hash, received_witness_root_hash
+            );
+            return Err(ErrorKind::InvalidStateRoot.into());
+        }
+
+        // TODO(thegaram): at this point, we can cache all the hashes received
+        // and reuse them later
+
+        // find hash corresponding to the state root requested
+        let index = (witness - epoch - DEFERRED_STATE_EPOCH_COUNT) as usize;
+        let received_root_hash = state_root.proof[index];
+
+        // validate state root against the hash provided
+        let computed_root_hash = state_root.root.compute_state_root_hash();
+
+        if received_root_hash != computed_root_hash {
+            info!(
+                "State root hash mismatch: received={}, computed={}",
+                received_root_hash, computed_root_hash
+            );
+            return Err(ErrorKind::InvalidStateRoot.into());
+        }
+
+        Ok(())
     }
 
     fn next_request_id(&self) -> RequestId {
@@ -150,7 +206,7 @@ impl QueryHandler {
         self.validate_pivot_hash(req.epoch, resp.pivot_hash)?;
         self.validate_state_root(req.epoch, &resp.state_root)?;
 
-        sender.complete(QueryResult::StateRoot(resp.state_root));
+        sender.complete(QueryResult::StateRoot(resp.state_root.root));
         // note: in case of early return, `sender` will be cancelled
 
         Ok(())
@@ -172,9 +228,9 @@ impl QueryHandler {
         if !resp.proof.is_valid(
             &req.key,
             resp.entry.as_ref().map(|v| &**v),
-            resp.state_root.delta_root,
-            resp.state_root.intermediate_delta_root,
-            resp.state_root.snapshot_root,
+            resp.state_root.root.delta_root,
+            resp.state_root.root.intermediate_delta_root,
+            resp.state_root.root.snapshot_root,
         ) {
             info!("Invalid proof from peer={}", peer);
             return Err(ErrorKind::InvalidProof.into());

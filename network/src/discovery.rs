@@ -4,14 +4,16 @@
 
 use crate::{
     hash::keccak,
+    node_database::NodeDatabase,
     node_table::{NodeId, *},
     service::{UdpIoContext, MAX_DATAGRAM_SIZE, UDP_PROTOCOL_DISCOVERY},
-    Error, ErrorKind, IpFilter,
+    Error, ErrorKind, IpFilter, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
 use cfx_types::{H256, H520};
 use keylib::{recover, sign, KeyPair, Secret};
-use rlp::{Rlp, RlpStream};
+use rlp::{Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     net::SocketAddr,
@@ -66,6 +68,7 @@ pub struct Discovery {
     check_timestamps: bool,
     adding_nodes: Vec<NodeEntry>,
     ip_filter: IpFilter,
+    pub disc_option: DiscoveryOption,
 }
 
 impl Discovery {
@@ -85,6 +88,10 @@ impl Discovery {
             check_timestamps: true,
             adding_nodes: Vec::new(),
             ip_filter,
+            disc_option: DiscoveryOption {
+                general: true,
+                archive: false,
+            },
         }
     }
 
@@ -132,7 +139,7 @@ impl Discovery {
         rlp.append(&DISCOVER_PROTOCOL_VERSION);
         self.public_endpoint.to_rlp_list(&mut rlp);
         node.endpoint.to_rlp_list(&mut rlp);
-        append_expiration(&mut rlp);
+        rlp.append(&expire_timestamp());
         let hash = self.send_packet(
             uio,
             PACKET_PING,
@@ -243,7 +250,7 @@ impl Discovery {
         // pong_to.to_rlp_list(&mut response);
 
         response.append(&echo_hash);
-        append_expiration(&mut response);
+        response.append(&expire_timestamp());
         self.send_packet(uio, PACKET_PONG, from, &response.drain())?;
 
         let entry = NodeEntry {
@@ -307,13 +314,10 @@ impl Discovery {
     ) -> Result<(), Error>
     {
         trace!("Got FindNode from {:?}", &from);
-        let timestamp: u64 = rlp.val_at(0)?;
-        self.check_timestamp(timestamp)?;
+        let msg: FindNodeMessage = rlp.as_val()?;
+        self.check_timestamp(msg.expire_timestamp)?;
+        let neighbors = msg.sample(&*uio.node_db.read(), &self.ip_filter)?;
 
-        let neighbors = uio
-            .node_db
-            .read()
-            .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter);
         let mut packets: Vec<Vec<u8>> = {
             let limit = (MAX_DATAGRAM_SIZE - (1 + 109)) / 90;
             let chunks = neighbors.chunks(limit);
@@ -325,7 +329,7 @@ impl Discovery {
                     n.endpoint.to_rlp(&mut rlp);
                     rlp.append(&n.id);
                 }
-                append_expiration(&mut rlp);
+                rlp.append(&expire_timestamp());
                 rlp.out()
             });
             packets.collect()
@@ -469,27 +473,15 @@ impl Discovery {
         }
         trace!("Starting round {:?}", self.discovery_round);
         let mut tried_count = 0;
-        {
-            let discover_targets = uio
-                .node_db
-                .read()
-                .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter)
-                .into_iter();
-            let discover_targets = discover_targets
-                .filter(|x| !self.discovery_nodes.contains(&x.id))
-                .take(DISCOVER_NODES_COUNT as usize)
-                .collect::<Vec<_>>();
-            for r in discover_targets {
-                match self.send_find_node(uio, &r) {
-                    Ok(()) => {
-                        self.discovery_nodes.insert(r.id);
-                        tried_count += 1;
-                    }
-                    Err(e) => {
-                        warn!("Error sending node discovery packet for {:?}: {:?}", &r.endpoint, e);
-                    }
-                };
-            }
+
+        if self.disc_option.general {
+            tried_count += self.discover_without_tag(uio);
+        }
+
+        if self.disc_option.archive {
+            let key: String = NODE_TAG_NODE_TYPE.into();
+            let value: String = NODE_TAG_ARCHIVE.into();
+            tried_count += self.discover_with_tag(uio, &key, &value);
         }
 
         if tried_count == 0 {
@@ -502,14 +494,16 @@ impl Discovery {
 
     fn send_find_node(
         &mut self, uio: &UdpIoContext, node: &NodeEntry,
-    ) -> Result<(), Error> {
-        let mut rlp = RlpStream::new_list(1);
-        append_expiration(&mut rlp);
+        tag_key: Option<String>, tag_value: Option<String>,
+    ) -> Result<(), Error>
+    {
+        let msg = FindNodeMessage::new(tag_key, tag_value);
+
         self.send_packet(
             uio,
             PACKET_FIND_NODE,
             &node.endpoint.udp_address(),
-            &rlp.drain(),
+            &msg.rlp_bytes(),
         )?;
 
         self.in_flight_find_nodes.insert(
@@ -544,15 +538,86 @@ impl Discovery {
             self.start();
         }
     }
+
+    fn discover_without_tag(&mut self, uio: &UdpIoContext) -> usize {
+        let sampled: Vec<NodeEntry> = uio
+            .node_db
+            .read()
+            .sample_trusted_nodes(DISCOVER_NODES_COUNT, &self.ip_filter)
+            .into_iter()
+            .filter(|n| !self.discovery_nodes.contains(&n.id))
+            .collect();
+
+        self.discover_with_nodes(uio, sampled, None, None)
+    }
+
+    fn discover_with_nodes(
+        &mut self, uio: &UdpIoContext, nodes: Vec<NodeEntry>,
+        tag_key: Option<String>, tag_value: Option<String>,
+    ) -> usize
+    {
+        let mut sent = 0;
+
+        for node in nodes {
+            match self.send_find_node(
+                uio,
+                &node,
+                tag_key.clone(),
+                tag_value.clone(),
+            ) {
+                Ok(_) => {
+                    self.discovery_nodes.insert(node.id);
+                    sent += 1;
+                }
+                Err(e) => {
+                    warn!(
+                        "Error sending node discovery packet for {:?}: {:?}",
+                        node.endpoint, e
+                    );
+                }
+            }
+        }
+
+        sent
+    }
+
+    fn discover_with_tag(
+        &mut self, uio: &UdpIoContext, key: &String, value: &String,
+    ) -> usize {
+        let tagged_nodes = uio.node_db.read().sample_trusted_node_ids_with_tag(
+            DISCOVER_NODES_COUNT / 2,
+            key,
+            value,
+        );
+
+        let count = DISCOVER_NODES_COUNT - tagged_nodes.len() as u32;
+        let random_nodes = uio
+            .node_db
+            .read()
+            .sample_trusted_node_ids(count, &self.ip_filter);
+
+        let sampled: HashSet<NodeId> = tagged_nodes
+            .into_iter()
+            .chain(random_nodes)
+            .filter(|id| !self.discovery_nodes.contains(id))
+            .collect();
+
+        let sampled_nodes = uio.node_db.read().get_nodes(sampled, true);
+
+        self.discover_with_nodes(
+            uio,
+            sampled_nodes,
+            Some(key.clone()),
+            Some(value.clone()),
+        )
+    }
 }
 
-fn append_expiration(rlp: &mut RlpStream) {
-    let expiry = SystemTime::now() + EXPIRY_TIME;
-    let timestamp = expiry
+fn expire_timestamp() -> u64 {
+    (SystemTime::now() + EXPIRY_TIME)
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs() as u32;
-    rlp.append(&timestamp);
+        .as_secs()
 }
 
 fn assemble_packet(
@@ -576,4 +641,53 @@ fn assemble_packet(
     let signed_hash = keccak(&packet[(1 + 32)..]);
     packet[1..(1 + 32)].copy_from_slice(&signed_hash);
     Ok(packet)
+}
+
+pub struct DiscoveryOption {
+    // discover nodes without any tag filter
+    pub general: bool,
+    // discover archive nodes
+    pub archive: bool,
+}
+
+#[derive(RlpEncodable, RlpDecodable)]
+struct FindNodeMessage {
+    pub tag_key: Option<String>,
+    pub tag_value: Option<String>,
+    pub expire_timestamp: u64,
+}
+
+impl FindNodeMessage {
+    fn new(tag_key: Option<String>, tag_value: Option<String>) -> Self {
+        FindNodeMessage {
+            tag_key,
+            tag_value,
+            expire_timestamp: expire_timestamp(),
+        }
+    }
+
+    fn sample(
+        &self, node_db: &NodeDatabase, ip_filter: &IpFilter,
+    ) -> Result<Vec<NodeEntry>, Error> {
+        let key = match self.tag_key {
+            Some(ref key) => key,
+            None => {
+                return Ok(node_db
+                    .sample_trusted_nodes(DISCOVER_NODES_COUNT, ip_filter))
+            }
+        };
+
+        let value = match self.tag_value {
+            Some(ref value) => value,
+            None => return Err(ErrorKind::BadProtocol.into()),
+        };
+
+        let ids = node_db.sample_trusted_node_ids_with_tag(
+            DISCOVER_NODES_COUNT,
+            key,
+            value,
+        );
+
+        Ok(node_db.get_nodes(ids, true))
+    }
 }
