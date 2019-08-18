@@ -475,6 +475,15 @@ impl ConsensusGraph {
             .executed_best_state_epoch_number()
     }
 
+    /// Returns the latest epoch whose state execution has been enqueued.
+    /// And this state should be the `deferred_state` of the block being mined.
+    ///
+    /// Note that the state may not exist, and the caller should wait for the
+    /// result if the state is going to be used.
+    pub fn best_state_epoch_number(&self) -> u64 {
+        self.inner.read_recursive().best_state_epoch_number()
+    }
+
     pub fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<H256, String> {
