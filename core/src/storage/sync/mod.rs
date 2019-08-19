@@ -22,8 +22,8 @@ pub struct ChunkKeyWithProof {
 }
 
 impl ChunkKeyWithProof {
-    /// Validate the proof in the chunk key
-    pub fn validate(&self, _root: &StateRoot) -> bool { unimplemented!() }
+    /// Check if the chunk key is valid
+    pub fn is_valid(&self, _root: &StateRoot) -> bool { unimplemented!() }
 }
 
 #[derive(Default, RlpEncodable, RlpDecodable)]
@@ -33,20 +33,20 @@ pub struct RangedManifest {
 }
 
 impl RangedManifest {
-    /// Validate the proof of all chunk keys
-    pub fn validate(&self, root: &StateRoot) -> bool {
+    /// Check if the manifest is valid.
+    pub fn is_valid(&self, root: &StateRoot) -> bool {
         if self.chunks.is_empty() {
             return false;
         }
 
         for chunk in &self.chunks {
-            if !chunk.validate(root) {
+            if !chunk.is_valid(root) {
                 return false;
             }
         }
 
         if let Some(chunk) = &self.next_chunk {
-            if !chunk.validate(root) {
+            if !chunk.is_valid(root) {
                 return false;
             }
         }
@@ -55,13 +55,23 @@ impl RangedManifest {
     }
 
     pub fn merge(&mut self, other: RangedManifest) {
+        if other.chunks.is_empty() {
+            return;
+        }
+
+        if let Some(ref chunk) = self.next_chunk {
+            if chunk.key != other.chunks[0].key {
+                return;
+            }
+        }
+
         self.chunks.extend(other.chunks);
         self.next_chunk = other.next_chunk;
     }
 
-    /// Validate the integrity of all chunk keys, there should not be any chunk
-    /// key missed.
-    pub fn validate_integrity(&self, _root: &StateRoot) -> bool {
+    /// Check if the integrity of manifest is valid. There should not be any
+    /// chunk key missed.
+    pub fn is_integrity_valid(&self, _root: &StateRoot) -> bool {
         unimplemented!()
     }
 }
@@ -72,12 +82,12 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    /// Validate the chunk with given key and state root
-    pub fn validate(&self, _key: &ChunkKey, _root: &StateRoot) -> bool {
+    /// Check if the chunk is valid with given key and state root
+    pub fn is_valid(&self, _key: &ChunkKey, _root: &StateRoot) -> bool {
         unimplemented!()
     }
 
-    pub fn restore(self, _state: &mut dyn StateTrait) -> Result<(), Error> {
+    pub fn insert(self, _state: &mut dyn StateTrait) -> Result<(), Error> {
         unimplemented!()
     }
 }
