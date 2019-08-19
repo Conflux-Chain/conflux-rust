@@ -727,7 +727,7 @@ impl NeighborsChunkMessage {
 
         if request.num_chunks == 0 {
             request.num_chunks = self.num_chunks;
-        } else {
+        } else if request.num_chunks != self.num_chunks {
             debug!("invalid NeighborsChunkMessage, chunk number mismatch, requested = {}, responded = {}", request.num_chunks, self.num_chunks);
             bail!(ErrorKind::BadProtocol);
         }
