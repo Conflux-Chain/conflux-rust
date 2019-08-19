@@ -357,6 +357,25 @@ impl CowNodeRef {
         path_merkle
     }
 
+    fn uncached_children_count(
+        &mut self, trie: &DeltaMpt, trie_node: &mut TrieNodeDeltaMpt,
+    ) -> u32 {
+        let node_memory_manager = trie.get_node_memory_manager();
+        let cache_manager = node_memory_manager.get_cache_manager();
+        trie_node
+            .children_table
+            .iter()
+            .map(|(_i, node_ref)| match NodeRefDeltaMpt::from(*node_ref) {
+                NodeRefDeltaMpt::Committed { db_key }
+                    if !cache_manager.lock().query(db_key) =>
+                {
+                    1
+                }
+                _ => 0,
+            })
+            .sum()
+    }
+
     /// Get if unowned, compute if owned.
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
@@ -425,24 +444,8 @@ impl CowNodeRef {
                     {
                         let node_memory_manager =
                             trie.get_node_memory_manager();
-                        let cache_manager =
-                            node_memory_manager.get_cache_manager();
-                        let num_uncached: u32 = trie_node
-                            .children_table
-                            .iter()
-                            .map(|(_i, node_ref)| {
-                                match NodeRefDeltaMpt::from(*node_ref) {
-                                    NodeRefDeltaMpt::Committed { db_key }
-                                        if !cache_manager
-                                            .lock()
-                                            .query(db_key) =>
-                                    {
-                                        1
-                                    }
-                                    _ => 0,
-                                }
-                            })
-                            .sum();
+                        let num_uncached =
+                            self.uncached_children_count(trie, trie_node);
                         if num_uncached > CHILDREN_MERKLE_UNCACHED_THRESHOLD {
                             node_memory_manager.load_children_merkles_from_db(
                                 db,
@@ -511,7 +514,10 @@ impl CowNodeRef {
             }
         }
 
-        if depth > CHILDREN_MERKLE_DEPTH_THRESHOLD {
+        let num_uncached = self.uncached_children_count(trie, trie_node);
+        if depth > CHILDREN_MERKLE_DEPTH_THRESHOLD
+            && num_uncached > CHILDREN_MERKLE_UNCACHED_THRESHOLD
+        {
             if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
                 trie.children_merkle_map.lock().insert(
                     index,
@@ -611,12 +617,13 @@ impl CowNodeRef {
             commit_transaction.info.row_number =
                 commit_transaction.info.row_number.get_next()?;
 
-            let mut children_merkle_map = trie.children_merkle_map.lock();
             let slot = match &self.node_ref {
                 NodeRefDeltaMpt::Dirty { index } => *index,
                 _ => unsafe { unreachable_unchecked() },
             };
-            if let Some(children_merkles) = children_merkle_map.remove(&slot) {
+            if let Some(children_merkles) =
+                trie.children_merkle_map.lock().remove(&slot)
+            {
                 commit_transaction.transaction.borrow_mut().put(
                     format!("cm{}", db_key).as_bytes(),
                     &children_merkles.rlp_bytes(),
