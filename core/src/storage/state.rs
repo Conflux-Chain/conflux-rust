@@ -49,8 +49,17 @@ pub trait StateTrait {
     fn revert(&mut self);
 
     // TODO(yz): verifiable proof related methods.
+
+    // fast sync operations
+    fn get_manifest(
+        &self, start_chunk: &Option<ChunkKey>,
+    ) -> Option<RangedManifest>;
+    fn get_chunk(&self, key: &ChunkKey) -> Option<Chunk>;
 }
 
 use super::impls::{errors::*, state_proof::StateProof};
-use crate::statedb::KeyPadding;
+use crate::{
+    statedb::KeyPadding,
+    storage::sync::{Chunk, ChunkKey, RangedManifest},
+};
 use primitives::{EpochId, MerkleHash, StateRootWithAuxInfo};

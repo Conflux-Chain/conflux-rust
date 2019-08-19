@@ -10,8 +10,7 @@ pub(self) mod storage_db;
 pub mod tests;
 
 mod impls;
-
-pub use self::impls::state_proof::{StateProof, TrieProof};
+mod sync;
 
 pub use self::{
     impls::{
@@ -20,11 +19,13 @@ pub use self::{
         multi_version_merkle_patricia_trie::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
         },
+        state_proof::{StateProof, TrieProof},
     },
     state::{State as Storage, StateTrait as StorageTrait},
     state_manager::{
         SnapshotAndEpochIdRef, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,
     },
+    sync::{Chunk, ChunkKey, ChunkKeyWithProof, RangedManifest},
     tests::new_state_manager_for_testing as new_storage_manager_for_testing,
 };

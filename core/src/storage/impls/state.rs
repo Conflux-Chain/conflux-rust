@@ -265,6 +265,14 @@ impl<'a> StateTrait for State<'a> {
                 .free_owned_node(&mut owned_node.clone());
         }
     }
+
+    fn get_manifest(
+        &self, _start_chunk: &Option<ChunkKey>,
+    ) -> Option<RangedManifest> {
+        unimplemented!()
+    }
+
+    fn get_chunk(&self, _key: &ChunkKey) -> Option<Chunk> { unimplemented!() }
 }
 
 impl<'a> State<'a> {
@@ -457,7 +465,10 @@ use super::{
     state_manager::*,
     state_proof::StateProof,
 };
-use crate::statedb::KeyPadding;
+use crate::{
+    statedb::KeyPadding,
+    storage::sync::{Chunk, ChunkKey, RangedManifest},
+};
 use primitives::{
     EpochId, MerkleHash, StateRoot, StateRootWithAuxInfo, MERKLE_NULL_NODE,
 };
