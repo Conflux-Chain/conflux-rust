@@ -8,11 +8,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 lazy_static! {
-    static ref TX_FIRST_MISS_METER: Arc<Meter> =
+    static ref TX_FIRST_MISS_METER: Arc<dyn Meter> =
         register_meter_with_group("tx_pool", "tx_first_miss_size");
-    static ref TX_FOR_COMPARE_METER: Arc<Meter> =
+    static ref TX_FOR_COMPARE_METER: Arc<dyn Meter> =
         register_meter_with_group("tx_pool", "tx_for_compare_size");
-    static ref TX_RANDOM_BYTE_METER: Arc<Meter> =
+    static ref TX_RANDOM_BYTE_METER: Arc<dyn Meter> =
         register_meter_with_group("tx_pool", "tx_random_byte_size");
 }
 const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;

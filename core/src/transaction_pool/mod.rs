@@ -29,13 +29,13 @@ use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
 
 lazy_static! {
-    static ref TX_POOL_GAUGE: Arc<Meter> =
+    static ref TX_POOL_GAUGE: Arc<dyn Meter> =
         register_meter_with_group("txpool", "unexecuted_size");
-    static ref TX_POOL_READY_GAUGE: Arc<Meter> =
+    static ref TX_POOL_READY_GAUGE: Arc<dyn Meter> =
         register_meter_with_group("txpool", "ready_size");
-    static ref TX_POOL_INSERT_TIMER: Arc<Meter> =
+    static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
-    static ref TX_POOL_RECOVER_TIMER: Arc<Meter> =
+    static ref TX_POOL_RECOVER_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::recover_public");
 }
 

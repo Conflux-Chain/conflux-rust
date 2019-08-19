@@ -190,7 +190,7 @@ impl NetworkService {
 
     /// Register a new protocol handler
     pub fn register_protocol(
-        &self, handler: Arc<NetworkProtocolHandler + Sync>,
+        &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId, versions: &[u8],
     ) -> Result<(), Error>
     {
@@ -320,7 +320,8 @@ pub struct NetworkServiceInner {
     tcp_listener: Mutex<TcpListener>,
     udp_channel: RwLock<UdpChannel>,
     discovery: Mutex<Option<Discovery>>,
-    handlers: RwLock<HashMap<ProtocolId, Arc<NetworkProtocolHandler + Sync>>>,
+    handlers:
+        RwLock<HashMap<ProtocolId, Arc<dyn NetworkProtocolHandler + Sync>>>,
     timers: RwLock<HashMap<TimerToken, ProtocolTimer>>,
     timer_counter: RwLock<usize>,
     pub node_db: RwLock<NodeDatabase>,
@@ -1012,7 +1013,7 @@ impl NetworkServiceInner {
         let mut failure_id = None;
         let mut deregister = false;
 
-        if let FIRST_SESSION...LAST_SESSION = token {
+        if let FIRST_SESSION..=LAST_SESSION = token {
             if let Some(session) = self.sessions.get(token) {
                 let mut sess = session.write();
                 if !sess.expired() {
@@ -1214,7 +1215,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     ) {
         trace!("Hup: {}", stream);
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.connection_closed(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.connection_closed(stream, io),
             _ => warn!("Unexpected hup"),
         }
     }
@@ -1223,7 +1224,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.session_readable(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.session_readable(stream, io),
             TCP_ACCEPT => self.accept(io),
             UDP_MESSAGE => self.udp_readable(io),
             _ => panic!("Received unknown readable token"),
@@ -1234,7 +1235,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.session_writable(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.session_writable(stream, io),
             UDP_MESSAGE => self.udp_writable(io),
             _ => panic!("Received unknown writable token"),
         }
@@ -1398,7 +1399,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
+            FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
@@ -1436,7 +1437,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
+            FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     let sess = session.write();
                     if sess.expired() {
@@ -1462,7 +1463,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
+            FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()

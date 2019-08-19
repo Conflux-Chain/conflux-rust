@@ -25,7 +25,8 @@ pub trait StateSync {
     /// - Otherwise, cleanup the previous sync and start new sync.
     fn start(
         &self, _checkpoint: H256, _trusted_blame_block: H256,
-        _io: &NetworkContext, _sync_handler: &SynchronizationProtocolHandler,
+        _io: &dyn NetworkContext,
+        _sync_handler: &SynchronizationProtocolHandler,
     );
 }
 

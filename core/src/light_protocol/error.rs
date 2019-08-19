@@ -100,7 +100,7 @@ error_chain! {
     }
 }
 
-pub fn handle(io: &NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
+pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     warn!(
         "Error while handling message, peer={}, msg_id={:?}, error={:?}",
         peer, msg_id, e

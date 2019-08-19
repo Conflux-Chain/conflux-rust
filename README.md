@@ -2,6 +2,8 @@
 
 Conflux-rust is a rust-based implementation of Conflux protocol, it is fast and reliable. Please follow the [Conflux Documentation](https://conflux-chain.github.io/conflux-doc/) to [build](https://conflux-chain.github.io/conflux-doc/install/) and [run](https://conflux-chain.github.io/conflux-doc/get_started/) Conflux.
 
+This version depends on rustc 1.37.0.
+
 ## Contribution
 
 Thank you for considering helping out with our source code. We appreciate any contributions, even the smallest fixes.

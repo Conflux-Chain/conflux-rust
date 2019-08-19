@@ -190,7 +190,7 @@ impl NetworkConfiguration {
 pub enum NetworkIoMessage {
     Start,
     AddHandler {
-        handler: Arc<NetworkProtocolHandler + Sync>,
+        handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId,
         versions: Vec<u8>,
     },
@@ -212,20 +212,20 @@ pub enum NetworkIoMessage {
 }
 
 pub trait NetworkProtocolHandler: Sync + Send {
-    fn initialize(&self, _io: &NetworkContext) {}
+    fn initialize(&self, _io: &dyn NetworkContext) {}
 
-    fn on_message(&self, io: &NetworkContext, peer: PeerId, data: &[u8]);
+    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, data: &[u8]);
 
-    fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId);
+    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId);
 
-    fn on_peer_disconnected(&self, io: &NetworkContext, peer: PeerId);
+    fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId);
 
-    fn on_timeout(&self, io: &NetworkContext, timer: TimerToken);
+    fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken);
 
-    fn send_local_message(&self, _io: &NetworkContext, _message: Vec<u8>) {}
+    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {}
 
     fn on_work_dispatch(
-        &self, _io: &NetworkContext, _work_type: HandlerWorkType,
+        &self, _io: &dyn NetworkContext, _work_type: HandlerWorkType,
     ) {
     }
 }

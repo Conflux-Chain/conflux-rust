@@ -32,9 +32,9 @@ use std::{
 use unexpected::{Mismatch, OutOfBounds};
 
 lazy_static! {
-    static ref SYNC_INSERT_HEADER: Arc<Meter> =
+    static ref SYNC_INSERT_HEADER: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync::insert_block_header");
-    static ref SYNC_INSERT_BLOCK: Arc<Meter> =
+    static ref SYNC_INSERT_BLOCK: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync::insert_block");
 }
 

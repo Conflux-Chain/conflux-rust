@@ -61,11 +61,11 @@ where T::TransactionType: 'static
 }
 
 pub trait KeyValueDbAsReadTrait {
-    fn as_read_only(&self) -> &KeyValueDbTraitRead;
+    fn as_read_only(&self) -> &dyn KeyValueDbTraitRead;
 }
 
 impl<T: KeyValueDbTraitRead> KeyValueDbAsReadTrait for T {
-    fn as_read_only(&self) -> &KeyValueDbTraitRead { self }
+    fn as_read_only(&self) -> &dyn KeyValueDbTraitRead { self }
 }
 
 pub trait KeyValueDbAsAnyTrait {

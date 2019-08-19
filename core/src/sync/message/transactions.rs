@@ -205,9 +205,9 @@ pub struct GetTransactions {
 }
 
 impl Request for GetTransactions {
-    fn as_message(&self) -> &Message { self }
+    fn as_message(&self) -> &dyn Message { self }
 
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.transaction_request_timeout
@@ -235,7 +235,7 @@ impl Request for GetTransactions {
 
     fn is_empty(&self) -> bool { self.tx_ids.is_empty() }
 
-    fn resend(&self) -> Option<Box<Request>> { None }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 }
 
 impl Handleable for GetTransactions {

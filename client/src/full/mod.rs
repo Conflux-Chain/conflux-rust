@@ -58,7 +58,7 @@ pub struct FullClientHandle {
 impl FullClientHandle {
     pub fn into_be_dropped(
         self,
-    ) -> (Weak<SystemDB>, Arc<BlockGenerator>, Box<Any>) {
+    ) -> (Weak<SystemDB>, Arc<BlockGenerator>, Box<dyn Any>) {
         (
             self.ledger_db,
             self.blockgen,

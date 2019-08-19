@@ -830,7 +830,7 @@ impl<NodeRefT: NodeRefTrait> Decodable for ChildrenTable<NodeRefT> {
     fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
         let item_count = rlp.item_count()?;
         Ok(match item_count {
-            0...1 => Self::default(),
+            0..=1 => Self::default(),
             16 => Self {
                 bitmap: CompactedChildrenTable::<NodeRefT>::all_bits(),
                 table: rlp.as_list::<NodeRefT>()?.into_boxed_slice(),

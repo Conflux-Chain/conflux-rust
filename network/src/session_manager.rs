@@ -30,7 +30,7 @@ pub struct SessionManager {
     max_ingress_sessions: usize,
     cur_ingress_sessions: AtomicUsize,
     node_id_index: RwLock<HashMap<NodeId, usize>>,
-    ip_limit: RwLock<Box<SessionIpLimit>>,
+    ip_limit: RwLock<Box<dyn SessionIpLimit>>,
     tag_index: RwLock<SessionTagIndex>,
 }
 

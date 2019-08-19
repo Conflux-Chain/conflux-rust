@@ -46,11 +46,11 @@ pub trait SynchronizationPhaseTrait: Send + Sync {
     fn name(&self) -> &'static str;
     fn phase_type(&self) -> SyncPhaseType;
     fn next(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType;
     fn start(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     );
 }
@@ -58,7 +58,7 @@ pub trait SynchronizationPhaseTrait: Send + Sync {
 pub struct SynchronizationPhaseManagerInner {
     initialized: bool,
     current_phase: SyncPhaseType,
-    phases: HashMap<SyncPhaseType, Arc<SynchronizationPhaseTrait>>,
+    phases: HashMap<SyncPhaseType, Arc<dyn SynchronizationPhaseTrait>>,
 }
 
 impl SynchronizationPhaseManagerInner {
@@ -70,17 +70,19 @@ impl SynchronizationPhaseManagerInner {
         }
     }
 
-    pub fn register_phase(&mut self, phase: Arc<SynchronizationPhaseTrait>) {
+    pub fn register_phase(
+        &mut self, phase: Arc<dyn SynchronizationPhaseTrait>,
+    ) {
         self.phases.insert(phase.phase_type(), phase);
     }
 
     pub fn get_phase(
         &self, phase_type: SyncPhaseType,
-    ) -> Arc<SynchronizationPhaseTrait> {
+    ) -> Arc<dyn SynchronizationPhaseTrait> {
         self.phases.get(&phase_type).unwrap().clone()
     }
 
-    pub fn get_current_phase(&self) -> Arc<SynchronizationPhaseTrait> {
+    pub fn get_current_phase(&self) -> Arc<dyn SynchronizationPhaseTrait> {
         self.get_phase(self.current_phase)
     }
 
@@ -139,22 +141,22 @@ impl SynchronizationPhaseManager {
         sync_manager
     }
 
-    pub fn register_phase(&self, phase: Arc<SynchronizationPhaseTrait>) {
+    pub fn register_phase(&self, phase: Arc<dyn SynchronizationPhaseTrait>) {
         self.inner.write().register_phase(phase);
     }
 
     pub fn get_phase(
         &self, phase_type: SyncPhaseType,
-    ) -> Arc<SynchronizationPhaseTrait> {
+    ) -> Arc<dyn SynchronizationPhaseTrait> {
         self.inner.read().get_phase(phase_type)
     }
 
-    pub fn get_current_phase(&self) -> Arc<SynchronizationPhaseTrait> {
+    pub fn get_current_phase(&self) -> Arc<dyn SynchronizationPhaseTrait> {
         self.inner.read().get_current_phase()
     }
 
     pub fn change_phase_to(
-        &self, phase_type: SyncPhaseType, io: &NetworkContext,
+        &self, phase_type: SyncPhaseType, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -164,7 +166,7 @@ impl SynchronizationPhaseManager {
     }
 
     pub fn try_initialize(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -198,7 +200,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
     }
 
     fn next(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
@@ -211,7 +213,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
     }
 
     fn start(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -248,7 +250,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     }
 
     fn next(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
@@ -268,7 +270,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     }
 
     fn start(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -298,7 +300,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpCheckpoint }
 
     fn next(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
@@ -333,7 +335,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     }
 
     fn start(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -390,7 +392,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
     }
 
     fn next(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
@@ -401,7 +403,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
     }
 
     fn start(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -473,7 +475,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::CatchUpSyncBlock }
 
     fn next(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
@@ -493,7 +495,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     }
 
     fn start(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -520,7 +522,7 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     fn phase_type(&self) -> SyncPhaseType { SyncPhaseType::Normal }
 
     fn next(
-        &self, _io: &NetworkContext,
+        &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
@@ -529,7 +531,7 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     }
 
     fn start(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {

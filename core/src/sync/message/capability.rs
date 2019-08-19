@@ -29,7 +29,9 @@ impl DynamicCapability {
         }
     }
 
-    pub fn broadcast_with_peers(self, io: &NetworkContext, peers: Vec<PeerId>) {
+    pub fn broadcast_with_peers(
+        self, io: &dyn NetworkContext, peers: Vec<PeerId>,
+    ) {
         let msg = DynamicCapabilityChange { changed: self };
 
         for peer in peers {
@@ -39,7 +41,9 @@ impl DynamicCapability {
         }
     }
 
-    pub fn broadcast(self, io: &NetworkContext, syn: &SynchronizationState) {
+    pub fn broadcast(
+        self, io: &dyn NetworkContext, syn: &SynchronizationState,
+    ) {
         let peers = syn.peers.read().keys().cloned().collect();
         self.broadcast_with_peers(io, peers);
     }

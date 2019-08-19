@@ -239,7 +239,7 @@ impl<
     fn load_from_db<'c: 'a, 'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, db_key: DeltaMptDbKey,
+        db: &dyn KeyValueDbTraitRead, db_key: DeltaMptDbKey,
     ) -> Result<
         GuardedValue<
             MutexGuard<'c, CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
@@ -421,7 +421,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -549,7 +549,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -587,7 +587,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<

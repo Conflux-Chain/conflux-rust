@@ -61,7 +61,7 @@ use std::fs::File;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
-fn other_io_err<E>(e: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
+fn other_io_err<E>(e: E) -> io::Error where E: Into<Box<dyn error::Error + Send + Sync>> {
 	io::Error::new(io::ErrorKind::Other, e)
 }
 
@@ -720,13 +720,13 @@ impl KeyValueDB for Database {
 		Database::flush(self)
 	}
 
-	fn iter<'a>(&'a self, col: Option<u32>) -> Box<Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a> {
+	fn iter<'a>(&'a self, col: Option<u32>) -> Box<dyn Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a> {
 		let unboxed = Database::iter(self, col);
 		Box::new(unboxed.into_iter().flat_map(|inner| inner))
 	}
 
 	fn iter_from_prefix<'a>(&'a self, col: Option<u32>, prefix: &'a [u8])
-		-> Box<Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a>
+		-> Box<dyn Iterator<Item=(Box<[u8]>, Box<[u8]>)> + 'a>
 	{
 		let unboxed = Database::iter_from_prefix(self, col, prefix);
 		Box::new(unboxed.into_iter().flat_map(|inner| inner))

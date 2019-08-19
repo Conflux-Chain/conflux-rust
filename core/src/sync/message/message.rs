@@ -74,7 +74,7 @@ build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetB
 
 // normal priority and size-sensitive message types
 impl Message for Transactions {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::TRANSACTIONS }
 
@@ -84,7 +84,7 @@ impl Message for Transactions {
 }
 
 impl Message for GetBlocksResponse {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_RESPONSE }
 
@@ -94,7 +94,7 @@ impl Message for GetBlocksResponse {
 }
 
 impl Message for GetBlocksWithPublicResponse {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
 
@@ -104,7 +104,7 @@ impl Message for GetBlocksWithPublicResponse {
 }
 
 impl Message for GetBlockTxnResponse {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_TXN_RESPONSE }
 
@@ -114,7 +114,7 @@ impl Message for GetBlockTxnResponse {
 }
 
 impl Message for TransactionDigests {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::TRANSACTION_DIGESTS }
 
@@ -126,7 +126,7 @@ impl Message for TransactionDigests {
 }
 
 impl Message for GetTransactions {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS }
 
@@ -136,7 +136,7 @@ impl Message for GetTransactions {
 }
 
 impl Message for GetTransactionsResponse {
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
 

@@ -49,7 +49,7 @@ pub struct LightClientHandle {
 }
 
 impl LightClientHandle {
-    pub fn into_be_dropped(self) -> (Weak<SystemDB>, Box<Any>) {
+    pub fn into_be_dropped(self) -> (Weak<SystemDB>, Box<dyn Any>) {
         (
             self.ledger_db,
             Box::new((

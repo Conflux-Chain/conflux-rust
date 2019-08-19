@@ -48,7 +48,7 @@ pub struct Work<Message> {
     pub work_type: WorkType<Message>,
     pub token: usize,
     pub handler_id: HandlerId,
-    pub handler: Arc<IoHandler<Message>>,
+    pub handler: Arc<dyn IoHandler<Message>>,
 }
 
 /// A socket IO worker thread

@@ -8,7 +8,7 @@ pub struct SnapshotMpt<DbType: KeyValueDbTraitRead, BorrowType: Borrow<DbType>>
     pub _marker_db_type: std::marker::PhantomData<DbType>,
 }
 
-fn compressed_path_to_db_key(_path: &CompressedPathTrait) -> Vec<u8> {
+fn compressed_path_to_db_key(_path: &dyn CompressedPathTrait) -> Vec<u8> {
     // FIXME: implement.
     // FIXME: The trick to make path in increasing order correspond to a tree
     // FIXME: structure is to expand each byte into two nibbles, with the
@@ -25,15 +25,15 @@ impl<DbType: KeyValueDbTraitRead, BorrowType: Borrow<DbType>>
     fn get_merkle_root(&self) -> &MerkleHash { unimplemented!() }
 
     fn load_node(
-        &self, path: &CompressedPathTrait,
+        &self, path: &dyn CompressedPathTrait,
     ) -> Result<Option<VanillaTrieNode<MerkleHash>>> {
         let _key = compressed_path_to_db_key(path);
         unimplemented!()
     }
 
     fn iterate_subtree_trie_nodes_without_root(
-        &self, path: &CompressedPathTrait,
-    ) -> Box<SnapshotMptIteraterTrait> {
+        &self, path: &dyn CompressedPathTrait,
+    ) -> Box<dyn SnapshotMptIteraterTrait> {
         let _key = compressed_path_to_db_key(path);
         unimplemented!()
     }
@@ -42,13 +42,13 @@ impl<DbType: KeyValueDbTraitRead, BorrowType: Borrow<DbType>>
 impl<DbType: KeyValueDbTraitSingleWriter, BorrowType: BorrowMut<DbType>>
     SnapshotMptTraitSingleWriter for SnapshotMpt<DbType, BorrowType>
 {
-    fn delete_node(&mut self, path: &CompressedPathTrait) -> Result<()> {
+    fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
         let _key = compressed_path_to_db_key(path);
         unimplemented!()
     }
 
     fn write_node(
-        &mut self, path: &CompressedPathTrait,
+        &mut self, path: &dyn CompressedPathTrait,
         _trie_node: &VanillaTrieNode<MerkleHash>,
     ) -> Result<()>
     {
