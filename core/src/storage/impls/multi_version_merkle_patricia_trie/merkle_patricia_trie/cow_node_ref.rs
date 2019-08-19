@@ -616,13 +616,12 @@ impl CowNodeRef {
                 NodeRefDeltaMpt::Dirty { index } => *index,
                 _ => unsafe { unreachable_unchecked() },
             };
-            if let Some(children_merkles) = children_merkle_map.get(&slot) {
+            if let Some(children_merkles) = children_merkle_map.remove(&slot) {
                 commit_transaction.transaction.borrow_mut().put(
                     format!("cm{}", db_key).as_bytes(),
                     &children_merkles.rlp_bytes(),
                 )?;
             }
-            children_merkle_map.remove(&slot);
 
             let committed_node_ref = NodeRefDeltaMpt::Committed { db_key };
             owned_node_set.insert(committed_node_ref.clone(), None);
