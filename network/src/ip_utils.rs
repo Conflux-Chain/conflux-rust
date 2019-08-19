@@ -101,12 +101,12 @@ impl SocketAddrExt for Ipv4Addr {
             || self.is_multicast()
             || self.is_shared_space()
             || self.is_special_purpose()
-            || self.is_benchmarking()
+            || SocketAddrExt::is_benchmarking(self)
             || self.is_future_use()
     }
 
     fn is_usable_public(&self) -> bool {
-        !self.is_reserved() && !self.is_private()
+        !SocketAddrExt::is_reserved(self) && !self.is_private()
     }
 
     fn is_usable_private(&self) -> bool { self.is_private() }
@@ -182,8 +182,8 @@ impl SocketAddrExt for IpAddr {
 
     fn is_reserved(&self) -> bool {
         match *self {
-            IpAddr::V4(ref ip) => ip.is_reserved(),
-            IpAddr::V6(ref ip) => ip.is_reserved(),
+            IpAddr::V4(ref ip) => SocketAddrExt::is_reserved(ip),
+            IpAddr::V6(ref ip) => SocketAddrExt::is_reserved(ip),
         }
     }
 
@@ -289,7 +289,7 @@ pub fn select_public_address(port: u16) -> SocketAddr {
             for addr in &list {
                 //TODO: use better criteria than just the first in the list
                 match addr {
-                    IpAddr::V4(a) if !a.is_reserved() => {
+                    IpAddr::V4(a) if !SocketAddrExt::is_reserved(a) => {
                         return SocketAddr::V4(SocketAddrV4::new(*a, port));
                     }
                     _ => {}
@@ -590,10 +590,18 @@ fn ipv4_special_purpose() {
 
 #[test]
 fn ipv4_benchmarking() {
-    assert!(!Ipv4Addr::new(198, 17, 255, 255).is_benchmarking());
-    assert!(Ipv4Addr::new(198, 18, 0, 0).is_benchmarking());
-    assert!(Ipv4Addr::new(198, 19, 255, 255).is_benchmarking());
-    assert!(!Ipv4Addr::new(198, 20, 0, 0).is_benchmarking());
+    assert!(!SocketAddrExt::is_benchmarking(&Ipv4Addr::new(
+        198, 17, 255, 255
+    )));
+    assert!(SocketAddrExt::is_benchmarking(&Ipv4Addr::new(
+        198, 18, 0, 0
+    )));
+    assert!(SocketAddrExt::is_benchmarking(&Ipv4Addr::new(
+        198, 19, 255, 255
+    )));
+    assert!(!SocketAddrExt::is_benchmarking(&Ipv4Addr::new(
+        198, 20, 0, 0
+    )));
 }
 
 #[test]
