@@ -7,7 +7,7 @@ use cfx_types::H512;
 use enum_map::EnumMap;
 use io::*;
 use rand::{self, Rng};
-use rlp::{DecoderError, Rlp, RlpStream};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde_derive::Serialize;
 use serde_json;
 use std::{
@@ -161,6 +161,23 @@ impl FromStr for NodeEndpoint {
 pub struct NodeEntry {
     pub id: NodeId,
     pub endpoint: NodeEndpoint,
+}
+
+impl Encodable for NodeEntry {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(4);
+        self.endpoint.to_rlp(s);
+        s.append(&self.id);
+    }
+}
+
+impl Decodable for NodeEntry {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(NodeEntry {
+            id: rlp.val_at(3)?,
+            endpoint: NodeEndpoint::from_rlp(rlp)?,
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]

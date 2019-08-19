@@ -48,10 +48,26 @@ struct PingRequest {
 struct FindNodeRequest {
     // Time when the request was sent
     sent_at: Instant,
-    // Number of items sent by the node
-    response_count: usize,
-    // Whether the request have been answered yet
-    answered: bool,
+    // Number of neighbor chunks for the response
+    num_chunks: usize,
+    // Number of received chunks for the response
+    received_chunks: HashSet<usize>,
+}
+
+impl Default for FindNodeRequest {
+    fn default() -> Self {
+        FindNodeRequest {
+            sent_at: Instant::now(),
+            num_chunks: 0,
+            received_chunks: HashSet::new(),
+        }
+    }
+}
+
+impl FindNodeRequest {
+    fn is_completed(&self) -> bool {
+        self.num_chunks > 0 && self.num_chunks == self.received_chunks.len()
+    }
 }
 
 #[allow(dead_code)]
@@ -318,27 +334,16 @@ impl Discovery {
         self.check_timestamp(msg.expire_timestamp)?;
         let neighbors = msg.sample(&*uio.node_db.read(), &self.ip_filter)?;
 
-        let mut packets: Vec<Vec<u8>> = {
-            let limit = (MAX_DATAGRAM_SIZE - (1 + 109)) / 90;
-            let chunks = neighbors.chunks(limit);
-            let packets = chunks.map(|c| {
-                let mut rlp = RlpStream::new_list(2);
-                rlp.begin_list(c.len());
-                for n in c {
-                    rlp.begin_list(4);
-                    n.endpoint.to_rlp(&mut rlp);
-                    rlp.append(&n.id);
-                }
-                rlp.append(&expire_timestamp());
-                rlp.out()
-            });
-            packets.collect()
-        };
+        trace!("Sample {} Neighbours for {:?}", neighbors.len(), &from);
 
-        for p in packets.drain(..) {
-            self.send_packet(uio, PACKET_NEIGHBOURS, from, &p)?;
+        let chunk_size = (MAX_DATAGRAM_SIZE - (1 + 109)) / 90;
+        let chunks = NeighborsChunkMessage::chunks(neighbors, chunk_size);
+
+        for chunk in &chunks {
+            self.send_packet(uio, PACKET_NEIGHBOURS, from, &chunk.rlp_bytes())?;
         }
-        trace!("Sent {} Neighbours to {:?}", neighbors.len(), &from);
+
+        trace!("Sent {} Neighbours chunks to {:?}", chunks.len(), &from);
         Ok(())
     }
 
@@ -347,60 +352,42 @@ impl Discovery {
         from: &SocketAddr,
     ) -> Result<(), Error>
     {
-        let results_count = rlp.at(0)?.item_count()?;
-
-        let is_expected = match self.in_flight_find_nodes.entry(*node_id) {
-            Entry::Occupied(mut entry) => {
-                let expected = {
-                    let request = entry.get_mut();
-                    // Mark the request as answered
-                    request.answered = true;
-                    if request.response_count + results_count
-                        <= DISCOVER_NODES_COUNT as usize
-                    {
-                        request.response_count += results_count;
-                        true
-                    } else {
-                        debug!("Got unexpected Neighbors from {:?} ; oversized packet ({} + {}) node_id={:#x}", &from, request.response_count, results_count, node_id);
-                        false
-                    }
-                };
-                if entry.get().response_count == DISCOVER_NODES_COUNT as usize {
-                    entry.remove();
-                }
-                expected
-            }
+        let mut entry = match self.in_flight_find_nodes.entry(*node_id) {
+            Entry::Occupied(entry) => entry,
             Entry::Vacant(_) => {
                 debug!("Got unexpected Neighbors from {:?} ; couldn't find node_id={:#x}", &from, node_id);
-                false
+                return Ok(());
             }
         };
 
-        if !is_expected {
+        let msg: NeighborsChunkMessage = rlp.as_val()?;
+        let request = entry.get_mut();
+
+        if !msg.update(request)? {
             return Ok(());
         }
 
-        trace!("Got {} Neighbours from {:?}", results_count, &from);
-        for r in rlp.at(0)?.iter() {
-            let endpoint = NodeEndpoint::from_rlp(&r)?;
-            if !endpoint.is_valid() {
-                debug!("Bad address: {:?}", endpoint);
-                continue;
-            }
-            let node_id: NodeId = r.val_at(3)?;
-            if node_id == self.id {
-                continue;
-            }
-            let entry = NodeEntry {
-                id: node_id,
-                endpoint,
-            };
-            if !self.is_allowed(&entry) {
-                debug!("Address not allowed: {:?}", entry);
-                continue;
-            }
-            self.try_ping(uio, entry);
+        if request.is_completed() {
+            entry.remove();
         }
+
+        trace!("Got {} Neighbours from {:?}", msg.neighbors.len(), &from);
+
+        for node in msg.neighbors {
+            if !node.endpoint.is_valid() {
+                debug!("Bad address: {:?}", node.endpoint);
+                continue;
+            }
+            if node.id == self.id {
+                continue;
+            }
+            if !self.is_allowed(&node) {
+                debug!("Address not allowed: {:?}", node);
+                continue;
+            }
+            self.try_ping(uio, node);
+        }
+
         Ok(())
     }
 
@@ -434,7 +421,7 @@ impl Discovery {
         });
         self.in_flight_find_nodes.retain(|node_id, find_node_request| {
             if time.duration_since(find_node_request.sent_at) > FIND_NODE_TIMEOUT {
-                if !find_node_request.answered {
+                if !find_node_request.is_completed() {
                     debug!("Removing expired FIND NODE request for node_id={:#x}", node_id);
                     nodes_to_expire.push(*node_id);
                 }
@@ -506,14 +493,8 @@ impl Discovery {
             &msg.rlp_bytes(),
         )?;
 
-        self.in_flight_find_nodes.insert(
-            node.id.clone(),
-            FindNodeRequest {
-                sent_at: Instant::now(),
-                response_count: 0,
-                answered: false,
-            },
-        );
+        self.in_flight_find_nodes
+            .insert(node.id.clone(), FindNodeRequest::default());
 
         trace!("Sent FindNode to {:?}", &node.endpoint);
         Ok(())
@@ -689,5 +670,73 @@ impl FindNodeMessage {
         );
 
         Ok(node_db.get_nodes(ids, true))
+    }
+}
+
+#[derive(RlpEncodable, RlpDecodable)]
+struct NeighborsChunkMessage {
+    neighbors: Vec<NodeEntry>,
+    num_chunks: usize,
+    chunk_index: usize,
+}
+
+impl NeighborsChunkMessage {
+    fn chunks(
+        neighbors: Vec<NodeEntry>, chunk_size: usize,
+    ) -> Vec<NeighborsChunkMessage> {
+        let chunks = neighbors.chunks(chunk_size);
+        let num_chunks = chunks.len();
+        chunks
+            .enumerate()
+            .map(|(chunk_index, chunk)| NeighborsChunkMessage {
+                neighbors: chunk.to_vec(),
+                num_chunks,
+                chunk_index,
+            })
+            .collect()
+    }
+
+    fn validate(&self) -> Result<(), Error> {
+        if self.neighbors.is_empty() {
+            debug!("invalid NeighborsChunkMessage, neighbors is empty");
+            bail!(ErrorKind::BadProtocol);
+        }
+
+        if self.num_chunks == 0 {
+            debug!("invalid NeighborsChunkMessage, num_chunks is zero");
+            bail!(ErrorKind::BadProtocol);
+        }
+
+        if self.chunk_index >= self.num_chunks {
+            debug!(
+                "invalid NeighborsChunkMessage, chunk index is invalid, len = {}, index = {}",
+                self.num_chunks, self.chunk_index
+            );
+            bail!(ErrorKind::BadProtocol);
+        }
+
+        Ok(())
+    }
+
+    /// updates the find node request with this message.
+    /// Return Ok(true) if new chunk received.
+    /// Return Ok(false) if duplicated chunk received.
+    /// Return Err if validation failed.
+    fn update(&self, request: &mut FindNodeRequest) -> Result<bool, Error> {
+        self.validate()?;
+
+        if request.num_chunks == 0 {
+            request.num_chunks = self.num_chunks;
+        } else if request.num_chunks != self.num_chunks {
+            debug!("invalid NeighborsChunkMessage, chunk number mismatch, requested = {}, responded = {}", request.num_chunks, self.num_chunks);
+            bail!(ErrorKind::BadProtocol);
+        }
+
+        if !request.received_chunks.insert(self.chunk_index) {
+            debug!("duplicated NeighborsChunkMessage");
+            return Ok(false);
+        }
+
+        Ok(true)
     }
 }
