@@ -77,7 +77,7 @@ impl Chunk {
         unimplemented!()
     }
 
-    pub fn restore(self, _state: &mut StateTrait) -> Result<(), Error> {
+    pub fn restore(self, _state: &mut dyn StateTrait) -> Result<(), Error> {
         unimplemented!()
     }
 }
