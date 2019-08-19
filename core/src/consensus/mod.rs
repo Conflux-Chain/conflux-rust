@@ -39,7 +39,7 @@ use std::{
 };
 
 lazy_static! {
-    static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<Meter> =
+    static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "consensus_on_new_block_timer");
 }
 
@@ -224,7 +224,7 @@ impl ConsensusGraph {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.best_state_epoch_number(),
+            EpochNumber::LatestState => self.executed_best_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.best_epoch_number() {
@@ -307,7 +307,8 @@ impl ConsensusGraph {
                 return Err("Latest mined epoch is not executed".into());
             }
             EpochNumber::Number(num) => {
-                let latest_state_epoch = self.best_state_epoch_number();
+                let latest_state_epoch =
+                    self.executed_best_state_epoch_number();
                 if *num > latest_state_epoch {
                     return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
                 }
@@ -467,6 +468,18 @@ impl ConsensusGraph {
         self.best_info.read_recursive().best_block_hash
     }
 
+    /// Returns the latest epoch with executed state.
+    pub fn executed_best_state_epoch_number(&self) -> u64 {
+        self.inner
+            .read_recursive()
+            .executed_best_state_epoch_number()
+    }
+
+    /// Returns the latest epoch whose state execution has been enqueued.
+    /// And this state should be the `deferred_state` of the block being mined.
+    ///
+    /// Note that the state may not exist, and the caller should wait for the
+    /// result if the state is going to be used.
     pub fn best_state_epoch_number(&self) -> u64 {
         self.inner.read_recursive().best_state_epoch_number()
     }
@@ -735,6 +748,21 @@ impl ConsensusGraph {
         inner
             .find_first_index_with_correct_state_of(0)
             .and_then(|index| Some(inner.arena[inner.pivot_chain[index]].hash))
+    }
+
+    pub fn first_epoch_with_correct_state_of(&self, epoch: u64) -> Option<u64> {
+        // TODO(thegaram): change logic to work with arbitrary height, not just
+        // the ones from the current era (i.e. use epoch instead of pivot index)
+        let inner = self.inner.read();
+
+        // for now, make sure to avoid underflow
+        let pivot_index = match epoch {
+            h if h < inner.get_cur_era_genesis_height() => return None,
+            h => inner.height_to_pivot_index(h),
+        };
+
+        let trusted = inner.find_first_index_with_correct_state_of(pivot_index);
+        trusted.map(|index| inner.pivot_index_to_height(index))
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db

@@ -43,10 +43,28 @@ class TxRelayTest(ConfluxTestFramework):
         self.nodes[FULLNODE0].wait_for_phase(["NormalSyncPhase"])
         self.nodes[FULLNODE1].wait_for_phase(["NormalSyncPhase"])
 
+    def random_full_node(self):
+        return random.randint(0, self.num_nodes - 2) # 0..1 inclusive
+
+    def generate_correct_block(self, node=None):
+        if node is None: node = self.random_full_node()
+        return self.rpc[node].generate_block()
+
+    def generate_incorrect_block(self, node=None):
+        if node is None: node = self.random_full_node()
+
+        blame_info = {}
+        blame_info['blame'] = 1
+        blame_info['deferredStateRoot'] = "0x1111111111111111111111111111111111111111111111111111111111111111"
+
+        return self.nodes[node].test_generateblockwithblameinfo(1, 0, blame_info)[0]
+
     def run_test(self):
+        num_blocks = 100
         num_txs = 20
         txs = []
 
+        # ------------------------------------------------
         # send transactions
         self.log.info(f"Sending {num_txs} txs through the light node...")
         for nonce in range(0, num_txs):
@@ -68,17 +86,46 @@ class TxRelayTest(ConfluxTestFramework):
             self.rpc[FULLNODE1].wait_for_receipt(hash)
 
         self.log.info(f"Pass 1 - all txs relayed\n")
+        # ------------------------------------------------
+        self.log.info(f"Generating incorrect blocks...")
+
+        # save the latest epoch, guaranteed to have all the new balances
+        epoch_before_blamed_blocks = self.rpc[FULLNODE0].epoch_number()
+
+        # generate some incorrect blocks
+        for _ in range(num_blocks):
+            self.generate_incorrect_block(FULLNODE0)
+
+        # generate one correct block and check blame info
+        hash = self.generate_correct_block(FULLNODE0)
+        block = self.rpc[FULLNODE0].block_by_hash(hash)
+        assert_greater_than(block["blame"], 0)
+
+        # generate some correct blocks to make sure we are confident about the previous one
+        sync_blocks(self.nodes[FULLNODE0:FULLNODE1])
+
+        for _ in range(num_blocks):
+            self.generate_correct_block()
+
+        self.log.info(f"Pass 2 - blame info correct\n")
+        # ------------------------------------------------
         self.log.info(f"Checking the resulting account balances through the light node...")
 
         # sync blocks to make sure the light client has the header with the latest state
-        self.log.info(f"syncing blocks")
+        self.log.info("syncing blocks...")
         sync_blocks(self.nodes)
+
+        latest_epoch = self.rpc[FULLNODE0].epoch_number()
 
         # check balances for each address on all nodes
         for (_, receiver, value) in txs:
+            # pick random epoch from the ones that have all balance information
+            # this way, ~50% of our queries will have to deal with blaming blocks
+            epoch = random.randint(epoch_before_blamed_blocks, latest_epoch - 5)
+
             node0_balance = self.rpc[FULLNODE0].get_balance(receiver)
             node1_balance = self.rpc[FULLNODE1].get_balance(receiver)
-            node2_balance = self.rpc[LIGHTNODE].get_balance(receiver)
+            node2_balance = self.rpc[LIGHTNODE].get_balance(receiver, epoch=hex(epoch))
 
             assert_equal(node0_balance, value)
             assert_equal(node1_balance, value)
@@ -86,7 +133,7 @@ class TxRelayTest(ConfluxTestFramework):
 
             self.log.info(f"account {receiver} correct")
 
-        self.log.info(f"Pass 2 - balances retrieved correctly\n")
+        self.log.info(f"Pass 3 - balances retrieved correctly\n")
 
 
 if __name__ == "__main__":

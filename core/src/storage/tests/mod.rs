@@ -35,13 +35,13 @@ impl KeyValueDB for FakeDbForStateTest {
 
     fn iter<'a>(
         &'a self, _col: Option<u32>,
-    ) -> Box<Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
+    ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
         unreachable!()
     }
 
     fn iter_from_prefix<'a>(
         &'a self, _col: Option<u32>, _prefix: &'a [u8],
-    ) -> Box<Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
+    ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
         unreachable!()
     }
 

@@ -168,7 +168,7 @@ impl SyncHandler {
 
     #[inline]
     fn request_epochs(
-        &self, io: &NetworkContext, peer: PeerId, epochs: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
         info!("request_epochs peer={:?} epochs={:?}", peer, epochs);
 
@@ -187,7 +187,7 @@ impl SyncHandler {
 
     #[inline]
     fn request_headers(
-        &self, io: &NetworkContext, peer: PeerId, hashes: Vec<H256>,
+        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
     ) -> Result<(), Error> {
         info!("request_headers peer={:?} hashes={:?}", peer, hashes);
 
@@ -245,7 +245,7 @@ impl SyncHandler {
         self.headers.insert_waiting(missing, HashSource::Reference);
     }
 
-    fn sync_headers(&self, io: &NetworkContext) {
+    fn sync_headers(&self, io: &dyn NetworkContext) {
         info!("sync_headers; statistics: {:?}", self.get_statistics());
 
         // check if there are any peers available
@@ -289,7 +289,7 @@ impl SyncHandler {
         }
     }
 
-    fn sync_epochs(&self, io: &NetworkContext) {
+    fn sync_epochs(&self, io: &dyn NetworkContext) {
         info!("sync_epochs; statistics: {:?}", self.get_statistics());
 
         // return if we already have enough hashes in the pipeline
@@ -332,7 +332,7 @@ impl SyncHandler {
     }
 
     pub(super) fn on_block_hashes(
-        &self, io: &NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockHashesResponse = rlp.as_val()?;
         info!("on_block_hashes resp={:?}", resp);
@@ -347,7 +347,7 @@ impl SyncHandler {
     }
 
     pub(super) fn on_block_headers(
-        &self, io: &NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockHeadersResponse = rlp.as_val()?;
         info!("on_block_headers resp={:?}", resp);
@@ -359,7 +359,7 @@ impl SyncHandler {
     }
 
     pub(super) fn on_new_block_hashes(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let msg: NewBlockHashes = rlp.as_val()?;
         info!("on_new_block_hashes msg={:?}", msg);
@@ -379,7 +379,7 @@ impl SyncHandler {
         Ok(())
     }
 
-    pub(super) fn start_sync(&self, io: &NetworkContext) {
+    pub(super) fn start_sync(&self, io: &dyn NetworkContext) {
         info!("start_sync; statistics: {:?}", self.get_statistics());
 
         match self.catch_up_mode() {

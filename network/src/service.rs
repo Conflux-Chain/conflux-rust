@@ -14,7 +14,7 @@ use crate::{
     Capability, Error, ErrorKind, HandlerWorkType, IpFilter,
     NetworkConfiguration, NetworkContext as NetworkContextTrait,
     NetworkIoMessage, NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
-    UpdateNodeOperation,
+    UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
 use keccak_hash::keccak;
@@ -190,7 +190,7 @@ impl NetworkService {
 
     /// Register a new protocol handler
     pub fn register_protocol(
-        &self, handler: Arc<NetworkProtocolHandler + Sync>,
+        &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId, versions: &[u8],
     ) -> Result<(), Error>
     {
@@ -320,7 +320,8 @@ pub struct NetworkServiceInner {
     tcp_listener: Mutex<TcpListener>,
     udp_channel: RwLock<UdpChannel>,
     discovery: Mutex<Option<Discovery>>,
-    handlers: RwLock<HashMap<ProtocolId, Arc<NetworkProtocolHandler + Sync>>>,
+    handlers:
+        RwLock<HashMap<ProtocolId, Arc<dyn NetworkProtocolHandler + Sync>>>,
     timers: RwLock<HashMap<TimerToken, ProtocolTimer>>,
     timer_counter: RwLock<usize>,
     pub node_db: RwLock<NodeDatabase>,
@@ -647,9 +648,15 @@ impl NetworkServiceInner {
         Ok(())
     }
 
-    fn has_enough_outgoing_peers(&self) -> bool {
-        let (_, egress_count, _) = self.sessions.stat();
-        return egress_count >= self.config.max_outgoing_peers as usize;
+    fn has_enough_outgoing_peers(
+        &self, tag: Option<(&str, &str)>, max: usize,
+    ) -> bool {
+        let count = match tag {
+            Some((k, v)) => self.sessions.count_with_tag(&k.into(), &v.into()),
+            None => self.sessions.stat().1, // egress count
+        };
+
+        count >= max
     }
 
     fn on_housekeeping(&self, io: &IoContext<NetworkIoMessage>) {
@@ -664,35 +671,43 @@ impl NetworkServiceInner {
         }
 
         let self_id = self.metadata.id().clone();
-        let max_outgoing_peers = self.config.max_outgoing_peers as usize;
-        let max_handshakes = self.config.max_handshakes;
-        let allow_ips = self.config.ip_filter.clone();
+
+        let sampled_archive_nodes = self.sample_archive_nodes();
 
         let (handshake_count, egress_count, ingress_count) =
             self.sessions.stat();
         let samples;
         {
-            let egress_attempt_count = if max_outgoing_peers > egress_count {
-                max_outgoing_peers - egress_count
+            let egress_attempt_count = if self.config.max_outgoing_peers
+                > egress_count + sampled_archive_nodes.len()
+            {
+                self.config.max_outgoing_peers
+                    - egress_count
+                    - sampled_archive_nodes.len()
             } else {
                 0
             };
             samples = self.node_db.read().sample_trusted_node_ids(
                 egress_attempt_count as u32,
-                &allow_ips,
+                &self.config.ip_filter,
             );
         }
+
         let reserved_nodes = self.reserved_nodes.read();
         // Try to connect all reserved peers and trusted peers
-        let nodes = reserved_nodes.iter().cloned().chain(samples);
+        let nodes = reserved_nodes
+            .iter()
+            .cloned()
+            .chain(sampled_archive_nodes)
+            .chain(samples);
 
-        let max_handshakes_per_round = max_handshakes / 2;
+        let max_handshakes_per_round = self.config.max_handshakes / 2;
         let mut started: usize = 0;
         for id in nodes
             .filter(|id| !self.sessions.contains_node(id) && *id != self_id)
             .take(min(
-                max_handshakes_per_round as usize,
-                max_handshakes as usize - handshake_count,
+                max_handshakes_per_round,
+                self.config.max_handshakes - handshake_count,
             ))
         {
             self.connect_peer(&id, io);
@@ -704,6 +719,27 @@ impl NetworkServiceInner {
             handshake_count,
             started
         );
+    }
+
+    /// Sample archive nodes for outgoing connections if not enough.
+    fn sample_archive_nodes(&self) -> HashSet<NodeId> {
+        if self.config.max_outgoing_peers_archive == 0 {
+            return HashSet::new();
+        }
+
+        let key: String = NODE_TAG_NODE_TYPE.into();
+        let value: String = NODE_TAG_ARCHIVE.into();
+        let archive_sessions = self.sessions.count_with_tag(&key, &value);
+
+        if archive_sessions >= self.config.max_outgoing_peers_archive {
+            return HashSet::new();
+        }
+
+        self.node_db.read().sample_trusted_node_ids_with_tag(
+            (self.config.max_outgoing_peers_archive - archive_sessions) as u32,
+            &key,
+            &value,
+        )
     }
 
     // Kill connections of all dropped peers
@@ -977,7 +1013,7 @@ impl NetworkServiceInner {
         let mut failure_id = None;
         let mut deregister = false;
 
-        if let FIRST_SESSION...LAST_SESSION = token {
+        if let FIRST_SESSION..=LAST_SESSION = token {
             if let Some(session) = self.sessions.get(token) {
                 let mut sess = session.write();
                 if !sess.expired() {
@@ -1179,7 +1215,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     ) {
         trace!("Hup: {}", stream);
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.connection_closed(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.connection_closed(stream, io),
             _ => warn!("Unexpected hup"),
         }
     }
@@ -1188,7 +1224,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.session_readable(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.session_readable(stream, io),
             TCP_ACCEPT => self.accept(io),
             UDP_MESSAGE => self.udp_readable(io),
             _ => panic!("Received unknown readable token"),
@@ -1199,7 +1235,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.session_writable(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.session_writable(stream, io),
             UDP_MESSAGE => self.udp_writable(io),
             _ => panic!("Received unknown writable token"),
         }
@@ -1210,8 +1246,20 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             HOUSEKEEPING => self.on_housekeeping(io),
             DISCOVERY_REFRESH => {
                 // Run the _slow_ discovery if enough peers are connected
-                if self.has_enough_outgoing_peers() {
-                    self.discovery.lock().as_mut().map(|d| d.refresh());
+                let disc_general = self.has_enough_outgoing_peers(
+                    None,
+                    self.config.max_outgoing_peers,
+                );
+                let disc_archive = self.has_enough_outgoing_peers(
+                    Some((NODE_TAG_NODE_TYPE, NODE_TAG_ARCHIVE)),
+                    self.config.max_outgoing_peers_archive,
+                );
+                if disc_general || disc_archive {
+                    self.discovery.lock().as_mut().map(|d| {
+                        d.disc_option.general = disc_general;
+                        d.disc_option.archive = disc_archive;
+                        d.refresh();
+                    });
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
@@ -1219,8 +1267,20 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             }
             FAST_DISCOVERY_REFRESH => {
                 // Run the fast discovery if not enough peers are connected
-                if !self.has_enough_outgoing_peers() {
-                    self.discovery.lock().as_mut().map(|d| d.refresh());
+                let disc_general = !self.has_enough_outgoing_peers(
+                    None,
+                    self.config.max_outgoing_peers,
+                );
+                let disc_archive = !self.has_enough_outgoing_peers(
+                    Some((NODE_TAG_NODE_TYPE, NODE_TAG_ARCHIVE)),
+                    self.config.max_outgoing_peers_archive,
+                );
+                if disc_general || disc_archive {
+                    self.discovery.lock().as_mut().map(|d| {
+                        d.disc_option.general = disc_general;
+                        d.disc_option.archive = disc_archive;
+                        d.refresh();
+                    });
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
@@ -1339,7 +1399,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
+            FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
@@ -1377,7 +1437,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
+            FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     let sess = session.write();
                     if sess.expired() {
@@ -1403,7 +1463,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
+            FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
@@ -1615,6 +1675,9 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
     fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str) {
         let id = self.network_service.get_peer_node_id(peer);
         self.network_service.node_db.write().set_tag(id, key, value);
+        self.network_service
+            .sessions
+            .add_tag(peer, key.into(), value.into());
     }
 }
 

@@ -45,14 +45,14 @@ use std::{
 };
 
 lazy_static! {
-    static ref CONSENSIS_EXECUTION_TIMER: Arc<Meter> =
+    static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "consensus::handle_epoch_execution");
-    static ref CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER: Arc<Meter> =
+    static ref CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER: Arc<dyn Meter> =
         register_meter_with_group(
             "timer",
             "consensus::compute_state_for_block"
         );
-    static ref GOOD_TPS_METER: Arc<Meter> =
+    static ref GOOD_TPS_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "good_tps");
 }
 

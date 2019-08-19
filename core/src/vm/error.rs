@@ -136,5 +136,6 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 pub type TrapResult<T, Call, Create> =
     ::std::result::Result<Result<T>, TrapError<Call, Create>>;
 
-pub type ExecTrapResult<T> = TrapResult<T, Box<ResumeCall>, Box<ResumeCreate>>;
+pub type ExecTrapResult<T> =
+    TrapResult<T, Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;
 //pub type ExecTrapError = TrapError<Box<ResumeCall>, Box<ResumeCreate>>;

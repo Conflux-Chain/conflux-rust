@@ -6,7 +6,7 @@ pub struct SubTrieVisitor<'trie> {
     root: CowNodeRef,
 
     trie_ref: &'trie MerklePatriciaTrie,
-    db: &'trie KeyValueDbTraitRead,
+    db: &'trie dyn KeyValueDbTraitRead,
 
     /// We use ReturnAfterUse because only one SubTrieVisitor(the deepest) can
     /// hold the mutable reference of owned_node_set.

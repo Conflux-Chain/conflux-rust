@@ -241,7 +241,7 @@ impl<
     fn load_from_db<'c: 'a, 'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, db_key: DeltaMptDbKey,
+        db: &dyn KeyValueDbTraitRead, db_key: DeltaMptDbKey,
     ) -> Result<
         GuardedValue<
             MutexGuard<'c, CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
@@ -292,7 +292,7 @@ impl<
     }
 
     pub fn load_children_merkles_from_db(
-        &self, db: &KeyValueDbTraitRead, db_key: DeltaMptDbKey,
+        &self, db: &dyn KeyValueDbTraitRead, db_key: DeltaMptDbKey,
     ) -> Result<Option<CompactedChildrenTable<MerkleHash>>> {
         self.children_merkle_db_loads
             .fetch_add(1, Ordering::Relaxed);
@@ -440,7 +440,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -568,7 +568,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -606,7 +606,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<

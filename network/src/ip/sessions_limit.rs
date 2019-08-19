@@ -209,11 +209,11 @@ impl SessionIpLimit for SubnetLimit {
 }
 
 struct CompositeLimit {
-    limits: Vec<Box<SessionIpLimit>>,
+    limits: Vec<Box<dyn SessionIpLimit>>,
 }
 
 impl CompositeLimit {
-    fn new(limits: Vec<Box<SessionIpLimit>>) -> Self {
+    fn new(limits: Vec<Box<dyn SessionIpLimit>>) -> Self {
         CompositeLimit { limits }
     }
 }
@@ -255,7 +255,7 @@ mod tests {
 
     fn new_ip(ip: &'static str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
 
-    fn new_limit(config: &str) -> Box<SessionIpLimit> {
+    fn new_limit(config: &str) -> Box<dyn SessionIpLimit> {
         let config: String = config.into();
         new_session_ip_limit(&config.try_into().unwrap())
     }

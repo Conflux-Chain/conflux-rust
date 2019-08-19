@@ -63,7 +63,7 @@ impl RequestHandler {
     // 2. UnknownPeer:
     //      No need to let caller handle request resending;
     pub fn match_request(
-        &self, io: &NetworkContext, peer_id: PeerId, request_id: u64,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         let mut peers = self.peers.lock();
         let mut requests_queue = self.requests_queue.lock();
@@ -82,9 +82,9 @@ impl RequestHandler {
     /// Send request to the specified peer. If peer is `None` or send request
     /// failed, return the request back to caller to handle in advance.
     pub fn send_request(
-        &self, io: &NetworkContext, peer: Option<PeerId>,
-        mut request: Box<Request>, delay: Option<Duration>,
-    ) -> Result<(), Box<Request>>
+        &self, io: &dyn NetworkContext, peer: Option<PeerId>,
+        mut request: Box<dyn Request>, delay: Option<Duration>,
+    ) -> Result<(), Box<dyn Request>>
     {
         let peer = match peer {
             Some(peer) => peer,
@@ -153,7 +153,7 @@ impl RequestHandler {
     }
 
     pub fn get_timeout_requests(
-        &self, io: &NetworkContext,
+        &self, io: &dyn NetworkContext,
     ) -> Vec<RequestMessage> {
         // Check if in-flight requests timeout
         let mut timeout_requests = Vec::new();
@@ -290,7 +290,7 @@ impl RequestContainer {
     //      This also does NOT introduce needs to handle request
     //      resending for caller;
     pub fn match_request(
-        &mut self, io: &NetworkContext, request_id: u64,
+        &mut self, io: &dyn NetworkContext, request_id: u64,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
     ) -> Result<RequestMessage, Error>
@@ -360,9 +360,9 @@ pub struct SynchronizationPeerRequest {
 
 /// Trait of request message
 pub trait Request: Send + Debug + HasRequestId {
-    fn as_message(&self) -> &Message;
+    fn as_message(&self) -> &dyn Message;
     /// Support to downcast trait to concrete request type.
-    fn as_any(&self) -> &Any;
+    fn as_any(&self) -> &dyn Any;
     /// Request timeout for resend purpose.
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration;
 
@@ -385,7 +385,7 @@ pub trait Request: Send + Debug + HasRequestId {
     ///
     /// If resend is not required, return `None`, e.g. request transactions
     /// failed.
-    fn resend(&self) -> Option<Box<Request>>;
+    fn resend(&self) -> Option<Box<dyn Request>>;
 
     /// Required peer capability to send this request
     fn required_capability(&self) -> Option<DynamicCapability> { None }
@@ -393,12 +393,12 @@ pub trait Request: Send + Debug + HasRequestId {
 
 #[derive(Debug)]
 pub struct RequestMessage {
-    pub request: Box<Request>,
+    pub request: Box<dyn Request>,
     pub delay: Option<Duration>,
 }
 
 impl RequestMessage {
-    pub fn new(request: Box<Request>, delay: Option<Duration>) -> Self {
+    pub fn new(request: Box<dyn Request>, delay: Option<Duration>) -> Self {
         RequestMessage { request, delay }
     }
 
@@ -406,13 +406,13 @@ impl RequestMessage {
         self.request.set_request_id(request_id);
     }
 
-    pub fn get_msg(&self) -> &Message { self.request.as_message() }
+    pub fn get_msg(&self) -> &dyn Message { self.request.as_message() }
 
     /// Download cast request to specified request type.
     /// If downcast failed, resend the request again and return
     /// `UnexpectedResponse` error.
     pub fn downcast_ref<T: Request + Any>(
-        &self, io: &NetworkContext, request_manager: &RequestManager,
+        &self, io: &dyn NetworkContext, request_manager: &RequestManager,
         remove_on_mismatch: bool,
     ) -> Result<&T, Error>
     {

@@ -42,7 +42,7 @@ use time::Duration;
 pub mod propagate;
 
 lazy_static! {
-    static ref TX_GEN_METER: Arc<Meter> =
+    static ref TX_GEN_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "tx_gen");
 }
 

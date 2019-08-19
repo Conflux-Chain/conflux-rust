@@ -47,9 +47,9 @@ impl Handleable for SnapshotChunkRequest {
 }
 
 impl Request for SnapshotChunkRequest {
-    fn as_message(&self) -> &Message { self }
+    fn as_message(&self) -> &dyn Message { self }
 
-    fn as_any(&self) -> &Any { self }
+    fn as_any(&self) -> &dyn Any { self }
 
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
@@ -61,7 +61,9 @@ impl Request for SnapshotChunkRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<Request>> { Some(Box::new(self.clone())) }
+    fn resend(&self) -> Option<Box<dyn Request>> {
+        Some(Box::new(self.clone()))
+    }
 
     fn required_capability(&self) -> Option<DynamicCapability> {
         Some(DynamicCapability::ServeCheckpoint(Some(

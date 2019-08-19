@@ -337,7 +337,7 @@ impl ConsensusNewBlockHandler {
         // If we do not have the anticone of its parent, we compute it with
         // brute force!
         let parent_anticone_opt = inner.anticone_cache.get(parent);
-        let mut anticone;
+        let anticone;
         if parent_anticone_opt.is_none() {
             anticone = ConsensusNewBlockHandler::compute_anticone_bruteforce(
                 inner, me,

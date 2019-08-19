@@ -5,7 +5,7 @@
 pub struct KvdbRocksdb {
     /// Currently this is only a wrapper around the old system_db.
     /// This is going to be deprecated.
-    pub kvdb: Arc<KeyValueDB>,
+    pub kvdb: Arc<dyn KeyValueDB>,
 }
 
 pub struct KvdbRocksDbTransaction {

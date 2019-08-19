@@ -48,7 +48,7 @@ impl DataPropagation {
 }
 
 impl NetworkProtocolHandler for DataPropagation {
-    fn initialize(&self, io: &NetworkContext) {
+    fn initialize(&self, io: &dyn NetworkContext) {
         info!("DataPropagation.initialize: register timers");
 
         if let Err(e) = io.register_timer(0, self.interval) {
@@ -59,7 +59,7 @@ impl NetworkProtocolHandler for DataPropagation {
         }
     }
 
-    fn on_message(&self, _io: &NetworkContext, peer: PeerId, data: &[u8]) {
+    fn on_message(&self, _io: &dyn NetworkContext, peer: PeerId, data: &[u8]) {
         if data.len() != self.size {
             error!("DataPropagation.on_message: received invalid data, len = {}, expected = {}", data.len(), self.size);
         }
@@ -70,7 +70,7 @@ impl NetworkProtocolHandler for DataPropagation {
         );
     }
 
-    fn on_peer_connected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: PeerId) {
         debug!(
             "DataPropagation.on_peer_connected: new peer {} connected",
             peer
@@ -78,7 +78,7 @@ impl NetworkProtocolHandler for DataPropagation {
         self.peers.write().insert(peer);
     }
 
-    fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: PeerId) {
         debug!(
             "DataPropagation.on_peer_disconnected: peer {} disconnected",
             peer
@@ -86,7 +86,7 @@ impl NetworkProtocolHandler for DataPropagation {
         self.peers.write().remove(&peer);
     }
 
-    fn on_timeout(&self, io: &NetworkContext, timer: TimerToken) {
+    fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
         assert_eq!(timer, 0);
 
         for p in self.peers.read().iter() {

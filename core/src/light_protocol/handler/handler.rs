@@ -112,7 +112,7 @@ impl Handler {
 
     #[rustfmt::skip]
     fn dispatch_message(
-        &self, io: &NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
@@ -129,7 +129,7 @@ impl Handler {
     }
 
     fn send_status(
-        &self, io: &NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(StatusPing {
             genesis_hash: self.consensus.data_man.true_genesis_block.hash(),
@@ -165,7 +165,7 @@ impl Handler {
     }
 
     fn on_status(
-        &self, io: &NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let status: StatusPong = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
@@ -189,7 +189,7 @@ impl Handler {
     }
 
     pub fn send_raw_tx(
-        &self, io: &NetworkContext, peer: PeerId, raw: Vec<u8>,
+        &self, io: &dyn NetworkContext, peer: PeerId, raw: Vec<u8>,
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(SendRawTx { raw });
         msg.send(io, peer)?;
@@ -198,7 +198,7 @@ impl Handler {
 }
 
 impl NetworkProtocolHandler for Handler {
-    fn initialize(&self, io: &NetworkContext) {
+    fn initialize(&self, io: &dyn NetworkContext) {
         let period = Duration::from_millis(SYNC_PERIOD_MS);
         io.register_timer(SYNC_TIMER, period)
             .expect("Error registering sync timer");
@@ -208,7 +208,7 @@ impl NetworkProtocolHandler for Handler {
             .expect("Error registering request cleanup timer");
     }
 
-    fn on_message(&self, io: &NetworkContext, peer: PeerId, raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
         trace!("on_message: peer={:?}, raw={:?}", peer, raw);
 
         if raw.len() < 2 {
@@ -229,7 +229,7 @@ impl NetworkProtocolHandler for Handler {
         }
     }
 
-    fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId) {
         info!("on_peer_connected: peer={:?}", peer);
 
         match self.send_status(io, peer) {
@@ -246,12 +246,12 @@ impl NetworkProtocolHandler for Handler {
         }
     }
 
-    fn on_peer_disconnected(&self, _io: &NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: PeerId) {
         info!("on_peer_disconnected: peer={:?}", peer);
         self.peers.remove(&peer);
     }
 
-    fn on_timeout(&self, io: &NetworkContext, timer: TimerToken) {
+    fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
         trace!("Timeout: timer={:?}", timer);
         match timer {
             SYNC_TIMER => self.sync.start_sync(io),

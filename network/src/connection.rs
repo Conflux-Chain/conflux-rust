@@ -23,15 +23,15 @@ use std::{
 };
 
 lazy_static! {
-    static ref READ_METER: Arc<Meter> =
+    static ref READ_METER: Arc<dyn Meter> =
         register_meter_with_group("network_connection_data", "read");
-    static ref WRITE_METER: Arc<Meter> =
+    static ref WRITE_METER: Arc<dyn Meter> =
         register_meter_with_group("network_connection_data", "write");
-    static ref SEND_METER: Arc<Meter> =
+    static ref SEND_METER: Arc<dyn Meter> =
         register_meter_with_group("network_connection_data", "send");
-    static ref SEND_LOW_PRIORITY_METER: Arc<Meter> =
+    static ref SEND_LOW_PRIORITY_METER: Arc<dyn Meter> =
         register_meter_with_group("network_connection_data", "send_low");
-    static ref SEND_HIGH_PRIORITY_METER: Arc<Meter> =
+    static ref SEND_HIGH_PRIORITY_METER: Arc<dyn Meter> =
         register_meter_with_group("network_connection_data", "send_high");
 }
 
@@ -459,7 +459,7 @@ mod tests {
 
     impl PacketSizer for TestPacketSizer {
         fn packet_size(raw_packet: &Bytes) -> usize {
-            let buf = &raw_packet.into_buf() as &Buf;
+            let buf = &raw_packet.into_buf() as &dyn Buf;
             if buf.remaining() >= 1 {
                 let size = buf.bytes()[0] as usize;
                 if buf.remaining() >= size {

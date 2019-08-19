@@ -56,7 +56,7 @@ impl SynchronizationService {
         self.protocol_handler.get_synchronization_graph()
     }
 
-    pub fn current_sync_phase(&self) -> Arc<SynchronizationPhaseTrait> {
+    pub fn current_sync_phase(&self) -> Arc<dyn SynchronizationPhaseTrait> {
         self.protocol_handler.phase_manager.get_current_phase()
     }
 

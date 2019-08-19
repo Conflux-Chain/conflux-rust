@@ -13,7 +13,7 @@ pub trait Timer: Send + Sync {
     fn update_since(&self, _start: Instant) {}
 }
 
-pub fn register_timer(name: &'static str) -> Arc<Timer> {
+pub fn register_timer(name: &'static str) -> Arc<dyn Timer> {
     if !is_enabled() {
         Arc::new(NoopTimer)
     } else {
@@ -29,8 +29,8 @@ struct NoopTimer;
 impl Timer for NoopTimer {}
 
 struct StandardTimer {
-    meter: Arc<Meter>,
-    histogram: Arc<Histogram>,
+    meter: Arc<dyn Meter>,
+    histogram: Arc<dyn Histogram>,
 }
 
 impl Timer for StandardTimer {
