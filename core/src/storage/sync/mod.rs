@@ -55,14 +55,17 @@ impl RangedManifest {
     }
 
     pub fn merge(&mut self, other: RangedManifest) {
+        let next_chunk = match self.next_chunk {
+            Some(ref chunk) => chunk,
+            None => return,
+        };
+
         if other.chunks.is_empty() {
             return;
         }
 
-        if let Some(ref chunk) = self.next_chunk {
-            if chunk.key != other.chunks[0].key {
-                return;
-            }
+        if next_chunk.key != other.chunks[0].key {
+            return;
         }
 
         self.chunks.extend(other.chunks);
