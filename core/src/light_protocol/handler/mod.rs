@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod handler;
+mod ledger_proof;
 mod query;
 mod sync;
 

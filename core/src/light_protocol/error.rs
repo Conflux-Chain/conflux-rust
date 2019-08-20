@@ -38,9 +38,19 @@ error_chain! {
             display("Invalid message format"),
         }
 
-        InvalidProof {
-            description("Invalid proof"),
-            display("Invalid proof"),
+        InvalidLedgerProof {
+            description("Invalid ledger proof"),
+            display("Invalid ledger proof"),
+        }
+
+        InvalidReceipts {
+            description("Invalid receipts"),
+            display("Invalid receipts"),
+        }
+
+        InvalidStateProof {
+            description("Invalid state proof"),
+            display("Invalid state proof"),
         }
 
         InvalidStateRoot {
@@ -146,7 +156,9 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         }
 
         ErrorKind::InvalidMessageFormat
-        | ErrorKind::InvalidProof
+        | ErrorKind::InvalidLedgerProof
+        | ErrorKind::InvalidReceipts
+        | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot
         | ErrorKind::ValidationFailed
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),

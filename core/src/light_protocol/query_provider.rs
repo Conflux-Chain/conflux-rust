@@ -10,7 +10,7 @@ use std::sync::{Arc, Weak};
 
 use cfx_types::H256;
 use primitives::{
-    BlockHeader, EpochNumber, StateRoot, TransactionWithSignature,
+    BlockHeader, EpochNumber, Receipt, StateRoot, TransactionWithSignature,
 };
 
 use crate::{
@@ -36,8 +36,9 @@ use super::{
     message::{
         msgid, BlockHashes as GetBlockHashesResponse,
         BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
-        GetBlockHeaders, GetStateEntry, GetStateRoot, NewBlockHashes, NodeType,
-        SendRawTx, StateEntry as GetStateEntryResponse,
+        GetBlockHeaders, GetReceipts, GetStateEntry, GetStateRoot,
+        NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
+        ReceiptsWithProof, SendRawTx, StateEntry as GetStateEntryResponse,
         StateRoot as GetStateRootResponse, StateRootWithProof, StatusPing,
         StatusPong,
     },
@@ -144,6 +145,7 @@ impl QueryProvider {
             msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, &rlp),
             msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
             msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, &rlp),
+            msgid::GET_RECEIPTS => self.on_get_receipts(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -168,6 +170,12 @@ impl QueryProvider {
     }
 
     #[inline]
+    fn block_hashes_in(&self, epoch: u64) -> Result<Vec<H256>, Error> {
+        let epoch = EpochNumber::Number(epoch);
+        Ok(self.consensus.get_block_hashes_by_epoch(epoch)?)
+    }
+
+    #[inline]
     fn headers_needed_to_verify(&self, epoch: u64) -> Result<Vec<u64>, Error> {
         // find the first header that can verify the state root requested
         let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
@@ -183,16 +191,15 @@ impl QueryProvider {
         let blame = self.pivot_header_of(witness)?.blame() as u64;
 
         // assumption: the state root requested can be verified by the witness
+        assert!(witness >= epoch + DEFERRED_STATE_EPOCH_COUNT);
         assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
 
+        // assumption: the witness header is correct
+        // i.e. it does not blame blocks at or before the genesis block
+        assert!(witness > blame);
+
         // collect all header heights that were used to compute DSR of `witness`
-        Ok((0..(blame + 1))
-            .map(|ii| {
-                // assumption: majority will not approve incorrect blame fields
-                assert!(witness >= ii);
-                witness - ii
-            })
-            .collect())
+        Ok((0..(blame + 1)).map(|ii| witness - ii).collect())
     }
 
     #[inline]
@@ -229,7 +236,7 @@ impl QueryProvider {
     }
 
     #[inline]
-    fn state_root_with_proof_at(
+    fn state_root_with_proof_of(
         &self, epoch: u64,
     ) -> Result<StateRootWithProof, Error> {
         let root = self.state_root_of(epoch)?;
@@ -241,6 +248,54 @@ impl QueryProvider {
             .collect::<Result<Vec<H256>, Error>>()?;
 
         Ok(StateRootWithProof { root, proof })
+    }
+
+    #[inline]
+    fn epoch_receipts_of(
+        &self, epoch: u64,
+    ) -> Result<Vec<Vec<Receipt>>, Error> {
+        let pivot = self.pivot_hash_of(epoch)?;
+        let hashes = self.block_hashes_in(epoch)?;
+
+        hashes
+            .into_iter()
+            .map(|h| {
+                self.consensus
+                    .data_man
+                    .block_results_by_hash_with_epoch(&h, &pivot, false)
+                    .map(|res| (*res.receipts).clone())
+                    .ok_or(ErrorKind::InternalError.into())
+            })
+            .collect()
+    }
+
+    #[inline]
+    fn correct_deferred_receipts_root_hash_of(
+        &self, height: u64,
+    ) -> Result<H256, Error> {
+        let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
+        let pivot = self.pivot_hash_of(epoch)?;
+
+        self.consensus
+            .data_man
+            .get_epoch_execution_commitments(&pivot)
+            .map(|c| c.receipts_root)
+            .ok_or(ErrorKind::InternalError.into())
+    }
+
+    #[inline]
+    fn receipts_with_proof_of(
+        &self, epoch: u64,
+    ) -> Result<ReceiptsWithProof, Error> {
+        let receipts = self.epoch_receipts_of(epoch)?;
+
+        let proof = self
+            .headers_needed_to_verify(epoch)?
+            .into_iter()
+            .map(|h| self.correct_deferred_receipts_root_hash_of(h))
+            .collect::<Result<Vec<H256>, Error>>()?;
+
+        Ok(ReceiptsWithProof { receipts, proof })
     }
 
     #[inline]
@@ -332,7 +387,7 @@ impl QueryProvider {
         let request_id = req.request_id;
 
         let pivot_hash = self.pivot_hash_of(req.epoch)?;
-        let state_root = self.state_root_with_proof_at(req.epoch)?;
+        let state_root = self.state_root_with_proof_of(req.epoch)?;
 
         let msg: Box<dyn Message> = Box::new(GetStateRootResponse {
             request_id,
@@ -352,7 +407,7 @@ impl QueryProvider {
         let request_id = req.request_id;
 
         let pivot_hash = self.pivot_hash_of(req.epoch)?;
-        let state_root = self.state_root_with_proof_at(req.epoch)?;
+        let state_root = self.state_root_with_proof_of(req.epoch)?;
         let (entry, proof) = self.state_entry_at(req.epoch, &req.key)?;
         let entry = entry.map(|x| x.to_vec());
 
@@ -448,6 +503,26 @@ impl QueryProvider {
                 Err(ErrorKind::InternalError.into())
             }
         }
+    }
+
+    fn on_get_receipts(
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetReceipts = rlp.as_val()?;
+        info!("on_get_receipts req={:?}", req);
+        let request_id = req.request_id;
+
+        let pivot_hash = self.pivot_hash_of(req.epoch)?;
+        let receipts = self.receipts_with_proof_of(req.epoch)?;
+
+        let msg: Box<dyn Message> = Box::new(GetReceiptsResponse {
+            request_id,
+            pivot_hash,
+            receipts,
+        });
+
+        msg.send(io, peer)?;
+        Ok(())
     }
 
     fn broadcast(

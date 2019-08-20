@@ -19,13 +19,17 @@ use futures::{
 };
 
 use cfx_types::H256;
-use primitives::{BlockHeader, BlockHeaderBuilder, EpochNumber, StateRoot};
+use primitives::{
+    BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, StateRoot,
+};
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         message::{
-            GetStateEntry, GetStateRoot, StateEntry as GetStateEntryResponse,
+            GetReceipts, GetStateEntry, GetStateRoot,
+            Receipts as GetReceiptsResponse, ReceiptsWithProof,
+            StateEntry as GetStateEntryResponse,
             StateRoot as GetStateRootResponse, StateRootWithProof,
         },
         Error, ErrorKind,
@@ -38,10 +42,13 @@ use crate::{
     },
 };
 
+use super::ledger_proof::LedgerProof;
+
 #[derive(Debug)]
 pub enum QueryResult {
     StateEntry(Option<Vec<u8>>),
     StateRoot(StateRoot),
+    Receipts(Vec<Vec<Receipt>>),
 }
 
 struct PendingRequest {
@@ -91,16 +98,16 @@ impl QueryHandler {
         }
     }
 
-    // 1. When validating a state root, we first find the witness - the block
-    //    header that can be used to verify the state root. This selection is
-    //    done based on the blame fields.
-    // 2. Then we validate the integrity of the provided hash set against the
-    //    deferred state root field of the witness.
-    // 3. Finally, we validate the state root against the corresponding state
-    //    root hash provided.
-    fn validate_state_root(
-        &self, epoch: u64, state_root: &StateRootWithProof,
-    ) -> Result<(), Error> {
+    // When validating a ledger proof, we first find the witness - the block
+    // header that can be used to verify the the provided hashes against the
+    // corresponding on-ledger root hash. The witness is chosen based on the
+    // blame field. The root hash can be one of a) deferred state root hash,
+    // b) deferred receipts root hash, c) deferred logs bloom hash. Then, we
+    // compute the deferred root using the hashes provided and compare it to
+    // the hash stored in the witness header.
+    fn validate_ledger_proof(
+        &self, epoch: u64, proof: LedgerProof,
+    ) -> Result<H256, Error> {
         // find the first header that can verify the state root requested
         let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
 
@@ -116,54 +123,61 @@ impl QueryHandler {
         let blame = witness_header.blame() as u64;
 
         // assumption: the target state root can be verified by the witness
+        assert!(witness >= epoch + DEFERRED_STATE_EPOCH_COUNT);
         assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
 
-        // validate the number of hashes provided against local witness blame
-        if state_root.proof.len() as u64 != blame + 1 {
-            info!(
-                "Invalid number of hashes provided: expected={}, received={}",
-                blame + 1,
-                state_root.proof.len()
-            );
-            return Err(ErrorKind::InvalidStateRoot.into());
-        }
+        // assumption: the witness header is correct
+        // i.e. it does not blame blocks at or before the genesis block
+        assert!(witness > blame);
 
-        // compute witness deferred state root hash from the hashes provided
-        let received_witness_root_hash = match blame {
-            0 => state_root.proof[0],
-            _ => {
-                let hashes = state_root.proof.clone();
-                BlockHeaderBuilder::compute_blame_state_root_vec_root(hashes)
-            }
-        };
+        // do the actual validation
+        proof.validate(witness_header)?;
 
-        // validate against local witness deferred state root hash
-        let local_witness_root_hash = *witness_header.deferred_state_root();
-
-        if received_witness_root_hash != local_witness_root_hash {
-            info!(
-                "Witness root hash mismatch: local={}, received={}",
-                local_witness_root_hash, received_witness_root_hash
-            );
-            return Err(ErrorKind::InvalidStateRoot.into());
-        }
-
-        // TODO(thegaram): at this point, we can cache all the hashes received
-        // and reuse them later
-
-        // find hash corresponding to the state root requested
+        // return the root hash corresponding to `epoch`
         let index = (witness - epoch - DEFERRED_STATE_EPOCH_COUNT) as usize;
-        let received_root_hash = state_root.proof[index];
+        let received_root_hash = proof[index];
 
-        // validate state root against the hash provided
-        let computed_root_hash = state_root.root.compute_state_root_hash();
+        Ok(received_root_hash)
+    }
 
-        if received_root_hash != computed_root_hash {
+    fn validate_state_root(
+        &self, epoch: u64, srwp: &StateRootWithProof,
+    ) -> Result<(), Error> {
+        let StateRootWithProof { root, proof } = srwp;
+        let proof = LedgerProof::StateRoot(proof.to_vec());
+
+        let received = self.validate_ledger_proof(epoch, proof)?;
+        let computed = root.compute_state_root_hash();
+
+        if received != computed {
             info!(
                 "State root hash mismatch: received={}, computed={}",
-                received_root_hash, computed_root_hash
+                received, computed
             );
             return Err(ErrorKind::InvalidStateRoot.into());
+        }
+
+        Ok(())
+    }
+
+    fn validate_receipts(
+        &self, epoch: u64, rwp: &ReceiptsWithProof,
+    ) -> Result<(), Error> {
+        let ReceiptsWithProof { receipts, proof } = rwp;
+        let proof = LedgerProof::ReceiptsRoot(proof.to_vec());
+
+        // convert Vec<Vec<_>> to Vec<Arc<Vec<_>>>
+        let rs = receipts.into_iter().cloned().map(Arc::new).collect();
+
+        let received = self.validate_ledger_proof(epoch, proof)?;
+        let computed = BlockHeaderBuilder::compute_block_receipts_root(&rs);
+
+        if received != computed {
+            info!(
+                "Receipts root hash mismatch: received={}, computed={}",
+                received, computed
+            );
+            return Err(ErrorKind::InvalidReceipts.into());
         }
 
         Ok(())
@@ -233,10 +247,28 @@ impl QueryHandler {
             resp.state_root.root.snapshot_root,
         ) {
             info!("Invalid proof from peer={}", peer);
-            return Err(ErrorKind::InvalidProof.into());
+            return Err(ErrorKind::InvalidStateProof.into());
         }
 
         sender.complete(QueryResult::StateEntry(resp.entry));
+        // note: in case of early return, `sender` will be cancelled
+
+        Ok(())
+    }
+
+    pub(super) fn on_receipts(
+        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let resp: GetReceiptsResponse = rlp.as_val()?;
+        info!("on_receipts resp={:?}", resp);
+
+        let id = resp.request_id;
+        let (req, sender) = self.match_request::<GetReceipts>(peer, id)?;
+
+        self.validate_pivot_hash(req.epoch, resp.pivot_hash)?;
+        self.validate_receipts(req.epoch, &resp.receipts)?;
+
+        sender.complete(QueryResult::Receipts(resp.receipts.receipts));
         // note: in case of early return, `sender` will be cancelled
 
         Ok(())
@@ -281,6 +313,7 @@ impl QueryHandler {
             std::thread::sleep(d);
         }
 
+        // TODO(thegaram): remove timeout requests from `pending`
         Err(ErrorKind::NoResponse.into())
     }
 }

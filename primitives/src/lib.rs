@@ -29,6 +29,7 @@ pub use crate::{
     block_header::{BlockHeader, BlockHeaderBuilder},
     epoch::{EpochId, EpochNumber},
     log_entry::LogEntry,
+    receipt::Receipt,
     state_root::*,
     transaction::{
         Action, SignedTransaction, Transaction, TransactionWithSignature,
