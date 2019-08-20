@@ -42,6 +42,8 @@ use crate::{
     },
 };
 
+use super::ledger_proof::LedgerProof;
+
 #[derive(Debug)]
 pub enum QueryResult {
     StateEntry(Option<Vec<u8>>),
@@ -103,8 +105,8 @@ impl QueryHandler {
     // b) deferred receipts root hash, c) deferred logs bloom hash. Then, we
     // compute the deferred root using the hashes provided and compare it to
     // the hash stored in the witness header.
-    fn validate_proof_hashes(
-        &self, epoch: u64, hashes: &Vec<H256>,
+    fn validate_ledger_proof(
+        &self, epoch: u64, proof: LedgerProof,
     ) -> Result<H256, Error> {
         // find the first header that can verify the state root requested
         let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
@@ -128,42 +130,12 @@ impl QueryHandler {
         // i.e. it does not blame blocks at or before the genesis block
         assert!(witness > blame);
 
-        // validate the number of hashes provided against local witness blame
-        if hashes.len() as u64 != blame + 1 {
-            info!(
-                "Invalid number of hashes provided: expected={}, received={}",
-                blame + 1,
-                hashes.len()
-            );
-            return Err(ErrorKind::InvalidLedgerProof.into());
-        }
+        // do the actual validation
+        proof.validate(witness_header)?;
 
-        // compute witness deferred root hash from the hashes provided
-        let received_witness_root_hash = match blame {
-            0 => hashes[0],
-            _ => {
-                let hashes = hashes.clone();
-                BlockHeaderBuilder::compute_blame_state_root_vec_root(hashes)
-            }
-        };
-
-        // validate against local witness deferred state root hash
-        let local_witness_root_hashes = vec![
-            *witness_header.deferred_state_root(),
-            *witness_header.deferred_receipts_root(),
-            *witness_header.deferred_logs_bloom_hash(),
-        ];
-
-        if !local_witness_root_hashes.contains(&received_witness_root_hash) {
-            info!(
-                "Witness root hash mismatch: local={:?}, received={}",
-                local_witness_root_hashes, received_witness_root_hash
-            );
-            return Err(ErrorKind::InvalidLedgerProof.into());
-        }
-
+        // return the root hash corresponding to `epoch`
         let index = (witness - epoch - DEFERRED_STATE_EPOCH_COUNT) as usize;
-        let received_root_hash = hashes[index];
+        let received_root_hash = proof[index];
 
         Ok(received_root_hash)
     }
@@ -172,8 +144,9 @@ impl QueryHandler {
         &self, epoch: u64, srwp: &StateRootWithProof,
     ) -> Result<(), Error> {
         let StateRootWithProof { root, proof } = srwp;
+        let proof = LedgerProof::StateRoot(proof.to_vec());
 
-        let received = self.validate_proof_hashes(epoch, proof)?;
+        let received = self.validate_ledger_proof(epoch, proof)?;
         let computed = root.compute_state_root_hash();
 
         if received != computed {
@@ -191,11 +164,12 @@ impl QueryHandler {
         &self, epoch: u64, rwp: &ReceiptsWithProof,
     ) -> Result<(), Error> {
         let ReceiptsWithProof { receipts, proof } = rwp;
+        let proof = LedgerProof::ReceiptsRoot(proof.to_vec());
 
         // convert Vec<Vec<_>> to Vec<Arc<Vec<_>>>
         let rs = receipts.into_iter().cloned().map(Arc::new).collect();
 
-        let received = self.validate_proof_hashes(epoch, proof)?;
+        let received = self.validate_ledger_proof(epoch, proof)?;
         let computed = BlockHeaderBuilder::compute_block_receipts_root(&rs);
 
         if received != computed {
