@@ -16,7 +16,7 @@ pub enum LedgerProof {
 impl Index<usize> for LedgerProof {
     type Output = H256;
 
-    fn index(&self, ii: usize) -> &H256 {
+    fn index(&self, ii: usize) -> &Self::Output {
         let hashes = match self {
             LedgerProof::StateRoot(hs) => hs,
             LedgerProof::ReceiptsRoot(hs) => hs,
