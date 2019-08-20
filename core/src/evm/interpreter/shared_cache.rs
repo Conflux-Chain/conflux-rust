@@ -32,6 +32,7 @@ const DEFAULT_CACHE_SIZE: usize = 4 * 1024 * 1024;
 // stub for a HeapSizeOf implementation.
 struct Bits(Arc<BitSet>);
 
+// FIXME Use malloc_size_of
 impl HeapSizeOf for Bits {
     fn heap_size_of_children(&self) -> usize {
         // dealing in bits here

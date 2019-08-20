@@ -86,7 +86,7 @@ class SingleBench(ConfluxTestFramework):
             self.node.p2p.send_protocol_packet(int_to_bytes(
                 TRANSACTIONS) + encoded)
         for k in balance_map:
-                wait_until(lambda: self.check_account(k, balance_map))
+                wait_until(lambda: self.check_account(k, balance_map), timeout=100000000)
         end_time = datetime.datetime.now()
         time_used = (end_time - start_time).total_seconds()
         block_gen_thread.stop()

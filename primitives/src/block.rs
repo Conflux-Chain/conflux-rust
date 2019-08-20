@@ -8,8 +8,8 @@ use crate::{
 };
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{H256, U256};
-use heapsize::HeapSizeOf;
 use keccak_hash::keccak;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rand::Rng;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use siphasher::sip::SipHasher24;
@@ -34,10 +34,9 @@ pub struct Block {
     pub approximated_rlp_size_with_public: usize,
 }
 
-impl HeapSizeOf for Block {
-    fn heap_size_of_children(&self) -> usize {
-        self.block_header.heap_size_of_children()
-            + SignedTransaction::heap_size_of_iter(self.transactions.iter())
+impl MallocSizeOf for Block {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.block_header.size_of(ops) + self.transactions.size_of(ops)
     }
 }
 
@@ -252,10 +251,9 @@ impl Debug for CompactBlock {
     }
 }
 
-impl HeapSizeOf for CompactBlock {
-    fn heap_size_of_children(&self) -> usize {
-        self.tx_short_ids.heap_size_of_children()
-            + self.reconstructed_txes.heap_size_of_children()
+impl MallocSizeOf for CompactBlock {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.tx_short_ids.size_of(ops) + self.reconstructed_txes.size_of(ops)
     }
 }
 

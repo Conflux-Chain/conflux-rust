@@ -22,8 +22,8 @@ use crate::{
 };
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Bloom, H256};
-use heapsize::HeapSizeOf;
 use kvdb::DBTransaction;
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::{from_tx_hash, get_shortid_key, CompactBlock},
@@ -907,12 +907,13 @@ impl BlockDataManager {
 
     /// Get current cache size.
     pub fn cache_size(&self) -> CacheSize {
-        let block_headers = self.block_headers.read().heap_size_of_children();
-        let blocks = self.blocks.read().heap_size_of_children();
-        let compact_blocks = self.compact_blocks.read().heap_size_of_children();
-        let block_receipts = self.block_receipts.read().heap_size_of_children();
+        let malloc_ops = &mut new_malloc_size_ops();
+        let block_headers = self.block_headers.read().size_of(malloc_ops);
+        let blocks = self.blocks.read().size_of(malloc_ops);
+        let compact_blocks = self.compact_blocks.read().size_of(malloc_ops);
+        let block_receipts = self.block_receipts.read().size_of(malloc_ops);
         let transaction_addresses =
-            self.transaction_addresses.read().heap_size_of_children();
+            self.transaction_addresses.read().size_of(malloc_ops);
         CacheSize {
             block_headers,
             blocks,
@@ -923,6 +924,7 @@ impl BlockDataManager {
     }
 
     fn block_cache_gc(&self) {
+        let malloc_ops = &mut new_malloc_size_ops();
         let current_size = self.cache_size().total();
         let mut block_headers = self.block_headers.write();
         let mut blocks = self.blocks.write();
@@ -961,11 +963,11 @@ impl BlockDataManager {
                 }
             }
 
-            block_headers.heap_size_of_children()
-                + blocks.heap_size_of_children()
-                + executed_results.heap_size_of_children()
-                + tx_address.heap_size_of_children()
-                + compact_blocks.heap_size_of_children()
+            block_headers.size_of(malloc_ops)
+                + blocks.size_of(malloc_ops)
+                + executed_results.size_of(malloc_ops)
+                + tx_address.size_of(malloc_ops)
+                + compact_blocks.size_of(malloc_ops)
         });
 
         block_headers.shrink_to_fit();
@@ -1288,9 +1290,9 @@ pub struct BlockExecutedResult {
     pub receipts: Arc<Vec<Receipt>>,
     pub bloom: Bloom,
 }
-impl HeapSizeOf for BlockExecutedResult {
-    fn heap_size_of_children(&self) -> usize {
-        self.receipts.heap_size_of_children()
+impl MallocSizeOf for BlockExecutedResult {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.receipts.size_of(ops)
     }
 }
 type EpochIndex = H256;
@@ -1300,9 +1302,9 @@ pub struct BlockReceiptsInfo {
     info_with_epoch: Vec<(EpochIndex, BlockExecutedResult)>,
 }
 
-impl HeapSizeOf for BlockReceiptsInfo {
-    fn heap_size_of_children(&self) -> usize {
-        self.info_with_epoch.heap_size_of_children()
+impl MallocSizeOf for BlockReceiptsInfo {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.info_with_epoch.size_of(ops)
     }
 }
 

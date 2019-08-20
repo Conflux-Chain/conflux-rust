@@ -8,15 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! A reduced fork of Firefox's malloc_size_of crate, for bundling with WebRender.
+//! A reduced fork of Firefox's malloc_size_of crate, for bundling with
+//! WebRender.
 
-use std::hash::{BuildHasher, Hash};
-use std::mem::size_of;
-use std::ops::Range;
-use std::os::raw::c_void;
-use std::sync::Arc;
-use std::mem;
-use cfx_types::{H64, H256, H512};
+use cfg_if::cfg_if;
+use cfx_types::{H256, H512};
+use std::{
+    hash::{BuildHasher, Hash},
+    mem::{self, size_of},
+    ops::Range,
+    os::raw::c_void,
+    sync::Arc,
+};
 
 /// A C function that takes a pointer to a heap allocation and returns its size.
 type VoidPtrToSizeFn = unsafe extern "C" fn(ptr: *const c_void) -> usize;
@@ -37,7 +40,8 @@ impl MallocSizeOfOps {
     pub fn new(
         size_of: VoidPtrToSizeFn,
         malloc_enclosing_size_of: Option<VoidPtrToSizeFn>,
-    ) -> Self {
+    ) -> Self
+    {
         MallocSizeOfOps {
             size_of_op: size_of,
             enclosing_size_of_op: malloc_enclosing_size_of,
@@ -116,9 +120,7 @@ impl<T: MallocSizeOf + ?Sized> MallocSizeOf for Box<T> {
 }
 
 impl MallocSizeOf for () {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl<T1, T2> MallocSizeOf for (T1, T2)
@@ -150,7 +152,10 @@ where
     T4: MallocSizeOf,
 {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.0.size_of(ops) + self.1.size_of(ops) + self.2.size_of(ops) + self.3.size_of(ops)
+        self.0.size_of(ops)
+            + self.1.size_of(ops)
+            + self.2.size_of(ops)
+            + self.3.size_of(ops)
     }
 }
 
@@ -186,8 +191,7 @@ impl<T: MallocSizeOf> MallocSizeOf for std::cell::RefCell<T> {
 }
 
 impl<'a, B: ?Sized + ToOwned> MallocSizeOf for std::borrow::Cow<'a, B>
-where
-    B::Owned: MallocSizeOf,
+where B::Owned: MallocSizeOf
 {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         match *self {
@@ -226,7 +230,8 @@ impl<T: MallocSizeOf> MallocSizeOf for Vec<T> {
 /// This is only for estimating memory size in Cache Manager
 impl<T: MallocSizeOf> MallocSizeOf for Arc<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        (mem::size_of::<T>() + self.as_ref().size_of(ops))/Arc::strong_count(self)
+        (mem::size_of::<T>() + self.as_ref().size_of(ops))
+            / Arc::strong_count(self)
     }
 }
 
@@ -239,13 +244,14 @@ macro_rules! malloc_size_of_hash_set {
         {
             fn shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
                 if ops.has_malloc_enclosing_size_of() {
-                    // The first value from the iterator gives us an interior pointer.
-                    // `ops.malloc_enclosing_size_of()` then gives us the storage size.
-                    // This assumes that the `HashSet`'s contents (values and hashes)
+                    // The first value from the iterator gives us an interior
+                    // pointer. `ops.malloc_enclosing_size_of()`
+                    // then gives us the storage size. This assumes
+                    // that the `HashSet`'s contents (values and hashes)
                     // are all stored in a single contiguous heap allocation.
-                    self.iter()
-                        .next()
-                        .map_or(0, |t| unsafe { ops.malloc_enclosing_size_of(t) })
+                    self.iter().next().map_or(0, |t| unsafe {
+                        ops.malloc_enclosing_size_of(t)
+                    })
                 } else {
                     // An estimate.
                     self.capacity() * (size_of::<T>() + size_of::<usize>())
@@ -279,13 +285,15 @@ macro_rules! malloc_size_of_hash_map {
             S: BuildHasher,
         {
             fn shallow_size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-                // See the implementation for std::collections::HashSet for details.
+                // See the implementation for std::collections::HashSet for
+                // details.
                 if ops.has_malloc_enclosing_size_of() {
-                    self.values()
-                        .next()
-                        .map_or(0, |v| unsafe { ops.malloc_enclosing_size_of(v) })
+                    self.values().next().map_or(0, |v| unsafe {
+                        ops.malloc_enclosing_size_of(v)
+                    })
                 } else {
-                    self.capacity() * (size_of::<V>() + size_of::<K>() + size_of::<usize>())
+                    self.capacity()
+                        * (size_of::<V>() + size_of::<K>() + size_of::<usize>())
                 }
             }
         }
@@ -312,9 +320,7 @@ malloc_size_of_hash_map!(std::collections::HashMap<K, V, S>);
 
 // PhantomData is always 0.
 impl<T> MallocSizeOf for std::marker::PhantomData<T> {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        0
-    }
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 /// For use on types where size_of() returns 0.
@@ -358,8 +364,90 @@ malloc_size_of_is_0!(std::time::Duration);
 malloc_size_of_is_0!(std::time::Instant);
 malloc_size_of_is_0!(std::time::SystemTime);
 
-malloc_size_of_is_0!(Range<u8>, Range<u16>, Range<u32>, Range<u64>, Range<usize>);
-malloc_size_of_is_0!(Range<i8>, Range<i16>, Range<i32>, Range<i64>, Range<isize>);
+malloc_size_of_is_0!(
+    Range<u8>,
+    Range<u16>,
+    Range<u32>,
+    Range<u64>,
+    Range<usize>
+);
+malloc_size_of_is_0!(
+    Range<i8>,
+    Range<i16>,
+    Range<i32>,
+    Range<i64>,
+    Range<isize>
+);
 malloc_size_of_is_0!(Range<f32>, Range<f64>);
 
-malloc_size_of_is_0!(H64, H256, H512);
+malloc_size_of_is_0!(H256, H512);
+
+mod usable_size {
+
+    use super::*;
+
+    cfg_if! {
+        if #[cfg(target_os = "windows")] {
+
+            // default windows allocator
+            extern crate winapi;
+
+            use self::winapi::um::heapapi::{GetProcessHeap, HeapSize, HeapValidate};
+
+            /// Get the size of a heap block.
+            /// Call windows allocator through `winapi` crate
+            pub unsafe extern "C" fn malloc_usable_size(mut ptr: *const c_void) -> usize {
+
+                let heap = GetProcessHeap();
+
+                if HeapValidate(heap, 0, ptr) == 0 {
+                    ptr = *(ptr as *const *const c_void).offset(-1);
+                }
+
+                HeapSize(heap, 0, ptr) as usize
+            }
+
+        } else if #[cfg(feature = "jemalloc-global")] {
+
+            /// Use of jemalloc usable size C function through jemallocator crate call.
+            pub unsafe extern "C" fn malloc_usable_size(ptr: *const c_void) -> usize {
+                jemallocator::usable_size(ptr)
+            }
+
+        } else if #[cfg(target_os = "linux")] {
+
+            /// Linux call system allocator (currently malloc).
+            extern "C" {
+                pub fn malloc_usable_size(ptr: *const c_void) -> usize;
+            }
+
+        } else if #[cfg(target_os = "macos")] {
+
+            /// Linux call system allocator (currently malloc).
+            extern "C" {
+                #[link_name = "malloc_size"]
+                pub fn malloc_usable_size(ptr: *const c_void) -> usize;
+            }
+
+
+        } else {
+            pub unsafe extern "C" fn malloc_usable_size(_ptr: *const c_void) -> usize {
+                unreachable!("estimate heapsize or feature allocator needed")
+            }
+
+        }
+
+    }
+
+    /// No enclosing function defined.
+    #[inline]
+    pub fn new_enclosing_size_fn() -> Option<VoidPtrToSizeFn> { None }
+}
+
+/// Get a new instance of a MallocSizeOfOps
+pub fn new_malloc_size_ops() -> MallocSizeOfOps {
+    MallocSizeOfOps::new(
+        usable_size::malloc_usable_size,
+        usable_size::new_enclosing_size_fn(),
+    )
+}

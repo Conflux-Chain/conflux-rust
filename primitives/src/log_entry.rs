@@ -6,7 +6,7 @@
 
 use crate::{block::BlockNumber, bytes::Bytes};
 use cfx_types::{Address, Bloom, BloomInput, H256};
-use heapsize::HeapSizeOf;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::ops::Deref;
 
 /// A record of execution for a `LOG` operation.
@@ -21,9 +21,9 @@ pub struct LogEntry {
     pub data: Bytes,
 }
 
-impl HeapSizeOf for LogEntry {
-    fn heap_size_of_children(&self) -> usize {
-        self.topics.heap_size_of_children() + self.data.heap_size_of_children()
+impl MallocSizeOf for LogEntry {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.topics.size_of(ops) + self.data.size_of(ops)
     }
 }
 

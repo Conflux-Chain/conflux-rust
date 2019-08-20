@@ -48,7 +48,7 @@ class MessageTest(ConfluxTestFramework):
         nonce_map = {genesis_key: 0}
         '''Test Random Transactions'''
         all_txs = []
-        tx_n = 10000
+        tx_n = 100000
         gas_price = 1
         self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/10/2)
         for i in range(tx_n):

@@ -46,6 +46,7 @@ metrics = { path = "../util/metrics" }
 hibitset = { path = "../util/hibitset" }
 futures = "0.1"
 memoffset = "0.5.1"
+malloc_size_of = {path = "../util/malloc_size_of"}
 
 [dev-dependencies]
 rustc-hex = "1.0"
