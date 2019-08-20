@@ -30,7 +30,6 @@ extern crate lazy_static;
 extern crate bit_set;
 extern crate bn;
 extern crate byteorder;
-extern crate heapsize;
 extern crate memory_cache;
 extern crate num;
 extern crate parity_crypto;

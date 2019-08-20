@@ -4,12 +4,12 @@
 
 use crate::{bytes::Bytes, hash::keccak};
 use cfx_types::{Address, H160, H256, U256};
-use heapsize::HeapSizeOf;
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{error, fmt, mem, ops::Deref, sync::Arc};
+use std::{error, fmt, mem, ops::Deref};
 use unexpected::OutOfBounds;
 
 /// Fake address for unsigned transactions.
@@ -229,9 +229,9 @@ impl Encodable for Transaction {
     }
 }
 
-impl HeapSizeOf for Transaction {
-    fn heap_size_of_children(&self) -> usize {
-        self.data.heap_size_of_children()
+impl MallocSizeOf for Transaction {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.data.size_of(ops)
     }
 }
 
@@ -365,9 +365,9 @@ impl TransactionWithSignature {
     }
 }
 
-impl HeapSizeOf for TransactionWithSignature {
-    fn heap_size_of_children(&self) -> usize {
-        self.unsigned.heap_size_of_children()
+impl MallocSizeOf for TransactionWithSignature {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.unsigned.size_of(ops)
     }
 }
 
@@ -459,7 +459,7 @@ impl SignedTransaction {
     pub fn size(&self) -> usize {
         // FIXME: We should revisit the size of transaction after we finished
         // the persistent storage part
-        self.heap_size_of_children()
+        mem::size_of::<Self>()
     }
 
     pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
@@ -482,22 +482,10 @@ impl SignedTransaction {
             Ok(true)
         }
     }
-
-    pub fn heap_size_of_iter<'a, T>(tx_iter: T) -> usize
-    where T: Iterator<Item = &'a Arc<SignedTransaction>> {
-        tx_iter.fold(0, |acc, x| {
-            acc + x.heap_size_of_children() / Arc::strong_count(x)
-        })
-    }
 }
 
-impl HeapSizeOf for SignedTransaction {
-    // This function only works for SignedTransaction in Arc,
-    // i.e., for SignedTransaction in Box, this function computes
-    // heap size of SignedTransaction wrongly. This is due to the
-    // wrong handling of heap_size_of_children() of Arc. In our case,
-    // we only have Arc<SignedTransaction>.
-    fn heap_size_of_children(&self) -> usize {
-        mem::size_of::<Self>() + self.transaction.heap_size_of_children()
+impl MallocSizeOf for SignedTransaction {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.transaction.size_of(ops)
     }
 }
