@@ -10,7 +10,7 @@ use crate::{
     block_data_manager::{
         BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
     },
-    consensus::anticone_cache::AnticoneCache,
+    consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
     state::State,
@@ -28,7 +28,7 @@ use primitives::{
 };
 use slab::Slab;
 use std::{
-    cmp::{max, min},
+    cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     sync::Arc,
 };
@@ -69,17 +69,16 @@ pub struct ConsensusGraphNodeData {
     /// The indices set of the blocks in the epoch when the current
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
-    blockset_in_own_view_of_epoch: HashSet<usize>,
+    blockset_in_own_view_of_epoch: Vec<usize>,
     /// The number of blocks in the last two era. Only such blocks are counted
     /// during difficulty adjustment.
     num_epoch_blocks_in_2era: usize,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
     pub ordered_executable_epoch_blocks: Vec<usize>,
-    /// The minimum/maximum epoch number of the block in the view of other
-    /// blocks including itself.
-    min_epoch_in_other_views: u64,
-    max_epoch_in_other_views: u64,
+    /// It indicates whether `blockset_in_own_view_of_epoch` is cleared due to
+    /// its size.
+    pub blockset_cleared: bool,
     pub sequence_number: u64,
     /// exec_info_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
@@ -90,7 +89,7 @@ pub struct ConsensusGraphNodeData {
 }
 
 impl ConsensusGraphNodeData {
-    fn new(epoch_number: u64, height: u64, sequence_number: u64) -> Self {
+    fn new(epoch_number: u64, sequence_number: u64) -> Self {
         ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
@@ -98,8 +97,7 @@ impl ConsensusGraphNodeData {
             blockset_in_own_view_of_epoch: Default::default(),
             num_epoch_blocks_in_2era: 0,
             ordered_executable_epoch_blocks: Default::default(),
-            min_epoch_in_other_views: height,
-            max_epoch_in_other_views: height,
+            blockset_cleared: false,
             sequence_number,
             exec_info_lca_height: NULLU64,
             vote_valid: true,
@@ -338,6 +336,7 @@ pub struct ConsensusGraphInner {
     // The cache to store Anticone information of each node. This could be very
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
+    pastset_cache: PastSetCache,
     // The cache to store execution information of nodes in the consensus graph
     pub execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
@@ -419,6 +418,7 @@ impl ConsensusGraphInner {
             data_man: data_man.clone(),
             inner_conf,
             anticone_cache: AnticoneCache::new(),
+            pastset_cache: Default::default(),
             execution_info_cache: HashMap::new(),
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
@@ -1121,142 +1121,127 @@ impl ConsensusGraphInner {
         self.arena[me].era_block == self.arena[pivot].era_block
     }
 
-    fn collect_blockset_in_own_view_of_epoch_brutal(&mut self, pivot: usize) {
-        let mut path_to_genesis = Vec::new();
-        let mut parent = pivot;
-        while parent != NULL {
-            path_to_genesis.push(parent);
-            parent = self.arena[parent].parent;
+    fn collect_blockset_in_own_view_of_epoch_brutal(
+        &mut self, lca: usize, pivot: usize,
+    ) {
+        let pastset = self.pastset_cache.get(lca, false).unwrap();
+        let mut path_to_lca = Vec::new();
+        let mut cur = pivot;
+        while cur != lca {
+            path_to_lca.push(cur);
+            cur = self.arena[cur].parent;
         }
-        path_to_genesis.reverse();
-        let mut visited = BitSet::with_capacity(self.arena.len() as u32);
-        for ancestor_arena_index in path_to_genesis {
-            if ancestor_arena_index != pivot {
-                for index in &self.arena[ancestor_arena_index]
-                    .data
-                    .blockset_in_own_view_of_epoch
-                {
-                    visited.add(*index as u32);
-                }
-                visited.add(ancestor_arena_index as u32);
-            } else {
+        path_to_lca.reverse();
+        let mut visited = HashSet::new();
+        for ancestor_arena_index in path_to_lca {
+            visited.insert(ancestor_arena_index);
+            if ancestor_arena_index == pivot
+                || self.arena[ancestor_arena_index].data.blockset_cleared
+            {
                 let mut queue = VecDeque::new();
                 for referee in &self.arena[ancestor_arena_index].referees {
-                    if !visited.contains(*referee as u32) {
-                        visited.add(*referee as u32);
+                    if !pastset.contains(*referee as u32)
+                        && !visited.contains(referee)
+                    {
+                        visited.insert(*referee);
                         queue.push_back(*referee);
                     }
                 }
                 while let Some(index) = queue.pop_front() {
-                    self.arena[pivot]
-                        .data
-                        .blockset_in_own_view_of_epoch
-                        .insert(index);
+                    if ancestor_arena_index == pivot {
+                        self.arena[pivot]
+                            .data
+                            .blockset_in_own_view_of_epoch
+                            .push(index);
+                    }
                     let parent = self.arena[index].parent;
-                    if !visited.contains(parent as u32) {
-                        visited.add(parent as u32);
+                    if parent != NULL
+                        && !pastset.contains(parent as u32)
+                        && !visited.contains(&parent)
+                    {
+                        visited.insert(parent);
                         queue.push_back(parent);
                     }
                     for referee in &self.arena[index].referees {
-                        if !visited.contains(*referee as u32) {
-                            visited.add(*referee as u32);
+                        if !pastset.contains(*referee as u32)
+                            && !visited.contains(referee)
+                        {
+                            visited.insert(*referee);
                             queue.push_back(*referee);
                         }
                     }
+                }
+            } else {
+                for index in &self.arena[ancestor_arena_index]
+                    .data
+                    .blockset_in_own_view_of_epoch
+                {
+                    visited.insert(*index);
                 }
             }
         }
     }
 
+    fn compute_pastset_brutal(&mut self, me: usize) -> BitSet {
+        let mut path = Vec::new();
+        let mut cur = me;
+        while cur != NULL && self.pastset_cache.get(cur, false).is_none() {
+            path.push(cur);
+            cur = self.arena[cur].parent;
+        }
+        path.reverse();
+        let mut result = self
+            .pastset_cache
+            .get(cur, false)
+            .unwrap_or(&BitSet::new())
+            .clone();
+        for ancestor_arena_index in path {
+            result.add(ancestor_arena_index as u32);
+            if self.arena[ancestor_arena_index].data.blockset_cleared {
+                let mut queue = VecDeque::new();
+                queue.push_back(ancestor_arena_index);
+                while let Some(index) = queue.pop_front() {
+                    let parent = self.arena[index].parent;
+                    if parent != NULL && !result.contains(parent as u32) {
+                        result.add(parent as u32);
+                        queue.push_back(parent);
+                    }
+                    for referee in &self.arena[index].referees {
+                        if !result.contains(*referee as u32) {
+                            result.add(*referee as u32);
+                            queue.push_back(*referee);
+                        }
+                    }
+                }
+            } else {
+                for index in &self.arena[ancestor_arena_index]
+                    .data
+                    .blockset_in_own_view_of_epoch
+                {
+                    result.add(*index as u32);
+                }
+            }
+        }
+        result
+    }
+
     fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
+        // TODO: consider the speed for recovery from db
         let parent = self.arena[pivot].parent;
         // This indicates `pivot` is partial_invalid and for partial invalid
         // block we don't need to calculate and store the blockset
         if parent != NULL && self.arena[parent].data.partial_invalid {
             return;
         }
-        let mut use_brutal_method = false;
-        let mut queue = VecDeque::new();
-        let mut visited = HashSet::new();
-        for referee in &self.arena[pivot].referees {
-            visited.insert(*referee);
-            queue.push_back(*referee);
-        }
-
-        while let Some(index) = queue.pop_front() {
-            let mut in_old_epoch = false;
-            let mut parent = self.arena[pivot].parent;
-
-            if self.arena[parent].height
-                > self.arena[index].data.max_epoch_in_other_views
-            {
-                parent = self.ancestor_at(
-                    parent,
-                    self.arena[index].data.max_epoch_in_other_views,
-                );
+        if parent != NULL {
+            let last = *self.pivot_chain.last().unwrap();
+            let lca = self.lca(last, parent);
+            assert!(lca != NULL);
+            if self.pastset_cache.get(lca, true).is_none() {
+                let pastset = self.compute_pastset_brutal(lca);
+                self.pastset_cache.update(lca, pastset);
             }
-            let mut loop_cnt = 0;
-
-            loop {
-                loop_cnt += 1;
-                assert!(parent != NULL);
-
-                if self.arena[parent].height
-                    < self.arena[index].data.min_epoch_in_other_views
-                    || (self.arena[index].data.sequence_number
-                        > self.arena[parent].data.sequence_number)
-                {
-                    break;
-                }
-
-                if parent == index
-                    || self.arena[parent]
-                        .data
-                        .blockset_in_own_view_of_epoch
-                        .contains(&index)
-                {
-                    in_old_epoch = true;
-                    break;
-                }
-
-                parent = self.arena[parent].parent;
-            }
-
-            if loop_cnt > EPOCH_IN_OTHER_VIEWS_GAP_BOUND {
-                use_brutal_method = true;
-                break;
-            }
-
-            if !in_old_epoch {
-                let parent = self.arena[index].parent;
-                if !visited.contains(&parent) {
-                    visited.insert(parent);
-                    queue.push_back(parent);
-                }
-                for referee in &self.arena[index].referees {
-                    if !visited.contains(referee) {
-                        visited.insert(*referee);
-                        queue.push_back(*referee);
-                    }
-                }
-                self.arena[index].data.min_epoch_in_other_views = min(
-                    self.arena[index].data.min_epoch_in_other_views,
-                    self.arena[pivot].height,
-                );
-                self.arena[index].data.max_epoch_in_other_views = max(
-                    self.arena[index].data.max_epoch_in_other_views,
-                    self.arena[pivot].height,
-                );
-                self.arena[pivot]
-                    .data
-                    .blockset_in_own_view_of_epoch
-                    .insert(index);
-            }
-        }
-
-        if use_brutal_method {
-            self.arena[pivot].data.blockset_in_own_view_of_epoch.clear();
-            self.collect_blockset_in_own_view_of_epoch_brutal(pivot);
+            self.collect_blockset_in_own_view_of_epoch_brutal(lca, pivot);
         }
 
         let filtered_blockset = self.arena[pivot]
@@ -1291,6 +1276,7 @@ impl ConsensusGraphInner {
             .data
             .ordered_executable_epoch_blocks
             .push(pivot);
+        self.arena[pivot].data.blockset_cleared = false;
     }
 
     fn insert_referee_if_not_duplicate(
@@ -1369,7 +1355,7 @@ impl ConsensusGraphInner {
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, my_height, sn),
+            data: ConsensusGraphNodeData::new(NULLU64, sn),
         });
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -2242,7 +2228,7 @@ impl ConsensusGraphInner {
     /// Compute the total weight in the epoch represented by the block of
     /// my_hash.
     fn total_weight_in_own_epoch(
-        &self, blockset_in_own_epoch: &HashSet<usize>, inclusive: bool,
+        &self, blockset_in_own_epoch: &Vec<usize>, inclusive: bool,
         genesis: usize,
     ) -> i128
     {
@@ -2342,7 +2328,13 @@ impl ConsensusGraphInner {
             pivot = self.arena[pivot].parent;
         }
         new_pivot_chain.reverse();
-        self.pivot_chain = new_pivot_chain;
+        self.pivot_chain.clear();
+        for index in &new_pivot_chain {
+            self.pivot_chain.push(*index);
+            if self.arena[*index].data.blockset_cleared {
+                self.collect_blockset_in_own_view_of_epoch(*index);
+            }
+        }
         debug!(
             "set_pivot_to_stable: stable={:?}, chain_len={}",
             stable,

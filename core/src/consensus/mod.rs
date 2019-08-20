@@ -5,6 +5,7 @@
 mod anticone_cache;
 pub mod consensus_inner;
 mod debug;
+mod pastset_cache;
 
 use super::consensus::consensus_inner::{
     confirmation_meter::ConfirmationMeter,
