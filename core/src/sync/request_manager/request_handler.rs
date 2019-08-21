@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 use std::{
     any::Any,
     cmp::Ordering,
-    collections::{BinaryHeap, HashMap, VecDeque},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     fmt::Debug,
     mem,
     sync::{
@@ -157,6 +157,7 @@ impl RequestHandler {
     ) -> Vec<RequestMessage> {
         // Check if in-flight requests timeout
         let mut timeout_requests = Vec::new();
+        let mut peers_to_disconnect = HashSet::new();
         for sync_req in self.get_timeout_sync_requests() {
             if let Ok(req) =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id)
@@ -166,11 +167,7 @@ impl RequestHandler {
                     self.peers.lock().get_mut(&peer_id)
                 {
                     if request_container.on_timeout_should_disconnect() {
-                        io.disconnect_peer(
-                            peer_id,
-                            Some(UpdateNodeOperation::Demotion),
-                            None,
-                        );
+                        peers_to_disconnect.insert(peer_id);
                     }
                 }
                 timeout_requests.push(req);
@@ -178,6 +175,16 @@ impl RequestHandler {
                 debug!("Timeout a removed request {:?}", sync_req);
             }
         }
+        for peer_id in peers_to_disconnect {
+            // Note `self.peers` will be used in `disconnect_peer`, so we must
+            // call it without locking `self.peers`.
+            io.disconnect_peer(
+                peer_id,
+                Some(UpdateNodeOperation::Demotion),
+                None,
+            );
+        }
+
         timeout_requests
     }
 
