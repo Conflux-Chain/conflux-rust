@@ -84,6 +84,84 @@ impl ConsensusNewBlockHandler {
         referees
     }
 
+    /// recompute past_weight under stable_genesis
+    fn recompute_stable_past_weight(
+        inner: &mut ConsensusGraphInner, stable_genesis_future_set: BitSet,
+    ) {
+        let mut stack = Vec::new();
+        let mut visited = BitSet::with_capacity(inner.arena.len() as u32);
+        stack.push((0, inner.cur_era_genesis_block_arena_index, Vec::new()));
+        while let Some((state, me, mut blockset)) = stack.pop() {
+            if state == 0 {
+                // compute blockset_in_own_view_of_epoch first
+                if !inner.arena[me].data.blockset_cleared {
+                    for index in
+                        &inner.arena[me].data.blockset_in_own_view_of_epoch
+                    {
+                        if !visited.contains(*index as u32) {
+                            visited.add(*index as u32);
+                            blockset.push(*index);
+                        }
+                    }
+                } else {
+                    let mut queue = VecDeque::new();
+                    for referee in &inner.arena[me].referees {
+                        if !visited.contains(*referee as u32) {
+                            visited.add(*referee as u32);
+                            queue.push_back(*referee);
+                        }
+                    }
+                    while let Some(index) = queue.pop_front() {
+                        blockset.push(index);
+                        let parent = inner.arena[index].parent;
+                        if !visited.contains(parent as u32) {
+                            visited.add(parent as u32);
+                            queue.push_back(parent);
+                        }
+                        for referee in &inner.arena[index].referees {
+                            if !visited.contains(*referee as u32) {
+                                visited.add(*referee as u32);
+                                queue.push_back(*referee);
+                            }
+                        }
+                    }
+                }
+
+                // compute past_weight
+                if stable_genesis_future_set.contains(me as u32) {
+                    let parent = inner.arena[me].parent;
+                    if stable_genesis_future_set.contains(parent as u32) {
+                        inner.arena[me].past_weight = inner.arena[parent]
+                            .past_weight
+                            + inner.block_weight(parent, false);
+                    } else {
+                        inner.arena[me].past_weight = 0;
+                    }
+
+                    for index in &blockset {
+                        if stable_genesis_future_set.contains(*index as u32) {
+                            inner.arena[me].past_weight +=
+                                inner.block_weight(*index, false);
+                        }
+                    }
+                }
+
+                stack.push((1, me, blockset));
+                visited.add(me as u32);
+                for child in &inner.arena[me].children {
+                    if !inner.arena[*child].data.partial_invalid {
+                        stack.push((0, *child, Vec::new()));
+                    }
+                }
+            } else {
+                visited.remove(me as u32);
+                for index in blockset {
+                    visited.remove(index as u32);
+                }
+            }
+        }
+    }
+
     fn checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
     ) {
@@ -114,79 +192,11 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
-        // recompute past_weight under stable_genesis
-        let mut stack = Vec::new();
-        let mut visited = BitSet::with_capacity(inner.arena.len() as u32);
-        stack.push((0, stable_era_genesis, Vec::new()));
-        while let Some((state, index, mut blockset)) = stack.pop() {
-            if state == 0 {
-                // compute blockset_in_own_view_of_epoch first
-                if !inner.arena[index].data.blockset_cleared {
-                    for index in
-                        &inner.arena[index].data.blockset_in_own_view_of_epoch
-                    {
-                        if stable_genesis_future_set.contains(*index as u32)
-                            && !visited.contains(*index as u32)
-                        {
-                            visited.add(*index as u32);
-                            blockset.push(*index);
-                        }
-                    }
-                } else {
-                    let mut queue = VecDeque::new();
-                    for referee in &inner.arena[index].referees {
-                        if !visited.contains(*referee as u32) {
-                            visited.add(*referee as u32);
-                            queue.push_back(*referee);
-                        }
-                    }
-                    while let Some(index) = queue.pop_front() {
-                        blockset.push(index);
-                        let parent = inner.arena[index].parent;
-                        if stable_genesis_future_set.contains(parent as u32)
-                            && !visited.contains(parent as u32)
-                        {
-                            visited.add(parent as u32);
-                            queue.push_back(parent);
-                        }
-                        for referee in &inner.arena[index].referees {
-                            if stable_genesis_future_set
-                                .contains(*referee as u32)
-                                && !visited.contains(*referee as u32)
-                            {
-                                visited.add(*referee as u32);
-                                queue.push_back(*referee);
-                            }
-                        }
-                    }
-                }
 
-                // compute past_weight
-                let parent = inner.arena[index].parent;
-                if stable_genesis_future_set.contains(parent as u32) {
-                    inner.arena[index].past_weight = inner.arena[parent]
-                        .past_weight
-                        + inner.block_weight(parent, false);
-                } else {
-                    inner.arena[index].past_weight = 0;
-                }
-                for index in &blockset {
-                    inner.arena[*index].past_weight +=
-                        inner.block_weight(*index, false);
-                }
-
-                stack.push((1, index, blockset));
-                visited.add(index as u32);
-                for child in &inner.arena[index].children {
-                    stack.push((0, *child, Vec::new()));
-                }
-            } else {
-                visited.remove(index as u32);
-                for index in blockset {
-                    visited.remove(index as u32);
-                }
-            }
-        }
+        ConsensusNewBlockHandler::recompute_stable_past_weight(
+            inner,
+            stable_genesis_future_set,
+        );
 
         // Now we topologically sort the blocks outside the era
         let mut outside_block_arena_indices = HashSet::new();

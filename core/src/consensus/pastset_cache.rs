@@ -45,10 +45,14 @@ impl PastSetCache {
 
     pub fn intersect_update(&mut self, outside_era_blockset: &HashSet<usize>) {
         self.cache.retain(|me, (s, _)| {
-            for index in outside_era_blockset.iter() {
-                s.remove(*index as u32);
+            if outside_era_blockset.contains(me) {
+                false
+            } else {
+                for index in outside_era_blockset.iter() {
+                    s.remove(*index as u32);
+                }
+                true
             }
-            !outside_era_blockset.contains(me)
         });
     }
 }
