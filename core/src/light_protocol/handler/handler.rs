@@ -122,6 +122,7 @@ impl Handler {
             msgid::STATE_ROOT => self.query.on_state_root(io, peer, &rlp),
             msgid::STATE_ENTRY => self.query.on_state_entry(io, peer, &rlp),
             msgid::RECEIPTS => self.query.on_receipts(io, peer, &rlp),
+            msgid::TXS => self.query.on_txs(io, peer, &rlp),
             msgid::BLOCK_HASHES => self.sync.on_block_hashes(io, peer, &rlp),
             msgid::BLOCK_HEADERS => self.sync.on_block_headers(io, peer, &rlp),
             msgid::NEW_BLOCK_HASHES => self.sync.on_new_block_hashes(io, peer, &rlp),

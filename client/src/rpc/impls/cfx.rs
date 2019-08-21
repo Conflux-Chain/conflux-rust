@@ -139,6 +139,31 @@ impl RpcImpl {
             })
     }
 
+    pub fn transaction_by_hash(
+        &self, hash: RpcH256,
+    ) -> RpcResult<Option<RpcTransaction>> {
+        let hash: H256 = hash.into();
+        info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
+
+        if let Some((transaction, receipt, tx_address)) =
+            self.consensus.get_transaction_info_by_hash(&hash)
+        {
+            Ok(Some(RpcTransaction::from_signed(
+                &transaction,
+                Some(RpcReceipt::new(transaction.clone(), receipt, tx_address)),
+            )))
+        } else {
+            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
+                return Ok(Some(RpcTransaction::from_signed(
+                    &transaction,
+                    None,
+                )));
+            }
+
+            Ok(None)
+        }
+    }
+
     fn generate(
         &self, num_blocks: usize, num_txs: usize,
     ) -> RpcResult<Vec<H256>> {
@@ -383,7 +408,6 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
-            fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn transaction_count(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         }
 
@@ -393,6 +417,7 @@ impl Cfx for CfxHandler {
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
         }
     }
 }

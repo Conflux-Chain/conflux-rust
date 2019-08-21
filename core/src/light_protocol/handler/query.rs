@@ -20,17 +20,19 @@ use futures::{
 
 use cfx_types::H256;
 use primitives::{
-    BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, StateRoot,
+    BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, SignedTransaction,
+    StateRoot,
 };
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         message::{
-            GetReceipts, GetStateEntry, GetStateRoot,
+            GetReceipts, GetStateEntry, GetStateRoot, GetTxs,
             Receipts as GetReceiptsResponse, ReceiptsWithProof,
             StateEntry as GetStateEntryResponse,
             StateRoot as GetStateRootResponse, StateRootWithProof,
+            Txs as GetTxsResponse,
         },
         Error, ErrorKind,
     },
@@ -49,6 +51,7 @@ pub enum QueryResult {
     StateEntry(Option<Vec<u8>>),
     StateRoot(StateRoot),
     Receipts(Vec<Vec<Receipt>>),
+    Txs(Vec<SignedTransaction>),
 }
 
 struct PendingRequest {
@@ -269,6 +272,21 @@ impl QueryHandler {
         self.validate_receipts(req.epoch, &resp.receipts)?;
 
         sender.complete(QueryResult::Receipts(resp.receipts.receipts));
+        // note: in case of early return, `sender` will be cancelled
+
+        Ok(())
+    }
+
+    pub(super) fn on_txs(
+        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let resp: GetTxsResponse = rlp.as_val()?;
+        info!("on_txs resp={:?}", resp);
+
+        let id = resp.request_id;
+        let (_req, sender) = self.match_request::<GetTxs>(peer, id)?;
+
+        sender.complete(QueryResult::Txs(resp.txs));
         // note: in case of early return, `sender` will be cancelled
 
         Ok(())

@@ -130,6 +130,17 @@ impl RpcImpl {
             false => Err(RpcError::invalid_params("Unable to relay tx")),
         }
     }
+
+    pub fn transaction_by_hash(
+        &self, hash: RpcH256,
+    ) -> RpcResult<Option<RpcTransaction>> {
+        info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
+
+        // TODO(thegaram): try to retrieve from local tx pool or cache first
+
+        let maybe_tx = self.light.get_tx(hash.into());
+        Ok(maybe_tx.map(|tx| RpcTransaction::from_signed(&tx, None)))
+    }
 }
 
 // macro for reducing boilerplate for unsupported methods
@@ -167,7 +178,6 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
-            fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn transaction_count(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         }
 
@@ -177,6 +187,7 @@ impl Cfx for CfxHandler {
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
         }
     }
 }

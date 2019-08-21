@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H160;
-use primitives::{Account, StateRoot};
+use cfx_types::{H160, H256};
+use primitives::{Account, SignedTransaction, StateRoot};
 use std::sync::Arc;
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     handler::QueryResult,
-    message::{GetStateEntry, GetStateRoot},
+    message::{GetStateEntry, GetStateRoot, GetTxs},
     Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
     LIGHT_PROTOCOL_VERSION,
 };
@@ -167,5 +167,49 @@ impl QueryService {
         }
 
         success
+    }
+
+    pub fn query_txs(
+        &self, peer: PeerId, hashes: Vec<H256>,
+    ) -> Result<Vec<SignedTransaction>, Error> {
+        info!("query_txs peer={:?} hashes={:?}", peer, hashes);
+
+        let req = GetTxs {
+            request_id: 0,
+            hashes,
+        };
+
+        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
+            match self.handler.query.execute(io, peer, req)? {
+                QueryResult::Txs(txs) => Ok(txs),
+                _ => Err(ErrorKind::UnexpectedResponse.into()),
+            }
+        })
+    }
+
+    pub fn get_tx(&self, hash: H256) -> Option<SignedTransaction> {
+        info!("get_tx hash={:?}", hash);
+
+        // try each peer until we succeed
+        for peer in self.handler.peers.all_peers_shuffled() {
+            match self.query_txs(peer, vec![hash]) {
+                Err(e) => {
+                    warn!("Failed to get txs from peer={:?}: {:?}", peer, e);
+                }
+                Ok(txs) => {
+                    match txs.iter().find(|tx| tx.hash() == hash).cloned() {
+                        Some(tx) => return Some(tx),
+                        None => {
+                            warn!(
+                                "Peer {} returned {:?}, target tx not found!",
+                                peer, txs
+                            );
+                        }
+                    }
+                }
+            };
+        }
+
+        None
     }
 }

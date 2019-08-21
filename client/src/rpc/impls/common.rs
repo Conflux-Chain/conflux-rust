@@ -23,9 +23,9 @@ use network::{
 };
 
 use crate::rpc::types::{
-    Block as RpcBlock, EpochNumber, Receipt as RpcReceipt, Receipt,
-    Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
-    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Block as RpcBlock, EpochNumber, Receipt as RpcReceipt, Status as RpcStatus,
+    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+    U256 as RpcU256, U64 as RpcU64,
 };
 
 fn grouped_txs<T, F>(
@@ -168,31 +168,6 @@ impl RpcImpl {
                     ))
                 }
             })
-    }
-
-    pub fn transaction_by_hash(
-        &self, hash: RpcH256,
-    ) -> RpcResult<Option<RpcTransaction>> {
-        let hash: H256 = hash.into();
-        info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
-
-        if let Some((transaction, receipt, tx_address)) =
-            self.consensus.get_transaction_info_by_hash(&hash)
-        {
-            Ok(Some(RpcTransaction::from_signed(
-                &transaction,
-                Some(Receipt::new(transaction.clone(), receipt, tx_address)),
-            )))
-        } else {
-            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
-                return Ok(Some(RpcTransaction::from_signed(
-                    &transaction,
-                    None,
-                )));
-            }
-
-            Ok(None)
-        }
     }
 
     pub fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>> {
