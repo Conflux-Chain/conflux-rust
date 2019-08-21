@@ -329,6 +329,7 @@ class LogAggregator:
         self.tx_packed_to_block_latency = {}
         self.min_tx_packed_to_block_latency = []
         self.host_by_block_ratio = []
+        self.tx_wait_to_be_packed_time =[]
 
     def add_host(self, host_log:HostLogReducer):
         self.sync_cons_gap_stats.extend(host_log.sync_cons_gap_stats)
@@ -336,12 +337,19 @@ class LogAggregator:
         for b in host_log.blocks.values():
             Block.add_or_merge(self.blocks, b)
         by_block_cnt = 0
+
         for tx in host_log.txs.values():
             Transaction.add_or_merge(self.txs, tx)
             if tx.by_block:
                 by_block_cnt += 1
-        # This data only work for one node per host
+
+        # following data only work for one node per host
         self.host_by_block_ratio.append(by_block_cnt / len(host_log.txs))
+
+        for tx in host_log.txs.values():
+            if tx.packed_timestamps[0] is not None:
+                self.tx_wait_to_be_packed_time.append(tx.packed_timestamps[0] - min(tx.received_timestamps))
+
 
     def validate(self):
         num_nodes = len(self.sync_cons_gap_stats)
@@ -392,6 +400,8 @@ class LogAggregator:
 
         return Statistics(data)
 
+    #for every transaction, self.tx_latency_stats contains a list of duration that every node receives the transaction, either by tx propagation or block .
+    #stat_tx_latency stores for every transaction, the value that the transaction propagates P(n) number of nodes.
     def stat_tx_latency(self, p:Percentile):
         data = []
 
@@ -414,6 +424,8 @@ class LogAggregator:
     def stat_tx_ratio(self):
         return Statistics(self.host_by_block_ratio)
 
+    def stat_tx_wait_to_be_packed(self):
+        return Statistics(self.tx_wait_to_be_packed_time)
 
     @staticmethod
     def load(logs_dir):
