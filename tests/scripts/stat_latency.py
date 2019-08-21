@@ -87,7 +87,7 @@ class LogAnalyzer:
 
         #row: the P(n) time the transaction is packed into a block. Column: Percentage of the transactions.
         for p in Percentile:
-            name_tx_packed_to_block ="tx packed to block latency ({}) P means the nth time".format(p.name)
+            name_tx_packed_to_block ="tx packed to block latency ({})".format(p.name)
             table.add_stat(name_tx_packed_to_block, "%.2f", self.agg.stat_tx_packed_to_block_latency(p))
 
         #the first time a transaction is packed to the first time the transaction is geneated.
