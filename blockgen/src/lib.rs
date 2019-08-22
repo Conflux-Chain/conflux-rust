@@ -288,7 +288,7 @@ impl BlockGenerator {
             if tx_hash[0] & 254 == 0 {
                 debug!("Sampled transaction {:?} in packing block", tx_hash);
             }
-            sender_accounts.insert(tx.sender.clone());
+            sender_accounts.insert(tx.sender);
         }
         PACKED_ACCOUNT_SIZE.update(sender_accounts.len());
 
