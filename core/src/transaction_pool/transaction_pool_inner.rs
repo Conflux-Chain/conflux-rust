@@ -558,6 +558,12 @@ impl TransactionPoolInner {
             account_cache,
         );
 
+        if transaction.hash[0] & 254 == 0 {
+            debug!(
+                "Transaction {:?} current nonce: {:?}, state nonce:{:?}",
+                transaction.hash, transaction.nonce, state_nonce
+            );
+        }
         if transaction.nonce
             >= state_nonce
                 + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
