@@ -37,7 +37,7 @@ class Transaction:
         if "in block" in log_line:
             by_block = True
             return Transaction(tx_hash, log_timestamp, by_block)
-        elif "in ready pool":
+        elif "in ready pool" in log_line:
             by_block = False
             return Transaction(tx_hash, log_timestamp, by_block, None, log_timestamp)
         elif "in packing block" in log_line:
@@ -321,7 +321,7 @@ class HostLogReducer:
         futures = []
         for (path, _, files) in os.walk(log_dir):
             for f in files:
-                if f == "conflux.log":
+                if f == "tx_sample.log":
                     log_file = os.path.join(path, f)
                     futures.append(executor.submit(NodeLogMapper.mapf, log_file))
 
@@ -416,13 +416,13 @@ class LogAggregator:
             if tx.packed_timestamps[0] is not None:
                 self.tx_packed_to_block_latency[tx.hash] = Statistics(tx.get_packed_to_block_latencies())
 
-                tx_hash,tx_latency= tx.get_min_packed_to_block_latency()
+                tx_latency= tx.get_min_packed_to_block_latency()
                 if self.largest_min_tx_packed_latency_hash is not None:
                     if self.largest_min_tx_packed_latency_time <tx_latency:
-                        self.largest_min_tx_packed_latency_hash=tx_hash
+                        self.largest_min_tx_packed_latency_hash=tx.hash
                         self.largest_min_tx_packed_latency_time=tx_latency
                 else:
-                    self.largest_min_tx_packed_latency_hash=tx_hash
+                    self.largest_min_tx_packed_latency_hash=tx.hash
                     self.largest_min_tx_packed_latency_time=tx_latency
                 self.min_tx_packed_to_block_latency.append(tx_latency)
 
@@ -493,12 +493,12 @@ class LogAggregator:
         return agg
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Parameter required: <log_dir> <output_file>")
-        sys.exit(1)
+    # if len(sys.argv) < 3:
+    #     print("Parameter required: <log_dir> <output_file>")
+    #     sys.exit(1)
 
-    log_dir = sys.argv[1]
-    output_file = sys.argv[2]
+    log_dir = "/Users/yilinhan/Desktop/tests"
+    output_file = "abc.txt"
 
     executor = ThreadPoolExecutor()
     reducer = HostLogReducer.reduced(log_dir, executor)
