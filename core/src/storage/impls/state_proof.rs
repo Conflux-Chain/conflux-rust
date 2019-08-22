@@ -5,7 +5,7 @@
 pub use super::multi_version_merkle_patricia_trie::{
     merkle_patricia_trie::merkle::MaybeMerkleTableRef, TrieProof,
 };
-use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use primitives::{StateRoot, MERKLE_NULL_NODE};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
@@ -28,11 +28,13 @@ impl StateProof {
         self
     }
 
-    pub fn is_valid(
-        &self, key: &Vec<u8>, value: Option<&[u8]>, delta_root: MerkleHash,
-        intermediate_root: MerkleHash, snapshot_root: MerkleHash,
-    ) -> bool
-    {
+    pub fn is_valid_kv(
+        &self, key: &Vec<u8>, value: Option<&[u8]>, root: StateRoot,
+    ) -> bool {
+        let delta_root = root.delta_root;
+        let intermediate_root = root.intermediate_delta_root;
+        let snapshot_root = root.snapshot_root;
+
         match (
             value,
             &self.delta_proof,
@@ -41,36 +43,36 @@ impl StateProof {
         ) {
             // proof of existence for key in delta trie
             (Some(_), Some(p1), None, None) => {
-                p1.is_valid(key, value, delta_root)
+                p1.is_valid_kv(key, value, delta_root)
             }
             // proof of existence for key in intermediate trie
             (Some(_), Some(p1), Some(p2), None) => {
-                p1.is_valid(key, None, delta_root)
-                    && p2.is_valid(key, value, intermediate_root)
+                p1.is_valid_kv(key, None, delta_root)
+                    && p2.is_valid_kv(key, value, intermediate_root)
             }
             // proof of existence for key in snapshot
             (Some(_), Some(p1), Some(p2), Some(p3)) => {
-                p1.is_valid(key, None, delta_root)
-                    && p2.is_valid(key, None, intermediate_root)
-                    && p3.is_valid(key, value, snapshot_root)
+                p1.is_valid_kv(key, None, delta_root)
+                    && p2.is_valid_kv(key, None, intermediate_root)
+                    && p3.is_valid_kv(key, value, snapshot_root)
             }
             // proof of non-existence with a single trie
             (None, Some(p1), None, None) => {
-                p1.is_valid(key, None, delta_root)
+                p1.is_valid_kv(key, None, delta_root)
                     && intermediate_root == MERKLE_NULL_NODE
                     && snapshot_root == MERKLE_NULL_NODE
             }
             // proof of non-existence with two tries
             (None, Some(p1), Some(p2), None) => {
-                p1.is_valid(key, None, delta_root)
-                    && p2.is_valid(key, None, intermediate_root)
+                p1.is_valid_kv(key, None, delta_root)
+                    && p2.is_valid_kv(key, None, intermediate_root)
                     && snapshot_root == MERKLE_NULL_NODE
             }
             // proof of non-existence with all tries
             (None, Some(p1), Some(p2), Some(p3)) => {
-                p1.is_valid(key, None, delta_root)
-                    && p2.is_valid(key, None, intermediate_root)
-                    && p3.is_valid(key, None, snapshot_root)
+                p1.is_valid_kv(key, None, delta_root)
+                    && p2.is_valid_kv(key, None, intermediate_root)
+                    && p3.is_valid_kv(key, None, snapshot_root)
             }
             // no proofs available
             (_, None, None, None) => {
