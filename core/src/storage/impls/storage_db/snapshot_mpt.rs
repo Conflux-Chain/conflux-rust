@@ -37,6 +37,16 @@ impl<DbType: KeyValueDbTraitRead, BorrowType: Borrow<DbType>>
         let _key = compressed_path_to_db_key(path);
         unimplemented!()
     }
+
+    fn get_manifest(
+        &self, _start_chunk: &ChunkKey,
+    ) -> Result<Option<RangedManifest>> {
+        unimplemented!()
+    }
+
+    fn get_chunk(&self, _key: &ChunkKey) -> Result<Option<Chunk>> {
+        unimplemented!()
+    }
 }
 
 impl<DbType: KeyValueDbTraitSingleWriter, BorrowType: BorrowMut<DbType>>
@@ -69,6 +79,9 @@ use super::super::{
     multi_version_merkle_patricia_trie::merkle_patricia_trie::{
         trie_node::VanillaTrieNode, CompressedPathTrait,
     },
+};
+use crate::storage::impls::storage_db::snapshot_sync::{
+    Chunk, ChunkKey, RangedManifest,
 };
 use primitives::MerkleHash;
 use std::borrow::{Borrow, BorrowMut};

@@ -20,6 +20,9 @@ pub use self::{
         multi_version_merkle_patricia_trie::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
         },
+        storage_db::snapshot_sync::{
+            Chunk, ChunkKey, RangedManifest, Restorer,
+        },
     },
     state::{State as Storage, StateTrait as StorageTrait},
     state_manager::{
