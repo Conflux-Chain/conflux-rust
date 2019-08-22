@@ -277,6 +277,20 @@ impl QueryHandler {
         Ok(())
     }
 
+    fn validate_txs(&self, txs: &Vec<SignedTransaction>) -> Result<(), Error> {
+        for tx in txs {
+            match tx.verify_public(false) {
+                Ok(true) => continue,
+                _ => {
+                    warn!("Tx signature verification failed for {:?}", tx);
+                    return Err(ErrorKind::InvalidTxSignature.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub(super) fn on_txs(
         &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -285,6 +299,8 @@ impl QueryHandler {
 
         let id = resp.request_id;
         let (_req, sender) = self.match_request::<GetTxs>(peer, id)?;
+
+        self.validate_txs(&resp.txs)?;
 
         sender.complete(QueryResult::Txs(resp.txs));
         // note: in case of early return, `sender` will be cancelled

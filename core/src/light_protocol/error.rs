@@ -58,6 +58,11 @@ error_chain! {
             display("Invalid state root"),
         }
 
+        InvalidTxSignature {
+            description("Invalid tx signature"),
+            display("Invalid tx signature"),
+        }
+
         PivotHashMismatch {
             description("Pivot hash mismatch"),
             display("Pivot hash mismatch"),
@@ -160,6 +165,7 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidReceipts
         | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot
+        | ErrorKind::InvalidTxSignature
         | ErrorKind::ValidationFailed
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
 
