@@ -238,6 +238,12 @@ impl ConsensusExecutor {
                 KECCAK_EMPTY_BLOOM,
             )
         } else {
+            if let Some(result) = self.handler.get_execution_result(&epoch_hash)
+            {
+                // The epoch already executed, so we do not need wait for the
+                // queue to be empty
+                return result;
+            }
             let (sender, receiver) = channel();
             debug!("Wait for execution result of epoch {:?}", epoch_hash);
             self.sender
@@ -834,32 +840,33 @@ impl ConsensusExecutionHandler {
     }
 
     fn handle_get_result_task(&self, task: GetExecutionResultTask) {
+        task.sender
+            .send(
+                self.get_execution_result(&task.epoch_hash).expect(
+                    "The caller of wait_for_result ensures the existence",
+                ),
+            )
+            .expect("Consensus Worker fails");
+    }
+
+    fn get_execution_result(
+        &self, epoch_hash: &H256,
+    ) -> Option<(StateRootWithAuxInfo, H256, H256)> {
         let state_root = self
             .data_man
             .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(
-                &task.epoch_hash,
-                None,
-            ))
-            .unwrap()
-            // Unwrapping is safe because the state is assumed to exist.
-            .unwrap()
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(epoch_hash, None))
+            .expect("No DB Error")?
             .get_state_root()
-            .unwrap()
-            .unwrap();
+            .expect("No DB Error")?;
 
-        let epoch_execution_commitments = self
-            .data_man
-            .get_epoch_execution_commitments(&task.epoch_hash)
-            .unwrap();
-
-        task.sender
-            .send((
-                state_root,
-                epoch_execution_commitments.receipts_root,
-                epoch_execution_commitments.logs_bloom_hash,
-            ))
-            .expect("Consensus Worker fails");
+        let epoch_execution_commitments =
+            self.data_man.get_epoch_execution_commitments(epoch_hash)?;
+        Some((
+            state_root,
+            epoch_execution_commitments.receipts_root,
+            epoch_execution_commitments.logs_bloom_hash,
+        ))
     }
 
     /// Compute the epoch `epoch_hash`, and skip it if already computed.

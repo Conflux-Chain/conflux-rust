@@ -180,8 +180,8 @@ class TestNode:
             self.index, self.ip, self.rpchost, self.port, self.rpcport, rpc_url(self.index, self.rpchost, self.rpcport)
         ))
 
-    def wait_for_recovery(self, wait_time):
-        self.wait_for_phase(["NormalSyncPhase", "CatchUpSyncBlockPhase"], wait_time=wait_time)
+    def wait_for_recovery(self, phase_to_wait, wait_time):
+        self.wait_for_phase(phase_to_wait, wait_time=wait_time)
 
     def wait_for_phase(self, phases, wait_time=10):
         sleep_time = 0.1

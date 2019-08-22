@@ -324,7 +324,7 @@ class ConfluxTestFramework:
                     remote=True
                 ))
 
-    def start_node(self, i, extra_args=None, wait_for_recovery=True, wait_time=10, *args, **kwargs):
+    def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=10, *args, **kwargs):
         """Start a bitcoind"""
 
         node = self.nodes[i]
@@ -332,8 +332,8 @@ class ConfluxTestFramework:
         node.start(extra_args, *args, **kwargs)
         node.wait_for_rpc_connection()
         node.wait_for_nodeid()
-        if wait_for_recovery:
-            node.wait_for_recovery(wait_time)
+        if phase_to_wait is not None:
+            node.wait_for_recovery(phase_to_wait, wait_time)
 
         if self.options.coveragedir is not None:
             coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
@@ -347,7 +347,7 @@ class ConfluxTestFramework:
             for node in self.nodes:
                 node.wait_for_rpc_connection()
                 node.wait_for_nodeid()
-                node.wait_for_recovery(10)
+                node.wait_for_recovery(("NormalSyncPhase", "CatchUpSyncBlockPhase"), 10)
         except:
             # If one node failed to start, stop the others
             self.stop_nodes()

@@ -90,7 +90,7 @@ build_config! {
         (data_propagate_size, (usize), 1000)
         (record_tx_address, (bool), true)
         // TODO Set default to true when we have new tx pool implementation
-        (enable_optimistic_execution, (bool), false)
+        (enable_optimistic_execution, (bool), true)
         (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
         (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)

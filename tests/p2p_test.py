@@ -40,7 +40,7 @@ class P2PTest(ConfluxTestFramework):
             if random.random() <= 0.01:
                 self.log.info("stop %s", chosen_peer)
                 self.stop_node(chosen_peer)
-                self.start_node(chosen_peer)
+                self.start_node(chosen_peer, phase_to_wait=("NormalSyncPhase"))
             self.log.debug("%d try to generate", chosen_peer)
             block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
             self.log.info("%d generate block %s", chosen_peer, block_hash)
