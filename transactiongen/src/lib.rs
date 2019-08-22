@@ -242,7 +242,8 @@ impl TransactionGenerator {
                 let signed_tx = tx.sign(initial_key_pair.secret());
                 let mut tx_to_insert = Vec::new();
                 tx_to_insert.push(signed_tx.transaction);
-                txgen.txpool.insert_new_transactions(&tx_to_insert);
+                let (txs, _)= txgen.txpool.insert_new_transactions(&tx_to_insert);
+                txgen.sync.append_received_transactions(txs);
                 last_account = Some(receiver_address);
                 TX_GEN_METER.mark(1);
             } else {
