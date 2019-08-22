@@ -18,11 +18,10 @@ use secret_store::SecretStore;
 use threadpool::ThreadPool;
 
 use cfxcore::{
-    block_data_manager::BlockDataManager, genesis,
-    light_protocol::QueryService, statistics::Statistics,
+    block_data_manager::BlockDataManager, genesis, statistics::Statistics,
     storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, SynchronizationGraph,
-    TransactionPool, WORKER_COMPUTATION_PARALLELISM,
+    vm_factory::VmFactory, ConsensusGraph, LightQueryService,
+    SynchronizationGraph, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 
 use crate::{
@@ -41,7 +40,7 @@ pub struct LightClientHandle {
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
     pub ledger_db: Weak<SystemDB>,
-    pub light: Arc<QueryService>,
+    pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub secret_store: Arc<SecretStore>,
@@ -188,7 +187,7 @@ impl LightClient {
             Arc::new(network)
         };
 
-        let light = Arc::new(QueryService::new(
+        let light = Arc::new(LightQueryService::new(
             consensus.clone(),
             sync_graph.clone(),
             network.clone(),
