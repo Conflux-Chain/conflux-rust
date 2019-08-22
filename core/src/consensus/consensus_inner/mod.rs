@@ -214,21 +214,26 @@ impl Default for ConsensusGraphPivotData {
 ///
 /// Blaming is used to provide proof for state root of a specific pivot block.
 /// The rationale behind is as follows. Verifying state roots of blocks off
-/// pivot chain is very costly. It is preferred to avoid this verification if
-/// possible. Normally, Conflux only needs to store correct state root in
-/// header of pivot block to provide proof for light node. However, the pivot
-/// chain may oscillate at the place close to ledger tail, which means that
-/// a block that is off pivot at some point may become pivot block in the
-/// future. If we do not verify the state root in the header of that block, when
-/// it becomes a pivot block later, we cannot guarantee the correctness of the
-/// state root in its header. Therefore, if we do not verify the state root in
-/// off-pivot block, we cannot guarantee the correctness of state root in pivot
-/// block. Of course, one may argue that you can switch pivot chain when
-/// incorrect state root in pivot block is observed. However, this makes the
-/// check for the correct parent selection rely on state root checking, which in
-/// turn will require state root verification on any blocks including off-pivot
-/// ones. This violates the original goal to save cost of verification of state
-/// root in off-pivot blocks.
+/// pivot chain is very costly and sometimes impractical, e.g., when the block
+/// refers to another block that is not in the current era. It is preferred to
+/// avoid this verification if possible. Normally, Conflux only needs to store
+/// correct state root in header of pivot block to provide proof for light node.
+/// However, the pivot chain may oscillate at the place close to ledger tail,
+/// which means that a block that is off pivot at some point may become pivot
+/// block in the future. If we do not verify the state root in the header of
+/// that block, when it becomes a pivot block later, we cannot guarantee the
+/// correctness of the state root in its header. Therefore, if we do not verify
+/// the state root in off-pivot block, we cannot guarantee the correctness of
+/// state root in pivot block. Of course, one may argue that you can switch
+/// pivot chain when incorrect state root in pivot block is observed. However,
+/// this makes the check for the correct parent selection rely on state root
+/// checking. Then, since Conflux is an inclusive protocol which adopts
+/// off-pivot blocks in its final ledger, it needs to verify the correctness of
+/// parent selection of off-pivot blocks and this relies on the state
+/// verification on all the parent candidates of the off-pivot blocks.
+/// Therefore, this eventually will lead to state root verification on any
+/// blocks including off-pivot ones. This violates the original goal of saving
+/// cost of the state root verification in off-pivot blocks.
 ///
 /// We therefore allow incorrect state root in pivot block header, and use the
 /// blaming mechanism to enable the proof generation of the correct state root.
