@@ -99,6 +99,10 @@ impl SessionManager {
         self.node_id_index.read().contains_key(id)
     }
 
+    pub fn get_index_by_id(&self, id: &NodeId) -> Option<usize> {
+        self.node_id_index.read().get(id).cloned()
+    }
+
     /// Creates a new session with specified TCP socket. It is egress connection
     /// if the `id` is not `None`, otherwise it is ingress connection.
     pub fn create(

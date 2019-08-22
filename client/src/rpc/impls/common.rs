@@ -19,7 +19,7 @@ use network::{
     get_high_priority_packets,
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
-    NetworkService, SessionDetails,
+    NetworkService, SessionDetails, UpdateNodeOperation,
 };
 
 use crate::rpc::types::{
@@ -376,6 +376,12 @@ impl RpcImpl {
                 }
             }
         }
+    }
+
+    pub fn net_disconnect_node(
+        &self, id: NodeId, op: Option<UpdateNodeOperation>,
+    ) -> RpcResult<Option<usize>> {
+        Ok(self.network.disconnect_node(&id, op))
     }
 
     pub fn net_sessions(

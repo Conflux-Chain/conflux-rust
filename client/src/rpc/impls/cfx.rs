@@ -22,7 +22,7 @@ use cfxcore::{
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use network::{
     node_table::{Node, NodeId},
-    throttling, SessionDetails,
+    throttling, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{
     filter::FilterError, Action, SignedTransaction, Transaction,
@@ -482,6 +482,7 @@ impl DebugRpc for DebugRpcImpl {
             fn clear_tx_pool(&self) -> RpcResult<()>;
             fn net_high_priority_packets(&self) -> RpcResult<usize>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
+            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
             fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>>;

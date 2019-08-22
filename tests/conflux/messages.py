@@ -81,9 +81,13 @@ class Hello(rlp.Serializable):
 
 
 class Disconnect(rlp.Serializable):
-    fields = [
-        ("reason", big_endian_int)
-    ]
+    def __init__(self, code:int, msg:str=None):
+        self.code = code
+        self.msg = msg
+
+    @classmethod
+    def deserialize(cls, serial):
+        return cls(int(serial[0]), str(serial[1:]))
 
 
 class Status(rlp.Serializable):

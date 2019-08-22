@@ -7,7 +7,7 @@ use keylib;
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{fmt, io, net};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DisconnectReason {
     DisconnectRequested,
     UselessPeer,

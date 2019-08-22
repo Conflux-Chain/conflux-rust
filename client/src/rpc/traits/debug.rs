@@ -7,7 +7,7 @@ use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use network::{
     node_table::{Node, NodeId},
-    throttling, SessionDetails,
+    throttling, SessionDetails, UpdateNodeOperation,
 };
 use std::collections::BTreeMap;
 
@@ -44,6 +44,11 @@ pub trait DebugRpc {
 
     #[rpc(name = "net_node")]
     fn net_node(&self, node_id: NodeId) -> RpcResult<Option<(String, Node)>>;
+
+    #[rpc(name = "net_disconnect_node")]
+    fn net_disconnect_node(
+        &self, id: NodeId, op: Option<UpdateNodeOperation>,
+    ) -> RpcResult<Option<usize>>;
 
     #[rpc(name = "net_sessions")]
     fn net_sessions(

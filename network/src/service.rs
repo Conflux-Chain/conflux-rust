@@ -283,6 +283,22 @@ impl NetworkService {
             }
         }
     }
+
+    pub fn disconnect_node(
+        &self, id: &NodeId, op: Option<UpdateNodeOperation>,
+    ) -> Option<usize> {
+        let inner = self.inner.as_ref()?;
+        let peer = inner.sessions.get_index_by_id(id)?;
+        let io = IoContext::new(self.io_service.as_ref()?.channel(), 0);
+        inner.kill_connection(
+            peer,
+            &io,
+            true,
+            op,
+            Some(DisconnectReason::DisconnectRequested),
+        );
+        Some(peer)
+    }
 }
 
 type SharedSession = Arc<RwLock<Session>>;
@@ -1006,7 +1022,7 @@ impl NetworkServiceInner {
     fn kill_connection(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
         remote: bool, op: Option<UpdateNodeOperation>,
-        msg: Option<&'static str>,
+        reason: Option<DisconnectReason>,
     )
     {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
@@ -1022,12 +1038,8 @@ impl NetworkServiceInner {
                             if sess.have_capability(*p) {
                                 to_disconnect.push(*p);
 
-                                if let Some(msg) = msg {
-                                    sess.send_disconnect(
-                                        DisconnectReason::Custom(
-                                            msg.to_owned(),
-                                        ),
-                                    );
+                                if let Some(ref reason) = reason {
+                                    sess.send_disconnect(reason.clone());
                                 };
                             }
                         }
@@ -1644,6 +1656,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         reason: Option<&'static str>,
     )
     {
+        let reason = reason.map(|r| DisconnectReason::Custom(r.into()));
         self.network_service
             .kill_connection(peer, self.io, true, op, reason);
     }

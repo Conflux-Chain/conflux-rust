@@ -71,6 +71,7 @@ use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde_derive::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -230,6 +231,7 @@ pub trait NetworkProtocolHandler: Sync + Send {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum UpdateNodeOperation {
     Failure,
     Demotion,
