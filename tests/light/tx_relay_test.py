@@ -87,6 +87,22 @@ class TxRelayTest(ConfluxTestFramework):
 
         self.log.info(f"Pass 1 - all txs relayed\n")
         # ------------------------------------------------
+        self.log.info(f"Retrieving txs through light node...")
+
+        for (hash, _, _) in txs:
+            node0_tx = self.rpc[FULLNODE0].get_tx(hash)
+            light_tx = self.rpc[LIGHTNODE].get_tx(hash)
+
+            # NOTE: the current light rpc implementation only retrieves the tx, does
+            # not retrieve receipts or tx addresses. this will be implemented later
+            node0_tx["blockHash"] = None
+            node0_tx["transactionIndex"] = None
+
+            assert_equal(light_tx, node0_tx)
+            self.log.info(f"tx {hash} correct")
+
+        self.log.info(f"Pass 2 - all txs retrieved\n")
+        # ------------------------------------------------
         self.log.info(f"Generating incorrect blocks...")
 
         # save the latest epoch, guaranteed to have all the new balances
@@ -99,7 +115,7 @@ class TxRelayTest(ConfluxTestFramework):
         # generate one correct block and check blame info
         hash = self.generate_correct_block(FULLNODE0)
         block = self.rpc[FULLNODE0].block_by_hash(hash)
-        assert_greater_than(block["blame"], 0)
+        assert_equal(block["blame"], num_blocks)
 
         # generate some correct blocks to make sure we are confident about the previous one
         sync_blocks(self.nodes[FULLNODE0:FULLNODE1])
@@ -107,7 +123,7 @@ class TxRelayTest(ConfluxTestFramework):
         for _ in range(num_blocks):
             self.generate_correct_block()
 
-        self.log.info(f"Pass 2 - blame info correct\n")
+        self.log.info(f"Pass 3 - blame info correct\n")
         # ------------------------------------------------
         self.log.info(f"Checking the resulting account balances through the light node...")
 
@@ -133,7 +149,7 @@ class TxRelayTest(ConfluxTestFramework):
 
             self.log.info(f"account {receiver} correct")
 
-        self.log.info(f"Pass 3 - balances retrieved correctly\n")
+        self.log.info(f"Pass 4 - balances retrieved correctly\n")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ pub use message::msgid;
 pub use node_type::NodeType;
 pub use protocol::{
     BlockHashes, BlockHeaders, GetBlockHashesByEpoch, GetBlockHeaders,
-    GetReceipts, GetStateEntry, GetStateRoot, NewBlockHashes, Receipts,
+    GetReceipts, GetStateEntry, GetStateRoot, GetTxs, NewBlockHashes, Receipts,
     ReceiptsWithProof, SendRawTx, StateEntry, StateRoot, StateRootWithProof,
-    StatusPing, StatusPong,
+    StatusPing, StatusPong, Txs,
 };

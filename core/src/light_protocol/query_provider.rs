@@ -10,7 +10,8 @@ use std::sync::{Arc, Weak};
 
 use cfx_types::H256;
 use primitives::{
-    BlockHeader, EpochNumber, Receipt, StateRoot, TransactionWithSignature,
+    BlockHeader, EpochNumber, Receipt, SignedTransaction, StateRoot,
+    TransactionWithSignature,
 };
 
 use crate::{
@@ -20,7 +21,9 @@ use crate::{
         throttling::THROTTLING_SERVICE, NetworkContext, NetworkProtocolHandler,
         NetworkService, PeerId,
     },
-    parameters::light::{MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND},
+    parameters::light::{
+        MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_TXS_TO_SEND,
+    },
     statedb::StateDb,
     storage::{
         state::{State, StateTrait},
@@ -36,11 +39,11 @@ use super::{
     message::{
         msgid, BlockHashes as GetBlockHashesResponse,
         BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
-        GetBlockHeaders, GetReceipts, GetStateEntry, GetStateRoot,
+        GetBlockHeaders, GetReceipts, GetStateEntry, GetStateRoot, GetTxs,
         NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
         ReceiptsWithProof, SendRawTx, StateEntry as GetStateEntryResponse,
         StateRoot as GetStateRootResponse, StateRootWithProof, StatusPing,
-        StatusPong,
+        StatusPong, Txs as GetTxsResponse,
     },
     peers::Peers,
     Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
@@ -146,6 +149,7 @@ impl QueryProvider {
             msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
             msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, &rlp),
             msgid::GET_RECEIPTS => self.on_get_receipts(io, peer, &rlp),
+            msgid::GET_TXS => self.on_get_txs(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -310,6 +314,18 @@ impl QueryProvider {
 
         let value = value.map(|x| x.to_vec());
         Ok((value, proof))
+    }
+
+    fn tx_by_hash(&self, hash: H256) -> Option<SignedTransaction> {
+        if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
+            return Some(info.0);
+        };
+
+        if let Some(tx) = self.tx_pool.get_transaction(&hash) {
+            return Some((*tx).clone());
+        };
+
+        None
     }
 
     fn send_status(
@@ -520,6 +536,27 @@ impl QueryProvider {
             pivot_hash,
             receipts,
         });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_txs(
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetTxs = rlp.as_val()?;
+        info!("on_get_txs req={:?}", req);
+        let request_id = req.request_id;
+
+        let txs = req
+            .hashes
+            .into_iter()
+            .take(MAX_TXS_TO_SEND)
+            .filter_map(|h| self.tx_by_hash(h))
+            .collect();
+
+        let msg: Box<dyn Message> =
+            Box::new(GetTxsResponse { request_id, txs });
 
         msg.send(io, peer)?;
         Ok(())
