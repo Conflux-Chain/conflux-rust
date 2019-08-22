@@ -136,6 +136,9 @@ impl ReadyAccountPool {
         &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
     ) -> Option<Arc<SignedTransaction>> {
         let replaced = if let Some(tx) = tx {
+            if tx.hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in ready pool", tx.hash);
+            }
             self.insert(tx)
         } else {
             self.remove(address)
@@ -146,9 +149,6 @@ impl ReadyAccountPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        if tx.hash[0] & 254 == 0 {
-            debug!("Sampled transaction {:?} in ready pool", tx.hash);
-        }
         self.treap
             .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
     }
