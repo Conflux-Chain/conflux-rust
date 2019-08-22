@@ -560,8 +560,8 @@ impl TransactionPoolInner {
 
         if transaction.hash[0] & 254 == 0 {
             debug!(
-                "Transaction {:?} current nonce: {:?}, state nonce:{:?}",
-                transaction.hash, transaction.nonce, state_nonce
+                "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
+                transaction.hash, transaction.sender, transaction.nonce, state_nonce
             );
         }
         if transaction.nonce
