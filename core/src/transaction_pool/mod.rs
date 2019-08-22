@@ -20,7 +20,9 @@ use crate::{
 };
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
-use metrics::{register_meter_with_group, Gauge, GaugeUsize,Meter, MeterTimer};
+use metrics::{
+    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
+};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     Account, Action, EpochId, SignedTransaction, TransactionWithSignature,
