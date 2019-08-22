@@ -495,12 +495,8 @@ fn test_proofs() {
 
     let mut epoch_id = H256::default();
     epoch_id[0] = 1;
-    let root = state.compute_state_root().unwrap();
+    let root = state.compute_state_root().unwrap().state_root;
     state.commit(epoch_id).unwrap();
-
-    let delta_root = root.state_root.delta_root;
-    let intermediate_root = root.state_root.intermediate_delta_root;
-    let snapshot_root = root.state_root.snapshot_root;
 
     rng.shuffle(keys.as_mut());
 
@@ -512,33 +508,24 @@ fn test_proofs() {
         let value = value.as_ref().map(|b| &**b);
 
         // valid proof
-        assert!(proof.is_valid(
-            key,
-            value,
-            delta_root,
-            intermediate_root,
-            snapshot_root,
-        ));
+        assert!(proof.is_valid_kv(key, value, root.clone()));
 
         // invalid state root
-        let mut invalid_root = delta_root.clone();
+        let mut invalid_root = root.delta_root.clone();
         invalid_root[0] = 0x00;
-        assert!(!proof.is_valid(
+
+        assert!(!proof.is_valid_kv(
             key,
             value,
-            invalid_root,
-            invalid_root,
-            invalid_root,
+            StateRoot {
+                snapshot_root: invalid_root,
+                intermediate_delta_root: invalid_root,
+                delta_root: invalid_root
+            },
         ));
 
         // invalid value
-        assert!(!proof.is_valid(
-            key,
-            Some(&[0x00; 100][..]),
-            delta_root,
-            intermediate_root,
-            snapshot_root,
-        ));
+        assert!(!proof.is_valid_kv(key, Some(&[0x00; 100][..]), root.clone()));
 
         // invalid hash
         let mut invalid_proof = proof.clone();
@@ -548,13 +535,7 @@ fn test_proofs() {
             delta_proof.nodes[0].set_merkle(&wrong_merkle);
         }
 
-        assert!(!invalid_proof.is_valid(
-            key,
-            value,
-            delta_root,
-            intermediate_root,
-            snapshot_root,
-        ));
+        assert!(!invalid_proof.is_valid_kv(key, value, root.clone()));
 
         // test rlp
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
@@ -578,13 +559,7 @@ fn test_proofs() {
         assert_eq!(value, None);
 
         // valid non-existence proof
-        assert!(proof.is_valid(
-            &key.to_vec(),
-            None,
-            delta_root,
-            intermediate_root,
-            snapshot_root,
-        ));
+        assert!(proof.is_valid_kv(&key.to_vec(), None, root.clone()));
     }
 }
 
@@ -596,5 +571,6 @@ use super::{
     new_state_manager_for_testing,
 };
 use cfx_types::H256;
+use primitives::StateRoot;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use std::{mem, sync::Arc, thread};

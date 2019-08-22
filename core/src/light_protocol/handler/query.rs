@@ -239,13 +239,11 @@ impl QueryHandler {
         self.validate_state_root(req.epoch, &resp.state_root)?;
 
         // validate proof
-        if !resp.proof.is_valid(
-            &req.key,
-            resp.entry.as_ref().map(|v| &**v),
-            resp.state_root.root.delta_root,
-            resp.state_root.root.intermediate_delta_root,
-            resp.state_root.root.snapshot_root,
-        ) {
+        let key = &req.key;
+        let value = resp.entry.as_ref().map(|v| &**v);
+        let root = resp.state_root.root;
+
+        if !resp.proof.is_valid_kv(key, value, root) {
             info!("Invalid proof from peer={}", peer);
             return Err(ErrorKind::InvalidStateProof.into());
         }

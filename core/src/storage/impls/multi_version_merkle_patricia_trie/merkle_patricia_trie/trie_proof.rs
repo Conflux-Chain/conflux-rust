@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::H256;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use std::{
     collections::HashMap,
@@ -53,56 +54,87 @@ pub struct TrieProof {
 impl TrieProof {
     pub fn new(nodes: Vec<TrieProofNode>) -> Self { TrieProof { nodes } }
 
-    pub fn is_valid(
+    /// Verify that the trie `root` has `value` under `key`.
+    /// Use `None` for exclusion proofs (i.e. there is no value under `key`).
+    // NOTE: This API cannot be used to prove that there is a value under `key`
+    // but it does not equal a given value. We add this later on if it's needed.
+    pub fn is_valid_kv(
         &self, key: &[u8], value: Option<&[u8]>, root: MerkleHash,
     ) -> bool {
-        // empty proof
-        if self.nodes.is_empty() {
-            return value == None && root == MERKLE_NULL_NODE;
+        self.is_valid(key, root, |node| match node {
+            None => value == None,
+            Some(node) => value == node.value_as_slice().into_option(),
+        })
+    }
+
+    /// Verify that the trie `root` has a node with `hash` under `path`.
+    /// Use `MERKLE_NULL_NODE` for exclusion proofs (i.e. `path` does not exist
+    /// or leads to another hash).
+    pub fn is_valid_path_to(
+        &self, path: &[u8], hash: MerkleHash, root: MerkleHash,
+    ) -> bool {
+        self.is_valid(path, root, |node| match node {
+            None => hash == MERKLE_NULL_NODE,
+            Some(node) => hash == *node.get_merkle(),
+        })
+    }
+
+    fn is_valid(
+        &self, path: &[u8], root: MerkleHash,
+        pred: impl FnOnce(Option<&TrieProofNode>) -> bool,
+    ) -> bool
+    {
+        // empty trie
+        if root == MERKLE_NULL_NODE {
+            return pred(None);
         }
+
+        // NOTE: an empty proof is only valid if it is an
+        // exclusion proof for an empty trie, covered above
 
         // store (hash -> node) mapping
-        let mut nodes = HashMap::new();
-        for node in &self.nodes {
-            nodes.insert(node.get_merkle(), node);
-        }
+        let nodes = self
+            .nodes
+            .iter()
+            .map(|node| (node.get_merkle(), node))
+            .collect::<HashMap<&H256, &TrieProofNode>>();
 
-        let mut key = key;
+        // traverse the trie along `path`
+        let mut key = path;
         let mut hash = &root;
 
         loop {
-            match nodes.get(hash) {
-                // proof has missing node
+            let node = match nodes.get(hash) {
+                Some(node) => node,
                 None => {
+                    // missing node
                     debug_assert!(!hash.eq(&MERKLE_NULL_NODE)); // this should lead to `ChildNotFound`
                     return false;
                 }
-                Some(node) => {
-                    // node hash does not match its contents
-                    if !node.is_valid() {
-                        return false;
-                    }
+            };
 
-                    match node.walk::<Read>(key) {
-                        WalkStop::Arrived => {
-                            return value
-                                == node.value_as_slice().into_option();
-                        }
-                        WalkStop::PathDiverted { .. } => {
-                            return value == None;
-                        }
-                        WalkStop::ChildNotFound { .. } => {
-                            return value == None;
-                        }
-                        WalkStop::Descent {
-                            key_remaining,
-                            child_node,
-                            ..
-                        } => {
-                            hash = child_node;
-                            key = key_remaining;
-                        }
-                    }
+            // node hash does not match its contents
+            if !node.is_valid() {
+                return false;
+            }
+
+            match node.walk::<Read>(key) {
+                WalkStop::Arrived => {
+                    return pred(Some(node));
+                }
+                WalkStop::PathDiverted { .. } => {
+                    return pred(None);
+                }
+                WalkStop::ChildNotFound { .. } => {
+                    return pred(None);
+                }
+                WalkStop::Descent {
+                    key_remaining,
+                    child_node,
+                    ..
+                } => {
+                    hash = child_node;
+                    key = key_remaining;
                 }
             }
         }
@@ -210,11 +242,39 @@ mod tests {
             node
         };
 
+        let leaf1_hash = leaf1.compute_merkle();
+        let leaf2_hash = leaf2.compute_merkle();
+        let ext_hash = ext.compute_merkle();
+        let branch_hash = branch.compute_merkle();
+        let root = branch_hash.clone();
+        let null = MERKLE_NULL_NODE;
+
         // empty proof
         let proof = TrieProof::new(vec![]);
-        assert!(proof.is_valid(&[0x00], None, MERKLE_NULL_NODE));
-        assert!(!proof.is_valid(&[0x00], None, leaf1.compute_merkle()));
-        assert!(!proof.is_valid(&key1, Some(&[0x00]), MERKLE_NULL_NODE));
+        assert!(proof.is_valid_kv(&[0x00], None, null));
+        assert!(!proof.is_valid_kv(&[0x00], None, leaf1_hash));
+        assert!(!proof.is_valid_kv(&key1, Some(&[0x00]), null));
+
+        // missing node
+        let proof = TrieProof::new(vec![ext.clone(), branch.clone()]);
+        assert!(!proof.is_valid_kv(&key2, Some(&value2), root));
+
+        // wrong hash
+        let mut leaf2_wrong = leaf2.clone();
+        let mut wrong_merkle = leaf2_wrong.get_merkle().clone();
+        wrong_merkle[0] = 0x00;
+        leaf2_wrong.set_merkle(&wrong_merkle);
+
+        let proof = TrieProof::new(vec![
+            leaf1.clone(),
+            leaf2_wrong,
+            ext.clone(),
+            branch.clone(),
+        ]);
+        assert!(!proof.is_valid_kv(&key2, Some(&value2), root));
+
+        // wrong value
+        assert!(!proof.is_valid_kv(&key2, Some(&[0x00, 0x00, 0x04]), root));
 
         // valid proof
         let proof = TrieProof::new(vec![
@@ -224,28 +284,70 @@ mod tests {
             branch.clone(),
         ]);
 
-        let root = branch.compute_merkle();
-        assert!(proof.is_valid(&key1, Some(&value1), root));
-        assert!(proof.is_valid(&key2, Some(&value2), root));
-        assert!(proof.is_valid(&[0x01], None, root));
+        assert!(proof.is_valid_kv(&key1, Some(&value1), root));
+        assert!(proof.is_valid_kv(&key2, Some(&value2), root));
+        assert!(proof.is_valid_kv(&[0x01], None, root));
 
         // wrong root
-        assert!(!proof.is_valid(&key2, Some(&value2), leaf1.compute_merkle()));
+        assert!(!proof.is_valid_kv(&key2, Some(&value2), leaf1_hash));
 
-        // missing node
-        let proof = TrieProof::new(vec![ext.clone(), branch.clone()]);
-        assert!(!proof.is_valid(&key2, Some(&value2), root));
+        // path to `branch` (root)
+        let key = &[];
+        assert!(proof.is_valid_path_to(key, branch_hash, root));
+        assert!(!proof.is_valid_path_to(key, leaf1_hash, root));
+        assert!(!proof.is_valid_path_to(key, ext_hash, root));
+        assert!(!proof.is_valid_path_to(key, leaf2_hash, root));
 
-        // wrong hash
-        let mut leaf2_wrong = leaf2;
-        let mut wrong_merkle = leaf2_wrong.get_merkle().clone();
-        wrong_merkle[0] = 0x00;
-        leaf2_wrong.set_merkle(&wrong_merkle);
+        // path to `leaf1`
+        let path = &[0x02];
+        assert!(proof.is_valid_path_to(path, leaf1_hash, root));
+        assert!(!proof.is_valid_path_to(path, branch_hash, root));
+        assert!(!proof.is_valid_path_to(path, ext_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
 
-        let proof = TrieProof::new(vec![leaf1, leaf2_wrong, ext, branch]);
-        assert!(!proof.is_valid(&key2, Some(&value2), root));
+        // path to `ext`
+        let path = &[0x00, 0x00];
+        assert!(proof.is_valid_path_to(path, ext_hash, root));
+        assert!(!proof.is_valid_path_to(path, branch_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
 
-        // wrong value
-        assert!(!proof.is_valid(&key2, Some(&[0x00, 0x00, 0x04]), root));
+        // path to `leaf2`
+        let path = &[0x00, 0x00, 0x03];
+        assert!(proof.is_valid_path_to(path, leaf2_hash, root));
+        assert!(!proof.is_valid_path_to(path, branch_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
+        assert!(!proof.is_valid_path_to(path, ext_hash, root));
+
+        // non-existent prefix
+        let path = &[0x00];
+        assert!(proof.is_valid_path_to(path, null, root));
+        assert!(!proof.is_valid_path_to(path, branch_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
+        assert!(!proof.is_valid_path_to(path, ext_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
+
+        // non-existent path
+        let path = &[0x01];
+        assert!(proof.is_valid_path_to(path, null, root));
+        assert!(!proof.is_valid_path_to(path, branch_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
+        assert!(!proof.is_valid_path_to(path, ext_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
+
+        // non-existent path with existing prefix
+        let path = &[0x00, 0x00, 0x03, 0x04];
+        assert!(proof.is_valid_path_to(path, null, root));
+        assert!(!proof.is_valid_path_to(path, branch_hash, root));
+        assert!(!proof.is_valid_path_to(path, ext_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
+        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
+
+        // empty trie
+        assert!(proof.is_valid_path_to(&[], null, null));
+        assert!(proof.is_valid_path_to(&[0x00], null, null));
+
+        assert!(!proof.is_valid_path_to(&[], branch_hash, null));
+        assert!(!proof.is_valid_path_to(&[0x00], branch_hash, null));
     }
 }
