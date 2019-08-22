@@ -146,6 +146,9 @@ impl ReadyAccountPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
+        if tx.hash[0] & 254 == 0 {
+            debug!("Sampled transaction {:?} in ready pool", tx);
+        }
         self.treap
             .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
     }

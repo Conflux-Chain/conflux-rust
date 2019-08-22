@@ -93,6 +93,9 @@ class LogAnalyzer:
         #the first time a transaction is packed to the first time the transaction is geneated.
         table.add_stat("min tx packed to block latency", "%.2f", self.agg.stat_min_tx_packed_to_block_latency())
 
+        #the time between the node receives the tx and the tx becomes ready
+        table.add_stat("min tx to ready pool latency", "%.2f", self.agg.stat_min_tx_packed_to_block_latency())
+
         #colomn: P(n) nodes: percentage of the transactions is received by block.
         table.add_stat("by_block_ratio", "%.2f", self.agg.stat_tx_ratio())
 
@@ -139,6 +142,7 @@ class LogAnalyzer:
         tx_sum = sum(block_txs_list)
         print("{} txs generated".format(tx_sum))
         print("Throughput is {}".format(tx_sum / (max_time - min_time)))
+        print("Slowest packed transaction hash: {}".format(self.agg.get_largest_min_tx_packed_latency_hash()))
         table.pretty_print()
         if self.csv_output is not None:
             table.output_csv(self.csv_output)
