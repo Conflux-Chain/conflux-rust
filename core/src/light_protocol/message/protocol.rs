@@ -11,7 +11,7 @@ use crate::{message::RequestId, storage::StateProof};
 
 use primitives::{
     BlockHeader as PrimitiveBlockHeader, Receipt as PrimitiveReceipt,
-    StateRoot as PrimitiveStateRoot,
+    SignedTransaction, StateRoot as PrimitiveStateRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -145,4 +145,15 @@ pub struct Receipts {
     pub request_id: RequestId,
     pub pivot_hash: H256,
     pub receipts: ReceiptsWithProof,
+}
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetTxs {
+    pub request_id: RequestId,
+    pub hashes: Vec<H256>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct Txs {
+    pub request_id: RequestId,
+    pub txs: Vec<SignedTransaction>,
 }

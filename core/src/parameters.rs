@@ -157,9 +157,10 @@ pub mod light {
     /// `GetBlockHashesByEpoch` request.
     pub const NUM_WAITING_HEADERS_THRESHOLD: usize = 1000;
 
-    /// Maximum number of epochs/headers to send to a light peer in a response.
+    /// Max number of epochs/headers/txs to send to a light peer in a response.
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
     pub const MAX_HEADERS_TO_SEND: usize = 512;
+    pub const MAX_TXS_TO_SEND: usize = 1024;
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;

@@ -23,6 +23,8 @@ build_msgid! {
     SEND_RAW_TX = 0x0b
     GET_RECEIPTS = 0x0c
     RECEIPTS = 0x0d
+    GET_TXS = 0x0e
+    TXS = 0x0f
 
     INVALID = 0xff
 }
@@ -42,8 +44,11 @@ build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
 build_msg_impl! { SendRawTx, msgid::SEND_RAW_TX, "SendRawTx" }
 build_msg_impl! { GetReceipts, msgid::GET_RECEIPTS, "GetReceipts" }
 build_msg_impl! { Receipts, msgid::RECEIPTS, "Receipts" }
+build_msg_impl! { GetTxs, msgid::GET_TXS, "GetTxs" }
+build_msg_impl! { Txs, msgid::TXS, "Txs" }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }
 build_has_request_id_impl! { GetStateEntry }
 build_has_request_id_impl! { GetReceipts }
+build_has_request_id_impl! { GetTxs }
