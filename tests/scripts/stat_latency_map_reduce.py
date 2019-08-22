@@ -321,7 +321,7 @@ class HostLogReducer:
         futures = []
         for (path, _, files) in os.walk(log_dir):
             for f in files:
-                if f == "tx_sample.log":
+                if f == "conflux.log":
                     log_file = os.path.join(path, f)
                     futures.append(executor.submit(NodeLogMapper.mapf, log_file))
 
@@ -493,12 +493,12 @@ class LogAggregator:
         return agg
 
 if __name__ == "__main__":
-    # if len(sys.argv) < 3:
-    #     print("Parameter required: <log_dir> <output_file>")
-    #     sys.exit(1)
+    if len(sys.argv) < 3:
+        print("Parameter required: <log_dir> <output_file>")
+        sys.exit(1)
 
-    log_dir = "/Users/yilinhan/Desktop/tests"
-    output_file = "abc.txt"
+    log_dir = sys.argv[1]
+    output_file = sys.argv[2]
 
     executor = ThreadPoolExecutor()
     reducer = HostLogReducer.reduced(log_dir, executor)
