@@ -24,7 +24,7 @@ class TxRelayTest(ConfluxTestFramework):
 
         self.start_node(FULLNODE0, ["--archive"])
         self.start_node(FULLNODE1, ["--archive"])
-        self.start_node(LIGHTNODE, ["--light"], wait_for_recovery=False)
+        self.start_node(LIGHTNODE, ["--light"], phase_to_wait=None)
 
         # set up RPC clients
         self.rpc = [None] * self.num_nodes

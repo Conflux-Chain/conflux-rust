@@ -23,7 +23,7 @@ class LightSyncTest(ConfluxTestFramework):
 
         self.start_node(FULLNODE0, ["--archive"])
         self.start_node(FULLNODE1, ["--archive"])
-        self.start_node(LIGHTNODE, ["--light"], wait_for_recovery=False)
+        self.start_node(LIGHTNODE, ["--light"], phase_to_wait=None)
 
         # connect archive nodes, wait for phase changes to complete
         connect_nodes(self.nodes, FULLNODE0, FULLNODE1)
