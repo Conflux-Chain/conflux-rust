@@ -794,6 +794,12 @@ impl NetworkServiceInner {
                     return;
                 }
             };
+
+            if !self.sessions.is_ip_allowed(&address.ip()) {
+                debug!("cannot create outgoing connection to node, id = {:?}, address = {:?}", id, address);
+                return;
+            }
+
             match TcpStream::connect(&address) {
                 Ok(socket) => {
                     trace!("{}: connecting to {:?}", id, address);

@@ -15,7 +15,7 @@ use parking_lot::RwLock;
 use slab::Slab;
 use std::{
     collections::{HashMap, HashSet},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -101,6 +101,11 @@ impl SessionManager {
 
     pub fn get_index_by_id(&self, id: &NodeId) -> Option<usize> {
         self.node_id_index.read().get(id).cloned()
+    }
+
+    /// Check if the specified IP address is allowed to create a new session.
+    pub fn is_ip_allowed(&self, ip: &IpAddr) -> bool {
+        self.ip_limit.read().is_allowed(ip)
     }
 
     /// Creates a new session with specified TCP socket. It is egress connection
