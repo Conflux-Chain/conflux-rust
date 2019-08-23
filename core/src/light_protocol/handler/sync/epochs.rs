@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::{super::handler::FullPeerState, max_of_collection, Peers};
+use super::{super::FullPeerState, max_of_collection, Peers};
 use crate::{
     consensus::ConsensusGraph,
     message::RequestId,

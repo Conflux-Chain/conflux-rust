@@ -20,12 +20,12 @@ use cfx_types::H256;
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
+        common::Peers,
         message::{
             BlockHashes as GetBlockHashesResponse,
             BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
             GetBlockHeaders, NewBlockHashes,
         },
-        peers::Peers,
         Error,
     },
     message::{Message, RequestId},
@@ -38,7 +38,7 @@ use crate::{
     sync::SynchronizationGraph,
 };
 
-use super::handler::FullPeerState;
+use super::FullPeerState;
 
 use epochs::Epochs;
 use headers::{HashSource, Headers};

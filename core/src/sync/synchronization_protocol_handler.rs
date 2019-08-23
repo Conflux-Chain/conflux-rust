@@ -6,7 +6,7 @@ use super::{
     random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
-    light_protocol::QueryProvider,
+    light_protocol::Provider as LightProvider,
     message::{HasRequestId, Message, MsgId},
     sync::message::{
         handle_rlp_message, msgid, GetBlockHeadersResponse, NewBlock,
@@ -235,7 +235,7 @@ pub struct SynchronizationProtocolHandler {
     pub state_sync: Arc<SnapshotChunkSync>,
 
     // provider for serving light protocol queries
-    light_provider: Arc<QueryProvider>,
+    light_provider: Arc<LightProvider>,
 }
 
 #[derive(Clone)]
@@ -262,7 +262,7 @@ impl SynchronizationProtocolHandler {
         is_full_node: bool, protocol_config: ProtocolConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
-        light_provider: Arc<QueryProvider>,
+        light_provider: Arc<LightProvider>,
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(is_full_node));

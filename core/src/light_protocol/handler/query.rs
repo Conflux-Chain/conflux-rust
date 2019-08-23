@@ -18,33 +18,24 @@ use futures::{
     Async, Future,
 };
 
-use cfx_types::H256;
-use primitives::{
-    BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, SignedTransaction,
-    StateRoot,
-};
+use primitives::{Receipt, SignedTransaction, StateRoot};
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
+        common::Validate,
         message::{
             GetReceipts, GetStateEntry, GetStateRoot, GetTxs,
-            Receipts as GetReceiptsResponse, ReceiptsWithProof,
+            Receipts as GetReceiptsResponse,
             StateEntry as GetStateEntryResponse,
-            StateRoot as GetStateRootResponse, StateRootWithProof,
-            Txs as GetTxsResponse,
+            StateRoot as GetStateRootResponse, Txs as GetTxsResponse,
         },
         Error, ErrorKind,
     },
     message::{HasRequestId, Message, RequestId},
     network::{NetworkContext, PeerId},
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{MAX_POLL_TIME_MS, POLL_PERIOD_MS},
-    },
+    parameters::light::{MAX_POLL_TIME_MS, POLL_PERIOD_MS},
 };
-
-use super::ledger_proof::LedgerProof;
 
 #[derive(Debug)]
 pub enum QueryResult {
@@ -60,130 +51,28 @@ struct PendingRequest {
 }
 
 pub struct QueryHandler {
-    consensus: Arc<ConsensusGraph>,
+    // next request id to be used when sending messages
     next_request_id: Arc<AtomicU64>,
+
+    // set of queries sent but not received yet
     pending: RwLock<BTreeMap<(PeerId, RequestId), PendingRequest>>,
+
+    // helper API for validating ledger and state information
+    validate: Validate,
 }
 
 impl QueryHandler {
     pub fn new(
         consensus: Arc<ConsensusGraph>, next_request_id: Arc<AtomicU64>,
     ) -> Self {
+        let pending = RwLock::new(BTreeMap::new());
+        let validate = Validate::new(consensus.clone());
+
         QueryHandler {
-            consensus,
             next_request_id,
-            pending: RwLock::new(BTreeMap::new()),
+            pending,
+            validate,
         }
-    }
-
-    #[inline]
-    fn pivot_hash_of(&self, epoch: u64) -> Result<H256, Error> {
-        let epoch = EpochNumber::Number(epoch);
-        Ok(self.consensus.get_hash_from_epoch_number(epoch)?)
-    }
-
-    #[inline]
-    fn pivot_header_of(&self, epoch: u64) -> Result<Arc<BlockHeader>, Error> {
-        let pivot = self.pivot_hash_of(epoch)?;
-        let header = self.consensus.data_man.block_header_by_hash(&pivot);
-        header.ok_or(ErrorKind::InternalError.into())
-    }
-
-    fn validate_pivot_hash(&self, epoch: u64, hash: H256) -> Result<(), Error> {
-        match self.pivot_hash_of(epoch)? {
-            h if h == hash => Ok(()),
-            h => {
-                // NOTE: this can happen in normal scenarios
-                // where the pivot chain has not converged
-                debug!("Pivot hash mismatch: local={}, response={}", h, hash);
-                Err(ErrorKind::PivotHashMismatch.into())
-            }
-        }
-    }
-
-    // When validating a ledger proof, we first find the witness - the block
-    // header that can be used to verify the the provided hashes against the
-    // corresponding on-ledger root hash. The witness is chosen based on the
-    // blame field. The root hash can be one of a) deferred state root hash,
-    // b) deferred receipts root hash, c) deferred logs bloom hash. Then, we
-    // compute the deferred root using the hashes provided and compare it to
-    // the hash stored in the witness header.
-    fn validate_ledger_proof(
-        &self, epoch: u64, proof: LedgerProof,
-    ) -> Result<H256, Error> {
-        // find the first header that can verify the state root requested
-        let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
-
-        let witness = match witness {
-            Some(epoch) => epoch,
-            None => {
-                warn!("Unable to verify state proof for epoch {}", epoch);
-                return Err(ErrorKind::UnableToProduceProof.into());
-            }
-        };
-
-        let witness_header = self.pivot_header_of(witness)?;
-        let blame = witness_header.blame() as u64;
-
-        // assumption: the target state root can be verified by the witness
-        assert!(witness >= epoch + DEFERRED_STATE_EPOCH_COUNT);
-        assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
-
-        // assumption: the witness header is correct
-        // i.e. it does not blame blocks at or before the genesis block
-        assert!(witness > blame);
-
-        // do the actual validation
-        proof.validate(witness_header)?;
-
-        // return the root hash corresponding to `epoch`
-        let index = (witness - epoch - DEFERRED_STATE_EPOCH_COUNT) as usize;
-        let received_root_hash = proof[index];
-
-        Ok(received_root_hash)
-    }
-
-    fn validate_state_root(
-        &self, epoch: u64, srwp: &StateRootWithProof,
-    ) -> Result<(), Error> {
-        let StateRootWithProof { root, proof } = srwp;
-        let proof = LedgerProof::StateRoot(proof.to_vec());
-
-        let received = self.validate_ledger_proof(epoch, proof)?;
-        let computed = root.compute_state_root_hash();
-
-        if received != computed {
-            info!(
-                "State root hash mismatch: received={}, computed={}",
-                received, computed
-            );
-            return Err(ErrorKind::InvalidStateRoot.into());
-        }
-
-        Ok(())
-    }
-
-    fn validate_receipts(
-        &self, epoch: u64, rwp: &ReceiptsWithProof,
-    ) -> Result<(), Error> {
-        let ReceiptsWithProof { receipts, proof } = rwp;
-        let proof = LedgerProof::ReceiptsRoot(proof.to_vec());
-
-        // convert Vec<Vec<_>> to Vec<Arc<Vec<_>>>
-        let rs = receipts.into_iter().cloned().map(Arc::new).collect();
-
-        let received = self.validate_ledger_proof(epoch, proof)?;
-        let computed = BlockHeaderBuilder::compute_block_receipts_root(&rs);
-
-        if received != computed {
-            info!(
-                "Receipts root hash mismatch: received={}, computed={}",
-                received, computed
-            );
-            return Err(ErrorKind::InvalidReceipts.into());
-        }
-
-        Ok(())
     }
 
     fn next_request_id(&self) -> RequestId {
@@ -220,8 +109,8 @@ impl QueryHandler {
         let id = resp.request_id;
         let (req, sender) = self.match_request::<GetStateRoot>(peer, id)?;
 
-        self.validate_pivot_hash(req.epoch, resp.pivot_hash)?;
-        self.validate_state_root(req.epoch, &resp.state_root)?;
+        self.validate.pivot_hash(req.epoch, resp.pivot_hash)?;
+        self.validate.state_root(req.epoch, &resp.state_root)?;
 
         sender.complete(QueryResult::StateRoot(resp.state_root.root));
         // note: in case of early return, `sender` will be cancelled
@@ -238,8 +127,8 @@ impl QueryHandler {
         let id = resp.request_id;
         let (req, sender) = self.match_request::<GetStateEntry>(peer, id)?;
 
-        self.validate_pivot_hash(req.epoch, resp.pivot_hash)?;
-        self.validate_state_root(req.epoch, &resp.state_root)?;
+        self.validate.pivot_hash(req.epoch, resp.pivot_hash)?;
+        self.validate.state_root(req.epoch, &resp.state_root)?;
 
         // validate proof
         let key = &req.key;
@@ -266,25 +155,11 @@ impl QueryHandler {
         let id = resp.request_id;
         let (req, sender) = self.match_request::<GetReceipts>(peer, id)?;
 
-        self.validate_pivot_hash(req.epoch, resp.pivot_hash)?;
-        self.validate_receipts(req.epoch, &resp.receipts)?;
+        self.validate.pivot_hash(req.epoch, resp.pivot_hash)?;
+        self.validate.receipts(req.epoch, &resp.receipts)?;
 
         sender.complete(QueryResult::Receipts(resp.receipts.receipts));
         // note: in case of early return, `sender` will be cancelled
-
-        Ok(())
-    }
-
-    fn validate_txs(&self, txs: &Vec<SignedTransaction>) -> Result<(), Error> {
-        for tx in txs {
-            match tx.verify_public(false) {
-                Ok(true) => continue,
-                _ => {
-                    warn!("Tx signature verification failed for {:?}", tx);
-                    return Err(ErrorKind::InvalidTxSignature.into());
-                }
-            }
-        }
 
         Ok(())
     }
@@ -298,7 +173,7 @@ impl QueryHandler {
         let id = resp.request_id;
         let (_req, sender) = self.match_request::<GetTxs>(peer, id)?;
 
-        self.validate_txs(&resp.txs)?;
+        self.validate.txs(&resp.txs)?;
 
         sender.complete(QueryResult::Txs(resp.txs));
         // note: in case of early return, `sender` will be cancelled

@@ -2,20 +2,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod common;
 mod error;
 mod handler;
 mod message;
-mod peers;
-mod query_provider;
+mod provider;
 mod query_service;
 
 use crate::network::ProtocolId;
 const LIGHT_PROTOCOL_ID: ProtocolId = *b"clp"; // Conflux Light Protocol
 const LIGHT_PROTOCOL_VERSION: u8 = 1;
 
-use self::error::{handle as handle_error, Error, ErrorKind};
+use error::{handle as handle_error, Error, ErrorKind};
 
-pub use self::{
-    handler::Handler, query_provider::QueryProvider,
-    query_service::QueryService,
-};
+pub use handler::Handler;
+pub use provider::Provider;
+pub use query_service::QueryService;
