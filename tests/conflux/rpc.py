@@ -223,6 +223,9 @@ class RpcClient:
     def get_node(self, node_id: str):
         return self.node.net_node(node_id)
 
+    def add_node(self, node_id: str, ip: str, port: int):
+        self.node.addnode(node_id, "{}:{}".format(ip, port))
+
     def disconnect_peer(self, node_id: str, node_op:str=None) -> int:
         return self.node.net_disconnect_node(node_id, node_op)
 
