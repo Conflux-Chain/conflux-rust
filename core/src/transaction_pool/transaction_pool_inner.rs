@@ -136,6 +136,9 @@ impl ReadyAccountPool {
         &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
     ) -> Option<Arc<SignedTransaction>> {
         let replaced = if let Some(tx) = tx {
+            if tx.hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in ready pool", tx.hash);
+            }
             self.insert(tx)
         } else {
             self.remove(address)
@@ -555,6 +558,12 @@ impl TransactionPoolInner {
             account_cache,
         );
 
+        if transaction.hash[0] & 254 == 0 {
+            debug!(
+                "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
+                transaction.hash, transaction.sender, transaction.nonce, state_nonce
+            );
+        }
         if transaction.nonce
             >= state_nonce
                 + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)

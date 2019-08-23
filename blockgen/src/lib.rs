@@ -8,16 +8,23 @@ use cfxcore::{
     SharedSynchronizationGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
+use lazy_static::lazy_static;
 use log::{debug, info, trace, warn};
+use metrics::{Gauge, GaugeUsize};
 use parking_lot::{Mutex, RwLock};
 use primitives::*;
 use std::{
     cmp::max,
+    collections::HashSet,
     sync::{mpsc, Arc},
     thread, time,
 };
 use time::{SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
+lazy_static! {
+    static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group("txpool", "packed_account_size");
+}
 
 enum MiningState {
     Start,
@@ -275,12 +282,15 @@ impl BlockGenerator {
                 additional_transactions,
             );
 
+        let mut sender_accounts = HashSet::new();
         for tx in &transactions {
             let tx_hash = tx.hash();
             if tx_hash[0] & 254 == 0 {
                 debug!("Sampled transaction {:?} in packing block", tx_hash);
             }
+            sender_accounts.insert(tx.sender);
         }
+        PACKED_ACCOUNT_SIZE.update(sender_accounts.len());
 
         let (
             blame,
