@@ -26,6 +26,11 @@ class RpcClient:
         self.EPOCH_LATEST_MINED = "latest_mined"
         self.EPOCH_LATEST_STATE = "latest_state"
 
+        # update node operations
+        self.UPDATE_NODE_OP_FAILURE = "Failure"
+        self.UPDATE_NODE_OP_DEMOTE = "Demotion"
+        self.UPDATE_NODE_OP_REMOVE = "Remove"
+
         # hash/address definitions
         self.GENESIS_ADDR = eth_utils.encode_hex(privtoaddr(default_config["GENESIS_PRI_KEY"]))
         self.COINBASE_ADDR = eth_utils.encode_hex(default_config["GENESIS_COINBASE"])
@@ -207,6 +212,19 @@ class RpcClient:
 
     def get_peers(self) -> list:
         return self.node.getpeerinfo()
+
+    def get_peer(self, node_id: str):
+        for p in self.get_peers():
+            if p["nodeid"] == node_id:
+                return p
+
+        return None
+
+    def get_node(self, node_id: str):
+        return self.node.net_node(node_id)
+
+    def disconnect_peer(self, node_id: str, node_op:str=None) -> int:
+        return self.node.net_disconnect_node(node_id, node_op)
 
     def chain(self) -> list:
         return self.node.cfx_getChain()

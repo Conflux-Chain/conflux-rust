@@ -357,10 +357,10 @@ def disconnect_nodes(nodes, from_connection, node_num):
     wait_until(lambda: [peer for peer in nodes[node_num].getpeerinfo() if peer["nodeid"] == nodes[from_connection].key] == [], timeout=5)
 
 
-def check_handshake(from_connection, target_addr):
+def check_handshake(from_connection, target_node_id):
     peers = from_connection.getpeerinfo()
     for peer in peers:
-        if (peer['addr'].split(":")[0] == target_addr.split(":")[0]) and (peer['caps'] != None):
+        if peer["nodeid"] == target_node_id and peer['caps'] is not None:
             return True
     return False
 
@@ -377,7 +377,7 @@ def connect_nodes(nodes, a, node_num):
     from_connection.addnode(key, peer_addr)
     # poll until hello handshake complete to avoid race conditions
     # with transaction relaying
-    wait_until(lambda: check_handshake(from_connection, peer_addr))
+    wait_until(lambda: check_handshake(from_connection, to_connection.key))
 
 
 def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
