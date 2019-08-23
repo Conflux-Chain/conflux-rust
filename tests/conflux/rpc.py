@@ -213,6 +213,16 @@ class RpcClient:
     def get_peers(self) -> list:
         return self.node.getpeerinfo()
 
+    def get_peer(self, node_id: str):
+        for p in self.get_peers():
+            if p["nodeid"] == node_id:
+                return p
+
+        return None
+
+    def get_node(self, node_id: str):
+        return self.node.net_node(node_id)
+
     def disconnect_peer(self, node_id: str, node_op:str=None) -> int:
         return self.node.net_disconnect_node(node_id, node_op)
 
