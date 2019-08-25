@@ -231,7 +231,6 @@ impl FullClient {
             txpool.clone(),
             sync.clone(),
             secret_store.clone(),
-            network.net_key_pair().ok(),
         ));
 
         let special_txgen =
@@ -290,6 +289,7 @@ impl FullClient {
             sync.clone(),
             blockgen.clone(),
             txpool.clone(),
+            txgen.clone(),
         ));
 
         let common_impl = Arc::new(CommonImpl::new(

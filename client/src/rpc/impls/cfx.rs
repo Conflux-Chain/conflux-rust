@@ -38,12 +38,16 @@ pub struct RpcImpl {
     sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
+    tx_gen: Arc<TransactionGenerator>,
 }
+use std::collections::HashMap;
+use txgen::TransactionGenerator;
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
+        tx_gen: Arc<TransactionGenerator>,
     ) -> Self
     {
         RpcImpl {
@@ -51,6 +55,7 @@ impl RpcImpl {
             sync,
             block_gen,
             tx_pool,
+            tx_gen,
         }
     }
 
@@ -137,6 +142,30 @@ impl RpcImpl {
                     }
                 }
             })
+    }
+
+    fn send_usable_genesis_accounts(
+        &self, raw_addresses: Bytes, raw_secrets: Bytes,
+    ) -> RpcResult<Bytes> {
+        let addresses: Vec<String> = Rlp::new(&raw_addresses.into_vec())
+            .as_list()
+            .map_err(|err| {
+                RpcError::invalid_params(format!("Decode error: {:?}", err))
+            })?;
+        let secrets: Vec<String> =
+            Rlp::new(&raw_secrets.into_vec()).as_list().map_err(|err| {
+                RpcError::invalid_params(format!("Decode error: {:?}", err))
+            })?;
+        let mut key_pairs = HashMap::new();
+        for i in 0..addresses.len() {
+            key_pairs.insert(addresses[i].clone(), secrets[i].clone());
+        }
+        info!(
+            "RPC Request: send_usable_genesis_accounts # of nodes={:?}",
+            key_pairs.len()
+        );
+        self.tx_gen.add_genesis_accounts(key_pairs);
+        Ok(Bytes::new("1".into()))
     }
 
     pub fn transaction_by_hash(
@@ -418,6 +447,7 @@ impl Cfx for CfxHandler {
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
+            fn send_usable_genesis_accounts(& self,raw_addresses:Bytes, raw_secrets:Bytes) ->RpcResult<Bytes>;
         }
     }
 }
