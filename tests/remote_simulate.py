@@ -159,7 +159,7 @@ class RemoteSimulate(ConfluxTestFramework):
         parser.add_argument(
             "--genesis-accounts",
             dest="genesis_accounts",
-            default="~/genesis_accounts.toml",
+            default="/home/ubuntu/genesis_accounts.toml",
             type=str,
         )
 
@@ -208,7 +208,7 @@ class RemoteSimulate(ConfluxTestFramework):
         if self.tx_propagation_enabled:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000 * len(self.ips) // self.options.tps)
-            if self.options.txgen_account_count * self.ips >100000:
+            if self.options.txgen_account_count * len(self.ips) >100000:
                 print("Please try use smaller tx_gen_account.")
                 exit()
             self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
@@ -221,7 +221,7 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
         #genesis accounts
-        self.conf_parameters["genesis_accounts"] = str(self.options.genesis_accounts)
+        self.conf_parameters["genesis_accounts"] = str("\'{}\'".format(self.options.genesis_accounts))
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
