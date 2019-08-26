@@ -125,9 +125,11 @@ pub mod light {
     /// Frequency of re-triggering sync.
     pub const SYNC_PERIOD_MS: u64 = 5000;
 
-    /// Timeout for `GetBlockHashesByEpoch` and `GetBlockHeaders` requests.
+    /// Request timeouts.
     pub const EPOCH_REQUEST_TIMEOUT_MS: u64 = 2000;
     pub const HEADER_REQUEST_TIMEOUT_MS: u64 = 2000;
+    pub const WITNESS_REQUEST_TIMEOUT_MS: u64 = 2000;
+    pub const BLOOM_REQUEST_TIMEOUT_MS: u64 = 2000;
 
     /// Maximum time period we wait for a response for an on-demand query.
     /// After this timeout has been reached, we try another peer or give up.
@@ -136,13 +138,17 @@ pub mod light {
     /// Period of time to sleep between subsequent polls for on-demand queries.
     pub const POLL_PERIOD_MS: u64 = 100;
 
-    /// (Maximum) number of epochs/headers requested in a single request.
+    /// (Maximum) number of items requested in a single request.
     pub const EPOCH_REQUEST_BATCH_SIZE: usize = 30;
     pub const HEADER_REQUEST_BATCH_SIZE: usize = 30;
+    pub const BLOOM_REQUEST_BATCH_SIZE: usize = 30;
+    pub const WITNESS_REQUEST_BATCH_SIZE: usize = 10;
 
-    /// Maximum number of in-flight headers at any given time.
-    /// If we reach this limit, we will not request any more headers.
+    /// Maximum number of in-flight items at any given time.
+    /// If we reach this limit, we will not request any more.
     pub const MAX_HEADERS_IN_FLIGHT: usize = 500;
+    pub const MAX_WITNESSES_IN_FLIGHT: usize = 30;
+    pub const MAX_BLOOMS_IN_FLIGHT: usize = 500;
 
     /// Maximum number of in-flight epoch requests at any given time.
     /// Similar to `MAX_HEADERS_IN_FLIGHT`. However, it is hard to match
@@ -152,15 +158,20 @@ pub mod light {
     /// Number of epochs to request in one round (in possibly multiple batches).
     pub const NUM_EPOCHS_TO_REQUEST: usize = 200;
 
-    /// Minimum number of missing headers during catch-up mode.
-    /// If we have fewer, we will try to request some more using a
-    /// `GetBlockHashesByEpoch` request.
+    /// Minimum number of missing items in the sync pipeline.
+    /// If we have fewer, we will try to request some more.
     pub const NUM_WAITING_HEADERS_THRESHOLD: usize = 1000;
+    pub const NUM_WAITING_WITNESSES_THRESHOLD: usize = 30;
 
     /// Max number of epochs/headers/txs to send to a light peer in a response.
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
     pub const MAX_HEADERS_TO_SEND: usize = 512;
     pub const MAX_TXS_TO_SEND: usize = 1024;
+
+    /// During syncing, we might transiently have enough malicious blaming
+    /// blocks to consider a correct header incorrect. For this reason, we
+    /// first wait for enough header to accumulate before checking blaming.
+    pub const BLAME_CHECK_OFFSET: u64 = 20;
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;

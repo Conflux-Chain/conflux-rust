@@ -18,12 +18,15 @@ use crate::{
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
-            BlockHeaders as GetBlockHeadersResponse, GetBlockHashesByEpoch,
-            GetBlockHeaders, GetReceipts, GetStateEntry, GetStateRoot, GetTxs,
-            NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
-            SendRawTx, StateEntry as GetStateEntryResponse,
+            BlockHeaders as GetBlockHeadersResponse, BloomWithEpoch,
+            Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
+            GetBlockHeaders, GetBlooms, GetReceipts, GetStateEntry,
+            GetStateRoot, GetTxs, GetWitnessInfo, NewBlockHashes, NodeType,
+            Receipts as GetReceiptsResponse, SendRawTx,
+            StateEntry as GetStateEntryResponse,
             StateRoot as GetStateRootResponse, StatusPing, StatusPong,
-            Txs as GetTxsResponse,
+            Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
+            WitnessInfoWithHeight,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
@@ -149,6 +152,8 @@ impl Provider {
             msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, &rlp),
             msgid::GET_RECEIPTS => self.on_get_receipts(io, peer, &rlp),
             msgid::GET_TXS => self.on_get_txs(io, peer, &rlp),
+            msgid::GET_WITNESS_INFO => self.on_get_witness_info(io, peer, &rlp),
+            msgid::GET_BLOOMS => self.on_get_blooms(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -387,6 +392,48 @@ impl Provider {
 
         let msg: Box<dyn Message> =
             Box::new(GetTxsResponse { request_id, txs });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_witness_info(
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetWitnessInfo = rlp.as_val()?;
+        info!("on_get_witness_info req={:?}", req);
+        let request_id = req.request_id;
+
+        let infos = req
+            .witnesses
+            .into_iter()
+            .map(|w| self.ledger.witness_info(w))
+            .collect::<Result<Vec<WitnessInfoWithHeight>, Error>>()?;
+
+        let msg: Box<dyn Message> =
+            Box::new(GetWitnessInfoResponse { request_id, infos });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_blooms(
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetBlooms = rlp.as_val()?;
+        info!("on_get_blooms req={:?}", req);
+        let request_id = req.request_id;
+
+        let blooms = req
+            .epochs
+            .into_iter()
+            .map(|e| self.ledger.bloom_of(e).map(|bloom| (e, bloom)))
+            .filter_map(Result::ok)
+            .map(|(epoch, bloom)| BloomWithEpoch { epoch, bloom })
+            .collect();
+
+        let msg: Box<dyn Message> =
+            Box::new(GetBloomsResponse { request_id, blooms });
 
         msg.send(io, peer)?;
         Ok(())

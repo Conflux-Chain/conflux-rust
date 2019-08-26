@@ -453,6 +453,13 @@ impl BlockHeaderBuilder {
         keccak(bloom)
     }
 
+    pub fn compute_aggregated_bloom(blooms: Vec<Bloom>) -> Bloom {
+        blooms.into_iter().fold(Bloom::zero(), |mut res, bloom| {
+            res.accrue_bloom(&bloom);
+            res
+        })
+    }
+
     pub fn compute_blame_state_root_vec_root(roots: Vec<H256>) -> H256 {
         let mut rlp_stream = RlpStream::new_list(roots.len());
         for root in roots {

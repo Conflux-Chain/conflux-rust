@@ -33,14 +33,19 @@ error_chain! {
             display("Internal error"),
         }
 
-        InvalidMessageFormat {
-            description("Invalid message format"),
-            display("Invalid message format"),
+        InvalidBloom {
+            description("Invalid bloom"),
+            display("Invalid bloom"),
         }
 
         InvalidLedgerProof {
             description("Invalid ledger proof"),
             display("Invalid ledger proof"),
+        }
+
+        InvalidMessageFormat {
+            description("Invalid message format"),
+            display("Invalid message format"),
         }
 
         InvalidReceipts {
@@ -160,8 +165,9 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
             op = Some(UpdateNodeOperation::Demotion)
         }
 
-        ErrorKind::InvalidMessageFormat
+        ErrorKind::InvalidBloom
         | ErrorKind::InvalidLedgerProof
+        | ErrorKind::InvalidMessageFormat
         | ErrorKind::InvalidReceipts
         | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot

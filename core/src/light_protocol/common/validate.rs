@@ -4,11 +4,12 @@
 
 use std::sync::Arc;
 
-use cfx_types::H256;
+use cfx_types::{Bloom, H256};
 use primitives::{BlockHeaderBuilder, SignedTransaction};
 
 use crate::{
     consensus::ConsensusGraph,
+    hash::keccak,
     light_protocol::{
         message::{ReceiptsWithProof, StateRootWithProof},
         Error, ErrorKind,
@@ -30,6 +31,41 @@ impl Validate {
     pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
         let ledger = LedgerInfo::new(consensus.clone());
         Validate { consensus, ledger }
+    }
+
+    #[inline]
+    pub fn bloom_with_local_info(
+        &self, epoch: u64, bloom: Bloom,
+    ) -> Result<(), Error> {
+        let pivot = self.ledger.pivot_hash_of(epoch)?;
+
+        let local = self
+            .consensus
+            .data_man
+            .get_epoch_execution_commitments(&pivot);
+
+        let local = match local {
+            Some(res) => res.logs_bloom_hash,
+            None => {
+                warn!(
+                    "Bloom hash not found, epoch={}, bloom={:?}",
+                    epoch, bloom
+                );
+                return Err(ErrorKind::InternalError.into());
+            }
+        };
+
+        let received = keccak(bloom);
+
+        if received != local {
+            warn!(
+                "Bloom validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidBloom.into());
+        }
+
+        Ok(())
     }
 
     #[inline]
@@ -57,11 +93,9 @@ impl Validate {
     pub fn ledger_proof(
         &self, epoch: u64, proof: LedgerProof,
     ) -> Result<H256, Error> {
-        // find the first header that can verify the state root requested
-        let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
-
-        let witness = match witness {
-            Some(epoch) => epoch,
+        // find witness
+        let witness = match self.ledger.witness_of_state_at(epoch) {
+            Some(w) => w,
             None => {
                 warn!("Unable to verify state proof for epoch {}", epoch);
                 return Err(ErrorKind::UnableToProduceProof.into());
@@ -80,7 +114,7 @@ impl Validate {
         assert!(witness > blame);
 
         // do the actual validation
-        proof.validate(witness_header)?;
+        proof.validate(&witness_header)?;
 
         // return the root hash corresponding to `epoch`
         let index = (witness - epoch - DEFERRED_STATE_EPOCH_COUNT) as usize;
