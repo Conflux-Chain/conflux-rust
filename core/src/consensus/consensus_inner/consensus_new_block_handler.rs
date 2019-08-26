@@ -64,21 +64,13 @@ impl ConsensusNewBlockHandler {
 
     fn process_referees(
         inner: &ConsensusGraphInner, old_referees: &Vec<usize>,
-        era_blockset: &HashSet<usize>, legacy_refs: &HashMap<H256, Vec<usize>>,
+        era_blockset: &HashSet<usize>,
     ) -> Vec<usize>
     {
         let mut referees = Vec::new();
         for referee in old_referees {
-            let hash = inner.arena[*referee].hash;
             if era_blockset.contains(referee) {
                 inner.insert_referee_if_not_duplicate(&mut referees, *referee);
-            } else if let Some(r) = legacy_refs.get(&hash) {
-                for arena_index in r {
-                    inner.insert_referee_if_not_duplicate(
-                        &mut referees,
-                        *arena_index,
-                    );
-                }
             }
         }
         referees
@@ -86,8 +78,20 @@ impl ConsensusNewBlockHandler {
 
     /// recompute past_weight under stable_genesis
     fn recompute_stable_past_weight(
-        inner: &mut ConsensusGraphInner, stable_genesis_future_set: BitSet,
+        inner: &mut ConsensusGraphInner, stable_genesis: usize,
     ) {
+        let mut stable_genesis_subtree =
+            BitSet::with_capacity(inner.arena.len() as u32);
+        let mut queue = VecDeque::new();
+        stable_genesis_subtree.add(stable_genesis as u32);
+        queue.push_back(stable_genesis);
+        while let Some(x) = queue.pop_front() {
+            for child in &inner.arena[x].children {
+                queue.push_back(*child);
+                stable_genesis_subtree.add(*child as u32);
+            }
+        }
+
         let mut stack = Vec::new();
         let mut visited = BitSet::with_capacity(inner.arena.len() as u32);
         stack.push((0, inner.cur_era_genesis_block_arena_index, Vec::new()));
@@ -128,9 +132,9 @@ impl ConsensusNewBlockHandler {
                 }
 
                 // compute past_weight
-                if stable_genesis_future_set.contains(me as u32) {
+                if stable_genesis_subtree.contains(me as u32) {
                     let parent = inner.arena[me].parent;
-                    if stable_genesis_future_set.contains(parent as u32) {
+                    if stable_genesis_subtree.contains(parent as u32) {
                         inner.arena[me].past_weight = inner.arena[parent]
                             .past_weight
                             + inner.block_weight(parent, false);
@@ -139,7 +143,7 @@ impl ConsensusNewBlockHandler {
                     }
 
                     for index in &blockset {
-                        if stable_genesis_future_set.contains(*index as u32) {
+                        if stable_genesis_subtree.contains(*index as u32) {
                             inner.arena[me].past_weight +=
                                 inner.block_weight(*index, false);
                         }
@@ -173,29 +177,28 @@ impl ConsensusNewBlockHandler {
         // We first compute the set of blocks inside the new era and we
         // recompute the past_weight inside the stable height.
         let mut new_era_block_arena_index_set = HashSet::new();
-        let mut stable_genesis_future_set =
-            BitSet::with_capacity(inner.arena.len() as u32);
         let mut queue = VecDeque::new();
         queue.push_back(new_era_block_arena_index);
         new_era_block_arena_index_set.insert(new_era_block_arena_index);
-        stable_genesis_future_set.add(stable_era_genesis as u32);
         while let Some(x) = queue.pop_front() {
             inner.arena[x].past_weight = 0;
-            let parent_inside_stable =
-                stable_genesis_future_set.contains(x as u32);
-            let children = inner.arena[x].children.clone();
-            for child in children.iter() {
-                queue.push_back(*child);
-                new_era_block_arena_index_set.insert(*child);
-                if parent_inside_stable {
-                    stable_genesis_future_set.add(*child as u32);
+            for child in &inner.arena[x].children {
+                if !new_era_block_arena_index_set.contains(child) {
+                    queue.push_back(*child);
+                    new_era_block_arena_index_set.insert(*child);
+                }
+            }
+            for referrer in &inner.arena[x].referrers {
+                if !new_era_block_arena_index_set.contains(referrer) {
+                    queue.push_back(*referrer);
+                    new_era_block_arena_index_set.insert(*referrer);
                 }
             }
         }
 
         ConsensusNewBlockHandler::recompute_stable_past_weight(
             inner,
-            stable_genesis_future_set,
+            stable_era_genesis,
         );
 
         // Now we topologically sort the blocks outside the era
@@ -205,24 +208,11 @@ impl ConsensusNewBlockHandler {
                 outside_block_arena_indices.insert(index);
             }
         }
-        let sorted_outside_block_arena_indices =
-            inner.topological_sort(&outside_block_arena_indices);
         // Next we are going to compute the new legacy_refs map based on current
         // graph information
-        let mut new_legacy_refs = HashMap::new();
-        let mut outside_block_hashes =
-            inner.old_era_block_sets.pop_back().unwrap();
-        for index in sorted_outside_block_arena_indices.iter() {
-            let referees = ConsensusNewBlockHandler::process_referees(
-                inner,
-                &inner.arena[*index].referees,
-                &new_era_block_arena_index_set,
-                &new_legacy_refs,
-            );
-            if !referees.is_empty() {
-                new_legacy_refs.insert(inner.arena[*index].hash, referees);
-            }
-            outside_block_hashes.push(inner.arena[*index].hash);
+        let mut old_era_block_set = inner.old_era_block_set.lock();
+        for index in outside_block_arena_indices.iter() {
+            old_era_block_set.push_back(inner.arena[*index].hash);
             // remove useless data in BlockDataManager
             inner
                 .data_man
@@ -230,20 +220,6 @@ impl ConsensusNewBlockHandler {
             inner
                 .data_man
                 .remove_epoch_execution_context(&inner.arena[*index].hash);
-        }
-        inner.old_era_block_sets.push_back(outside_block_hashes);
-        inner.old_era_block_sets.push_back(Vec::new());
-        // Now we append all existing legacy_refs into the new_legacy_refs
-        for (hash, old_referees) in inner.legacy_refs.iter() {
-            let referees = ConsensusNewBlockHandler::process_referees(
-                inner,
-                &old_referees,
-                &new_era_block_arena_index_set,
-                &new_legacy_refs,
-            );
-            if !referees.is_empty() {
-                new_legacy_refs.insert(*hash, referees);
-            }
         }
         // Next we are going to recompute all referee and referrer information
         // in arena
@@ -258,10 +234,15 @@ impl ConsensusNewBlockHandler {
                 inner,
                 &inner.arena[me].referees,
                 &new_era_block_arena_index_set,
-                &new_legacy_refs,
             );
             for u in new_referees.iter() {
                 inner.arena[*u].referrers.push(me);
+            }
+            // reassign the parent for outside era blocks
+            if !new_era_block_arena_index_set.contains(&inner.arena[me].parent)
+                && inner.arena[me].era_block == NULL
+            {
+                inner.arena[me].parent = new_era_block_arena_index;
             }
             inner.arena[me].referees = new_referees;
             // We no longer need to consider blocks outside our era when
@@ -272,7 +253,6 @@ impl ConsensusNewBlockHandler {
                 .retain(|v| new_era_block_arena_index_set.contains(v));
         }
         // Now we are ready to cleanup outside blocks in inner data structures
-        inner.legacy_refs = new_legacy_refs;
         inner.arena[new_era_block_arena_index].parent = NULL;
         inner
             .pastset_cache
@@ -349,7 +329,8 @@ impl ConsensusNewBlockHandler {
         visited.add(me as u32);
         while let Some(index) = queue.pop_front() {
             let parent = inner.arena[index].parent;
-            if inner.arena[parent].data.epoch_number > last_in_pivot
+            if parent != NULL
+                && inner.arena[parent].data.epoch_number > last_in_pivot
                 && !visited.contains(parent as u32)
             {
                 visited.add(parent as u32);
@@ -403,55 +384,48 @@ impl ConsensusNewBlockHandler {
         // If we do not have the anticone of its parent, we compute it with
         // brute force!
         let parent_anticone_opt = inner.anticone_cache.get(parent);
-        let anticone;
+        let mut anticone;
         if parent_anticone_opt.is_none() {
             anticone = ConsensusNewBlockHandler::compute_anticone_bruteforce(
                 inner, me,
             );
         } else {
+            // anticone = parent_anticone + parent_future - my_past
             // Compute future set of parent
-            let mut parent_futures = inner.compute_future_bitset(parent);
-            parent_futures.remove(me as u32);
+            anticone = inner.compute_future_bitset(parent);
+            anticone.remove(me as u32);
 
-            anticone = {
-                let parent_anticone = parent_anticone_opt.unwrap();
-                let mut my_past = BitSet::new();
-                let mut queue: VecDeque<usize> = VecDeque::new();
-                queue.push_back(me);
-                while let Some(index) = queue.pop_front() {
-                    if my_past.contains(index as u32) {
-                        continue;
-                    }
+            for index in parent_anticone_opt.unwrap() {
+                anticone.add(*index as u32);
+            }
+            let mut my_past = BitSet::new();
+            let mut queue: VecDeque<usize> = VecDeque::new();
+            queue.push_back(me);
+            while let Some(index) = queue.pop_front() {
+                if my_past.contains(index as u32) {
+                    continue;
+                }
 
-                    debug_assert!(index != parent);
-                    if index != me {
-                        my_past.add(index as u32);
-                    }
+                debug_assert!(index != parent);
+                if index != me {
+                    my_past.add(index as u32);
+                }
 
-                    let idx_parent = inner.arena[index].parent;
-                    debug_assert!(idx_parent != NULL);
-                    if parent_anticone.contains(&idx_parent)
-                        || parent_futures.contains(idx_parent as u32)
-                    {
-                        queue.push_back(idx_parent);
-                    }
+                let idx_parent = inner.arena[index].parent;
+                debug_assert!(idx_parent != NULL);
+                if anticone.contains(idx_parent as u32) {
+                    queue.push_back(idx_parent);
+                }
 
-                    for referee in &inner.arena[index].referees {
-                        if parent_anticone.contains(referee)
-                            || parent_futures.contains(*referee as u32)
-                        {
-                            queue.push_back(*referee);
-                        }
+                for referee in &inner.arena[index].referees {
+                    if anticone.contains(*referee as u32) {
+                        queue.push_back(*referee);
                     }
                 }
-                for index in parent_anticone {
-                    parent_futures.add(*index as u32);
-                }
-                for index in my_past.drain() {
-                    parent_futures.remove(index);
-                }
-                parent_futures
-            };
+            }
+            for index in my_past.drain() {
+                anticone.remove(index);
+            }
         }
 
         inner.anticone_cache.update(me, &anticone);
@@ -923,21 +897,8 @@ impl ConsensusNewBlockHandler {
 
     fn process_outside_block(
         &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
-    ) {
-        let mut referees = Vec::new();
-        for hash in block_header.referee_hashes().iter() {
-            if let Some(x) = inner.hash_to_arena_indices.get(hash) {
-                inner.insert_referee_if_not_duplicate(&mut referees, *x);
-            } else if let Some(r) = inner.legacy_refs.get(hash) {
-                for arena_index in r {
-                    inner.insert_referee_if_not_duplicate(
-                        &mut referees,
-                        *arena_index,
-                    );
-                }
-            }
-        }
-        inner.legacy_refs.insert(block_header.hash(), referees);
+    ) -> u64 {
+        inner.insert_out_era_block(block_header)
     }
 
     fn recycle_tx_in_block(
@@ -1036,13 +997,16 @@ impl ConsensusNewBlockHandler {
     )
     {
         let parent_hash = block_header.parent_hash();
-        if !inner.hash_to_arena_indices.contains_key(&parent_hash) {
+        let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
+        // current block is outside era or it's parent is outside era
+        if parent_index.is_none()
+            || inner.arena[*parent_index.unwrap()].era_block == NULL
+        {
             debug!(
                 "parent={:?} not in consensus graph, set header to pending",
                 parent_hash
             );
-            self.process_outside_block(inner, &block_header);
-            let sn = inner.get_next_sequence_number();
+            let sn = self.process_outside_block(inner, &block_header);
             let block_info = LocalBlockInfo::new(
                 BlockStatus::Pending,
                 sn,
@@ -1050,12 +1014,6 @@ impl ConsensusNewBlockHandler {
             );
             self.data_man
                 .insert_local_block_info_to_db(hash, block_info);
-            inner
-                .old_era_block_sets
-                .iter_mut()
-                .last()
-                .unwrap()
-                .push(hash.clone());
             return;
         }
 

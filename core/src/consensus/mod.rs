@@ -731,17 +731,7 @@ impl ConsensusGraph {
     /// This function returns the set of blocks that are two eras farther from
     /// current era. They can be safely garbage collected.
     pub fn retrieve_old_era_blocks(&self) -> Option<H256> {
-        let inner = &mut *self.inner.write();
-        if inner.old_era_block_sets.len() < 3 {
-            return None;
-        }
-        if inner.old_era_block_sets.front().unwrap().is_empty() {
-            inner.old_era_block_sets.pop_front();
-            // we simply return None here since next call of this function will
-            // handle other cases
-            return None;
-        }
-        inner.old_era_block_sets.front_mut().unwrap().pop()
+        self.inner.read().old_era_block_set.lock().pop_front()
     }
 
     pub fn get_trusted_blame_block(&self) -> Option<H256> {
