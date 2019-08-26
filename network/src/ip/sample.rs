@@ -111,8 +111,5 @@ impl<T: Hash + Eq + Clone> SampleHashSet<T> {
     pub fn len(&self) -> usize { self.items.len() }
 
     #[inline]
-    pub fn contains(&self, value: &T) -> bool { self.items.contains(value) }
-
-    #[inline]
     pub fn iter(&self) -> Iter<T> { self.items.iter() }
 }

@@ -33,7 +33,12 @@ pub struct NodeIpLimit {
     subnet_type: SubnetType,
     subnet_quota: usize,     // quota for a subnet
     evict_timeout: Duration, // used to evict out-of-date node
-    buckets: SampleHashMap<u32, NodeBucket>, // one bucket for each subnet
+
+    // all trusted nodes grouped by subnet
+    trusted_buckets: SampleHashMap<u32, NodeBucket>,
+    // all untrusted nodes grouped by subnet
+    untrusted_buckets: SampleHashMap<u32, NodeBucket>,
+
     ip_index: HashMap<IpAddr, NodeId>,
     node_index: HashMap<NodeId, IpAddr>,
 }
@@ -44,7 +49,8 @@ impl NodeIpLimit {
             subnet_type: SubnetType::C,
             subnet_quota,
             evict_timeout: DEFAULT_EVICT_TIMEOUT,
-            buckets: Default::default(),
+            trusted_buckets: Default::default(),
+            untrusted_buckets: Default::default(),
             ip_index: HashMap::new(),
             node_index: HashMap::new(),
         }
@@ -73,14 +79,27 @@ impl NodeIpLimit {
         self.ip_index.remove(&ip);
 
         let subnet = self.subnet_type.subnet(&ip);
-        let bucket = self
-            .buckets
-            .get_mut(&subnet)
-            .expect("node bucket should exist");
-        bucket.remove(id);
+        if !Self::remove_with_buckets(&mut self.trusted_buckets, subnet, id) {
+            Self::remove_with_buckets(&mut self.untrusted_buckets, subnet, id);
+        }
+
+        true
+    }
+
+    fn remove_with_buckets(
+        buckets: &mut SampleHashMap<u32, NodeBucket>, subnet: u32, id: &NodeId,
+    ) -> bool {
+        let bucket = match buckets.get_mut(&subnet) {
+            Some(bucket) => bucket,
+            None => return false,
+        };
+
+        if !bucket.remove(id) {
+            return false;
+        }
 
         if bucket.count() == 0 {
-            self.buckets.remove(&subnet);
+            buckets.remove(&subnet);
         }
 
         true
@@ -94,15 +113,15 @@ impl NodeIpLimit {
         }
 
         let mut sampled = HashSet::new();
-        if self.buckets.is_empty() {
+        if self.trusted_buckets.is_empty() {
             return sampled;
         }
 
         let mut rng = thread_rng();
 
         for _ in 0..n {
-            if let Some(bucket) = self.buckets.sample(&mut rng) {
-                if let Some(id) = bucket.sample_trusted(&mut rng) {
+            if let Some(bucket) = self.trusted_buckets.sample(&mut rng) {
+                if let Some(id) = bucket.sample(&mut rng) {
                     sampled.insert(id);
                 }
             }
@@ -198,28 +217,47 @@ impl NodeIpLimit {
         self.ip_index.insert(ip, id.clone());
 
         let subnet = self.subnet_type.subnet(&ip);
-        let bucket = self
-            .buckets
-            .get_mut_or_insert_with(subnet, || NodeBucket::default());
-        assert!(bucket.count() < self.subnet_quota);
-        bucket.add(id, trusted);
+        if trusted {
+            self.trusted_buckets
+                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .add(id);
+        } else {
+            self.untrusted_buckets
+                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .add(id);
+        }
     }
 
     /// Check whether the subnet quota is enough for the specified IP address .
     fn is_quota_allowed(&self, ip: &IpAddr) -> bool {
         let subnet = self.subnet_type.subnet(ip);
 
-        match self.buckets.get(&subnet) {
-            Some(bucket) => bucket.count() < self.subnet_quota,
-            None => return true,
-        }
+        let num_trusted = self
+            .trusted_buckets
+            .get(&subnet)
+            .map_or(0, |bucket| bucket.count());
+
+        let num_untrusted = self
+            .untrusted_buckets
+            .get(&subnet)
+            .map_or(0, |bucket| bucket.count());
+
+        num_trusted + num_untrusted < self.subnet_quota
     }
 
     /// Select a node to evict.
     fn select_evictee(&self, ip: &IpAddr, db: &NodeDatabase) -> Option<NodeId> {
         let subnet = self.subnet_type.subnet(&ip);
-        let bucket = self.buckets.get(&subnet)?;
-        bucket.select_evictee(db, self.evict_timeout)
+
+        // evict untrusted node prior to trusted node
+        self.untrusted_buckets
+            .get(&subnet)
+            .and_then(|bucket| bucket.select_evictee(db, self.evict_timeout))
+            .or_else(|| {
+                self.trusted_buckets.get(&subnet).and_then(|bucket| {
+                    bucket.select_evictee(db, self.evict_timeout)
+                })
+            })
     }
 }
 
