@@ -74,7 +74,8 @@ class Transaction:
             txs[tx.hash].packed_timestamps[0] = tx.packed_timestamps[0]
 
         if tx.ready_pool_timestamps[0] is not None:
-            txs[tx.hash].ready_pool_timestamps[0]= tx.ready_pool_timestamps[0]
+            if tx.ready_pool_timestamps[0] < txs[tx.hash].ready_pool_timestamps[0]:
+                txs[tx.hash].ready_pool_timestamps[0]= tx.ready_pool_timestamps[0]
 
     def merge(self, tx):
         self.received_timestamps.extend(tx.received_timestamps)
