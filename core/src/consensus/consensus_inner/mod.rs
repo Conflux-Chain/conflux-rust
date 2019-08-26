@@ -298,10 +298,6 @@ pub struct ConsensusGraphInner {
     pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     // The set of *graph* tips in the TreeGraph.
     terminal_hashes: HashSet<H256>,
-    // The map to connect reference edges of legacy node before the current
-    // era. It maps the hash of a legacy node to a list of referred nodes
-    // inside the current era.
-    legacy_refs: HashMap<H256, Vec<usize>>,
     // The ``current'' era_genesis block index. It will start being the
     // original genesis. As time goes, it will move to future era genesis
     // checkpoint.
@@ -393,7 +389,6 @@ impl ConsensusGraphInner {
             pivot_chain_metadata: Vec::new(),
             optimistic_executed_height: None,
             terminal_hashes: Default::default(),
-            legacy_refs: HashMap::new(),
             cur_era_genesis_block_arena_index: NULL,
             cur_era_genesis_height,
             cur_era_stable_height,
@@ -1310,6 +1305,69 @@ impl ConsensusGraphInner {
         }
     }
 
+    pub fn insert_out_era_block(&mut self, block_header: &BlockHeader) -> u64 {
+        let hash = block_header.hash();
+
+        let is_heavy = U512::from(block_header.pow_quality)
+            >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
+                * U512::from(block_header.difficulty());
+
+        // we make cur_era_genesis be it's parent if it doesn‘t has one.
+        let parent = self
+            .hash_to_arena_indices
+            .get(block_header.parent_hash())
+            .cloned()
+            .unwrap_or(self.cur_era_genesis_block_arena_index);
+
+        let mut referees: Vec<usize> = Vec::new();
+        for hash in block_header.referee_hashes().iter() {
+            if let Some(x) = self.hash_to_arena_indices.get(hash) {
+                self.insert_referee_if_not_duplicate(&mut referees, *x);
+            }
+        }
+
+        let my_height = block_header.height();
+        let sn = self.get_next_sequence_number();
+        let index = self.arena.insert(ConsensusGraphNode {
+            hash,
+            height: my_height,
+            is_heavy,
+            difficulty: *block_header.difficulty(),
+            past_weight: 0, // will be updated later below
+            past_num_blocks: 0,
+            past_era_weight: 0, // will be updated later below
+            stable: true,
+            // Block header contains an adaptive field, we will verify with our
+            // own computation
+            adaptive: block_header.adaptive(),
+            parent,
+            last_pivot_in_past: 0,
+            era_block: NULL,
+            children: Vec::new(),
+            referees,
+            referrers: Vec::new(),
+            data: ConsensusGraphNodeData::new(NULLU64, sn),
+        });
+        self.hash_to_arena_indices.insert(hash, index);
+
+        let referees = self.arena[index].referees.clone();
+        for referee in referees {
+            self.arena[referee].referrers.push(index);
+        }
+        if parent != self.cur_era_genesis_block_arena_index {
+            self.arena[parent].children.push(index);
+        }
+
+        self.weight_tree.make_tree(index);
+        self.inclusive_weight_tree.make_tree(index);
+        self.stable_tree.make_tree(index);
+        self.stable_weight_tree.make_tree(index);
+        self.adaptive_tree.make_tree(index);
+        self.inclusive_adaptive_tree.make_tree(index);
+
+        sn
+    }
+
     fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
         let hash = block_header.hash();
 
@@ -1330,10 +1388,6 @@ impl ConsensusGraphInner {
         for hash in block_header.referee_hashes().iter() {
             if let Some(x) = self.hash_to_arena_indices.get(hash) {
                 self.insert_referee_if_not_duplicate(&mut referees, *x);
-            } else if let Some(r) = self.legacy_refs.get(hash) {
-                for index in r {
-                    self.insert_referee_if_not_duplicate(&mut referees, *index);
-                }
             }
         }
 
