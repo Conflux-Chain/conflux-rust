@@ -578,7 +578,11 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    /// for outside era block, consider the lca is NULL
     pub fn lca(&self, me: usize, v: usize) -> usize {
+        if self.arena[v].era_block == NULL || self.arena[me].era_block == NULL {
+            return NULL;
+        }
         self.inclusive_weight_tree.lca(me, v)
     }
 
@@ -1304,13 +1308,12 @@ impl ConsensusGraphInner {
         }
     }
 
+    /// Try to insert an outside era block, return it's sequence number. If both
+    /// it's parent and referees are empty, we will not insert it into
+    /// `arena`.
     pub fn insert_out_era_block(&mut self, block_header: &BlockHeader) -> u64 {
+        let sn = self.get_next_sequence_number();
         let hash = block_header.hash();
-
-        let is_heavy = U512::from(block_header.pow_quality)
-            >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
-                * U512::from(block_header.difficulty());
-
         // we make cur_era_genesis be it's parent if it doesn‘t has one.
         let parent = self
             .hash_to_arena_indices
@@ -1325,12 +1328,19 @@ impl ConsensusGraphInner {
             }
         }
 
-        let my_height = block_header.height();
-        let sn = self.get_next_sequence_number();
+        if parent == self.cur_era_genesis_block_arena_index
+            && referees.is_empty()
+        {
+            self.old_era_block_set.lock().push_back(hash);
+            return sn;
+        }
+
+        // actually, we only need these fields: `parent`, `referees`,
+        // `children`, `referrers`, `era_block`
         let index = self.arena.insert(ConsensusGraphNode {
             hash,
-            height: my_height,
-            is_heavy,
+            height: block_header.height(),
+            is_heavy: true,
             difficulty: *block_header.difficulty(),
             past_weight: 0, // will be updated later below
             past_num_blocks: 0,

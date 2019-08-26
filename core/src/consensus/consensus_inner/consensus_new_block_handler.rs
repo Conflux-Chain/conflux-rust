@@ -384,50 +384,48 @@ impl ConsensusNewBlockHandler {
         // If we do not have the anticone of its parent, we compute it with
         // brute force!
         let parent_anticone_opt = inner.anticone_cache.get(parent);
-        let anticone;
+        let mut anticone;
         if parent_anticone_opt.is_none() {
             anticone = ConsensusNewBlockHandler::compute_anticone_bruteforce(
                 inner, me,
             );
         } else {
+            // anticone = parent_anticone + parent_future - my_past
             // Compute future set of parent
-            let mut parent_futures = inner.compute_future_bitset(parent);
-            parent_futures.remove(me as u32);
+            anticone = inner.compute_future_bitset(parent);
+            anticone.remove(me as u32);
 
-            anticone = {
-                for index in parent_anticone_opt.unwrap() {
-                    parent_futures.add(*index as u32);
+            for index in parent_anticone_opt.unwrap() {
+                anticone.add(*index as u32);
+            }
+            let mut my_past = BitSet::new();
+            let mut queue: VecDeque<usize> = VecDeque::new();
+            queue.push_back(me);
+            while let Some(index) = queue.pop_front() {
+                if my_past.contains(index as u32) {
+                    continue;
                 }
-                let mut my_past = BitSet::new();
-                let mut queue: VecDeque<usize> = VecDeque::new();
-                queue.push_back(me);
-                while let Some(index) = queue.pop_front() {
-                    if my_past.contains(index as u32) {
-                        continue;
-                    }
 
-                    debug_assert!(index != parent);
-                    if index != me {
-                        my_past.add(index as u32);
-                    }
+                debug_assert!(index != parent);
+                if index != me {
+                    my_past.add(index as u32);
+                }
 
-                    let idx_parent = inner.arena[index].parent;
-                    debug_assert!(idx_parent != NULL);
-                    if parent_futures.contains(idx_parent as u32) {
-                        queue.push_back(idx_parent);
-                    }
+                let idx_parent = inner.arena[index].parent;
+                debug_assert!(idx_parent != NULL);
+                if anticone.contains(idx_parent as u32) {
+                    queue.push_back(idx_parent);
+                }
 
-                    for referee in &inner.arena[index].referees {
-                        if parent_futures.contains(*referee as u32) {
-                            queue.push_back(*referee);
-                        }
+                for referee in &inner.arena[index].referees {
+                    if anticone.contains(*referee as u32) {
+                        queue.push_back(*referee);
                     }
                 }
-                for index in my_past.drain() {
-                    parent_futures.remove(index);
-                }
-                parent_futures
-            };
+            }
+            for index in my_past.drain() {
+                anticone.remove(index);
+            }
         }
 
         inner.anticone_cache.update(me, &anticone);
