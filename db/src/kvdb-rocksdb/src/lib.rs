@@ -27,7 +27,7 @@ extern crate regex;
 extern crate rocksdb;
 
 #[cfg(test)]
-extern crate ethereum_types;
+extern crate cfx_types;
 
 extern crate kvdb;
 
@@ -524,7 +524,7 @@ mod tests {
 
 	use std::str::FromStr;
 	use self::tempdir::TempDir;
-	use ethereum_types::H256;
+	use cfx_types::H256;
 	use super::*;
 
 	fn test_db(config: &DatabaseConfig) {
