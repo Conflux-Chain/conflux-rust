@@ -80,15 +80,15 @@ impl ConsensusNewBlockHandler {
     fn recompute_stable_past_weight(
         inner: &mut ConsensusGraphInner, stable_genesis: usize,
     ) {
-        let mut stable_genesis_future_set =
+        let mut stable_genesis_subtree =
             BitSet::with_capacity(inner.arena.len() as u32);
         let mut queue = VecDeque::new();
-        stable_genesis_future_set.add(stable_genesis as u32);
+        stable_genesis_subtree.add(stable_genesis as u32);
         queue.push_back(stable_genesis);
         while let Some(x) = queue.pop_front() {
             for child in &inner.arena[x].children {
                 queue.push_back(*child);
-                stable_genesis_future_set.add(*child as u32);
+                stable_genesis_subtree.add(*child as u32);
             }
         }
 
@@ -132,9 +132,9 @@ impl ConsensusNewBlockHandler {
                 }
 
                 // compute past_weight
-                if stable_genesis_future_set.contains(me as u32) {
+                if stable_genesis_subtree.contains(me as u32) {
                     let parent = inner.arena[me].parent;
-                    if stable_genesis_future_set.contains(parent as u32) {
+                    if stable_genesis_subtree.contains(parent as u32) {
                         inner.arena[me].past_weight = inner.arena[parent]
                             .past_weight
                             + inner.block_weight(parent, false);
@@ -143,7 +143,7 @@ impl ConsensusNewBlockHandler {
                     }
 
                     for index in &blockset {
-                        if stable_genesis_future_set.contains(*index as u32) {
+                        if stable_genesis_subtree.contains(*index as u32) {
                             inner.arena[me].past_weight +=
                                 inner.block_weight(*index, false);
                         }
@@ -208,14 +208,11 @@ impl ConsensusNewBlockHandler {
                 outside_block_arena_indices.insert(index);
             }
         }
-        let sorted_outside_block_arena_indices =
-            inner.topological_sort(&outside_block_arena_indices);
         // Next we are going to compute the new legacy_refs map based on current
         // graph information
-        let mut outside_block_hashes =
-            inner.old_era_block_sets.pop_back().unwrap();
-        for index in sorted_outside_block_arena_indices.iter() {
-            outside_block_hashes.push(inner.arena[*index].hash);
+        let mut old_era_block_set = inner.old_era_block_set.lock();
+        for index in outside_block_arena_indices.iter() {
+            old_era_block_set.push_back(inner.arena[*index].hash);
             // remove useless data in BlockDataManager
             inner
                 .data_man
@@ -224,8 +221,6 @@ impl ConsensusNewBlockHandler {
                 .data_man
                 .remove_epoch_execution_context(&inner.arena[*index].hash);
         }
-        inner.old_era_block_sets.push_back(outside_block_hashes);
-        inner.old_era_block_sets.push_back(Vec::new());
         // Next we are going to recompute all referee and referrer information
         // in arena
         let era_parent = inner.arena[new_era_block_arena_index].parent;
@@ -1021,12 +1016,6 @@ impl ConsensusNewBlockHandler {
             );
             self.data_man
                 .insert_local_block_info_to_db(hash, block_info);
-            inner
-                .old_era_block_sets
-                .iter_mut()
-                .last()
-                .unwrap()
-                .push(hash.clone());
             return;
         }
 

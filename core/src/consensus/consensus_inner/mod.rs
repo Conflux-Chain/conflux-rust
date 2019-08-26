@@ -22,6 +22,7 @@ use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::{
     CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
 };
+use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder,
     StateRootWithAuxInfo, TransactionAddress,
@@ -343,7 +344,7 @@ pub struct ConsensusGraphInner {
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     // Block set of each old era. It will garbage collected by sync graph
-    pub old_era_block_sets: VecDeque<Vec<H256>>,
+    pub old_era_block_set: Mutex<VecDeque<H256>>,
 }
 
 pub struct ConsensusGraphNode {
@@ -423,10 +424,8 @@ impl ConsensusGraphInner {
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
-            old_era_block_sets: VecDeque::new(),
+            old_era_block_set: Mutex::new(VecDeque::new()),
         };
-        // The last vector is the current maintained set
-        inner.old_era_block_sets.push_back(Vec::new());
 
         // NOTE: Only genesis block will be first inserted into consensus graph
         // and then into synchronization graph. All the other blocks will be
