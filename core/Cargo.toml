@@ -23,7 +23,7 @@ secret-store = { path = "../secret_store" }
 rand = "0.5"
 error-chain = { version = "0.12", default-features = false }
 slab = "0.4"
-kvdb = "0.1"
+kvdb = {git="https://github.com/paritytech/parity-common.git", branch="ao-upstream-rocksdb", version = "0.2"}
 db = { path = "../db" }
 bit-set = "0.4"
 heapsize = "0.4"
