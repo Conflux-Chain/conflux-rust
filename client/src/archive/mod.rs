@@ -142,7 +142,8 @@ impl ArchiveClient {
             match conf.raw_conf.genesis_accounts {
                 Some(ref file) => {
                     genesis::default(secret_store.as_ref());
-                    genesis::load_file(file)?},
+                    genesis::load_file(file)?
+                }
                 None => genesis::default(secret_store.as_ref()),
             }
         } else {

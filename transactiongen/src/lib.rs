@@ -258,12 +258,13 @@ impl TransactionGenerator {
             let signed_tx = tx.sign(&address_secret_pair[&sender_address]);
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
-            let (txs, fail) =
+            let (_txs, fail) =
                 txgen.txpool.insert_new_transactions(&tx_to_insert);
             if fail.len() == 0 {
-                //txgen.sync.append_received_transactions(txs);//TODO: performance flaw that too slow if this is called more than 10 times a second.
-                // tx successfully inserted into tx pool, so we can update our
-                // state about nonce and balance
+                txgen.sync.append_received_transactions(txs);
+                //tx successfully inserted into
+                // tx pool, so we can update our state about
+                // nonce and balance
                 {
                     let sender_balance =
                         balance_map.get_mut(&sender_address).unwrap();
