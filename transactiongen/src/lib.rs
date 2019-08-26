@@ -261,7 +261,7 @@ impl TransactionGenerator {
             let (txs, fail) =
                 txgen.txpool.insert_new_transactions(&tx_to_insert);
             if fail.len() == 0 {
-                txgen.sync.append_received_transactions(txs);
+                //txgen.sync.append_received_transactions(txs);//TODO: performance flaw that too slow if this is called more than 10 times a second.
                 // tx successfully inserted into tx pool, so we can update our
                 // state about nonce and balance
                 {
