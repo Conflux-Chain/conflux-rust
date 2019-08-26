@@ -2,8 +2,8 @@
 
 from argparse import ArgumentParser
 from collections import Counter
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
+import eth_utils
+import rlp
 import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
@@ -221,7 +221,7 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
         #genesis accounts
-        self.conf_parameters["genesis_accounts"] = str(genesis_accounts)
+        self.conf_parameters["genesis_accounts"] = str(self.options.genesis_accounts)
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
