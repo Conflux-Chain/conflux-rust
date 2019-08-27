@@ -8,17 +8,14 @@ use crate::{
         PacketSizer as PacketSizerTrait, SendQueueStatus, WriteStatus,
         MAX_PAYLOAD_SIZE,
     },
-    hash::keccak,
+    handshake::Handshake,
     node_table::{NodeEndpoint, NodeEntry, NodeId},
     service::NetworkServiceInner,
     Capability, DisconnectReason, Error, ErrorKind, ProtocolId,
     SessionMetadata, UpdateNodeOperation,
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
-use cfx_bytes;
-use cfx_types::H520;
 use io::*;
-use keylib::{recover, sign};
 use mio::{deprecated::*, tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
@@ -30,7 +27,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-struct PacketSizer;
+pub struct PacketSizer;
 
 impl PacketSizerTrait for PacketSizer {
     fn packet_size(raw_packet: &Bytes) -> usize {
@@ -48,12 +45,12 @@ impl PacketSizerTrait for PacketSizer {
     }
 }
 
-type Connection = TcpConnection<PacketSizer>;
+pub type Connection = TcpConnection<PacketSizer>;
 
 pub struct Session {
     pub metadata: SessionMetadata,
     address: SocketAddr,
-    connection: Connection,
+    state: State,
     sent_hello: Instant,
     had_hello: Option<Instant>,
     expired: Option<Instant>,
@@ -61,6 +58,11 @@ pub struct Session {
     // statistics for read/write
     last_read: Instant,
     last_write: (Instant, Option<WriteStatus>), // None for error
+}
+
+enum State {
+    Handshake(MovableWrapper<Handshake>),
+    Session(Connection),
 }
 
 pub enum SessionData {
@@ -83,7 +85,12 @@ impl Session {
     ) -> Result<Session, Error>
     {
         let originated = id.is_some();
-        let mut session = Session {
+
+        let nonce = host.metadata.next_nonce();
+        let mut handshake = Handshake::new(token, id, socket, nonce)?;
+        handshake.start(io, &host.metadata, originated)?;
+
+        Ok(Session {
             metadata: SessionMetadata {
                 id: id.cloned(),
                 capabilities: Vec::new(),
@@ -91,17 +98,13 @@ impl Session {
                 originated,
             },
             address,
-            connection: Connection::new(token, socket),
+            state: State::Handshake(MovableWrapper::new(handshake)),
             sent_hello: Instant::now(),
             had_hello: None,
             expired: None,
             last_read: Instant::now(),
             last_write: (Instant::now(), None),
-        };
-
-        session.write_hello(io, host)?;
-
-        Ok(session)
+        })
     }
 
     pub fn have_capability(&self, protocol: ProtocolId) -> bool {
@@ -124,7 +127,12 @@ impl Session {
         self.expired() && !self.connection().is_sending()
     }
 
-    fn connection(&self) -> &Connection { &self.connection }
+    fn connection(&self) -> &Connection {
+        match self.state {
+            State::Handshake(ref h) => &h.get().connection,
+            State::Session(ref c) => c,
+        }
+    }
 
     pub fn token(&self) -> StreamToken { self.connection().token() }
 
@@ -133,14 +141,17 @@ impl Session {
     pub fn register_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> Result<(), Error> {
-        self.connection.register_socket(reg, event_loop)?;
+        if !self.expired() {
+            self.connection().register_socket(reg, event_loop)?;
+        }
+
         Ok(())
     }
 
     pub fn update_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> Result<(), Error> {
-        self.connection.update_socket(reg, event_loop)?;
+        self.connection().update_socket(reg, event_loop)?;
         Ok(())
     }
 
@@ -148,6 +159,47 @@ impl Session {
         &self, event_loop: &mut EventLoop<H>,
     ) -> Result<(), Error> {
         self.connection().deregister_socket(event_loop)?;
+        Ok(())
+    }
+
+    fn complete_handshake<Message>(
+        &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
+    ) -> Result<(), Error>
+    where Message: Send + Sync + Clone {
+        let token = self.token();
+
+        let handshake = match self.state {
+            State::Handshake(ref mut h) => h.take(),
+            State::Session(_) => panic!("Unexpected session state"),
+        };
+
+        // refuse incoming session if the node is blacklisted
+        if host.node_db.write().evaluate_blacklisted(&handshake.id) {
+            return Err(self.send_disconnect(DisconnectReason::Blacklisted));
+        }
+
+        // update node id for ingress session
+        if self.metadata.id.is_none() {
+            if let Err(reason) =
+                host.sessions.update_ingress_node_id(token, &handshake.id)
+            {
+                debug!(
+                    "failed to update node id of ingress session, reason = {:?}, session = {:?}",
+                    reason, self
+                );
+
+                return Err(
+                    self.send_disconnect(DisconnectReason::UpdateNodeIdFailed)
+                );
+            }
+
+            self.metadata.id = Some(handshake.id.clone());
+        }
+
+        // write HELLO packet to remote peer
+        self.state = State::Session(handshake.connection);
+        self.write_hello(io, host)?;
+
         Ok(())
     }
 
@@ -161,9 +213,22 @@ impl Session {
             return Ok(SessionData::None);
         }
 
-        match self.connection.readable()? {
-            Some(data) => Ok(self.read_packet(io, &data, host)?),
-            None => Ok(SessionData::None),
+        match self.state {
+            State::Handshake(ref mut h) => {
+                let h = h.get_mut();
+                h.readable(io, &host.metadata)?;
+                if h.done() {
+                    self.complete_handshake(io, host)?;
+                    io.update_registration(self.token()).unwrap_or_else(|e| {
+                        debug!("Token registration error: {:?}", e)
+                    });
+                }
+                Ok(SessionData::None)
+            }
+            State::Session(ref mut c) => match c.readable()? {
+                Some(data) => Ok(self.read_packet(io, &data, host)?),
+                None => Ok(SessionData::None),
+            },
         }
     }
 
@@ -186,49 +251,8 @@ impl Session {
         let data = &data[4..];
         match packet_id {
             PACKET_HELLO => {
-                debug!("read packet HELLO, session = {:?}", self);
-                if data.len() <= 32 + 65 {
-                    return Err(ErrorKind::BadProtocol.into());
-                }
-                let hash_signed = keccak(&data[32..]);
-                if hash_signed[..] != data[0..32] {
-                    return Err(ErrorKind::BadProtocol.into());
-                }
-                let signed = &data[(32 + 65)..];
-                let signature = H520::from_slice(&data[32..(32 + 65)]);
-                let node_id = recover(&signature.into(), &keccak(signed))?;
-
-                // refuse incoming session if the node is blacklisted
-                if host.node_db.write().evaluate_blacklisted(&node_id) {
-                    return Err(
-                        self.send_disconnect(DisconnectReason::Blacklisted)
-                    );
-                }
-
-                if self.metadata.id.is_none() {
-                    if let Err(reason) = host
-                        .sessions
-                        .update_ingress_node_id(self.token(), &node_id)
-                    {
-                        debug!(
-                            "failed to update node id of ingress session, reason = {:?}, session = {:?}",
-                            reason, self
-                        );
-                        return Err(self.send_disconnect(
-                            DisconnectReason::UpdateNodeIdFailed,
-                        ));
-                    }
-
-                    self.metadata.id = Some(node_id);
-                } else {
-                    if Some(node_id) != self.metadata.id {
-                        return Err(self.send_disconnect(
-                            DisconnectReason::WrongEndpointInfo,
-                        ));
-                    }
-                }
-                let rlp = Rlp::new(signed);
-                self.read_hello(io, &node_id, &rlp, host)?;
+                let rlp = Rlp::new(&data);
+                self.read_hello(io, &rlp, host)?;
                 Ok(SessionData::Ready)
             }
             PACKET_DISCONNECT => {
@@ -268,7 +292,7 @@ impl Session {
     }
 
     fn read_hello<Message: Send + Sync + Clone>(
-        &mut self, io: &IoContext<Message>, id: &NodeId, rlp: &Rlp,
+        &mut self, io: &IoContext<Message>, rlp: &Rlp,
         host: &NetworkServiceInner,
     ) -> Result<(), Error>
     {
@@ -306,7 +330,7 @@ impl Session {
         self.metadata.capabilities = caps;
         self.metadata.peer_capabilities = peer_caps;
         if self.metadata.capabilities.is_empty() {
-            debug!("No common capabilities with remote peer, peer_node_id = {:?}, session = {:?}", id, self);
+            debug!("No common capabilities with remote peer, peer_node_id = {:?}, session = {:?}", self.metadata.id, self);
             return Err(self.send_disconnect(DisconnectReason::UselessPeer));
         }
 
@@ -322,7 +346,10 @@ impl Session {
         };
 
         let entry = NodeEntry {
-            id: id.clone(),
+            id: self
+                .metadata
+                .id
+                .expect("should have node ID after handshake"),
             endpoint: ping_to.clone(),
         };
         if !entry.endpoint.is_valid() {
@@ -394,14 +421,24 @@ impl Session {
     ) -> Result<SendQueueStatus, Error>
     {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
-        self.connection.send(io, &packet[..], priority)
+        match self.state {
+            State::Handshake(_) => {
+                panic!("should not send packet during handshake")
+            }
+            State::Session(ref mut c) => c.send(io, &packet, priority),
+        }
     }
 
     pub fn send_packet_immediately(
         &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: &[u8],
     ) -> Result<usize, Error> {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
-        self.connection.write_raw_data(&packet[..])
+        match self.state {
+            State::Handshake(_) => {
+                panic!("should not send packet immediately during handshake")
+            }
+            State::Session(ref mut c) => c.write_raw_data(&packet),
+        }
     }
 
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
@@ -431,27 +468,11 @@ impl Session {
         let mut rlp = RlpStream::new_list(2);
         rlp.append_list(&*host.metadata.capabilities.read());
         host.metadata.public_endpoint.to_rlp_list(&mut rlp);
-
-        let mut packet =
-            cfx_bytes::Bytes::with_capacity(rlp.as_raw().len() + 32 + 65);
-        packet.resize(32 + 65, 0);
-        packet.extend_from_slice(rlp.as_raw());
-        let hash = keccak(&packet[(32 + 65)..]);
-        let signature = match sign(host.metadata.keys.secret(), &hash) {
-            Ok(s) => s,
-            Err(e) => {
-                debug!("failed to sign hello packet, session = {:?}", self);
-                return Err(Error::from(e));
-            }
-        };
-        packet[32..(32 + 65)].copy_from_slice(&signature[..]);
-        let signed_hash = keccak(&packet[32..]);
-        packet[0..32].copy_from_slice(&signed_hash);
         self.send_packet(
             io,
             None,
             PACKET_HELLO,
-            &packet,
+            &rlp.drain(),
             SendQueuePriority::High,
         )
         .map(|_| ())
@@ -460,7 +481,12 @@ impl Session {
     pub fn writable<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        match self.connection.writable(io) {
+        let result = match self.state {
+            State::Handshake(ref mut h) => h.get_mut().writable(io),
+            State::Session(ref mut s) => s.writable(io),
+        };
+
+        match result {
             Ok(status) => {
                 self.last_write = (Instant::now(), Some(status));
                 Ok(())
@@ -477,7 +503,7 @@ impl Session {
             originated: self.metadata.originated,
             node_id: self.metadata.id,
             address: self.address,
-            connection: self.connection.details(),
+            connection: self.connection().details(),
             status: if let Some(time) = self.expired {
                 format!("expired ({:?})", time.elapsed())
             } else if let Some(time) = self.had_hello {
@@ -526,4 +552,34 @@ pub struct SessionDetails {
     pub last_read: String,
     pub last_write: String,
     pub last_write_status: String,
+}
+
+struct MovableWrapper<T> {
+    item: Option<T>,
+}
+
+impl<T> MovableWrapper<T> {
+    fn new(item: T) -> Self { MovableWrapper { item: Some(item) } }
+
+    fn get(&self) -> &T {
+        match self.item {
+            Some(ref item) => item,
+            None => panic!("item is moved"),
+        }
+    }
+
+    fn get_mut(&mut self) -> &mut T {
+        match self.item {
+            Some(ref mut item) => item,
+            None => panic!("item is moved"),
+        }
+    }
+
+    fn take(&mut self) -> T {
+        if self.item.is_none() {
+            panic!("item is moved already")
+        }
+
+        self.item.take().expect("should have value")
+    }
 }
