@@ -62,20 +62,6 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    fn process_referees(
-        inner: &ConsensusGraphInner, old_referees: &Vec<usize>,
-        era_blockset: &HashSet<usize>,
-    ) -> Vec<usize>
-    {
-        let mut referees = Vec::new();
-        for referee in old_referees {
-            if era_blockset.contains(referee) {
-                inner.insert_referee_if_not_duplicate(&mut referees, *referee);
-            }
-        }
-        referees
-    }
-
     /// recompute past_weight under stable_genesis
     fn recompute_stable_past_weight(
         inner: &mut ConsensusGraphInner, stable_genesis: usize,
@@ -93,7 +79,7 @@ impl ConsensusNewBlockHandler {
         }
 
         let mut stack = Vec::new();
-        let mut visited = BitSet::with_capacity(inner.arena.len() as u32);
+        let mut visited = BitSet::with_capacity(inner.arena.capacity() as u32);
         stack.push((0, inner.cur_era_genesis_block_arena_index, Vec::new()));
         while let Some((state, me, mut blockset)) = stack.pop() {
             if state == 0 {
@@ -208,43 +194,24 @@ impl ConsensusNewBlockHandler {
                 outside_block_arena_indices.insert(index);
             }
         }
-        // Next we are going to compute the new legacy_refs map based on current
-        // graph information
-        let mut old_era_block_set = inner.old_era_block_set.lock();
-        for index in outside_block_arena_indices.iter() {
-            old_era_block_set.push_back(inner.arena[*index].hash);
-            // remove useless data in BlockDataManager
-            inner
-                .data_man
-                .remove_epoch_execution_commitments(&inner.arena[*index].hash);
-            inner
-                .data_man
-                .remove_epoch_execution_context(&inner.arena[*index].hash);
-        }
         // Next we are going to recompute all referee and referrer information
         // in arena
         let era_parent = inner.arena[new_era_block_arena_index].parent;
         let new_era_pivot_index = inner.height_to_pivot_index(new_era_height);
         for v in new_era_block_arena_index_set.iter() {
-            inner.arena[*v].referrers = Vec::new();
-        }
-        for v in new_era_block_arena_index_set.iter() {
             let me = *v;
-            let new_referees = ConsensusNewBlockHandler::process_referees(
-                inner,
-                &inner.arena[me].referees,
-                &new_era_block_arena_index_set,
-            );
-            for u in new_referees.iter() {
-                inner.arena[*u].referrers.push(me);
-            }
+            inner.arena[me]
+                .referees
+                .retain(|v| new_era_block_arena_index_set.contains(v));
+            inner.arena[me]
+                .referrers
+                .retain(|v| new_era_block_arena_index_set.contains(v));
             // reassign the parent for outside era blocks
             if !new_era_block_arena_index_set.contains(&inner.arena[me].parent)
                 && inner.arena[me].era_block == NULL
             {
                 inner.arena[me].parent = new_era_block_arena_index;
             }
-            inner.arena[me].referees = new_referees;
             // We no longer need to consider blocks outside our era when
             // computing blockset_in_epoch
             inner.arena[me]
@@ -253,16 +220,21 @@ impl ConsensusNewBlockHandler {
                 .retain(|v| new_era_block_arena_index_set.contains(v));
         }
         // Now we are ready to cleanup outside blocks in inner data structures
+        let mut old_era_block_set = inner.old_era_block_set.lock();
         inner.arena[new_era_block_arena_index].parent = NULL;
         inner
             .pastset_cache
             .intersect_update(&outside_block_arena_indices);
         for index in outside_block_arena_indices {
             let hash = inner.arena[index].hash;
+            old_era_block_set.push_back(hash);
             inner.hash_to_arena_indices.remove(&hash);
             inner.terminal_hashes.remove(&hash);
             inner.arena.remove(index);
             inner.execution_info_cache.remove(&index);
+            // remove useless data in BlockDataManager
+            inner.data_man.remove_epoch_execution_commitments(&hash);
+            inner.data_man.remove_epoch_execution_context(&hash);
         }
         assert!(new_era_pivot_index < inner.pivot_chain.len());
         inner.pivot_chain = inner.pivot_chain.split_off(new_era_pivot_index);
@@ -469,7 +441,7 @@ impl ConsensusNewBlockHandler {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
             // If it is outside current era, we will skip!
-            if inner.arena[lca].height < era_genesis_height {
+            if lca == NULL || inner.arena[lca].height < era_genesis_height {
                 continue;
             }
             if lca == parent {
@@ -541,7 +513,7 @@ impl ConsensusNewBlockHandler {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
             // If it is outside the era, we will skip!
-            if inner.arena[lca].height < era_genesis_height {
+            if lca == NULL || inner.arena[lca].height < era_genesis_height {
                 continue;
             }
             if lca == parent {
