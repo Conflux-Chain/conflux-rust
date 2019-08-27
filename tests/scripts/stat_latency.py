@@ -93,7 +93,7 @@ class LogAnalyzer:
         #the first time a transaction is packed to the first time the transaction is geneated.
         table.add_stat("min tx packed to block latency", "%.2f", self.agg.stat_min_tx_packed_to_block_latency())
 
-        #the time between the node receives the tx and the tx becomes ready
+        #the time between the node receives the tx and the tx first time becomes ready
         table.add_stat("min tx to ready pool latency", "%.2f", self.agg.stat_min_tx_to_ready_pool_latency())
 
         #colomn: P(n) nodes: percentage of the transactions is received by block.

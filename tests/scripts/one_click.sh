@@ -29,7 +29,7 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;cargo build --release --features \"deadlock_detection\";parallel-scp -O \"StrictHostKeyChecking no\" -h ips -l ubuntu -p 1000 ../../target/release/conflux ~ |grep FAILURE|wc -l;"
 
     #4) Run experiments
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation"
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --send-tx-period-ms 50 --txgen-account-count $account_count"
 
     #5) Terminate slave instances
     rm -rf tmp_data
@@ -61,6 +61,13 @@ exp_config="250:1:300000:2000"
 # For experiments with --enable-tx-propagation , <txs_per_block> * <tx_size> will be used as block size 
 
 tps=3000
+account_count=100
+total_acounts=$(($account_count*$slave_count))
+if [ $total_acounts -gt 100000 ]
+then
+    echo "Error: exceed total number of accounts"
+    exit
+fi
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps
 

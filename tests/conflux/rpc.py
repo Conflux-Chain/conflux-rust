@@ -147,6 +147,9 @@ class RpcClient:
         
         return tx_hash
 
+    def send_usable_genesis_accounts(self, addresses:list, secrets:list):
+        self.node.cfx_sendUsableGenesisAccounts(eth_utils.encode_hex(rlp.encode(addresses)),eth_utils.encode_hex(rlp.encode(secrets)))
+
     def wait_for_receipt(self, tx_hash: str, num_txs=1, timeout=10, state_before_wait=True):
         if state_before_wait:
             self.generate_blocks_to_state(num_txs=num_txs)

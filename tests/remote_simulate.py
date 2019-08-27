@@ -2,8 +2,8 @@
 
 from argparse import ArgumentParser
 from collections import Counter
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
+import eth_utils
+import rlp
 import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,6 +16,7 @@ from test_framework.mininode import *
 from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
 from scripts.exp_latency import pscp, pssh, kill_remote_conflux
+import csv
 
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
@@ -155,6 +156,12 @@ class RemoteSimulate(ConfluxTestFramework):
             default=500000,
             type=int,
         )
+        parser.add_argument(
+            "--genesis-accounts",
+            dest="genesis_accounts",
+            default="/home/ubuntu/genesis_accounts.toml",
+            type=str,
+        )
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
@@ -210,6 +217,9 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["max_peers_propagation"] = str(self.options.max_peers_propagation)
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
+        #genesis accounts
+        self.conf_parameters["genesis_accounts"] = str("\'{}\'".format(self.options.genesis_accounts))
+
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
 
@@ -257,12 +267,23 @@ class RemoteSimulate(ConfluxTestFramework):
         if self.tx_propagation_enabled:
             # Setup balance for each node
             client = RpcClient(self.nodes[0])
-            for i in range(num_nodes):
-                pub_key = self.nodes[i].key
-                addr = self.nodes[i].addr
-                self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/(num_nodes + 1)) - 21000, receiver=encode_hex(addr), nonce=i)
-                client.send_tx(tx)
+            with open('./genesis_keypairs.csv') as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=',')
+                start_time = time.time()
+                for i in range(num_nodes):
+                    counter = 0
+                    addresses= list()
+                    secrets = list()
+                    for row in csv_reader:# this is equivalent to read next()
+                        addresses.append(row[0])
+                        secrets.append(row[1])
+                        counter= counter+1
+                        if counter == self.options.txgen_account_count:
+                            client = RpcClient(self.nodes[i])
+                            client.send_usable_genesis_accounts(addresses,secrets)
+                            break
+
+                self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
 
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
