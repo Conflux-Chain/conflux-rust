@@ -30,7 +30,7 @@ use primitives::{
 };
 use rand::prelude::*;
 use rlp::Encodable;
-use secret_store::SharedSecretStore;
+use secret_store::{SecretStore, SharedSecretStore};
 use std::{
     collections::HashMap,
     str::FromStr,
@@ -77,6 +77,7 @@ pub struct TransactionGenerator {
     secret_store: SharedSecretStore,
     state: RwLock<TransGenState>,
     keypairs: RwLock<HashMap<String, String>>,
+    key_pair: Option<KeyPair>,
 }
 
 pub type SharedTransactionGenerator = Arc<TransactionGenerator>;
@@ -85,6 +86,7 @@ impl TransactionGenerator {
     pub fn new(
         consensus: SharedConsensusGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, secret_store: SharedSecretStore,
+        key_pair: Option<KeyPair>,
     ) -> Self
     {
         TransactionGenerator {
@@ -93,8 +95,8 @@ impl TransactionGenerator {
             sync,
             secret_store,
             state: RwLock::new(TransGenState::Start),
-
             keypairs: RwLock::new(HashMap::new()),
+            key_pair,
         }
     }
 
@@ -159,7 +161,7 @@ impl TransactionGenerator {
         r
     }
 
-    pub fn generate_transactions(
+    pub fn generate_transactions_with_mutiple_genesis_accounts(
         txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
     ) -> Result<(), Error> {
         loop {
@@ -272,6 +274,210 @@ impl TransactionGenerator {
                     if *sender_balance < 42000.into() {
                         addresses.remove(sender_index);
                         if addresses.len() == 0 {
+                            break;
+                        }
+                    }
+                }
+                *sender_nonce += U256::one();
+                *balance_map.entry(receiver_address).or_insert(0.into()) +=
+                    balance_to_transfer;
+                tx_n += 1;
+                TX_GEN_METER.mark(1);
+            } else {
+                // The transaction pool is full and the tx is discarded, so the
+                // state should not updated. We add unconditional
+                // sleep to avoid busy spin if the tx pool cannot support the
+                // expected throughput.
+                thread::sleep(tx_config.period);
+            }
+
+            let now = Instant::now();
+            let time_elapsed = now.duration_since(start_time);
+            if let Some(time_left) =
+                (tx_config.period * tx_n).checked_sub(time_elapsed)
+            {
+                thread::sleep(time_left);
+            } else {
+                debug!("Elapsed time larger than the time needed for sleep: time_elapsed={:?}", time_elapsed);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn generate_transactions(
+        txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
+    ) -> Result<(), Error> {
+        let account_count = tx_config.account_count;
+        let mut nonce_map: HashMap<Address, U256> = HashMap::new();
+        let mut balance_map: HashMap<Address, U256> = HashMap::new();
+
+        let initial_key_pair = txgen.key_pair.clone().expect("should exist");
+        let secret_store = SecretStore::new();
+        debug!(
+            "tx_gen address={:?} pub_key={:?}",
+            public_to_address(initial_key_pair.public()),
+            initial_key_pair.public()
+        );
+        debug!(
+            "Tx Generation Config {:?} {:?}",
+            tx_config.generate_tx, tx_config.period
+        );
+        secret_store.insert(initial_key_pair.clone());
+        let mut tx_n = 0;
+        // Wait for initial tx
+        loop {
+            match *txgen.state.read() {
+                TransGenState::Stop => return Ok(()),
+                _ => {}
+            }
+
+            // Do not generate tx in catch_up_mode
+            if txgen.sync.catch_up_mode() {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            let state = txgen.consensus.get_best_state();
+            let sender_address = initial_key_pair.address();
+            let sender_balance = state.balance(&sender_address).ok();
+            if sender_balance.is_none()
+                || sender_balance.clone().unwrap() == 0.into()
+            {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            } else {
+                balance_map
+                    .insert(sender_address.clone(), sender_balance.unwrap());
+                nonce_map.insert(sender_address, 0.into());
+                break;
+            }
+        }
+        debug!("Get initial transaction");
+        let mut last_account = None;
+        let mut wait_count = 0;
+        // Setup accounts
+        loop {
+            match *txgen.state.read() {
+                TransGenState::Stop => return Ok(()),
+                _ => {}
+            }
+            if secret_store.count() < account_count {
+                let mut receiver_kp: KeyPair;
+                let sender_address = initial_key_pair.address();
+                let sender_balance =
+                    balance_map.get_mut(&sender_address).unwrap();
+                let balance_to_transfer = *sender_balance / account_count;
+                // Create a new receiver account
+                loop {
+                    receiver_kp = Random.generate()?;
+                    if secret_store.insert(receiver_kp.clone()) {
+                        nonce_map.insert(receiver_kp.address(), 0.into());
+                        break;
+                    }
+                }
+                *sender_balance -= balance_to_transfer + 21000;
+                // Generate nonce for the transaction
+                let sender_nonce =
+                    nonce_map.get_mut(&initial_key_pair.address()).unwrap();
+                let receiver_address = public_to_address(receiver_kp.public());
+                *balance_map.entry(receiver_address).or_insert(0.into()) +=
+                    balance_to_transfer;
+                // Generate the transaction, sign it, and push into the
+                // transaction pool
+                let tx = Transaction {
+                    nonce: *sender_nonce,
+                    gas_price: U256::from(1u64),
+                    gas: U256::from(21000u64),
+                    value: balance_to_transfer,
+                    action: Action::Call(receiver_address.clone()),
+                    data: Bytes::new(),
+                };
+                *sender_nonce += U256::one();
+                let signed_tx = tx.sign(initial_key_pair.secret());
+                let mut tx_to_insert = Vec::new();
+                tx_to_insert.push(signed_tx.transaction);
+                let (txs, _) =
+                    txgen.txpool.insert_new_transactions(&tx_to_insert);
+                txgen.sync.append_received_transactions(txs);
+                last_account = Some(receiver_address);
+                TX_GEN_METER.mark(1);
+            } else {
+                // Wait for preparation
+                let state = txgen.consensus.get_best_state();
+                let sender_balance = state.balance(&last_account.unwrap()).ok();
+                if wait_count < account_count
+                    && (sender_balance.is_none()
+                        || sender_balance.clone().unwrap() == 0.into())
+                {
+                    wait_count += 1;
+                    thread::sleep(tx_config.period);
+                    continue;
+                } else {
+                    info!("Stop waiting for tx_gen setup");
+                    break;
+                }
+            }
+        }
+
+        info!("Start Generating Workload");
+        let start_time = Instant::now();
+        // Generate more tx
+        loop {
+            match *txgen.state.read() {
+                TransGenState::Stop => return Ok(()),
+                _ => {}
+            }
+
+            // Randomly select sender and receiver.
+            // Sender must exist in the account list.
+            // Receiver can be not in the account list which
+            // leads to generate a new account
+            let account_count = secret_store.count();
+            let mut receiver_index: usize = random();
+            receiver_index %= account_count;
+            let receiver_kp = secret_store.get_keypair(receiver_index);
+            let mut sender_index: usize = random();
+            sender_index %= account_count;
+            let sender_kp = secret_store.get_keypair(sender_index);
+            let sender_address = public_to_address(sender_kp.public());
+
+            // Always send value 0
+            let balance_to_transfer = U256::from(0);
+            // Generate nonce for the transaction
+            let sender_nonce = nonce_map.get_mut(&sender_kp.address()).unwrap();
+            let receiver_address = public_to_address(receiver_kp.public());
+            trace!(
+                "receiver={:?} value={:?} nonce={:?}",
+                receiver_address,
+                balance_to_transfer,
+                sender_nonce
+            );
+            // Generate the transaction, sign it, and push into the transaction
+            // pool
+            let tx = Transaction {
+                nonce: *sender_nonce,
+                gas_price: U256::from(1u64),
+                gas: U256::from(21000u64),
+                value: balance_to_transfer,
+                action: Action::Call(receiver_address),
+                data: Bytes::new(),
+            };
+
+            let signed_tx = tx.sign(sender_kp.secret());
+            let mut tx_to_insert = Vec::new();
+            tx_to_insert.push(signed_tx.transaction);
+            let (txs, fail) =
+                txgen.txpool.insert_new_transactions(&tx_to_insert);
+            if fail.len() == 0 {
+                txgen.sync.append_received_transactions(txs);
+                // tx successfully inserted into tx pool, so we can update our
+                // state about nonce and balance
+                {
+                    let sender_balance =
+                        balance_map.get_mut(&sender_address).unwrap();
+                    *sender_balance -= balance_to_transfer + 21000;
+                    if *sender_balance < 42000.into() {
+                        secret_store.remove_keypair(sender_index);
+                        if secret_store.count() == 0 {
                             break;
                         }
                     }

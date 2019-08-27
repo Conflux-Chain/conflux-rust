@@ -234,6 +234,7 @@ impl FullClient {
             txpool.clone(),
             sync.clone(),
             secret_store.clone(),
+            network.net_key_pair().ok(),
         ));
 
         let special_txgen =
@@ -271,7 +272,34 @@ impl FullClient {
         let tx_conf = conf.tx_gen_config();
         let txgen_handle = if tx_conf.generate_tx {
             let txgen_clone = txgen.clone();
-            Some(
+            let t = if conf.raw_conf.test_mode {
+                match conf.raw_conf.genesis_accounts {
+                    Some(ref _file) => {
+                        thread::Builder::new()
+                            .name("txgen".into())
+                            .spawn(move || {
+                                TransactionGenerator::generate_transactions_with_mutiple_genesis_accounts(
+                                    txgen_clone,
+                                    tx_conf,
+                                )
+                                    .unwrap();
+                            })
+                            .expect("should succeed")
+                    }
+                    None =>{
+                        thread::Builder::new()
+                            .name("txgen".into())
+                            .spawn(move || {
+                                TransactionGenerator::generate_transactions(
+                                    txgen_clone,
+                                    tx_conf,
+                                )
+                                    .unwrap();
+                            })
+                            .expect("should succeed")
+                    }
+                }
+            } else {
                 thread::Builder::new()
                     .name("txgen".into())
                     .spawn(move || {
@@ -281,8 +309,9 @@ impl FullClient {
                         )
                         .unwrap();
                     })
-                    .expect("should succeed"),
-            )
+                    .expect("should succeed")
+            };
+            Some(t)
         } else {
             None
         };

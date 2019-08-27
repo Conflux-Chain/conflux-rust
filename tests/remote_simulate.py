@@ -208,9 +208,6 @@ class RemoteSimulate(ConfluxTestFramework):
         if self.tx_propagation_enabled:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
-            if self.options.txgen_account_count * len(self.ips) >100000:
-                print("Please try use smaller tx_gen_account.")
-                exit()
             self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
