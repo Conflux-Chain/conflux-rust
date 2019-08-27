@@ -4,9 +4,8 @@
 
 use crate::{
     connection::{
-        Connection as TcpConnection, ConnectionDetails,
-        PacketSizer as PacketSizerTrait, SendQueueStatus, WriteStatus,
-        MAX_PAYLOAD_SIZE,
+        Connection as TcpConnection, ConnectionDetails, PacketSizer,
+        SendQueueStatus, WriteStatus, MAX_PAYLOAD_SIZE,
     },
     handshake::Handshake,
     node_table::{NodeEndpoint, NodeEntry, NodeId},
@@ -27,25 +26,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub struct PacketSizer;
-
-impl PacketSizerTrait for PacketSizer {
-    fn packet_size(raw_packet: &Bytes) -> usize {
-        let buf = &mut raw_packet.into_buf() as &mut dyn Buf;
-        if buf.remaining() >= 3 {
-            let size = buf.get_uint_le(3) as usize;
-            if buf.remaining() >= size {
-                size + 3
-            } else {
-                0
-            }
-        } else {
-            0
-        }
-    }
-}
-
-pub type Connection = TcpConnection<PacketSizer>;
+pub type Connection = TcpConnection<SessionPacket>;
 
 pub struct Session {
     pub metadata: SessionMetadata,
@@ -134,6 +115,13 @@ impl Session {
         }
     }
 
+    fn connection_mut(&mut self) -> &mut Connection {
+        match self.state {
+            State::Handshake(ref mut h) => &mut h.get_mut().connection,
+            State::Session(ref mut c) => c,
+        }
+    }
+
     pub fn token(&self) -> StreamToken { self.connection().token() }
 
     pub fn address(&self) -> SocketAddr { self.address }
@@ -168,20 +156,22 @@ impl Session {
     where Message: Send + Sync + Clone {
         let token = self.token();
 
-        let handshake = match self.state {
-            State::Handshake(ref mut h) => h.take(),
+        let wrapper = match self.state {
+            State::Handshake(ref mut h) => h,
             State::Session(_) => panic!("Unexpected session state"),
         };
 
-        // refuse incoming session if the node is blacklisted
-        if host.node_db.write().evaluate_blacklisted(&handshake.id) {
-            return Err(self.send_disconnect(DisconnectReason::Blacklisted));
-        }
-
         // update node id for ingress session
         if self.metadata.id.is_none() {
+            let id = wrapper.get().id.clone();
+
+            // refuse incoming session if the node is blacklisted
+            if host.node_db.write().evaluate_blacklisted(&id) {
+                return Err(self.send_disconnect(DisconnectReason::Blacklisted));
+            }
+
             if let Err(reason) =
-                host.sessions.update_ingress_node_id(token, &handshake.id)
+                host.sessions.update_ingress_node_id(token, &id)
             {
                 debug!(
                     "failed to update node id of ingress session, reason = {:?}, session = {:?}",
@@ -193,11 +183,11 @@ impl Session {
                 );
             }
 
-            self.metadata.id = Some(handshake.id.clone());
+            self.metadata.id = Some(id);
         }
 
         // write HELLO packet to remote peer
-        self.state = State::Session(handshake.connection);
+        self.state = State::Session(wrapper.take().connection);
         self.write_hello(io, host)?;
 
         Ok(())
@@ -226,37 +216,34 @@ impl Session {
                 Ok(SessionData::None)
             }
             State::Session(ref mut c) => match c.readable()? {
-                Some(data) => Ok(self.read_packet(io, &data, host)?),
+                Some(data) => Ok(self.read_packet(io, data, host)?),
                 None => Ok(SessionData::None),
             },
         }
     }
 
     fn read_packet<Message: Send + Sync + Clone>(
-        &mut self, io: &IoContext<Message>, data: &Bytes,
+        &mut self, io: &IoContext<Message>, data: Bytes,
         host: &NetworkServiceInner,
     ) -> Result<SessionData, Error>
     {
-        if data.len() <= 3 {
-            return Err(ErrorKind::BadProtocol.into());
-        }
+        let packet = SessionPacket::parse(data)?;
 
-        let packet_id = data[3];
-        if packet_id != PACKET_HELLO
-            && packet_id != PACKET_DISCONNECT
+        if packet.id != PACKET_HELLO
+            && packet.id != PACKET_DISCONNECT
             && self.had_hello.is_none()
         {
             return Err(ErrorKind::BadProtocol.into());
         }
-        let data = &data[4..];
-        match packet_id {
+
+        match packet.id {
             PACKET_HELLO => {
-                let rlp = Rlp::new(&data);
+                let rlp = Rlp::new(&packet.data);
                 self.read_hello(io, &rlp, host)?;
                 Ok(SessionData::Ready)
             }
             PACKET_DISCONNECT => {
-                let rlp = Rlp::new(&data);
+                let rlp = Rlp::new(&packet.data);
                 let reason: DisconnectReason = rlp.as_val()?;
                 debug!(
                     "read packet DISCONNECT, reason = {}, session = {:?}",
@@ -269,22 +256,16 @@ impl Session {
                 Ok(SessionData::Continue)
             }
             PACKET_PONG => Ok(SessionData::Continue),
-            PACKET_USER => {
-                if data.len() < 3 {
-                    Err(ErrorKind::Decoder.into())
-                } else {
-                    let mut protocol: ProtocolId = [0u8; 3];
-                    protocol.clone_from_slice(&data[..3]);
-                    Ok(SessionData::Message {
-                        data: (&data[3..]).to_vec(),
-                        protocol,
-                    })
-                }
-            }
+            PACKET_USER => Ok(SessionData::Message {
+                data: packet.data.to_vec(),
+                protocol: packet
+                    .protocol
+                    .expect("protocol should available for USER packet"),
+            }),
             _ => {
                 debug!(
                     "read packet UNKNOWN, packet_id = {:?}, session = {:?}",
-                    packet_id, self
+                    packet.id, self
                 );
                 Ok(SessionData::Continue)
             }
@@ -376,7 +357,7 @@ impl Session {
         Ok(())
     }
 
-    pub fn prepare_packet(
+    fn prepare_packet(
         &self, protocol: Option<ProtocolId>, packet_id: u8, data: &[u8],
     ) -> Result<BytesMut, Error> {
         if protocol.is_some()
@@ -393,26 +374,12 @@ impl Session {
             );
             bail!(ErrorKind::BadProtocol);
         }
+
         if self.expired() {
             return Err(ErrorKind::Expired.into());
         }
-        let packet_size =
-            1 + protocol.map(|p| p.len()).unwrap_or(0) + data.len();
-        if packet_size > MAX_PAYLOAD_SIZE {
-            error!(
-                "Packet is too big, size = {}, max = {}, session = {:?}",
-                packet_size, MAX_PAYLOAD_SIZE, self
-            );
-            bail!(ErrorKind::OversizedPacket);
-        }
-        let mut packet = BytesMut::with_capacity(3 + packet_size);
-        packet.put_uint_le(packet_size as u64, 3);
-        packet.put_u8(packet_id);
-        if let Some(protocol) = protocol {
-            packet.put_slice(&protocol);
-        }
-        packet.put_slice(&data);
-        Ok(packet)
+
+        SessionPacket::assemble(packet_id, protocol, data)
     }
 
     pub fn send_packet<Message: Send + Sync + Clone>(
@@ -421,24 +388,14 @@ impl Session {
     ) -> Result<SendQueueStatus, Error>
     {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
-        match self.state {
-            State::Handshake(_) => {
-                panic!("should not send packet during handshake")
-            }
-            State::Session(ref mut c) => c.send(io, &packet, priority),
-        }
+        self.connection_mut().send(io, &packet, priority)
     }
 
     pub fn send_packet_immediately(
         &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: &[u8],
     ) -> Result<usize, Error> {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
-        match self.state {
-            State::Handshake(_) => {
-                panic!("should not send packet immediately during handshake")
-            }
-            State::Session(ref mut c) => c.write_raw_data(&packet),
-        }
+        self.connection_mut().write_raw_data(&packet)
     }
 
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
@@ -564,22 +521,99 @@ impl<T> MovableWrapper<T> {
     fn get(&self) -> &T {
         match self.item {
             Some(ref item) => item,
-            None => panic!("item is moved"),
+            None => panic!("cannot get moved item"),
         }
     }
 
     fn get_mut(&mut self) -> &mut T {
         match self.item {
             Some(ref mut item) => item,
-            None => panic!("item is moved"),
+            None => panic!("cannot get_mut moved item"),
         }
     }
 
     fn take(&mut self) -> T {
         if self.item.is_none() {
-            panic!("item is moved already")
+            panic!("cannot take moved item")
         }
 
         self.item.take().expect("should have value")
+    }
+}
+
+pub struct SessionPacket {
+    pub id: u8,
+    pub protocol: Option<ProtocolId>,
+    pub data: Bytes,
+}
+
+impl SessionPacket {
+    pub fn assemble(
+        id: u8, protocol: Option<ProtocolId>, data: &[u8],
+    ) -> Result<BytesMut, Error> {
+        let packet_size = 1 + protocol.map_or(0, |p| p.len()) + data.len();
+
+        if packet_size > MAX_PAYLOAD_SIZE {
+            error!(
+                "Packet is too big, size = {}, max = {}",
+                packet_size, MAX_PAYLOAD_SIZE
+            );
+            bail!(ErrorKind::OversizedPacket);
+        }
+
+        let mut packet = BytesMut::with_capacity(3 + packet_size);
+        packet.put_uint_le(packet_size as u64, 3);
+        packet.put_u8(id);
+        if let Some(protocol) = protocol {
+            packet.put_slice(&protocol);
+        }
+        packet.put_slice(data);
+
+        Ok(packet)
+    }
+
+    pub fn parse(mut data: Bytes) -> Result<Self, Error> {
+        if data.len() <= 3 {
+            bail!(ErrorKind::BadProtocol);
+        }
+
+        let packet_id = data.split_to(4)[3];
+
+        if packet_id != PACKET_USER {
+            return Ok(SessionPacket {
+                id: packet_id,
+                protocol: None,
+                data,
+            });
+        }
+
+        if data.len() < 3 {
+            bail!(ErrorKind::Decoder);
+        }
+
+        let mut protocol: ProtocolId = [0u8; 3];
+        protocol.copy_from_slice(&data.split_to(3));
+
+        Ok(SessionPacket {
+            id: packet_id,
+            protocol: Some(protocol),
+            data,
+        })
+    }
+}
+
+impl PacketSizer for SessionPacket {
+    fn packet_size(raw_packet: &Bytes) -> usize {
+        let buf = &mut raw_packet.into_buf() as &mut dyn Buf;
+        if buf.remaining() >= 3 {
+            let size = buf.get_uint_le(3) as usize;
+            if buf.remaining() >= size {
+                size + 3
+            } else {
+                0
+            }
+        } else {
+            0
+        }
     }
 }

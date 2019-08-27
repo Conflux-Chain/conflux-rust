@@ -19,8 +19,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    connection::WriteStatus, node_table::NodeId, service::HostMetadata,
-    session::Connection, Error, ErrorKind,
+    connection::WriteStatus,
+    node_table::NodeId,
+    service::HostMetadata,
+    session::{Connection, SessionPacket},
+    Error, ErrorKind,
 };
 use cfx_bytes::Bytes;
 use cfx_types::{Public, H256, H520};
@@ -123,21 +126,34 @@ impl Handshake {
         &mut self, io: &IoContext<Message>, host: &HostMetadata,
     ) -> Result<(), Error>
     where Message: Send + Clone + Sync + 'static {
+        trace!("handshake readable enter, state = {:?}", self.state);
+
         while let Some(data) = self.connection.readable()? {
+            let packet = SessionPacket::parse(data)?;
+
             match self.state {
-                HandshakeState::New => {}
+                HandshakeState::New => {
+                    error!("handshake readable invalid for New state");
+                }
                 HandshakeState::StartSession => {
-                    io.clear_timer(self.connection.token()).ok();
-                    break;
+                    error!("handshake readable invalid for StartSession state");
                 }
                 HandshakeState::ReadingAuth => {
-                    self.read_auth(io, host.secret(), &data)?;
+                    self.read_auth(io, host.secret(), &packet.data)?;
                 }
                 HandshakeState::ReadingAck => {
-                    self.read_ack(host.secret(), &data)?;
+                    self.read_ack(host.secret(), &packet.data)?;
                 }
             }
+
+            if self.state == HandshakeState::StartSession {
+                io.clear_timer(self.connection.token()).ok();
+                break;
+            }
         }
+
+        trace!("handshake readable leave, state = {:?}", self.state);
+
         Ok(())
     }
 
@@ -257,8 +273,8 @@ impl Handshake {
         let message = ecies::encrypt(&self.id, &[], &data)?;
 
         self.auth_cipher = message.clone();
-        self.connection
-            .send(io, &message, SendQueuePriority::High)?;
+        let data = SessionPacket::assemble(0, None, &message)?;
+        self.connection.send(io, &data, SendQueuePriority::High)?;
         self.state = HandshakeState::ReadingAck;
 
         Ok(())
@@ -286,8 +302,8 @@ impl Handshake {
 
         let message = ecies::encrypt(&self.id, &[], &data)?;
         self.ack_cipher = message.clone();
-        self.connection
-            .send(io, &message, SendQueuePriority::High)?;
+        let data = SessionPacket::assemble(0, None, &message)?;
+        self.connection.send(io, &data, SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
         Ok(())
     }

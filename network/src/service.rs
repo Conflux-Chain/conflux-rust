@@ -1066,8 +1066,8 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, session = {:?}",
-                    deregister, *sess
+                    "kill connection, deregister = {}, resson = {:?}, session = {:?}",
+                    deregister, reason, *sess
                 );
             }
         }
@@ -1279,7 +1279,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     io,
                     true,
                     Some(UpdateNodeOperation::Demotion),
-                    None,
+                    Some(DisconnectReason::Custom("session timeout".into())),
                 );
             }
             HOUSEKEEPING => self.on_housekeeping(io),
