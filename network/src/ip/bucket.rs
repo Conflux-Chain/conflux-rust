@@ -4,83 +4,43 @@ use crate::{
     node_table::{NodeContact, NodeId},
 };
 use rand::{thread_rng, Rng, ThreadRng};
-use std::{slice::Iter, time::Duration};
+use std::time::Duration;
 
 /// NodeBucket is used to manage the nodes that grouped by subnet,
 /// and support to sample any node from bucket.
 #[derive(Default, Debug)]
 pub struct NodeBucket {
-    trusted_nodes: SampleHashSet<NodeId>,
-    untrusted_nodes: SampleHashSet<NodeId>,
+    nodes: SampleHashSet<NodeId>,
 }
 
 impl NodeBucket {
     #[inline]
-    pub fn count(&self) -> usize {
-        self.trusted_nodes.len() + self.untrusted_nodes.len()
-    }
+    pub fn count(&self) -> usize { self.nodes.len() }
 
     #[inline]
-    fn contains(&self, id: &NodeId) -> bool {
-        self.trusted_nodes.contains(id) || self.untrusted_nodes.contains(id)
-    }
+    pub fn add(&mut self, id: NodeId) -> bool { self.nodes.insert(id) }
 
-    /// Add the specified node `id` into bucket as trusted or untrusted.
-    /// Return `true` if new added, otherwise `false`.
-    pub fn add(&mut self, id: NodeId, trusted: bool) -> bool {
-        if self.contains(&id) {
-            return false;
-        }
+    #[inline]
+    pub fn remove(&mut self, id: &NodeId) -> bool { self.nodes.remove(id) }
 
-        if trusted {
-            self.trusted_nodes.insert(id)
-        } else {
-            self.untrusted_nodes.insert(id)
-        }
-    }
-
-    /// Remove the specified node `id` from bucket.
-    /// Return `false` if node not found, otherwise `true`.
-    pub fn remove(&mut self, id: &NodeId) -> bool {
-        self.trusted_nodes.remove(id) || self.untrusted_nodes.remove(id)
-    }
-
-    /// Randomly select a node with the specified `rng` if bucket is not empty.
-    pub fn sample_trusted(&self, rng: &mut ThreadRng) -> Option<NodeId> {
-        self.trusted_nodes.sample(rng)
+    #[inline]
+    pub fn sample(&self, rng: &mut ThreadRng) -> Option<NodeId> {
+        self.nodes.sample(rng)
     }
 
     /// Select a node to evict due to bucket is full. The basic priority is as
     /// following:
-    /// - Evict untrusted nodes prior to trusted ones.
     /// - Do not evict connecting nodes.
     /// - Evict nodes that have not been contacted for a long time.
     /// - Randomly pick a node without "fresher" bias.
     pub fn select_evictee(
         &self, db: &NodeDatabase, evict_timeout: Duration,
     ) -> Option<NodeId> {
-        self.select_evictee_with_nodes(
-            self.untrusted_nodes.iter(),
-            db,
-            evict_timeout,
-        )
-        .or_else(|| {
-            self.select_evictee_with_nodes(
-                self.trusted_nodes.iter(),
-                db,
-                evict_timeout,
-            )
-        })
-    }
-
-    fn select_evictee_with_nodes(
-        &self, nodes: Iter<NodeId>, db: &NodeDatabase, evict_timeout: Duration,
-    ) -> Option<NodeId> {
         let mut long_time_nodes = Vec::new();
         let mut evictable_nodes = Vec::new();
 
-        for id in nodes {
-            if let Some((_, node)) = db.get_with_trusty(id) {
+        for id in self.nodes.iter() {
+            if let Some(node) = db.get(id, false) {
                 // do not evict the connecting nodes
                 if let Some(NodeContact::Success(_)) = node.last_connected {
                     continue;
@@ -125,60 +85,34 @@ mod tests {
     use super::{NodeBucket, NodeId};
     use rand::thread_rng;
 
-    fn assert_node_with_trusty(
-        bucket: &NodeBucket, id: &NodeId, trusted: bool,
-    ) {
-        if trusted {
-            assert_eq!(bucket.untrusted_nodes.contains(id), false);
-            assert_eq!(bucket.trusted_nodes.contains(id), true);
-        } else {
-            assert_eq!(bucket.trusted_nodes.contains(id), false);
-            assert_eq!(bucket.untrusted_nodes.contains(id), true);
-        }
-    }
-
     #[test]
     fn test_add_remove() {
         let mut bucket = NodeBucket::default();
         assert_eq!(bucket.count(), 0);
 
-        // add n1 as trusted
+        // succeed to add n1
         let n1 = NodeId::random();
-        assert_eq!(bucket.add(n1.clone(), true), true);
-        assert_node_with_trusty(&bucket, &n1, true);
+        assert_eq!(bucket.add(n1.clone()), true);
         assert_eq!(bucket.count(), 1);
 
         // cannot add n1 again
-        assert_eq!(bucket.add(n1.clone(), true), false);
-        assert_eq!(bucket.add(n1.clone(), false), false);
-
-        // add n2 as trusted
-        let n2 = NodeId::random();
-        assert_eq!(bucket.add(n2.clone(), true), true);
-        assert_node_with_trusty(&bucket, &n2, true);
-        assert_eq!(bucket.count(), 2);
-
-        // add n3 as untrusted
-        let n3 = NodeId::random();
-        assert_eq!(bucket.add(n3.clone(), false), true);
-        assert_node_with_trusty(&bucket, &n3, false);
-        assert_eq!(bucket.count(), 3);
-
-        // remove non-exist node
-        let n4 = NodeId::random();
-        assert_eq!(bucket.remove(&n4), false);
-
-        // remove existing n1/n2/n3
-        assert_eq!(bucket.remove(&n1), true);
-        assert_eq!(bucket.contains(&n1), false);
-        assert_eq!(bucket.count(), 2);
-
-        assert_eq!(bucket.remove(&n2), true);
-        assert_eq!(bucket.contains(&n2), false);
+        assert_eq!(bucket.add(n1.clone()), false);
         assert_eq!(bucket.count(), 1);
 
-        assert_eq!(bucket.remove(&n3), true);
-        assert_eq!(bucket.contains(&n3), false);
+        // succeed to add n2
+        let n2 = NodeId::random();
+        assert_eq!(bucket.add(n2.clone()), true);
+        assert_eq!(bucket.count(), 2);
+
+        // failed to remove non-exist node n3
+        let n3 = NodeId::random();
+        assert_eq!(bucket.remove(&n3), false);
+
+        // succeed to remove existing n1/n2
+        assert_eq!(bucket.remove(&n1), true);
+        assert_eq!(bucket.count(), 1);
+
+        assert_eq!(bucket.remove(&n2), true);
         assert_eq!(bucket.count(), 0);
     }
 
@@ -188,17 +122,11 @@ mod tests {
         let mut rng = thread_rng();
 
         // sample None if bucket is empty
-        assert_eq!(bucket.sample_trusted(&mut rng), None);
+        assert_eq!(bucket.sample(&mut rng), None);
 
         // sample any trusted node
         let n1 = NodeId::random();
-        assert_eq!(bucket.add(n1.clone(), true), true);
-        assert_eq!(bucket.sample_trusted(&mut rng), Some(n1.clone()));
-
-        // cannot sample from untrusted node
-        assert_eq!(bucket.remove(&n1), true);
-        let n2 = NodeId::random();
-        assert_eq!(bucket.add(n2.clone(), false), true);
-        assert_eq!(bucket.sample_trusted(&mut rng), None);
+        assert_eq!(bucket.add(n1.clone()), true);
+        assert_eq!(bucket.sample(&mut rng), Some(n1.clone()));
     }
 }
