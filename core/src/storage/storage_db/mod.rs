@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub mod delta_db_manager;
+#[macro_use]
 pub mod key_value_db;
 pub mod snapshot_db;
 pub mod snapshot_db_manager;

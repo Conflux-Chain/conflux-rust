@@ -2,6 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+// FIXME: Move this file out of impl hierarchy. It also doesn't belong to
+// FIXME: storage_db. The ideal place is core::src::storage::snapshot_manager.
+
 use crate::storage::impls::errors::*;
 use primitives::MerkleHash;
 use std::sync::mpsc::Sender;
