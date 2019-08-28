@@ -5,6 +5,7 @@
 use super::DisconnectReason;
 use crate::{
     discovery::{Discovery, DISCOVER_NODES_COUNT},
+    handshake::BYPASS_CRYPTOGRAPHY,
     io::*,
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
@@ -32,7 +33,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{atomic::Ordering as AtomicOrdering, Arc},
     time::{Duration, Instant},
 };
 
@@ -151,6 +152,10 @@ impl NetworkService {
         self.io_service = Some(raw_io_service);
 
         if self.inner.is_none() {
+            if self.config.test_mode {
+                BYPASS_CRYPTOGRAPHY.store(true, AtomicOrdering::Relaxed);
+            }
+
             let inner = Arc::new(match self.config.test_mode {
                 true => NetworkServiceInner::new_with_latency(&self.config)?,
                 false => NetworkServiceInner::new(&self.config)?,

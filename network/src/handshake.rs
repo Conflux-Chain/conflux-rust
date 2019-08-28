@@ -35,7 +35,12 @@ use keylib::{
 };
 use mio::tcp::TcpStream;
 use priority_send_queue::SendQueuePriority;
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
+
+pub static BYPASS_CRYPTOGRAPHY: AtomicBool = AtomicBool::new(false);
 
 #[derive(PartialEq, Eq, Debug)]
 enum HandshakeState {
@@ -78,6 +83,8 @@ const V4_ACK_PACKET_SIZE: usize = 210;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl Handshake {
+    const DEFAULT_PACKET_ID: u8 = 0;
+
     /// Create a new handshake object
     pub fn new(
         token: StreamToken, id: Option<&NodeId>, socket: TcpStream, nonce: H256,
@@ -139,7 +146,13 @@ impl Handshake {
                     error!("handshake readable invalid for StartSession state");
                 }
                 HandshakeState::ReadingAuth => {
-                    self.read_auth(io, host.secret(), &packet.data)?;
+                    if packet.id == Self::DEFAULT_PACKET_ID
+                        || !BYPASS_CRYPTOGRAPHY.load(Ordering::Relaxed)
+                    {
+                        self.read_auth(io, host.secret(), &packet.data)?;
+                    } else {
+                        self.read_node_id(io, host.id(), packet)?;
+                    }
                 }
                 HandshakeState::ReadingAck => {
                     self.read_ack(host.secret(), &packet.data)?;
@@ -212,6 +225,32 @@ impl Handshake {
         Ok(())
     }
 
+    // for test purpose only
+    fn read_node_id<Message>(
+        &mut self, io: &IoContext<Message>, public: &Public,
+        packet: SessionPacket,
+    ) -> Result<(), Error>
+    where
+        Message: Send + Clone + Sync + 'static,
+    {
+        if packet.data.len() != 64 {
+            debug!(
+                "failed to read auth, wrong auth packet size {}, expected = 64",
+                packet.data.len()
+            );
+            return Err(ErrorKind::BadProtocol.into());
+        }
+
+        self.id.clone_from_slice(&packet.data);
+
+        let data = SessionPacket::assemble(packet.id, None, public.as_ref())?;
+        self.connection.send(io, &data, SendQueuePriority::High)?;
+
+        self.state = HandshakeState::StartSession;
+
+        Ok(())
+    }
+
     /// Parse and validate ack message
     fn read_ack(&mut self, secret: &Secret, data: &[u8]) -> Result<(), Error> {
         trace!(
@@ -273,7 +312,8 @@ impl Handshake {
         let message = ecies::encrypt(&self.id, &[], &data)?;
 
         self.auth_cipher = message.clone();
-        let data = SessionPacket::assemble(0, None, &message)?;
+        let data =
+            SessionPacket::assemble(Self::DEFAULT_PACKET_ID, None, &message)?;
         self.connection.send(io, &data, SendQueuePriority::High)?;
         self.state = HandshakeState::ReadingAck;
 
@@ -302,7 +342,8 @@ impl Handshake {
 
         let message = ecies::encrypt(&self.id, &[], &data)?;
         self.ack_cipher = message.clone();
-        let data = SessionPacket::assemble(0, None, &message)?;
+        let data =
+            SessionPacket::assemble(Self::DEFAULT_PACKET_ID, None, &message)?;
         self.connection.send(io, &data, SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
         Ok(())
