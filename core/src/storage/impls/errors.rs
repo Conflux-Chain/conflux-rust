@@ -10,9 +10,10 @@ error_chain! {
 
     foreign_links {
         Io(io::Error);
+        IntegerConversionError(std::num::TryFromIntError);
         ParseIntError(num::ParseIntError);
         RlpDecodeError(rlp::DecoderError);
-        SqliteError(rusqlite::Error);
+        SqliteError(sqlite::Error);
     }
 
     errors {
@@ -56,6 +57,17 @@ error_chain! {
         StateCommitWithoutMerkleHash {
             description("State commit called before computing Merkle hash."),
             display("State commit called before computing Merkle hash."),
+        }
+
+        DbNotExist {
+            description("Failed to operate on an empty db."),
+            display("Failed to operate on an empty db."),
+        }
+
+        // TODO(yz): add error details.
+        DbValueError {
+            description("Unexpected result from db query."),
+            display("Unexpected result from db query."),
         }
 
         SnapshotCowCreation {

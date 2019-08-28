@@ -321,7 +321,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
         }
     }
 
-    fn log_usage(&self, prefix: &String) {
+    fn log_usage(&self, prefix: &str) {
         debug!(
             "{}lru: capacity {}, size {}",
             prefix, self.capacity, self.size

@@ -239,7 +239,7 @@ impl<
     fn load_from_db<'c: 'a, 'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &dyn KeyValueDbTraitRead, db_key: DeltaMptDbKey,
+        db: &mut dyn KeyValueDbTraitOwnedRead, db_key: DeltaMptDbKey,
     ) -> Result<
         GuardedValue<
             MutexGuard<'c, CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
@@ -249,7 +249,7 @@ impl<
     {
         self.db_load_counter.fetch_add(1, Ordering::Relaxed);
         // We never save null node in db.
-        let rlp_bytes = db.get_with_number_key(db_key.into())?.unwrap();
+        let rlp_bytes = db.get_mut_with_number_key(db_key.into())?.unwrap();
         let rlp = Rlp::new(rlp_bytes.as_ref());
         let mut trie_node = MemOptimizedTrieNode::decode(&rlp)?;
 
@@ -421,7 +421,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &mut dyn KeyValueDbTraitOwnedRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -549,7 +549,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &mut dyn KeyValueDbTraitOwnedRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -587,7 +587,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &dyn KeyValueDbTraitRead, is_loaded_from_db: &mut bool,
+        db: &mut dyn KeyValueDbTraitOwnedRead, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -651,9 +651,7 @@ impl<
     pub fn log_usage(&self) {
         let cache_manager = self.cache.lock();
         cache_manager.node_ref_map.log_usage();
-        cache_manager
-            .cache_algorithm
-            .log_usage(&"trie node cache ".into());
+        cache_manager.cache_algorithm.log_usage("trie node cache ");
         let allocator_ref = self.get_allocator();
         debug!(
             "trie node allocator: max allowed size: {}, \
@@ -788,7 +786,9 @@ impl<
 }
 
 use super::{
-    super::{super::storage_db::key_value_db::KeyValueDbTraitRead, errors::*},
+    super::{
+        super::storage_db::key_value_db::KeyValueDbTraitOwnedRead, errors::*,
+    },
     cache::algorithm::{
         lru::LRU, CacheAccessResult, CacheAlgoDataTrait, CacheAlgorithm,
         CacheIndexTrait, CacheStoreUtil,
