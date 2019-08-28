@@ -54,6 +54,7 @@ build_config! {
         (node_table_timeout, (Option<u64>), Some(300))
         (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
         (test_mode, (bool), false)
+        (eth_compatibility_mode, (bool), false)
         (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
@@ -268,7 +269,7 @@ impl Configuration {
     }
 
     pub fn verification_config(&self) -> VerificationConfig {
-        VerificationConfig::new(self.raw_conf.test_mode)
+        VerificationConfig::new(self.raw_conf.test_mode, self.raw_conf.eth_compatibility_mode)
     }
 
     pub fn tx_gen_config(&self) -> TransactionGeneratorConfig {

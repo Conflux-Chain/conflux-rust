@@ -16,17 +16,20 @@ use unexpected::{Mismatch, OutOfBounds};
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {
     pub verify_timestamp: bool,
+    pub eth_compatibility_mode: bool,
 }
 
 impl VerificationConfig {
-    pub fn new(test_mode: bool) -> Self {
+    pub fn new(test_mode: bool, eth_compatibility_mode: bool) -> Self {
         if test_mode {
             VerificationConfig {
                 verify_timestamp: false,
+                eth_compatibility_mode,
             }
         } else {
             VerificationConfig {
                 verify_timestamp: true,
+                eth_compatibility_mode,
             }
         }
     }
