@@ -312,6 +312,7 @@ impl CowNodeRef {
         commit_transaction: &mut AtomicCommitTransaction<Transaction>,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
+        children_merkle_map: &mut ChildrenMerkleMap,
     ) -> Result<()>
     {
         for (_i, node_ref_mut) in trie_node.children_table.iter_mut() {
@@ -331,6 +332,7 @@ impl CowNodeRef {
                     commit_transaction,
                     cache_manager,
                     allocator_ref,
+                    children_merkle_map,
                 );
 
                 if commit_result.is_ok() {
@@ -380,7 +382,7 @@ impl CowNodeRef {
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         allocator_ref: AllocatorRefRefDeltaMpt, db: &dyn KeyValueDbTraitRead,
-        depth: u8,
+        children_merkle_map: &mut ChildrenMerkleMap, depth: u8,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -396,6 +398,7 @@ impl CowNodeRef {
                 trie_node,
                 allocator_ref,
                 db,
+                children_merkle_map,
                 depth,
             )?;
 
@@ -426,7 +429,7 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt, db: &dyn KeyValueDbTraitRead,
-        depth: u8,
+        children_merkle_map: &mut ChildrenMerkleMap, depth: u8,
     ) -> Result<MaybeMerkleTable>
     {
         match trie_node.children_table.get_children_count() {
@@ -463,6 +466,7 @@ impl CowNodeRef {
                     trie_node,
                     allocator_ref,
                     db,
+                    children_merkle_map,
                     known_merkles,
                     depth,
                 )
@@ -475,6 +479,7 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt, db: &dyn KeyValueDbTraitRead,
+        children_merkle_map: &mut ChildrenMerkleMap,
         known_merkles: Option<CompactedChildrenTable<MerkleHash>>, depth: u8,
     ) -> Result<MaybeMerkleTable>
     {
@@ -501,6 +506,7 @@ impl CowNodeRef {
                                 owned_node_set,
                                 allocator_ref,
                                 db,
+                                children_merkle_map,
                                 depth + 1,
                             );
                             // There is no change to the child reference so the
@@ -519,7 +525,7 @@ impl CowNodeRef {
             && num_uncached > CHILDREN_MERKLE_UNCACHED_THRESHOLD
         {
             if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
-                trie.children_merkle_map.lock().insert(
+                children_merkle_map.insert(
                     index,
                     VanillaChildrenTable::<MerkleHash>::from(merkles),
                 );
@@ -594,6 +600,7 @@ impl CowNodeRef {
         commit_transaction: &mut AtomicCommitTransaction<Transaction>,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
+        children_merkle_map: &mut ChildrenMerkleMap,
     ) -> Result<bool>
     {
         if self.owned {
@@ -604,6 +611,7 @@ impl CowNodeRef {
                 commit_transaction,
                 cache_manager,
                 allocator_ref,
+                children_merkle_map,
             )?;
 
             let db_key = commit_transaction.info.row_number.value;
@@ -621,9 +629,7 @@ impl CowNodeRef {
                 NodeRefDeltaMpt::Dirty { index } => *index,
                 _ => unsafe { unreachable_unchecked() },
             };
-            if let Some(children_merkles) =
-                trie.children_merkle_map.lock().remove(&slot)
-            {
+            if let Some(children_merkles) = children_merkle_map.remove(&slot) {
                 commit_transaction.transaction.borrow_mut().put(
                     format!("cm{}", db_key).as_bytes(),
                     &children_merkles.rlp_bytes(),
@@ -882,6 +888,7 @@ use super::{
             },
             errors::*,
             owned_node_set::OwnedNodeSet,
+            state::ChildrenMerkleMap,
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
