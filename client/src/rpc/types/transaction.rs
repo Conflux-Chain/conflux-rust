@@ -25,6 +25,7 @@ pub struct Transaction {
     pub gas: RpcU256,
     pub contract_created: Option<RpcH160>,
     pub data: Bytes,
+    pub status: Option<RpcU256>,
     /// The standardised V field of the signature.
     pub v: RpcU256,
     /// The R field of the signature.
@@ -38,16 +39,19 @@ impl Transaction {
         t: &SignedTransaction, receipt: Option<Receipt>,
     ) -> Transaction {
         let mut contract_created = None;
+        let mut status: Option<RpcU256> = None;
         if let Some(ref receipt) = receipt {
             if let Some(ref address) = receipt.contract_created {
                 contract_created = Some(address.clone().into());
             }
+            status = Some(receipt.outcome_status.into());
         }
         Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
             block_hash: receipt.clone().map(|x| x.block_hash.into()),
             transaction_index: receipt.clone().map(|x| x.index.into()),
+            status,
             contract_created,
             from: t.sender().into(),
             to: match t.action {
