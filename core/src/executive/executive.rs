@@ -1597,8 +1597,8 @@ mod tests {
 
         let res = {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            let mut _nonce_increased = false;
-            ex.transact(&t, &mut _nonce_increased)
+            let mut nonce_increased = false;
+            ex.transact(&t, &mut nonce_increased)
         };
 
         match res {
