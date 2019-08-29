@@ -27,6 +27,7 @@ use cfxcore::{
 use crate::{
     configuration::Configuration,
     rpc::{
+        extractor::RpcExtractor,
         impls::{common::RpcImpl as CommonImpl, light::RpcImpl},
         setup_debug_rpc_apis_light, setup_public_rpc_apis_light,
     },
@@ -203,7 +204,7 @@ impl LightClient {
             txpool.clone(),
         ));
 
-        let debug_rpc_http_server = super::rpc::new_http(
+        let debug_rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 Some((127, 0, 0, 1)),
                 conf.raw_conf.jsonrpc_local_http_port,
@@ -213,7 +214,7 @@ impl LightClient {
             setup_debug_rpc_apis_light(common_impl.clone(), rpc_impl.clone()),
         )?;
 
-        let rpc_tcp_server = super::rpc::new_tcp(
+        let rpc_tcp_server = super::rpc::start_tcp(
             super::rpc::TcpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_tcp_port,
@@ -229,9 +230,10 @@ impl LightClient {
                     rpc_impl.clone(),
                 )
             },
+            RpcExtractor,
         )?;
 
-        let rpc_http_server = super::rpc::new_http(
+        let rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_http_port,
