@@ -40,13 +40,16 @@ build_has_request_id_impl! { SnapshotManifestRequest }
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         // todo find manifest from storage APIs
+        let (state_blame_vec, receipt_blame_vec, bloom_blame_vec) = self
+            .get_blame_states(ctx)
+            .unwrap_or((Vec::new(), Vec::new(), Vec::new()));
         let response = SnapshotManifestResponse {
             request_id: self.request_id,
-            checkpoint: self.checkpoint.clone(),
+            checkpoint: self.checkpoint,
             chunk_hashes: Vec::new(),
-            state_blame_vec: self
-                .get_blame_states(ctx)
-                .unwrap_or_else(|| Vec::new()),
+            state_blame_vec,
+            receipt_blame_vec,
+            bloom_blame_vec,
         };
 
         ctx.send_response(&response)
@@ -54,10 +57,13 @@ impl Handleable for SnapshotManifestRequest {
 }
 
 impl SnapshotManifestRequest {
-    /// return an empty vec if some information not exist in db, caller may find
-    /// another peer to send the request; otherwise return a state_blame_vec
+    /// return three empty vectors if some information not exist in db, caller
+    /// may find another peer to send the request; otherwise return
+    /// `(state_blame_vec, receipt_blame_vec, bloom_blame_vec)`
     /// of the requested block
-    fn get_blame_states(self, ctx: &Context) -> Option<Vec<H256>> {
+    fn get_blame_states(
+        &self, ctx: &Context,
+    ) -> Option<(Vec<H256>, Vec<H256>, Vec<H256>)> {
         let trusted_block = ctx
             .manager
             .graph
@@ -65,6 +71,8 @@ impl SnapshotManifestRequest {
             .block_header_by_hash(&self.trusted_blame_block)?;
 
         let mut state_blame_vec = Vec::new();
+        let mut receipt_blame_vec = Vec::new();
+        let mut bloom_blame_vec = Vec::new();
         let mut block_hash = trusted_block.hash();
         let mut request_invalid = false;
         loop {
@@ -75,6 +83,10 @@ impl SnapshotManifestRequest {
                 .consensus_graph_execution_info_from_db(&block_hash)
             {
                 state_blame_vec.push(exec_info.original_deferred_state_root);
+                receipt_blame_vec
+                    .push(exec_info.original_deferred_receipt_root);
+                bloom_blame_vec
+                    .push(exec_info.original_deferred_logs_bloom_hash);
                 if state_blame_vec.len() == trusted_block.blame() as usize + 1 {
                     break;
                 }
@@ -100,7 +112,7 @@ impl SnapshotManifestRequest {
         if request_invalid {
             None
         } else {
-            Some(state_blame_vec)
+            Some((state_blame_vec, receipt_blame_vec, bloom_blame_vec))
         }
     }
 }

@@ -2,14 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, DynamicCapability},
-    state::{
-        snapshot_chunk_request::SnapshotChunkRequest,
-        snapshot_manifest_request::SnapshotManifestRequest,
-        snapshot_manifest_response::SnapshotManifestResponse, StateSync,
+use crate::{
+    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
+    sync::{
+        message::{Context, DynamicCapability},
+        state::{
+            snapshot_chunk_request::SnapshotChunkRequest,
+            snapshot_manifest_request::SnapshotManifestRequest,
+            snapshot_manifest_response::SnapshotManifestResponse, StateSync,
+        },
+        SynchronizationProtocolHandler,
     },
-    SynchronizationProtocolHandler,
 };
 use cfx_bytes::Bytes;
 use cfx_types::H256;
@@ -59,6 +62,8 @@ struct Inner {
     trusted_blame_block: H256,
     status: Status,
     state_blame_vec: Vec<H256>,
+    receipt_blame_vec: Vec<H256>,
+    bloom_blame_vec: Vec<H256>,
     pending_chunks: VecDeque<H256>,
     downloading_chunks: HashSet<H256>,
     restoring_chunks: HashSet<H256>,
@@ -71,6 +76,8 @@ impl Inner {
         self.trusted_blame_block = trusted_blame_block;
         self.status = Status::DownloadingManifest(Instant::now());
         self.state_blame_vec.clear();
+        self.receipt_blame_vec.clear();
+        self.bloom_blame_vec.clear();
         self.pending_chunks.clear();
         self.downloading_chunks.clear();
         self.restoring_chunks.clear();
@@ -189,6 +196,8 @@ impl SnapshotChunkSync {
             .extend(response.chunk_hashes.into_iter());
         inner.status = Status::DownloadingChunks(Instant::now());
         inner.state_blame_vec = response.state_blame_vec;
+        inner.receipt_blame_vec = response.receipt_blame_vec;
+        inner.bloom_blame_vec = response.bloom_blame_vec;
 
         // request snapshot chunks from peers concurrently
         let peers = ctx.manager.syn.get_random_peers_satisfying(
@@ -315,7 +324,8 @@ impl SnapshotChunkSync {
             return;
         }
         // check checkpoint position in `state_blame_vec`
-        let offset = trusted_blame_block.height() - checkpoint.height();
+        let offset = trusted_blame_block.height() - checkpoint.height()
+            + DEFERRED_STATE_EPOCH_COUNT;
         if offset as usize >= inner.state_blame_vec.len() {
             inner.status = Status::Invalid;
             return;
@@ -335,5 +345,15 @@ impl SnapshotChunkSync {
         // TODO: check state_blame_vec[offset] equals to recovered checkpoint
         // state_root
         inner.status = Status::Completed;
+
+        // insert `EpochExecutionCommitments` of checkpoint to data_man
+        ctx.manager
+            .graph
+            .data_man
+            .insert_epoch_execution_commitments(
+                inner.checkpoint,
+                inner.receipt_blame_vec[offset as usize],
+                inner.bloom_blame_vec[offset as usize],
+            );
     }
 }
