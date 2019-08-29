@@ -28,7 +28,7 @@ use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::{from_tx_hash, get_shortid_key, CompactBlock},
     receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
     Block, BlockHeader, SignedTransaction, TransactionAddress,
