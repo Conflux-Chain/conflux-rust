@@ -2,12 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::storage::impls::errors::*;
-use primitives::MerkleHash;
+use crate::storage::impls::errors::Error;
+use cfx_types::H256;
+use primitives::{MerkleHash, StateRoot};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::sync::mpsc::Sender;
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash, RlpDecodable, RlpEncodable)]
 pub struct ChunkKey {}
 
+#[derive(Default, RlpDecodable, RlpEncodable)]
 pub struct RangedManifest {}
 
 impl RangedManifest {
@@ -15,8 +19,8 @@ impl RangedManifest {
     /// requested start chunk key. Basically, the retrieved chunks should
     /// not be empty, and the proofs of all chunk keys are valid.
     pub fn validate(
-        &self, _snapshot_root: &MerkleHash, _start_chunk: &ChunkKey,
-    ) -> Result<()> {
+        &self, _snapshot_root: &MerkleHash, _start_chunk: &Option<ChunkKey>,
+    ) -> Result<(), Error> {
         unimplemented!()
     }
 
@@ -25,19 +29,31 @@ impl RangedManifest {
     pub fn chunks(&self) -> Vec<ChunkKey> { unimplemented!() }
 
     // todo validate the integrity of all manifest, e.g. no chunk missed
+
+    pub fn load(
+        _checkpoint: &H256, _start_chunk: &Option<ChunkKey>,
+    ) -> Result<Option<RangedManifest>, Error> {
+        unimplemented!()
+    }
 }
 
+#[derive(Default, RlpDecodable, RlpEncodable)]
 pub struct Chunk {}
 
 impl Chunk {
     /// Validate the chunk with specified key and snapshot merkle root.
     pub fn validate(
         &self, _key: &ChunkKey, _snapshot_root: &MerkleHash,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
+        unimplemented!()
+    }
+
+    pub fn load(_chunk_key: &ChunkKey) -> Result<Option<Chunk>, Error> {
         unimplemented!()
     }
 }
 
+#[derive(Default)]
 pub struct Restorer {}
 
 impl Restorer {
@@ -48,9 +64,7 @@ impl Restorer {
 
     /// Start to restore chunks asynchronously and notify the restoration
     /// progress with specified sender.
-    /// The progress is (num_pending_chunks, num_restored_chunks),
-    /// and snapshot restoration completed when num_pending_chunks is 0.
-    pub fn start_to_restore(&self, _progress_sender: Sender<(usize, usize)>) {
+    pub fn start_to_restore(&self, _progress_sender: Sender<RestoreProgress>) {
         unimplemented!()
     }
 
@@ -58,4 +72,13 @@ impl Restorer {
     pub fn is_valid(&self, _snapshot_root: &MerkleHash) -> bool {
         unimplemented!()
     }
+
+    pub fn restored_state_root(&self) -> StateRoot { unimplemented!() }
+}
+
+#[derive(Default, Debug)]
+pub struct RestoreProgress {}
+
+impl RestoreProgress {
+    pub fn is_completed(&self) -> bool { unimplemented!() }
 }

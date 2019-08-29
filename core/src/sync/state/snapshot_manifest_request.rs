@@ -4,6 +4,7 @@
 
 use crate::{
     message::{HasRequestId, Message, MsgId, RequestId},
+    storage::{ChunkKey, RangedManifest},
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
@@ -21,17 +22,8 @@ use std::{any::Any, time::Duration};
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
     pub checkpoint: H256,
-    pub trusted_blame_block: H256,
-}
-
-impl SnapshotManifestRequest {
-    pub fn new(checkpoint: H256, trusted_blame_block: H256) -> Self {
-        SnapshotManifestRequest {
-            request_id: 0,
-            checkpoint,
-            trusted_blame_block,
-        }
-    }
+    pub start_chunk: Option<ChunkKey>,
+    pub trusted_blame_block: Option<H256>,
 }
 
 build_msg_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
@@ -39,21 +31,42 @@ build_has_request_id_impl! { SnapshotManifestRequest }
 
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        // todo find manifest from storage APIs
-        let response = SnapshotManifestResponse {
+        let manifest =
+            match RangedManifest::load(&self.checkpoint, &self.start_chunk) {
+                Ok(Some(m)) => m,
+                _ => RangedManifest::default(),
+            };
+
+        ctx.send_response(&SnapshotManifestResponse {
             request_id: self.request_id,
             checkpoint: self.checkpoint.clone(),
-            chunk_hashes: Vec::new(),
-            state_blame_vec: self
-                .get_blame_states(ctx)
-                .unwrap_or_else(|| Vec::new()),
-        };
-
-        ctx.send_response(&response)
+            manifest,
+            state_blame_vec: self.get_blame_states(ctx).unwrap_or_default(),
+        })
     }
 }
 
 impl SnapshotManifestRequest {
+    pub fn new(checkpoint: H256, trusted_blame_block: H256) -> Self {
+        SnapshotManifestRequest {
+            request_id: 0,
+            checkpoint,
+            start_chunk: None,
+            trusted_blame_block: Some(trusted_blame_block),
+        }
+    }
+
+    pub fn new_with_start_chunk(
+        checkpoint: H256, start_chunk: ChunkKey,
+    ) -> Self {
+        SnapshotManifestRequest {
+            request_id: 0,
+            checkpoint,
+            start_chunk: Some(start_chunk),
+            trusted_blame_block: None,
+        }
+    }
+
     /// return an empty vec if some information not exist in db, caller may find
     /// another peer to send the request; otherwise return a state_blame_vec
     /// of the requested block
@@ -62,7 +75,7 @@ impl SnapshotManifestRequest {
             .manager
             .graph
             .data_man
-            .block_header_by_hash(&self.trusted_blame_block)?;
+            .block_header_by_hash(&self.trusted_blame_block?)?;
 
         let mut state_blame_vec = Vec::new();
         let mut block_hash = trusted_block.hash();
