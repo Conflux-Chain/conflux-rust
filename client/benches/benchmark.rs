@@ -88,7 +88,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut _nonce_increased = false;
         b.iter(|| {
-            ex.transact(&tx, _nonce_increased).unwrap();
+            ex.transact(&tx, &mut _nonce_increased).unwrap();
             ex.state.clear();
         })
     });
