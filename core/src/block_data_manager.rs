@@ -59,23 +59,11 @@ pub struct EpochExecutionCommitments {
     pub logs_bloom_hash: H256,
 }
 
-#[derive(Clone, RlpEncodable, RlpDecodable)]
+#[derive(Clone, RlpEncodable, RlpDecodable, Default)]
 pub struct ConsensusGraphExecutionInfo {
-    pub state_valid: bool,
     pub original_deferred_state_root: H256,
     pub original_deferred_receipt_root: H256,
     pub original_deferred_logs_bloom_hash: H256,
-}
-
-impl Default for ConsensusGraphExecutionInfo {
-    fn default() -> Self {
-        ConsensusGraphExecutionInfo {
-            state_valid: true,
-            original_deferred_state_root: Default::default(),
-            original_deferred_receipt_root: Default::default(),
-            original_deferred_logs_bloom_hash: Default::default(),
-        }
-    }
 }
 
 pub struct BlockDataManager {

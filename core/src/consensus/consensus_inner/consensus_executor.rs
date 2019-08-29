@@ -340,10 +340,8 @@ impl ConsensusExecutor {
                         if *index == pivot_arena_index {
                             no_reward =
                                 block_consensus_node.data.partial_invalid
-                                    || !inner
-                                        .execution_info_cache
-                                        .get(&pivot_arena_index)
-                                        .unwrap()
+                                    || !inner.arena[pivot_arena_index]
+                                        .data
                                         .state_valid;
                         } else {
                             no_reward = block_consensus_node

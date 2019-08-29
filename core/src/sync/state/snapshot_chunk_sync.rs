@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     storage::{Chunk, ChunkKey, RestoreProgress, Restorer},
     sync::{
         message::{Context, DynamicCapability},
@@ -19,6 +20,7 @@ use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
 use primitives::BlockHeaderBuilder;
 use std::{
+    cmp::max,
     collections::{HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
     sync::Arc,
@@ -68,6 +70,9 @@ struct Inner {
 
     // blame state that used to verify restored state root
     true_state_root_by_blame_info: H256,
+    state_blame_vec: Vec<H256>,
+    receipt_blame_vec: Vec<H256>,
+    bloom_blame_vec: Vec<H256>,
 
     // download
     pending_chunks: VecDeque<ChunkKey>,
@@ -85,6 +90,9 @@ impl Inner {
         self.trusted_blame_block = trusted_blame_block;
         self.status = Status::DownloadingManifest(Instant::now());
         self.true_state_root_by_blame_info = H256::new();
+        self.state_blame_vec.clear();
+        self.receipt_blame_vec.clear();
+        self.bloom_blame_vec.clear();
         self.pending_chunks.clear();
         self.downloading_chunks.clear();
         self.num_downloaded = 0;
@@ -206,7 +214,7 @@ impl SnapshotChunkSync {
                 ctx,
                 &inner.checkpoint,
                 &inner.trusted_blame_block,
-                response.state_blame_vec,
+                &response.state_blame_vec,
             ) {
                 Some(state) => inner.true_state_root_by_blame_info = state,
                 None => {
@@ -245,6 +253,9 @@ impl SnapshotChunkSync {
 
         // update status
         inner.status = Status::DownloadingChunks(Instant::now());
+        inner.state_blame_vec = response.state_blame_vec;
+        inner.receipt_blame_vec = response.receipt_blame_vec;
+        inner.bloom_blame_vec = response.bloom_blame_vec;
 
         // request snapshot chunks from peers concurrently
         let peers = ctx.manager.syn.get_random_peers_satisfying(
@@ -368,6 +379,7 @@ impl SnapshotChunkSync {
         let root = inner.restorer.restored_state_root();
         if root.compute_state_root_hash() == inner.true_state_root_by_blame_info
         {
+            // TODO: restore commitment and exec_info
             info!("Snapshot chunks restored successfully");
             inner.status = Status::Completed;
         } else {
@@ -389,7 +401,7 @@ impl SnapshotChunkSync {
 
     fn validate_blame_states(
         ctx: &Context, checkpoint: &H256, trusted_blame_block: &H256,
-        state_blame_vec: Vec<H256>,
+        state_blame_vec: &Vec<H256>,
     ) -> Option<H256>
     {
         // these two header must exist in disk, it's safe to unwrap
@@ -406,12 +418,17 @@ impl SnapshotChunkSync {
             .block_header_by_hash(trusted_blame_block)
             .unwrap();
 
+        let vec_len = max(
+            trusted_blame_block.height() - checkpoint.height(),
+            trusted_blame_block.blame() as u64,
+        ) + 1;
         // check blame count correct
-        if trusted_blame_block.blame() as usize + 1 != state_blame_vec.len() {
+        if vec_len as usize != state_blame_vec.len() {
             return None;
         }
         // check checkpoint position in `state_blame_vec`
-        let offset = trusted_blame_block.height() - checkpoint.height();
+        let offset = trusted_blame_block.height() - checkpoint.height()
+            + DEFERRED_STATE_EPOCH_COUNT;
         if offset as usize >= state_blame_vec.len() {
             return None;
         }
@@ -419,7 +436,8 @@ impl SnapshotChunkSync {
             state_blame_vec[0].clone()
         } else {
             BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                state_blame_vec.to_vec(),
+                state_blame_vec[0..trusted_blame_block.blame() as usize + 1]
+                    .to_vec(),
             )
         };
         // check `deferred_state_root` is correct
@@ -427,6 +445,6 @@ impl SnapshotChunkSync {
             return None;
         }
 
-        Some(state_blame_vec[offset as usize].clone())
+        Some(state_blame_vec[offset as usize])
     }
 }
