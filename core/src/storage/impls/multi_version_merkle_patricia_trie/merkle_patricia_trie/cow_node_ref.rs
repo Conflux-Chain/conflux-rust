@@ -5,7 +5,7 @@
 /// Load children merkles only when the number of uncached children nodes is
 /// above this threshold. Note that a small value will result in worse
 /// performance.
-const CHILDREN_MERKLE_UNCACHED_THRESHOLD: u32 = 3;
+const CHILDREN_MERKLE_UNCACHED_THRESHOLD: u32 = 4;
 
 /// Load/store children merkles only when the depth of current node is above
 /// this threshold. This is motivated by the fact that lower (deeper) nodes will
@@ -14,7 +14,7 @@ const CHILDREN_MERKLE_UNCACHED_THRESHOLD: u32 = 3;
 /// Depth 5 = 69905 (70k) nodes.
 /// Depth 6 = 1118481 (1.1 million) nodes.
 /// Depth 7 = 17895697 (18 million) nodes.
-const CHILDREN_MERKLE_DEPTH_THRESHOLD: u8 = 4;
+const CHILDREN_MERKLE_DEPTH_THRESHOLD: u8 = 3;
 
 /// CowNodeRef facilities access and modification to trie nodes in multi-version
 /// MPT. It offers read-only access to the original trie node, and creates an
