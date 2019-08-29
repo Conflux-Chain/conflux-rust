@@ -860,7 +860,7 @@ impl BlockDataManager {
                         .outcome_status
                     {
                         TRANSACTION_OUTCOME_SUCCESS
-                        | TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
+                        | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
                             self.insert_transaction_address(
                                 &tx.hash,
                                 &TransactionAddress {
