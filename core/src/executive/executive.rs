@@ -968,8 +968,9 @@ impl<'a, 'b> Executive<'a, 'b> {
     }
 
     pub fn transact(
-        &mut self, tx: &SignedTransaction,
+        &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
     ) -> ExecutionResult<Executed> {
+        *nonce_increased = false;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
 
@@ -1024,6 +1025,7 @@ impl<'a, 'b> Executive<'a, 'b> {
         // Increase nonce even sender does not have enough balance
         if !spec.keep_unsigned_nonce || !tx.is_unsigned() {
             self.state.inc_nonce(&sender)?;
+            *nonce_increased = true;
         }
 
         let mut substate = Substate::new();
@@ -1595,7 +1597,8 @@ mod tests {
 
         let res = {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.transact(&t)
+            let mut nonce_increased = false;
+            ex.transact(&t, &mut nonce_increased)
         };
 
         match res {

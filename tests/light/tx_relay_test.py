@@ -97,6 +97,7 @@ class TxRelayTest(ConfluxTestFramework):
             # not retrieve receipts or tx addresses. this will be implemented later
             node0_tx["blockHash"] = None
             node0_tx["transactionIndex"] = None
+            node0_tx["status"] = None
 
             assert_equal(light_tx, node0_tx)
             self.log.info(f"tx {hash} correct")

@@ -27,7 +27,10 @@ use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::{from_tx_hash, get_shortid_key, CompactBlock},
-    receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
+    receipt::{
+        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_SUCCESS,
+    },
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
@@ -851,19 +854,22 @@ impl BlockDataManager {
                 let block =
                     self.block_by_hash(block_hash, true).expect("block exists");
                 for (tx_idx, tx) in block.transactions.iter().enumerate() {
-                    if epoch_receipts[block_idx]
+                    match epoch_receipts[block_idx]
                         .get(tx_idx)
                         .unwrap()
                         .outcome_status
-                        == TRANSACTION_OUTCOME_SUCCESS
                     {
-                        self.insert_transaction_address(
-                            &tx.hash,
-                            &TransactionAddress {
-                                block_hash: *block_hash,
-                                index: tx_idx,
-                            },
-                        )
+                        TRANSACTION_OUTCOME_SUCCESS
+                        | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
+                            self.insert_transaction_address(
+                                &tx.hash,
+                                &TransactionAddress {
+                                    block_hash: *block_hash,
+                                    index: tx_idx,
+                                },
+                            )
+                        }
+                        _ => {}
                     }
                 }
             }
