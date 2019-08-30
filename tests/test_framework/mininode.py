@@ -119,15 +119,22 @@ class P2PConnection(asyncore.dispatcher):
             while True:
                 if len(self.recvbuf) < 3:
                     return
+
                 packet_size = struct.unpack("<L", rzpad(self.recvbuf[:3], 4))[0]
                 if len(self.recvbuf) < 3 + packet_size:
                     return
+
                 packet_id = self.recvbuf[3]
-                if packet_id != PACKET_HELLO and packet_id != PACKET_DISCONNECT and (not self.had_hello):
-                    raise ValueError("bad protocol")
+                self._log_message("receive", packet_id)
                 payload = self.recvbuf[4:3 + packet_size]
                 self.recvbuf = self.recvbuf[3 + packet_size:]
-                self._log_message("receive", packet_id)
+
+                if self.on_handshake(packet_id, payload):
+                    continue
+
+                if packet_id != PACKET_HELLO and packet_id != PACKET_DISCONNECT and (not self.had_hello):
+                    raise ValueError("bad protocol")
+
                 if packet_id == PACKET_HELLO:
                     self.on_hello(payload)
                 elif packet_id == PACKET_DISCONNECT:
@@ -145,6 +152,9 @@ class P2PConnection(asyncore.dispatcher):
         except Exception as e:
             logger.exception('Error reading message: ' + repr(e))
             raise
+
+    def on_handshake(self, packet_id, payload) -> bool:
+        return False
 
     def on_hello(self, payload):
         self.had_hello = True
@@ -364,23 +374,7 @@ class P2PInterface(P2PConnection):
                 raise
 
     def on_hello(self, payload):
-        h = payload[:32]
-        hash_signed = sha3_256(payload[32:])
-        if h != hash_signed:
-            return
-        signature = payload[32:32+65]
-        r = big_endian_to_int(signature[:32])
-        s = big_endian_to_int(signature[32:64])
-        v = big_endian_to_int(signature[64:]) + 27
-        signed = payload[32+65:]
-        h_signed = sha3_256(signed)
-        node_id = ecrecover_to_pub(h_signed, v, r, s)
-        # if node_id == encode_int32(self.pub_key[0])+encode_int32(self.pub_key[1]):
-        #     print("Match")
-        # else:
-        #     print(node_id, encode_int32(self.pub_key[0])+encode_int32(self.pub_key[1]))
-        self.peer_pubkey = node_id
-        hello = rlp.decode(signed, Hello)
+        hello = rlp.decode(payload, Hello)
 
         capabilities = []
         for c in hello.capabilities:
@@ -392,23 +386,28 @@ class P2PInterface(P2PConnection):
             ip = get_ip_address()
         endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
         hello = Hello([Capability(self.protocol, self.protocol_version)], endpoint)
-        to_sign = rlp.encode(hello, Hello)
-        sig = ecsign(sha3_256(to_sign), self.priv_key)
-        v = (sig[0] - 27).to_bytes(1, "big")
-        r = sig[1].to_bytes(32, "big")
-        s = sig[2].to_bytes(32, "big")
-        to_hash = r + s + v + to_sign
-        hash_signed = sha3_256(to_hash)
-        self.send_packet(PACKET_HELLO, hash_signed + to_hash)
+
+        self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
         self.had_hello = True
         self.send_status()
 
     # Callback methods. Can be overridden by subclasses in individual test
     # cases to provide custom message handling behaviour.
 
-    def on_open(self): pass
+    def on_open(self):
+        self.handshake = Handshake(self)
+        self.handshake.write_auth()
 
     def on_close(self): pass
+
+    def on_handshake(self, packet_id, payload) -> bool:
+        if self.handshake.state == "ReadingAck":
+            self.handshake.read_ack(payload)
+            return True
+
+        assert self.handshake.state == "StartSession"
+
+        return False
 
     def on_get_blocks(self, msg):
         resp = Blocks(reqid=msg.reqid, blocks=[])
@@ -501,3 +500,18 @@ def start_p2p_connection(nodes, remote=False):
         p2p.wait_for_status()
 
     return p2p_connections
+
+class Handshake:
+    def __init__(self, peer: P2PInterface):
+        self.peer = peer
+        self.state = "New"
+
+    def write_auth(self):
+        node_id = utils.decode_hex(self.peer.key)
+        self.peer.send_packet(255, node_id)
+        self.state = "ReadingAck"
+
+    def read_ack(self, remote_node_id: bytes):
+        assert len(remote_node_id) == 64, "invalid node id length {}".format(len(remote_node_id))
+        self.peer.peer_key = utils.encode_hex(remote_node_id)
+        self.state = "StartSession"

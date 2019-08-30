@@ -16,6 +16,7 @@ use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
     marker::PhantomData,
+    net::SocketAddr,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
         Arc,
@@ -350,6 +351,18 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
     }
 
     pub fn token(&self) -> StreamToken { self.token }
+
+    /// Get remote peer address
+    pub fn remote_addr(&self) -> io::Result<SocketAddr> {
+        self.socket.peer_addr()
+    }
+
+    /// Get remote peer address string
+    pub fn remote_addr_str(&self) -> String {
+        self.remote_addr()
+            .map(|a| a.to_string())
+            .unwrap_or_else(|_| "Unknown".to_owned())
+    }
 
     pub fn details(&self) -> ConnectionDetails {
         ConnectionDetails {

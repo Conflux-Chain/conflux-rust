@@ -5,6 +5,7 @@
 use super::DisconnectReason;
 use crate::{
     discovery::{Discovery, DISCOVER_NODES_COUNT},
+    handshake::BYPASS_CRYPTOGRAPHY,
     io::*,
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
@@ -17,6 +18,7 @@ use crate::{
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
+use cfx_types::H256;
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
 use mio::{deprecated::EventLoop, tcp::*, udp::*, *};
@@ -31,7 +33,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{atomic::Ordering as AtomicOrdering, Arc},
     time::{Duration, Instant},
 };
 
@@ -150,6 +152,10 @@ impl NetworkService {
         self.io_service = Some(raw_io_service);
 
         if self.inner.is_none() {
+            if self.config.test_mode {
+                BYPASS_CRYPTOGRAPHY.store(true, AtomicOrdering::Relaxed);
+            }
+
             let inner = Arc::new(match self.config.test_mode {
                 true => NetworkServiceInner::new_with_latency(&self.config)?,
                 false => NetworkServiceInner::new(&self.config)?,
@@ -304,9 +310,10 @@ impl NetworkService {
 type SharedSession = Arc<RwLock<Session>>;
 
 pub struct HostMetadata {
-    #[allow(unused)]
     /// Our private and public keys.
     pub keys: KeyPair,
+    /// Connection nonce.
+    nonce: RwLock<H256>,
     pub capabilities: RwLock<Vec<Capability>>,
     pub local_address: SocketAddr,
     /// Local address + discovery port
@@ -316,6 +323,14 @@ pub struct HostMetadata {
 }
 
 impl HostMetadata {
+    pub fn next_nonce(&self) -> H256 {
+        let mut nonce = self.nonce.write();
+        *nonce = keccak(&*nonce);
+        *nonce
+    }
+
+    pub(crate) fn secret(&self) -> &Secret { self.keys.secret() }
+
     pub(crate) fn id(&self) -> &NodeId { self.keys.public() }
 }
 
@@ -496,6 +511,7 @@ impl NetworkServiceInner {
         let mut inner = NetworkServiceInner {
             metadata: HostMetadata {
                 keys,
+                nonce: RwLock::new(H256::random()),
                 capabilities: RwLock::new(Vec::new()),
                 local_address: listen_address,
                 local_endpoint,
@@ -1055,8 +1071,8 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, session = {:?}",
-                    deregister, *sess
+                    "kill connection, deregister = {}, resson = {:?}, session = {:?}",
+                    deregister, reason, *sess
                 );
             }
         }
@@ -1261,6 +1277,16 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
 
     fn timeout(&self, io: &IoContext<NetworkIoMessage>, token: TimerToken) {
         match token {
+            FIRST_SESSION..=LAST_SESSION => {
+                debug!("Connection timeout: {}", token);
+                self.kill_connection(
+                    token,
+                    io,
+                    true,
+                    Some(UpdateNodeOperation::Demotion),
+                    Some(DisconnectReason::Custom("session timeout".into())),
+                );
+            }
             HOUSEKEEPING => self.on_housekeeping(io),
             DISCOVERY_REFRESH => {
                 // Run the _slow_ discovery if enough peers are connected
