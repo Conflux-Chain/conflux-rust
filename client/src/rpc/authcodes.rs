@@ -228,7 +228,7 @@ impl<T: TimeProvider> AuthCodes<T> {
 
 #[cfg(test)]
 mod tests {
-    use hash::keccak;
+    use keccak_hash::keccak;
     use std::{
         cell::Cell,
         fs,
@@ -238,7 +238,7 @@ mod tests {
     use tempdir::TempDir;
 
     use super::*;
-    use ethereum_types::H256;
+    use cfx_types::H256;
 
     fn generate_hash(val: &str, time: u64) -> H256 {
         keccak(format!("{}:{}", val, time))

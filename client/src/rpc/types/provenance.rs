@@ -67,9 +67,9 @@ impl fmt::Display for Origin {
 
 #[cfg(test)]
 mod tests {
-    use super::Origin;
-    use cfx_types::H256;
-    use serde_json;
+    //use super::Origin;
+    //use cfx_types::H256;
+    //use serde_json;
 
     //    #[test]
     //    fn should_serialize_origin() {
