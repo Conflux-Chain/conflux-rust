@@ -7,15 +7,21 @@ use crate::{
         AccessControlAllowOrigin, DomainsValidation, Server as HttpServer,
         ServerBuilder as HttpServerBuilder,
     },
-    tcp::{Server as TcpServer, ServerBuilder as TcpServerBuilder},
+    tcp::{self, Server as TcpServer, ServerBuilder as TcpServerBuilder},
 };
-use jsonrpc_core::IoHandler;
+use jsonrpc_core::MetaIoHandler;
 use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
 };
 
+mod authcodes;
+pub mod extractor;
+mod helpers;
+mod http_common;
 pub mod impls;
+pub mod informant;
+pub mod metadata;
 mod traits;
 mod types;
 
@@ -27,11 +33,13 @@ use self::{
             CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
+        pubsub::PubSubClient,
     },
-    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
+    traits::{cfx::Cfx, debug::DebugRpc, pubsub::PubSub, test::TestRpc},
 };
 
-pub use self::types::Block as RpcBlock;
+pub use self::types::{Block as RpcBlock, Origin};
+pub use metadata::Metadata;
 
 #[derive(Debug, PartialEq)]
 pub struct TcpConfiguration {
@@ -91,65 +99,77 @@ impl HttpConfiguration {
 }
 
 pub fn setup_public_rpc_apis(
-    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>,
-) -> IoHandler {
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: Option<PubSubClient>,
+) -> MetaIoHandler<Metadata> {
     let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = IoHandler::new();
+    let mut handler = MetaIoHandler::default();
     handler.extend_with(cfx);
+    if let Some(pubsub) = pubsub {
+        handler.extend_with(pubsub.to_delegate());
+    }
     handler
 }
 
 pub fn setup_debug_rpc_apis(
-    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>,
-) -> IoHandler {
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: Option<PubSubClient>,
+) -> MetaIoHandler<Metadata> {
     let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
     let test = TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
     let debug = DebugRpcImpl::new(common.clone(), rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = IoHandler::new();
+    let mut handler = MetaIoHandler::default();
     handler.extend_with(cfx);
     handler.extend_with(test);
     handler.extend_with(debug);
+    if let Some(pubsub) = pubsub {
+        handler.extend_with(pubsub.to_delegate());
+    }
     handler
 }
 
 pub fn setup_public_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>,
-) -> IoHandler {
+) -> MetaIoHandler<Metadata> {
     let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = IoHandler::new();
+    let mut handler = MetaIoHandler::default();
     handler.extend_with(cfx);
     handler
 }
 
 pub fn setup_debug_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>,
-) -> IoHandler {
+) -> MetaIoHandler<Metadata> {
     let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
     let test = LightTestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
     let debug = LightDebugRpcImpl::new(common.clone(), rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = IoHandler::new();
+    let mut handler = MetaIoHandler::default();
     handler.extend_with(cfx);
     handler.extend_with(test);
     handler.extend_with(debug);
     handler
 }
 
-pub fn new_tcp(
-    conf: TcpConfiguration, handler: IoHandler,
-) -> Result<Option<TcpServer>, String> {
+pub fn start_tcp<H, T>(
+    conf: TcpConfiguration, handler: H, extractor: T,
+) -> Result<Option<TcpServer>, String>
+where
+    H: Into<MetaIoHandler<Metadata>>,
+    T: tcp::MetaExtractor<Metadata> + 'static,
+{
     if !conf.enabled {
         return Ok(None);
     }
 
-    match TcpServerBuilder::new(handler).start(&conf.address) {
+    match TcpServerBuilder::with_meta_extractor(handler, extractor)
+        .start(&conf.address)
+    {
         Ok(server) => Ok(Some(server)),
         Err(io_error) => {
             Err(format!("TCP error: {} (addr = {})", io_error, conf.address))
@@ -157,8 +177,8 @@ pub fn new_tcp(
     }
 }
 
-pub fn new_http(
-    conf: HttpConfiguration, handler: IoHandler,
+pub fn start_http(
+    conf: HttpConfiguration, handler: MetaIoHandler<Metadata>,
 ) -> Result<Option<HttpServer>, String> {
     if !conf.enabled {
         return Ok(None);

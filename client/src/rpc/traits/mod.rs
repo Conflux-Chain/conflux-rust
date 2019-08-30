@@ -9,4 +9,5 @@ pub mod test;
 
 pub use cfx::Cfx;
 pub use debug::DebugRpc;
+pub use pubsub::PubSub;
 pub use test::TestRpc;
