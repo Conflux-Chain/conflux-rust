@@ -67,7 +67,7 @@ struct Inner {
     status: Status,
 
     // blame state that used to verify restored state root
-    blame_state: H256,
+    true_state_root_by_blame_info: H256,
 
     // download
     pending_chunks: VecDeque<ChunkKey>,
@@ -84,7 +84,7 @@ impl Inner {
         self.checkpoint = checkpoint;
         self.trusted_blame_block = trusted_blame_block;
         self.status = Status::DownloadingManifest(Instant::now());
-        self.blame_state = H256::new();
+        self.true_state_root_by_blame_info = H256::new();
         self.pending_chunks.clear();
         self.downloading_chunks.clear();
         self.num_downloaded = 0;
@@ -208,7 +208,7 @@ impl SnapshotChunkSync {
                 &inner.trusted_blame_block,
                 response.state_blame_vec,
             ) {
-                Some(state) => inner.blame_state = state,
+                Some(state) => inner.true_state_root_by_blame_info = state,
                 None => {
                     warn!("failed to validate the blame state, re-sync manifest from other peer");
                     self.resync_manifest(ctx, &mut inner);
@@ -365,7 +365,8 @@ impl SnapshotChunkSync {
 
         // verify the blame state
         let root = inner.restorer.restored_state_root();
-        if root.compute_state_root_hash() == inner.blame_state {
+        if root.compute_state_root_hash() == inner.true_state_root_by_blame_info
+        {
             info!("Snapshot chunks restored successfully");
             inner.status = Status::Completed;
         } else {
