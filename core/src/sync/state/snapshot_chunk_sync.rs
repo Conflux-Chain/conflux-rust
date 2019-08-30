@@ -9,7 +9,7 @@ use crate::{
         state::{
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
-            snapshot_manifest_response::SnapshotManifestResponse, StateSync,
+            snapshot_manifest_response::SnapshotManifestResponse,
         },
         SynchronizationProtocolHandler,
     },
@@ -21,7 +21,7 @@ use primitives::BlockHeaderBuilder;
 use std::{
     collections::{HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
-    sync::{mpsc::channel, Arc},
+    sync::Arc,
     time::Instant,
 };
 
@@ -112,8 +112,19 @@ pub struct SnapshotChunkSync {
     max_download_peers: usize,
 }
 
-impl StateSync for SnapshotChunkSync {
-    fn start(
+impl SnapshotChunkSync {
+    pub fn new(max_download_peers: usize) -> Self {
+        SnapshotChunkSync {
+            inner: Default::default(),
+            max_download_peers: if max_download_peers == 0 {
+                1
+            } else {
+                max_download_peers
+            },
+        }
+    }
+
+    pub fn start(
         &self, checkpoint: H256, trusted_blame_block: H256,
         io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
     )
@@ -133,19 +144,6 @@ impl StateSync for SnapshotChunkSync {
         inner.reset(checkpoint, trusted_blame_block);
 
         self.request_manifest(&inner, io, sync_handler);
-    }
-}
-
-impl SnapshotChunkSync {
-    pub fn new(max_download_peers: usize) -> Self {
-        SnapshotChunkSync {
-            inner: Default::default(),
-            max_download_peers: if max_download_peers == 0 {
-                1
-            } else {
-                max_download_peers
-            },
-        }
     }
 
     fn abort(&self) {
@@ -335,55 +333,41 @@ impl SnapshotChunkSync {
                 download_start_time.elapsed()
             );
 
-            self.start_to_restore(&mut inner);
+            // start to restore and update status
+            inner.restorer.start_to_restore();
+            inner.status = Status::Restoring(Instant::now());
         }
 
         debug!("sync state progress: {:?}", *inner);
     }
 
-    fn start_to_restore(&self, inner: &mut Inner) {
-        let (sender, receiver) = channel::<RestoreProgress>();
+    pub fn update_restore_progress(&self) {
+        let mut inner = self.inner.write();
 
-        let inner_cloned = self.inner.clone();
-        std::thread::Builder::new()
-            .name("SnapshotRestoreMonitor".into())
-            .spawn(move || {
-                // monitor the restoration progress
-                while let Ok(rp) = receiver.recv() {
-                    let completed = rp.is_completed();
-                    trace!("Snapshot chunk restoration progress: {:?}", rp);
-                    inner_cloned.write().restore_progress = rp;
-                    if completed {
-                        break;
-                    }
-                }
+        let start_time = match inner.status {
+            Status::Restoring(t) => t,
+            _ => return,
+        };
 
-                let mut inner = inner_cloned.write();
-                match inner.status {
-                    Status::Restoring(t) => {
-                        info!("Snapshot chunks restoration completed in {:?}", t.elapsed());
-                    }
-                    _ => {
-                        info!("Snapshot chunks restoration completed, but mismatch with current status {:?}", inner.status);
-                        return;
-                    }
-                };
+        inner.restore_progress = inner.restorer.progress();
+        if !inner.restore_progress.is_completed() {
+            return;
+        }
 
-                // verify the blame state
-                let root = inner.restorer.restored_state_root();
-                if root.compute_state_root_hash() == inner.blame_state {
-                    info!("Snapshot chunks restored successfully");
-                    inner.status = Status::Completed;
-                } else {
-                    warn!("Failed to restore snapshot chunks, blame state mismatch");
-                    inner.status = Status::Invalid;
-                }
-            })
-            .expect("should create thread to monitor snapshot restoration");
+        info!(
+            "Snapshot chunks restoration completed in {:?}",
+            start_time.elapsed()
+        );
 
-        // start to restore and update status
-        inner.restorer.start_to_restore(sender);
-        inner.status = Status::Restoring(Instant::now());
+        // verify the blame state
+        let root = inner.restorer.restored_state_root();
+        if root.compute_state_root_hash() == inner.blame_state {
+            info!("Snapshot chunks restored successfully");
+            inner.status = Status::Completed;
+        } else {
+            warn!("Failed to restore snapshot chunks, blame state mismatch");
+            inner.status = Status::Invalid;
+        }
     }
 
     pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {

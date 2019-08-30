@@ -6,7 +6,6 @@ use crate::storage::impls::errors::Error;
 use cfx_types::H256;
 use primitives::{MerkleHash, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::sync::mpsc::Sender;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, RlpDecodable, RlpEncodable)]
 pub struct ChunkKey {}
@@ -62,16 +61,15 @@ impl Restorer {
         unimplemented!()
     }
 
-    /// Start to restore chunks asynchronously and notify the restoration
-    /// progress with specified sender.
-    pub fn start_to_restore(&self, _progress_sender: Sender<RestoreProgress>) {
-        unimplemented!()
-    }
+    /// Start to restore chunks asynchronously.
+    pub fn start_to_restore(&self) { unimplemented!() }
 
     /// Check if the restored snapshot match with the specified snapshot root.
     pub fn is_valid(&self, _snapshot_root: &MerkleHash) -> bool {
         unimplemented!()
     }
+
+    pub fn progress(&self) -> RestoreProgress { unimplemented!() }
 
     pub fn restored_state_root(&self) -> StateRoot { unimplemented!() }
 }
