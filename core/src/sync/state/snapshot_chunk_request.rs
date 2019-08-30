@@ -4,6 +4,7 @@
 
 use crate::{
     message::{HasRequestId, Message, MsgId, RequestId},
+    storage::{Chunk, ChunkKey},
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
@@ -15,21 +16,21 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, collections::HashMap, time::Duration};
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkRequest {
     pub request_id: u64,
     pub checkpoint: H256,
-    pub chunk_hash: H256,
+    pub chunk_key: ChunkKey,
 }
 
 impl SnapshotChunkRequest {
-    pub fn new(checkpoint: H256, chunk_hash: H256) -> Self {
+    pub fn new(checkpoint: H256, chunk_key: ChunkKey) -> Self {
         SnapshotChunkRequest {
             request_id: 0,
             checkpoint,
-            chunk_hash,
+            chunk_key,
         }
     }
 }
@@ -39,10 +40,15 @@ build_has_request_id_impl! { SnapshotChunkRequest }
 
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        // todo find chunk from storage APIs
-        let kvs = HashMap::new();
-        let response = SnapshotChunkResponse::new(self.request_id, kvs);
-        ctx.send_response(&response)
+        let chunk = match Chunk::load(&self.chunk_key) {
+            Ok(Some(chunk)) => chunk,
+            _ => Chunk::default(),
+        };
+
+        ctx.send_response(&SnapshotChunkResponse {
+            request_id: self.request_id,
+            chunk,
+        })
     }
 }
 
