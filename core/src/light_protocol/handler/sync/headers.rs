@@ -42,9 +42,9 @@ struct Statistics {
 // NOTE: order defines priority: Epoch < Reference < NewHash
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) enum HashSource {
-    Epoch,     // hash received through an epoch request
-    Reference, // hash referenced by a header we received
-    NewHash,   // hash received through a new hashes announcement
+    Epoch,      // hash received through an epoch request
+    Dependency, // hash referenced by a header we received
+    NewHash,    // hash received through a new hashes announcement
 }
 
 #[derive(Clone, Debug, Eq)]
@@ -185,7 +185,7 @@ impl Headers {
         }
 
         let missing = missing.into_iter();
-        self.request(missing, HashSource::Reference);
+        self.request(missing, HashSource::Dependency);
     }
 
     #[inline]
@@ -238,8 +238,8 @@ mod tests {
 
     #[test]
     fn test_ordering() {
-        assert!(HashSource::Epoch < HashSource::Reference);
-        assert!(HashSource::Reference < HashSource::NewHash);
+        assert!(HashSource::Epoch < HashSource::Dependency);
+        assert!(HashSource::Dependency < HashSource::NewHash);
 
         let now = Instant::now();
         let one_ms_ago = now.sub(Duration::from_millis(1));
@@ -261,7 +261,7 @@ mod tests {
         let h2 = MissingHeader {
             hash: 2.into(),
             since: now,
-            source: HashSource::Reference,
+            source: HashSource::Dependency,
         };
 
         assert!(h1 < h2); // higher source priority
@@ -269,7 +269,7 @@ mod tests {
         let h3 = MissingHeader {
             hash: 3.into(),
             since: one_ms_ago,
-            source: HashSource::Reference,
+            source: HashSource::Dependency,
         };
 
         assert!(h2 < h3); // longer waiting time
@@ -334,13 +334,13 @@ mod tests {
         let h2 = MissingHeader {
             hash: 2.into(),
             since: now,
-            source: HashSource::Reference,
+            source: HashSource::Dependency,
         };
 
         let h3 = MissingHeader {
             hash: 3.into(),
             since: one_ms_ago,
-            source: HashSource::Reference,
+            source: HashSource::Dependency,
         };
 
         let h4 = MissingHeader {
