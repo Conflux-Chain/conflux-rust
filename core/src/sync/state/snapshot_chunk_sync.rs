@@ -341,6 +341,7 @@ impl SnapshotChunkSync {
         debug!("sync state progress: {:?}", *inner);
     }
 
+    /// Update the progress of snapshot restoration.
     pub fn update_restore_progress(&self) {
         let mut inner = self.inner.write();
 
