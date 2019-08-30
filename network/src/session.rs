@@ -154,8 +154,6 @@ impl Session {
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error>
     where Message: Send + Sync + Clone {
-        let token = self.token();
-
         let wrapper = match self.state {
             State::Handshake(ref mut h) => h,
             State::Session(_) => panic!("Unexpected session state"),
@@ -168,19 +166,6 @@ impl Session {
             // refuse incoming session if the node is blacklisted
             if host.node_db.write().evaluate_blacklisted(&id) {
                 return Err(self.send_disconnect(DisconnectReason::Blacklisted));
-            }
-
-            if let Err(reason) =
-                host.sessions.update_ingress_node_id(token, &id)
-            {
-                debug!(
-                    "failed to update node id of ingress session, reason = {:?}, session = {:?}",
-                    reason, self
-                );
-
-                return Err(
-                    self.send_disconnect(DisconnectReason::UpdateNodeIdFailed)
-                );
             }
 
             self.metadata.id = Some(id);
@@ -238,6 +223,8 @@ impl Session {
 
         match packet.id {
             PACKET_HELLO => {
+                self.update_ingress_node_id(host)?;
+
                 let rlp = Rlp::new(&packet.data);
                 self.read_hello(io, &rlp, host)?;
                 Ok(SessionData::Ready)
@@ -270,6 +257,32 @@ impl Session {
                 Ok(SessionData::Continue)
             }
         }
+    }
+
+    /// Update node Id for ingress session.
+    fn update_ingress_node_id(
+        &mut self, host: &NetworkServiceInner,
+    ) -> Result<(), Error> {
+        // ignore egress session
+        if self.metadata.originated {
+            return Ok(());
+        }
+
+        let token = self.token();
+        let node_id = self
+            .metadata
+            .id
+            .expect("should have node id after handshake");
+
+        host.sessions.update_ingress_node_id(token, &node_id)
+            .map_err(|reason| {
+                debug!(
+                    "failed to update node id of ingress session, reason = {:?}, session = {:?}",
+                    reason, self
+                );
+
+                self.send_disconnect(DisconnectReason::UpdateNodeIdFailed)
+            })
     }
 
     fn read_hello<Message: Send + Sync + Clone>(
