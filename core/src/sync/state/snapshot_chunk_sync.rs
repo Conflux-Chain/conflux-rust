@@ -350,6 +350,10 @@ impl SnapshotChunkSync {
         };
 
         inner.restore_progress = inner.restorer.progress();
+        trace!(
+            "Snapshot chunk restoration progress: {:?}",
+            inner.restore_progress
+        );
         if !inner.restore_progress.is_completed() {
             return;
         }
