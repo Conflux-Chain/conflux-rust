@@ -4,4 +4,5 @@
 
 #[macro_use]
 pub mod deref_plus_impl_or_borrow_self;
+pub mod tuple;
 pub mod wrap;
