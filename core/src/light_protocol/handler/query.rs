@@ -49,7 +49,7 @@ pub struct QueryHandler {
     pending: RwLock<BTreeMap<(PeerId, RequestId), PendingRequest>>,
 
     // series of unique request ids
-    request_ids: Arc<UniqueId>,
+    request_id_allocator: Arc<UniqueId>,
 
     // helper API for validating ledger and state information
     validate: Validate,
@@ -57,14 +57,14 @@ pub struct QueryHandler {
 
 impl QueryHandler {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, request_ids: Arc<UniqueId>,
+        consensus: Arc<ConsensusGraph>, request_id_allocator: Arc<UniqueId>,
     ) -> Self {
         let pending = RwLock::new(BTreeMap::new());
         let validate = Validate::new(consensus.clone());
 
         QueryHandler {
             pending,
-            request_ids,
+            request_id_allocator,
             validate,
         }
     }
@@ -177,7 +177,7 @@ impl QueryHandler {
     ) -> Result<QueryResult, Error>
     where T: Message + HasRequestId + Clone + 'static {
         // set request id
-        let id = self.request_ids.next();
+        let id = self.request_id_allocator.next();
         req.set_request_id(id);
 
         // set up channel and store request

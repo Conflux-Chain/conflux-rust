@@ -69,13 +69,13 @@ pub(super) struct Epochs {
     peers: Arc<Peers<FullPeerState>>,
 
     // series of unique request ids
-    request_ids: Arc<UniqueId>,
+    request_id_allocator: Arc<UniqueId>,
 }
 
 impl Epochs {
     pub fn new(
         consensus: Arc<ConsensusGraph>, headers: Arc<Headers>,
-        peers: Arc<Peers<FullPeerState>>, request_ids: Arc<UniqueId>,
+        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let in_flight = RwLock::new(HashMap::new());
@@ -87,7 +87,7 @@ impl Epochs {
             in_flight,
             latest,
             peers,
-            request_ids,
+            request_id_allocator,
         }
     }
 
@@ -170,7 +170,7 @@ impl Epochs {
             return Ok(None);
         }
 
-        let request_id = self.request_ids.next();
+        let request_id = self.request_id_allocator.next();
 
         let msg: Box<dyn Message> =
             Box::new(GetBlockHashesByEpoch { request_id, epochs });

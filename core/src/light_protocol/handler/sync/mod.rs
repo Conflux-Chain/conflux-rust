@@ -63,7 +63,7 @@ pub(super) struct SyncHandler {
 impl SyncHandler {
     pub(super) fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-        request_ids: Arc<UniqueId>, peers: Arc<Peers<FullPeerState>>,
+        request_id_allocator: Arc<UniqueId>, peers: Arc<Peers<FullPeerState>>,
     ) -> Self
     {
         // TODO(thegaram): At this point the light node does not persist
@@ -74,27 +74,27 @@ impl SyncHandler {
         let headers = Arc::new(Headers::new(
             graph.clone(),
             peers.clone(),
-            request_ids.clone(),
+            request_id_allocator.clone(),
         ));
 
         let epochs = Epochs::new(
             consensus.clone(),
             headers.clone(),
             peers.clone(),
-            request_ids.clone(),
+            request_id_allocator.clone(),
         );
 
         let blooms = Arc::new(Blooms::new(
             consensus.clone(),
             peers.clone(),
-            request_ids.clone(),
+            request_id_allocator.clone(),
         ));
 
         let witnesses = Witnesses::new(
             blooms.clone(),
             consensus.clone(),
             peers.clone(),
-            request_ids.clone(),
+            request_id_allocator.clone(),
         );
 
         SyncHandler {

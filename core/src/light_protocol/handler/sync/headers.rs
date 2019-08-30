@@ -101,7 +101,7 @@ pub(super) struct Headers {
     graph: Arc<SynchronizationGraph>,
 
     // series of unique request ids
-    request_ids: Arc<UniqueId>,
+    request_id_allocator: Arc<UniqueId>,
 
     // sync and request manager
     sync_manager: SyncManager<H256, MissingHeader>,
@@ -110,7 +110,7 @@ pub(super) struct Headers {
 impl Headers {
     pub fn new(
         graph: Arc<SynchronizationGraph>, peers: Arc<Peers<FullPeerState>>,
-        request_ids: Arc<UniqueId>,
+        request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let duplicate_count = AtomicU64::new(0);
@@ -120,7 +120,7 @@ impl Headers {
             duplicate_count,
             graph,
             sync_manager,
-            request_ids,
+            request_id_allocator,
         }
     }
 
@@ -206,7 +206,7 @@ impl Headers {
         }
 
         let msg: Box<dyn Message> = Box::new(GetBlockHeaders {
-            request_id: self.request_ids.next(),
+            request_id: self.request_id_allocator.next(),
             hashes,
         });
 

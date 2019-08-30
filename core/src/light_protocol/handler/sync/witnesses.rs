@@ -99,7 +99,7 @@ pub(super) struct Witnesses {
     ledger: LedgerInfo,
 
     // series of unique request ids
-    request_ids: Arc<UniqueId>,
+    request_id_allocator: Arc<UniqueId>,
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingWitness>,
@@ -108,7 +108,7 @@ pub(super) struct Witnesses {
 impl Witnesses {
     pub fn new(
         blooms: Arc<Blooms>, consensus: Arc<ConsensusGraph>,
-        peers: Arc<Peers<FullPeerState>>, request_ids: Arc<UniqueId>,
+        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let latest_verified_header = RwLock::new(0);
@@ -120,7 +120,7 @@ impl Witnesses {
             consensus,
             latest_verified_header,
             ledger,
-            request_ids,
+            request_id_allocator,
             sync_manager,
         }
     }
@@ -198,7 +198,7 @@ impl Witnesses {
         }
 
         let msg: Box<dyn Message> = Box::new(GetWitnessInfo {
-            request_id: self.request_ids.next(),
+            request_id: self.request_id_allocator.next(),
             witnesses,
         });
 

@@ -82,7 +82,7 @@ impl HasKey<u64> for MissingBloom {
 
 pub(super) struct Blooms {
     // series of unique request ids
-    request_ids: Arc<UniqueId>,
+    request_id_allocator: Arc<UniqueId>,
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingBloom>,
@@ -98,7 +98,7 @@ pub(super) struct Blooms {
 impl Blooms {
     pub fn new(
         consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
-        request_ids: Arc<UniqueId>,
+        request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let sync_manager = SyncManager::new(peers.clone());
@@ -106,7 +106,7 @@ impl Blooms {
         let verified = RwLock::new(HashMap::new());
 
         Blooms {
-            request_ids,
+            request_id_allocator,
             sync_manager,
             validate,
             verified,
@@ -160,7 +160,7 @@ impl Blooms {
         }
 
         let msg: Box<dyn Message> = Box::new(GetBlooms {
-            request_id: self.request_ids.next(),
+            request_id: self.request_id_allocator.next(),
             epochs,
         });
 
