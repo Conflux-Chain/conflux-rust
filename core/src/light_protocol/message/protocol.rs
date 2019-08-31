@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
+use cfx_types::{Bloom, H256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -146,6 +146,7 @@ pub struct Receipts {
     pub pivot_hash: H256,
     pub receipts: ReceiptsWithProof,
 }
+
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct GetTxs {
     pub request_id: RequestId,
@@ -156,4 +157,42 @@ pub struct GetTxs {
 pub struct Txs {
     pub request_id: RequestId,
     pub txs: Vec<SignedTransaction>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetWitnessInfo {
+    pub request_id: RequestId,
+    pub witnesses: Vec<u64>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct WitnessInfoWithHeight {
+    pub height: u64,
+    pub receipt_hashes: Vec<H256>,
+    pub bloom_hashes: Vec<H256>,
+    // TODO(thegaram): send state roots as well
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct WitnessInfo {
+    pub request_id: RequestId,
+    pub infos: Vec<WitnessInfoWithHeight>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetBlooms {
+    pub request_id: RequestId,
+    pub epochs: Vec<u64>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct BloomWithEpoch {
+    pub epoch: u64,
+    pub bloom: Bloom,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct Blooms {
+    pub request_id: RequestId,
+    pub blooms: Vec<BloomWithEpoch>,
 }

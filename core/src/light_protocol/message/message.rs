@@ -25,6 +25,10 @@ build_msgid! {
     RECEIPTS = 0x0d
     GET_TXS = 0x0e
     TXS = 0x0f
+    GET_WITNESS_INFO = 0x10
+    WITNESS_INFO = 0x11
+    GET_BLOOMS = 0x12
+    BLOOMS = 0x13
 
     INVALID = 0xff
 }
@@ -46,6 +50,10 @@ build_msg_impl! { GetReceipts, msgid::GET_RECEIPTS, "GetReceipts" }
 build_msg_impl! { Receipts, msgid::RECEIPTS, "Receipts" }
 build_msg_impl! { GetTxs, msgid::GET_TXS, "GetTxs" }
 build_msg_impl! { Txs, msgid::TXS, "Txs" }
+build_msg_impl! { GetWitnessInfo, msgid::GET_WITNESS_INFO, "GetWitnessInfo" }
+build_msg_impl! { WitnessInfo, msgid::WITNESS_INFO, "WitnessInfo" }
+build_msg_impl! { GetBlooms, msgid::GET_BLOOMS, "GetBlooms" }
+build_msg_impl! { Blooms, msgid::BLOOMS, "Blooms" }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }

@@ -4,13 +4,14 @@
 
 use cfx_types::H256;
 use primitives::{BlockHeader, BlockHeaderBuilder};
-use std::{ops::Index, sync::Arc};
+use std::ops::Index;
 
 use crate::light_protocol::{Error, ErrorKind};
 
 pub enum LedgerProof {
     StateRoot(Vec<H256>),
     ReceiptsRoot(Vec<H256>),
+    LogsBloomHash(Vec<H256>),
 }
 
 impl Index<usize> for LedgerProof {
@@ -20,6 +21,7 @@ impl Index<usize> for LedgerProof {
         let hashes = match self {
             LedgerProof::StateRoot(hs) => hs,
             LedgerProof::ReceiptsRoot(hs) => hs,
+            LedgerProof::LogsBloomHash(hs) => hs,
         };
 
         &hashes[ii]
@@ -27,7 +29,7 @@ impl Index<usize> for LedgerProof {
 }
 
 impl LedgerProof {
-    pub fn validate(&self, witness: Arc<BlockHeader>) -> Result<(), Error> {
+    pub fn validate(&self, witness: &BlockHeader) -> Result<(), Error> {
         // extract proof hashes and corresponding local root hash
         let (hashes, local_root_hash) = match self {
             LedgerProof::StateRoot(hashes) => {
@@ -35,6 +37,9 @@ impl LedgerProof {
             }
             LedgerProof::ReceiptsRoot(hashes) => {
                 (hashes, *witness.deferred_receipts_root())
+            }
+            LedgerProof::LogsBloomHash(hashes) => {
+                (hashes, *witness.deferred_logs_bloom_hash())
             }
         };
 
@@ -62,7 +67,7 @@ impl LedgerProof {
         // validate against local witness deferred state root hash
         if received_root_hash != local_root_hash {
             info!(
-                "Witness root hash mismatch: local={:?}, received={}",
+                "Witness root hash mismatch: local={:?}, received={:?}",
                 local_root_hash, received_root_hash
             );
             return Err(ErrorKind::InvalidLedgerProof.into());
