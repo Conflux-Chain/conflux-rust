@@ -54,6 +54,10 @@ impl KvdbSqliteDestructureTrait for SnapshotDbSqlite {
     }
 }
 
+impl KeyValueDbTypes for SnapshotDbSqlite {
+    type ValueType = Box<[u8]>;
+}
+
 /// Automatically implement KeyValueDbTraitRead with the same code of
 /// KvdbSqlite.
 impl ReadImplFamily for SnapshotDbSqlite {
@@ -71,7 +75,9 @@ impl SingleWriterImplFamily for SnapshotDbSqlite {
 impl KeyValueDbToOwnedReadTrait for SnapshotDbSqlite {
     fn to_owned_read<'a>(
         &'a self,
-    ) -> Result<Box<dyn 'a + KeyValueDbTraitOwnedRead>> {
+    ) -> Result<
+        Box<dyn 'a + KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>,
+    > {
         Ok(Box::new(self.try_clone()?))
     }
 }
@@ -358,9 +364,9 @@ use super::{
     super::{
         super::storage_db::{
             KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
-            OwnedReadImplFamily, ReadImplFamily, SingleWriterImplFamily,
-            SnapshotDbTrait, SnapshotMptTraitReadOnly,
-            SnapshotMptTraitSingleWriter,
+            KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
+            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptTraitReadOnly,
+            SnapshotMptTraitSingleWriter, SnapshotMptValue,
         },
         errors::*,
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{
@@ -372,7 +378,7 @@ use super::{
         KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
         KvdbSqliteDestructureTrait,
     },
-    snapshot_mpt::{SnapshotMpt, SnapshotMptValue},
+    snapshot_mpt::SnapshotMpt,
     sqlite::{ConnectionWithRowParser, SqliteConnection},
 };
 use primitives::MerkleHash;

@@ -3,9 +3,17 @@
 // See http://www.gnu.org/licenses/
 
 // The trait for database manager of Delta MPT.
+
+pub type DeltaDbOwnedReadTraitObj<'db> =
+    dyn 'db + KeyValueDbTraitOwnedRead<ValueType = Box<[u8]>>;
+
+pub type DeltaDbTransactionTraitObj =
+    dyn KeyValueDbTransactionTrait<ValueType = Box<[u8]>>;
+
 pub trait DeltaDbTrait:
-    KeyValueDbTraitRead
+    KeyValueDbTypes<ValueType = Box<[u8]>>
     + KeyValueDbToOwnedReadTrait
+    + KeyValueDbTraitRead
     + KeyValueDbTraitTransactionalDyn
 {
 }
