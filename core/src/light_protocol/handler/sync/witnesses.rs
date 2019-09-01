@@ -30,10 +30,7 @@ use crate::{
     },
 };
 
-use super::{
-    blooms::Blooms,
-    sync_manager::{HasKey, SyncManager},
-};
+use super::sync_manager::{HasKey, SyncManager};
 
 #[derive(Debug)]
 struct Statistics {
@@ -85,10 +82,7 @@ impl HasKey<u64> for MissingWitness {
     fn key(&self) -> u64 { self.height }
 }
 
-pub(super) struct Witnesses {
-    // bloom sync manager
-    blooms: Arc<Blooms>,
-
+pub struct Witnesses {
     // shared consensus graph
     consensus: Arc<ConsensusGraph>,
 
@@ -106,9 +100,9 @@ pub(super) struct Witnesses {
 }
 
 impl Witnesses {
-    pub fn new(
-        blooms: Arc<Blooms>, consensus: Arc<ConsensusGraph>,
-        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
+    pub(super) fn new(
+        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
+        request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let latest_verified_header = RwLock::new(0);
@@ -116,7 +110,6 @@ impl Witnesses {
         let sync_manager = SyncManager::new(peers.clone());
 
         Witnesses {
-            blooms,
             consensus,
             latest_verified_header,
             ledger,
@@ -126,10 +119,12 @@ impl Witnesses {
     }
 
     #[inline]
+    pub fn latest_verified(&self) -> u64 { *self.latest_verified_header.read() }
+
     fn get_statistics(&self) -> Statistics {
         Statistics {
             in_flight: self.sync_manager.num_in_flight(),
-            verified: *self.latest_verified_header.read(),
+            verified: self.latest_verified(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -168,9 +163,6 @@ impl Witnesses {
                     receipts[ii as usize],
                     blooms[ii as usize],
                 );
-
-                // request bloom for this epoch
-                self.blooms.request(epoch);
             }
 
             // signal receipt
@@ -181,7 +173,7 @@ impl Witnesses {
     }
 
     #[inline]
-    pub fn clean_up(&self) {
+    pub(super) fn clean_up(&self) {
         let timeout = Duration::from_millis(WITNESS_REQUEST_TIMEOUT_MS);
         let witnesses = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(witnesses.into_iter());
@@ -207,7 +199,7 @@ impl Witnesses {
     }
 
     #[inline]
-    pub fn sync(&self, io: &dyn NetworkContext) {
+    pub(super) fn sync(&self, io: &dyn NetworkContext) {
         info!("witness sync statistics: {:?}", self.get_statistics());
 
         if let Err(e) = self.verify_pivot_chain() {
@@ -249,16 +241,18 @@ impl Witnesses {
     }
 
     fn verify_pivot_chain(&self) -> Result<(), Error> {
-        let best = self.consensus.best_epoch_number() - BLAME_CHECK_OFFSET;
-        let mut latest = self.latest_verified_header.write();
+        let best = match self.consensus.best_epoch_number() {
+            epoch if epoch < BLAME_CHECK_OFFSET => return Ok(()),
+            epoch => epoch - BLAME_CHECK_OFFSET,
+        };
 
+        let mut latest = self.latest_verified_header.write();
         let mut height = *latest + 1;
 
         // iterate through all trusted pivot headers
         // TODO(thegaram): consider chain-reorg
         while height < best && self.is_header_trusted(height)? {
-            debug!("header {} is valid", height);
-
+            trace!("header {} is valid", height);
             let header = self.ledger.pivot_header_of(height)?;
             let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
 
@@ -272,9 +266,6 @@ impl Witnesses {
                 );
             }
 
-            // request corresponding bloom
-            self.blooms.request(epoch);
-
             *latest = height;
             height += 1;
         }
@@ -283,7 +274,11 @@ impl Witnesses {
     }
 
     fn collect_witnesses(&self) -> Result<(), Error> {
-        let best = self.consensus.best_epoch_number() - BLAME_CHECK_OFFSET;
+        let best = match self.consensus.best_epoch_number() {
+            epoch if epoch < BLAME_CHECK_OFFSET => return Ok(()),
+            epoch => epoch - BLAME_CHECK_OFFSET,
+        };
+
         let mut height = *self.latest_verified_header.read() + 1;
 
         while height <= best
