@@ -26,8 +26,8 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        RECEIPT_REQUEST_TIMEOUT_MS, MAX_RECEIPTS_IN_FLIGHT,
-        RECEIPT_REQUEST_BATCH_SIZE,
+        MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
+        RECEIPT_REQUEST_TIMEOUT_MS,
     },
 };
 

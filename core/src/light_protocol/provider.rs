@@ -18,12 +18,13 @@ use crate::{
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
-            BlockHeaders as GetBlockHeadersResponse, BloomWithEpoch,
+            BlockHeaders as GetBlockHeadersResponse,
+            BlockTxs as GetBlockTxsResponse, BlockTxsWithHash, BloomWithEpoch,
             Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
-            GetBlockHeaders, GetBlooms, GetReceipts, GetStateEntry,
-            GetStateRoot, GetTxs, GetWitnessInfo, NewBlockHashes, NodeType,
-            Receipts as GetReceiptsResponse, SendRawTx,
-            StateEntry as GetStateEntryResponse,
+            GetBlockHeaders, GetBlockTxs, GetBlooms, GetReceipts,
+            GetStateEntry, GetStateRoot, GetTxs, GetWitnessInfo,
+            NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
+            ReceiptsWithEpoch, SendRawTx, StateEntry as GetStateEntryResponse,
             StateRoot as GetStateRootResponse, StatusPing, StatusPong,
             Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
             WitnessInfoWithHeight,
@@ -154,6 +155,7 @@ impl Provider {
             msgid::GET_TXS => self.on_get_txs(io, peer, &rlp),
             msgid::GET_WITNESS_INFO => self.on_get_witness_info(io, peer, &rlp),
             msgid::GET_BLOOMS => self.on_get_blooms(io, peer, &rlp),
+            msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -363,12 +365,16 @@ impl Provider {
         info!("on_get_receipts req={:?}", req);
         let request_id = req.request_id;
 
-        let pivot_hash = self.ledger.pivot_hash_of(req.epoch)?;
-        let receipts = self.ledger.receipts_with_proof_of(req.epoch)?;
+        let receipts = req
+            .epochs
+            .into_iter()
+            .map(|e| self.ledger.receipts_of(e).map(|receipts| (e, receipts)))
+            .filter_map(Result::ok)
+            .map(|(epoch, receipts)| ReceiptsWithEpoch { epoch, receipts })
+            .collect();
 
         let msg: Box<dyn Message> = Box::new(GetReceiptsResponse {
             request_id,
-            pivot_hash,
             receipts,
         });
 
@@ -434,6 +440,41 @@ impl Provider {
 
         let msg: Box<dyn Message> =
             Box::new(GetBloomsResponse { request_id, blooms });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_block_txs(
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetBlockTxs = rlp.as_val()?;
+        info!("on_get_block_txs req={:?}", req);
+        let request_id = req.request_id;
+
+        let block_txs = req
+            .hashes
+            .into_iter()
+            .map(|h| self.ledger.block(h))
+            .filter_map(Result::ok)
+            .map(|block| {
+                let block_txs = block
+                    .transactions
+                    .clone()
+                    .into_iter()
+                    .map(|arc_tx| (*arc_tx).clone())
+                    .collect();
+                BlockTxsWithHash {
+                    hash: block.hash(),
+                    block_txs,
+                }
+            })
+            .collect();
+
+        let msg: Box<dyn Message> = Box::new(GetBlockTxsResponse {
+            request_id,
+            block_txs,
+        });
 
         msg.send(io, peer)?;
         Ok(())

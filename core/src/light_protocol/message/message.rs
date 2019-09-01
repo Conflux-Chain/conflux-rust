@@ -29,6 +29,8 @@ build_msgid! {
     WITNESS_INFO = 0x11
     GET_BLOOMS = 0x12
     BLOOMS = 0x13
+    GET_BLOCK_TXS = 0x014
+    BLOCK_TXS = 0x015
 
     INVALID = 0xff
 }
@@ -54,6 +56,8 @@ build_msg_impl! { GetWitnessInfo, msgid::GET_WITNESS_INFO, "GetWitnessInfo" }
 build_msg_impl! { WitnessInfo, msgid::WITNESS_INFO, "WitnessInfo" }
 build_msg_impl! { GetBlooms, msgid::GET_BLOOMS, "GetBlooms" }
 build_msg_impl! { Blooms, msgid::BLOOMS, "Blooms" }
+build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs" }
+build_msg_impl! { BlockTxs, msgid::BLOCK_TXS, "BlockTxs" }
 
 // generate `impl HasRequestId for _` for each request type
 build_has_request_id_impl! { GetStateRoot }
