@@ -2,6 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub type SnapshotMptValue = (Box<[u8]>, Box<[u8]>, i64);
+
+// FIXME: change later to (VanillaTrieNode<MerkleHash>, i64) by our iterable
+// tuple type.
+pub type SnapshotMptDbValue = Box<[u8]>;
+
 pub trait SnapshotMptTraitReadOnly {
     fn get_merkle_root(&self) -> &MerkleHash;
     fn load_node(

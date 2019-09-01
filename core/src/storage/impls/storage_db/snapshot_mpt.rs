@@ -2,10 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub type SnapshotMptValue = (Box<[u8]>, Box<[u8]>, i64);
-
 pub struct SnapshotMpt<
-    DbType: KeyValueDbTraitOwnedRead + ?Sized,
+    DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
     BorrowType: Borrow<DbType>,
 > {
     pub db: BorrowType,
@@ -72,7 +70,7 @@ fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
 }
 
 impl<
-        DbType: KeyValueDbTraitOwnedRead + ?Sized,
+        DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitReadOnly for SnapshotMpt<DbType, BorrowType>
 where DbType:
@@ -129,7 +127,7 @@ where DbType:
 }
 
 impl<
-        DbType: KeyValueDbTraitSingleWriter + ?Sized,
+        DbType: KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue> + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitSingleWriter for SnapshotMpt<DbType, BorrowType>
 where DbType:
@@ -160,8 +158,9 @@ use super::{
                 KeyValueDbTraitSingleWriter,
             },
             snapshot_mpt::{
-                SnapshotMptIteraterTrait, SnapshotMptTraitReadOnly,
-                SnapshotMptTraitSingleWriter,
+                SnapshotMptDbValue, SnapshotMptIteraterTrait,
+                SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+                SnapshotMptValue,
             },
         },
         errors::*,

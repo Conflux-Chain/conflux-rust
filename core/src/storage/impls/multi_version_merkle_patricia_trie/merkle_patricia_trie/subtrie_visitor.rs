@@ -6,7 +6,7 @@ pub struct SubTrieVisitor<'trie, 'db: 'trie> {
     root: CowNodeRef,
 
     trie_ref: &'trie MerklePatriciaTrie,
-    db: ReturnAfterUse<'trie, Box<dyn KeyValueDbTraitOwnedRead + 'db>>,
+    db: ReturnAfterUse<'trie, Box<DeltaDbOwnedReadTraitObj<'db>>>,
 
     /// We use ReturnAfterUse because only one SubTrieVisitor(the deepest) can
     /// hold the mutable reference of owned_node_set.
@@ -40,7 +40,10 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             CowNodeRef::new(child_node, self.owned_node_set.get_ref());
         SubTrieVisitor {
             trie_ref,
-            db: ReturnAfterUse::<'a, Box<dyn 'db + KeyValueDbTraitOwnedRead >>::new_from_origin::<'trie>(&mut self.db),
+            db: ReturnAfterUse::<
+                'a,
+                Box<DeltaDbOwnedReadTraitObj<'db>>,
+            >::new_from_origin::<'trie>(&mut self.db),
             root: cow_child_node,
             owned_node_set: ReturnAfterUse::new_from_origin(
                 &mut self.owned_node_set,
@@ -770,7 +773,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 use super::{
     super::{
         super::{
-            super::storage_db::key_value_db::KeyValueDbTraitOwnedRead,
+            super::storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
             errors::*, state::OwnedNodeSet,
         },
         guarded_value::GuardedValue,

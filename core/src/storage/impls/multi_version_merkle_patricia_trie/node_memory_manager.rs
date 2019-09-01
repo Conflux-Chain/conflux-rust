@@ -239,7 +239,7 @@ impl<
     fn load_from_db<'c: 'a, 'a>(
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &mut dyn KeyValueDbTraitOwnedRead, db_key: DeltaMptDbKey,
+        db: &mut DeltaDbOwnedReadTraitObj, db_key: DeltaMptDbKey,
     ) -> Result<
         GuardedValue<
             MutexGuard<'c, CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
@@ -421,7 +421,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &mut dyn KeyValueDbTraitOwnedRead, is_loaded_from_db: &mut bool,
+        db: &mut DeltaDbOwnedReadTraitObj, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -549,7 +549,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &mut dyn KeyValueDbTraitOwnedRead, is_loaded_from_db: &mut bool,
+        db: &mut DeltaDbOwnedReadTraitObj, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -587,7 +587,7 @@ impl<
         &self, allocator: AllocatorRefRef<'a, CacheAlgoDataT>,
         node: NodeRefDeltaMpt,
         cache_manager: &'c Mutex<CacheManager<CacheAlgoDataT, CacheAlgorithmT>>,
-        db: &mut dyn KeyValueDbTraitOwnedRead, is_loaded_from_db: &mut bool,
+        db: &mut DeltaDbOwnedReadTraitObj, is_loaded_from_db: &mut bool,
     ) -> Result<
         GuardedValue<
             Option<
@@ -787,7 +787,8 @@ impl<
 
 use super::{
     super::{
-        super::storage_db::key_value_db::KeyValueDbTraitOwnedRead, errors::*,
+        super::storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
+        errors::*,
     },
     cache::algorithm::{
         lru::LRU, CacheAccessResult, CacheAlgoDataTrait, CacheAlgorithm,

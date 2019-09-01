@@ -29,7 +29,7 @@ pub struct AtomicCommit {
 
 pub struct AtomicCommitTransaction<
     'a,
-    Transaction: BorrowMut<dyn KeyValueDbTransactionTrait>,
+    Transaction: BorrowMut<DeltaDbTransactionTraitObj>,
 > {
     pub info: MutexGuard<'a, AtomicCommit>,
     pub transaction: Transaction,
@@ -84,8 +84,7 @@ impl MultiVersionMerklePatriciaTrie {
 
     pub fn start_commit(
         &self,
-    ) -> Result<AtomicCommitTransaction<Box<dyn KeyValueDbTransactionTrait>>>
-    {
+    ) -> Result<AtomicCommitTransaction<Box<DeltaDbTransactionTraitObj>>> {
         Ok(AtomicCommitTransaction {
             info: self.commit_lock.lock(),
             transaction: self.db.start_transaction_dyn(true)?,
@@ -229,7 +228,7 @@ impl MultiVersionMerklePatriciaTrie {
 
     pub fn db_owned_read<'a>(
         &'a self,
-    ) -> Result<Box<dyn KeyValueDbTraitOwnedRead + 'a>> {
+    ) -> Result<Box<DeltaDbOwnedReadTraitObj<'a>>> {
         self.db.to_owned_read()
     }
 
@@ -241,7 +240,9 @@ use self::{
     node_memory_manager::*, node_ref_map::DeltaMptDbKey, row_number::*,
 };
 use super::{
-    super::storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
+    super::storage_db::delta_db_manager::{
+        DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
+    },
     errors::*,
     storage_manager::storage_manager::*,
 };

@@ -83,6 +83,10 @@ impl KvdbSqlite {
     }
 }
 
+impl KeyValueDbTypes for KvdbSqlite {
+    type ValueType = Box<[u8]>;
+}
+
 impl KeyValueDbTraitTransactional for KvdbSqlite {
     type TransactionType = KvdbSqliteTransaction;
 
@@ -100,7 +104,9 @@ impl KeyValueDbTraitTransactional for KvdbSqlite {
 impl KeyValueDbToOwnedReadTrait for KvdbSqlite {
     fn to_owned_read<'a>(
         &'a self,
-    ) -> Result<Box<dyn 'a + KeyValueDbTraitOwnedRead>> {
+    ) -> Result<
+        Box<dyn 'a + KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>,
+    > {
         Ok(Box::new(self.try_clone()?))
     }
 }
@@ -144,6 +150,10 @@ impl Drop for KvdbSqliteTransaction {
             self.revert();
         }
     }
+}
+
+impl KeyValueDbTypes for KvdbSqliteTransaction {
+    type ValueType = Box<[u8]>;
 }
 
 impl KeyValueDbTransactionTrait for KvdbSqliteTransaction {
@@ -190,9 +200,16 @@ impl DerefMut for KvdbSqliteTransaction {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.db }
 }
 
+impl KeyValueDbTypes for KvdbSqliteBorrowMut<'_> {
+    type ValueType = Box<[u8]>;
+}
+
+impl KeyValueDbTypes for KvdbSqliteBorrowMutReadOnly<'_> {
+    type ValueType = Box<[u8]>;
+}
+
 // FIXME: check if the error is SQLITE_BUSY, and if so, assert.
 // FIXME: our code should not hit this error.
-
 impl<
         'db,
         'any: 'db,
@@ -222,9 +239,11 @@ impl<
 
 impl<T: ReadImplFamily<FamilyRepresentitive = KvdbSqlite>>
     ReadImplByFamily<KvdbSqlite> for T
-where T: KvdbSqliteDestructureTrait
+where
+    T: KvdbSqliteDestructureTrait,
+    T: KeyValueDbTypes<ValueType = <KvdbSqlite as KeyValueDbTypes>::ValueType>,
 {
-    fn get_impl(&self, key: &[u8]) -> Result<Option<Box<[u8]>>> {
+    fn get_impl(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         let (connection, table_name) = self.destructure();
         match connection {
             None => Ok(None),
@@ -250,7 +269,9 @@ where T: KvdbSqliteDestructureTrait
         }
     }
 
-    fn get_with_number_key_impl(&self, key: i64) -> Result<Option<Box<[u8]>>> {
+    fn get_with_number_key_impl(
+        &self, key: i64,
+    ) -> Result<Option<Self::ValueType>> {
         let (connection, table_name) = self.destructure();
         match connection {
             None => Ok(None),
@@ -279,9 +300,11 @@ where T: KvdbSqliteDestructureTrait
 
 impl<T: OwnedReadImplFamily<FamilyRepresentitive = KvdbSqlite>>
     OwnedReadImplByFamily<KvdbSqlite> for T
-where T: KvdbSqliteDestructureTrait
+where
+    T: KvdbSqliteDestructureTrait,
+    T: KeyValueDbTypes<ValueType = <KvdbSqlite as KeyValueDbTypes>::ValueType>,
 {
-    fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Box<[u8]>>> {
+    fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         let (connection, table_name) = self.destructure_mut();
         match connection {
             None => Ok(None),
@@ -296,7 +319,7 @@ where T: KvdbSqliteDestructureTrait
 
     fn get_mut_with_number_key_impl(
         &mut self, key: i64,
-    ) -> Result<Option<Box<[u8]>>> {
+    ) -> Result<Option<Self::ValueType>> {
         let (connection, table_name) = self.destructure_mut();
         match connection {
             None => Ok(None),
@@ -312,9 +335,13 @@ where T: KvdbSqliteDestructureTrait
 
 impl<T: SingleWriterImplFamily<FamilyRepresentitive = KvdbSqlite>>
     SingleWriterImplByFamily<KvdbSqlite> for T
-where T: KvdbSqliteDestructureTrait
+where
+    T: KvdbSqliteDestructureTrait,
+    T: KeyValueDbTypes<ValueType = <KvdbSqlite as KeyValueDbTypes>::ValueType>,
 {
-    fn delete_impl(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+    fn delete_impl(
+        &mut self, key: &[u8],
+    ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, table_name) = self.destructure_mut();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -331,7 +358,7 @@ where T: KvdbSqliteDestructureTrait
 
     fn put_impl(
         &mut self, key: &[u8], value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>> {
+    ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, table_name) = self.destructure_mut();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -348,7 +375,7 @@ where T: KvdbSqliteDestructureTrait
 
     fn put_with_number_key_impl(
         &mut self, key: i64, value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>> {
+    ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, table_name) = self.destructure_mut();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -365,6 +392,7 @@ where T: KvdbSqliteDestructureTrait
 }
 
 // Section for marking automatic implmentation of KeyValueDbTraitOwnedRead, etc.
+
 impl OwnedReadImplFamily for KvdbSqlite {
     type FamilyRepresentitive = KvdbSqlite;
 }
@@ -385,7 +413,18 @@ impl<
         'any,
         T: ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
         F,
+    > KeyValueDbTypes for ConnectionWithRowParser<T, F>
+where T: KeyValueDbTypes<ValueType = <KvdbSqlite as KeyValueDbTypes>::ValueType>
+{
+    type ValueType = T::ValueType;
+}
+
+impl<
+        'any,
+        T: ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
+        F,
     > OwnedReadImplFamily for ConnectionWithRowParser<T, F>
+where T: KeyValueDbTypes<ValueType = <KvdbSqlite as KeyValueDbTypes>::ValueType>
 {
     type FamilyRepresentitive = KvdbSqlite;
 }
@@ -407,6 +446,7 @@ impl<
         T: ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
         F,
     > SingleWriterImplFamily for ConnectionWithRowParser<T, F>
+where T: KeyValueDbTypes<ValueType = <KvdbSqlite as KeyValueDbTypes>::ValueType>
 {
     type FamilyRepresentitive = KvdbSqlite;
 }
@@ -432,6 +472,7 @@ impl<
         T: ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
         F,
     > ReadImplFamily for ConnectionWithRowParser<T, F>
+where T: KeyValueDbTypes<ValueType = <KvdbSqlite as KeyValueDbTypes>::ValueType>
 {
     type FamilyRepresentitive = KvdbSqlite;
 }
