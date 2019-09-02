@@ -72,6 +72,12 @@ pub trait GenericSocket: Read + Write {}
 
 impl GenericSocket for TcpStream {}
 
+pub trait PacketAssembler: Send + Sync {
+    fn is_oversized(&self, len: usize) -> bool;
+    fn assemble(&self, data: &[u8]) -> Result<Bytes, Error>;
+    fn load(&self, buf: &mut Bytes) -> Option<Bytes>;
+}
+
 /// This information is to measure the congestion situation of network.
 #[allow(dead_code)]
 pub struct SendQueueStatus {
@@ -85,7 +91,7 @@ pub struct GenericConnection<Socket: GenericSocket> {
     send_queue: PrioritySendQueue<(Vec<u8>, usize)>,
     interest: Ready,
     registered: AtomicBool,
-    packet: Packet,
+    assembler: Box<dyn PacketAssembler>,
 }
 
 impl<Socket: GenericSocket> Drop for GenericConnection<Socket> {
@@ -130,7 +136,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             }
         }
 
-        let packet = self.packet.load(&mut self.recv_buf);
+        let packet = self.assembler.load(&mut self.recv_buf);
 
         if let Some(ref p) = packet {
             trace!(
@@ -150,7 +156,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             data
         );
 
-        let data = self.packet.assemble(data)?;
+        let data = self.assembler.assemble(data)?;
         let size = self.socket.write(&data)?;
 
         trace!(
@@ -242,7 +248,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
     ) -> Result<SendQueueStatus, Error>
     {
         if !data.is_empty() {
-            let data = self.packet.assemble(data)?;
+            let data = self.assembler.assemble(data)?;
             let size = data.len();
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
@@ -287,7 +293,7 @@ impl Connection {
             send_queue: PrioritySendQueue::new(),
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
-            packet: Packet::new(3, MAX_PAYLOAD_SIZE),
+            assembler: Box::new(PacketWithLenAssembler::default()),
         }
     }
 
@@ -388,27 +394,38 @@ pub struct ConnectionDetails {
     pub registered: bool,
 }
 
-struct Packet {
+pub struct PacketWithLenAssembler {
     data_len_bytes: usize,
-    max_len: usize,
+    max_data_len: usize,
 }
 
-impl Packet {
-    fn new(data_len_bytes: usize, max_len: usize) -> Self {
+impl PacketWithLenAssembler {
+    fn new(data_len_bytes: usize, mut max_packet_len: usize) -> Self {
         assert!(data_len_bytes > 0 && data_len_bytes <= 8);
 
         let max = usize::max_value() >> (64 - 8 * data_len_bytes);
-        assert!(max_len <= max);
+        assert!(max_packet_len <= max);
+        if max_packet_len == 0 {
+            max_packet_len = max;
+        }
 
-        Packet {
+        PacketWithLenAssembler {
             data_len_bytes,
-            max_len: if max_len == 0 { max } else { max_len },
+            max_data_len: max_packet_len - data_len_bytes,
         }
     }
+}
+
+impl Default for PacketWithLenAssembler {
+    fn default() -> Self { PacketWithLenAssembler::new(3, MAX_PAYLOAD_SIZE) }
+}
+
+impl PacketAssembler for PacketWithLenAssembler {
+    #[inline]
+    fn is_oversized(&self, len: usize) -> bool { len > self.max_data_len }
 
     fn assemble(&self, data: &[u8]) -> Result<Bytes, Error> {
-        if data.len() > self.max_len - self.data_len_bytes {
-            debug!("failed to assemble packet, oversized = {}", data.len());
+        if self.is_oversized(data.len()) {
             return Err(ErrorKind::OversizedPacket.into());
         }
 
@@ -427,12 +444,12 @@ impl Packet {
             return None;
         }
 
-        let mut be_bytes = [0u8; 8];
-        be_bytes
+        let mut le_bytes = [0u8; 8];
+        le_bytes
             .split_at_mut(self.data_len_bytes)
             .0
             .copy_from_slice(&buf[..self.data_len_bytes]);
-        let data_size = usize::from_le_bytes(be_bytes);
+        let data_size = usize::from_le_bytes(le_bytes);
 
         if buf.len() < self.data_len_bytes + data_size {
             return None;
