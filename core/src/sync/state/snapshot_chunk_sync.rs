@@ -470,8 +470,8 @@ impl SnapshotChunkSync {
             return None;
         }
         // check checkpoint position in `state_blame_vec`
-        let offset = trusted_blame_block.height() - checkpoint.height()
-            + DEFERRED_STATE_EPOCH_COUNT;
+        let offset = trusted_blame_block.height()
+            - (checkpoint.height() + DEFERRED_STATE_EPOCH_COUNT);
         if offset as usize >= state_blame_vec.len() {
             return None;
         }
