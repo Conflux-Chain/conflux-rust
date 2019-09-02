@@ -1386,7 +1386,6 @@ impl ConsensusNewBlockHandler {
     /// recover receipts_root and logs_bloom_hash in pivot chain
     pub fn construct_pivot_state(&self, inner: &mut ConsensusGraphInner) {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
-            // full node will leave this function here
             return;
         }
         // recover `EpochExecutionCommitments` from

@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    block_data_manager::ConsensusGraphExecutionInfo,
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     storage::{Chunk, ChunkKey, RestoreProgress, Restorer},
     sync::{
@@ -385,6 +386,48 @@ impl SnapshotChunkSync {
         } else {
             warn!("Failed to restore snapshot chunks, blame state mismatch");
             inner.status = Status::Invalid;
+        }
+    }
+
+    pub fn restore_execution_state(
+        &self, sync_handler: &SynchronizationProtocolHandler,
+    ) {
+        let inner = self.inner.read();
+        let mut hash = inner.trusted_blame_block;
+        let mut hashes = Vec::new();
+        for i in 0..inner.state_blame_vec.len() {
+            hashes.push(hash);
+            sync_handler
+                .graph
+                .data_man
+                .insert_consensus_graph_execution_info_to_db(
+                    &hashes[i],
+                    &ConsensusGraphExecutionInfo {
+                        original_deferred_state_root: inner.state_blame_vec[i],
+                        original_deferred_receipt_root: inner.receipt_blame_vec
+                            [i],
+                        original_deferred_logs_bloom_hash: inner
+                            .bloom_blame_vec[i],
+                    },
+                );
+            if i >= DEFERRED_STATE_EPOCH_COUNT as usize {
+                sync_handler
+                    .graph
+                    .data_man
+                    .insert_epoch_execution_commitments(
+                        hashes[i],
+                        inner.receipt_blame_vec
+                            [i - DEFERRED_STATE_EPOCH_COUNT as usize],
+                        inner.bloom_blame_vec
+                            [i - DEFERRED_STATE_EPOCH_COUNT as usize],
+                    )
+            }
+            let block = sync_handler
+                .graph
+                .data_man
+                .block_header_by_hash(&hash)
+                .unwrap();
+            hash = *block.parent_hash();
         }
     }
 

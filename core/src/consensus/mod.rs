@@ -462,18 +462,6 @@ impl ConsensusGraph {
                     header.as_ref(),
                     None,
                 );
-                // for archive node, we should recover exec_info from db
-                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
-                {
-                    if let Some(exe_info) = self
-                        .data_man
-                        .consensus_graph_execution_info_from_db(hash)
-                    {
-                        inner
-                            .execution_info_cache
-                            .insert(*arena_index, exe_info);
-                    }
-                }
             }
 
             // for full node, we should recover state_valid for pivot block
@@ -486,6 +474,15 @@ impl ConsensusGraph {
                     *inner.hash_to_arena_indices.get(&hash).unwrap();
                 inner.arena[arena_index].data.state_valid =
                     pivot_block_state_valid_map.remove(&hash).unwrap();
+            }
+
+            // we should recover exec_info from db
+            if let Some(arena_index) = inner.hash_to_arena_indices.get(hash) {
+                if let Some(exe_info) =
+                    self.data_man.consensus_graph_execution_info_from_db(hash)
+                {
+                    inner.execution_info_cache.insert(*arena_index, exe_info);
+                }
             }
 
             self.update_best_info(inner);

@@ -318,6 +318,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             if self.state_sync.status() == Status::Completed {
                 DynamicCapability::ServeCheckpoint(Some(checkpoint))
                     .broadcast(io, &sync_handler.syn);
+                self.state_sync.restore_execution_state(sync_handler);
                 return SyncPhaseType::CatchUpRecoverBlockFromDB;
             }
         } else {
