@@ -822,7 +822,10 @@ impl NetworkServiceInner {
                     (socket, address)
                 }
                 Err(e) => {
-                    self.node_db.write().note_failure(id, true, true);
+                    self.node_db.write().note_failure(
+                        id, true, /* by_connection */
+                        true, /* trusted_only */
+                    );
                     debug!(
                         "{}: can't connect o address {:?} {:?}",
                         id, address, e
@@ -833,7 +836,10 @@ impl NetworkServiceInner {
         };
 
         if let Err(e) = self.create_connection(socket, address, Some(id), io) {
-            self.node_db.write().note_failure(id, true, true);
+            self.node_db.write().note_failure(
+                id, true, /* by_connection */
+                true, /* trusted_only */
+            );
             debug!("Can't create connection: {:?}", e);
         }
     }
@@ -1082,11 +1088,17 @@ impl NetworkServiceInner {
                 if let Some(op) = op {
                     match op {
                         UpdateNodeOperation::Failure => {
-                            self.node_db.write().note_failure(&id, true, false);
+                            self.node_db.write().note_failure(
+                                &id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
                         }
                         UpdateNodeOperation::Demotion => {
                             self.node_db.write().demote(&id);
-                            self.node_db.write().note_failure(&id, true, false);
+                            self.node_db.write().note_failure(
+                                &id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
                         }
                         UpdateNodeOperation::Remove => {
                             self.node_db.write().set_blacklisted(&id);
@@ -1488,9 +1500,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                         sess.deregister_socket(event_loop)
                             .expect("Error deregistering socket");
                         if let Some(node_id) = sess.id() {
-                            self.node_db
-                                .write()
-                                .note_failure(node_id, true, false);
+                            self.node_db.write().note_failure(
+                                node_id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
                         }
                         self.sessions.remove(&*sess);
                         debug!("Removed session: {:?}", *sess);

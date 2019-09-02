@@ -285,13 +285,13 @@ mod tests {
         assert_eq!(limit.insert(n2.clone(), ip2, true, None), true);
 
         // remove those 2 nodes
-        validate_node(&limit, &n1, &ip1, true);
+        validate_node(&limit, &n1, &ip1, true /* exists */);
         assert_eq!(limit.remove(&n1), true);
-        validate_node(&limit, &n1, &ip1, false);
+        validate_node(&limit, &n1, &ip1, false /* exists */);
 
-        validate_node(&limit, &n2, &ip2, true);
+        validate_node(&limit, &n2, &ip2, true /* exists */);
         assert_eq!(limit.remove(&n2), true);
-        validate_node(&limit, &n2, &ip2, false);
+        validate_node(&limit, &n2, &ip2, false /* exists */);
     }
 
     #[test]
@@ -340,7 +340,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n.clone(), ip, true, None), true);
-        validate_node(&limit, &n, &ip, true);
+        validate_node(&limit, &n, &ip, true /* exists */);
 
         // cannot insert with same id and ip as trusted or untrusted
         assert_eq!(
@@ -349,7 +349,7 @@ mod tests {
         );
         assert_eq!(limit.insert(n.clone(), ip, true, None), false);
         assert_eq!(limit.insert(n.clone(), ip, false, None), false);
-        validate_node(&limit, &n, &ip, true);
+        validate_node(&limit, &n, &ip, true /* exists */);
     }
 
     #[test]
@@ -365,7 +365,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n1.clone(), ip, true, None), true);
-        validate_node(&limit, &n1, &ip, true);
+        validate_node(&limit, &n1, &ip, true /* exists */);
 
         // add n2 with existing ip which need to evict the n1
         let n2 = NodeId::random();
@@ -376,13 +376,13 @@ mod tests {
 
         // add n2 without evicting n1
         assert_eq!(limit.insert(n2.clone(), ip, true, None), false);
-        validate_node(&limit, &n1, &ip, true); // n1 not evicted
-        validate_node(&limit, &n2, &ip, false); // n2 not inserted
+        validate_node(&limit, &n1, &ip, true /* exists */); // n1 not evicted
+        validate_node(&limit, &n2, &ip, false /* exists */); // n2 not inserted
 
         // add n2 with evicting n1
         assert_eq!(limit.insert(n2.clone(), ip, true, Some(n1.clone())), true);
-        validate_node(&limit, &n1, &ip, false); // n1 evicted
-        validate_node(&limit, &n2, &ip, true); // n2 inserted
+        validate_node(&limit, &n1, &ip, false /* exists */); // n1 evicted
+        validate_node(&limit, &n2, &ip, true /* exists */); // n2 inserted
     }
 
     #[test]
@@ -398,7 +398,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n1.clone(), ip1, true, None), true);
-        validate_node(&limit, &n1, &ip1, true);
+        validate_node(&limit, &n1, &ip1, true /* exists */);
 
         let n2 = NodeId::random();
         let ip2 = new_ip("127.0.0.2");
@@ -407,7 +407,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n2.clone(), ip2, true, None), true);
-        validate_node(&limit, &n2, &ip2, true);
+        validate_node(&limit, &n2, &ip2, true /* exists */);
 
         // change n2's ip from ip2 to ip1
         assert_eq!(
@@ -417,13 +417,13 @@ mod tests {
 
         // update n2 without evicting n1
         assert_eq!(limit.insert(n2.clone(), ip1, true, None), false);
-        validate_node(&limit, &n1, &ip1, true); // n1 not evicted
-        validate_node(&limit, &n2, &ip2, true); // n2 not updated
+        validate_node(&limit, &n1, &ip1, true /* exists */); // n1 not evicted
+        validate_node(&limit, &n2, &ip2, true /* exists */); // n2 not updated
 
         // update n2 with evicting n1
         assert_eq!(limit.insert(n2.clone(), ip1, true, Some(n1.clone())), true);
-        validate_node(&limit, &n1, &ip1, false); // n1 evicted
-        validate_node(&limit, &n2, &ip1, true); // n2 updated
+        validate_node(&limit, &n1, &ip1, false /* exists */); // n1 evicted
+        validate_node(&limit, &n2, &ip1, true /* exists */); // n2 updated
     }
 
     #[test]

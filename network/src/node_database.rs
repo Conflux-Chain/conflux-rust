@@ -122,8 +122,8 @@ impl NodeDatabase {
             trusted_node_tag_index,
         };
 
-        db.init(false);
-        db.init(true);
+        db.init(false /* trusted */);
+        db.init(true /* trusted */);
 
         db
     }
@@ -145,11 +145,21 @@ impl NodeDatabase {
         let ip = node.endpoint.address.ip();
 
         if self.trusted_nodes.contains(&node.id) {
-            if self.insert_ip_limit(node.id.clone(), ip, true) {
-                self.trusted_nodes.add_node(node, false);
+            if self.insert_ip_limit(
+                node.id.clone(),
+                ip,
+                true, /* trusted */
+            ) {
+                self.trusted_nodes
+                    .add_node(node, false /* preserve_last_contact */);
             }
-        } else if self.insert_ip_limit(node.id.clone(), ip, false) {
-            self.untrusted_nodes.add_node(node, false);
+        } else if self.insert_ip_limit(
+            node.id.clone(),
+            ip,
+            false, /* trusted */
+        ) {
+            self.untrusted_nodes
+                .add_node(node, false /* preserve_last_contact */);
         }
     }
 
@@ -191,9 +201,14 @@ impl NodeDatabase {
                 node.last_connected = old_node.last_connected;
                 node.stream_token = old_node.stream_token;
                 self.trusted_node_tag_index.add_node(&node);
-                self.trusted_nodes.add_node(node, false);
+                self.trusted_nodes
+                    .add_node(node, false /* preserve_last_contact */);
             }
-        } else if self.insert_ip_limit(node.id.clone(), ip, true) {
+        } else if self.insert_ip_limit(
+            node.id.clone(),
+            ip,
+            true, /* trusted */
+        ) {
             self.trusted_nodes.update_last_contact(node);
         }
     }
@@ -241,10 +256,16 @@ impl NodeDatabase {
                 node.last_connected = old_node.last_connected;
                 node.stream_token = old_node.stream_token;
                 self.trusted_node_tag_index.add_node(&node);
-                self.trusted_nodes.add_node(node, false);
+                self.trusted_nodes
+                    .add_node(node, false /* preserve_last_contact */);
             }
-        } else if self.insert_ip_limit(node.id.clone(), ip, true) {
-            self.trusted_nodes.add_node(node, false);
+        } else if self.insert_ip_limit(
+            node.id.clone(),
+            ip,
+            true, /* trusted */
+        ) {
+            self.trusted_nodes
+                .add_node(node, false /* preserve_last_contact */);
         }
     }
 
@@ -303,7 +324,7 @@ impl NodeDatabase {
         let mut entries = Vec::new();
 
         for id in self.ip_limit.sample_trusted(count) {
-            if let Some(node) = self.get(&id, true) {
+            if let Some(node) = self.get(&id, true /* trusted_only */) {
                 entries.push(NodeEntry {
                     id,
                     endpoint: node.endpoint.clone(),
@@ -372,7 +393,10 @@ impl NodeDatabase {
                         {
                             // IP address not changed and always allow to add.
                             self.trusted_node_tag_index.add_node(&removed_node);
-                            self.trusted_nodes.add_node(removed_node, false);
+                            self.trusted_nodes.add_node(
+                                removed_node,
+                                false, /* preserve_last_contact */
+                            );
                         }
                     }
                 }
@@ -387,7 +411,10 @@ impl NodeDatabase {
         {
             self.trusted_node_tag_index
                 .remove_node(&removed_trusted_node);
-            self.untrusted_nodes.add_node(removed_trusted_node, false);
+            self.untrusted_nodes.add_node(
+                removed_trusted_node,
+                false, /* preserve_last_contact */
+            );
         }
     }
 
@@ -509,11 +536,15 @@ impl NodeDatabase {
     /// Set the specified node to blacklisted.
     pub fn set_blacklisted(&mut self, id: &NodeId) {
         // update the last failure time
-        self.note_failure(id, true, false);
+        self.note_failure(
+            id, true,  /* by_connection */
+            false, /* trusted_only */
+        );
 
         // move to blacklisted node table
         if let Some(node) = self.remove(id) {
-            self.blacklisted_nodes.add_node(node, false);
+            self.blacklisted_nodes
+                .add_node(node, false /* preserve_last_contact */);
         }
     }
 
@@ -570,8 +601,13 @@ mod tests {
         db.insert_with_token(entry.clone(), 5);
 
         // should be untrusted with stream token 5
-        assert_eq!(db.get(&entry.id, true), None);
-        assert_eq!(db.get(&entry.id, false).unwrap().stream_token, Some(5));
+        assert_eq!(db.get(&entry.id, true /* trusted_only */), None);
+        assert_eq!(
+            db.get(&entry.id, false /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            Some(5)
+        );
     }
 
     #[test]
@@ -581,11 +617,21 @@ mod tests {
         // add trusted node, whose token is None
         let entry = new_entry("127.0.0.1:999");
         db.insert_trusted(entry.clone());
-        assert_eq!(db.get(&entry.id, true).unwrap().stream_token, None);
+        assert_eq!(
+            db.get(&entry.id, true /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            None
+        );
 
         // update node with token 3
         db.insert_with_token(entry.clone(), 3);
-        assert_eq!(db.get(&entry.id, true).unwrap().stream_token, Some(3));
+        assert_eq!(
+            db.get(&entry.id, true /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            Some(3)
+        );
     }
 
     #[test]
@@ -597,8 +643,13 @@ mod tests {
 
         // update node with new token
         db.insert_with_token(entry.clone(), 8);
-        assert_eq!(db.get(&entry.id, true), None);
-        assert_eq!(db.get(&entry.id, false).unwrap().stream_token, Some(8));
+        assert_eq!(db.get(&entry.id, true /* trusted_only */), None);
+        assert_eq!(
+            db.get(&entry.id, false /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            Some(8)
+        );
     }
 
     #[test]
@@ -612,7 +663,7 @@ mod tests {
         let mut entry2 = new_entry("127.0.0.2:999");
         entry2.id = entry1.id;
         db.insert_with_token(entry2.clone(), 8);
-        let node = db.get(&entry1.id, false).unwrap();
+        let node = db.get(&entry1.id, false /* trusted_only */).unwrap();
         assert_eq!(node.endpoint, entry2.endpoint);
         assert_eq!(node.stream_token, Some(8));
     }
@@ -635,10 +686,10 @@ mod tests {
         db.insert_with_token(entry.clone(), 5);
 
         // node1 removed
-        assert_eq!(db.get(&entry1.id, false), None);
+        assert_eq!(db.get(&entry1.id, false /* trusted_only */), None);
 
         // node2 updated
-        let node = db.get(&entry.id, false).unwrap();
+        let node = db.get(&entry.id, false /* trusted_only */).unwrap();
         assert_eq!(node.endpoint, entry.endpoint);
         assert_eq!(node.stream_token, Some(5));
     }
@@ -650,12 +701,12 @@ mod tests {
         // add a trusted node
         let entry = new_entry("127.0.0.1:999");
         db.insert_trusted(entry.clone());
-        assert_eq!(db.get(&entry.id, true).is_some(), true);
+        assert_eq!(db.get(&entry.id, true /* trusted_only */).is_some(), true);
 
         // demote the trusted node to untrusted
         db.demote(&entry.id);
-        assert_eq!(db.get(&entry.id, true), None);
-        assert!(db.get(&entry.id, false).is_some());
+        assert_eq!(db.get(&entry.id, true /* trusted_only */), None);
+        assert!(db.get(&entry.id, false /* trusted_only */).is_some());
     }
 
     #[test]
@@ -665,20 +716,23 @@ mod tests {
         // add trusted node
         let entry1 = new_entry("127.0.0.1:999");
         db.insert_trusted(entry1.clone());
-        assert_eq!(db.get(&entry1.id, true).is_some(), true);
+        assert_eq!(db.get(&entry1.id, true /* trusted_only */).is_some(), true);
 
         // add untrusted node
         let entry2 = new_entry("127.0.0.2:999");
         db.insert_with_token(entry2.clone(), 9);
-        assert_eq!(db.get(&entry2.id, false).is_some(), true);
+        assert_eq!(
+            db.get(&entry2.id, false /* trusted_only */).is_some(),
+            true
+        );
 
         // delete nodes
         assert_eq!(db.remove(&NodeId::random()), None);
         assert_eq!(db.remove(&entry1.id).unwrap().endpoint, entry1.endpoint);
         assert_eq!(db.remove(&entry2.id).unwrap().endpoint, entry2.endpoint);
 
-        assert_eq!(db.get(&entry1.id, true), None);
-        assert_eq!(db.get(&entry2.id, false), None);
+        assert_eq!(db.get(&entry1.id, true /* trusted_only */), None);
+        assert_eq!(db.get(&entry2.id, false /* trusted_only */), None);
     }
 
     #[test]
@@ -687,7 +741,7 @@ mod tests {
 
         let n = new_entry("127.0.0.1:999");
         db.insert_trusted(n.clone());
-        assert_eq!(db.get(&n.id, true).unwrap().id, n.id);
+        assert_eq!(db.get(&n.id, true /* trusted_only */).unwrap().id, n.id);
         assert_eq!(db.evaluate_blacklisted(&n.id), false);
 
         // set to blacklisted

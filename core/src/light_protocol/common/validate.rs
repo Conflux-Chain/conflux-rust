@@ -184,7 +184,7 @@ impl Validate {
     #[inline]
     pub fn txs(&self, txs: &Vec<SignedTransaction>) -> Result<(), Error> {
         for tx in txs {
-            match tx.verify_public(false) {
+            match tx.verify_public(false /* skip */) {
                 Ok(true) => continue,
                 _ => {
                     warn!("Tx signature verification failed for {:?}", tx);

@@ -434,16 +434,16 @@ mod nonce_pool_test {
         assert_eq!(nonce_pool.is_empty(), true);
         for i in 0..10 {
             assert_eq!(
-                nonce_pool.insert(&tx1[i as usize], false),
+                nonce_pool.insert(&tx1[i as usize], false /* force */),
                 InsertResult::NewAdded
             );
             assert_eq!(
                 nonce_pool.get_tx_by_nonce(U256::from(i)),
                 Some(tx1[i].clone())
             );
-            assert_eq!(nonce_pool.insert(&tx2[i as usize], false), InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price")));
+            assert_eq!(nonce_pool.insert(&tx2[i as usize], false /* force */), InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price")));
             assert_eq!(
-                nonce_pool.insert(&tx2[i as usize], true),
+                nonce_pool.insert(&tx2[i as usize], true /* force */),
                 InsertResult::Updated(tx1[i as usize].clone())
             );
             assert_eq!(nonce_pool.is_empty(), false);
@@ -483,7 +483,7 @@ mod nonce_pool_test {
 
         for i in vec![0, 1, 3, 4] {
             assert_eq!(
-                nonce_pool.insert(&tx[i], false),
+                nonce_pool.insert(&tx[i], false /* force */),
                 InsertResult::NewAdded
             );
             assert_eq!(
@@ -514,7 +514,10 @@ mod nonce_pool_test {
             ),
             None
         );
-        assert_eq!(nonce_pool.insert(&tx[2], false), InsertResult::NewAdded);
+        assert_eq!(
+            nonce_pool.insert(&tx[2], false /* force */),
+            InsertResult::NewAdded
+        );
         assert_eq!(
             nonce_pool.recalculate_readiness_with_local_info(
                 4.into(),
@@ -611,12 +614,12 @@ mod nonce_pool_test {
             let nonce: usize = rng.next_u64() as usize % count;
             if mock_nonce_pool.contains_key(&nonce.into()) {
                 assert_eq!(
-                    nonce_pool.insert(&tx[nonce], true),
+                    nonce_pool.insert(&tx[nonce], true /* force */),
                     InsertResult::Updated(tx[nonce].clone())
                 );
             } else {
                 assert_eq!(
-                    nonce_pool.insert(&tx[nonce], false),
+                    nonce_pool.insert(&tx[nonce], false /* force */),
                     InsertResult::NewAdded
                 );
                 mock_nonce_pool.insert(nonce.into(), tx[nonce].clone());
@@ -658,12 +661,12 @@ mod nonce_pool_test {
             let nonce: usize = rng.next_u64() as usize % count;
             if mock_nonce_pool.contains_key(&nonce.into()) {
                 assert_eq!(
-                    nonce_pool.insert(&tx[nonce], true),
+                    nonce_pool.insert(&tx[nonce], true /* force */),
                     InsertResult::Updated(tx[nonce].clone())
                 );
             } else {
                 assert_eq!(
-                    nonce_pool.insert(&tx[nonce], false),
+                    nonce_pool.insert(&tx[nonce], false /* force */),
                     InsertResult::NewAdded
                 );
                 mock_nonce_pool.insert(nonce.into(), tx[nonce].clone());

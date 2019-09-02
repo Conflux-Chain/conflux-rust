@@ -60,7 +60,7 @@ fn out_of_memory_attack1() {
             false, // insert_to_consensus
             true,  // persistent
         );
-        sync.insert_block(new_block, false, false, false);
+        sync.insert_block(new_block, false /* need_to_verify */, false /* persistent */, false /* recover_from_db */);
     }
     while consensus.get_processed_block_count() != era_epoch_count - 1 {
         thread::sleep(time::Duration::from_millis(100));
@@ -89,7 +89,7 @@ fn out_of_memory_attack1() {
             false, // insert_to_consensus
             true,  // persistent
         );
-        sync.insert_block(new_block, false, false, false);
+        sync.insert_block(new_block, false /* need_to_verify */, false /* persistent */, false /* recover_from_db */);
         if (i - era_epoch_count + 1) % 10000 == 0 {
             while consensus.get_processed_block_count() != i {
                 thread::sleep(time::Duration::from_millis(100));
@@ -160,7 +160,7 @@ fn out_of_memory_attack2() {
             false, // insert_to_consensus
             true,  // persistent
         );
-        sync.insert_block(new_block, false, false, false);
+        sync.insert_block(new_block, false /* need_to_verify */, false /* persistent */, false /* recover_from_db */);
         // insert a malicious block
         if i >= 3 {
             let mut ref_hashes = Vec::new();
@@ -177,7 +177,7 @@ fn out_of_memory_attack2() {
                 false, // insert_to_consensus
                 true,  // persistent
             );
-            sync.insert_block(new_block, false, false, false);
+            sync.insert_block(new_block, false /* need_to_verify */, false /* persistent */, false /* recover_from_db */);
         }
         if i % 1000 == 0 {
             while consensus.get_processed_block_count()
@@ -238,7 +238,7 @@ fn performence_attack() {
             false, // insert_to_consensus
             true,  // persistent
         );
-        sync.insert_block(new_block, false, false, false);
+        sync.insert_block(new_block, false /* need_to_verify */, false /* persistent */, false /* recover_from_db */);
     }
     for i in era_epoch_count..era_epoch_count * 2 {
         // insert a pivot block
@@ -252,7 +252,7 @@ fn performence_attack() {
             false, // insert_to_consensus
             true,  // persistent
         );
-        sync.insert_block(new_block, false, false, false);
+        sync.insert_block(new_block, false /* need_to_verify */, false /* persistent */, false /* recover_from_db */);
         // insert a malicious block
         let (new_hash, mut new_block) = create_simple_block(
             sync.clone(),
@@ -268,7 +268,7 @@ fn performence_attack() {
             false, // insert_to_consensus
             true,  // persistent
         );
-        sync.insert_block(new_block, false, false, false);
+        sync.insert_block(new_block, false /* need_to_verify */, false /* persistent */, false /* recover_from_db */);
         if (i + 1) % 1000 == 0 {
             while consensus.get_processed_block_count()
                 != pivot.len() + block.len() - 1

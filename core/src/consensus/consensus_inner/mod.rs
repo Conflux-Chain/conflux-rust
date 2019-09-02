@@ -383,7 +383,10 @@ impl ConsensusGraphInner {
     ) -> Self
     {
         let genesis_block = data_man
-            .block_by_hash(cur_era_genesis_block_hash, true)
+            .block_by_hash(
+                cur_era_genesis_block_hash,
+                true, /* update_cache */
+            )
             .unwrap();
         let cur_era_genesis_height = genesis_block.block_header.height();
         let cur_era_stable_height = if cur_era_genesis_height == 0 {
@@ -803,10 +806,11 @@ impl ConsensusGraphInner {
                     subtree_stable_weight[index] +=
                         subtree_stable_weight[*child];
                 }
-                let weight = self.block_weight(index, false);
+                let weight =
+                    self.block_weight(index, false /* inclusive */);
                 subtree_weight[index] += weight;
                 subtree_inclusive_weight[index] +=
-                    self.block_weight(index, true);
+                    self.block_weight(index, true /* inclusive */);
                 if self.arena[index].stable {
                     subtree_stable_weight[index] += weight;
                 }
@@ -847,7 +851,7 @@ impl ConsensusGraphInner {
             };
             let w = total_weight
                 - past_era_weight
-                - self.block_weight(grandparent, false);
+                - self.block_weight(grandparent, false /* inclusive */);
             if w > adjusted_beta {
                 let a = subtree_weight[parent];
                 if self.inner_conf.adaptive_weight_alpha_den as i128 * a
@@ -999,8 +1003,9 @@ impl ConsensusGraphInner {
             } else {
                 self.arena[gp].past_era_weight
             };
-            let w =
-                total_weight - past_era_weight - self.block_weight(gp, false);
+            let w = total_weight
+                - past_era_weight
+                - self.block_weight(gp, false /* inclusive */);
             if w > adjusted_beta {
                 best = mid;
                 low = mid + 1;
@@ -1482,17 +1487,18 @@ impl ConsensusGraphInner {
                 era_genesis,
             );
             let past_weight = self.arena[parent].past_weight
-                + self.block_weight(parent, false)
+                + self.block_weight(parent, false /* inclusive */)
                 + weight_in_my_epoch;
             let past_num_blocks = self.arena[parent].past_num_blocks
                 + self.arena[index].data.ordered_executable_epoch_blocks.len()
                     as u64;
             let past_era_weight = if parent != era_genesis {
                 self.arena[parent].past_era_weight
-                    + self.block_weight(parent, false)
+                    + self.block_weight(parent, false /* inclusive */)
                     + weight_era_in_my_epoch
             } else {
-                self.block_weight(parent, false) + weight_era_in_my_epoch
+                self.block_weight(parent, false /* inclusive */)
+                    + weight_era_in_my_epoch
             };
 
             self.data_man.insert_epoch_execution_context(
@@ -1643,7 +1649,10 @@ impl ConsensusGraphInner {
             .ordered_executable_epoch_blocks
         {
             let block = data_man
-                .block_by_hash(&self.arena[*idx].hash, false)
+                .block_by_hash(
+                    &self.arena[*idx].hash,
+                    false, /* update_cache */
+                )
                 .expect("Exist");
             epoch_blocks.push(block);
         }
@@ -1702,10 +1711,14 @@ impl ConsensusGraphInner {
         let mut total_weight = self.arena[pivot_block_arena_index]
             .past_era_weight
             - self.arena[me].past_era_weight
-            + self.block_weight(pivot_block_arena_index, false);
+            + self.block_weight(
+                pivot_block_arena_index,
+                false, /* inclusive */
+            );
         for index in visited2.iter() {
             if self.is_same_era(index as usize, pivot_block_arena_index) {
-                total_weight -= self.block_weight(index as usize, false);
+                total_weight -= self
+                    .block_weight(index as usize, false /* inclusive */);
             }
         }
         total_weight
@@ -2054,11 +2067,14 @@ impl ConsensusGraphInner {
         &self, tx_hash: &H256,
     ) -> Option<(Receipt, TransactionAddress)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
-        let address =
-            self.data_man.transaction_address_by_hash(tx_hash, false)?;
+        let address = self.data_man.transaction_address_by_hash(
+            tx_hash, false, /* update_cache */
+        )?;
         // receipts should never be None if address is not None because
-        let receipts =
-            self.block_receipts_by_hash(&address.block_hash, false)?;
+        let receipts = self.block_receipts_by_hash(
+            &address.block_hash,
+            false, /* update_cache */
+        )?;
         Some((
             receipts
                 .get(address.index)
