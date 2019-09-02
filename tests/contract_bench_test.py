@@ -148,21 +148,55 @@ class HTLCTest(SmartContractBenchBase):
         data = contract.functions.getNow().buildTransaction(self.tx_conf)["data"];
         result = self.rpc.call(contractAddr, data)
         print(result, int(time.time()))
+    
+    def testPayContract(self):
+        CONTRACT_PATH = "contracts/pay_bytecode.dat"
+        logs = self.rpc.get_logs(self.filter)
+        l = len(logs)
 
-
+        # construct contract object 
+        solc = Solc()
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        contract = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/pay_abi.json"),
+            bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
+        )
+        
+        # deploy contract
+        data = contract.constructor().buildTransaction(self.tx_conf)["data"]
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
+        contractAddr = Web3.toChecksumAddress(contractAddr)
+        self.tx_conf["to"] = contractAddr
+        logs = self.rpc.get_logs(self.filter)
+        
+        b0 = self.rpc.get_balance(self.sender)
+        # interact with recharge()
+        data = contract.functions.recharge().buildTransaction(self.tx_conf)["data"];
+        cost = 5000000000000000000
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
+        b1 = self.rpc.get_balance(self.sender)
+        
+        #interact with withdraw
+        data = contract.functions.withdraw(self.sender_checksum).buildTransaction(self.tx_conf)["data"];
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
+        b2 = self.rpc.get_balance(self)
+        print(b0)
+        print(b1)
+        print(b2)
+        
 
     def run_test(self):
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944";
         self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2";
         self.priv_key = default_config["GENESIS_PRI_KEY"]
         self.sender = encode_hex_0x(privtoaddr(self.priv_key))
+        self.sender_checksum = Web3.toChecksumAddress(self.sender)
         self.rpc = RpcClient(self.nodes[0])
         nonce = 0
         gas = 50000000
         gas_price = 10
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
 
-        # apply filter, we expect no logs
         self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
         result = self.rpc.get_logs(self.filter)
         assert_equal(result, [])
@@ -171,7 +205,7 @@ class HTLCTest(SmartContractBenchBase):
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testBallotContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
-        self.testHTLCContract()
+        self.testPayContract()
         self.log.info("Pass")
 
     def address_to_topic(self, address):
