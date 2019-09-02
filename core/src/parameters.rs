@@ -16,6 +16,9 @@ pub mod consensus {
     pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
     // FIXME: We should use finality to determine the checkpoint moment instead.
     pub const ERA_DEFAULT_CHECKPOINT_GAP: u64 = 50000;
+
+    pub const NULL: usize = !0;
+    pub const NULLU64: u64 = !0;
 }
 
 pub mod consensus_internal {

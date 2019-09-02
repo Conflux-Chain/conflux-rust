@@ -240,11 +240,13 @@ impl ConsensusExecutor {
                 KECCAK_EMPTY_BLOOM,
             )
         } else {
-            if let Some(result) = self.handler.get_execution_result(&epoch_hash)
-            {
+            if self.handler.data_man.epoch_executed(&epoch_hash) {
                 // The epoch already executed, so we do not need wait for the
                 // queue to be empty
-                return result;
+                return self
+                    .handler
+                    .get_execution_result(&epoch_hash)
+                    .expect("it should success");
             }
             let (sender, receiver) = channel();
             debug!("Wait for execution result of epoch {:?}", epoch_hash);
@@ -340,10 +342,8 @@ impl ConsensusExecutor {
                         if *index == pivot_arena_index {
                             no_reward =
                                 block_consensus_node.data.partial_invalid
-                                    || !inner
-                                        .execution_info_cache
-                                        .get(&pivot_arena_index)
-                                        .unwrap()
+                                    || !inner.arena[pivot_arena_index]
+                                        .data
                                         .state_valid;
                         } else {
                             no_reward = block_consensus_node

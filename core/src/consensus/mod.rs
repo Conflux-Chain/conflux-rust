@@ -26,7 +26,7 @@ use crate::parameters::{
     block::REFEREE_BOUND, consensus::*, consensus_internal::*,
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -35,7 +35,10 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
+    cmp::Reverse,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    thread::sleep,
     time::Duration,
 };
 
@@ -110,6 +113,15 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
+    /// This is the hash of latest block inserted into consensus graph.
+    /// Since the critical section is very short, a `Mutex` is enough.
+    pub latest_inserted_block: Mutex<H256>,
+    /// This HashMap stores whether the state in header is correct or not for
+    /// pivot blocks from current era genesis to first trusted blame block
+    /// after current era stable genesis.
+    /// We use `Mutex` here because other thread will only modify it once and
+    /// after that only current thread will operate this map.
+    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -130,6 +142,7 @@ impl ConsensusGraph {
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
+                None,
             )));
         let executor = ConsensusExecutor::start(
             txpool.clone(),
@@ -151,6 +164,8 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
+            latest_inserted_block: Mutex::new(*era_genesis_block_hash),
+            pivot_block_state_valid_map: Mutex::new(Default::default()),
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -401,17 +416,28 @@ impl ConsensusGraph {
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
 
-        if !ignore_body {
-            let block = self.data_man.block_by_hash(hash, true).unwrap();
-            debug!(
-                "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-                block.block_header,
-                block.transactions.len(),
-                block.size(),
-            );
+        let block_opt = if ignore_body {
+            None
+        } else {
+            self.data_man.block_by_hash(hash, true)
+        };
 
-            {
-                let inner = &mut *self.inner.write();
+        let header_opt = if ignore_body {
+            self.data_man.block_header_by_hash(hash)
+        } else {
+            None
+        };
+
+        {
+            let inner = &mut *self.inner.write();
+            if !ignore_body {
+                let block = block_opt.unwrap();
+                debug!(
+                    "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
+                    block.block_header,
+                    block.transactions.len(),
+                    block.size(),
+                );
                 self.new_block_handler.on_new_block(
                     inner,
                     &self.confirmation_meter,
@@ -419,20 +445,16 @@ impl ConsensusGraph {
                     &block.block_header,
                     Some(&block.transactions),
                 );
-                self.update_best_info(inner);
-            }
-            self.txpool
-                .notify_new_best_info(self.best_info.read().clone());
-        } else {
-            // This `ignore_body` case will only be used during recovery from
-            // checkpoint, either from db or from remote peers
-            let header = self.data_man.block_header_by_hash(hash).unwrap();
-            debug!(
-                "insert new block_header into consensus: block_header={:?}",
-                header
-            );
-            {
-                let inner = &mut *self.inner.write();
+            } else {
+                // This `ignore_body` case will only be used when
+                // 1. archive node is in `CatchUpRecoverBlockFromDB` phase
+                // 2. full node is in `CatchUpRecoverBlockHeaderFromDB`,
+                // `CatchUpSyncBlockHeader` or `CatchUpRecoverBlockFromDB` phase
+                let header = header_opt.unwrap();
+                debug!(
+                    "insert new block_header into consensus: block_header={:?}",
+                    header
+                );
                 self.new_block_handler.on_new_block(
                     inner,
                     &self.confirmation_meter,
@@ -440,29 +462,37 @@ impl ConsensusGraph {
                     header.as_ref(),
                     None,
                 );
-                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
-                {
-                    if let Some(exe_info) = self
-                        .data_man
-                        .consensus_graph_execution_info_from_db(hash)
-                    {
-                        inner
-                            .execution_info_cache
-                            .insert(*arena_index, exe_info);
-                    }
-                }
-
-                // If we have recovered all blocks in the past of stable block,
-                // we should reset the pivot chain. And later
-                // processed blocks may not be pending.
-                if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
-                    inner.set_pivot_to_stable(hash);
-                }
-                self.update_best_info(inner);
             }
-            self.txpool
-                .notify_new_best_info(self.best_info.read().clone());
+
+            // for full node, we should recover state_valid for pivot block
+            let mut pivot_block_state_valid_map =
+                self.pivot_block_state_valid_map.lock();
+            if !pivot_block_state_valid_map.is_empty()
+                && pivot_block_state_valid_map.contains_key(&hash)
+            {
+                let arena_index =
+                    *inner.hash_to_arena_indices.get(&hash).unwrap();
+                inner.arena[arena_index].data.state_valid =
+                    pivot_block_state_valid_map.remove(&hash).unwrap();
+            }
+
+            // we should recover exec_info from db
+            if let Some(arena_index) = inner.hash_to_arena_indices.get(hash) {
+                if let Some(exe_info) =
+                    self.data_man.consensus_graph_execution_info_from_db(hash)
+                {
+                    inner.execution_info_cache.insert(*arena_index, exe_info);
+                }
+            }
+
+            self.update_best_info(inner);
+            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
+                inner.set_pivot_to_stable(hash);
+            }
         }
+        self.txpool
+            .notify_new_best_info(self.best_info.read().clone());
+        *self.latest_inserted_block.lock() = *hash;
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -734,11 +764,10 @@ impl ConsensusGraph {
         self.inner.read().old_era_block_set.lock().pop_front()
     }
 
-    pub fn get_trusted_blame_block(&self) -> Option<H256> {
+    /// Find a trusted blame block for checkpoint
+    pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
         let inner = self.inner.read();
-        inner
-            .find_first_index_with_correct_state_of(0)
-            .and_then(|index| Some(inner.arena[inner.pivot_chain[index]].hash))
+        inner.get_trusted_blame_block(stable_hash)
     }
 
     pub fn first_trusted_header_starting_from(

@@ -777,6 +777,9 @@ pub struct SynchronizationGraph {
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
     pub statistics: SharedStatistics,
+    /// This is the hash of latest graph ready block
+    /// Since the critical section is very short, a `Mutex` is enough.
+    pub latest_graph_ready_block: Mutex<H256>,
 
     /// Channel used to send work to `ConsensusGraph`
     /// Each element is <block_hash, ignore_body>
@@ -810,6 +813,9 @@ impl SynchronizationGraph {
             verification_config,
             consensus: consensus.clone(),
             statistics: consensus.statistics.clone(),
+            latest_graph_ready_block: Mutex::new(
+                data_man.genesis_block().block_header.hash(),
+            ),
             consensus_sender: Mutex::new(consensus_sender),
             is_full_node,
         };
@@ -1299,6 +1305,7 @@ impl SynchronizationGraph {
         // into consensus graph; Otherwise Consensus Worker can handle the
         // block in order asynchronously. In addition, if this block is
         // recovered from db, we can simply ignore body.
+        *self.latest_graph_ready_block.lock() = h;
         if !recover_from_db {
             self.consensus_sender
                 .lock()
