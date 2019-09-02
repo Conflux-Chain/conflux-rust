@@ -1341,7 +1341,7 @@ impl ConsensusNewBlockHandler {
                         inner,
                         epoch_arena_index,
                     );
-                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                self.executor.compute_epoch(EpochExecutionTask::new(
                     inner.arena[epoch_arena_index].hash,
                     inner.get_epoch_block_hashes(epoch_arena_index),
                     inner.get_epoch_start_block_number(epoch_arena_index),
@@ -1396,6 +1396,10 @@ impl ConsensusNewBlockHandler {
             0..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
         {
             let arena_index = inner.pivot_chain[pivot_index];
+            let pivot_hash = inner.arena[arena_index].hash;
+            if pivot_hash == inner.data_man.true_genesis_block.hash() {
+                continue;
+            }
             let exec_pivot_index =
                 pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
             if exec_pivot_index < inner.pivot_chain.len()
@@ -1406,20 +1410,12 @@ impl ConsensusNewBlockHandler {
                 let exec_arena_index = inner.pivot_chain[exec_pivot_index];
                 let exec_info =
                     inner.execution_info_cache.get(&exec_arena_index).unwrap();
-                if inner.arena[arena_index].hash
-                    != self.data_man.true_genesis_block.hash()
-                {
-                    self.data_man.insert_epoch_execution_commitments(
-                        inner.arena[arena_index].hash,
-                        exec_info.original_deferred_receipt_root,
-                        exec_info.original_deferred_logs_bloom_hash,
-                    );
-                }
+                self.data_man.insert_epoch_execution_commitments(
+                    pivot_hash,
+                    exec_info.original_deferred_receipt_root,
+                    exec_info.original_deferred_logs_bloom_hash,
+                );
             } else {
-                let pivot_hash = inner.arena[arena_index].hash.clone();
-                if pivot_hash == inner.data_man.true_genesis_block.hash() {
-                    return;
-                }
                 let epoch_arena_indices = &inner.arena[arena_index]
                     .data
                     .ordered_executable_epoch_blocks;

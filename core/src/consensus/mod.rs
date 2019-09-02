@@ -446,6 +446,10 @@ impl ConsensusGraph {
                     Some(&block.transactions),
                 );
             } else {
+                // This `ignore_body` case will only be used when
+                // 1. archive node is in `CatchUpRecoverBlockFromDB` phase
+                // 2. full node is in `CatchUpRecoverBlockHeaderFromDB`,
+                // `CatchUpSyncBlockHeader` or `CatchUpRecoverBlockFromDB` phase
                 let header = header_opt.unwrap();
                 debug!(
                     "insert new block_header into consensus: block_header={:?}",

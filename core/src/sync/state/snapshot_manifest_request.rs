@@ -88,6 +88,7 @@ impl SnapshotManifestRequest {
         let mut bloom_blame_vec = Vec::new();
         let mut block_hash = trusted_block.hash();
         let mut request_invalid = false;
+        let mut pass_checkpoint = false;
         loop {
             if let Some(exec_info) = ctx
                 .manager
@@ -95,12 +96,17 @@ impl SnapshotManifestRequest {
                 .data_man
                 .consensus_graph_execution_info_from_db(&block_hash)
             {
+                if block_hash == self.checkpoint {
+                    pass_checkpoint = true;
+                }
                 state_blame_vec.push(exec_info.original_deferred_state_root);
                 receipt_blame_vec
                     .push(exec_info.original_deferred_receipt_root);
                 bloom_blame_vec
                     .push(exec_info.original_deferred_logs_bloom_hash);
-                if state_blame_vec.len() == trusted_block.blame() as usize + 1 {
+                if state_blame_vec.len() >= trusted_block.blame() as usize + 1
+                    && pass_checkpoint
+                {
                     break;
                 }
                 if let Some(block) =
