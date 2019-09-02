@@ -4,23 +4,20 @@
 
 use crate::{
     message::{Message, MsgId},
+    storage::Chunk,
     sync::{
         message::{msgid, Context, Handleable},
         state::SnapshotChunkRequest,
         Error, ErrorKind,
     },
 };
-use cfx_bytes::Bytes;
-use cfx_types::H256;
-use keccak_hash::keccak;
-use rlp::{DecoderError, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, collections::HashMap};
+use std::any::Any;
 
-#[derive(Debug, RlpDecodable, RlpEncodable)]
+#[derive(RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkResponse {
     pub request_id: u64,
-    pub chunk: Bytes,
+    pub chunk: Chunk,
 }
 
 build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
@@ -35,66 +32,24 @@ impl Handleable for SnapshotChunkResponse {
             true,
         )?;
 
-        let chunk_hash = keccak(&self.chunk);
-        if chunk_hash != request.chunk_hash {
-            debug!("Responded snapshot chunk hash mismatch");
+        let root = ctx.must_get_state_root(&request.checkpoint);
+
+        if let Err(e) =
+            self.chunk.validate(&request.chunk_key, &root.snapshot_root)
+        {
+            debug!("failed to validate the snapshot chunk, error = {:?}", e);
             ctx.manager
                 .request_manager
                 .remove_mismatch_request(ctx.io, &message);
             bail!(ErrorKind::Invalid);
         }
 
-        let kvs = match self.into_kvs() {
-            Ok(kvs) => kvs,
-            Err(e) => {
-                debug!("Failed to decode responded snapshot chunk data to kvs, error = {:?}", e);
-                ctx.manager
-                    .request_manager
-                    .remove_mismatch_request(ctx.io, &message);
-                bail!(ErrorKind::Decoder(e));
-            }
-        };
-
-        ctx.manager
-            .state_sync
-            .handle_snapshot_chunk_response(ctx, chunk_hash, kvs);
+        ctx.manager.state_sync.handle_snapshot_chunk_response(
+            ctx,
+            request.chunk_key.clone(),
+            self.chunk,
+        );
 
         Ok(())
-    }
-}
-
-impl SnapshotChunkResponse {
-    pub fn new(request_id: u64, kvs: HashMap<H256, Bytes>) -> Self {
-        let mut s = RlpStream::new_list(kvs.len());
-        for (key, value) in kvs {
-            s.begin_list(2).append(&key).append_list(&value);
-        }
-
-        SnapshotChunkResponse {
-            request_id,
-            chunk: s.drain(),
-        }
-    }
-
-    pub fn into_kvs(self) -> Result<HashMap<H256, Bytes>, DecoderError> {
-        let rlp = Rlp::new(self.chunk.as_slice());
-        let mut kvs = HashMap::new();
-
-        for i in 0..rlp.item_count()? {
-            let kv = rlp.at(i)?;
-
-            if kv.item_count()? != 2 {
-                return Err(DecoderError::RlpIncorrectListLen);
-            }
-
-            let key = kv.val_at(0)?;
-            let value = kv.list_at(1)?;
-
-            if kvs.insert(key, value).is_some() {
-                return Err(DecoderError::Custom("duplicated key"));
-            }
-        }
-
-        Ok(kvs)
     }
 }

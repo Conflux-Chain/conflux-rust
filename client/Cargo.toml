@@ -27,6 +27,7 @@ error-chain = { version = "0.12" }
 log = "0.4"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
+runtime = { path = "../util/runtime" }
 slab = "0.2"
 cfxcore = { path = "../core" }
 network = { path = "../network" }
@@ -45,6 +46,10 @@ rustc-hex= "1.0"
 threadpool = "1.0"
 metrics = { path = "../util/metrics" }
 delegate = "0.2.0"
+transient-hashmap = "0.4"
+rand_xorshift = "0.1.1"
+itertools = "0.5"
+order-stat = "0.1"
 
 [dev-dependencies]
 criterion = "0.2"

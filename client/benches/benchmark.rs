@@ -86,8 +86,9 @@ fn txexe_benchmark(c: &mut Criterion) {
             VmFactory::new(1024 * 32),
         );
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut nonce_increased = false;
         b.iter(|| {
-            ex.transact(&tx).unwrap();
+            ex.transact(&tx, &mut nonce_increased).unwrap();
             ex.state.clear();
         })
     });

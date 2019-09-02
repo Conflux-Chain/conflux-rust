@@ -9,8 +9,9 @@ mod protocol;
 pub use message::msgid;
 pub use node_type::NodeType;
 pub use protocol::{
-    BlockHashes, BlockHeaders, GetBlockHashesByEpoch, GetBlockHeaders,
-    GetReceipts, GetStateEntry, GetStateRoot, GetTxs, NewBlockHashes, Receipts,
-    ReceiptsWithProof, SendRawTx, StateEntry, StateRoot, StateRootWithProof,
-    StatusPing, StatusPong, Txs,
+    BlockHashes, BlockHeaders, BloomWithEpoch, Blooms, GetBlockHashesByEpoch,
+    GetBlockHeaders, GetBlooms, GetReceipts, GetStateEntry, GetStateRoot,
+    GetTxs, GetWitnessInfo, NewBlockHashes, Receipts, ReceiptsWithProof,
+    SendRawTx, StateEntry, StateRoot, StateRootWithProof, StatusPing,
+    StatusPong, Txs, WitnessInfo, WitnessInfoWithHeight,
 };

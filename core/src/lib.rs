@@ -51,6 +51,7 @@ pub mod genesis;
 mod parameters;
 #[macro_use]
 pub mod message;
+pub mod client;
 pub mod light_protocol;
 pub mod machine;
 pub mod pow;

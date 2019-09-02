@@ -21,7 +21,7 @@ pub use self::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
         },
         storage_db::snapshot_sync::{
-            Chunk, ChunkKey, RangedManifest, Restorer,
+            Chunk, ChunkKey, RangedManifest, RestoreProgress, Restorer,
         },
     },
     state::{State as Storage, StateTrait as StorageTrait},

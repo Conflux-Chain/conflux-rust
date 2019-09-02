@@ -7,7 +7,7 @@ use crate::{
     parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD,
     sync::{
         message::DynamicCapability,
-        state::{SnapshotChunkSync, StateSync, Status},
+        state::{SnapshotChunkSync, Status},
         synchronization_protocol_handler::SynchronizationProtocolHandler,
         synchronization_state::SynchronizationState,
         SharedSynchronizationGraph, SynchronizationGraphInner,
@@ -309,17 +309,18 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .data_man
             .get_cur_consensus_era_genesis_hash();
 
-        // move to next phase only if checkpoint not changed and sync completed
-        if self.state_sync.checkpoint() == checkpoint
-            && self.state_sync.status() == Status::Completed
-        {
-            DynamicCapability::ServeCheckpoint(Some(checkpoint))
-                .broadcast(io, &sync_handler.syn);
-            return SyncPhaseType::CatchUpRecoverBlockFromDB;
-        }
+        if self.state_sync.checkpoint() == checkpoint {
+            if let Status::Restoring(_) = self.state_sync.status() {
+                self.state_sync.update_restore_progress();
+            }
 
-        // start to sync new checkpoint if new era started,
-        if checkpoint != self.state_sync.checkpoint() {
+            if self.state_sync.status() == Status::Completed {
+                DynamicCapability::ServeCheckpoint(Some(checkpoint))
+                    .broadcast(io, &sync_handler.syn);
+                return SyncPhaseType::CatchUpRecoverBlockFromDB;
+            }
+        } else {
+            // start to sync new checkpoint if new era started,
             match sync_handler.graph.consensus.get_trusted_blame_block() {
                 Some(block) => {
                     self.state_sync.start(checkpoint, block, io, sync_handler)

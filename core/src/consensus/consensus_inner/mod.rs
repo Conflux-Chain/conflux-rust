@@ -655,7 +655,12 @@ impl ConsensusGraphInner {
         // cannot have any information about the state root of `pivot_index`
         let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
 
-        // get pivot index of first trusted block based on the blame fields
+        self.find_first_trusted_starting_from(from)
+    }
+
+    pub fn find_first_trusted_starting_from(
+        &self, from: usize,
+    ) -> Option<usize> {
         let mut trusted_index =
             match self.find_first_with_trusted_blame_starting_from(from) {
                 None => return None,
