@@ -19,10 +19,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    connection::WriteStatus,
+    connection::{Connection, WriteStatus},
     node_table::NodeId,
     service::HostMetadata,
-    session::{Connection, SessionPacket},
     Error, ErrorKind,
 };
 use cfx_bytes::Bytes;
@@ -40,6 +39,7 @@ use std::{
     time::Duration,
 };
 
+// used for test purpose only to bypass the cryptography
 pub static BYPASS_CRYPTOGRAPHY: AtomicBool = AtomicBool::new(false);
 
 #[derive(PartialEq, Eq, Debug)]
@@ -83,8 +83,6 @@ const V4_ACK_PACKET_SIZE: usize = 210;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl Handshake {
-    const DEFAULT_PACKET_ID: u8 = 0;
-
     /// Create a new handshake object
     pub fn new(
         token: StreamToken, id: Option<&NodeId>, socket: TcpStream, nonce: H256,
@@ -136,8 +134,6 @@ impl Handshake {
         trace!("handshake readable enter, state = {:?}", self.state);
 
         while let Some(data) = self.connection.readable()? {
-            let packet = SessionPacket::parse(data)?;
-
             match self.state {
                 HandshakeState::New => {
                     error!("handshake readable invalid for New state");
@@ -146,16 +142,16 @@ impl Handshake {
                     error!("handshake readable invalid for StartSession state");
                 }
                 HandshakeState::ReadingAuth => {
-                    if packet.id == Self::DEFAULT_PACKET_ID
-                        || !BYPASS_CRYPTOGRAPHY.load(Ordering::Relaxed)
+                    if data.len() == 64
+                        && BYPASS_CRYPTOGRAPHY.load(Ordering::Relaxed)
                     {
-                        self.read_auth(io, host.secret(), &packet.data)?;
+                        self.read_node_id(io, host.id(), &data)?;
                     } else {
-                        self.read_node_id(io, host.id(), packet)?;
+                        self.read_auth(io, host.secret(), &data)?;
                     }
                 }
                 HandshakeState::ReadingAck => {
-                    self.read_ack(host.secret(), &packet.data)?;
+                    self.read_ack(host.secret(), &data)?;
                 }
             }
 
@@ -227,27 +223,19 @@ impl Handshake {
 
     // for test purpose only
     fn read_node_id<Message>(
-        &mut self, io: &IoContext<Message>, public: &Public,
-        packet: SessionPacket,
+        &mut self, io: &IoContext<Message>, public: &Public, data: &[u8],
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
-        if packet.data.len() != 64 {
-            debug!(
-                "failed to read node id, invalid data size {}, expected = 64, packet = {:?}",
-                packet.data.len(), packet
-            );
-            return Err(ErrorKind::BadProtocol.into());
-        }
-
-        self.id.clone_from_slice(&packet.data);
-
-        let data = SessionPacket::assemble(packet.id, None, public.as_ref())?;
-        self.connection.send(io, &data, SendQueuePriority::High)?;
-
+    where Message: Send + Clone + Sync + 'static {
+        trace!(
+            "Received handshake auth from {:?}, node id len = {}",
+            self.connection.remote_addr_str(),
+            data.len()
+        );
+        assert_eq!(data.len(), 64);
+        self.id.clone_from_slice(data);
+        self.connection
+            .send(io, public.as_ref(), SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
-
         Ok(())
     }
 
@@ -312,9 +300,8 @@ impl Handshake {
         let message = ecies::encrypt(&self.id, &[], &data)?;
 
         self.auth_cipher = message.clone();
-        let data =
-            SessionPacket::assemble(Self::DEFAULT_PACKET_ID, None, &message)?;
-        self.connection.send(io, &data, SendQueuePriority::High)?;
+        self.connection
+            .send(io, &message, SendQueuePriority::High)?;
         self.state = HandshakeState::ReadingAck;
 
         Ok(())
@@ -342,9 +329,8 @@ impl Handshake {
 
         let message = ecies::encrypt(&self.id, &[], &data)?;
         self.ack_cipher = message.clone();
-        let data =
-            SessionPacket::assemble(Self::DEFAULT_PACKET_ID, None, &message)?;
-        self.connection.send(io, &data, SendQueuePriority::High)?;
+        self.connection
+            .send(io, &message, SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
         Ok(())
     }

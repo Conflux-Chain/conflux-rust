@@ -5,7 +5,7 @@
 use crate::{
     io::{IoContext, StreamToken},
     throttling::THROTTLING_SERVICE,
-    Error,
+    Error, ErrorKind,
 };
 use bytes::Bytes;
 use lazy_static::lazy_static;
@@ -15,7 +15,6 @@ use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
-    marker::PhantomData,
     net::SocketAddr,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
@@ -43,7 +42,7 @@ pub enum WriteStatus {
     Complete,
 }
 
-pub const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
+const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
 
 static HIGH_PRIORITY_PACKETS: AtomicUsize = AtomicUsize::new(0);
 
@@ -73,29 +72,23 @@ pub trait GenericSocket: Read + Write {}
 
 impl GenericSocket for TcpStream {}
 
-pub trait PacketSizer {
-    fn packet_size(_: &Bytes) -> usize;
-}
-
 /// This information is to measure the congestion situation of network.
 #[allow(dead_code)]
 pub struct SendQueueStatus {
     queue_length: usize,
 }
 
-pub struct GenericConnection<Socket: GenericSocket, Sizer: PacketSizer> {
+pub struct GenericConnection<Socket: GenericSocket> {
     token: StreamToken,
     socket: Socket,
     recv_buf: Bytes,
     send_queue: PrioritySendQueue<(Vec<u8>, usize)>,
     interest: Ready,
     registered: AtomicBool,
-    phantom: PhantomData<Sizer>,
+    packet: Packet,
 }
 
-impl<Socket: GenericSocket, Sizer: PacketSizer> Drop
-    for GenericConnection<Socket, Sizer>
-{
+impl<Socket: GenericSocket> Drop for GenericConnection<Socket> {
     fn drop(&mut self) {
         let mut service = THROTTLING_SERVICE.write();
         while let Some(((packet, pos), priority)) = self.send_queue.pop_front()
@@ -110,9 +103,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer> Drop
     }
 }
 
-impl<Socket: GenericSocket, Sizer: PacketSizer>
-    GenericConnection<Socket, Sizer>
-{
+impl<Socket: GenericSocket> GenericConnection<Socket> {
     pub fn readable(&mut self) -> io::Result<Option<Bytes>> {
         let mut buf: [u8; 1024] = [0; 1024];
         loop {
@@ -139,13 +130,17 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
             }
         }
 
-        let size = Sizer::packet_size(&self.recv_buf);
-        if size == 0 {
-            Ok(None)
-        } else {
-            trace!("Packet received, token = {}, size = {}", self.token, size);
-            Ok(Some(self.recv_buf.split_to(size)))
+        let packet = self.packet.load(&mut self.recv_buf);
+
+        if let Some(ref p) = packet {
+            trace!(
+                "Packet received, token = {}, size = {}",
+                self.token,
+                p.len()
+            );
         }
+
+        Ok(packet)
     }
 
     pub fn write_raw_data(&mut self, data: &[u8]) -> Result<usize, Error> {
@@ -155,7 +150,8 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
             data
         );
 
-        let size = self.socket.write(data)?;
+        let data = self.packet.assemble(data)?;
+        let size = self.socket.write(&data)?;
 
         trace!(
             "Succeed to send socket data, token = {}, size = {}",
@@ -246,6 +242,7 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
     ) -> Result<SendQueueStatus, Error>
     {
         if !data.is_empty() {
+            let data = self.packet.assemble(data)?;
             let size = data.len();
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
@@ -279,9 +276,9 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
     pub fn is_sending(&self) -> bool { self.interest.is_writable() }
 }
 
-pub type Connection<Sizer> = GenericConnection<TcpStream, Sizer>;
+pub type Connection = GenericConnection<TcpStream>;
 
-impl<Sizer: PacketSizer> Connection<Sizer> {
+impl Connection {
     pub fn new(token: StreamToken, socket: TcpStream) -> Self {
         Connection {
             token,
@@ -290,7 +287,7 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
             send_queue: PrioritySendQueue::new(),
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
-            phantom: PhantomData,
+            packet: Packet::new(3, MAX_PAYLOAD_SIZE),
         }
     }
 
@@ -391,6 +388,62 @@ pub struct ConnectionDetails {
     pub registered: bool,
 }
 
+struct Packet {
+    data_len_bytes: usize,
+    max_len: usize,
+}
+
+impl Packet {
+    fn new(data_len_bytes: usize, max_len: usize) -> Self {
+        assert!(data_len_bytes > 0 && data_len_bytes <= 8);
+
+        let max = usize::max_value() >> (64 - 8 * data_len_bytes);
+        assert!(max_len <= max);
+
+        Packet {
+            data_len_bytes,
+            max_len: if max_len == 0 { max } else { max_len },
+        }
+    }
+
+    fn assemble(&self, data: &[u8]) -> Result<Bytes, Error> {
+        if data.len() > self.max_len - self.data_len_bytes {
+            debug!("failed to assemble packet, oversized = {}", data.len());
+            return Err(ErrorKind::OversizedPacket.into());
+        }
+
+        let mut packet = Bytes::with_capacity(self.data_len_bytes + data.len());
+
+        packet.extend_from_slice(
+            &data.len().to_le_bytes()[..self.data_len_bytes],
+        );
+        packet.extend_from_slice(data);
+
+        Ok(packet)
+    }
+
+    fn load(&self, buf: &mut Bytes) -> Option<Bytes> {
+        if buf.len() < self.data_len_bytes {
+            return None;
+        }
+
+        let mut be_bytes = [0u8; 8];
+        be_bytes
+            .split_at_mut(self.data_len_bytes)
+            .0
+            .copy_from_slice(&buf[..self.data_len_bytes]);
+        let data_size = usize::from_le_bytes(be_bytes);
+
+        if buf.len() < self.data_len_bytes + data_size {
+            return None;
+        }
+
+        buf.split_to(self.data_len_bytes);
+
+        Some(buf.split_to(data_size))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -400,7 +453,7 @@ mod tests {
 
     use super::*;
     use crate::io::*;
-    use bytes::{Buf, Bytes, IntoBuf};
+    use bytes::Bytes;
     use mio::Ready;
 
     struct TestSocket {
@@ -468,25 +521,7 @@ mod tests {
 
     impl GenericSocket for TestSocket {}
 
-    struct TestPacketSizer;
-
-    impl PacketSizer for TestPacketSizer {
-        fn packet_size(raw_packet: &Bytes) -> usize {
-            let buf = &raw_packet.into_buf() as &dyn Buf;
-            if buf.remaining() >= 1 {
-                let size = buf.bytes()[0] as usize;
-                if buf.remaining() >= size {
-                    size
-                } else {
-                    0
-                }
-            } else {
-                0
-            }
-        }
-    }
-
-    type TestConnection = GenericConnection<TestSocket, TestPacketSizer>;
+    type TestConnection = GenericConnection<TestSocket>;
 
     impl TestConnection {
         fn new() -> Self {
@@ -497,7 +532,7 @@ mod tests {
                 recv_buf: Bytes::new(),
                 interest: Ready::hup() | Ready::readable(),
                 registered: AtomicBool::new(false),
-                phantom: PhantomData,
+                packet: Packet::new(1, 0),
             }
         }
     }
@@ -545,11 +580,11 @@ mod tests {
             assert!(status.unwrap().is_none());
         }
 
-        connection.socket.read_buf.extend_from_slice(&[0u8]);
+        connection.socket.read_buf.extend_from_slice(&[3, 8]);
         {
             let status = connection.readable();
             assert!(status.is_ok());
-            assert_eq!(status.unwrap().unwrap().len(), 3);
+            assert_eq!(&status.unwrap().unwrap()[..], &[0, 3, 8]);
         }
 
         {
