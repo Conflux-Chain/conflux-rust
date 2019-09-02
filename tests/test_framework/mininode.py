@@ -4,7 +4,7 @@
 `P2PConnection: A low-level connection object to a node's P2P interface
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
-from eth_utils import big_endian_to_int
+from eth_utils import big_endian_to_int, encode_hex
 
 from conflux import utils
 from conflux.messages import *
@@ -21,7 +21,7 @@ import threading
 
 from conflux.transactions import Transaction
 from conflux.utils import hash32, hash20, sha3, int_to_bytes, sha3_256, ecrecover_to_pub, ec_random_keys, ecsign, \
-    bytes_to_int, encode_int32, int_to_hex, zpad, rzpad
+    bytes_to_int, encode_int32, int_to_hex, int_to_32bytearray, zpad, rzpad
 from test_framework.blocktools import make_genesis
 from test_framework.util import wait_until, get_ip_address
 
@@ -144,8 +144,6 @@ class P2PConnection(asyncore.dispatcher):
                     self.on_ping()
                 elif packet_id == PACKET_PONG:
                     self.on_pong()
-                elif packet_id == PACKET_PONG:
-                    pass
                 else:
                     assert packet_id == PACKET_PROTOCOL
                     self.on_protocol_packet(payload)
@@ -275,7 +273,7 @@ class P2PInterface(P2PConnection):
         self.peer_pubkey = None
         self.priv_key, self.pub_key = ec_random_keys()
         x, y = self.pub_key
-        self.key = "0x"+int_to_hex(x)[2:]+int_to_hex(y)[2:]
+        self.key = "0x" + encode_hex(bytes(int_to_32bytearray(x)))[2:] + encode_hex(bytes(int_to_32bytearray(y)))[2:]
         self.had_status = False
         self.on_packet_func = {}
         self.remote = remote

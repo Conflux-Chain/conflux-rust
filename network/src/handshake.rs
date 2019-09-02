@@ -235,8 +235,8 @@ impl Handshake {
     {
         if packet.data.len() != 64 {
             debug!(
-                "failed to read auth, wrong auth packet size {}, expected = 64",
-                packet.data.len()
+                "failed to read node id, invalid data size {}, expected = 64, packet = {:?}",
+                packet.data.len(), packet
             );
             return Err(ErrorKind::BadProtocol.into());
         }

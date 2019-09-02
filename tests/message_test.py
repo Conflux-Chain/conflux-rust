@@ -48,7 +48,7 @@ class MessageTest(ConfluxTestFramework):
         # wait_until(lambda: default_node.msg_count >= 3)
         self.log.info("Send GetBlocks message")
         handler = WaitHandler(default_node, GET_BLOCKS_RESPONSE)
-        self.send_msg(GetBlocks(with_public=0, hashes=[blocks[0]]))
+        self.send_msg(GetBlocks(with_public=False, hashes=[blocks[0]]))
         handler.wait()
         self.log.info("Received GetBlock response")
 

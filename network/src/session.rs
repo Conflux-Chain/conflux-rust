@@ -615,6 +615,18 @@ impl SessionPacket {
     }
 }
 
+impl fmt::Debug for SessionPacket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "SessionPacket {{ id: {}, protocol: {:?}, date_len: {} }}",
+            self.id,
+            self.protocol,
+            self.data.len()
+        )
+    }
+}
+
 impl PacketSizer for SessionPacket {
     fn packet_size(raw_packet: &Bytes) -> usize {
         let buf = &mut raw_packet.into_buf() as &mut dyn Buf;
