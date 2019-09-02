@@ -291,7 +291,10 @@ impl ConsensusGraph {
             last_epoch_number -= 1;
 
             for hash in hashes {
-                let block = self.data_man.block_by_hash(&hash, false).unwrap();
+                let block = self
+                    .data_man
+                    .block_by_hash(&hash, false /* update_cache */)
+                    .unwrap();
                 for tx in block.transactions.iter() {
                     if tx_hashes.insert(tx.hash()) {
                         prices.push(tx.gas_price().clone());
@@ -419,7 +422,7 @@ impl ConsensusGraph {
         let block_opt = if ignore_body {
             None
         } else {
-            self.data_man.block_by_hash(hash, true)
+            self.data_man.block_by_hash(hash, true /* update_cache */)
         };
 
         let header_opt = if ignore_body {
@@ -533,8 +536,10 @@ impl ConsensusGraph {
         if let Some((receipt, address)) =
             inner.get_transaction_receipt_with_address(hash)
         {
-            let block =
-                self.data_man.block_by_hash(&address.block_hash, false)?;
+            let block = self.data_man.block_by_hash(
+                &address.block_hash,
+                false, /* update_cache */
+            )?;
             let transaction = (*block.transactions[address.index]).clone();
             Some((transaction, receipt, address))
         } else {
@@ -626,7 +631,7 @@ impl ConsensusGraph {
                         .block_results_by_hash_with_epoch(
                             &hash,
                             &epoch_hash,
-                            false,
+                            false, /* update_cache */
                         )
                         .map(|r| r.bloom)
                     {
@@ -668,9 +673,9 @@ impl ConsensusGraph {
             .flat_map(move |blocks_chunk| {
                 blocks_chunk.into_par_iter()
                     .filter_map(|hash|
-                        self.inner.read().block_receipts_by_hash(&hash, false).map(|r| (hash, (*r).clone()))
+                        self.inner.read().block_receipts_by_hash(&hash, false /* update_cache */).map(|r| (hash, (*r).clone()))
                     )
-                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false).map(|b| (hash, receipts, b.transaction_hashes())))
+                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, receipts, b.transaction_hashes())))
                     .flat_map(|(hash, mut receipts, mut hashes)| {
                         if receipts.len() != hashes.len() {
                             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", hash, receipts.len(), hashes.len());

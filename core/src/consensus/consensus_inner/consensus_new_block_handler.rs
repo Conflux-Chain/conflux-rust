@@ -123,15 +123,18 @@ impl ConsensusNewBlockHandler {
                     if stable_genesis_subtree.contains(parent as u32) {
                         inner.arena[me].past_weight = inner.arena[parent]
                             .past_weight
-                            + inner.block_weight(parent, false);
+                            + inner.block_weight(
+                                parent, false, /* inclusive */
+                            );
                     } else {
                         inner.arena[me].past_weight = 0;
                     }
 
                     for index in &blockset {
                         if stable_genesis_subtree.contains(*index as u32) {
-                            inner.arena[me].past_weight +=
-                                inner.block_weight(*index, false);
+                            inner.arena[me].past_weight += inner.block_weight(
+                                *index, false, /* inclusive */
+                            );
                         }
                     }
                 }
@@ -646,7 +649,11 @@ impl ConsensusNewBlockHandler {
 
             let blocks = epoch_block_hashes
                 .iter()
-                .map(|hash| self.data_man.block_by_hash(hash, false).unwrap())
+                .map(|hash| {
+                    self.data_man
+                        .block_by_hash(hash, false /* update_cache */)
+                        .unwrap()
+                })
                 .collect::<Vec<_>>();
 
             debug_record.block_hashes = epoch_block_hashes;
@@ -804,7 +811,8 @@ impl ConsensusNewBlockHandler {
         inner.stable_tree.set(
             me,
             (inner.inner_conf.adaptive_weight_alpha_num as i128)
-                * (inner.block_weight(parent, false) + past_era_weight),
+                * (inner.block_weight(parent, false /* inclusive */)
+                    + past_era_weight),
         );
 
         inner.adaptive_tree.make_tree(me);
@@ -829,8 +837,9 @@ impl ConsensusNewBlockHandler {
         &self, inner: &mut ConsensusGraphInner, me: usize, stable: bool,
     ) -> i128 {
         let parent = inner.arena[me].parent;
-        let weight = inner.block_weight(me, false);
-        let inclusive_weight = inner.block_weight(me, true);
+        let weight = inner.block_weight(me, false /* inclusive */);
+        let inclusive_weight =
+            inner.block_weight(me, true /* inclusive */);
 
         inner.weight_tree.path_apply(me, weight);
         inner.inclusive_weight_tree.path_apply(me, inclusive_weight);
@@ -878,7 +887,10 @@ impl ConsensusNewBlockHandler {
     ) {
         let block = inner
             .data_man
-            .block_by_hash(&inner.arena[arena_index].hash, true)
+            .block_by_hash(
+                &inner.arena[arena_index].hash,
+                true, /* update_cache */
+            )
             .expect("Block should always found in the data manager!");
         self.txpool.recycle_transactions(block.transactions.clone());
     }
@@ -1427,7 +1439,7 @@ impl ConsensusNewBlockHandler {
                         self.data_man.block_results_by_hash_with_epoch(
                             &inner.arena[*i].hash,
                             &pivot_hash,
-                            true,
+                            true, /* update_cache */
                         )
                     {
                         epoch_receipts.push(r.receipts);

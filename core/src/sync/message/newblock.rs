@@ -77,7 +77,7 @@ fn on_new_decoded_block(
         block,
         need_to_verify,
         persistent,
-        false,
+        false, // recover_from_db
     );
     if to_relay {
         need_to_relay.push(hash);

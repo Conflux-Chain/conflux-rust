@@ -215,7 +215,8 @@ impl SynchronizationGraphInner {
             self.arena.remove(index);
             self.hash_to_arena_indices.remove(&hash);
             // only remove block header in memory cache
-            self.data_man.remove_block_header(&hash, false);
+            self.data_man
+                .remove_block_header(&hash, false /* remove_db */);
 
             num_cleared += 1;
             if num_cleared == max_num_of_cleared_blocks {
@@ -738,7 +739,7 @@ impl SynchronizationGraphInner {
             self.arena.remove(*index);
             self.hash_to_arena_indices.remove(&hash);
             // remove header/block in memory cache and header/block in db
-            self.data_man.remove_block(&hash, true);
+            self.data_man.remove_block(&hash, true /* remove_db */);
         }
     }
 
@@ -869,9 +870,11 @@ impl SynchronizationGraph {
             if self.is_full_node {
                 // TODO: remove state root
                 // remove block header in memory cache
-                self.data_man.remove_block_header(&hash, false);
+                self.data_man
+                    .remove_block_header(&hash, false /* remove_db */);
                 // remove block body in memory cache and db
-                self.data_man.remove_block_body(&hash, true);
+                self.data_man
+                    .remove_block_body(&hash, true /* remove_db */);
             }
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {
@@ -956,8 +959,11 @@ impl SynchronizationGraph {
 
                 // This is necessary to construct consensus graph.
                 if !header_only {
-                    let (success, _) =
-                        self.insert_block(block, true, false, true);
+                    let (success, _) = self.insert_block(
+                        block, true,  /* need_to_verify */
+                        false, /* persistent */
+                        true,  /* recover_from_db */
+                    );
                     assert!(success);
                 }
 
@@ -978,7 +984,11 @@ impl SynchronizationGraph {
         }
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
-        self.remove_expire_blocks(0, true, Some(out_of_era_blocks));
+        self.remove_expire_blocks(
+            0,    /* expire_time */
+            true, /* recover */
+            Some(out_of_era_blocks),
+        );
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
         if !header_only {
             self.consensus.construct_pivot_state();
@@ -1024,7 +1034,7 @@ impl SynchronizationGraph {
     }
 
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
-        self.data_man.block_by_hash(hash, true)
+        self.data_man.block_by_hash(hash, true /* update_cache */)
     }
 
     pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }
@@ -1309,10 +1319,10 @@ impl SynchronizationGraph {
         if !recover_from_db {
             self.consensus_sender
                 .lock()
-                .send((h, false))
+                .send((h, false /* ignore_body */))
                 .expect("Cannot fail");
         } else {
-            self.consensus.on_new_block(&h, true);
+            self.consensus.on_new_block(&h, true /* ignore_body */);
         }
     }
 

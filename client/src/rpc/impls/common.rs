@@ -114,7 +114,7 @@ impl RpcImpl {
                 let block = self
                     .consensus
                     .data_man
-                    .block_by_hash(&hash, false)
+                    .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
                 Ok(RpcBlock::new(&*block, inner, include_txs))
             })
@@ -130,7 +130,10 @@ impl RpcImpl {
         );
         let inner = &*self.consensus.inner.read();
 
-        if let Some(block) = self.consensus.data_man.block_by_hash(&hash, false)
+        if let Some(block) = self
+            .consensus
+            .data_man
+            .block_by_hash(&hash, false /* update_cache */)
         {
             let result_block = Some(RpcBlock::new(&*block, inner, include_txs));
             Ok(result_block)
@@ -156,8 +159,10 @@ impl RpcImpl {
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|_| {
-                if let Some(block) =
-                    self.consensus.data_man.block_by_hash(&block_hash, false)
+                if let Some(block) = self
+                    .consensus
+                    .data_man
+                    .block_by_hash(&block_hash, false /* update_cache */)
                 {
                     debug!("Build RpcBlock {}", block.hash());
                     let result_block = RpcBlock::new(&*block, inner, true);
@@ -231,7 +236,7 @@ impl RpcImpl {
                 RpcBlock::new(
                     self.consensus
                         .data_man
-                        .block_by_hash(x, false)
+                        .block_by_hash(x, false /* update_cache */)
                         .expect("Error to get block by hash")
                         .as_ref(),
                     inner,
@@ -276,8 +281,10 @@ impl RpcImpl {
         let mut min = std::u64::MAX;
         let mut max: u64 = 0;
         for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
-            if let Some(block) =
-                self.consensus.data_man.block_by_hash(key, false)
+            if let Some(block) = self
+                .consensus
+                .data_man
+                .block_by_hash(key, false /* update_cache */)
             {
                 let timestamp = block.block_header.timestamp();
                 if timestamp < min && timestamp > 0 {

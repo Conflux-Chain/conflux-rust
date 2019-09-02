@@ -146,9 +146,10 @@ impl BlockDataManager {
             data_man.checkpoint_hashes_from_db()
         {
             if checkpoint_hash != genesis_block.block_header.hash() {
-                if let Some(checkpoint_block) =
-                    data_man.block_by_hash(&checkpoint_hash, false)
-                {
+                if let Some(checkpoint_block) = data_man.block_by_hash(
+                    &checkpoint_hash,
+                    false, /* update_cache */
+                ) {
                     if data_man
                         .storage_manager
                         .contains_state(SnapshotAndEpochIdRef::new(
@@ -161,8 +162,9 @@ impl BlockDataManager {
                             *checkpoint_block.block_header.parent_hash();
                         for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
                             assert_ne!(cur_hash, H256::default());
-                            let cur_block =
-                                data_man.block_by_hash(&cur_hash, false);
+                            let cur_block = data_man.block_by_hash(
+                                &cur_hash, false, /* update_cache */
+                            );
                             if cur_block.is_some()
                                 && data_man
                                     .storage_manager
@@ -196,7 +198,8 @@ impl BlockDataManager {
             },
         );
 
-        data_man.insert_block(data_man.genesis_block(), true);
+        data_man
+            .insert_block(data_man.genesis_block(), true /* persistent */);
 
         // persist local_block_info for real genesis block
         if data_man.genesis_block().block_header.hash()
@@ -256,8 +259,12 @@ impl BlockDataManager {
     pub fn transaction_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<SignedTransaction>> {
-        let address = self.transaction_address_by_hash(hash, false)?;
-        let block = self.block_by_hash(&address.block_hash, false)?;
+        let address = self
+            .transaction_address_by_hash(hash, false /* update_cache */)?;
+        let block = self.block_by_hash(
+            &address.block_hash,
+            false, /* update_cache */
+        )?;
         assert!(address.index < block.transactions.len());
         Some(block.transactions[address.index].clone())
     }
@@ -583,7 +590,7 @@ impl BlockDataManager {
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
-        let result = self.block_by_hash(hash, false)?;
+        let result = self.block_by_hash(hash, false /* update_cache */)?;
         Some(result.block_header.height())
     }
 
@@ -828,9 +835,9 @@ impl BlockDataManager {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
-                if let Some(r) =
-                    self.block_results_by_hash_with_epoch(h, epoch_hash, true)
-                {
+                if let Some(r) = self.block_results_by_hash_with_epoch(
+                    h, epoch_hash, true, /* update_cache */
+                ) {
                     epoch_receipts.push(r.receipts);
                 } else {
                     return false;
@@ -839,8 +846,9 @@ impl BlockDataManager {
             // Recover tx address if we will skip pivot chain execution
             for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
             {
-                let block =
-                    self.block_by_hash(block_hash, true).expect("block exists");
+                let block = self
+                    .block_by_hash(block_hash, true /* update_cache */)
+                    .expect("block exists");
                 for (tx_idx, tx) in block.transactions.iter().enumerate() {
                     match epoch_receipts[block_idx]
                         .get(tx_idx)

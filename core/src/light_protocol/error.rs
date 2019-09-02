@@ -205,6 +205,6 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     };
 
     if disconnect {
-        io.disconnect_peer(peer, op, None);
+        io.disconnect_peer(peer, op, None /* reason */);
     }
 }
