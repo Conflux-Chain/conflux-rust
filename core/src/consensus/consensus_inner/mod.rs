@@ -511,7 +511,7 @@ impl ConsensusGraphInner {
                 .execution_info_cache
                 .insert(genesis_arena_index, exe_info);
         } else {
-            error!("No execution info for cur_era_genesis in db!");
+            info!("No execution info for cur_era_genesis in db!");
         }
         inner
     }

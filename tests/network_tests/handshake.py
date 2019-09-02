@@ -6,7 +6,7 @@ sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import DefaultNode, network_thread_start
-from test_framework.util import wait_until, connect_nodes, check_handshake
+from test_framework.util import wait_until, connect_nodes
 
 class HandshakeTests(ConfluxTestFramework):
     def set_test_params(self):
@@ -25,7 +25,6 @@ class HandshakeTests(ConfluxTestFramework):
 
         # full node handshake
         connect_nodes(self.nodes, 0, 1)
-        wait_until(lambda: check_handshake(self.nodes[0], self.nodes[1].key), timeout=3)
 
 if __name__ == "__main__":
     HandshakeTests().main()
