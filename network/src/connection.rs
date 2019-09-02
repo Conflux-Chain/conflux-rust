@@ -78,6 +78,50 @@ pub trait PacketAssembler: Send + Sync {
     fn load(&self, buf: &mut Bytes) -> Option<Bytes>;
 }
 
+/// Packet with guard to automatically update throttling and high priority
+/// packets counter.
+#[derive(Default)]
+struct Packet {
+    data: Bytes,
+    is_high_priority: bool,
+    throttling_size: usize,
+}
+
+impl Packet {
+    fn new(data: Bytes, priority: SendQueuePriority) -> Result<Self, Error> {
+        let throttling_size = data.len();
+        THROTTLING_SERVICE.write().on_enqueue(throttling_size)?;
+
+        let is_high_priority = priority == SendQueuePriority::High;
+        if is_high_priority {
+            incr_high_priority_packets();
+        }
+
+        Ok(Packet {
+            data,
+            is_high_priority,
+            throttling_size,
+        })
+    }
+
+    fn set_high_priority(&mut self) {
+        if !self.is_high_priority {
+            incr_high_priority_packets();
+            self.is_high_priority = true;
+        }
+    }
+}
+
+impl Drop for Packet {
+    fn drop(&mut self) {
+        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size);
+
+        if self.is_high_priority {
+            decr_high_priority_packets();
+        }
+    }
+}
+
 /// This information is to measure the congestion situation of network.
 #[allow(dead_code)]
 pub struct SendQueueStatus {
@@ -88,25 +132,13 @@ pub struct GenericConnection<Socket: GenericSocket> {
     token: StreamToken,
     socket: Socket,
     recv_buf: Bytes,
-    send_queue: PrioritySendQueue<(Vec<u8>, usize)>,
+    // Pending packet that is not prefixed with length.
+    send_queue: PrioritySendQueue<Packet>,
+    // Sending packet that prefixed with length.
+    sending_packet: Option<Packet>,
     interest: Ready,
     registered: AtomicBool,
     assembler: Box<dyn PacketAssembler>,
-}
-
-impl<Socket: GenericSocket> Drop for GenericConnection<Socket> {
-    fn drop(&mut self) {
-        let mut service = THROTTLING_SERVICE.write();
-        while let Some(((packet, pos), priority)) = self.send_queue.pop_front()
-        {
-            if pos < packet.len() {
-                service.on_dequeue(packet.len() - pos);
-                if priority == SendQueuePriority::High {
-                    decr_high_priority_packets();
-                }
-            }
-        }
-    }
 }
 
 impl<Socket: GenericSocket> GenericConnection<Socket> {
@@ -151,8 +183,9 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
 
     pub fn write_raw_data(&mut self, data: &[u8]) -> Result<usize, Error> {
         trace!(
-            "Sending raw buffer, token = {}, data = {:?}",
+            "Sending raw buffer, token = {} data_len = {}, data = {:?}",
             self.token,
+            data.len(),
             data
         );
 
@@ -162,7 +195,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         trace!(
             "Succeed to send socket data, token = {}, size = {}",
             self.token,
-            size,
+            size
         );
 
         WRITE_METER.mark(size);
@@ -170,76 +203,79 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
     }
 
     fn write_next_from_queue(&mut self) -> Result<WriteStatus, Error> {
-        if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
-            && has_high_priority_packets()
-        {
-            trace!(
-                "Give up to send socket data due to low priority, token = {}",
-                self.token
-            );
-            return Ok(WriteStatus::LowPriority);
-        }
-
-        let buf = match self.send_queue.front_mut() {
-            Some((buf, promoted)) => {
-                if promoted {
-                    trace!("Low priority packet promoted to high priority, token = {}", self.token);
-                    incr_high_priority_packets();
-                }
-                buf
+        if self.sending_packet.is_none() {
+            // give up to send low priority packet
+            if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
+                && has_high_priority_packets()
+            {
+                trace!("Give up to send socket data due to low priority, token = {}", self.token);
+                return Ok(WriteStatus::LowPriority);
             }
-            None => return Ok(WriteStatus::Complete),
-        };
-        let len = buf.0.len();
-        let pos = buf.1;
-        if pos >= len {
-            error!(
-                "Unexpected connection data, token = {}, len = {}, pos = {}",
-                self.token, len, pos
+
+            // get packet from queue to send
+            let (mut packet, priority) = match self.send_queue.pop_front() {
+                Some(item) => item,
+                None => return Ok(WriteStatus::Complete),
+            };
+
+            if priority != SendQueuePriority::High {
+                trace!(
+                    "Low priority packet promoted to high priority, token = {}",
+                    self.token
+                );
+                packet.set_high_priority();
+            }
+
+            // assemble packet to send, e.g. prefix length to packet
+            packet.data = self.assembler.assemble(&packet.data)?;
+
+            trace!(
+                "Packet ready for sent, token = {}, size = {}",
+                self.token,
+                packet.data.len()
             );
-            return Ok(WriteStatus::Complete);
+
+            self.sending_packet = Some(packet);
         }
 
-        let size = self.socket.write(&buf.0[pos..])?;
+        let data = &mut self
+            .sending_packet
+            .as_mut()
+            .expect("should pop packet from send queue")
+            .data;
+
+        let size = self.socket.write(&data)?;
 
         trace!(
             "Succeed to send socket data, token = {}, size = {}",
             self.token,
             size
         );
-        THROTTLING_SERVICE.write().on_dequeue(size);
+
         WRITE_METER.mark(size);
+        data.split_to(size);
 
-        // NOTE: the line below does not work due the error:
-        // `cannot borrow `*self` as mutable more than once at a time`
-        // let size = self.write_raw_data(&buf.0)?;
-
-        if pos + size < len {
-            buf.1 += size;
-            Ok(WriteStatus::Ongoing)
-        } else {
-            trace!("Packet sent, token = {}, size = {}", self.token, len);
-            decr_high_priority_packets();
+        if data.is_empty() {
+            trace!("Packet sent, token = {}", self.token);
+            self.sending_packet = None;
             Ok(WriteStatus::Complete)
+        } else {
+            Ok(WriteStatus::Ongoing)
         }
     }
 
     pub fn writable<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
-        let status = self.write_next_from_queue();
+        let status = self.write_next_from_queue()?;
 
-        if let Ok(WriteStatus::Complete) = status {
-            self.send_queue.pop_front();
-        }
-
-        if self.send_queue.is_empty() {
+        if self.sending_packet.is_none() && self.send_queue.is_empty() {
             self.interest.remove(Ready::writable());
         }
 
         io.update_registration(self.token)?;
 
-        status
+        Ok(status)
     }
 
     pub fn send<Message: Sync + Send + Clone + 'static>(
@@ -248,19 +284,19 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
     ) -> Result<SendQueueStatus, Error>
     {
         if !data.is_empty() {
-            let data = self.assembler.assemble(data)?;
             let size = data.len();
+            if self.assembler.is_oversized(size) {
+                return Err(ErrorKind::OversizedPacket.into());
+            }
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
 
             SEND_METER.mark(size);
-            THROTTLING_SERVICE.write().on_enqueue(size)?;
-            let message = data.to_vec();
-            self.send_queue.push_back((message, 0), priority);
+            let packet = Packet::new(data.into(), priority)?;
+            self.send_queue.push_back(packet, priority);
 
             match priority {
                 SendQueuePriority::High => {
-                    incr_high_priority_packets();
                     SEND_HIGH_PRIORITY_METER.mark(size);
                 }
                 SendQueuePriority::Normal => {
@@ -291,6 +327,7 @@ impl Connection {
             socket,
             recv_buf: Bytes::new(),
             send_queue: PrioritySendQueue::new(),
+            sending_packet: None,
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
             assembler: Box::new(PacketWithLenAssembler::default()),
@@ -371,6 +408,10 @@ impl Connection {
         ConnectionDetails {
             token: self.token,
             recv_buf: self.recv_buf.len(),
+            sending_buf: self
+                .sending_packet
+                .as_ref()
+                .map_or(0, |p| p.data.len()),
             priority_queue_normal: self
                 .send_queue
                 .len_by_priority(SendQueuePriority::Normal),
@@ -388,6 +429,7 @@ impl Connection {
 pub struct ConnectionDetails {
     pub token: StreamToken,
     pub recv_buf: usize,
+    pub sending_buf: usize,
     pub priority_queue_normal: usize,
     pub priority_queue_high: usize,
     pub interest: String,
@@ -546,10 +588,11 @@ mod tests {
                 token: 1234567890usize,
                 socket: TestSocket::new(),
                 send_queue: PrioritySendQueue::new(),
+                sending_packet: None,
                 recv_buf: Bytes::new(),
                 interest: Ready::hup() | Ready::readable(),
                 registered: AtomicBool::new(false),
-                packet: Packet::new(1, 0),
+                assembler: Box::new(PacketWithLenAssembler::new(1, 0)),
             }
         }
     }
@@ -573,17 +616,22 @@ mod tests {
     #[test]
     fn connection_write_is_buffered() {
         let mut connection = TestConnection::new();
-        connection.socket = TestSocket::with_buf(1024);
-        let data = (vec![0; 10240], 0);
+        connection.socket = TestSocket::with_buf(10);
+        let packet =
+            Packet::new(vec![0; 60].into(), SendQueuePriority::High).unwrap();
         connection
             .send_queue
-            .push_back(data, SendQueuePriority::High);
-        incr_high_priority_packets();
+            .push_back(packet, SendQueuePriority::High);
 
         let status = connection.writable(&test_io());
 
         assert!(status.is_ok());
-        assert_eq!(1, connection.send_queue.len());
+        assert_eq!(0, connection.send_queue.len());
+
+        // raw_data_len = 60
+        // send_packet with packet_len = 60 + 1
+        // left size = 60 + 1 - 10 (socket buffer size)
+        assert_eq!(connection.sending_packet.unwrap().data.len(), 51);
     }
 
     #[test]
