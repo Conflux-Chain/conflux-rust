@@ -546,7 +546,6 @@ mod tests {
 
     use super::*;
     use crate::io::*;
-    use bytes::Bytes;
     use mio::Ready;
 
     struct TestSocket {
@@ -662,28 +661,30 @@ mod tests {
         assert!(status.is_ok());
         assert_eq!(0, connection.send_queue.len());
 
-        // raw_data_len = 60
-        // send_packet with packet_len = 60 + 1
-        // left size = 60 + 1 - 10 (socket buffer size)
-        assert_eq!(connection.sending_packet.unwrap().data.len(), 51);
+        let sending_packet = connection.sending_packet.unwrap();
+        assert_eq!(sending_packet.data.len(), 61);
+        assert_eq!(sending_packet.sending_pos, 10);
     }
 
     #[test]
     fn connection_read() {
         let mut connection = TestConnection::new();
 
-        connection.socket.read_buf = vec![3, 0];
+        let mut data = vec![1, 3, 5, 7];
+        connection.assembler.assemble(&mut data).unwrap();
+
+        connection.socket.read_buf = data[..2].to_vec();
         {
             let status = connection.readable();
             assert!(status.is_ok());
             assert!(status.unwrap().is_none());
         }
 
-        connection.socket.read_buf.extend_from_slice(&[3, 8]);
+        connection.socket.read_buf.extend_from_slice(&data[2..]);
         {
             let status = connection.readable();
             assert!(status.is_ok());
-            assert_eq!(&status.unwrap().unwrap()[..], &[0, 3, 8]);
+            assert_eq!(&status.unwrap().unwrap()[..], &[1, 3, 5, 7]);
         }
 
         {
