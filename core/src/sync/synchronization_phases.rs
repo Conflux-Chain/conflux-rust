@@ -426,8 +426,11 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             {
                 thread::sleep(time::Duration::from_millis(100));
             }
-            // Now, we can safely acquire the lock of consensus graph
+            // Now, we can safely acquire the lock of consensus graph.
             let old_consensus_inner = &mut *self.graph.consensus.inner.write();
+            // We should assign a new instance_id here since we construct a new
+            // consensus graph.
+            old_sync_inner.data_man.initialize_instance_id();
 
             let (cur_era_genesis_hash, _) =
                 old_sync_inner.get_genesis_hash_and_height_in_current_era();
