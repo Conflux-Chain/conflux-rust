@@ -3,17 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    connection::{
-        Connection as TcpConnection, ConnectionDetails, PacketSizer,
-        SendQueueStatus, WriteStatus, MAX_PAYLOAD_SIZE,
-    },
+    connection::{Connection, ConnectionDetails, SendQueueStatus, WriteStatus},
     handshake::Handshake,
     node_table::{NodeEndpoint, NodeEntry, NodeId},
     service::NetworkServiceInner,
     Capability, DisconnectReason, Error, ErrorKind, ProtocolId,
-    SessionMetadata, UpdateNodeOperation,
+    SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
-use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
+use bytes::{BufMut, Bytes, BytesMut};
 use io::*;
 use mio::{deprecated::*, tcp::*, *};
 use priority_send_queue::SendQueuePriority;
@@ -25,8 +22,6 @@ use std::{
     str,
     time::{Duration, Instant},
 };
-
-pub type Connection = TcpConnection<SessionPacket>;
 
 pub struct Session {
     pub metadata: SessionMetadata,
@@ -392,7 +387,7 @@ impl Session {
             return Err(ErrorKind::Expired.into());
         }
 
-        SessionPacket::assemble(packet_id, protocol, data)
+        Ok(SessionPacket::assemble(packet_id, protocol, data))
     }
 
     pub fn send_packet<Message: Send + Sync + Clone>(
@@ -554,43 +549,35 @@ impl<T> MovableWrapper<T> {
     }
 }
 
-pub struct SessionPacket {
+struct SessionPacket {
     pub id: u8,
     pub protocol: Option<ProtocolId>,
     pub data: Bytes,
 }
 
 impl SessionPacket {
-    pub fn assemble(
-        id: u8, protocol: Option<ProtocolId>, data: &[u8],
-    ) -> Result<BytesMut, Error> {
+    fn assemble(id: u8, protocol: Option<ProtocolId>, data: &[u8]) -> BytesMut {
+        // packet_id, protocol, data
         let packet_size = 1 + protocol.map_or(0, |p| p.len()) + data.len();
 
-        if packet_size > MAX_PAYLOAD_SIZE {
-            error!(
-                "Packet is too big, size = {}, max = {}",
-                packet_size, MAX_PAYLOAD_SIZE
-            );
-            bail!(ErrorKind::OversizedPacket);
-        }
-
-        let mut packet = BytesMut::with_capacity(3 + packet_size);
-        packet.put_uint_le(packet_size as u64, 3);
+        let mut packet = BytesMut::with_capacity(packet_size);
         packet.put_u8(id);
         if let Some(protocol) = protocol {
             packet.put_slice(&protocol);
         }
         packet.put_slice(data);
 
-        Ok(packet)
+        packet
     }
 
-    pub fn parse(mut data: Bytes) -> Result<Self, Error> {
-        if data.len() <= 3 {
+    fn parse(mut data: Bytes) -> Result<Self, Error> {
+        if data.is_empty() {
+            debug!("failed to parse session packet, data is empty");
             bail!(ErrorKind::BadProtocol);
         }
 
-        let packet_id = data.split_to(4)[3];
+        // first byte is packet_id
+        let packet_id = data.split_to(1)[0];
 
         if packet_id != PACKET_USER {
             return Ok(SessionPacket {
@@ -600,12 +587,13 @@ impl SessionPacket {
             });
         }
 
-        if data.len() < 3 {
-            bail!(ErrorKind::Decoder);
+        if data.len() < PROTOCOL_ID_SIZE {
+            debug!("failed to parse session protocol packet, invalid length for protocol id");
+            bail!(ErrorKind::BadProtocol);
         }
 
-        let mut protocol: ProtocolId = [0u8; 3];
-        protocol.copy_from_slice(&data.split_to(3));
+        let mut protocol = ProtocolId::default();
+        protocol.copy_from_slice(&data.split_to(PROTOCOL_ID_SIZE));
 
         Ok(SessionPacket {
             id: packet_id,
@@ -624,21 +612,5 @@ impl fmt::Debug for SessionPacket {
             self.protocol,
             self.data.len()
         )
-    }
-}
-
-impl PacketSizer for SessionPacket {
-    fn packet_size(raw_packet: &Bytes) -> usize {
-        let buf = &mut raw_packet.into_buf() as &mut dyn Buf;
-        if buf.remaining() >= 3 {
-            let size = buf.get_uint_le(3) as usize;
-            if buf.remaining() >= size {
-                size + 3
-            } else {
-                0
-            }
-        } else {
-            0
-        }
     }
 }
