@@ -205,7 +205,11 @@ impl BlockDataManager {
             // persist local_block_info for true genesis
             data_man.insert_local_block_info_to_db(
                 &genesis_block.hash(),
-                LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
+                LocalBlockInfo::new(
+                    BlockStatus::Valid,
+                    0,
+                    data_man.get_instance_id(),
+                ),
             );
             data_man.insert_epoch_execution_commitments(
                 data_man.genesis_block.hash(),
@@ -255,9 +259,19 @@ impl BlockDataManager {
                 *my_instance_id = instance_id + 1;
             }
         } else {
-            // this case will only happen when full node begins to sync block
-            // bodies
+            // This case will only happen when full node begins to sync block
+            // bodies. And we should change the instance_id of genesis block to
+            // current one.
             *my_instance_id += 1;
+            if let Some(mut local_block_info) =
+                self.local_block_info_from_db(&self.genesis_block().hash())
+            {
+                local_block_info.instance_id = *my_instance_id;
+                self.insert_local_block_info_to_db(
+                    &self.genesis_block().hash(),
+                    local_block_info,
+                );
+            }
         }
 
         // persist new instance id
