@@ -201,15 +201,12 @@ impl BlockDataManager {
         data_man
             .insert_block(data_man.genesis_block(), true /* persistent */);
 
-        // the local_block_info for genesis block will persist here
-        data_man.insert_local_block_info_to_db(
-            &genesis_block.block_header.hash(),
-            LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
-        );
-
-        if data_man.genesis_block().block_header.hash()
-            == genesis_block.block_header.hash()
-        {
+        if data_man.genesis_block().hash() == genesis_block.hash() {
+            // persist local_block_info for true genesis
+            data_man.insert_local_block_info_to_db(
+                &genesis_block.hash(),
+                LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
+            );
             data_man.insert_epoch_execution_commitments(
                 data_man.genesis_block.hash(),
                 *data_man.genesis_block.block_header.deferred_receipts_root(),
@@ -218,6 +215,17 @@ impl BlockDataManager {
                     .block_header
                     .deferred_logs_bloom_hash(),
             );
+        } else {
+            // for other era genesis, we need to change the instance_id
+            if let Some(mut local_block_info) = data_man
+                .local_block_info_from_db(&data_man.genesis_block().hash())
+            {
+                local_block_info.instance_id = data_man.get_instance_id();
+                data_man.insert_local_block_info_to_db(
+                    &data_man.genesis_block().hash(),
+                    local_block_info,
+                );
+            }
         }
 
         data_man
