@@ -486,6 +486,9 @@ impl CowNodeRef {
         let known = known_merkles.is_some();
         let known_merkles = known_merkles.unwrap_or_default();
         let mut merkles = [MERKLE_NULL_NODE; CHILDREN_COUNT];
+        let record_children_merkles = depth > CHILDREN_MERKLE_DEPTH_THRESHOLD
+            && self.uncached_children_count(trie, trie_node)
+                > CHILDREN_MERKLE_UNCACHED_THRESHOLD;
 
         for (i, maybe_node_ref_mut) in trie_node.children_table.iter_non_skip()
         {
@@ -520,7 +523,7 @@ impl CowNodeRef {
             }
         }
 
-        if depth > CHILDREN_MERKLE_DEPTH_THRESHOLD {
+        if record_children_merkles {
             if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
                 children_merkle_map.insert(
                     index,
