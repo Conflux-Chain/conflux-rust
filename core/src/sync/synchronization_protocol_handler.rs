@@ -28,7 +28,7 @@ use super::{
     request_manager::RequestManager,
 };
 use crate::{
-    block_data_manager::{BlockStatus, NULLU64},
+    block_data_manager::BlockStatus,
     parameters::sync::*,
     sync::{
         message::{Context, DynamicCapability},
@@ -367,7 +367,11 @@ impl SynchronizationProtocolHandler {
 
         if !handle_rlp_message(msg_id, &ctx, &rlp)? {
             warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
-            io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove), None);
+            io.disconnect_peer(
+                peer,
+                Some(UpdateNodeOperation::Remove),
+                None, /* reason */
+            );
         }
 
         Ok(())
@@ -436,7 +440,7 @@ impl SynchronizationProtocolHandler {
         }
 
         if disconnect {
-            io.disconnect_peer(peer, op, None);
+            io.disconnect_peer(peer, op, None /* reason */);
         }
     }
 
@@ -640,9 +644,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id()
-                || info.get_instance_id() == NULLU64
-            {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
                 // This block header has already entered consensus
                 // graph in this run.
                 return true;
@@ -716,8 +718,11 @@ impl SynchronizationProtocolHandler {
                 }
             }
 
-            let (success, to_relay) =
-                self.graph.insert_block(block, true, true, false);
+            let (success, to_relay) = self.graph.insert_block(
+                block, true,  /* need_to_verify */
+                true,  /* persistent */
+                false, /* recover_from_db */
+            );
             if success {
                 // The requested block is correctly received
                 received_blocks.insert(hash);
@@ -771,7 +776,11 @@ impl SynchronizationProtocolHandler {
         assert!(!self.graph.contains_block(&hash));
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
-        self.graph.insert_block(block, false, true, false);
+        self.graph.insert_block(
+            block, false, /* need_to_verify */
+            true,  /* persistent */
+            false, /* recover_from_db */
+        );
         to_relay
     }
 
@@ -852,10 +861,15 @@ impl SynchronizationProtocolHandler {
                 block: (*block).clone().into(),
             });
             for id in self.syn.peers.read().keys() {
-                send_message_with_throttling(io, *id, msg.as_ref(), true)
-                    .unwrap_or_else(|e| {
-                        warn!("Error sending new blocks, err={:?}", e);
-                    });
+                send_message_with_throttling(
+                    io,
+                    *id,
+                    msg.as_ref(),
+                    true, /* throttling_disabled */
+                )
+                .unwrap_or_else(|e| {
+                    warn!("Error sending new blocks, err={:?}", e);
+                });
             }
         }
     }
@@ -1204,9 +1218,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id()
-                || info.get_instance_id() == NULLU64
-            {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
                 // This block has already entered consensus graph
                 // in this run.
                 return true;
@@ -1215,7 +1227,11 @@ impl SynchronizationProtocolHandler {
 
         // FIXME: If there is no block info in db, whether we need to fetch
         // block from db?
-        if let Some(block) = self.graph.data_man.block_by_hash(hash, false) {
+        if let Some(block) = self
+            .graph
+            .data_man
+            .block_by_hash(hash, false /* update_cache */)
+        {
             debug!("Recovered block {:?} from db", hash);
             // Process blocks from db
             // The parameter `failed_peer` is only used when there exist some
@@ -1262,8 +1278,10 @@ impl SynchronizationProtocolHandler {
     pub fn expire_block_gc(
         &self, io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
-        let need_to_relay =
-            self.graph.remove_expire_blocks(timeout, true, None);
+        let need_to_relay = self.graph.remove_expire_blocks(
+            timeout, true, /* recover */
+            None, /* maybe_out_of_era_blocks */
+        );
         self.relay_blocks(io, need_to_relay)
     }
 }
@@ -1347,7 +1365,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
-            io.disconnect_peer(peer, Some(UpdateNodeOperation::Failure), None);
+            io.disconnect_peer(
+                peer,
+                Some(UpdateNodeOperation::Failure),
+                None, /* reason */
+            );
         } else {
             self.syn
                 .handshaking_peers
@@ -1398,7 +1420,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                     io.disconnect_peer(
                         peer,
                         Some(UpdateNodeOperation::Failure),
-                        None,
+                        None, /* reason */
                     );
                 }
             }

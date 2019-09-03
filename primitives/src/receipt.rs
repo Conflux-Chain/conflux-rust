@@ -8,7 +8,8 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
-pub const TRANSACTION_OUTCOME_EXCEPTION: u8 = 1;
+pub const TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING: u8 = 1; // gas fee charged
+pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas fee charged
 
 /// Information describing execution of a transaction.
 #[derive(Debug, Clone, PartialEq, Eq)]

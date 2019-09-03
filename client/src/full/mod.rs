@@ -16,7 +16,10 @@ use cfxcore::{
 };
 
 use crate::rpc::{
-    impls::{cfx::RpcImpl, common::RpcImpl as CommonImpl},
+    extractor::RpcExtractor,
+    impls::{
+        cfx::RpcImpl, common::RpcImpl as CommonImpl, pubsub::PubSubClient,
+    },
     setup_debug_rpc_apis, setup_public_rpc_apis,
 };
 use cfx_types::{Address, U256};
@@ -26,6 +29,7 @@ use db::SystemDB;
 use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
+use runtime::Runtime;
 use secret_store::SecretStore;
 use std::{
     any::Any,
@@ -52,6 +56,7 @@ pub struct FullClientHandle {
     pub blockgen: Arc<BlockGenerator>,
     pub secret_store: Arc<SecretStore>,
     pub ledger_db: Weak<SystemDB>,
+    pub runtime: Runtime,
 }
 
 impl FullClientHandle {
@@ -331,29 +336,41 @@ impl FullClient {
             txpool.clone(),
         ));
 
-        let debug_rpc_http_server = super::rpc::new_http(
+        let runtime = Runtime::with_default_thread_count();
+        let pubsub = PubSubClient::new(runtime.executor());
+
+        let debug_rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 Some((127, 0, 0, 1)),
                 conf.raw_conf.jsonrpc_local_http_port,
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone()),
+            setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone(), None),
         )?;
 
-        let rpc_tcp_server = super::rpc::new_tcp(
+        let rpc_tcp_server = super::rpc::start_tcp(
             super::rpc::TcpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_tcp_port,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_debug_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub),
+                )
             } else {
-                setup_public_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_public_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub),
+                )
             },
+            RpcExtractor,
         )?;
 
-        let rpc_http_server = super::rpc::new_http(
+        let rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_http_port,
@@ -361,9 +378,17 @@ impl FullClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_debug_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    None,
+                )
             } else {
-                setup_public_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_public_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    None,
+                )
             },
         )?;
 
@@ -379,6 +404,7 @@ impl FullClient {
             consensus,
             secret_store,
             sync,
+            runtime,
         })
     }
 

@@ -22,7 +22,9 @@ use cfx_types::{into_u256, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
+        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_SUCCESS,
     },
     Block, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
     TransactionAddress,
@@ -238,11 +240,13 @@ impl ConsensusExecutor {
                 KECCAK_EMPTY_BLOOM,
             )
         } else {
-            if let Some(result) = self.handler.get_execution_result(&epoch_hash)
-            {
+            if self.handler.data_man.epoch_executed(&epoch_hash) {
                 // The epoch already executed, so we do not need wait for the
                 // queue to be empty
-                return result;
+                return self
+                    .handler
+                    .get_execution_result(&epoch_hash)
+                    .expect("it should success");
             }
             let (sender, receiver) = channel();
             debug!("Wait for execution result of epoch {:?}", epoch_hash);
@@ -338,10 +342,8 @@ impl ConsensusExecutor {
                         if *index == pivot_arena_index {
                             no_reward =
                                 block_consensus_node.data.partial_invalid
-                                    || !inner
-                                        .execution_info_cache
-                                        .get(&pivot_arena_index)
-                                        .unwrap()
+                                    || !inner.arena[pivot_arena_index]
+                                        .data
                                         .state_valid;
                         } else {
                             no_reward = block_consensus_node
@@ -401,9 +403,10 @@ impl ConsensusExecutor {
                             for a_index in anticone_set {
                                 // TODO: Maybe consider to use base difficulty
                                 // Check with the spec!
-                                anticone_difficulty += U512::from(into_u256(
-                                    inner.block_weight(a_index, false),
-                                ));
+                                anticone_difficulty +=
+                                    U512::from(into_u256(inner.block_weight(
+                                        a_index, false, /* inclusive */
+                                    )));
                             }
                         };
 
@@ -903,7 +906,10 @@ impl ConsensusExecutionHandler {
         // Get blocks in this epoch after skip checking
         let epoch_blocks = self
             .data_man
-            .blocks_by_hash_list(epoch_block_hashes, true)
+            .blocks_by_hash_list(
+                epoch_block_hashes,
+                true, /* update_cache */
+            )
             .expect("blocks exist");
         let pivot_block = epoch_blocks.last().expect("Not empty");
 
@@ -1000,12 +1006,14 @@ impl ConsensusExecutionHandler {
             let mut n_other = 0;
             let mut cumulative_gas_used = U256::zero();
             for (idx, transaction) in block.transactions.iter().enumerate() {
-                let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
+                let mut tx_outcome_status =
+                    TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                 let mut transaction_logs = Vec::new();
+                let mut nonce_increased = false;
 
                 let r = {
                     Executive::new(state, &env, &machine, &spec)
-                        .transact(transaction)
+                        .transact(transaction, &mut nonce_increased)
                 };
                 // TODO Store fine-grained output status in receipts.
                 // Note now NotEnoughCash has
@@ -1024,6 +1032,7 @@ impl ConsensusExecutionHandler {
                         );
                     }
                     Err(ExecutionError::InvalidNonce { expected, got }) => {
+                        // not inc nonce
                         n_invalid_nonce += 1;
                         trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
                         // Add future transactions back to pool if we are
@@ -1036,21 +1045,36 @@ impl ConsensusExecutionHandler {
                             to_pending.push(transaction.clone());
                         }
                     }
-                    Ok(executed) => {
-                        env.gas_used = executed.cumulative_gas_used;
-                        cumulative_gas_used = executed.cumulative_gas_used;
-                        n_ok += 1;
-                        GOOD_TPS_METER.mark(1);
-                        trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
-                        accumulated_fee += executed.fee;
-                        transaction_logs = executed.logs;
-                        tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                    Ok(ref executed) => {
+                        if executed.exception.is_some() {
+                            warn!(
+                                "tx execution error: transaction={:?}, err={:?}",
+                                transaction, r
+                            );
+                        } else {
+                            env.gas_used = executed.cumulative_gas_used;
+                            cumulative_gas_used = executed.cumulative_gas_used;
+                            n_ok += 1;
+                            GOOD_TPS_METER.mark(1);
+                            trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                            accumulated_fee += executed.fee;
+                            transaction_logs = executed.logs.clone();
+                            tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                        }
                     }
                     _ => {
                         n_other += 1;
                         trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
                     }
                 }
+
+                if nonce_increased
+                    && tx_outcome_status != TRANSACTION_OUTCOME_SUCCESS
+                {
+                    tx_outcome_status =
+                        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
+                }
+
                 let receipt = Receipt::new(
                     tx_outcome_status,
                     cumulative_gas_used,
@@ -1064,7 +1088,9 @@ impl ConsensusExecutionHandler {
                         block_hash: block.hash(),
                         index: idx,
                     };
-                    if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
+                    if tx_outcome_status
+                        != TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
+                    {
                         self.data_man
                             .insert_transaction_address(&hash, &tx_addr);
                     }
@@ -1202,7 +1228,7 @@ impl ConsensusExecutionHandler {
             let receipts = match self.data_man.block_results_by_hash_with_epoch(
                 &block_hash,
                 &reward_epoch_hash,
-                true,
+                true, /* update_cache */
             ) {
                 Some(receipts) => receipts.receipts,
                 None => {
@@ -1394,7 +1420,8 @@ impl ConsensusExecutionHandler {
             gas_limit: tx.gas.clone(),
         };
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let r = ex.transact(tx);
+        let mut nonce_increased = false;
+        let r = ex.transact(tx, &mut nonce_increased);
         trace!("Execution result {:?}", r);
         r.map(|r| (r.output, r.gas_used))
             .map_err(|e| format!("execution error: {:?}", e))

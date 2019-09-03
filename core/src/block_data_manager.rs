@@ -27,7 +27,10 @@ use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
     block::{from_tx_hash, get_shortid_key, CompactBlock},
-    receipt::{Receipt, TRANSACTION_OUTCOME_SUCCESS},
+    receipt::{
+        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_SUCCESS,
+    },
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
@@ -56,23 +59,11 @@ pub struct EpochExecutionCommitments {
     pub logs_bloom_hash: H256,
 }
 
-#[derive(Clone, RlpEncodable, RlpDecodable)]
+#[derive(Clone, RlpEncodable, RlpDecodable, Default)]
 pub struct ConsensusGraphExecutionInfo {
-    pub state_valid: bool,
     pub original_deferred_state_root: H256,
     pub original_deferred_receipt_root: H256,
     pub original_deferred_logs_bloom_hash: H256,
-}
-
-impl Default for ConsensusGraphExecutionInfo {
-    fn default() -> Self {
-        ConsensusGraphExecutionInfo {
-            state_valid: true,
-            original_deferred_state_root: Default::default(),
-            original_deferred_receipt_root: Default::default(),
-            original_deferred_logs_bloom_hash: Default::default(),
-        }
-    }
 }
 
 pub struct BlockDataManager {
@@ -88,7 +79,7 @@ pub struct BlockDataManager {
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
     cur_consensus_era_stable_hash: RwLock<H256>,
-    instance_id: u64,
+    instance_id: Mutex<u64>,
 
     config: DataManagerConfiguration,
 
@@ -140,7 +131,7 @@ impl BlockDataManager {
             db,
             storage_manager,
             cache_man,
-            instance_id: 0,
+            instance_id: Mutex::new(0),
             config,
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
@@ -155,9 +146,10 @@ impl BlockDataManager {
             data_man.checkpoint_hashes_from_db()
         {
             if checkpoint_hash != genesis_block.block_header.hash() {
-                if let Some(checkpoint_block) =
-                    data_man.block_by_hash(&checkpoint_hash, false)
-                {
+                if let Some(checkpoint_block) = data_man.block_by_hash(
+                    &checkpoint_hash,
+                    false, /* update_cache */
+                ) {
                     if data_man
                         .storage_manager
                         .contains_state(SnapshotAndEpochIdRef::new(
@@ -170,8 +162,9 @@ impl BlockDataManager {
                             *checkpoint_block.block_header.parent_hash();
                         for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
                             assert_ne!(cur_hash, H256::default());
-                            let cur_block =
-                                data_man.block_by_hash(&cur_hash, false);
+                            let cur_block = data_man.block_by_hash(
+                                &cur_hash, false, /* update_cache */
+                            );
                             if cur_block.is_some()
                                 && data_man
                                     .storage_manager
@@ -205,15 +198,18 @@ impl BlockDataManager {
             },
         );
 
-        data_man.insert_block(data_man.genesis_block(), true);
+        data_man
+            .insert_block(data_man.genesis_block(), true /* persistent */);
 
-        // persist local_block_info for real genesis block
-        if data_man.genesis_block().block_header.hash()
-            == genesis_block.block_header.hash()
-        {
+        if data_man.genesis_block().hash() == genesis_block.hash() {
+            // persist local_block_info for true genesis
             data_man.insert_local_block_info_to_db(
-                &genesis_block.block_header.hash(),
-                LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
+                &genesis_block.hash(),
+                LocalBlockInfo::new(
+                    BlockStatus::Valid,
+                    0,
+                    data_man.get_instance_id(),
+                ),
             );
             data_man.insert_epoch_execution_commitments(
                 data_man.genesis_block.hash(),
@@ -223,38 +219,65 @@ impl BlockDataManager {
                     .block_header
                     .deferred_logs_bloom_hash(),
             );
+        } else {
+            // for other era genesis, we need to change the instance_id
+            if let Some(mut local_block_info) = data_man
+                .local_block_info_from_db(&data_man.genesis_block().hash())
+            {
+                local_block_info.instance_id = data_man.get_instance_id();
+                data_man.insert_local_block_info_to_db(
+                    &data_man.genesis_block().hash(),
+                    local_block_info,
+                );
+            }
         }
 
         data_man
     }
 
-    pub fn get_instance_id(&self) -> u64 { self.instance_id }
+    pub fn get_instance_id(&self) -> u64 { *self.instance_id.lock() }
 
-    fn initialize_instance_id(&mut self) {
-        // load last instance id
-        let instance_id = match self.db.key_value().get(COL_MISC, b"instance")
-            .expect("Low-level database error when fetching instance id. Some issue with disk?")
+    pub fn initialize_instance_id(&self) {
+        let mut my_instance_id = self.instance_id.lock();
+        if *my_instance_id == 0 {
+            // load last instance id
+            let instance_id = match self.db.key_value().get(COL_MISC, b"instance")
+                .expect("Low-level database error when fetching instance id. Some issue with disk?")
+                {
+                    Some(instance) => {
+                        let rlp = Rlp::new(&instance);
+                        Some(rlp.val_at::<u64>(0).expect("Failed to decode instance id!"))
+                    }
+                    None => {
+                        info!("No instance id got from db");
+                        None
+                    }
+                };
+
+            // set new instance id
+            if let Some(instance_id) = instance_id {
+                *my_instance_id = instance_id + 1;
+            }
+        } else {
+            // This case will only happen when full node begins to sync block
+            // bodies. And we should change the instance_id of genesis block to
+            // current one.
+            *my_instance_id += 1;
+            if let Some(mut local_block_info) =
+                self.local_block_info_from_db(&self.genesis_block().hash())
             {
-                Some(instance) => {
-                    let rlp = Rlp::new(&instance);
-                    Some(rlp.val_at::<u64>(0).expect("Failed to decode instance id!"))
-                }
-                None => {
-                    info!("No instance id got from db");
-                    None
-                }
-            };
-
-        assert_eq!(self.instance_id, 0);
-        // set new instance id
-        if let Some(instance_id) = instance_id {
-            self.instance_id = instance_id + 1;
+                local_block_info.instance_id = *my_instance_id;
+                self.insert_local_block_info_to_db(
+                    &self.genesis_block().hash(),
+                    local_block_info,
+                );
+            }
         }
 
         // persist new instance id
         let mut rlp_stream = RlpStream::new();
         rlp_stream.begin_list(1);
-        rlp_stream.append(&self.instance_id);
+        rlp_stream.append(&(*my_instance_id));
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_MISC, b"instance", &rlp_stream.drain());
         self.commit_db_transaction(dbops);
@@ -265,8 +288,12 @@ impl BlockDataManager {
     pub fn transaction_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<SignedTransaction>> {
-        let address = self.transaction_address_by_hash(hash, false)?;
-        let block = self.block_by_hash(&address.block_hash, false)?;
+        let address = self
+            .transaction_address_by_hash(hash, false /* update_cache */)?;
+        let block = self.block_by_hash(
+            &address.block_hash,
+            false, /* update_cache */
+        )?;
         assert!(address.index < block.transactions.len());
         Some(block.transactions[address.index].clone())
     }
@@ -592,7 +619,7 @@ impl BlockDataManager {
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
-        let result = self.block_by_hash(hash, false)?;
+        let result = self.block_by_hash(hash, false /* update_cache */)?;
         Some(result.block_header.height())
     }
 
@@ -837,9 +864,9 @@ impl BlockDataManager {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
-                if let Some(r) =
-                    self.block_results_by_hash_with_epoch(h, epoch_hash, true)
-                {
+                if let Some(r) = self.block_results_by_hash_with_epoch(
+                    h, epoch_hash, true, /* update_cache */
+                ) {
                     epoch_receipts.push(r.receipts);
                 } else {
                     return false;
@@ -848,22 +875,26 @@ impl BlockDataManager {
             // Recover tx address if we will skip pivot chain execution
             for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
             {
-                let block =
-                    self.block_by_hash(block_hash, true).expect("block exists");
+                let block = self
+                    .block_by_hash(block_hash, true /* update_cache */)
+                    .expect("block exists");
                 for (tx_idx, tx) in block.transactions.iter().enumerate() {
-                    if epoch_receipts[block_idx]
+                    match epoch_receipts[block_idx]
                         .get(tx_idx)
                         .unwrap()
                         .outcome_status
-                        == TRANSACTION_OUTCOME_SUCCESS
                     {
-                        self.insert_transaction_address(
-                            &tx.hash,
-                            &TransactionAddress {
-                                block_hash: *block_hash,
-                                index: tx_idx,
-                            },
-                        )
+                        TRANSACTION_OUTCOME_SUCCESS
+                        | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
+                            self.insert_transaction_address(
+                                &tx.hash,
+                                &TransactionAddress {
+                                    block_hash: *block_hash,
+                                    index: tx_idx,
+                                },
+                            )
+                        }
+                        _ => {}
                     }
                 }
             }

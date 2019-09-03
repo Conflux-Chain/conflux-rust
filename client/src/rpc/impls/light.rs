@@ -105,8 +105,12 @@ impl RpcImpl {
 
     #[allow(unused_variables)]
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
-        // TODO
-        unimplemented!()
+        info!("RPC Request: cfx_getLogs({:?})", filter);
+        self.light
+            .get_logs(filter.into())
+            .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
+            .map_err(|e| format!("Log filtering failed: {:?}", e))
+            .map_err(RpcError::invalid_params)
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {

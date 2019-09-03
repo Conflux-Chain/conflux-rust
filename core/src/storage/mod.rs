@@ -5,7 +5,10 @@
 pub(self) mod snapshot_manager;
 pub mod state;
 pub mod state_manager;
+#[macro_use]
 pub(self) mod storage_db;
+#[macro_use]
+pub mod utils;
 
 pub mod tests;
 
@@ -19,6 +22,9 @@ pub use self::{
         errors::{Error, ErrorKind, Result},
         multi_version_merkle_patricia_trie::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
+        },
+        storage_db::snapshot_sync::{
+            Chunk, ChunkKey, RangedManifest, RestoreProgress, Restorer,
         },
     },
     state::{State as Storage, StateTrait as StorageTrait},

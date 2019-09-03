@@ -2,11 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub struct SubTrieVisitor<'trie> {
+pub struct SubTrieVisitor<'trie, 'db: 'trie> {
     root: CowNodeRef,
 
     trie_ref: &'trie MerklePatriciaTrie,
-    db: &'trie dyn KeyValueDbTraitRead,
+    db: ReturnAfterUse<'trie, Box<dyn KeyValueDbTraitOwnedRead + 'db>>,
 
     /// We use ReturnAfterUse because only one SubTrieVisitor(the deepest) can
     /// hold the mutable reference of owned_node_set.
@@ -15,30 +15,32 @@ pub struct SubTrieVisitor<'trie> {
 
 type MerklePatriciaTrie = DeltaMpt;
 
-impl<'trie> SubTrieVisitor<'trie> {
+impl<'trie> SubTrieVisitor<'trie, 'trie> {
     pub fn new(
         trie_ref: &'trie MerklePatriciaTrie, root: NodeRefDeltaMpt,
         owned_node_set: &'trie mut Option<OwnedNodeSet>,
-    ) -> Self
+    ) -> Result<Self>
     {
-        Self {
+        Ok(Self {
             trie_ref,
-            db: trie_ref.db_read_only(),
+            db: ReturnAfterUse::new_from_value(trie_ref.db_owned_read()?),
             root: CowNodeRef::new(root, owned_node_set.as_ref().unwrap()),
             owned_node_set: ReturnAfterUse::new(owned_node_set),
-        }
+        })
     }
+}
 
+impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     fn new_visitor_for_subtree<'a>(
         &'a mut self, child_node: NodeRefDeltaMpt,
-    ) -> SubTrieVisitor<'a>
+    ) -> SubTrieVisitor<'a, 'db>
     where 'trie: 'a {
         let trie_ref = self.trie_ref;
         let cow_child_node =
             CowNodeRef::new(child_node, self.owned_node_set.get_ref());
         SubTrieVisitor {
             trie_ref,
-            db: self.db,
+            db: ReturnAfterUse::<'a, Box<dyn 'db + KeyValueDbTraitOwnedRead >>::new_from_origin::<'trie>(&mut self.db),
             root: cow_child_node,
             owned_node_set: ReturnAfterUse::new_from_origin(
                 &mut self.owned_node_set,
@@ -53,7 +55,7 @@ impl<'trie> SubTrieVisitor<'trie> {
     }
 
     fn get_trie_node<'a>(
-        &self, key: KeyPart, allocator_ref: AllocatorRefRefDeltaMpt<'a>,
+        &mut self, key: KeyPart, allocator_ref: AllocatorRefRefDeltaMpt<'a>,
     ) -> Result<
         Option<
             GuardedValue<
@@ -76,7 +78,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                     allocator_ref,
                     node_ref,
                     cache_manager,
-                    self.db,
+                    &mut **self.db.get_mut(),
                     &mut is_loaded_from_db,
                 )?;
             if is_loaded_from_db {
@@ -124,7 +126,7 @@ impl<'trie> SubTrieVisitor<'trie> {
         return Ok(Some(merkles));
     }
 
-    pub fn get_proof<'a>(&self, key: KeyPart) -> Result<TrieProof> {
+    pub fn get_proof<'a>(&mut self, key: KeyPart) -> Result<TrieProof> {
         let allocator_ref = &self.node_memory_manager().get_allocator();
         let node_memory_manager = self.node_memory_manager();
         let cache_manager = node_memory_manager.get_cache_manager();
@@ -141,7 +143,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                     allocator_ref,
                     node_ref.clone(),
                     cache_manager,
-                    self.db,
+                    &mut **self.db.get_mut(),
                     &mut false,
                 )?;
 
@@ -185,7 +187,7 @@ impl<'trie> SubTrieVisitor<'trie> {
         Ok(TrieProof::new(proof_nodes))
     }
 
-    pub fn get(&self, key: KeyPart) -> Result<Option<Box<[u8]>>> {
+    pub fn get(&mut self, key: KeyPart) -> Result<Option<Box<[u8]>>> {
         let allocator = self.node_memory_manager().get_allocator();
         let maybe_trie_node = self.get_trie_node(key, &allocator)?;
 
@@ -196,7 +198,7 @@ impl<'trie> SubTrieVisitor<'trie> {
     }
 
     pub fn get_merkle_hash_wo_compressed_path(
-        &self, key: KeyPart,
+        &mut self, key: KeyPart,
     ) -> Result<Option<MerkleHash>> {
         let allocator = self.node_memory_manager().get_allocator();
         let maybe_trie_node = self.get_trie_node(key, &allocator)?;
@@ -237,8 +239,11 @@ impl<'trie> SubTrieVisitor<'trie> {
 
         // FIXME: map_split?
         let is_owned = node_cow.is_owned();
-        let trie_node_ref =
-            node_cow.get_trie_node(node_memory_manager, &allocator, self.db)?;
+        let trie_node_ref = node_cow.get_trie_node(
+            node_memory_manager,
+            &allocator,
+            &mut **self.db.get_mut(),
+        )?;
         match trie_node_ref.walk::<Read>(key) {
             WalkStop::Arrived => {
                 // If value doesn't exists, returns invalid key error.
@@ -277,7 +282,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                             trie_node,
                             child_node_ref,
                             child_index,
-                            self.db,
+                            &mut **self.db.get_mut(),
                         )?;
 
                         // FIXME: true?
@@ -314,7 +319,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                 let trie_node_ref = node_cow.get_trie_node(
                     node_memory_manager,
                     &allocator,
-                    self.db,
+                    &mut **self.db.get_mut(),
                 )?;
                 let (value, child_replaced, new_child_node) = result.unwrap();
                 if child_replaced {
@@ -338,7 +343,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                                 trie_node,
                                 child_node_ref,
                                 child_index,
-                                self.db,
+                                &mut **self.db.get_mut(),
                             )?;
 
                             // FIXME: true?
@@ -414,8 +419,11 @@ impl<'trie> SubTrieVisitor<'trie> {
         // TODO(yz): be compliant to borrow rule and avoid duplicated
 
         // FIXME: map_split?
-        let trie_node_ref =
-            node_cow.get_trie_node(node_memory_manager, &allocator, self.db)?;
+        let trie_node_ref = node_cow.get_trie_node(
+            node_memory_manager,
+            &allocator,
+            &mut **self.db.get_mut(),
+        )?;
 
         let key_prefix: CompressedPathRaw;
         match trie_node_ref.walk::<Write>(key_remaining) {
@@ -461,7 +469,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                 let trie_node_ref = node_cow.get_trie_node(
                     node_memory_manager,
                     &allocator,
-                    self.db,
+                    &mut **self.db.get_mut(),
                 )?;
                 let (value, child_replaced, new_child_node) = result.unwrap();
                 // FIXME: copied from delete(). Try to reuse code?
@@ -486,7 +494,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                                 trie_node,
                                 child_node_ref,
                                 child_index,
-                                self.db,
+                                &mut **self.db.get_mut(),
                             )?;
 
                             // FIXME: true?
@@ -547,7 +555,7 @@ impl<'trie> SubTrieVisitor<'trie> {
             trie_node,
             key_prefix,
             &mut old_values,
-            self.db,
+            &mut **self.db.get_mut(),
         )?;
 
         Ok((Some(old_values), true, None))
@@ -576,8 +584,11 @@ impl<'trie> SubTrieVisitor<'trie> {
         let is_owned = node_cow.is_owned();
         // FIXME: apply db_load_counter to all places where it matters, and also
         // FIXME: pass down to recursion. (Also check other methods.)
-        let trie_node_ref =
-            node_cow.get_trie_node(node_memory_manager, &allocator, self.db)?;
+        let trie_node_ref = node_cow.get_trie_node(
+            node_memory_manager,
+            &allocator,
+            &mut **self.db.get_mut(),
+        )?;
         match trie_node_ref.walk::<Write>(key) {
             WalkStop::Arrived => {
                 let node_ref_changed = !is_owned;
@@ -612,7 +623,7 @@ impl<'trie> SubTrieVisitor<'trie> {
                         GuardedValue::take(node_cow.get_trie_node(
                             node_memory_manager,
                             &allocator,
-                            self.db,
+                            &mut **self.db.get_mut(),
                         )?);
                     node_cow
                         .cow_modify(
@@ -759,8 +770,8 @@ impl<'trie> SubTrieVisitor<'trie> {
 use super::{
     super::{
         super::{
-            super::storage_db::key_value_db::KeyValueDbTraitRead, errors::*,
-            state::OwnedNodeSet,
+            super::storage_db::key_value_db::KeyValueDbTraitOwnedRead,
+            errors::*, state::OwnedNodeSet,
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,

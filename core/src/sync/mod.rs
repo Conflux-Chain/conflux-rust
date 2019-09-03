@@ -275,7 +275,9 @@ pub mod msg_sender {
     pub fn send_message(
         io: &dyn NetworkContext, peer: PeerId, msg: &dyn Message,
     ) -> Result<(), NetworkError> {
-        send_message_with_throttling(io, peer, msg, false)
+        send_message_with_throttling(
+            io, peer, msg, false, /* throttling_disabled */
+        )
     }
 
     pub fn send_message_with_throttling(

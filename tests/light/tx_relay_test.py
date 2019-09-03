@@ -97,6 +97,7 @@ class TxRelayTest(ConfluxTestFramework):
             # not retrieve receipts or tx addresses. this will be implemented later
             node0_tx["blockHash"] = None
             node0_tx["transactionIndex"] = None
+            node0_tx["status"] = None
 
             assert_equal(light_tx, node0_tx)
             self.log.info(f"tx {hash} correct")
@@ -109,13 +110,12 @@ class TxRelayTest(ConfluxTestFramework):
         epoch_before_blamed_blocks = self.rpc[FULLNODE0].epoch_number()
 
         # generate some incorrect blocks
+        # NOTE: we avoid 51% attacks as it could cause some inconsistency during syncing
         for _ in range(num_blocks):
-            self.generate_incorrect_block(FULLNODE0)
-
-        # generate one correct block and check blame info
-        hash = self.generate_correct_block(FULLNODE0)
-        block = self.rpc[FULLNODE0].block_by_hash(hash)
-        assert_equal(block["blame"], num_blocks)
+            if random.random() < 0.66:
+                self.generate_correct_block(FULLNODE0)
+            else:
+                self.generate_incorrect_block(FULLNODE0)
 
         # generate some correct blocks to make sure we are confident about the previous one
         sync_blocks(self.nodes[FULLNODE0:FULLNODE1])

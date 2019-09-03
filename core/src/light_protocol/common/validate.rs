@@ -4,15 +4,13 @@
 
 use std::sync::Arc;
 
-use cfx_types::H256;
-use primitives::{BlockHeaderBuilder, SignedTransaction};
+use cfx_types::{Bloom, H256};
+use primitives::{Block, BlockHeaderBuilder, Receipt, SignedTransaction};
 
 use crate::{
     consensus::ConsensusGraph,
-    light_protocol::{
-        message::{ReceiptsWithProof, StateRootWithProof},
-        Error, ErrorKind,
-    },
+    hash::keccak,
+    light_protocol::{message::StateRootWithProof, Error, ErrorKind},
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
 };
 
@@ -30,6 +28,84 @@ impl Validate {
     pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
         let ledger = LedgerInfo::new(consensus.clone());
         Validate { consensus, ledger }
+    }
+
+    #[inline]
+    pub fn bloom_with_local_info(
+        &self, epoch: u64, bloom: Bloom,
+    ) -> Result<(), Error> {
+        let pivot = self.ledger.pivot_hash_of(epoch)?;
+
+        let local = self
+            .consensus
+            .data_man
+            .get_epoch_execution_commitments(&pivot);
+
+        let local = match local {
+            Some(res) => res.logs_bloom_hash,
+            None => {
+                warn!(
+                    "Bloom hash not found, epoch={}, bloom={:?}",
+                    epoch, bloom
+                );
+                return Err(ErrorKind::InternalError.into());
+            }
+        };
+
+        let received = keccak(bloom);
+
+        if received != local {
+            warn!(
+                "Bloom validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidBloom.into());
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn receipts_with_local_info(
+        &self, epoch: u64, receipts: &Vec<Vec<Receipt>>,
+    ) -> Result<(), Error> {
+        let pivot = self.ledger.pivot_hash_of(epoch)?;
+
+        let local = self
+            .consensus
+            .data_man
+            .get_epoch_execution_commitments(&pivot);
+
+        let local = match local {
+            Some(res) => res.receipts_root,
+            None => {
+                warn!(
+                    "Receipts root not found, epoch={}, receipts={:?}",
+                    epoch, receipts
+                );
+                return Err(ErrorKind::InternalError.into());
+            }
+        };
+
+        // convert Vec<Vec<Receipt>> -> Vec<Arc<Vec<Receipt>>>
+        // for API compatibility
+        let rs = receipts
+            .clone()
+            .into_iter()
+            .map(|rs| Arc::new(rs))
+            .collect();
+
+        let received = BlockHeaderBuilder::compute_block_receipts_root(&rs);
+
+        if received != local {
+            warn!(
+                "Receipt validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidReceipts.into());
+        }
+
+        Ok(())
     }
 
     #[inline]
@@ -57,11 +133,9 @@ impl Validate {
     pub fn ledger_proof(
         &self, epoch: u64, proof: LedgerProof,
     ) -> Result<H256, Error> {
-        // find the first header that can verify the state root requested
-        let witness = self.consensus.first_epoch_with_correct_state_of(epoch);
-
-        let witness = match witness {
-            Some(epoch) => epoch,
+        // find witness
+        let witness = match self.ledger.witness_of_state_at(epoch) {
+            Some(w) => w,
             None => {
                 warn!("Unable to verify state proof for epoch {}", epoch);
                 return Err(ErrorKind::UnableToProduceProof.into());
@@ -80,7 +154,7 @@ impl Validate {
         assert!(witness > blame);
 
         // do the actual validation
-        proof.validate(witness_header)?;
+        proof.validate(&witness_header)?;
 
         // return the root hash corresponding to `epoch`
         let index = (witness - epoch - DEFERRED_STATE_EPOCH_COUNT) as usize;
@@ -100,30 +174,6 @@ impl Validate {
                 Err(ErrorKind::PivotHashMismatch.into())
             }
         }
-    }
-
-    #[inline]
-    pub fn receipts(
-        &self, epoch: u64, rwp: &ReceiptsWithProof,
-    ) -> Result<(), Error> {
-        let ReceiptsWithProof { receipts, proof } = rwp;
-        let proof = LedgerProof::ReceiptsRoot(proof.to_vec());
-
-        // convert Vec<Vec<_>> to Vec<Arc<Vec<_>>>
-        let rs = receipts.into_iter().cloned().map(Arc::new).collect();
-
-        let received = self.ledger_proof(epoch, proof)?;
-        let computed = BlockHeaderBuilder::compute_block_receipts_root(&rs);
-
-        if received != computed {
-            info!(
-                "Receipts root hash mismatch: received={}, computed={}",
-                received, computed
-            );
-            return Err(ErrorKind::InvalidReceipts.into());
-        }
-
-        Ok(())
     }
 
     #[inline]
@@ -148,15 +198,41 @@ impl Validate {
     }
 
     #[inline]
-    pub fn txs(&self, txs: &Vec<SignedTransaction>) -> Result<(), Error> {
+    pub fn tx_signatures(
+        &self, txs: &Vec<SignedTransaction>,
+    ) -> Result<(), Error> {
         for tx in txs {
-            match tx.verify_public(false) {
+            match tx.verify_public(false /* skip */) {
                 Ok(true) => continue,
                 _ => {
                     warn!("Tx signature verification failed for {:?}", tx);
                     return Err(ErrorKind::InvalidTxSignature.into());
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn block_txs(
+        &self, hash: H256, txs: &Vec<SignedTransaction>,
+    ) -> Result<(), Error> {
+        // first, validate signatures for each tx
+        self.tx_signatures(txs)?;
+
+        // then, compute tx root and match against header info
+        let local = *self.ledger.header(hash)?.transactions_root();
+
+        let txs: Vec<_> = txs.iter().map(|tx| Arc::new(tx.clone())).collect();
+        let received = Block::compute_transaction_root(&txs);
+
+        if received != local {
+            warn!(
+                "Tx root validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidTxRoot.into());
         }
 
         Ok(())
