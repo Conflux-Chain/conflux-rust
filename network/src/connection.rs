@@ -443,7 +443,11 @@ pub struct PacketWithLenAssembler {
 
 impl PacketWithLenAssembler {
     fn new(data_len_bytes: usize, mut max_packet_len: usize) -> Self {
-        assert!(data_len_bytes > 0 && data_len_bytes <= 8);
+        assert!(
+            data_len_bytes > 0
+                && data_len_bytes <= 4
+                && data_len_bytes < max_packet_len
+        );
 
         let max = usize::max_value() >> (64 - 8 * data_len_bytes);
         assert!(max_packet_len <= max);

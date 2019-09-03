@@ -8,7 +8,7 @@ use crate::{
     node_table::{NodeEndpoint, NodeEntry, NodeId},
     service::NetworkServiceInner,
     Capability, DisconnectReason, Error, ErrorKind, ProtocolId,
-    SessionMetadata, UpdateNodeOperation,
+    SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::{BufMut, Bytes, BytesMut};
 use io::*;
@@ -557,6 +557,7 @@ struct SessionPacket {
 
 impl SessionPacket {
     fn assemble(id: u8, protocol: Option<ProtocolId>, data: &[u8]) -> BytesMut {
+        // packet_id, protocol, data
         let packet_size = 1 + protocol.map_or(0, |p| p.len()) + data.len();
 
         let mut packet = BytesMut::with_capacity(packet_size);
@@ -575,6 +576,7 @@ impl SessionPacket {
             bail!(ErrorKind::BadProtocol);
         }
 
+        // first byte is packet_id
         let packet_id = data.split_to(1)[0];
 
         if packet_id != PACKET_USER {
@@ -585,13 +587,13 @@ impl SessionPacket {
             });
         }
 
-        if data.len() < 3 {
+        if data.len() < PROTOCOL_ID_SIZE {
             debug!("failed to parse session protocol packet, invalid length for protocol id");
             bail!(ErrorKind::BadProtocol);
         }
 
-        let mut protocol: ProtocolId = [0u8; 3];
-        protocol.copy_from_slice(&data.split_to(3));
+        let mut protocol = ProtocolId::default();
+        protocol.copy_from_slice(&data.split_to(PROTOCOL_ID_SIZE));
 
         Ok(SessionPacket {
             id: packet_id,
