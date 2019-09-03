@@ -2,30 +2,30 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// TODO(yz): Status: WIP.
-// TODO(yz): Evaluate whether Sqlite is suitable for DeltaMpt and check if there
-// TODO(yz): are good B-Tree based alternatives. The read write locking
-// TODO(yz): mechanism of Sqlite may lead to complicated code for us.
-#[allow(unused)]
 pub struct DeltaDbManagerSqlite {}
+
+impl DeltaDbManagerSqlite {
+    const DELTA_DB_TABLE_NAME: &'static str = "delta_mpt";
+
+    #[allow(unused)]
+    pub fn new(_num_shards: u16) -> Self { Self {} }
+}
 
 impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
     type DeltaDb = KvdbSqlite;
 
-    fn new_empty_delta_db(
-        &self, _delta_db_name: &String,
-    ) -> Result<Self::DeltaDb> {
-        unimplemented!()
+    fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
+        KvdbSqlite::create_and_open(delta_db_name, Self::DELTA_DB_TABLE_NAME)
     }
 
     fn get_delta_db(
-        &self, _delta_db_name: &String,
+        &self, _delta_db_name: &str,
     ) -> Result<Option<Self::DeltaDb>> {
         unimplemented!()
     }
 
-    fn destroy_delta_db(&self, _delta_db_name: &String) -> Result<()> {
-        unimplemented!()
+    fn destroy_delta_db(&self, delta_db_name: &str) -> Result<()> {
+        Ok(remove_file(delta_db_name)?)
     }
 }
 
@@ -35,3 +35,4 @@ use super::{
     },
     kvdb_sqlite::KvdbSqlite,
 };
+use std::fs::remove_file;

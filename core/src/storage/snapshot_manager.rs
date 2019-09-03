@@ -6,8 +6,8 @@
 pub trait SnapshotManagerTrait: GetSnapshotDbManager {
     fn new_snapshot_by_merging(
         &self, old_snapshot_root: &MerkleHash, snapshot_epoch_id: EpochId,
-        height: u64, delta_db: DeltaMptInserter,
-    ) -> Result<Arc<Self::SnapshotDb>>
+        height: i64, delta_db: DeltaMptInserter,
+    ) -> Result<Self::SnapshotDb>
     where
         Self: Sized,
     {
@@ -21,14 +21,14 @@ pub trait SnapshotManagerTrait: GetSnapshotDbManager {
 
     fn get_snapshot(
         &self, snapshot_root: &MerkleHash,
-    ) -> Result<Option<Arc<Self::SnapshotDb>>>
+    ) -> Result<Option<Self::SnapshotDb>>
     where Self: Sized {
         self.get_snapshot_db_manager().get_snapshot(snapshot_root)
     }
 
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId,
-    ) -> Result<Option<Arc<Self::SnapshotDb>>>
+    ) -> Result<Option<Self::SnapshotDb>>
     where Self: Sized {
         self.get_snapshot_db_manager()
             .get_snapshot_by_epoch_id(epoch_id)
@@ -57,4 +57,3 @@ use super::{
     storage_db::{snapshot_db::*, snapshot_db_manager::*},
 };
 use primitives::{EpochId, MerkleHash};
-use std::sync::Arc;

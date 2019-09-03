@@ -5,11 +5,11 @@
 pub trait SnapshotMptTraitReadOnly {
     fn get_merkle_root(&self) -> &MerkleHash;
     fn load_node(
-        &self, path: &dyn CompressedPathTrait,
+        &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Option<VanillaTrieNode<MerkleHash>>>;
     fn iterate_subtree_trie_nodes_without_root(
-        &self, path: &dyn CompressedPathTrait,
-    ) -> Box<dyn SnapshotMptIteraterTrait>;
+        &mut self, path: &dyn CompressedPathTrait,
+    ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>>;
 
     fn get_manifest(
         &self, start_chunk: &ChunkKey,
@@ -25,10 +25,21 @@ pub trait SnapshotMptTraitSingleWriter: SnapshotMptTraitReadOnly {
     ) -> Result<()>;
 }
 
-pub trait SnapshotMptIteraterTrait {
-    fn next(
-        &mut self,
-    ) -> Result<Option<(CompressedPathRaw, VanillaTrieNode<MerkleHash>)>>;
+pub trait SnapshotMptIteraterTrait:
+    FallibleIterator<
+    Item = (CompressedPathRaw, VanillaTrieNode<MerkleHash>, i64),
+    Error = Error,
+>
+{
+}
+
+impl<
+        T: FallibleIterator<
+            Item = (CompressedPathRaw, VanillaTrieNode<MerkleHash>, i64),
+            Error = Error,
+        >,
+    > SnapshotMptIteraterTrait for T
+{
 }
 
 // TODO: A snapshot mpt iterator is suitable to work as base_mpt in MptMerger's
@@ -41,8 +52,7 @@ use super::super::impls::{
     multi_version_merkle_patricia_trie::merkle_patricia_trie::{
         trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
     },
+    storage_db::snapshot_sync::{Chunk, ChunkKey, RangedManifest},
 };
-use crate::storage::impls::storage_db::snapshot_sync::{
-    Chunk, ChunkKey, RangedManifest,
-};
+use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;

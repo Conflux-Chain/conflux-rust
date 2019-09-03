@@ -28,7 +28,7 @@ pub struct MptMerger<'a> {
 
 #[allow(unused)]
 struct MptsInRequest<'a> {
-    maybe_readonly_mpt: Option<&'a dyn SnapshotMptTraitReadOnly>,
+    maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadOnly>,
     out_mpt: &'a mut dyn SnapshotMptTraitSingleWriter,
 }
 
@@ -36,10 +36,16 @@ trait SetIoError {
     fn set_has_io_error(&self);
 
     fn load_node_wrapper<'a>(
-        &self, mpts_in_request: &MptsInRequest<'a>, path: &CompressedPathRaw,
-    ) -> Result<VanillaTrieNode<MerkleHash>> {
+        &self, mpts_in_request: &mut MptsInRequest<'a>,
+        path: &CompressedPathRaw,
+    ) -> Result<VanillaTrieNode<MerkleHash>>
+    {
         let result = if mpts_in_request.maybe_readonly_mpt.is_some() {
-            mpts_in_request.maybe_readonly_mpt.unwrap().load_node(path)
+            mpts_in_request
+                .maybe_readonly_mpt
+                .as_mut()
+                .unwrap()
+                .load_node(path)
         } else {
             mpts_in_request.out_mpt.load_node(path)
         };
@@ -77,21 +83,27 @@ impl<'a> MptMerger<'a> {
     ) -> Result<()> {
         let io_mpts = subtree_root.mpts_in_request.io_mpts_assumed_owner();
         let dest_mpt = &mut io_mpts.out_mpt;
-        let source_mpt = io_mpts.maybe_readonly_mpt.clone().unwrap();
-        let mut iter = source_mpt.iterate_subtree_trie_nodes_without_root(
+        let source_mpt = io_mpts.maybe_readonly_mpt.as_mut().unwrap();
+        let mut iter = match source_mpt.iterate_subtree_trie_nodes_without_root(
             &subtree_root.full_path_to_node,
-        );
+        ) {
+            Err(e) => {
+                subtree_root.has_io_error.set_has_io_error();
+                bail!(e);
+            }
+            Ok(iter) => iter,
+        };
         loop {
-            if let Some((path, trie_node)) = match iter.next() {
+            if let Some((path, trie_node, _subtree_size)) = match iter.next() {
                 Err(e) => {
-                    subtree_root.set_has_io_error();
+                    subtree_root.has_io_error.set_has_io_error();
                     bail!(e);
                 }
                 Ok(item) => item,
             } {
                 let result = dest_mpt.write_node(&path, &trie_node);
                 if result.is_err() {
-                    subtree_root.set_has_io_error();
+                    subtree_root.has_io_error.set_has_io_error();
                     return result;
                 }
                 continue;
@@ -143,6 +155,10 @@ impl<'a> Drop for NodeInMerge<'a> {
     }
 }
 
+impl SetIoError for *const Cell<bool> {
+    fn set_has_io_error(&self) { unsafe { &**self }.replace(true); }
+}
+
 impl<'a> SetIoError for NodeInMerge<'a> {
     fn set_has_io_error(&self) { unsafe { &*self.has_io_error }.replace(true); }
 }
@@ -151,8 +167,9 @@ impl<'a> NodeInMerge<'a> {
     fn new_root(
         mpt_merger: &mut MptMerger<'a>, supposed_merkle_root: &MerkleHash,
     ) -> Result<NodeInMerge<'a>> {
+        let mut mpts_in_request = mpt_merger.mpts_in_request.take();
         let root_trie_node = mpt_merger.load_node_wrapper(
-            mpt_merger.mpts_in_request.io_mpts_readonly_assumed_owner(),
+            mpts_in_request.io_mpts_assumed_owner(),
             &CompressedPathRaw::default(),
         )?;
 
@@ -165,7 +182,7 @@ impl<'a> NodeInMerge<'a> {
         );
 
         Ok(Self {
-            mpts_in_request: mpt_merger.mpts_in_request.take(),
+            mpts_in_request,
             trie_node: root_trie_node,
             path_start_steps: 0,
             full_path_to_node: Default::default(),
@@ -180,7 +197,7 @@ impl<'a> NodeInMerge<'a> {
 
     fn new_loaded(
         parent_node: &NodeInMerge<'a>,
-        mpts_in_request: Option<MptsInRequest<'a>>, node_child_index: u8,
+        mut mpts_in_request: Option<MptsInRequest<'a>>, node_child_index: u8,
         supposed_merkle_root: &MerkleHash,
     ) -> Result<NodeInMerge<'a>>
     {
@@ -191,7 +208,7 @@ impl<'a> NodeInMerge<'a> {
         );
 
         let trie_node = parent_node.load_node_wrapper(
-            mpts_in_request.io_mpts_readonly_assumed_owner(),
+            mpts_in_request.io_mpts_assumed_owner(),
             &path_db_key,
         )?;
         assert_eq!(
@@ -359,7 +376,7 @@ impl<'a> NodeInMerge<'a> {
                         // Save-as mode.
                         if child_node
                             .mpts_in_request
-                            .io_mpts_readonly_assumed_owner()
+                            .io_mpts_assumed_owner()
                             .maybe_readonly_mpt
                             .is_some()
                         {
@@ -512,7 +529,7 @@ enum MptMergerPopNodesRemaining<'key> {
 
 impl<'a> MptMerger<'a> {
     pub fn new(
-        maybe_readonly_mpt: Option<&'a dyn SnapshotMptTraitReadOnly>,
+        maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadOnly>,
         out_mpt: &'a mut dyn SnapshotMptTraitSingleWriter,
     ) -> Self
     {
@@ -917,7 +934,7 @@ impl<'a> MptMerger<'a> {
         if io_mpts.maybe_readonly_mpt.is_some() {
             io_mpts
                 .maybe_readonly_mpt
-                .clone()
+                .as_ref()
                 .unwrap()
                 .get_merkle_root()
         } else {

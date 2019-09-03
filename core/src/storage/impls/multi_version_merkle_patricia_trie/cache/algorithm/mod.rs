@@ -172,7 +172,7 @@ pub trait CacheAlgorithm: Send {
         cache_store_util: &mut CacheStoreUtilT,
     );
 
-    fn log_usage(&self, prefix: &String);
+    fn log_usage(&self, prefix: &str);
 }
 
 // TODO(yz): maybe replace it with a library.

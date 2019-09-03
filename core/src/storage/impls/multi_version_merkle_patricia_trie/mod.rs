@@ -3,12 +3,22 @@
 // See http://www.gnu.org/licenses/
 
 pub mod cache;
+pub mod guarded_value;
 pub(in super::super) mod merkle_patricia_trie;
 pub(in super::super) mod node_memory_manager;
+pub(self) mod node_ref_map;
 pub(super) mod return_after_use;
 pub(super) mod row_number;
 
-pub use self::node_ref_map::DEFAULT_NODE_MAP_SIZE;
+/// Fork of upstream slab in order to compact data and be thread-safe without
+/// giant lock.
+mod slab;
+
+pub use self::{
+    node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell},
+    node_ref_map::DEFAULT_NODE_MAP_SIZE,
+};
+pub use merkle_patricia_trie::trie_proof::TrieProof;
 
 pub type DeltaMpt = MultiVersionMerklePatriciaTrie;
 
@@ -26,10 +36,6 @@ pub struct AtomicCommitTransaction<
 }
 
 pub struct MultiVersionMerklePatriciaTrie {
-    // TODO(yz): revisit the comment below. With snapshot we may have special
-    // TODO(yz): api to create empty epoch.
-    /// We don't distinguish an epoch which doesn't exists from an epoch which
-    /// contains nothing.
     /// This version map is incomplete as some of other roots live in disk db.
     root_by_version: RwLock<HashMap<EpochId, NodeRefDeltaMpt>>,
     /// Note that we don't manage ChildrenTable in allocator because it's
@@ -44,8 +50,8 @@ pub struct MultiVersionMerklePatriciaTrie {
     /// (So far we don't have write-back implementation. For write-back we
     /// should think more about roots in disk db.)
     node_memory_manager: NodeMemoryManagerDeltaMpt,
-    /// This db access is read only. // FIXME: pub
-    db: Arc<dyn KeyValueDbTraitTransactionalDyn + Send + Sync>,
+    /// Underlying database for DeltaMpt.
+    db: Arc<dyn DeltaDbTrait + Send + Sync>,
     /// The padding is uniquely generated for each DeltaMPT, and it's used to
     /// compute padding bytes for address and storage_key. The padding setup
     /// is against an attack where adversary artificially build deep paths in
@@ -82,14 +88,14 @@ impl MultiVersionMerklePatriciaTrie {
     {
         Ok(AtomicCommitTransaction {
             info: self.commit_lock.lock(),
-            transaction: self.db.start_transaction_dyn()?,
+            transaction: self.db.start_transaction_dyn(true)?,
         })
     }
 
     pub fn new(
-        kvdb: Arc<dyn KeyValueDbTraitTransactionalDyn + Send + Sync>,
-        conf: StorageConfiguration, padding: KeyPadding,
-        snapshot_root: MerkleHash, storage_manager: Arc<StorageManager>,
+        kvdb: Arc<dyn DeltaDbTrait + Send + Sync>, conf: StorageConfiguration,
+        padding: KeyPadding, snapshot_root: MerkleHash,
+        storage_manager: Arc<StorageManager>,
     ) -> Self
     {
         let row_number =
@@ -123,6 +129,11 @@ impl MultiVersionMerklePatriciaTrie {
         &self, epoch_id: &EpochId,
     ) -> Result<Option<NodeRefDeltaMpt>> {
         let db_key_result = Self::parse_row_number(
+            // FIXME: the usage here for sqlite isn't thread-safe.
+            // FIXME: Think of a way of doing it correctly.
+            //
+            // FIXME: think about operations in state_manager and state, which
+            // FIXME: deserve a dedicated db connection. (Of course read-only)
             self.db.get(
                 [
                     "state_root_db_key_for_epoch_id_".as_bytes(),
@@ -187,7 +198,7 @@ impl MultiVersionMerklePatriciaTrie {
                         &self.node_memory_manager.get_allocator(),
                         node,
                         self.node_memory_manager.get_cache_manager(),
-                        self.db.as_read_only(),
+                        &mut *self.db.to_owned_read()?,
                         &mut false,
                     )?
                     .get_merkle()
@@ -216,28 +227,22 @@ impl MultiVersionMerklePatriciaTrie {
         })
     }
 
-    pub fn db_read_only(&self) -> &dyn KeyValueDbTraitRead {
-        self.db.as_read_only()
+    pub fn db_owned_read<'a>(
+        &'a self,
+    ) -> Result<Box<dyn KeyValueDbTraitOwnedRead + 'a>> {
+        self.db.to_owned_read()
     }
 
     pub fn db_commit(&self) -> &dyn Any { (*self.db).as_any() }
 }
-
-pub mod guarded_value;
-pub(self) mod node_ref_map;
-/// Fork of upstream slab in order to compact data and be thread-safe without
-/// giant lock.
-mod slab;
-
-pub use self::node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell};
-pub use merkle_patricia_trie::trie_proof::TrieProof;
 
 use self::{
     cache::algorithm::lru::LRU, merkle_patricia_trie::*,
     node_memory_manager::*, node_ref_map::DeltaMptDbKey, row_number::*,
 };
 use super::{
-    super::storage_db::key_value_db::*, errors::*,
+    super::storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
+    errors::*,
     storage_manager::storage_manager::*,
 };
 use crate::{
