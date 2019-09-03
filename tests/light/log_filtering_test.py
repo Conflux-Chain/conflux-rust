@@ -46,10 +46,6 @@ class LogFilteringTest(ConfluxTestFramework):
         # connect archive nodes
         connect_nodes(self.nodes, FULLNODE0, FULLNODE1)
 
-        # connect light node to archive nodes
-        connect_nodes(self.nodes, LIGHTNODE, FULLNODE0)
-        connect_nodes(self.nodes, LIGHTNODE, FULLNODE1)
-
         # wait for phase changes to complete
         self.nodes[FULLNODE0].wait_for_phase(["NormalSyncPhase"])
         self.nodes[FULLNODE1].wait_for_phase(["NormalSyncPhase"])
@@ -87,8 +83,15 @@ class LogFilteringTest(ConfluxTestFramework):
         for _ in range(50):
             self.generate_correct_block(FULLNODE0)
 
+        self.log.info("syncing full nodes...")
+        sync_blocks(self.nodes[FULLNODE0:FULLNODE1])
+
+        # connect light node to full nodes
+        connect_nodes(self.nodes, LIGHTNODE, FULLNODE0)
+        connect_nodes(self.nodes, LIGHTNODE, FULLNODE1)
+
         # make sure we all nodes are in sync
-        self.log.info("syncing...")
+        self.log.info("syncing light node...")
         sync_blocks(self.nodes[:])
 
         # apply filter, we expect a single log with 2 topics
