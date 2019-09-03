@@ -568,6 +568,7 @@ struct SessionPacket {
 }
 
 impl SessionPacket {
+    // data + Option<protocol> + protocol_flag + packet_id
     fn assemble(
         id: u8, protocol: Option<ProtocolId>, mut data: Vec<u8>,
     ) -> Vec<u8> {
@@ -577,21 +578,13 @@ impl SessionPacket {
             protocol_flag = 1;
         }
 
-        data.push(id);
         data.push(protocol_flag);
+        data.push(id);
 
         data
     }
 
     fn parse(mut data: Bytes) -> Result<Self, Error> {
-        // protocol flag
-        if data.len() == 0 {
-            debug!("failed to parse session packet, protocol flag missed");
-            return Err(ErrorKind::BadProtocol.into());
-        }
-
-        let protocol_flag = data.split_off(data.len() - 1)[0];
-
         // packet id
         if data.len() == 0 {
             debug!("failed to parse session packet, packet id missed");
@@ -599,6 +592,14 @@ impl SessionPacket {
         }
 
         let packet_id = data.split_off(data.len() - 1)[0];
+
+        // protocol flag
+        if data.len() == 0 {
+            debug!("failed to parse session packet, protocol flag missed");
+            return Err(ErrorKind::BadProtocol.into());
+        }
+
+        let protocol_flag = data.split_off(data.len() - 1)[0];
 
         // without protocol
         if protocol_flag == 0 {
