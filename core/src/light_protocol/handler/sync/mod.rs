@@ -7,6 +7,8 @@ mod blooms;
 mod epochs;
 mod future_item;
 mod headers;
+mod missing_item;
+mod priority_queue;
 mod receipts;
 mod sync_manager;
 mod witnesses;
@@ -220,8 +222,12 @@ impl SyncHandler {
             return Ok(());
         }
 
-        let hashes = msg.hashes.into_iter();
-        self.headers.request(hashes, HashSource::NewHash);
+        self.headers.request_now_from_peer(
+            io,
+            peer,
+            msg.hashes.into_iter(),
+            HashSource::NewHash,
+        );
 
         self.start_sync(io);
         Ok(())

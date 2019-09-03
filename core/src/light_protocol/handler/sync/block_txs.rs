@@ -4,17 +4,11 @@
 
 extern crate futures;
 
-use std::{
-    cmp,
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
 use cfx_types::H256;
 use futures::Future;
 use parking_lot::RwLock;
 use primitives::SignedTransaction;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -33,8 +27,8 @@ use crate::{
 };
 
 use super::{
-    future_item::FutureItem,
-    sync_manager::{HasKey, SyncManager},
+    future_item::FutureItem, missing_item::TimeOrdered,
+    sync_manager::SyncManager,
 };
 
 #[derive(Debug)]
@@ -44,48 +38,8 @@ struct Statistics {
     waiting: usize,
 }
 
-#[derive(Clone, Debug, Eq)]
-pub(super) struct MissingBlockTxs {
-    pub hash: H256,
-    pub since: Instant,
-}
-
-impl MissingBlockTxs {
-    pub fn new(hash: H256) -> Self {
-        MissingBlockTxs {
-            hash,
-            since: Instant::now(),
-        }
-    }
-}
-
-impl PartialEq for MissingBlockTxs {
-    fn eq(&self, other: &Self) -> bool { self.hash == other.hash }
-}
-
-// MissingBlockTxs::cmp is used for prioritizing bloom requests
-impl Ord for MissingBlockTxs {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        if self.eq(other) {
-            return cmp::Ordering::Equal;
-        }
-
-        let cmp_since = self.since.cmp(&other.since).reverse();
-        let cmp_hash = self.hash.cmp(&other.hash).reverse();
-
-        cmp_since.then(cmp_hash)
-    }
-}
-
-impl PartialOrd for MissingBlockTxs {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl HasKey<H256> for MissingBlockTxs {
-    fn key(&self) -> H256 { self.hash }
-}
+// prioritize earlier requests
+type MissingBlockTxs = TimeOrdered<H256>;
 
 pub struct BlockTxs {
     // series of unique request ids
