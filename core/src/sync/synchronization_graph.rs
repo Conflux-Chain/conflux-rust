@@ -947,10 +947,10 @@ impl SynchronizationGraph {
                 // This is for constructing synchronization graph.
                 let (success, _) = self.insert_block_header(
                     &mut block.block_header,
-                    true,
-                    false,
-                    header_only,
-                    false,
+                    true,        /* need_to_verify */
+                    false,       /* bench_mode */
+                    header_only, /* insert_to_consensus */
+                    false,       /* persistent */
                 );
                 assert!(success);
 

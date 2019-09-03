@@ -79,7 +79,7 @@ pub struct BlockDataManager {
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
     cur_consensus_era_stable_hash: RwLock<H256>,
-    instance_id: u64,
+    instance_id: Mutex<u64>,
 
     config: DataManagerConfiguration,
 
@@ -131,7 +131,7 @@ impl BlockDataManager {
             db,
             storage_manager,
             cache_man,
-            instance_id: 0,
+            instance_id: Mutex::new(0),
             config,
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
@@ -201,14 +201,15 @@ impl BlockDataManager {
         data_man
             .insert_block(data_man.genesis_block(), true /* persistent */);
 
-        // persist local_block_info for real genesis block
+        // the local_block_info for genesis block will persist here
+        data_man.insert_local_block_info_to_db(
+            &genesis_block.block_header.hash(),
+            LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
+        );
+
         if data_man.genesis_block().block_header.hash()
             == genesis_block.block_header.hash()
         {
-            data_man.insert_local_block_info_to_db(
-                &genesis_block.block_header.hash(),
-                LocalBlockInfo::new(BlockStatus::Valid, 0, NULLU64),
-            );
             data_man.insert_epoch_execution_commitments(
                 data_man.genesis_block.hash(),
                 *data_man.genesis_block.block_header.deferred_receipts_root(),
@@ -222,33 +223,39 @@ impl BlockDataManager {
         data_man
     }
 
-    pub fn get_instance_id(&self) -> u64 { self.instance_id }
+    pub fn get_instance_id(&self) -> u64 { *self.instance_id.lock() }
 
-    fn initialize_instance_id(&mut self) {
-        // load last instance id
-        let instance_id = match self.db.key_value().get(COL_MISC, b"instance")
-            .expect("Low-level database error when fetching instance id. Some issue with disk?")
-            {
-                Some(instance) => {
-                    let rlp = Rlp::new(&instance);
-                    Some(rlp.val_at::<u64>(0).expect("Failed to decode instance id!"))
-                }
-                None => {
-                    info!("No instance id got from db");
-                    None
-                }
-            };
+    pub fn initialize_instance_id(&self) {
+        let mut my_instance_id = self.instance_id.lock();
+        if *my_instance_id == 0 {
+            // load last instance id
+            let instance_id = match self.db.key_value().get(COL_MISC, b"instance")
+                .expect("Low-level database error when fetching instance id. Some issue with disk?")
+                {
+                    Some(instance) => {
+                        let rlp = Rlp::new(&instance);
+                        Some(rlp.val_at::<u64>(0).expect("Failed to decode instance id!"))
+                    }
+                    None => {
+                        info!("No instance id got from db");
+                        None
+                    }
+                };
 
-        assert_eq!(self.instance_id, 0);
-        // set new instance id
-        if let Some(instance_id) = instance_id {
-            self.instance_id = instance_id + 1;
+            // set new instance id
+            if let Some(instance_id) = instance_id {
+                *my_instance_id = instance_id + 1;
+            }
+        } else {
+            // this case will only happen when full node begins to sync block
+            // bodies
+            *my_instance_id += 1;
         }
 
         // persist new instance id
         let mut rlp_stream = RlpStream::new();
         rlp_stream.begin_list(1);
-        rlp_stream.append(&self.instance_id);
+        rlp_stream.append(&(*my_instance_id));
         let mut dbops = self.db.key_value().transaction();
         dbops.put(COL_MISC, b"instance", &rlp_stream.drain());
         self.commit_db_transaction(dbops);
