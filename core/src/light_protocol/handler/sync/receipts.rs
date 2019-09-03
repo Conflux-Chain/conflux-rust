@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+extern crate futures;
+
 use std::{
     cmp,
     collections::HashMap,
@@ -9,11 +11,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+use futures::Future;
 use parking_lot::RwLock;
 use primitives::Receipt;
-
-extern crate futures;
-use futures::{Async, Future, Poll};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -31,7 +31,10 @@ use crate::{
     },
 };
 
-use super::sync_manager::{HasKey, SyncManager};
+use super::{
+    future_item::FutureItem,
+    sync_manager::{HasKey, SyncManager},
+};
 
 #[derive(Debug)]
 struct Statistics {
@@ -81,31 +84,6 @@ impl PartialOrd for MissingReceipts {
 
 impl HasKey<u64> for MissingReceipts {
     fn key(&self) -> u64 { self.epoch }
-}
-
-pub struct ReceiptsFuture {
-    epoch: u64,
-    verified: Arc<RwLock<HashMap<u64, Vec<Vec<Receipt>>>>>,
-}
-
-impl ReceiptsFuture {
-    pub fn new(
-        epoch: u64, verified: Arc<RwLock<HashMap<u64, Vec<Vec<Receipt>>>>>,
-    ) -> ReceiptsFuture {
-        ReceiptsFuture { epoch, verified }
-    }
-}
-
-impl Future for ReceiptsFuture {
-    type Error = Error;
-    type Item = Vec<Vec<Receipt>>;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.verified.read().get(&self.epoch) {
-            None => Ok(Async::NotReady),
-            Some(receipts) => Ok(Async::Ready(receipts.clone())),
-        }
-    }
 }
 
 pub struct Receipts {
@@ -160,7 +138,7 @@ impl Receipts {
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
-        ReceiptsFuture::new(epoch, self.verified.clone())
+        FutureItem::new(epoch, self.verified.clone())
     }
 
     #[inline]

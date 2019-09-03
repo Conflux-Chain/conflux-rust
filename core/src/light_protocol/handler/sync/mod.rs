@@ -5,6 +5,7 @@
 mod block_txs;
 mod blooms;
 mod epochs;
+mod future_item;
 mod headers;
 mod receipts;
 mod sync_manager;

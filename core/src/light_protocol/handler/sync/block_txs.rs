@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+extern crate futures;
+
 use std::{
     cmp,
     collections::HashMap,
@@ -10,11 +12,9 @@ use std::{
 };
 
 use cfx_types::H256;
+use futures::Future;
 use parking_lot::RwLock;
 use primitives::SignedTransaction;
-
-extern crate futures;
-use futures::{Async, Future, Poll};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -32,7 +32,10 @@ use crate::{
     },
 };
 
-use super::sync_manager::{HasKey, SyncManager};
+use super::{
+    future_item::FutureItem,
+    sync_manager::{HasKey, SyncManager},
+};
 
 #[derive(Debug)]
 struct Statistics {
@@ -82,33 +85,6 @@ impl PartialOrd for MissingBlockTxs {
 
 impl HasKey<H256> for MissingBlockTxs {
     fn key(&self) -> H256 { self.hash }
-}
-
-pub struct BlockTxsFuture {
-    hash: H256,
-    verified: Arc<RwLock<HashMap<H256, Vec<SignedTransaction>>>>,
-}
-
-impl BlockTxsFuture {
-    pub fn new(
-        hash: H256,
-        verified: Arc<RwLock<HashMap<H256, Vec<SignedTransaction>>>>,
-    ) -> BlockTxsFuture
-    {
-        BlockTxsFuture { hash, verified }
-    }
-}
-
-impl Future for BlockTxsFuture {
-    type Error = Error;
-    type Item = Vec<SignedTransaction>;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.verified.read().get(&self.hash) {
-            None => Ok(Async::NotReady),
-            Some(txs) => Ok(Async::Ready(txs.clone())),
-        }
-    }
 }
 
 pub struct BlockTxs {
@@ -161,7 +137,7 @@ impl BlockTxs {
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
-        BlockTxsFuture::new(hash, self.verified.clone())
+        FutureItem::new(hash, self.verified.clone())
     }
 
     #[inline]
@@ -212,7 +188,7 @@ impl BlockTxs {
         self.sync_manager.sync(
             MAX_BLOCK_TXS_IN_FLIGHT,
             BLOCK_TX_REQUEST_BATCH_SIZE,
-            |peer, epochs| self.send_request(io, peer, epochs),
+            |peer, block_hashes| self.send_request(io, peer, block_hashes),
         );
     }
 }

@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+extern crate futures;
+
 use std::{
     cmp,
     collections::HashMap,
@@ -10,10 +12,8 @@ use std::{
 };
 
 use cfx_types::Bloom;
+use futures::Future;
 use parking_lot::RwLock;
-
-extern crate futures;
-use futures::{Async, Future, Poll};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -31,7 +31,10 @@ use crate::{
     },
 };
 
-use super::sync_manager::{HasKey, SyncManager};
+use super::{
+    future_item::FutureItem,
+    sync_manager::{HasKey, SyncManager},
+};
 
 #[derive(Debug)]
 struct Statistics {
@@ -81,31 +84,6 @@ impl PartialOrd for MissingBloom {
 
 impl HasKey<u64> for MissingBloom {
     fn key(&self) -> u64 { self.epoch }
-}
-
-pub struct BloomFuture {
-    epoch: u64,
-    verified: Arc<RwLock<HashMap<u64, Bloom>>>,
-}
-
-impl BloomFuture {
-    pub fn new(
-        epoch: u64, verified: Arc<RwLock<HashMap<u64, Bloom>>>,
-    ) -> BloomFuture {
-        BloomFuture { epoch, verified }
-    }
-}
-
-impl Future for BloomFuture {
-    type Error = Error;
-    type Item = Bloom;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.verified.read().get(&self.epoch) {
-            None => Ok(Async::NotReady),
-            Some(bloom) => Ok(Async::Ready(*bloom)),
-        }
-    }
 }
 
 pub struct Blooms {
@@ -160,7 +138,7 @@ impl Blooms {
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
-        BloomFuture::new(epoch, self.verified.clone())
+        FutureItem::new(epoch, self.verified.clone())
     }
 
     #[inline]

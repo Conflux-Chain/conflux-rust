@@ -44,7 +44,7 @@ impl LedgerInfo {
     pub fn block(&self, hash: H256) -> Result<Block, Error> {
         self.consensus
             .data_man
-            .block_by_hash(&hash, false)
+            .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
             .ok_or(ErrorKind::InternalError.into())
     }
@@ -194,7 +194,9 @@ impl LedgerInfo {
             .map(|h| {
                 self.consensus
                     .data_man
-                    .block_results_by_hash_with_epoch(&h, &pivot, false)
+                    .block_results_by_hash_with_epoch(
+                        &h, &pivot, false, /* update_cache */
+                    )
                     .map(|res| (*res.receipts).clone())
                     .ok_or(ErrorKind::InternalError.into())
             })
@@ -212,7 +214,9 @@ impl LedgerInfo {
             .map(|h| {
                 self.consensus
                     .data_man
-                    .block_results_by_hash_with_epoch(&h, &pivot, false)
+                    .block_results_by_hash_with_epoch(
+                        &h, &pivot, false, /* update_cache */
+                    )
                     .map(|res| res.bloom)
                     .ok_or(ErrorKind::InternalError.into())
             })
