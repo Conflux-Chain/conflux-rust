@@ -442,18 +442,12 @@ pub struct PacketWithLenAssembler {
 }
 
 impl PacketWithLenAssembler {
-    fn new(data_len_bytes: usize, mut max_packet_len: usize) -> Self {
-        assert!(
-            data_len_bytes > 0
-                && data_len_bytes <= 4
-                && data_len_bytes < max_packet_len
-        );
+    fn new(data_len_bytes: usize, max_packet_len: Option<usize>) -> Self {
+        assert!(data_len_bytes > 0 && data_len_bytes <= 3);
 
         let max = usize::max_value() >> (64 - 8 * data_len_bytes);
-        assert!(max_packet_len <= max);
-        if max_packet_len == 0 {
-            max_packet_len = max;
-        }
+        let max_packet_len = max_packet_len.unwrap_or(max);
+        assert!(max_packet_len > data_len_bytes && max_packet_len <= max);
 
         PacketWithLenAssembler {
             data_len_bytes,
@@ -463,7 +457,9 @@ impl PacketWithLenAssembler {
 }
 
 impl Default for PacketWithLenAssembler {
-    fn default() -> Self { PacketWithLenAssembler::new(3, MAX_PAYLOAD_SIZE) }
+    fn default() -> Self {
+        PacketWithLenAssembler::new(3, Some(MAX_PAYLOAD_SIZE))
+    }
 }
 
 impl PacketAssembler for PacketWithLenAssembler {
@@ -596,7 +592,7 @@ mod tests {
                 recv_buf: Bytes::new(),
                 interest: Ready::hup() | Ready::readable(),
                 registered: AtomicBool::new(false),
-                assembler: Box::new(PacketWithLenAssembler::new(1, 0)),
+                assembler: Box::new(PacketWithLenAssembler::new(1, None)),
             }
         }
     }
