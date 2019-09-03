@@ -38,7 +38,7 @@ trait SetIoError {
     fn load_node_wrapper<'a>(
         &self, mpts_in_request: &mut MptsInRequest<'a>,
         path: &CompressedPathRaw,
-    ) -> Result<VanillaTrieNode<MerkleHash>>
+    ) -> Result<SnapshotMptNode>
     {
         let result = if mpts_in_request.maybe_readonly_mpt.is_some() {
             mpts_in_request
@@ -94,14 +94,18 @@ impl<'a> MptMerger<'a> {
             Ok(iter) => iter,
         };
         loop {
-            if let Some((path, trie_node, _subtree_size)) = match iter.next() {
+            // FIXME: path, SnapshotMptNode.
+            if let Some((path, trie_node, subtree_size)) = match iter.next() {
                 Err(e) => {
                     subtree_root.has_io_error.set_has_io_error();
                     bail!(e);
                 }
                 Ok(item) => item,
             } {
-                let result = dest_mpt.write_node(&path, &trie_node);
+                let result = dest_mpt.write_node(
+                    &path,
+                    &SnapshotMptNode(trie_node, subtree_size),
+                );
                 if result.is_err() {
                     subtree_root.has_io_error.set_has_io_error();
                     return result;
@@ -119,7 +123,7 @@ impl CacheAlgoDataTrait for () {}
 struct NodeInMerge<'a> {
     mpts_in_request: Option<MptsInRequest<'a>>,
 
-    trie_node: VanillaTrieNode<MerkleHash>,
+    trie_node: SnapshotMptNode,
     // path_start_steps is changed when compressed path changes happen, but it
     // doesn't matter because it only happens to node removed from current MPT
     // path.
@@ -240,7 +244,7 @@ impl<'a> NodeInMerge<'a> {
     }
 
     fn new(
-        trie_node: VanillaTrieNode<MerkleHash>,
+        trie_node: SnapshotMptNode,
         parent_node: &mut NodeInMerge<'a>,
         child_index: u8,
         // path_db_key: CompressedPathRaw,
@@ -324,7 +328,8 @@ impl<'a> NodeInMerge<'a> {
                             &mut self.trie_node,
                             mem::replace(
                                 child_trie_node,
-                                VanillaTrieNode::default(),
+                                // FIXME: compute the subtree size
+                                Default::default(),
                             ),
                         );
 
@@ -689,11 +694,15 @@ impl<'a> MptMerger<'a> {
                             // Create a new node for child_index, key_remaining
                             // and value.
                             let new_node = NodeInMerge::new(
-                                VanillaTrieNode::new(
-                                    MERKLE_NULL_NODE,
-                                    Default::default(),
-                                    Some(value),
-                                    key_remaining.into(),
+                                SnapshotMptNode(
+                                    VanillaTrieNode::new(
+                                        MERKLE_NULL_NODE,
+                                        Default::default(),
+                                        Some(value),
+                                        key_remaining.into(),
+                                    ),
+                                    // FIXME: compute subtree size.
+                                    0,
                                 ),
                                 self.path_nodes.last_mut().unwrap(),
                                 child_index,
@@ -765,14 +774,18 @@ impl<'a> MptMerger<'a> {
                             .set_compressed_path(unmatched_path_remaining);
 
                         let mut fork_node = NodeInMerge::new(
-                            VanillaTrieNode::new(
-                                MERKLE_NULL_NODE,
-                                VanillaChildrenTable::new_from_one_child(
-                                    unmatched_child_index,
-                                    &MERKLE_NULL_NODE,
+                            SnapshotMptNode(
+                                VanillaTrieNode::new(
+                                    MERKLE_NULL_NODE,
+                                    VanillaChildrenTable::new_from_one_child(
+                                        unmatched_child_index,
+                                        &MERKLE_NULL_NODE,
+                                    ),
+                                    None,
+                                    matched_path,
                                 ),
-                                None,
-                                matched_path,
+                                // FIXME: compute the subtree size.
+                                0,
                             ),
                             parent_node,
                             parent_node.next_child_index,
@@ -799,11 +812,15 @@ impl<'a> MptMerger<'a> {
                                 fork_node.next_child_index = child_index;
 
                                 let value_node = NodeInMerge::new(
-                                    VanillaTrieNode::new(
-                                        MERKLE_NULL_NODE,
-                                        Default::default(),
-                                        value_last_step_diverted,
-                                        key_remaining.into(),
+                                    SnapshotMptNode(
+                                        VanillaTrieNode::new(
+                                            MERKLE_NULL_NODE,
+                                            Default::default(),
+                                            value_last_step_diverted,
+                                            key_remaining.into(),
+                                        ),
+                                        // FIXME: compute the subtree size.
+                                        0,
                                     ),
                                     &mut fork_node,
                                     child_index,
@@ -1036,10 +1053,7 @@ impl<'a> MptMerger<'a> {
 use super::{
     super::{
         super::{
-            super::storage_db::snapshot_mpt::{
-                SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
-            },
-            errors::*,
+            super::storage_db::snapshot_mpt::*, errors::*,
             storage_manager::DeltaMptInserter,
         },
         cache::algorithm::CacheAlgoDataTrait,

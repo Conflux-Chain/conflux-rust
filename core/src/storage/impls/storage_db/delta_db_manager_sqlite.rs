@@ -12,10 +12,16 @@ impl DeltaDbManagerSqlite {
 }
 
 impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
-    type DeltaDb = KvdbSqlite;
+    type DeltaDb = KvdbSqlite<Box<[u8]>>;
 
     fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
-        KvdbSqlite::create_and_open(delta_db_name, Self::DELTA_DB_TABLE_NAME)
+        KvdbSqlite::create_and_open(
+            delta_db_name,
+            Self::DELTA_DB_TABLE_NAME,
+            &[&"value"],
+            &[&"BLOB"],
+            true,
+        )
     }
 
     fn get_delta_db(

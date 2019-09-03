@@ -2,8 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+// FIXME: Rename to DbPutValue
+pub trait PutType {
+    // FIXME: Rename to type.
+    type PutType: ?Sized;
+}
+
 pub trait KeyValueDbTypes {
-    type ValueType;
+    type ValueType: PutType;
 }
 
 pub trait KeyValueDbTraitRead: KeyValueDbTypes {
@@ -54,11 +60,16 @@ pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitOwnedRead {
     /// old value at deletion.
     fn delete(&mut self, key: &[u8])
         -> Result<Option<Option<Self::ValueType>>>;
+    fn delete_with_number_key(
+        &mut self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete(key.to_string().as_bytes())
+    }
     fn put(
-        &mut self, key: &[u8], value: &[u8],
+        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>>;
     fn put_with_number_key(
-        &mut self, key: i64, value: &[u8],
+        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put(key.to_string().as_bytes(), value)
     }
@@ -74,15 +85,17 @@ pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader {
     /// old value at deletion.
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>>;
     fn put(
-        &self, key: &[u8], value: &[u8],
+        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>>;
     fn put_with_number_key(
-        &self, key: i64, value: &[u8],
+        &self, key: i64, value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put(key.to_string().as_bytes(), value)
     }
 }
 
+// FIXME: Is it possible to detach SingleWriter from it, so that the
+// implementation doesn't look so ugly on KvdbSqliteTransaction?
 pub trait KeyValueDbTransactionTrait:
     KeyValueDbTraitSingleWriter + Drop
 {
@@ -212,14 +225,20 @@ where
         self.delete_impl(key)
     }
 
+    fn delete_with_number_key(
+        &mut self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete_with_number_key_impl(key)
+    }
+
     fn put(
-        &mut self, key: &[u8], value: &[u8],
+        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_impl(key, value)
     }
 
     fn put_with_number_key(
-        &mut self, key: i64, value: &[u8],
+        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_with_number_key_impl(key, value)
     }
@@ -236,12 +255,16 @@ pub trait SingleWriterImplByFamily<FamilyRepresentative: ?Sized>:
         &mut self, key: &[u8],
     ) -> Result<Option<Option<Self::ValueType>>>;
 
+    fn delete_with_number_key_impl(
+        &mut self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>>;
+
     fn put_impl(
-        &mut self, key: &[u8], value: &[u8],
+        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>>;
 
     fn put_with_number_key_impl(
-        &mut self, key: i64, value: &[u8],
+        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>>;
 }
 
@@ -272,7 +295,7 @@ pub trait ReadImplByFamily<FamilyRepresentative: ?Sized>:
     ) -> Result<Option<Self::ValueType>>;
 }
 
-impl<ValueType> OwnedReadImplFamily
+impl<ValueType: PutType> OwnedReadImplFamily
     for dyn KeyValueDbTraitMultiReader<ValueType = ValueType>
 {
     type FamilyRepresentitive =
@@ -281,13 +304,18 @@ impl<ValueType> OwnedReadImplFamily
 
 /// Implement KeyValueDbTraitOwnedRead automatically for database engine which
 /// satisfies KeyValueDbTraitMultiReader.
-impl<T: KeyValueDbTraitMultiReader<ValueType = ValueType>, ValueType>
-    KeyValueDbTypes for &T
+impl<
+        T: KeyValueDbTraitMultiReader<ValueType = ValueType>,
+        ValueType: PutType,
+    > KeyValueDbTypes for &T
 {
     type ValueType = T::ValueType;
 }
 
-impl<T: KeyValueDbTraitMultiReader<ValueType = ValueType>, ValueType>
+impl<
+        T: KeyValueDbTraitMultiReader<ValueType = ValueType>,
+        ValueType: PutType,
+    >
     OwnedReadImplByFamily<dyn KeyValueDbTraitMultiReader<ValueType = ValueType>>
     for &T
 {
@@ -312,6 +340,14 @@ macro_rules! mark_kvdb_multi_reader {
             >;
         }
     };
+}
+
+impl PutType for Box<[u8]> {
+    type PutType = [u8];
+}
+
+impl PutType for i64 {
+    type PutType = i64;
 }
 
 use super::super::impls::errors::*;

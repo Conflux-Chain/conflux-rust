@@ -2,13 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[macro_use]
+pub mod utils;
+
 pub(self) mod snapshot_manager;
 pub mod state;
 pub mod state_manager;
 #[macro_use]
 pub(self) mod storage_db;
-#[macro_use]
-pub mod utils;
 
 pub mod tests;
 

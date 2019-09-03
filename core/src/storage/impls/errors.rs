@@ -14,6 +14,7 @@ error_chain! {
         ParseIntError(num::ParseIntError);
         RlpDecodeError(rlp::DecoderError);
         SqliteError(sqlite::Error);
+        StrfmtFmtError(strfmt::FmtError);
     }
 
     errors {
