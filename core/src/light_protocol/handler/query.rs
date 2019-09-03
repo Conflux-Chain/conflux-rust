@@ -19,8 +19,7 @@ use crate::{
     light_protocol::{
         common::{UniqueId, Validate},
         message::{
-            GetReceipts, GetStateEntry, GetStateRoot, GetTxs,
-            Receipts as GetReceiptsResponse,
+            GetStateEntry, GetStateRoot, GetTxs,
             StateEntry as GetStateEntryResponse,
             StateRoot as GetStateRootResponse, Txs as GetTxsResponse,
         },
@@ -136,24 +135,6 @@ impl QueryHandler {
         Ok(())
     }
 
-    pub(super) fn on_receipts(
-        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetReceiptsResponse = rlp.as_val()?;
-        info!("on_receipts resp={:?}", resp);
-
-        let id = resp.request_id;
-        let (req, sender) = self.match_request::<GetReceipts>(peer, id)?;
-
-        self.validate.pivot_hash(req.epoch, resp.pivot_hash)?;
-        self.validate.receipts(req.epoch, &resp.receipts)?;
-
-        sender.complete(QueryResult::Receipts(resp.receipts.receipts));
-        // note: in case of early return, `sender` will be cancelled
-
-        Ok(())
-    }
-
     pub(super) fn on_txs(
         &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -163,7 +144,7 @@ impl QueryHandler {
         let id = resp.request_id;
         let (_req, sender) = self.match_request::<GetTxs>(peer, id)?;
 
-        self.validate.txs(&resp.txs)?;
+        self.validate.tx_signatures(&resp.txs)?;
 
         sender.complete(QueryResult::Txs(resp.txs));
         // note: in case of early return, `sender` will be cancelled

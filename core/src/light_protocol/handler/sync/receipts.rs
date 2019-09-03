@@ -11,23 +11,23 @@ use std::{
     time::{Duration, Instant},
 };
 
-use cfx_types::Bloom;
 use futures::Future;
 use parking_lot::RwLock;
+use primitives::Receipt;
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         common::{Peers, UniqueId, Validate},
         handler::FullPeerState,
-        message::{BloomWithEpoch, GetBlooms},
+        message::{GetReceipts, ReceiptsWithEpoch},
         Error,
     },
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT_MS,
-        MAX_BLOOMS_IN_FLIGHT,
+        MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
+        RECEIPT_REQUEST_TIMEOUT_MS,
     },
 };
 
@@ -44,26 +44,26 @@ struct Statistics {
 }
 
 #[derive(Clone, Debug, Eq)]
-pub(super) struct MissingBloom {
+pub(super) struct MissingReceipts {
     pub epoch: u64,
     pub since: Instant,
 }
 
-impl MissingBloom {
+impl MissingReceipts {
     pub fn new(epoch: u64) -> Self {
-        MissingBloom {
+        MissingReceipts {
             epoch,
             since: Instant::now(),
         }
     }
 }
 
-impl PartialEq for MissingBloom {
+impl PartialEq for MissingReceipts {
     fn eq(&self, other: &Self) -> bool { self.epoch == other.epoch }
 }
 
-// MissingBloom::cmp is used for prioritizing bloom requests
-impl Ord for MissingBloom {
+// MissingReceipts::cmp is used for prioritizing bloom requests
+impl Ord for MissingReceipts {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         if self.eq(other) {
             return cmp::Ordering::Equal;
@@ -76,31 +76,31 @@ impl Ord for MissingBloom {
     }
 }
 
-impl PartialOrd for MissingBloom {
+impl PartialOrd for MissingReceipts {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl HasKey<u64> for MissingBloom {
+impl HasKey<u64> for MissingReceipts {
     fn key(&self) -> u64 { self.epoch }
 }
 
-pub struct Blooms {
+pub struct Receipts {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
     // sync and request manager
-    sync_manager: SyncManager<u64, MissingBloom>,
+    sync_manager: SyncManager<u64, MissingReceipts>,
 
     // helper API for validating ledger and state information
     validate: Validate,
 
-    // bloom filters received from full node
-    verified: Arc<RwLock<HashMap<u64, Bloom>>>,
+    // epoch receipts received from full node
+    verified: Arc<RwLock<HashMap<u64, Vec<Vec<Receipt>>>>>,
 }
 
-impl Blooms {
+impl Receipts {
     pub(super) fn new(
         consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>,
@@ -110,9 +110,9 @@ impl Blooms {
         let validate = Validate::new(consensus.clone());
         let verified = Arc::new(RwLock::new(HashMap::new()));
 
-        verified.write().insert(0, Bloom::zero());
+        verified.write().insert(0, vec![]);
 
-        Blooms {
+        Receipts {
             request_id_allocator,
             sync_manager,
             validate,
@@ -132,9 +132,9 @@ impl Blooms {
     #[inline]
     pub fn request(
         &self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> {
+    ) -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> {
         if !self.verified.read().contains_key(&epoch) {
-            let missing = MissingBloom::new(epoch);
+            let missing = MissingReceipts::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
@@ -143,13 +143,13 @@ impl Blooms {
 
     #[inline]
     pub(super) fn receive(
-        &self, blooms: impl Iterator<Item = BloomWithEpoch>,
+        &self, receipts: impl Iterator<Item = ReceiptsWithEpoch>,
     ) -> Result<(), Error> {
-        for BloomWithEpoch { epoch, bloom } in blooms {
-            info!("Validating bloom {:?} with epoch {}", bloom, epoch);
-            self.validate.bloom_with_local_info(epoch, bloom)?;
+        for ReceiptsWithEpoch { epoch, receipts } in receipts {
+            info!("Validating receipts {:?} with epoch {}", receipts, epoch);
+            self.validate.receipts_with_local_info(epoch, &receipts)?;
 
-            self.verified.write().insert(epoch, bloom);
+            self.verified.write().insert(epoch, receipts);
             self.sync_manager.remove_in_flight(&epoch);
         }
 
@@ -158,9 +158,9 @@ impl Blooms {
 
     #[inline]
     pub(super) fn clean_up(&self) {
-        let timeout = Duration::from_millis(BLOOM_REQUEST_TIMEOUT_MS);
-        let blooms = self.sync_manager.remove_timeout_requests(timeout);
-        self.sync_manager.insert_waiting(blooms.into_iter());
+        let timeout = Duration::from_millis(RECEIPT_REQUEST_TIMEOUT_MS);
+        let receiptss = self.sync_manager.remove_timeout_requests(timeout);
+        self.sync_manager.insert_waiting(receiptss.into_iter());
     }
 
     #[inline]
@@ -173,7 +173,7 @@ impl Blooms {
             return Ok(());
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlooms {
+        let msg: Box<dyn Message> = Box::new(GetReceipts {
             request_id: self.request_id_allocator.next(),
             epochs,
         });
@@ -184,11 +184,11 @@ impl Blooms {
 
     #[inline]
     pub(super) fn sync(&self, io: &dyn NetworkContext) {
-        info!("bloom sync statistics: {:?}", self.get_statistics());
+        info!("receipt sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
-            MAX_BLOOMS_IN_FLIGHT,
-            BLOOM_REQUEST_BATCH_SIZE,
+            MAX_RECEIPTS_IN_FLIGHT,
+            RECEIPT_REQUEST_BATCH_SIZE,
             |peer, epochs| self.send_request(io, peer, epochs),
         );
     }
