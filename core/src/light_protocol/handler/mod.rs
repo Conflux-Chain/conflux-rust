@@ -12,18 +12,14 @@ use sync::SyncHandler;
 use io::TimerToken;
 use parking_lot::RwLock;
 use rlp::Rlp;
-use std::{
-    collections::HashSet,
-    sync::{atomic::AtomicU64, Arc},
-    time::Duration,
-};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use cfx_types::H256;
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{Peers, Validate},
+        common::{Peers, UniqueId, Validate},
         handle_error,
         message::{msgid, NodeType, SendRawTx, StatusPing, StatusPong},
         Error, ErrorKind, LIGHT_PROTOCOL_VERSION,
@@ -58,7 +54,7 @@ pub struct Handler {
     pub query: QueryHandler,
 
     // sub-handler serving epoch and headers for syncing
-    sync: SyncHandler,
+    pub sync: SyncHandler,
 
     // helper API for validating ledger and state information
     validate: Validate,
@@ -69,15 +65,14 @@ impl Handler {
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
     ) -> Self {
         let peers = Arc::new(Peers::new());
-        let next_request_id = Arc::new(AtomicU64::new(0));
+        let request_id = Arc::new(UniqueId::new());
 
-        let query =
-            QueryHandler::new(consensus.clone(), next_request_id.clone());
+        let query = QueryHandler::new(consensus.clone(), request_id.clone());
 
         let sync = SyncHandler::new(
             consensus.clone(),
             graph,
-            next_request_id,
+            request_id,
             peers.clone(),
         );
 
@@ -143,10 +138,13 @@ impl Handler {
             // messages related to sync
             msgid::BLOCK_HASHES => self.sync.on_block_hashes(io, peer, &rlp),
             msgid::BLOCK_HEADERS => self.sync.on_block_headers(io, peer, &rlp),
+            msgid::BLOCK_TXS => self.sync.on_block_txs(io, peer, &rlp),
+            msgid::BLOOMS => self.sync.on_blooms(io, peer, &rlp),
             msgid::NEW_BLOCK_HASHES => self.sync.on_new_block_hashes(io, peer, &rlp),
+            msgid::RECEIPTS => self.sync.on_receipts(io, peer, &rlp),
+            msgid::WITNESS_INFO => self.sync.on_witness_info(io, peer, &rlp),
 
             // messages related to queries
-            msgid::RECEIPTS => self.query.on_receipts(io, peer, &rlp),
             msgid::STATE_ENTRY => self.query.on_state_entry(io, peer, &rlp),
             msgid::STATE_ROOT => self.query.on_state_root(io, peer, &rlp),
             msgid::TXS => self.query.on_txs(io, peer, &rlp),

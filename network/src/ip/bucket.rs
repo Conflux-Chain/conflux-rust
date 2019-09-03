@@ -40,7 +40,7 @@ impl NodeBucket {
         let mut evictable_nodes = Vec::new();
 
         for id in self.nodes.iter() {
-            if let Some(node) = db.get(id, false) {
+            if let Some(node) = db.get(id, false /* trusted_only */) {
                 // do not evict the connecting nodes
                 if let Some(NodeContact::Success(_)) = node.last_connected {
                     continue;

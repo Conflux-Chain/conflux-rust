@@ -23,6 +23,7 @@ error_chain! {
             description("Genesis mismatch"),
             display("Genesis mismatch"),
         }
+
         NoResponse {
             description("NoResponse"),
             display("NoResponse"),
@@ -33,14 +34,19 @@ error_chain! {
             display("Internal error"),
         }
 
-        InvalidMessageFormat {
-            description("Invalid message format"),
-            display("Invalid message format"),
+        InvalidBloom {
+            description("Invalid bloom"),
+            display("Invalid bloom"),
         }
 
         InvalidLedgerProof {
             description("Invalid ledger proof"),
             display("Invalid ledger proof"),
+        }
+
+        InvalidMessageFormat {
+            description("Invalid message format"),
+            display("Invalid message format"),
         }
 
         InvalidReceipts {
@@ -56,6 +62,11 @@ error_chain! {
         InvalidStateRoot {
             description("Invalid state root"),
             display("Invalid state root"),
+        }
+
+        InvalidTxRoot {
+            description("Invalid tx root"),
+            display("Invalid tx root"),
         }
 
         InvalidTxSignature {
@@ -160,11 +171,13 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
             op = Some(UpdateNodeOperation::Demotion)
         }
 
-        ErrorKind::InvalidMessageFormat
+        ErrorKind::InvalidBloom
         | ErrorKind::InvalidLedgerProof
+        | ErrorKind::InvalidMessageFormat
         | ErrorKind::InvalidReceipts
         | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot
+        | ErrorKind::InvalidTxRoot
         | ErrorKind::InvalidTxSignature
         | ErrorKind::ValidationFailed
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
@@ -199,6 +212,6 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     };
 
     if disconnect {
-        io.disconnect_peer(peer, op, None);
+        io.disconnect_peer(peer, op, None /* reason */);
     }
 }

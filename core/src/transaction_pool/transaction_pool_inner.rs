@@ -652,14 +652,24 @@ mod test_transaction_pool_inner {
         let bob = Random.generate().unwrap();
         let eva = Random.generate().unwrap();
 
-        let alice_tx1 = new_test_tx_with_read_info(&alice, 5, 10, 100, false);
-        let alice_tx2 = new_test_tx_with_read_info(&alice, 6, 10, 100, false);
-        let bob_tx1 = new_test_tx_with_read_info(&bob, 1, 10, 100, false);
-        let bob_tx2 = new_test_tx_with_read_info(&bob, 2, 10, 100, false);
-        let bob_tx2_new = new_test_tx_with_read_info(&bob, 2, 11, 100, false);
+        let alice_tx1 = new_test_tx_with_read_info(
+            &alice, 5, 10, 100, false, /* packed */
+        );
+        let alice_tx2 = new_test_tx_with_read_info(
+            &alice, 6, 10, 100, false, /* packed */
+        );
+        let bob_tx1 = new_test_tx_with_read_info(
+            &bob, 1, 10, 100, false, /* packed */
+        );
+        let bob_tx2 = new_test_tx_with_read_info(
+            &bob, 2, 10, 100, false, /* packed */
+        );
+        let bob_tx2_new = new_test_tx_with_read_info(
+            &bob, 2, 11, 100, false, /* packed */
+        );
 
         assert_eq!(
-            deferred_pool.insert(alice_tx1.clone(), false),
+            deferred_pool.insert(alice_tx1.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
@@ -672,31 +682,31 @@ mod test_transaction_pool_inner {
         assert_eq!(deferred_pool.contain_address(&bob.address()), false);
 
         assert_eq!(
-            deferred_pool.insert(alice_tx2.clone(), false),
+            deferred_pool.insert(alice_tx2.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
         assert_eq!(deferred_pool.remove_lowest_nonce(&bob.address()), None);
 
         assert_eq!(
-            deferred_pool.insert(bob_tx1.clone(), false),
+            deferred_pool.insert(bob_tx1.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
         assert_eq!(deferred_pool.contain_address(&bob.address()), true);
 
         assert_eq!(
-            deferred_pool.insert(bob_tx2.clone(), false),
+            deferred_pool.insert(bob_tx2.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
         assert_eq!(
-            deferred_pool.insert(bob_tx2_new.clone(), false),
+            deferred_pool.insert(bob_tx2_new.clone(), false /* force */),
             InsertResult::Updated(bob_tx2.clone())
         );
 
         assert_eq!(
-            deferred_pool.insert(bob_tx2.clone(), false),
+            deferred_pool.insert(bob_tx2.clone(), false /* force */),
             InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
         );
 
@@ -734,17 +744,27 @@ mod test_transaction_pool_inner {
         let alice = Random.generate().unwrap();
 
         let gas = 50000;
-        let tx1 = new_test_tx_with_read_info(&alice, 5, 10, 10000, true);
-        let tx2 = new_test_tx_with_read_info(&alice, 6, 10, 10000, true);
-        let tx3 = new_test_tx_with_read_info(&alice, 7, 10, 10000, true);
-        let tx4 = new_test_tx_with_read_info(&alice, 8, 10, 10000, false);
-        let tx5 = new_test_tx_with_read_info(&alice, 9, 10, 10000, false);
+        let tx1 = new_test_tx_with_read_info(
+            &alice, 5, 10, 10000, true, /* packed */
+        );
+        let tx2 = new_test_tx_with_read_info(
+            &alice, 6, 10, 10000, true, /* packed */
+        );
+        let tx3 = new_test_tx_with_read_info(
+            &alice, 7, 10, 10000, true, /* packed */
+        );
+        let tx4 = new_test_tx_with_read_info(
+            &alice, 8, 10, 10000, false, /* packed */
+        );
+        let tx5 = new_test_tx_with_read_info(
+            &alice, 9, 10, 10000, false, /* packed */
+        );
         let exact_cost = 4 * (gas * 10 + 10000);
 
-        deferred_pool.insert(tx1.clone(), false);
-        deferred_pool.insert(tx2.clone(), false);
-        deferred_pool.insert(tx4.clone(), false);
-        deferred_pool.insert(tx5.clone(), false);
+        deferred_pool.insert(tx1.clone(), false /* force */);
+        deferred_pool.insert(tx2.clone(), false /* force */);
+        deferred_pool.insert(tx4.clone(), false /* force */);
+        deferred_pool.insert(tx5.clone(), false /* force */);
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
@@ -773,7 +793,7 @@ mod test_transaction_pool_inner {
             Some(tx4.transaction.clone())
         );
 
-        deferred_pool.insert(tx3.clone(), false);
+        deferred_pool.insert(tx3.clone(), false /* force */);
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice.address(),

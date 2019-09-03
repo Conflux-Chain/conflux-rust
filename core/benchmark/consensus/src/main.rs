@@ -255,7 +255,11 @@ fn main() {
             false, // insert_to_consensus
             true,  // persistent
         );
-        sync.insert_block(new_block, false, false, false);
+        sync.insert_block(
+            new_block, false, /* need_to_verify */
+            false, /* persistent */
+            false, /* recover_from_db */
+        );
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;

@@ -9,7 +9,9 @@ use crate::{
         SynchronizationProtocolHandler,
     },
 };
+use cfx_types::H256;
 use network::{NetworkContext, PeerId};
+use primitives::StateRoot;
 
 pub struct Context<'a> {
     pub io: &'a dyn NetworkContext,
@@ -29,6 +31,24 @@ impl<'a> Context<'a> {
     pub fn send_response(&self, response: &dyn Message) -> Result<(), Error> {
         send_message(self.io, self.peer, response)?;
         Ok(())
+    }
+
+    pub fn must_get_state_root(&self, checkpoint: &H256) -> StateRoot {
+        match self.manager.graph.data_man.block_header_by_hash(checkpoint) {
+            Some(header) => header
+                .deferred_state_root_with_aux_info()
+                .state_root
+                .clone(),
+            None => {
+                error!(
+                    "failed to find the state root of checkpoint {:?}",
+                    checkpoint
+                );
+                panic!(
+                    "Cannot find block header of checkpoint to sync snapshot"
+                );
+            }
+        }
     }
 }
 

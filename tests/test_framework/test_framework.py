@@ -324,7 +324,7 @@ class ConfluxTestFramework:
                     remote=True
                 ))
 
-    def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=10, *args, **kwargs):
+    def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=30, *args, **kwargs):
         """Start a bitcoind"""
 
         node = self.nodes[i]

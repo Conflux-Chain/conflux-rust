@@ -4,6 +4,7 @@
 
 use crate::{
     message::{Message, MsgId},
+    storage::RangedManifest,
     sync::{
         message::{msgid, Context, Handleable},
         state::SnapshotManifestRequest,
@@ -12,14 +13,16 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, collections::HashSet};
+use std::any::Any;
 
-#[derive(Debug, RlpDecodable, RlpEncodable)]
+#[derive(RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub checkpoint: H256,
-    pub chunk_hashes: Vec<H256>,
+    pub manifest: RangedManifest,
     pub state_blame_vec: Vec<H256>,
+    pub receipt_blame_vec: Vec<H256>,
+    pub bloom_blame_vec: Vec<H256>,
 }
 
 build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
@@ -34,7 +37,7 @@ impl Handleable for SnapshotManifestResponse {
             true,
         )?;
 
-        if let Err(e) = self.validate(request) {
+        if let Err(e) = self.validate(ctx, request) {
             ctx.manager
                 .request_manager
                 .remove_mismatch_request(ctx.io, &message);
@@ -50,7 +53,9 @@ impl Handleable for SnapshotManifestResponse {
 }
 
 impl SnapshotManifestResponse {
-    fn validate(&self, request: &SnapshotManifestRequest) -> Result<(), Error> {
+    fn validate(
+        &self, ctx: &Context, request: &SnapshotManifestRequest,
+    ) -> Result<(), Error> {
         if self.checkpoint != request.checkpoint {
             debug!(
                 "Responded snapshot manifest checkpoint mismatch, requested = {:?}, responded = {:?}",
@@ -60,20 +65,27 @@ impl SnapshotManifestResponse {
             bail!(ErrorKind::Invalid);
         }
 
-        if self.chunk_hashes.is_empty() {
-            debug!("Responded snapshot manifest has empty chunks");
+        let root = ctx.must_get_state_root(&self.checkpoint);
+
+        if let Err(e) = self
+            .manifest
+            .validate(&root.snapshot_root, &request.start_chunk)
+        {
+            debug!("failed to validate snapshot manifest, error = {:?}", e);
             bail!(ErrorKind::Invalid);
         }
 
-        let distinct_chunks: HashSet<H256> =
-            self.chunk_hashes.iter().cloned().collect();
-        if distinct_chunks.len() != self.chunk_hashes.len() {
-            debug!("Responded snapshot manifest has duplicated chunks");
-            bail!(ErrorKind::Invalid);
-        }
-
-        if self.state_blame_vec.is_empty() {
+        if request.trusted_blame_block.is_some()
+            && self.state_blame_vec.is_empty()
+        {
             debug!("Responded snapshot manifest has empty blame states");
+            bail!(ErrorKind::Invalid);
+        }
+
+        if self.state_blame_vec.len() != self.receipt_blame_vec.len()
+            || self.state_blame_vec.len() != self.bloom_blame_vec.len()
+        {
+            debug!("Responded snapshot manifest has mismatch blame states/receipts/blooms");
             bail!(ErrorKind::Invalid);
         }
 

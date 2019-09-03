@@ -4,13 +4,7 @@
 
 use parking_lot::RwLock;
 use rlp::Rlp;
-use std::{
-    collections::BTreeMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 extern crate futures;
 use futures::{
@@ -23,10 +17,9 @@ use primitives::{Receipt, SignedTransaction, StateRoot};
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::Validate,
+        common::{UniqueId, Validate},
         message::{
-            GetReceipts, GetStateEntry, GetStateRoot, GetTxs,
-            Receipts as GetReceiptsResponse,
+            GetStateEntry, GetStateRoot, GetTxs,
             StateEntry as GetStateEntryResponse,
             StateRoot as GetStateRootResponse, Txs as GetTxsResponse,
         },
@@ -51,11 +44,11 @@ struct PendingRequest {
 }
 
 pub struct QueryHandler {
-    // next request id to be used when sending messages
-    next_request_id: Arc<AtomicU64>,
-
     // set of queries sent but not received yet
     pending: RwLock<BTreeMap<(PeerId, RequestId), PendingRequest>>,
+
+    // series of unique request ids
+    request_id_allocator: Arc<UniqueId>,
 
     // helper API for validating ledger and state information
     validate: Validate,
@@ -63,20 +56,16 @@ pub struct QueryHandler {
 
 impl QueryHandler {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, next_request_id: Arc<AtomicU64>,
+        consensus: Arc<ConsensusGraph>, request_id_allocator: Arc<UniqueId>,
     ) -> Self {
         let pending = RwLock::new(BTreeMap::new());
         let validate = Validate::new(consensus.clone());
 
         QueryHandler {
-            next_request_id,
             pending,
+            request_id_allocator,
             validate,
         }
-    }
-
-    fn next_request_id(&self) -> RequestId {
-        self.next_request_id.fetch_add(1, Ordering::Relaxed).into()
     }
 
     fn match_request<T>(
@@ -146,24 +135,6 @@ impl QueryHandler {
         Ok(())
     }
 
-    pub(super) fn on_receipts(
-        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetReceiptsResponse = rlp.as_val()?;
-        info!("on_receipts resp={:?}", resp);
-
-        let id = resp.request_id;
-        let (req, sender) = self.match_request::<GetReceipts>(peer, id)?;
-
-        self.validate.pivot_hash(req.epoch, resp.pivot_hash)?;
-        self.validate.receipts(req.epoch, &resp.receipts)?;
-
-        sender.complete(QueryResult::Receipts(resp.receipts.receipts));
-        // note: in case of early return, `sender` will be cancelled
-
-        Ok(())
-    }
-
     pub(super) fn on_txs(
         &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -173,7 +144,7 @@ impl QueryHandler {
         let id = resp.request_id;
         let (_req, sender) = self.match_request::<GetTxs>(peer, id)?;
 
-        self.validate.txs(&resp.txs)?;
+        self.validate.tx_signatures(&resp.txs)?;
 
         sender.complete(QueryResult::Txs(resp.txs));
         // note: in case of early return, `sender` will be cancelled
@@ -187,7 +158,7 @@ impl QueryHandler {
     ) -> Result<QueryResult, Error>
     where T: Message + HasRequestId + Clone + 'static {
         // set request id
-        let id = self.next_request_id();
+        let id = self.request_id_allocator.next();
         req.set_request_id(id);
 
         // set up channel and store request

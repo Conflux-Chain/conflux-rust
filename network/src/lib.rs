@@ -32,13 +32,15 @@ extern crate strum;
 extern crate strum_macros;
 extern crate keccak_hash;
 
-pub type ProtocolId = [u8; 3];
+pub const PROTOCOL_ID_SIZE: usize = 3;
+pub type ProtocolId = [u8; PROTOCOL_ID_SIZE];
 pub type HandlerWorkType = u8;
 pub type PeerId = usize;
 
 mod connection;
 mod discovery;
 mod error;
+mod handshake;
 mod ip;
 mod ip_utils;
 mod node_database;
