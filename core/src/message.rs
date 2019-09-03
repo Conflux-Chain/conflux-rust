@@ -7,7 +7,7 @@ pub type MsgId = u8;
 
 pub use cfx_bytes::Bytes;
 pub use priority_send_queue::SendQueuePriority;
-use rlp::Encodable;
+use rlp::{Encodable, Rlp};
 use std::any::Any;
 
 pub use crate::network::{
@@ -49,12 +49,10 @@ pub trait Message: Send + Sync + Encodable {
             }
         }
 
-        let mut raw = Bytes::new();
-        raw.push(self.msg_id().into());
-        raw.extend(self.rlp_bytes().iter());
-        let size = raw.len();
+        let msg = self.encode();
+        let size = msg.len();
 
-        if let Err(e) = io.send(peer, raw, self.priority()) {
+        if let Err(e) = io.send(peer, msg, self.priority()) {
             debug!("Error sending message: {:?}", e);
             return Err(e);
         };
@@ -67,6 +65,24 @@ pub trait Message: Send + Sync + Encodable {
 
         Ok(size)
     }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
+}
+
+pub fn decode_msg(msg: &[u8]) -> Option<(MsgId, Rlp)> {
+    let len = msg.len();
+    if len < 2 {
+        return None;
+    }
+
+    let msg_id = msg[len - 1];
+    let rlp = Rlp::new(&msg[..len - 1]);
+
+    Some((msg_id, rlp))
 }
 
 macro_rules! build_msg_impl {
