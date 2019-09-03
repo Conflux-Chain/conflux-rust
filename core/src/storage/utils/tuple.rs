@@ -38,9 +38,9 @@ pub trait TupleIndexExt: Sized {
 /// We don't support generics and lifetime yet because it will take some time to
 /// update the macro implementation.
 macro_rules! make_tuple_with_index_ext {
-    ( $tuple_struct_name:ident($($element_type:ty),*) ) => {
+    ( $tuple_struct_name:ident($($element_type:ty$(: $pub_vis:tt)*),*) ) => {
         #[derive(Default, Clone)]
-        struct $tuple_struct_name($($element_type),*);
+        pub struct $tuple_struct_name($($($pub_vis )*$element_type),*);
 
         make_get_index_ext_all!{
             $tuple_struct_name($($element_type),*),
