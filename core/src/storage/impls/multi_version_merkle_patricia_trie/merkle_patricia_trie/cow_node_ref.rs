@@ -520,11 +520,13 @@ impl CowNodeRef {
             }
         }
 
-        if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
-            children_merkle_map.insert(
-                index,
-                VanillaChildrenTable::<MerkleHash>::from(merkles),
-            );
+        if depth > CHILDREN_MERKLE_DEPTH_THRESHOLD {
+            if let NodeRefDeltaMpt::Dirty { index } = self.node_ref {
+                children_merkle_map.insert(
+                    index,
+                    VanillaChildrenTable::<MerkleHash>::from(merkles),
+                );
+            }
         }
 
         Ok(Some(merkles))
