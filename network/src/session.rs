@@ -396,14 +396,14 @@ impl Session {
     ) -> Result<SendQueueStatus, Error>
     {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
-        self.connection_mut().send(io, &packet, priority)
+        self.connection_mut().send(io, packet, priority)
     }
 
     pub fn send_packet_immediately(
         &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: Vec<u8>,
     ) -> Result<usize, Error> {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
-        self.connection_mut().write_raw_data(&packet)
+        self.connection_mut().write_raw_data(packet)
     }
 
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {

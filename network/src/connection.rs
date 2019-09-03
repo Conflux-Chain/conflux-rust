@@ -7,7 +7,7 @@ use crate::{
     throttling::THROTTLING_SERVICE,
     Error, ErrorKind,
 };
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
 use metrics::{register_meter_with_group, Meter};
 use mio::{deprecated::*, tcp::*, *};
@@ -74,21 +74,22 @@ impl GenericSocket for TcpStream {}
 
 pub trait PacketAssembler: Send + Sync {
     fn is_oversized(&self, len: usize) -> bool;
-    fn assemble(&self, data: &[u8]) -> Result<Bytes, Error>;
-    fn load(&self, buf: &mut Bytes) -> Option<Bytes>;
+    fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error>;
+    fn load(&self, buf: &mut BytesMut) -> Option<BytesMut>;
 }
 
 /// Packet with guard to automatically update throttling and high priority
 /// packets counter.
 #[derive(Default)]
 struct Packet {
-    data: Bytes,
+    data: Vec<u8>,
+    sending_pos: usize,
     is_high_priority: bool,
     throttling_size: usize,
 }
 
 impl Packet {
-    fn new(data: Bytes, priority: SendQueuePriority) -> Result<Self, Error> {
+    fn new(data: Vec<u8>, priority: SendQueuePriority) -> Result<Self, Error> {
         let throttling_size = data.len();
         THROTTLING_SERVICE.write().on_enqueue(throttling_size)?;
 
@@ -99,6 +100,7 @@ impl Packet {
 
         Ok(Packet {
             data,
+            sending_pos: 0,
             is_high_priority,
             throttling_size,
         })
@@ -110,6 +112,18 @@ impl Packet {
             self.is_high_priority = true;
         }
     }
+
+    fn write(&mut self, writer: &mut dyn Write) -> Result<usize, Error> {
+        if self.is_send_completed() {
+            return Ok(0);
+        }
+
+        let size = writer.write(&self.data[self.sending_pos..])?;
+        self.sending_pos += size;
+        Ok(size)
+    }
+
+    fn is_send_completed(&self) -> bool { self.sending_pos >= self.data.len() }
 }
 
 impl Drop for Packet {
@@ -131,7 +145,7 @@ pub struct SendQueueStatus {
 pub struct GenericConnection<Socket: GenericSocket> {
     token: StreamToken,
     socket: Socket,
-    recv_buf: Bytes,
+    recv_buf: BytesMut,
     // Pending packet that is not prefixed with length.
     send_queue: PrioritySendQueue<Packet>,
     // Sending packet that prefixed with length.
@@ -178,10 +192,12 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             );
         }
 
-        Ok(packet)
+        Ok(packet.map(|p| p.freeze()))
     }
 
-    pub fn write_raw_data(&mut self, data: &[u8]) -> Result<usize, Error> {
+    pub fn write_raw_data(
+        &mut self, mut data: Vec<u8>,
+    ) -> Result<usize, Error> {
         trace!(
             "Sending raw buffer, token = {} data_len = {}, data = {:?}",
             self.token,
@@ -189,7 +205,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             data
         );
 
-        let data = self.assembler.assemble(data)?;
+        self.assembler.assemble(&mut data)?;
         let size = self.socket.write(&data)?;
 
         trace!(
@@ -227,7 +243,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             }
 
             // assemble packet to send, e.g. prefix length to packet
-            packet.data = self.assembler.assemble(&packet.data)?;
+            self.assembler.assemble(&mut packet.data)?;
 
             trace!(
                 "Packet ready for sent, token = {}, size = {}",
@@ -238,13 +254,12 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             self.sending_packet = Some(packet);
         }
 
-        let data = &mut self
+        let packet = self
             .sending_packet
             .as_mut()
-            .expect("should pop packet from send queue")
-            .data;
+            .expect("should pop packet from send queue");
 
-        let size = self.socket.write(&data)?;
+        let size = packet.write(&mut self.socket)?;
 
         trace!(
             "Succeed to send socket data, token = {}, size = {}",
@@ -253,9 +268,8 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         );
 
         WRITE_METER.mark(size);
-        data.split_to(size);
 
-        if data.is_empty() {
+        if packet.is_send_completed() {
             trace!("Packet sent, token = {}", self.token);
             self.sending_packet = None;
             Ok(WriteStatus::Complete)
@@ -279,7 +293,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
     }
 
     pub fn send<Message: Sync + Send + Clone + 'static>(
-        &mut self, io: &IoContext<Message>, data: &[u8],
+        &mut self, io: &IoContext<Message>, data: Vec<u8>,
         priority: SendQueuePriority,
     ) -> Result<SendQueueStatus, Error>
     {
@@ -292,7 +306,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             trace!("Sending packet, token = {}, size = {}", self.token, size);
 
             SEND_METER.mark(size);
-            let packet = Packet::new(data.into(), priority)?;
+            let packet = Packet::new(data, priority)?;
             self.send_queue.push_back(packet, priority);
 
             match priority {
@@ -325,7 +339,7 @@ impl Connection {
         Connection {
             token,
             socket,
-            recv_buf: Bytes::new(),
+            recv_buf: BytesMut::new(),
             send_queue: PrioritySendQueue::new(),
             sending_packet: None,
             interest: Ready::hup() | Ready::readable(),
@@ -411,7 +425,7 @@ impl Connection {
             sending_buf: self
                 .sending_packet
                 .as_ref()
-                .map_or(0, |p| p.data.len()),
+                .map_or(0, |p| p.data.len() - p.sending_pos),
             priority_queue_normal: self
                 .send_queue
                 .len_by_priority(SendQueuePriority::Normal),
@@ -466,26 +480,36 @@ impl PacketAssembler for PacketWithLenAssembler {
     #[inline]
     fn is_oversized(&self, len: usize) -> bool { len > self.max_data_len }
 
-    fn assemble(&self, data: &[u8]) -> Result<Bytes, Error> {
+    fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error> {
         if self.is_oversized(data.len()) {
             return Err(ErrorKind::OversizedPacket.into());
         }
 
-        let mut packet = Bytes::with_capacity(self.data_len_bytes + data.len());
+        // first n-bytes swapped to the end
+        let swapped: Vec<u8> =
+            data.iter().take(self.data_len_bytes).cloned().collect();
 
-        packet.extend_from_slice(
-            &data.len().to_le_bytes()[..self.data_len_bytes],
-        );
-        packet.extend_from_slice(data);
+        // extend n-bytes
+        let data_len = data.len();
+        data.resize(data_len + self.data_len_bytes, 0);
 
-        Ok(packet)
+        // fill first n-bytes with LE data_len
+        data[..self.data_len_bytes]
+            .copy_from_slice(&data_len.to_le_bytes()[..self.data_len_bytes]);
+
+        // fill the last n-bytes with swapped values
+        let start = data.len() - swapped.len();
+        data[start..].copy_from_slice(&swapped);
+
+        Ok(())
     }
 
-    fn load(&self, buf: &mut Bytes) -> Option<Bytes> {
+    fn load(&self, buf: &mut BytesMut) -> Option<BytesMut> {
         if buf.len() < self.data_len_bytes {
             return None;
         }
 
+        // parse data length from first n-bytes
         let mut le_bytes = [0u8; 8];
         le_bytes
             .split_at_mut(self.data_len_bytes)
@@ -493,13 +517,23 @@ impl PacketAssembler for PacketWithLenAssembler {
             .copy_from_slice(&buf[..self.data_len_bytes]);
         let data_size = usize::from_le_bytes(le_bytes);
 
+        // some data not received yet
         if buf.len() < self.data_len_bytes + data_size {
             return None;
         }
 
-        buf.split_to(self.data_len_bytes);
+        let mut packet = buf.split_to(self.data_len_bytes + data_size);
 
-        Some(buf.split_to(data_size))
+        if data_size >= self.data_len_bytes {
+            // last n-bytes are swapped
+            let swapped = packet.split_off(data_size);
+            packet[..self.data_len_bytes].copy_from_slice(&swapped);
+        } else {
+            // just ignore the first n-bytes of msg length
+            packet.split_to(self.data_len_bytes);
+        };
+
+        Some(packet)
     }
 }
 
@@ -589,7 +623,7 @@ mod tests {
                 socket: TestSocket::new(),
                 send_queue: PrioritySendQueue::new(),
                 sending_packet: None,
-                recv_buf: Bytes::new(),
+                recv_buf: BytesMut::new(),
                 interest: Ready::hup() | Ready::readable(),
                 registered: AtomicBool::new(false),
                 assembler: Box::new(PacketWithLenAssembler::new(1, None)),
