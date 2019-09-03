@@ -318,14 +318,6 @@ mod tests {
         };
 
         assert!(h4 < h6); // hash order
-
-        let h7 = MissingHeader {
-            hash: 6.into(),
-            since: one_ms_ago,
-            source: HashSource::Epoch,
-        };
-
-        assert_eq!(h6, h7); // identical hash
     }
 
     fn assert_deep_equal(h1: Option<MissingHeader>, h2: Option<MissingHeader>) {
