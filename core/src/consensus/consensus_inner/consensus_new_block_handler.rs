@@ -1379,17 +1379,14 @@ impl ConsensusNewBlockHandler {
         block_status: BlockStatus, persist_terminal: bool,
     )
     {
-        let instance_id = if persist_terminal {
+        if persist_terminal {
             self.persist_terminals(inner);
-            NULLU64
-        } else {
-            self.data_man.get_instance_id()
-        };
+        }
 
         let block_info = LocalBlockInfo::new(
             block_status,
             inner.arena[me].data.sequence_number,
-            instance_id,
+            self.data_man.get_instance_id(),
         );
         self.data_man
             .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);

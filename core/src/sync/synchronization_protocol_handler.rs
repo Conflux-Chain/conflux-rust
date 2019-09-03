@@ -28,7 +28,7 @@ use super::{
     request_manager::RequestManager,
 };
 use crate::{
-    block_data_manager::{BlockStatus, NULLU64},
+    block_data_manager::BlockStatus,
     parameters::sync::*,
     sync::{
         message::{Context, DynamicCapability},
@@ -644,9 +644,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id()
-                || info.get_instance_id() == NULLU64
-            {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
                 // This block header has already entered consensus
                 // graph in this run.
                 return true;
@@ -1220,9 +1218,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id()
-                || info.get_instance_id() == NULLU64
-            {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
                 // This block has already entered consensus graph
                 // in this run.
                 return true;

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::{BlockDataManager, BlockStatus, NULLU64},
+    block_data_manager::{BlockDataManager, BlockStatus},
     consensus::{ConsensusGraphInner, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
@@ -244,7 +244,6 @@ impl SynchronizationGraphInner {
                     false
                 } else {
                     info.get_instance_id() == data_man.get_instance_id()
-                        || info.get_instance_id() == NULLU64
                 }
             } else {
                 false
