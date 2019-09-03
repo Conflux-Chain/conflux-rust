@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::block_data_types::*,
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     db::{
@@ -11,9 +10,7 @@ use crate::{
         COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
     },
     ext_db::SystemDB,
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT, WORKER_COMPUTATION_PARALLELISM,
-    },
+    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     pow::TargetDifficultyManager,
     storage::{
         state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
@@ -24,10 +21,10 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Bloom, H256};
 use kvdb::DBTransaction;
-use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    block::{from_tx_hash, get_shortid_key, CompactBlock},
+    block::CompactBlock,
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
@@ -35,11 +32,10 @@ use primitives::{
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp::{DecoderError, Rlp, RlpStream};
 use std::{
     collections::{HashMap, HashSet},
-    sync::{mpsc::channel, Arc},
+    sync::Arc,
 };
 use threadpool::ThreadPool;
 pub mod block_data_types;

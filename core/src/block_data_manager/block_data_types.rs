@@ -23,27 +23,11 @@ pub struct EpochExecutionCommitments {
 /// The DEFERRED state_root, receipt_root, and logs_bloom of an block.
 /// They may not be the ones in the block header which is the hash of that of
 /// all blamed block headers if `blame` is not 0.
-#[derive(Clone, RlpEncodable, RlpDecodable)]
+#[derive(Clone, RlpEncodable, RlpDecodable, Default)]
 pub struct ConsensusGraphExecutionInfo {
-    /// `state_valid` is `true` if `blame`, `deferred_state_root`,
-    /// `deferred_receipt_root`, and `deferred_logs_bloom_hash` are all
-    /// valid in this header.
-    pub state_valid: bool,
-
     pub original_deferred_state_root: H256,
     pub original_deferred_receipt_root: H256,
     pub original_deferred_logs_bloom_hash: H256,
-}
-
-impl Default for ConsensusGraphExecutionInfo {
-    fn default() -> Self {
-        ConsensusGraphExecutionInfo {
-            state_valid: true,
-            original_deferred_state_root: Default::default(),
-            original_deferred_receipt_root: Default::default(),
-            original_deferred_logs_bloom_hash: Default::default(),
-        }
-    }
 }
 
 /// `receipts` and `bloom` of a single block after execution.
@@ -115,7 +99,7 @@ impl BlockReceiptsInfo {
 pub struct LocalBlockInfo {
     status: BlockStatus,
     enter_consensus_seq_num: u64,
-    instance_id: u64,
+    pub instance_id: u64,
 }
 
 impl LocalBlockInfo {
