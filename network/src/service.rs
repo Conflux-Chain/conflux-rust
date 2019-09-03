@@ -383,7 +383,7 @@ impl DelayedQueue {
             &context.io,
             Some(context.protocol),
             session::PACKET_USER,
-            &context.msg,
+            context.msg,
             context.priority,
         ) {
             Ok(_) => {}
@@ -1686,7 +1686,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         self.io,
                         Some(self.protocol),
                         session::PACKET_USER,
-                        &msg,
+                        msg,
                         priority,
                     )?;
                 }

@@ -10,7 +10,7 @@ use crate::{
     Capability, DisconnectReason, Error, ErrorKind, ProtocolId,
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use io::*;
 use mio::{deprecated::*, tcp::*, *};
 use priority_send_queue::SendQueuePriority;
@@ -366,8 +366,8 @@ impl Session {
     }
 
     fn prepare_packet(
-        &self, protocol: Option<ProtocolId>, packet_id: u8, data: &[u8],
-    ) -> Result<BytesMut, Error> {
+        &self, protocol: Option<ProtocolId>, packet_id: u8, data: Vec<u8>,
+    ) -> Result<Vec<u8>, Error> {
         if protocol.is_some()
             && (self.metadata.capabilities.is_empty()
                 || self.had_hello.is_none())
@@ -392,7 +392,7 @@ impl Session {
 
     pub fn send_packet<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
-        packet_id: u8, data: &[u8], priority: SendQueuePriority,
+        packet_id: u8, data: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<SendQueueStatus, Error>
     {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
@@ -400,7 +400,7 @@ impl Session {
     }
 
     pub fn send_packet_immediately(
-        &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: &[u8],
+        &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: Vec<u8>,
     ) -> Result<usize, Error> {
         let packet = self.prepare_packet(protocol, packet_id, data)?;
         self.connection_mut().write_raw_data(&packet)
@@ -408,22 +408,34 @@ impl Session {
 
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
         let packet = rlp::encode(&reason);
-        let _ = self.send_packet_immediately(None, PACKET_DISCONNECT, &packet);
+        let _ = self.send_packet_immediately(None, PACKET_DISCONNECT, packet);
         ErrorKind::Disconnect(reason).into()
     }
 
     fn send_ping<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        self.send_packet(io, None, PACKET_PING, &[], SendQueuePriority::High)
-            .map(|_| ())
+        self.send_packet(
+            io,
+            None,
+            PACKET_PING,
+            Vec::new(),
+            SendQueuePriority::High,
+        )
+        .map(|_| ())
     }
 
     fn send_pong<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        self.send_packet(io, None, PACKET_PONG, &[], SendQueuePriority::High)
-            .map(|_| ())
+        self.send_packet(
+            io,
+            None,
+            PACKET_PONG,
+            Vec::new(),
+            SendQueuePriority::High,
+        )
+        .map(|_| ())
     }
 
     fn write_hello<Message: Send + Sync + Clone>(
@@ -437,7 +449,7 @@ impl Session {
             io,
             None,
             PACKET_HELLO,
-            &rlp.drain(),
+            rlp.drain(),
             SendQueuePriority::High,
         )
         .map(|_| ())
@@ -556,30 +568,40 @@ struct SessionPacket {
 }
 
 impl SessionPacket {
-    fn assemble(id: u8, protocol: Option<ProtocolId>, data: &[u8]) -> BytesMut {
-        // packet_id, protocol, data
-        let packet_size = 1 + protocol.map_or(0, |p| p.len()) + data.len();
-
-        let mut packet = BytesMut::with_capacity(packet_size);
-        packet.put_u8(id);
+    fn assemble(
+        id: u8, protocol: Option<ProtocolId>, mut data: Vec<u8>,
+    ) -> Vec<u8> {
+        let mut protocol_flag = 0;
         if let Some(protocol) = protocol {
-            packet.put_slice(&protocol);
+            data.extend_from_slice(&protocol);
+            protocol_flag = 1;
         }
-        packet.put_slice(data);
 
-        packet
+        data.push(id);
+        data.push(protocol_flag);
+
+        data
     }
 
     fn parse(mut data: Bytes) -> Result<Self, Error> {
-        if data.is_empty() {
-            debug!("failed to parse session packet, data is empty");
-            bail!(ErrorKind::BadProtocol);
+        // protocol flag
+        if data.len() == 0 {
+            debug!("failed to parse session packet, protocol flag missed");
+            return Err(ErrorKind::BadProtocol.into());
         }
 
-        // first byte is packet_id
-        let packet_id = data.split_to(1)[0];
+        let protocol_flag = data.split_off(data.len() - 1)[0];
 
-        if packet_id != PACKET_USER {
+        // packet id
+        if data.len() == 0 {
+            debug!("failed to parse session packet, packet id missed");
+            return Err(ErrorKind::BadProtocol.into());
+        }
+
+        let packet_id = data.split_off(data.len() - 1)[0];
+
+        // without protocol
+        if protocol_flag == 0 {
             return Ok(SessionPacket {
                 id: packet_id,
                 protocol: None,
@@ -587,13 +609,20 @@ impl SessionPacket {
             });
         }
 
-        if data.len() < PROTOCOL_ID_SIZE {
-            debug!("failed to parse session protocol packet, invalid length for protocol id");
-            bail!(ErrorKind::BadProtocol);
+        if protocol_flag != 1 {
+            debug!("failed to parse session packet, protocol flag is invalid");
+            return Err(ErrorKind::BadProtocol.into());
         }
 
+        // protocol
+        if data.len() < PROTOCOL_ID_SIZE {
+            debug!("failed to parse session protocol packet, protocol missed");
+            return Err(ErrorKind::BadProtocol.into());
+        }
+
+        let protocol_bytes = data.split_off(data.len() - PROTOCOL_ID_SIZE);
         let mut protocol = ProtocolId::default();
-        protocol.copy_from_slice(&data.split_to(PROTOCOL_ID_SIZE));
+        protocol.copy_from_slice(&protocol_bytes);
 
         Ok(SessionPacket {
             id: packet_id,
