@@ -4,16 +4,10 @@
 
 extern crate futures;
 
-use std::{
-    cmp,
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
 use cfx_types::Bloom;
 use futures::Future;
 use parking_lot::RwLock;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -32,8 +26,8 @@ use crate::{
 };
 
 use super::{
-    future_item::FutureItem,
-    sync_manager::{HasKey, SyncManager},
+    future_item::FutureItem, missing_item::KeyOrdered,
+    sync_manager::SyncManager,
 };
 
 #[derive(Debug)]
@@ -43,48 +37,8 @@ struct Statistics {
     waiting: usize,
 }
 
-#[derive(Clone, Debug, Eq)]
-pub(super) struct MissingBloom {
-    pub epoch: u64,
-    pub since: Instant,
-}
-
-impl MissingBloom {
-    pub fn new(epoch: u64) -> Self {
-        MissingBloom {
-            epoch,
-            since: Instant::now(),
-        }
-    }
-}
-
-impl PartialEq for MissingBloom {
-    fn eq(&self, other: &Self) -> bool { self.epoch == other.epoch }
-}
-
-// MissingBloom::cmp is used for prioritizing bloom requests
-impl Ord for MissingBloom {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        if self.eq(other) {
-            return cmp::Ordering::Equal;
-        }
-
-        let cmp_since = self.since.cmp(&other.since).reverse();
-        let cmp_epoch = self.epoch.cmp(&other.epoch).reverse();
-
-        cmp_since.then(cmp_epoch)
-    }
-}
-
-impl PartialOrd for MissingBloom {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl HasKey<u64> for MissingBloom {
-    fn key(&self) -> u64 { self.epoch }
-}
+// prioritize higher epochs
+type MissingBloom = KeyOrdered<u64>;
 
 pub struct Blooms {
     // series of unique request ids

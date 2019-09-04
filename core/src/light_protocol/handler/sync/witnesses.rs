@@ -2,13 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{
-    cmp,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
 use parking_lot::RwLock;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -30,7 +25,7 @@ use crate::{
     },
 };
 
-use super::sync_manager::{HasKey, SyncManager};
+use super::{missing_item::KeyReverseOrdered, sync_manager::SyncManager};
 
 #[derive(Debug)]
 struct Statistics {
@@ -39,48 +34,8 @@ struct Statistics {
     waiting: usize,
 }
 
-#[derive(Clone, Debug, Eq)]
-pub(super) struct MissingWitness {
-    pub height: u64,
-    pub since: Instant,
-}
-
-impl MissingWitness {
-    pub fn new(height: u64) -> Self {
-        MissingWitness {
-            height,
-            since: Instant::now(),
-        }
-    }
-}
-
-impl PartialEq for MissingWitness {
-    fn eq(&self, other: &Self) -> bool { self.height == other.height }
-}
-
-// MissingWitness::cmp is used for prioritizing header requests
-impl Ord for MissingWitness {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        if self.eq(other) {
-            return cmp::Ordering::Equal;
-        }
-
-        let cmp_since = self.since.cmp(&other.since).reverse();
-        let cmp_height = self.height.cmp(&other.height);
-
-        cmp_since.then(cmp_height)
-    }
-}
-
-impl PartialOrd for MissingWitness {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl HasKey<u64> for MissingWitness {
-    fn key(&self) -> u64 { self.height }
-}
+// prioritize lower epochs
+type MissingWitness = KeyReverseOrdered<u64>;
 
 pub struct Witnesses {
     // shared consensus graph

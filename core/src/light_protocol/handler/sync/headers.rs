@@ -12,6 +12,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+use cfx_types::H256;
+use primitives::BlockHeader;
+
 use crate::{
     light_protocol::{
         common::{Peers, UniqueId},
@@ -28,9 +31,7 @@ use crate::{
     sync::SynchronizationGraph,
 };
 
-use super::sync_manager::{HasKey, SyncManager};
-use cfx_types::H256;
-use primitives::BlockHeader;
+use super::{missing_item::HasKey, sync_manager::SyncManager};
 
 #[derive(Debug)]
 struct Statistics {
@@ -47,7 +48,7 @@ pub(super) enum HashSource {
     NewHash,    // hash received through a new hashes announcement
 }
 
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct MissingHeader {
     pub hash: H256,
     pub since: Instant,
@@ -64,21 +65,12 @@ impl MissingHeader {
     }
 }
 
-impl PartialEq for MissingHeader {
-    fn eq(&self, other: &Self) -> bool { self.hash == other.hash }
-}
-
 // MissingHeader::cmp is used for prioritizing header requests
 impl Ord for MissingHeader {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        if self.eq(other) {
-            return cmp::Ordering::Equal;
-        }
-
         let cmp_source = self.source.cmp(&other.source);
         let cmp_since = self.since.cmp(&other.since).reverse();
         let cmp_hash = self.hash.cmp(&other.hash);
-
         cmp_source.then(cmp_since).then(cmp_hash)
     }
 }
@@ -144,6 +136,34 @@ impl Headers {
             .map(|h| MissingHeader::new(h, source.clone()));
 
         self.sync_manager.insert_waiting(headers);
+    }
+
+    #[inline]
+    pub fn request_now_from_peer<I>(
+        &self, io: &dyn NetworkContext, peer: PeerId, hashes: I,
+        source: HashSource,
+    ) where
+        I: Iterator<Item = H256>,
+    {
+        let hashes: Vec<_> = hashes
+            .filter(|h| !self.graph.contains_block_header(&h))
+            .collect();
+
+        let headers = hashes
+            .iter()
+            .cloned()
+            .map(|h| MissingHeader::new(h, source.clone()));
+
+        match self.send_request(io, peer, hashes.clone()) {
+            Ok(_) => self.sync_manager.insert_in_flight(headers),
+            Err(e) => {
+                warn!(
+                    "Failed to request {:?} from {:?}: {:?}",
+                    hashes, peer, e
+                );
+                self.sync_manager.insert_waiting(headers);
+            }
+        }
     }
 
     pub fn receive<I>(&self, headers: I)
@@ -228,10 +248,11 @@ impl Headers {
 
 #[cfg(test)]
 mod tests {
-    use super::{HashSource, MissingHeader};
+    use super::{
+        super::priority_queue::PriorityQueue, HashSource, MissingHeader,
+    };
     use rand::Rng;
     use std::{
-        collections::BinaryHeap,
         ops::Sub,
         time::{Duration, Instant},
     };
@@ -297,14 +318,6 @@ mod tests {
         };
 
         assert!(h4 < h6); // hash order
-
-        let h7 = MissingHeader {
-            hash: 6.into(),
-            since: one_ms_ago,
-            source: HashSource::Epoch,
-        };
-
-        assert_eq!(h6, h7); // identical hash
     }
 
     fn assert_deep_equal(h1: Option<MissingHeader>, h2: Option<MissingHeader>) {
@@ -362,6 +375,7 @@ mod tests {
         };
 
         let mut headers = vec![];
+
         headers.push(h0.clone());
         headers.push(h1.clone());
         headers.push(h2.clone());
@@ -370,16 +384,10 @@ mod tests {
         headers.push(h5.clone());
         headers.push(h6.clone());
 
-        // NOTE: as `h5.hash == h6.hash`, BinaryHeap will
-        // insert another instance of `h5` in the last step;
-        // this is not optimal, but we have other checks to
-        // to ensure we don't request headers multiple times
-
         rand::thread_rng().shuffle(&mut headers);
-        let mut queue: BinaryHeap<MissingHeader> = BinaryHeap::new();
+        let mut queue = PriorityQueue::new();
         queue.extend(headers);
 
-        assert_deep_equal(queue.pop(), Some(h5.clone()));
         assert_deep_equal(queue.pop(), Some(h5));
         assert_deep_equal(queue.pop(), Some(h4));
         assert_deep_equal(queue.pop(), Some(h3));
