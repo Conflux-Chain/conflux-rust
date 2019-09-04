@@ -281,8 +281,10 @@ impl RpcImpl {
         let mut min = std::u64::MAX;
         let mut max: u64 = 0;
         for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
-            if let Some(block) =
-                self.consensus.data_man.block_by_hash(key, false)
+            if let Some(block) = self
+                .consensus
+                .data_man
+                .block_by_hash(key, false /* update_cache */)
             {
                 let timestamp = block.block_header.timestamp();
                 if timestamp < min && timestamp > 0 {
@@ -303,8 +305,10 @@ impl RpcImpl {
             let mut ranged_set = HashSet::new();
             for key in self.consensus.inner.read().hash_to_arena_indices.keys()
             {
-                if let Some(block) =
-                    self.consensus.data_man.block_by_hash(key, false)
+                if let Some(block) = self
+                    .consensus
+                    .data_man
+                    .block_by_hash(key, false /* update_cache */)
                 {
                     let timestamp = block.block_header.timestamp();
                     if timestamp > lower_bound && timestamp < upper_bound {
