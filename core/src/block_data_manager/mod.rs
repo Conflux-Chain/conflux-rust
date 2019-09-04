@@ -10,9 +10,7 @@ use crate::{
         COL_EXECUTION_CONTEXT, COL_MISC, COL_TX_ADDRESS,
     },
     ext_db::SystemDB,
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT, WORKER_COMPUTATION_PARALLELISM,
-    },
+    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     pow::TargetDifficultyManager,
     storage::{
         state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
@@ -23,10 +21,10 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Bloom, H256};
 use kvdb::DBTransaction;
-use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{
-    block::{from_tx_hash, get_shortid_key, CompactBlock},
+    block::CompactBlock,
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
@@ -34,13 +32,16 @@ use primitives::{
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp::{DecoderError, Rlp, RlpStream};
 use std::{
     collections::{HashMap, HashSet},
-    sync::{mpsc::channel, Arc},
+    sync::Arc,
 };
 use threadpool::ThreadPool;
+pub mod block_data_types;
+pub mod tx_data_manager;
+use crate::block_data_manager::tx_data_manager::TransactionDataManager;
+pub use block_data_types::*;
 
 pub const NULLU64: u64 = !0;
 
@@ -48,31 +49,12 @@ const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
 const EPOCH_EXECUTION_RESULT_SUFFIX_BYTE: u8 = 3;
 
-#[derive(Clone)]
-pub struct EpochExecutionContext {
-    pub start_block_number: u64,
-}
-
-#[derive(Clone)]
-pub struct EpochExecutionCommitments {
-    pub receipts_root: H256,
-    pub logs_bloom_hash: H256,
-}
-
-#[derive(Clone, RlpEncodable, RlpDecodable, Default)]
-pub struct ConsensusGraphExecutionInfo {
-    pub original_deferred_state_root: H256,
-    pub original_deferred_receipt_root: H256,
-    pub original_deferred_logs_bloom_hash: H256,
-}
-
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
-    tx_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
     epoch_execution_commitments:
         RwLock<HashMap<H256, EpochExecutionCommitments>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
@@ -83,14 +65,14 @@ pub struct BlockDataManager {
 
     config: DataManagerConfiguration,
 
+    tx_data_manager: TransactionDataManager,
+
     pub genesis_block: Arc<Block>,
     pub true_genesis_block: Arc<Block>,
     pub db: Arc<SystemDB>,
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
-    worker_pool: Arc<Mutex<ThreadPool>>,
-    tx_cache_man: Arc<Mutex<CacheManager<H256>>>,
 }
 
 impl BlockDataManager {
@@ -109,12 +91,8 @@ impl BlockDataManager {
             max_cache_size,
             3 * mb,
         )));
-        // TODO Bound both the size and the count of tx
-        let tx_cache_man = Arc::new(Mutex::new(CacheManager::new(
-            config.tx_cache_count * 3 / 4,
-            config.tx_cache_count,
-            10000,
-        )));
+        let tx_data_manager =
+            TransactionDataManager::new(config.tx_cache_count, worker_pool);
 
         let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
@@ -123,7 +101,6 @@ impl BlockDataManager {
             block_receipts: Default::default(),
             transaction_addresses: Default::default(),
             epoch_execution_commitments: Default::default(),
-            tx_cache: Default::default(),
             epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
             genesis_block: genesis_block.clone(),
@@ -136,8 +113,7 @@ impl BlockDataManager {
             target_difficulty_manager: TargetDifficultyManager::new(),
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
             cur_consensus_era_stable_hash: RwLock::new(genesis_hash),
-            worker_pool,
-            tx_cache_man,
+            tx_data_manager,
         };
 
         data_man.initialize_instance_id();
@@ -919,7 +895,7 @@ impl BlockDataManager {
         } else {
             if let Some(block_info) = self.local_block_info_from_db(block_hash)
             {
-                match block_info.status {
+                match block_info.get_status() {
                     BlockStatus::Invalid => {
                         RwLockUpgradableReadGuard::upgrade(invalid_block_set)
                             .insert(*block_hash);
@@ -1009,21 +985,9 @@ impl BlockDataManager {
         exeuction_contexts.shrink_to_fit();
     }
 
-    fn tx_cache_gc(&self) {
-        let mut tx_cache = self.tx_cache.write();
-        let mut tx_cache_man = self.tx_cache_man.lock();
-        tx_cache_man.collect_garbage(tx_cache.len(), |ids| {
-            for id in ids {
-                tx_cache.remove(&id);
-            }
-            tx_cache.len()
-        });
-        tx_cache.shrink_to_fit();
-    }
-
     pub fn gc_cache(&self) {
         self.block_cache_gc();
-        self.tx_cache_gc();
+        self.tx_data_manager.tx_cache_gc();
     }
 
     pub fn set_cur_consensus_era_genesis_hash(
@@ -1043,245 +1007,6 @@ impl BlockDataManager {
 
     pub fn get_cur_consensus_era_stable_hash(&self) -> H256 {
         self.cur_consensus_era_stable_hash.read().clone()
-    }
-
-    /// Recover the public keys for uncached transactions in `transactions`.
-    /// If a tx is already in the cache, it will be ignored and not included in
-    /// the output vec.
-    pub fn recover_unsigned_tx(
-        &self, transactions: &Vec<TransactionWithSignature>,
-    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
-        let uncached_trans = {
-            let tx_cache = self.tx_cache.read();
-            transactions
-                .iter()
-                .filter(|tx| {
-                    let tx_hash = tx.hash();
-                    let inserted = tx_cache.contains_key(&tx_hash);
-                    // Sample 1/128 transactions
-                    if tx_hash[0] & 254 == 0 {
-                        debug!("Sampled transaction {:?} in tx pool", tx_hash);
-                    }
-                    !inserted
-                })
-                .map(|tx| (0, tx.clone())) // idx not used
-                .collect()
-        };
-        // Ignore the index and return the recovered tx list
-        self.recover_uncached_tx(uncached_trans)
-            .map(|tx_vec| tx_vec.into_iter().map(|(_, tx)| tx).collect())
-    }
-
-    /// Recover public keys for the transactions in `block`.
-    ///
-    /// The public keys already in input transactions will be used directly
-    /// without verification. `block` will not be updated if any error is
-    /// thrown.
-    pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {
-        let (uncached_trans, mut recovered_trans) = {
-            let tx_cache = self.tx_cache.read();
-            let mut uncached_trans = Vec::new();
-            let mut recovered_trans = Vec::new();
-            for (idx, transaction) in block.transactions.iter().enumerate() {
-                if transaction.public.is_some() {
-                    // This may only happen for `GetBlocksWithPublicResponse`
-                    // for now.
-                    recovered_trans.push(Some(transaction.clone()));
-                    continue;
-                }
-                let tx_hash = transaction.hash();
-                // Sample 1/128 transactions
-                if tx_hash[0] & 254 == 0 {
-                    debug!("Sampled transaction {:?} in block", tx_hash);
-                }
-                match tx_cache.get(&tx_hash) {
-                    Some(tx) => recovered_trans.push(Some(tx.clone())),
-                    None => {
-                        uncached_trans
-                            .push((idx, transaction.transaction.clone()));
-                        recovered_trans.push(None);
-                    }
-                }
-            }
-            (uncached_trans, recovered_trans)
-        };
-        for (idx, tx) in self.recover_uncached_tx(uncached_trans)? {
-            recovered_trans[idx] = Some(tx);
-        }
-        block.transactions = recovered_trans
-            .into_iter()
-            .map(|e| e.expect("All tx recovered"))
-            .collect();
-        Ok(())
-    }
-
-    pub fn recover_unsigned_tx_with_order(
-        &self, transactions: &Vec<TransactionWithSignature>,
-    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
-        let (uncached_trans, mut recovered_trans) = {
-            let tx_cache = self.tx_cache.read();
-            let mut uncached_trans = Vec::new();
-            let mut recovered_trans = Vec::new();
-            for (idx, transaction) in transactions.iter().enumerate() {
-                let tx_hash = transaction.hash();
-                // Sample 1/128 transactions
-                if tx_hash[0] & 254 == 0 {
-                    debug!("Sampled transaction {:?} in block", tx_hash);
-                }
-                match tx_cache.get(&tx_hash) {
-                    Some(tx) => recovered_trans.push(Some(tx.clone())),
-                    None => {
-                        uncached_trans.push((idx, transaction.clone()));
-                        recovered_trans.push(None);
-                    }
-                }
-            }
-            (uncached_trans, recovered_trans)
-        };
-        for (idx, tx) in self.recover_uncached_tx(uncached_trans)? {
-            recovered_trans[idx] = Some(tx);
-        }
-        Ok(recovered_trans
-            .into_iter()
-            .map(|e| e.expect("All tx recovered"))
-            .collect())
-    }
-
-    /// Recover public key for `uncached_trans` and keep the corresponding index
-    /// unchanged.
-    ///
-    /// Note that we release `tx_cache` lock during pubkey recovery to allow
-    /// more parallelism, but we may recover a tx twice if it is received
-    /// again before the recovery finishes.
-    fn recover_uncached_tx(
-        &self, uncached_trans: Vec<(usize, TransactionWithSignature)>,
-    ) -> Result<Vec<(usize, Arc<SignedTransaction>)>, DecoderError> {
-        let mut recovered_trans = Vec::new();
-        if uncached_trans.len() < WORKER_COMPUTATION_PARALLELISM * 8 {
-            for (idx, tx) in uncached_trans {
-                if let Ok(public) = tx.recover_public() {
-                    recovered_trans.push((
-                        idx,
-                        Arc::new(SignedTransaction::new(public, tx.clone())),
-                    ));
-                } else {
-                    info!(
-                        "Unable to recover the public key of transaction {:?}",
-                        tx.hash()
-                    );
-                    return Err(DecoderError::Custom(
-                        "Cannot recover public key",
-                    ));
-                }
-            }
-        } else {
-            let tx_num = uncached_trans.len();
-            let tx_num_per_worker = tx_num / WORKER_COMPUTATION_PARALLELISM;
-            let mut remainder =
-                tx_num - (tx_num_per_worker * WORKER_COMPUTATION_PARALLELISM);
-            let mut start_idx = 0;
-            let mut end_idx = 0;
-            let mut unsigned_trans = Vec::new();
-
-            for tx in uncached_trans {
-                if start_idx == end_idx {
-                    // a new segment of transactions
-                    end_idx = start_idx + tx_num_per_worker;
-                    if remainder > 0 {
-                        end_idx += 1;
-                        remainder -= 1;
-                    }
-                    let unsigned_txes = Vec::new();
-                    unsigned_trans.push(unsigned_txes);
-                }
-
-                unsigned_trans.last_mut().unwrap().push(tx);
-
-                start_idx += 1;
-            }
-
-            let (sender, receiver) = channel();
-            let n_thread = unsigned_trans.len();
-            for unsigned_txes in unsigned_trans {
-                let sender = sender.clone();
-                self.worker_pool.lock().execute(move || {
-                    let mut signed_txes = Vec::new();
-                    for (idx, tx) in unsigned_txes {
-                        if let Ok(public) = tx.recover_public() {
-                            signed_txes.push((idx, Arc::new(SignedTransaction::new(
-                                public,
-                                tx.clone(),
-                            ))));
-                        } else {
-                            info!(
-                                "Unable to recover the public key of transaction {:?}",
-                                tx.hash()
-                            );
-                            break;
-                        }
-                    }
-                    sender.send(signed_txes).unwrap();
-                });
-            }
-
-            let mut total_recovered_num = 0 as usize;
-            for tx_publics in receiver.iter().take(n_thread) {
-                total_recovered_num += tx_publics.len();
-                for (idx, tx) in tx_publics {
-                    recovered_trans.push((idx, tx));
-                }
-            }
-            if total_recovered_num != tx_num {
-                return Err(DecoderError::Custom("Cannot recover public key"));
-            }
-        }
-        let mut tx_cache = self.tx_cache.write();
-        let mut tx_cache_man = self.tx_cache_man.lock();
-        for (_, tx) in &recovered_trans {
-            tx_cache.insert(tx.hash(), tx.clone());
-            tx_cache_man.note_used(tx.hash());
-        }
-        Ok(recovered_trans)
-    }
-
-    /// Find tx in tx_cache that matches tx_short_ids to fill in
-    /// reconstruced_txes Return the differentially encoded index of missing
-    /// transactions Now should only called once after CompactBlock is
-    /// decoded
-    pub fn build_partial(
-        &self, compact_block: &mut CompactBlock,
-    ) -> Vec<usize> {
-        compact_block
-            .reconstructed_txes
-            .resize(compact_block.tx_short_ids.len(), None);
-        let mut short_id_to_index =
-            HashMap::with_capacity(compact_block.tx_short_ids.len());
-        for (i, id) in compact_block.tx_short_ids.iter().enumerate() {
-            short_id_to_index.insert(id, i);
-        }
-        let (k0, k1) =
-            get_shortid_key(&compact_block.block_header, &compact_block.nonce);
-        for (tx_hash, tx) in &*self.tx_cache.read() {
-            let short_id = from_tx_hash(tx_hash, k0, k1);
-            match short_id_to_index.remove(&short_id) {
-                Some(index) => {
-                    compact_block.reconstructed_txes[index] = Some(tx.clone());
-                }
-                None => {}
-            }
-        }
-        let mut missing_index = Vec::new();
-        for index in short_id_to_index.values() {
-            missing_index.push(*index);
-        }
-        missing_index.sort();
-        let mut last = 0;
-        let mut missing_encoded = Vec::new();
-        for index in missing_index {
-            missing_encoded.push(index - last);
-            last = index + 1;
-        }
-        missing_encoded
     }
 
     pub fn insert_consensus_graph_execution_info_to_db(
@@ -1314,127 +1039,29 @@ impl BlockDataManager {
                 .expect("Wrong consensus_graph_execution_info rlp format!"),
         )
     }
-}
 
-#[derive(Clone, Debug)]
-pub struct BlockExecutedResult {
-    pub receipts: Arc<Vec<Receipt>>,
-    pub bloom: Bloom,
-}
-impl MallocSizeOf for BlockExecutedResult {
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.receipts.size_of(ops)
-    }
-}
-type EpochIndex = H256;
-
-#[derive(Default, Debug)]
-pub struct BlockReceiptsInfo {
-    info_with_epoch: Vec<(EpochIndex, BlockExecutedResult)>,
-}
-
-impl MallocSizeOf for BlockReceiptsInfo {
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.info_with_epoch.size_of(ops)
-    }
-}
-
-impl BlockReceiptsInfo {
-    /// `epoch` is the index of the epoch id in consensus arena
-    pub fn get_receipts_at_epoch(
-        &self, epoch: &EpochIndex,
-    ) -> Option<BlockExecutedResult> {
-        for (e_id, receipts) in &self.info_with_epoch {
-            if *e_id == *epoch {
-                return Some(receipts.clone());
-            }
-        }
-        None
+    pub fn recover_unsigned_tx(
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        self.tx_data_manager.recover_unsigned_tx(transactions)
     }
 
-    /// Insert the tx fee when the block is included in epoch `epoch`
-    pub fn insert_receipts_at_epoch(
-        &mut self, epoch: &EpochIndex, receipts: BlockExecutedResult,
-    ) {
-        // If it's inserted before, the fee must be the same, so we do not add
-        // duplicate entry
-        if self.get_receipts_at_epoch(epoch).is_none() {
-            self.info_with_epoch.push((*epoch, receipts));
-        }
+    pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {
+        self.tx_data_manager.recover_block(block)
     }
 
-    /// Only keep the tx fee in the given `epoch`
-    /// Called after we process rewards, and other fees will not be used w.h.p.
-    pub fn retain_epoch(&mut self, epoch: &EpochIndex) {
-        self.info_with_epoch.retain(|(e_id, _)| *e_id == *epoch);
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct LocalBlockInfo {
-    status: BlockStatus,
-    enter_consensus_seq_num: u64,
-    instance_id: u64,
-}
-
-impl LocalBlockInfo {
-    pub fn new(status: BlockStatus, seq_num: u64, instance_id: u64) -> Self {
-        LocalBlockInfo {
-            status,
-            enter_consensus_seq_num: seq_num,
-            instance_id,
-        }
+    pub fn recover_unsigned_tx_with_order(
+        &self, transactions: &Vec<TransactionWithSignature>,
+    ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        self.tx_data_manager
+            .recover_unsigned_tx_with_order(transactions)
     }
 
-    pub fn get_status(&self) -> BlockStatus { self.status }
-
-    pub fn get_seq_num(&self) -> u64 { self.enter_consensus_seq_num }
-
-    pub fn get_instance_id(&self) -> u64 { self.instance_id }
-}
-
-impl Encodable for LocalBlockInfo {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        let status = self.status.to_db_status();
-        stream
-            .begin_list(3)
-            .append(&status)
-            .append(&self.enter_consensus_seq_num)
-            .append(&self.instance_id);
+    pub fn build_partial(
+        &self, compact_block: &mut CompactBlock,
+    ) -> Vec<usize> {
+        self.tx_data_manager.build_partial(compact_block)
     }
-}
-
-impl Decodable for LocalBlockInfo {
-    fn decode(rlp: &Rlp) -> Result<LocalBlockInfo, DecoderError> {
-        let status: u8 = rlp.val_at(0)?;
-        Ok(LocalBlockInfo {
-            status: BlockStatus::from_db_status(status),
-            enter_consensus_seq_num: rlp.val_at(1)?,
-            instance_id: rlp.val_at(2)?,
-        })
-    }
-}
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum BlockStatus {
-    Valid = 0,
-    Invalid = 1,
-    PartialInvalid = 2,
-    Pending = 3,
-}
-
-impl BlockStatus {
-    fn from_db_status(db_status: u8) -> Self {
-        match db_status {
-            0 => BlockStatus::Valid,
-            1 => BlockStatus::Invalid,
-            2 => BlockStatus::PartialInvalid,
-            3 => BlockStatus::Pending,
-            _ => panic!("Read unknown block status from db"),
-        }
-    }
-
-    fn to_db_status(&self) -> u8 { *self as u8 }
 }
 
 pub struct DataManagerConfiguration {
