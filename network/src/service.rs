@@ -1233,8 +1233,8 @@ impl NetworkServiceInner {
         let mut disconnect_peers = Vec::new();
 
         for session in self.sessions.all() {
-            if let Some(sess) = session.try_read() {
-                if let (true, op) = sess.check_timeout() {
+            if let Some(mut sess) = session.try_write() {
+                if let (true, op) = sess.check_timeout(io) {
                     disconnect_peers.push((sess.token(), op));
                 }
             }

@@ -269,6 +269,7 @@ pub struct SessionMetadata {
     pub capabilities: Vec<Capability>,
     pub peer_capabilities: Vec<Capability>,
     pub originated: bool,
+    pub ping_latency: Option<Duration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

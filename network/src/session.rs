@@ -23,10 +23,19 @@ use std::{
     time::{Duration, Instant},
 };
 
+// timeouts to disconnect inactive peer timely.
+const EXPIRE_TIMEOUT: Duration = Duration::from_secs(5);
+const HELLO_TIMEOUT: Duration = Duration::from_secs(60);
+const PING_TIMEOUT: Duration = Duration::from_secs(60);
+const PING_INTERVAL: Duration = Duration::from_secs(120); // should > PING_TIMEOUT
+
 pub struct Session {
     pub metadata: SessionMetadata,
     address: SocketAddr,
     state: State,
+
+    ping_time: Instant,
+    pong_time: Option<Instant>,
     sent_hello: Instant,
     had_hello: Option<Instant>,
     expired: Option<Instant>,
@@ -72,9 +81,12 @@ impl Session {
                 capabilities: Vec::new(),
                 peer_capabilities: Vec::new(),
                 originated,
+                ping_latency: None,
             },
             address,
             state: State::Handshake(MovableWrapper::new(handshake)),
+            ping_time: Instant::now(),
+            pong_time: None,
             sent_hello: Instant::now(),
             had_hello: None,
             expired: None,
@@ -237,7 +249,11 @@ impl Session {
                 self.send_pong(io)?;
                 Ok(SessionData::Continue)
             }
-            PACKET_PONG => Ok(SessionData::Continue),
+            PACKET_PONG => {
+                self.metadata.ping_latency = Some(self.ping_time.elapsed());
+                self.pong_time = Some(Instant::now());
+                Ok(SessionData::Continue)
+            }
             PACKET_USER => Ok(SessionData::Message {
                 data: packet.data.to_vec(),
                 protocol: packet
@@ -415,8 +431,10 @@ impl Session {
     fn send_ping<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        self.send_packet(io, None, PACKET_PING, &[], SendQueuePriority::High)
-            .map(|_| ())
+        self.send_packet(io, None, PACKET_PING, &[], SendQueuePriority::High)?;
+        self.ping_time = Instant::now();
+        self.pong_time = None;
+        Ok(())
     }
 
     fn send_pong<Message: Send + Sync + Clone>(
@@ -476,22 +494,48 @@ impl Session {
             } else {
                 format!("handshaking ({:?})", self.sent_hello.elapsed())
             },
+            ping_latency: format!("{:?}", self.metadata.ping_latency),
             last_read: format!("{:?}", self.last_read.elapsed()),
             last_write: format!("{:?}", self.last_write.0.elapsed()),
             last_write_status: format!("{:?}", self.last_write.1),
         }
     }
 
-    pub fn check_timeout(&self) -> (bool, Option<UpdateNodeOperation>) {
+    pub fn check_timeout<Message: Send + Sync + Clone>(
+        &mut self, io: &IoContext<Message>,
+    ) -> (bool, Option<UpdateNodeOperation>) {
+        if let State::Handshake(_) = self.state {
+            return (false, None);
+        }
+
         if let Some(time) = self.expired {
             // should disconnected timely once expired
-            if time.elapsed() > Duration::from_secs(5) {
+            if time.elapsed() > EXPIRE_TIMEOUT {
                 return (true, None);
             }
         } else if self.had_hello.is_none() {
             // should receive HELLO packet timely after session created
-            if self.sent_hello.elapsed() > Duration::from_secs(300) {
+            if self.sent_hello.elapsed() > HELLO_TIMEOUT {
                 return (true, Some(UpdateNodeOperation::Demotion));
+            }
+        }
+
+        // check ping/pong
+        let timed_out = if let Some(pong) = self.pong_time {
+            pong.duration_since(self.ping_time) > PING_TIMEOUT
+        } else {
+            self.ping_time.elapsed() > PING_TIMEOUT
+        };
+
+        if timed_out {
+            return (true, None);
+        }
+
+        // send ping periodically to disconnect inactive peer timely
+        if self.ping_time.elapsed() > PING_INTERVAL {
+            if let Err(e) = self.send_ping(io) {
+                debug!("failed to send ping message, error = {:?}", e);
+                return (true, None);
             }
         }
 
@@ -514,6 +558,7 @@ pub struct SessionDetails {
     pub address: SocketAddr,
     pub connection: ConnectionDetails,
     pub status: String,
+    pub ping_latency: String,
     pub last_read: String,
     pub last_write: String,
     pub last_write_status: String,
