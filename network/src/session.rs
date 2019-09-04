@@ -561,6 +561,7 @@ impl<T> MovableWrapper<T> {
     }
 }
 
+#[derive(Eq, PartialEq)]
 struct SessionPacket {
     pub id: u8,
     pub protocol: Option<ProtocolId>,
@@ -600,9 +601,18 @@ impl SessionPacket {
         }
 
         let protocol_flag = data.split_off(data.len() - 1)[0];
+        if protocol_flag > 1 {
+            debug!("failed to parse session packet, protocol flag is invalid");
+            return Err(ErrorKind::BadProtocol.into());
+        }
 
         // without protocol
         if protocol_flag == 0 {
+            if packet_id == PACKET_USER {
+                debug!("failed to parse session packet, no protocol for user packet");
+                return Err(ErrorKind::BadProtocol.into());
+            }
+
             return Ok(SessionPacket {
                 id: packet_id,
                 protocol: None,
@@ -610,14 +620,14 @@ impl SessionPacket {
             });
         }
 
-        if protocol_flag != 1 {
-            debug!("failed to parse session packet, protocol flag is invalid");
+        if packet_id != PACKET_USER {
+            debug!("failed to parse session packet, invalid packet id");
             return Err(ErrorKind::BadProtocol.into());
         }
 
         // protocol
         if data.len() < PROTOCOL_ID_SIZE {
-            debug!("failed to parse session protocol packet, protocol missed");
+            debug!("failed to parse session packet, protocol missed");
             return Err(ErrorKind::BadProtocol.into());
         }
 
@@ -642,5 +652,66 @@ impl fmt::Debug for SessionPacket {
             self.protocol,
             self.data.len()
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_packet_assemble() {
+        let packet = SessionPacket::assemble(5, None, vec![1, 3]);
+        assert_eq!(packet, vec![1, 3, 0, 5]);
+
+        let packet = SessionPacket::assemble(6, Some([8; 3]), vec![2, 4]);
+        assert_eq!(packet, vec![2, 4, 8, 8, 8, 1, 6]);
+    }
+
+    #[test]
+    fn test_packet_parse() {
+        // packet id missed
+        assert!(SessionPacket::parse(vec![].into()).is_err());
+
+        // protocol flag missed
+        assert!(SessionPacket::parse(vec![1].into()).is_err());
+
+        // protocol flag invalid
+        assert!(SessionPacket::parse(vec![2, 1].into()).is_err());
+
+        // user packet without protocol
+        assert!(SessionPacket::parse(vec![0, PACKET_USER].into()).is_err());
+
+        // packet without protocol
+        let packet = SessionPacket::parse(vec![1, 2, 0, 20].into()).unwrap();
+        assert_eq!(
+            packet,
+            SessionPacket {
+                id: 20,
+                protocol: None,
+                data: vec![1, 2].into(),
+            }
+        );
+
+        // non user packet with protocol
+        assert!(SessionPacket::parse(vec![6, 6, 6, 1, 7].into()).is_err());
+
+        // user packet, but protocol length is not enough
+        assert!(
+            SessionPacket::parse(vec![6, 6, 1, PACKET_USER].into()).is_err()
+        );
+
+        // user packet with protocol
+        let packet =
+            SessionPacket::parse(vec![1, 9, 3, 3, 3, 1, PACKET_USER].into())
+                .unwrap();
+        assert_eq!(
+            packet,
+            SessionPacket {
+                id: PACKET_USER,
+                protocol: Some([3; 3]),
+                data: vec![1, 9].into(),
+            }
+        );
     }
 }

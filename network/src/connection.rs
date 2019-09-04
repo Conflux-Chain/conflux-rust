@@ -539,14 +539,13 @@ impl PacketAssembler for PacketWithLenAssembler {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{io::*, throttling::THROTTLING_SERVICE};
+    use mio::Ready;
     use std::{
         cmp,
         io::{Read, Result, Write},
     };
-
-    use super::*;
-    use crate::io::*;
-    use mio::Ready;
 
     struct TestSocket {
         read_buf: Vec<u8>,
@@ -692,5 +691,79 @@ mod tests {
             assert!(status.is_ok());
             assert!(status.unwrap().is_none());
         }
+    }
+
+    #[test]
+    fn test_packet_drop() {
+        let cur_queue_size = THROTTLING_SERVICE.write().on_enqueue(0).unwrap();
+        let cur_packets = get_high_priority_packets();
+
+        {
+            let _p = Packet::new(vec![1, 2, 3], SendQueuePriority::High);
+            assert_eq!(
+                THROTTLING_SERVICE.write().on_enqueue(0).unwrap(),
+                cur_queue_size + 3
+            );
+            assert_eq!(get_high_priority_packets(), cur_packets + 1);
+        }
+
+        assert_eq!(
+            THROTTLING_SERVICE.write().on_enqueue(0).unwrap(),
+            cur_queue_size
+        );
+        assert_eq!(get_high_priority_packets(), cur_packets);
+    }
+
+    #[test]
+    fn test_assembler_oversized() {
+        let assembler = PacketWithLenAssembler::default();
+        assert_eq!(assembler.is_oversized(MAX_PAYLOAD_SIZE - 4), false);
+        assert_eq!(assembler.is_oversized(MAX_PAYLOAD_SIZE - 3), false);
+        assert_eq!(assembler.is_oversized(MAX_PAYLOAD_SIZE - 2), true);
+    }
+
+    #[test]
+    fn test_assembler_assemble() {
+        let assembler = PacketWithLenAssembler::default();
+
+        // data length > 3
+        let mut data = vec![1, 2, 3, 4, 5];
+        assembler.assemble(&mut data).unwrap();
+        assert_eq!(data, vec![5, 0, 0, 4, 5, 1, 2, 3]);
+
+        // data length == 3
+        let mut data = vec![1, 2, 3];
+        assembler.assemble(&mut data).unwrap();
+        assert_eq!(data, vec![3, 0, 0, 1, 2, 3]);
+
+        // data length < 3
+        let mut data = vec![1, 2];
+        assembler.assemble(&mut data).unwrap();
+        assert_eq!(data, vec![2, 0, 0, 1, 2]);
+    }
+
+    #[test]
+    fn test_assembler_load() {
+        let assembler = PacketWithLenAssembler::default();
+
+        // packet not ready
+        assert_eq!(assembler.load(&mut vec![5].into()), None);
+        assert_eq!(assembler.load(&mut vec![5, 0, 0].into()), None);
+        assert_eq!(assembler.load(&mut vec![5, 0, 0, 4, 5, 1, 2].into()), None);
+
+        // packet ready and length > 3
+        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3].into();
+        assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
+        assert_eq!(buf.is_empty(), true);
+
+        // packet ready and length < 3
+        let mut buf = vec![2, 0, 0, 1, 2].into();
+        assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2]);
+        assert_eq!(buf.is_empty(), true);
+
+        // packet ready with some data of the next packet
+        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3, 6, 7].into();
+        assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
+        assert_eq!(&buf[..], &[6, 7]);
     }
 }
