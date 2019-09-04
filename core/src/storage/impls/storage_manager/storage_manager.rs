@@ -13,6 +13,7 @@ pub struct StorageManager {
             + Sync,
     >,
     maybe_db_destroy_errors: MaybeDbDestroyErrors,
+    // FIXME: when do insertions happen?
     snapshot_associated_mpts:
         RwLock<HashMap<MerkleHash, (Arc<DeltaMpt>, Arc<DeltaMpt>)>>,
 }
@@ -60,6 +61,9 @@ pub struct DeltaDbReleaser {
 
 impl Drop for DeltaDbReleaser {
     fn drop(&mut self) {
+        // FIXME: we must make sure that the latest delta db does not get
+        // FIXME: destroyed at program exit. The current code is broken.
+
         // Note that when an error happens in db, the program should fail
         // gracefully, but not in destructor.
         self.storage_manager
@@ -167,7 +171,7 @@ impl DeltaMptInserter {
         match &self.maybe_root_node {
             None => {}
             Some(root_node) => {
-                let db = self.mpt.db_read_only();
+                let db = &mut *self.mpt.db_owned_read()?;
                 let owned_node_set = Default::default();
                 let mut cow_root_node =
                     CowNodeRef::new(root_node.clone(), &owned_node_set);

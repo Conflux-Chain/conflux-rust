@@ -99,7 +99,12 @@ impl Handleable for GetBlocksWithPublicResponse {
 
         ctx.manager.recover_public_queue.dispatch(
             ctx.io,
-            RecoverPublicTask::new(self.blocks, req_hashes, ctx.peer, false),
+            RecoverPublicTask::new(
+                self.blocks,
+                req_hashes,
+                ctx.peer,
+                false, /* compact */
+            ),
         );
 
         Ok(())

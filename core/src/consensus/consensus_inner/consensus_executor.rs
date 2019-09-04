@@ -240,11 +240,13 @@ impl ConsensusExecutor {
                 KECCAK_EMPTY_BLOOM,
             )
         } else {
-            if let Some(result) = self.handler.get_execution_result(&epoch_hash)
-            {
+            if self.handler.data_man.epoch_executed(&epoch_hash) {
                 // The epoch already executed, so we do not need wait for the
                 // queue to be empty
-                return result;
+                return self
+                    .handler
+                    .get_execution_result(&epoch_hash)
+                    .expect("it should success");
             }
             let (sender, receiver) = channel();
             debug!("Wait for execution result of epoch {:?}", epoch_hash);
@@ -340,10 +342,8 @@ impl ConsensusExecutor {
                         if *index == pivot_arena_index {
                             no_reward =
                                 block_consensus_node.data.partial_invalid
-                                    || !inner
-                                        .execution_info_cache
-                                        .get(&pivot_arena_index)
-                                        .unwrap()
+                                    || !inner.arena[pivot_arena_index]
+                                        .data
                                         .state_valid;
                         } else {
                             no_reward = block_consensus_node
@@ -403,9 +403,10 @@ impl ConsensusExecutor {
                             for a_index in anticone_set {
                                 // TODO: Maybe consider to use base difficulty
                                 // Check with the spec!
-                                anticone_difficulty += U512::from(into_u256(
-                                    inner.block_weight(a_index, false),
-                                ));
+                                anticone_difficulty +=
+                                    U512::from(into_u256(inner.block_weight(
+                                        a_index, false, /* inclusive */
+                                    )));
                             }
                         };
 
@@ -905,7 +906,10 @@ impl ConsensusExecutionHandler {
         // Get blocks in this epoch after skip checking
         let epoch_blocks = self
             .data_man
-            .blocks_by_hash_list(epoch_block_hashes, true)
+            .blocks_by_hash_list(
+                epoch_block_hashes,
+                true, /* update_cache */
+            )
             .expect("blocks exist");
         let pivot_block = epoch_blocks.last().expect("Not empty");
 
@@ -1224,7 +1228,7 @@ impl ConsensusExecutionHandler {
             let receipts = match self.data_man.block_results_by_hash_with_epoch(
                 &block_hash,
                 &reward_epoch_hash,
-                true,
+                true, /* update_cache */
             ) {
                 Some(receipts) => receipts.receipts,
                 None => {

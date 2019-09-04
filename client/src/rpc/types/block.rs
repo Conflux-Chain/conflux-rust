@@ -29,32 +29,6 @@ pub enum BlockTransactions {
     Full(Vec<Transaction>),
 }
 
-//impl BlockTransactions {
-//    pub fn new(
-//        transactions: &Vec<Arc<SignedTransaction>>, include_txs: bool,
-//        consensus_inner: &mut ConsensusGraphInner,
-//    ) -> Self
-//    {
-//        match include_txs {
-//            false => BlockTransactions::Hashes(
-//                transactions.iter().map(|x| H256::from(x.hash())).collect(),
-//            ),
-//            true => BlockTransactions::Full(
-//                transactions
-//                    .iter()
-//                    .map(|x| {
-//                        Transaction::from_signed(
-//                            x,
-//                            consensus_inner
-//                                .transaction_address_by_hash(&x.hash, false),
-//                        )
-//                    })
-//                    .collect(),
-//            ),
-//        }
-//    }
-//}
-
 impl Serialize for BlockTransactions {
     fn serialize<S: Serializer>(
         &self, serializer: S,
@@ -164,7 +138,7 @@ impl Block {
             ),
             true => {
                 let tx_vec = match consensus_inner
-                    .block_receipts_by_hash(&b.hash(), false)
+                    .block_receipts_by_hash(&b.hash(), false /* update_cache */)
                 {
                     Some(receipts) => b
                         .transactions

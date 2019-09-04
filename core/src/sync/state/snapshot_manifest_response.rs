@@ -21,6 +21,8 @@ pub struct SnapshotManifestResponse {
     pub checkpoint: H256,
     pub manifest: RangedManifest,
     pub state_blame_vec: Vec<H256>,
+    pub receipt_blame_vec: Vec<H256>,
+    pub bloom_blame_vec: Vec<H256>,
 }
 
 build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
@@ -77,6 +79,13 @@ impl SnapshotManifestResponse {
             && self.state_blame_vec.is_empty()
         {
             debug!("Responded snapshot manifest has empty blame states");
+            bail!(ErrorKind::Invalid);
+        }
+
+        if self.state_blame_vec.len() != self.receipt_blame_vec.len()
+            || self.state_blame_vec.len() != self.bloom_blame_vec.len()
+        {
+            debug!("Responded snapshot manifest has mismatch blame states/receipts/blooms");
             bail!(ErrorKind::Invalid);
         }
 

@@ -34,9 +34,6 @@ use std::{
     sync::Arc,
 };
 
-const NULL: usize = !0;
-const NULLU64: u64 = !0;
-
 #[allow(dead_code)]
 const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
 
@@ -87,6 +84,10 @@ pub struct ConsensusGraphNodeData {
     /// It indicates whether the blame voting information of this block is
     /// correct or not.
     vote_valid: bool,
+    /// It indicates whether the states stored in header is correct or not
+    /// FIXME: only used for pivot chain, maybe we can move it to
+    /// `ConsensusGraphPivotData`
+    pub state_valid: bool,
 }
 
 impl ConsensusGraphNodeData {
@@ -102,6 +103,7 @@ impl ConsensusGraphNodeData {
             sequence_number,
             exec_info_lca_height: NULLU64,
             vote_valid: true,
+            state_valid: true,
         }
     }
 }
@@ -343,8 +345,13 @@ pub struct ConsensusGraphInner {
     pub execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
-    // Block set of each old era. It will garbage collected by sync graph
+    /// Block set of each old era. It will garbage collected by sync graph
     pub old_era_block_set: Mutex<VecDeque<H256>>,
+    /// This is the first trusted blame block for stable genesis. During full
+    /// node recovery, we will not do state validation for blocks between
+    /// `stable genesis` and `first_trusted_blame_block`.
+    first_trusted_blame_block: H256,
+    first_trusted_blame_block_height: u64,
 }
 
 pub struct ConsensusGraphNode {
@@ -372,16 +379,32 @@ impl ConsensusGraphInner {
     pub fn with_era_genesis_block(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
+        first_trusted_blame_block: Option<H256>,
     ) -> Self
     {
         let genesis_block = data_man
-            .block_by_hash(cur_era_genesis_block_hash, true)
+            .block_by_hash(
+                cur_era_genesis_block_hash,
+                true, /* update_cache */
+            )
             .unwrap();
         let cur_era_genesis_height = genesis_block.block_header.height();
         let cur_era_stable_height = if cur_era_genesis_height == 0 {
             0
         } else {
             cur_era_genesis_height + inner_conf.era_epoch_count
+        };
+        let first_trusted_blame_block = first_trusted_blame_block
+            .unwrap_or(data_man.true_genesis_block.hash());
+        let first_trusted_blame_block_height = if first_trusted_blame_block
+            == data_man.true_genesis_block.hash()
+        {
+            0
+        } else {
+            data_man
+                .block_header_by_hash(&first_trusted_blame_block)
+                .unwrap()
+                .height()
         };
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
@@ -425,6 +448,8 @@ impl ConsensusGraphInner {
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
+            first_trusted_blame_block,
+            first_trusted_blame_block_height,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -511,7 +536,7 @@ impl ConsensusGraphInner {
                 .execution_info_cache
                 .insert(genesis_arena_index, exe_info);
         } else {
-            error!("No execution info for cur_era_genesis in db!");
+            info!("No execution info for cur_era_genesis in db!");
         }
         inner
     }
@@ -781,10 +806,11 @@ impl ConsensusGraphInner {
                     subtree_stable_weight[index] +=
                         subtree_stable_weight[*child];
                 }
-                let weight = self.block_weight(index, false);
+                let weight =
+                    self.block_weight(index, false /* inclusive */);
                 subtree_weight[index] += weight;
                 subtree_inclusive_weight[index] +=
-                    self.block_weight(index, true);
+                    self.block_weight(index, true /* inclusive */);
                 if self.arena[index].stable {
                     subtree_stable_weight[index] += weight;
                 }
@@ -825,7 +851,7 @@ impl ConsensusGraphInner {
             };
             let w = total_weight
                 - past_era_weight
-                - self.block_weight(grandparent, false);
+                - self.block_weight(grandparent, false /* inclusive */);
             if w > adjusted_beta {
                 let a = subtree_weight[parent];
                 if self.inner_conf.adaptive_weight_alpha_den as i128 * a
@@ -977,8 +1003,9 @@ impl ConsensusGraphInner {
             } else {
                 self.arena[gp].past_era_weight
             };
-            let w =
-                total_weight - past_era_weight - self.block_weight(gp, false);
+            let w = total_weight
+                - past_era_weight
+                - self.block_weight(gp, false /* inclusive */);
             if w > adjusted_beta {
                 best = mid;
                 low = mid + 1;
@@ -1460,17 +1487,18 @@ impl ConsensusGraphInner {
                 era_genesis,
             );
             let past_weight = self.arena[parent].past_weight
-                + self.block_weight(parent, false)
+                + self.block_weight(parent, false /* inclusive */)
                 + weight_in_my_epoch;
             let past_num_blocks = self.arena[parent].past_num_blocks
                 + self.arena[index].data.ordered_executable_epoch_blocks.len()
                     as u64;
             let past_era_weight = if parent != era_genesis {
                 self.arena[parent].past_era_weight
-                    + self.block_weight(parent, false)
+                    + self.block_weight(parent, false /* inclusive */)
                     + weight_era_in_my_epoch
             } else {
-                self.block_weight(parent, false) + weight_era_in_my_epoch
+                self.block_weight(parent, false /* inclusive */)
+                    + weight_era_in_my_epoch
             };
 
             self.data_man.insert_epoch_execution_context(
@@ -1621,7 +1649,10 @@ impl ConsensusGraphInner {
             .ordered_executable_epoch_blocks
         {
             let block = data_man
-                .block_by_hash(&self.arena[*idx].hash, false)
+                .block_by_hash(
+                    &self.arena[*idx].hash,
+                    false, /* update_cache */
+                )
                 .expect("Exist");
             epoch_blocks.push(block);
         }
@@ -1680,10 +1711,14 @@ impl ConsensusGraphInner {
         let mut total_weight = self.arena[pivot_block_arena_index]
             .past_era_weight
             - self.arena[me].past_era_weight
-            + self.block_weight(pivot_block_arena_index, false);
+            + self.block_weight(
+                pivot_block_arena_index,
+                false, /* inclusive */
+            );
         for index in visited2.iter() {
             if self.is_same_era(index as usize, pivot_block_arena_index) {
-                total_weight -= self.block_weight(index as usize, false);
+                total_weight -= self
+                    .block_weight(index as usize, false /* inclusive */);
             }
         }
         total_weight
@@ -2032,11 +2067,14 @@ impl ConsensusGraphInner {
         &self, tx_hash: &H256,
     ) -> Option<(Receipt, TransactionAddress)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
-        let address =
-            self.data_man.transaction_address_by_hash(tx_hash, false)?;
+        let address = self.data_man.transaction_address_by_hash(
+            tx_hash, false, /* update_cache */
+        )?;
         // receipts should never be None if address is not None because
-        let receipts =
-            self.block_receipts_by_hash(&address.block_hash, false)?;
+        let receipts = self.block_receipts_by_hash(
+            &address.block_hash,
+            false, /* update_cache */
+        )?;
         Some((
             receipts
                 .get(address.index)
@@ -2110,14 +2148,14 @@ impl ConsensusGraphInner {
         receipt_blame_vec.push(exec_result.1.clone());
         bloom_blame_vec.push(exec_result.2.clone());
         loop {
+            if self.arena[cur].data.state_valid {
+                break;
+            }
             let exec_info_opt = self.execution_info_cache.get(&cur);
             if exec_info_opt.is_none() {
                 return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
             }
             let exec_info = exec_info_opt.unwrap();
-            if exec_info.state_valid {
-                break;
-            }
             blame += 1;
             if cur == self.cur_era_genesis_block_arena_index {
                 return Err(
@@ -2163,8 +2201,8 @@ impl ConsensusGraphInner {
     ) -> Result<(), String> {
         // For the original genesis, it is always correct
         if self.arena[me].height == 0 {
+            self.arena[me].data.state_valid = true;
             let exec_info = ConsensusGraphExecutionInfo {
-                state_valid: true,
                 original_deferred_state_root: self.genesis_block_state_root,
                 original_deferred_receipt_root: self
                     .genesis_block_receipts_root,
@@ -2183,34 +2221,65 @@ impl ConsensusGraphInner {
             exec_result.0.state_root.compute_state_root_hash();
         let original_deferred_receipt_root = exec_result.1.clone();
         let original_deferred_logs_bloom_hash = exec_result.2.clone();
-        let (
-            blame,
-            _,
-            deferred_state_root,
-            deferred_receipt_root,
-            deferred_logs_bloom_hash,
-        ) = self.compute_blame_and_state_with_execution_result(
-            parent,
-            exec_result,
-        )?;
-        let block_header = self
-            .data_man
-            .block_header_by_hash(&self.arena[me].hash)
-            .unwrap();
-        let state_valid = block_header.blame() == blame
-            && *block_header.deferred_state_root() == deferred_state_root
-            && *block_header.deferred_receipts_root() == deferred_receipt_root
-            && *block_header.deferred_logs_bloom_hash()
-                == deferred_logs_bloom_hash;
+        // We will skip state validation if `cur_era_stable_height <= lca.height
+        // && lca.height < first_trusted_blame_block_height` where lca
+        // is the lowest common ancestor of `first_trusted_blame_block`
+        // and `parent`.
+        let skip_state_validation = {
+            if self.first_trusted_blame_block_height
+                > self.cur_era_stable_height
+            {
+                if self.arena[parent].height
+                    < self.first_trusted_blame_block_height
+                {
+                    true
+                } else {
+                    let arena_index_opt = self
+                        .hash_to_arena_indices
+                        .get(&self.first_trusted_blame_block);
+                    if arena_index_opt.is_some() {
+                        let lca = self.lca(*arena_index_opt.unwrap(), parent);
+                        self.arena[lca].height
+                            < self.first_trusted_blame_block_height
+                    } else {
+                        false
+                    }
+                }
+            } else {
+                false
+            }
+        };
+        if !skip_state_validation {
+            let (
+                blame,
+                _,
+                deferred_state_root,
+                deferred_receipt_root,
+                deferred_logs_bloom_hash,
+            ) = self.compute_blame_and_state_with_execution_result(
+                parent,
+                exec_result,
+            )?;
+            let block_header = self
+                .data_man
+                .block_header_by_hash(&self.arena[me].hash)
+                .unwrap();
+            let state_valid = block_header.blame() == blame
+                && *block_header.deferred_state_root() == deferred_state_root
+                && *block_header.deferred_receipts_root()
+                    == deferred_receipt_root
+                && *block_header.deferred_logs_bloom_hash()
+                    == deferred_logs_bloom_hash;
 
-        if state_valid {
-            debug!("compute_execution_info_with_result(): Block {} state/blame is valid.", self.arena[me].hash);
-        } else {
-            debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
+            if state_valid {
+                debug!("compute_execution_info_with_result(): Block {} state/blame is valid.", self.arena[me].hash);
+            } else {
+                debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
+            }
+
+            self.arena[me].data.state_valid = state_valid;
         }
-
         let exec_info = ConsensusGraphExecutionInfo {
-            state_valid,
             original_deferred_state_root,
             original_deferred_receipt_root,
             original_deferred_logs_bloom_hash,
@@ -2263,25 +2332,14 @@ impl ConsensusGraphInner {
                         let mut cur = lca;
                         let mut vote_valid = true;
                         while cur_height > start_height {
-                            if self
-                                .execution_info_cache
-                                .get(&cur)
-                                .unwrap()
-                                .state_valid
-                            {
+                            if self.arena[cur].data.state_valid {
                                 vote_valid = false;
                                 break;
                             }
                             cur_height -= 1;
                             cur = self.arena[cur].parent;
                         }
-                        if vote_valid
-                            && !self
-                                .execution_info_cache
-                                .get(&cur)
-                                .unwrap()
-                                .state_valid
-                        {
+                        if vote_valid && !self.arena[cur].data.state_valid {
                             vote_valid = false;
                         }
                         self.arena[index].data.exec_info_lca_height =
@@ -2419,5 +2477,26 @@ impl ConsensusGraphInner {
 
     pub fn total_processed_block_count(&self) -> u64 {
         self.sequence_number_of_block_entrance
+    }
+
+    pub fn get_trusted_blame_block(
+        &self, checkpoint_hash: &H256,
+    ) -> Option<H256> {
+        let arena_index_opt = self.hash_to_arena_indices.get(checkpoint_hash);
+        // checkpoint has changed, wait for next checkpoint
+        if arena_index_opt.is_none() {
+            return None;
+        }
+        let arena_index = *arena_index_opt.unwrap();
+        let pivot_index =
+            self.height_to_pivot_index(self.arena[arena_index].height);
+        // the given checkpoint hash is invalid
+        if pivot_index >= self.pivot_chain.len()
+            || self.pivot_chain[pivot_index] != arena_index
+        {
+            return None;
+        }
+        self.find_first_index_with_correct_state_of(pivot_index)
+            .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
 }

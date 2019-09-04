@@ -4,9 +4,10 @@
 
 extern crate futures;
 
-use cfx_types::Bloom;
+use cfx_types::H256;
 use futures::Future;
 use parking_lot::RwLock;
+use primitives::SignedTransaction;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
@@ -14,19 +15,19 @@ use crate::{
     light_protocol::{
         common::{Peers, UniqueId, Validate},
         handler::FullPeerState,
-        message::{BloomWithEpoch, GetBlooms},
+        message::{BlockTxsWithHash, GetBlockTxs},
         Error,
     },
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT_MS,
-        MAX_BLOOMS_IN_FLIGHT,
+        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT_MS,
+        MAX_BLOCK_TXS_IN_FLIGHT,
     },
 };
 
 use super::{
-    future_item::FutureItem, missing_item::KeyOrdered,
+    future_item::FutureItem, missing_item::TimeOrdered,
     sync_manager::SyncManager,
 };
 
@@ -37,24 +38,24 @@ struct Statistics {
     waiting: usize,
 }
 
-// prioritize higher epochs
-type MissingBloom = KeyOrdered<u64>;
+// prioritize earlier requests
+type MissingBlockTxs = TimeOrdered<H256>;
 
-pub struct Blooms {
+pub struct BlockTxs {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
     // sync and request manager
-    sync_manager: SyncManager<u64, MissingBloom>,
+    sync_manager: SyncManager<H256, MissingBlockTxs>,
 
     // helper API for validating ledger and state information
     validate: Validate,
 
-    // bloom filters received from full node
-    verified: Arc<RwLock<HashMap<u64, Bloom>>>,
+    // block txs received from full node
+    verified: Arc<RwLock<HashMap<H256, Vec<SignedTransaction>>>>,
 }
 
-impl Blooms {
+impl BlockTxs {
     pub(super) fn new(
         consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>,
@@ -64,9 +65,7 @@ impl Blooms {
         let validate = Validate::new(consensus.clone());
         let verified = Arc::new(RwLock::new(HashMap::new()));
 
-        verified.write().insert(0, Bloom::zero());
-
-        Blooms {
+        BlockTxs {
             request_id_allocator,
             sync_manager,
             validate,
@@ -85,26 +84,26 @@ impl Blooms {
 
     #[inline]
     pub fn request(
-        &self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> {
-        if !self.verified.read().contains_key(&epoch) {
-            let missing = MissingBloom::new(epoch);
+        &self, hash: H256,
+    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> {
+        if !self.verified.read().contains_key(&hash) {
+            let missing = MissingBlockTxs::new(hash);
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
-        FutureItem::new(epoch, self.verified.clone())
+        FutureItem::new(hash, self.verified.clone())
     }
 
     #[inline]
     pub(super) fn receive(
-        &self, blooms: impl Iterator<Item = BloomWithEpoch>,
+        &self, block_txs: impl Iterator<Item = BlockTxsWithHash>,
     ) -> Result<(), Error> {
-        for BloomWithEpoch { epoch, bloom } in blooms {
-            info!("Validating bloom {:?} with epoch {}", bloom, epoch);
-            self.validate.bloom_with_local_info(epoch, bloom)?;
+        for BlockTxsWithHash { hash, block_txs } in block_txs {
+            info!("Validating block_txs {:?} with hash {}", block_txs, hash);
+            self.validate.block_txs(hash, &block_txs)?;
 
-            self.verified.write().insert(epoch, bloom);
-            self.sync_manager.remove_in_flight(&epoch);
+            self.verified.write().insert(hash, block_txs);
+            self.sync_manager.remove_in_flight(&hash);
         }
 
         Ok(())
@@ -112,24 +111,24 @@ impl Blooms {
 
     #[inline]
     pub(super) fn clean_up(&self) {
-        let timeout = Duration::from_millis(BLOOM_REQUEST_TIMEOUT_MS);
-        let blooms = self.sync_manager.remove_timeout_requests(timeout);
-        self.sync_manager.insert_waiting(blooms.into_iter());
+        let timeout = Duration::from_millis(BLOCK_TX_REQUEST_TIMEOUT_MS);
+        let block_txs = self.sync_manager.remove_timeout_requests(timeout);
+        self.sync_manager.insert_waiting(block_txs.into_iter());
     }
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
     ) -> Result<(), Error> {
-        info!("send_request peer={:?} epochs={:?}", peer, epochs);
+        info!("send_request peer={:?} hashes={:?}", peer, hashes);
 
-        if epochs.is_empty() {
+        if hashes.is_empty() {
             return Ok(());
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlooms {
+        let msg: Box<dyn Message> = Box::new(GetBlockTxs {
             request_id: self.request_id_allocator.next(),
-            epochs,
+            hashes,
         });
 
         msg.send(io, peer)?;
@@ -138,12 +137,12 @@ impl Blooms {
 
     #[inline]
     pub(super) fn sync(&self, io: &dyn NetworkContext) {
-        info!("bloom sync statistics: {:?}", self.get_statistics());
+        info!("block tx sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
-            MAX_BLOOMS_IN_FLIGHT,
-            BLOOM_REQUEST_BATCH_SIZE,
-            |peer, epochs| self.send_request(io, peer, epochs),
+            MAX_BLOCK_TXS_IN_FLIGHT,
+            BLOCK_TX_REQUEST_BATCH_SIZE,
+            |peer, block_hashes| self.send_request(io, peer, block_hashes),
         );
     }
 }

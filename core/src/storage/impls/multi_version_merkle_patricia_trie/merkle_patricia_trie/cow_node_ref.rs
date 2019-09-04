@@ -175,7 +175,8 @@ impl CowNodeRef {
     /// prevent any further calls on self.
     pub fn get_trie_node<'a, 'c: 'a>(
         &'a mut self, node_memory_manager: &'c NodeMemoryManagerDeltaMpt,
-        allocator: AllocatorRefRefDeltaMpt<'a>, db: &dyn KeyValueDbTraitRead,
+        allocator: AllocatorRefRefDeltaMpt<'a>,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<
         GuardedValue<
             Option<MutexGuard<'c, CacheManagerDeltaMpt>>,
@@ -226,7 +227,7 @@ impl CowNodeRef {
         mut self, trie: &DeltaMpt, owned_node_set: &OwnedNodeSet,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
-        db: &dyn KeyValueDbTraitRead,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<()>
     {
         if self.owned {
@@ -341,7 +342,8 @@ impl CowNodeRef {
     /// Get if unowned, compute if owned.
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
-        allocator_ref: AllocatorRefRefDeltaMpt, db: &dyn KeyValueDbTraitRead,
+        allocator_ref: AllocatorRefRefDeltaMpt,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -385,7 +387,8 @@ impl CowNodeRef {
     fn get_or_compute_children_merkles(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
-        allocator_ref: AllocatorRefRefDeltaMpt, db: &dyn KeyValueDbTraitRead,
+        allocator_ref: AllocatorRefRefDeltaMpt,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<MaybeMerkleTable>
     {
         match trie_node.children_table.get_children_count() {
@@ -431,7 +434,7 @@ impl CowNodeRef {
         &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut KVInserterType,
-        db: &dyn KeyValueDbTraitRead,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<()>
     {
         if guarded_trie_node.as_ref().as_ref().has_value() {
@@ -541,7 +544,7 @@ impl CowNodeRef {
         self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         child_node_ref: NodeRefDeltaMpt, child_index: u8,
-        db: &dyn KeyValueDbTraitRead,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<CowNodeRef>
     {
         let node_memory_manager = trie.get_node_memory_manager();
@@ -761,7 +764,7 @@ use super::{
     super::{
         super::{
             super::storage_db::key_value_db::{
-                KeyValueDbTraitRead, KeyValueDbTransactionTrait,
+                KeyValueDbTraitOwnedRead, KeyValueDbTransactionTrait,
             },
             errors::*,
             state::OwnedNodeSet,

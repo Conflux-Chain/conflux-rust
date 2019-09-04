@@ -279,7 +279,9 @@ impl Discovery {
         } else if !self.is_allowed(&entry) {
             debug!("Address not allowed: {:?}", entry);
         } else {
-            uio.node_db.write().note_success(node_id, None, false);
+            uio.node_db
+                .write()
+                .note_success(node_id, None, false /* trusted_only */);
         }
         Ok(())
     }
@@ -436,7 +438,10 @@ impl Discovery {
     }
 
     fn expire_node_request(&mut self, uio: &UdpIoContext, node_id: NodeId) {
-        uio.node_db.write().note_failure(&node_id, false, true);
+        uio.node_db.write().note_failure(
+            &node_id, false, /* by_connection */
+            true,  /* trusted_only */
+        );
     }
 
     fn update_new_nodes(&mut self, uio: &UdpIoContext) {
@@ -583,7 +588,10 @@ impl Discovery {
             .filter(|id| !self.discovery_nodes.contains(id))
             .collect();
 
-        let sampled_nodes = uio.node_db.read().get_nodes(sampled, true);
+        let sampled_nodes = uio
+            .node_db
+            .read()
+            .get_nodes(sampled, true /* trusted_only */);
 
         self.discover_with_nodes(
             uio,
@@ -669,7 +677,7 @@ impl FindNodeMessage {
             value,
         );
 
-        Ok(node_db.get_nodes(ids, true))
+        Ok(node_db.get_nodes(ids, true /* trusted_onlys */))
     }
 }
 
