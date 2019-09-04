@@ -275,7 +275,7 @@ impl RpcImpl {
         Ok(count)
     }
 
-    pub fn get_goodput(&self) -> RpcResult<isize> {
+    pub fn get_goodput(&self) -> RpcResult<String> {
         info!("RPC Request: get_goodput");
         let mut set = HashSet::new();
         let mut min = std::u64::MAX;
@@ -299,9 +299,40 @@ impl RpcImpl {
             }
         }
         if max != min {
-            Ok(set.len() as isize / (max - min) as isize)
+            //get goodput for the range (30%, 80%)
+            let lower_bound = min + ((max - min) as f64 * 0.3) as u64;
+            let upper_bound = min + ((max - min) as f64 * 0.8) as u64;
+            let mut ranged_set = HashSet::new();
+            for key in self.consensus.inner.read().hash_to_arena_indices.keys()
+            {
+                if let Some(block) = self
+                    .consensus
+                    .data_man
+                    .block_by_hash(key, false /* update_cache */)
+                {
+                    let timestamp = block.block_header.timestamp();
+                    if timestamp > lower_bound && timestamp < upper_bound {
+                        for transaction in &block.transactions {
+                            ranged_set.insert(transaction.hash());
+                        }
+                    }
+                }
+            }
+            if upper_bound != lower_bound {
+                Ok(format!(
+                    "full: {}, ranged: {}",
+                    set.len() as isize / (max - min) as isize,
+                    ranged_set.len() as isize
+                        / (upper_bound - lower_bound) as isize
+                ))
+            } else {
+                Ok(format!(
+                    "full: {}",
+                    set.len() as isize / (max - min) as isize
+                ))
+            }
         } else {
-            Ok(-1)
+            Ok("-1".to_string())
         }
     }
 
