@@ -168,6 +168,7 @@ class HTLCTest(SmartContractBenchBase):
         contractAddr = Web3.toChecksumAddress(contractAddr)
         self.tx_conf["to"] = contractAddr
         logs = self.rpc.get_logs(self.filter)
+        l = len(logs)
         
         b0 = self.rpc.get_balance(self.sender)
         # interact with recharge()
@@ -175,14 +176,21 @@ class HTLCTest(SmartContractBenchBase):
         cost = 5000000000000000000
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
         b1 = self.rpc.get_balance(self.sender)
+        bc = self.rpc.get_balance(contractAddr)
+        print("balance of contract:", bc)
         
         #interact with withdraw
         data = contract.functions.withdraw(self.sender_checksum).buildTransaction(self.tx_conf)["data"];
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
-        b2 = self.rpc.get_balance(self)
+        b2 = self.rpc.get_balance(self.sender)
         print(b0)
         print(b1)
         print(b2)
+        bc = self.rpc.get_balance(contractAddr)
+        print("balance of contract:", bc)
+        logs = self.rpc.get_logs(self.filter)
+        print(len(logs) - l)
+        print(logs[-(len(logs) - l):])
         
 
     def run_test(self):
