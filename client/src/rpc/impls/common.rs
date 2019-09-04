@@ -314,12 +314,19 @@ impl RpcImpl {
                     }
                 }
             }
-            Ok(format!(
-                "full: {}, ranged: {}",
-                set.len() as isize / (max - min) as isize,
-                ranged_set.len() as isize
-                    / (upper_bound - lower_bound) as isize
-            ))
+            if upper_bound != lower_bound {
+                Ok(format!(
+                    "full: {}, ranged: {}",
+                    set.len() as isize / (max - min) as isize,
+                    ranged_set.len() as isize
+                        / (upper_bound - lower_bound) as isize
+                ))
+            } else {
+                Ok(format!(
+                    "full: {}",
+                    set.len() as isize / (max - min) as isize
+                ))
+            }
         } else {
             Ok("-1".to_string())
         }
