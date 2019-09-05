@@ -198,6 +198,13 @@ fn main() -> Result<(), String> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("eth-compatibility-mode")
+                .long("eth-compatibility-mode")
+                .value_name("BOOL")
+                .help("Set Eth compatibility mode for replay eth transactions")
+                .takes_value(true)
+        )
+        .arg(
             Arg::with_name("db-compact-profile")
                 .long("db-compact-profile")
                 .value_name("ENUM")
