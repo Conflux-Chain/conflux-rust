@@ -45,6 +45,7 @@ use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
 };
+use crate::machine::new_machine_with_builtin;
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -979,7 +980,7 @@ impl ConsensusExecutionHandler {
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
-        let machine = new_machine();
+        let machine = new_machine_with_builtin();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
