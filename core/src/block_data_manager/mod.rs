@@ -55,6 +55,18 @@ pub struct BlockDataManager {
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+    /// Caching for receipts_root and logs_bloom.
+    /// It is not deferred, i.e., indexed by the hash of the pivot block
+    /// that produces the result when executed.
+    /// It is also used for checking whether an epoch has been executed.
+    /// It can be updated, i.e., adding new items, in the following cases:
+    /// 1) When a new epoch gets executed in normal execution;
+    /// 2) After syncing snapshot, we need to update execution commitment
+    ///    for pivot blocks around snapshot block based on blaming information;
+    /// 3) After recovering block graph from db, update execution commitment
+    ///    according to execution info from db;
+    /// 4) In BlockDataManager::new(), update execution commitment of true
+    ///    genesis block if it is the current era genesis in BlockDataManager.
     epoch_execution_commitments:
         RwLock<HashMap<H256, EpochExecutionCommitments>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,

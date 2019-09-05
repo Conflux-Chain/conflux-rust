@@ -882,20 +882,21 @@ impl SynchronizationGraph {
         }
     }
 
+    /// In full/archive node, this function can be invoked during
+    /// CatchUpRecoverBlockHeaderFromDbPhase phase and
+    /// CatchUpRecoverBlockFromDbPhase phase.
+    /// It tries to construct the consensus graph based on block/header
+    /// information stored in db.
     pub fn recover_graph_from_db(&self, header_only: bool) {
         info!("Start fast recovery of the block DAG from database");
-        let terminals_opt = self.data_man.terminals_from_db();
-        if terminals_opt.is_none() {
-            return;
-        }
-        let terminals = terminals_opt.unwrap();
-        debug!("Get terminals {:?}", terminals);
 
+        // Recover the initial sequence number in consensus graph
+        // based on the sequence number of genesis block in db.
         let genesis_hash = self.data_man.genesis_block().hash();
-
         let genesis_local_info =
             self.data_man.local_block_info_from_db(&genesis_hash);
         if genesis_local_info.is_none() {
+            // Local info of genesis block must exist.
             panic!(
                 "failed to get local block info from db for genesis[{}]",
                 &genesis_hash
@@ -911,6 +912,21 @@ impl SynchronizationGraph {
             genesis_hash, genesis_seq_num
         );
 
+        // Get terminals stored in db.
+        let terminals_opt = self.data_man.terminals_from_db();
+        if terminals_opt.is_none() {
+            return;
+        }
+        let terminals = terminals_opt.unwrap();
+        debug!("Get terminals {:?}", terminals);
+
+        // Reconstruct the consensus graph by traversing backward from
+        // terminals. This traversal will visit all the blocks under the
+        // future of current era genesis till the terminals. However,
+        // some blocks may not be graph-ready since they may have
+        // references or parents which are out of the current era. We
+        // will remember these out-of-era dependencies and resolve them
+        // accordingly.
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
         let mut out_of_era_blocks = HashSet::new();
@@ -919,15 +935,19 @@ impl SynchronizationGraph {
             visited_blocks.insert(terminal);
         }
 
+        // Remember the hashes of blocks that belong to the current genesis
+        // era but are missed in db. The missed blocks will be fetched from
+        // peers.
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
         while let Some(hash) = queue.pop_front() {
             if hash == genesis_hash {
+                // Genesis block is already in consensus graph.
                 continue;
             }
 
-            // ignore blocks beyond current checkpoint
-            // if block_local_info is missing, consider it is in current
-            // checkpoint
+            // Ignore blocks beyond the future of current genesis era.
+            // If block_local_info is missing, consider it is in current
+            // genesis era.
             if let Some(block_local_info) =
                 self.data_man.local_block_info_from_db(&hash)
             {
@@ -943,7 +963,8 @@ impl SynchronizationGraph {
             }
 
             if let Some(mut block) = self.data_man.block_from_db(&hash) {
-                // This is for constructing synchronization graph.
+                // Only construct synchronization graph if is not header_only.
+                // Construct both sync and consensus graph if is header_only.
                 let (success, _) = self.insert_block_header(
                     &mut block.block_header,
                     true,        /* need_to_verify */
@@ -956,7 +977,7 @@ impl SynchronizationGraph {
                 let parent = block.block_header.parent_hash().clone();
                 let referees = block.block_header.referee_hashes().clone();
 
-                // This is necessary to construct consensus graph.
+                // Construct consensus graph if is not header_only.
                 if !header_only {
                     let (success, _) = self.insert_block(
                         block, true,  /* need_to_verify */
@@ -983,6 +1004,8 @@ impl SynchronizationGraph {
         }
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
+
+        // Resolve out-of-era dependencies for not-graph-ready blocks.
         self.remove_expire_blocks(
             0,    /* expire_time */
             true, /* recover */
@@ -990,6 +1013,7 @@ impl SynchronizationGraph {
         );
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
         if !header_only {
+            // Rebuild pivot chain state info.
             self.consensus.construct_pivot_state();
         }
         self.consensus
@@ -1498,7 +1522,7 @@ impl SynchronizationGraph {
     /// remove all blocks which have not been updated for a long time
     /// we maintain a set `not_ready_blocks_frontier` which is the root nodes in
     /// the parental tree formed by not graph ready blocks. Find all expire
-    /// blocks which can be reeached by `not_ready_blocks_frontier`.
+    /// blocks which can be reached by `not_ready_blocks_frontier`.
     pub fn remove_expire_blocks(
         &self, expire_time: u64, recover: bool,
         maybe_out_of_era_blocks: Option<HashSet<H256>>,
