@@ -1032,7 +1032,7 @@ impl ConsensusExecutionHandler {
                     })
                     | Err(ExecutionError::SenderMustExist {})
                     | Err(ExecutionError::Internal(_)) => {
-                        warn!(
+                        trace!(
                             "tx execution error: transaction={:?}, err={:?}",
                             transaction, r
                         );
@@ -1053,7 +1053,7 @@ impl ConsensusExecutionHandler {
                     }
                     Ok(ref executed) => {
                         if executed.exception.is_some() {
-                            warn!(
+                            trace!(
                                 "tx execution error: transaction={:?}, err={:?}",
                                 transaction, r
                             );

@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 
+import csv
 import tarfile
 from argparse import ArgumentParser
 from collections import Counter
-import eth_utils
-import rlp
-import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex
 from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 from scripts.stat_latency_map_reduce import Statistics
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
-from scripts.stat_latency_map_reduce import Statistics
-from scripts.exp_latency import pscp, pssh, kill_remote_conflux
-import csv
 
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
@@ -221,7 +215,7 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["max_peers_propagation"] = str(self.options.max_peers_propagation)
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
-        #genesis accounts
+        # genesis accounts
         self.conf_parameters["genesis_accounts"] = str("\'{}\'".format(self.options.genesis_accounts))
 
     def stop_nodes(self):
@@ -276,18 +270,18 @@ class RemoteSimulate(ConfluxTestFramework):
                 start_time = time.time()
                 for i in range(num_nodes):
                     counter = 0
-                    addresses= list()
+                    addresses = list()
                     secrets = list()
-                    for row in csv_reader:# this is equivalent to read next()
+                    for row in csv_reader:  # this is equivalent to read next()
                         addresses.append(row[0])
                         secrets.append(row[1])
-                        counter= counter+1
+                        counter = counter + 1
                         if counter == self.options.txgen_account_count:
                             client = RpcClient(self.nodes[i])
-                            client.send_usable_genesis_accounts(addresses,secrets)
+                            client.send_usable_genesis_accounts(addresses, secrets)
                             break
 
-                self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
+                self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time() - start_time))
 
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()

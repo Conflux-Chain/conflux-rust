@@ -149,8 +149,9 @@ class RpcClient:
 
         return tx_hash
 
-    def send_usable_genesis_accounts(self, addresses:list, secrets:list):
-        self.node.cfx_sendUsableGenesisAccounts(eth_utils.encode_hex(rlp.encode(addresses)),eth_utils.encode_hex(rlp.encode(secrets)))
+    def send_usable_genesis_accounts(self, addresses: list, secrets: list):
+        self.node.cfx_sendUsableGenesisAccounts(eth_utils.encode_hex(rlp.encode(addresses)),
+                                                eth_utils.encode_hex(rlp.encode(secrets)))
 
     def wait_for_receipt(self, tx_hash: str, num_txs=1, timeout=10, state_before_wait=True):
         if state_before_wait:
@@ -234,7 +235,7 @@ class RpcClient:
     def add_node(self, node_id: str, ip: str, port: int):
         self.node.addnode(node_id, "{}:{}".format(ip, port))
 
-    def disconnect_peer(self, node_id: str, node_op:str=None) -> int:
+    def disconnect_peer(self, node_id: str, node_op: str = None) -> int:
         return self.node.net_disconnect_node(node_id, node_op)
 
     def chain(self) -> list:

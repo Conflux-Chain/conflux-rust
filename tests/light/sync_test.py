@@ -2,7 +2,9 @@
 
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
-import os, sys
+import os
+import sys
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from test_framework.test_framework import ConfluxTestFramework
@@ -12,6 +14,7 @@ from test_framework.util import *
 FULLNODE0 = 0
 FULLNODE1 = 1
 LIGHTNODE = 2
+
 
 class LightSyncTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -39,7 +42,7 @@ class LightSyncTest(ConfluxTestFramework):
             disconnect_nodes(self.nodes, LIGHTNODE, n)
 
     def random_full_node(self):
-        return random.randint(0, self.num_nodes - 2) # 0..1 inclusive
+        return random.randint(0, self.num_nodes - 2)  # 0..1 inclusive
 
     def generate_blocks(self, num):
         for _ in range(num):
@@ -51,7 +54,7 @@ class LightSyncTest(ConfluxTestFramework):
         block_batch_size = 100
 
         # NOTE: do not start p2p for LIGHTNODE
-        start_p2p_connection(self.nodes[0 : (self.num_nodes - 1)])
+        start_p2p_connection(self.nodes[0: (self.num_nodes - 1)])
 
         # catch up
         self.disconnect_light_node([FULLNODE0, FULLNODE1])

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-from test_framework.blocktools import create_transaction
-from conflux.messages import Transactions
+from http.client import CannotSendRequest
+
 from eth_utils import decode_hex
+
+from conflux.rpc import RpcClient
+from conflux.utils import ec_random_keys, privtoaddr
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.util import *
+from test_framework.blocktools import create_transaction
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
-from conflux.rpc import RpcClient
-from conflux.utils import ec_random_keys, privtoaddr, encode_hex_0x
-from http.client import CannotSendRequest
+from test_framework.util import *
 
 
 class SmartContractBenchBase(ConfluxTestFramework):
@@ -77,7 +78,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
             func = getattr(contract, name)
         attributes = {
             'nonce': self.get_nonce(privtoaddr(sender_key)),
-            ** SmartContractBenchBase.REQUEST_BASE
+            **SmartContractBenchBase.REQUEST_BASE
         }
         if contract_addr:
             attributes['receiver'] = decode_hex(contract_addr)
@@ -140,4 +141,3 @@ class SmartContractBenchBase(ConfluxTestFramework):
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
         return receipts
-

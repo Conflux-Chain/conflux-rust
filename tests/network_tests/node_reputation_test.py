@@ -6,9 +6,9 @@ import time
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import DefaultNode, network_thread_start
-from test_framework.util import connect_nodes, get_peer_addr, wait_until
+from test_framework.util import connect_nodes, get_peer_addr
 from conflux.rpc import RpcClient
+
 
 class NodeReputationTests(ConfluxTestFramework):
     def set_test_params(self):
@@ -45,7 +45,7 @@ class NodeReputationTests(ConfluxTestFramework):
 
         return node
 
-    def compare_node_time(self, t1:dict, t2:dict):
+    def compare_node_time(self, t1: dict, t2: dict):
         if t1["secs_since_epoch"] > t2["secs_since_epoch"]:
             return 1
 
@@ -121,6 +121,7 @@ class NodeReputationTests(ConfluxTestFramework):
         peer0 = client3.get_peer(self.nodes[0].key)
         # refused during handshake or not handshaked yet
         assert peer0 is None or len(peer0["caps"]) == 0
+
 
 if __name__ == "__main__":
     NodeReputationTests().main()

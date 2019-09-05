@@ -2,7 +2,9 @@
 
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
-import os, sys
+import os
+import sys
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import eth_utils
@@ -11,9 +13,8 @@ from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak, privtoaddr
-from test_framework.blocktools import create_transaction, encode_hex_0x
+from test_framework.blocktools import encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, assert_is_hex_string, assert_is_hash_string
 from test_framework.util import *
 
 CONTRACT_PATH = "../contracts/EventsTestContract_bytecode.dat"
@@ -24,6 +25,7 @@ NUM_CALLS = 20
 FULLNODE0 = 0
 FULLNODE1 = 1
 LIGHTNODE = 2
+
 
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -60,7 +62,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
         # deploy contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
-        assert(os.path.isfile(bytecode_file))
+        assert (os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read()
         _, contractAddr = self.deploy_contract(sender, priv_key, bytecode)
         self.log.info("contract deployed")
@@ -145,6 +147,7 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_receipt(tx.hash_hex())
         return receipt
+
 
 if __name__ == "__main__":
     LogFilteringTest().main()

@@ -53,10 +53,12 @@ from rlp.exceptions import (
     SerializationError,
 )
 
+
 # Copied from rlp.sedes.Boolean, but encode False to 0x00, not empty.
 class Boolean:
     """A sedes for booleans
     """
+
     def serialize(self, obj):
         if not isinstance(obj, bool):
             raise SerializationError('Can only serialize bool', obj)
@@ -103,7 +105,7 @@ class Hello(rlp.Serializable):
 
 
 class Disconnect(rlp.Serializable):
-    def __init__(self, code:int, msg:str=None):
+    def __init__(self, code: int, msg: str = None):
         self.code = code
         self.msg = msg
 
@@ -210,6 +212,7 @@ class GetBlockHeaders(rlp.Serializable):
             reqid=reqid,
             hashes=hashes,
         )
+
 
 class BlockHeader(rlp.Serializable):
     fields = [

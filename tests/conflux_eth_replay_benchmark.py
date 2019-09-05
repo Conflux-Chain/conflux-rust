@@ -136,7 +136,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             block_gen_thread.start()
             node_id += 1
 
-        tx_file_path = "/home/ubuntu/convert_eth_from_0_to_4141811_unknown_txs.rlp"
+        tx_file_path = "/Users/ypliu/Desktop/convert_eth_from_0_to_4141811_unknown_txs.rlp"
         f = open(tx_file_path, "rb")
 
         start_time = datetime.datetime.now()
@@ -184,7 +184,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     self.log.warning("Conflux node %s is slow by %s at receiving txs, slow down by %s.", peer_to_send,
                                      tx_count - txpool_received, should_sleep)
 
-                txpool_unpacked = txpool_status["unpacked"]
+                txpool_unpacked = txpool_status["unexecuted"]
                 unpacked_limit = 300000
                 if txpool_unpacked > unpacked_limit:
                     if txpool_received - txpool_unpacked == 0:
@@ -211,7 +211,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         self.log.info("100%% Ethereum Transactions completely replayed. Time used: %f seconds", time_used)
         self.log.info("Transaction per second: %f", tx_count / time_used)
 
-        time.sleep(2000000000)
+        # time.sleep(2000000)
 
 
 class BlockGenThread(threading.Thread):
@@ -290,8 +290,8 @@ class BlockGenThread(threading.Thread):
                 erc20_tx_count = math.ceil(BlockGenThread.ERC20_TX_PER_BLOCK * generate_factor)
                 self.node.generateoneblockspecial(BlockGenThread.BLOCK_TX_LIMIT,
                                                   BlockGenThread.BLOCK_SIZE_LIMIT, simple_tx_count, erc20_tx_count)
-                self.log.debug("node %s generated one block with %s extra dummy tx and %s extra erc20 tx",
-                               self.node_id, simple_tx_count, erc20_tx_count)
+                self.log.info("node %s generated one block with %s extra dummy tx and %s extra erc20 tx",
+                              self.node_id, simple_tx_count, erc20_tx_count)
             except Exception as e:
                 self.log.warning("node %s Fails to generate blocks with error msg: %s", self.node_id, e)
                 time.sleep(5)

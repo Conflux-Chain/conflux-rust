@@ -9,6 +9,7 @@ from test_framework.mininode import DefaultNode, network_thread_start
 from test_framework.util import wait_until
 from conflux.rpc import RpcClient
 
+
 class SessionIpLimitTests(ConfluxTestFramework):
     def __init__(self, ip_limit_config: str, num_peers: int):
         self.ip_limit_config = ip_limit_config
@@ -38,6 +39,7 @@ class SessionIpLimitTests(ConfluxTestFramework):
         for p in peers:
             if not p.had_status:
                 wait_until(lambda: p.state == "closed", timeout=3)
+
 
 if __name__ == "__main__":
     # 1 node for a single IP address

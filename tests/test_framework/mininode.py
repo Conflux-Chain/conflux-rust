@@ -4,25 +4,17 @@
 `P2PConnection: A low-level connection object to a node's P2P interface
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
-from eth_utils import big_endian_to_int, encode_hex
-
-from conflux import utils
-from conflux.messages import *
 import asyncore
 import socket
 import struct
 import threading
 from collections import defaultdict
 
-from eth_utils import big_endian_to_int
+from eth_utils import encode_hex
 
 from conflux import utils
 from conflux.messages import *
-from conflux.utils import int_to_bytes, sha3_256, ecrecover_to_pub, ec_random_keys, ecsign, \
-    int_to_hex, rzpad
-from conflux.transactions import Transaction
-from conflux.utils import hash32, hash20, sha3, int_to_bytes, sha3_256, ecrecover_to_pub, ec_random_keys, ecsign, \
-    bytes_to_int, encode_int32, int_to_hex, int_to_32bytearray, zpad, rzpad
+from conflux.utils import int_to_bytes, ec_random_keys, int_to_32bytearray, rzpad
 from test_framework.blocktools import make_genesis
 from test_framework.util import wait_until, get_ip_address
 
@@ -212,7 +204,6 @@ class P2PConnection(asyncore.dispatcher):
         buf += payload
 
         self.send_data(buf)
-
 
     def send_data(self, data, pushbuf=False):
         if self.state != "connected" and not pushbuf:
@@ -518,6 +509,7 @@ def start_p2p_connection(nodes, remote=False, local_ip=None):
         p2p.wait_for_status()
 
     return p2p_connections
+
 
 class Handshake:
     def __init__(self, peer: P2PInterface):

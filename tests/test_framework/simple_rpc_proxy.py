@@ -1,4 +1,5 @@
 import jsonrpcclient.client
+
 jsonrpcclient.client.request_log.propagate = False
 jsonrpcclient.client.response_log.propagate = False
 

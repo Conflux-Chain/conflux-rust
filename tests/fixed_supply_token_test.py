@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+import os
+
+from easysolc import Solc
+from web3 import Web3
+
 from conflux.utils import privtoaddr
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
-from easysolc import Solc
-
-from web3 import Web3
-import os
 
 
 class FixedTokenSupplyTokenTest(SmartContractBenchBase):

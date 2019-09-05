@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 
 import eth_utils
 
@@ -9,7 +8,6 @@ from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak, privtoaddr
 from test_framework.blocktools import encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, assert_is_hex_string, assert_is_hash_string
 from test_framework.util import *
 
 CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"

@@ -157,6 +157,7 @@ impl Encodable for Action {
     }
 }
 
+
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Transaction {
     /// Nonce.
@@ -173,6 +174,23 @@ pub struct Transaction {
     pub data: Bytes,
 }
 
+/// chain id - a number encoded in V to specify the version of chain.
+/// We don't need a chain id in Conflux test-net. The goal of importing chain id mechanism
+/// from Ethereum is to compatible with Ethereum history transactions in experiment, like
+/// replay them and test performance.
+///
+///  1. Global transaction, used by Conflux test-net
+///     chain id in Rust: None
+///     v: 0 or 1
+///     rlp rule of message hash: first 6 fields without RSV
+///  2. Ethereum transaction before Spurious Dragon (EIP-155)
+///     chain id in Rust: Some(0)
+///     v: 27 or 28
+///     rlp rule of message hash: first 6 fields without RSV
+///  3. Ethereum transaction after Spurious Dragon
+///     chain id in Rust: Some(CHAIN_ID), CHAIN_ID >= 1
+///     v: CHAIN_ID * 2 + 35 or CHAIN_ID * 2 + 36
+///     rlp rule of message hash: all 9 fields ended with V, R, S
 mod eth_compatible_signature {
     pub fn add_chain_replay_protection(v: u64, chain_id: Option<u64>) -> u64 {
         v + match chain_id {

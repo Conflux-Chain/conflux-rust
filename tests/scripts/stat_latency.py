@@ -79,27 +79,27 @@ class LogAnalyzer:
                 name = "block broadcast latency ({}/{})".format(t.name, p.name)
                 table.add_stat(name, "%.2f", self.agg.stat_block_latency(t, p))
 
-        #self.agg.stat_tx_latency prints: row: to propagate to P(n) number of nodes, column: Percentage of the transactions.
+        # self.agg.stat_tx_latency prints: row: to propagate to P(n) number of nodes, column: Percentage of the transactions.
         for p in Percentile:
             name = "tx broadcast latency ({})".format(p.name)
             table.add_stat(name, "%.2f", self.agg.stat_tx_latency(p))
 
-        #row: the P(n) time the transaction is packed into a block. Column: Percentage of the transactions.
+        # row: the P(n) time the transaction is packed into a block. Column: Percentage of the transactions.
         for p in Percentile:
-            name_tx_packed_to_block ="tx packed to block latency ({})".format(p.name)
+            name_tx_packed_to_block = "tx packed to block latency ({})".format(p.name)
             table.add_stat(name_tx_packed_to_block, "%.2f", self.agg.stat_tx_packed_to_block_latency(p))
 
-        #the first time a transaction is packed to the first time the transaction is geneated.
+        # the first time a transaction is packed to the first time the transaction is geneated.
         table.add_stat("min tx packed to block latency", "%.2f", self.agg.stat_min_tx_packed_to_block_latency())
 
-        #the time between the node receives the tx and the tx first time becomes ready
+        # the time between the node receives the tx and the tx first time becomes ready
         table.add_stat("min tx to ready pool latency", "%.2f", self.agg.stat_min_tx_to_ready_pool_latency())
 
-        #colomn: P(n) nodes: percentage of the transactions is received by block.
+        # colomn: P(n) nodes: percentage of the transactions is received by block.
         table.add_stat("by_block_ratio", "%.2f", self.agg.stat_tx_ratio())
 
-        #colomn: shows the time a transaction from receiving to packing for every node, be aware of the transactions can be packed multiple times.
-        #Therefore there may be mutiple values for the same transaction.
+        # colomn: shows the time a transaction from receiving to packing for every node, be aware of the transactions can be packed multiple times.
+        # Therefore there may be mutiple values for the same transaction.
         table.add_stat("Tx wait to be packed elasped time", "%.2f", self.agg.stat_tx_wait_to_be_packed())
 
         block_txs_list = []

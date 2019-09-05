@@ -2,17 +2,19 @@
 
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
-import os, sys
+import os
+import sys
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import *
 from test_framework.util import *
 
 FULLNODE0 = 0
 FULLNODE1 = 1
 LIGHTNODE = 2
+
 
 class TxRelayTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -44,7 +46,7 @@ class TxRelayTest(ConfluxTestFramework):
         self.nodes[FULLNODE1].wait_for_phase(["NormalSyncPhase"])
 
     def random_full_node(self):
-        return random.randint(0, self.num_nodes - 2) # 0..1 inclusive
+        return random.randint(0, self.num_nodes - 2)  # 0..1 inclusive
 
     def generate_correct_block(self, node=None):
         if node is None: node = self.random_full_node()

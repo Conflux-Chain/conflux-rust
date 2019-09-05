@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import datetime
 import os
-import types
 import time
+import types
 
 from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE
 from test_framework.mininode import start_p2p_connection

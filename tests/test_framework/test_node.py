@@ -5,12 +5,10 @@ import errno
 import http.client
 import subprocess
 import tempfile
-import requests
-import time
-import urllib.parse
 from enum import Enum
 
 import eth_utils
+import requests
 
 from conflux.utils import get_nodeid, sha3, encode_int32
 from .util import *

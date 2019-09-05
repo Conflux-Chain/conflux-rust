@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-from rlp.sedes import Binary, BigEndianInt
 
-from conflux import utils, trie
-from conflux.utils import encode_hex, bytes_to_int, int_to_hex, str_to_bytes
-from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import ConfluxTestFramework
+from test_framework.blocktools import create_block
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+
 
 class ExpireBlockTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -40,7 +38,8 @@ class ExpireBlockTest(ConfluxTestFramework):
             blocks.append(new_hash)
             self.log.info("generate block={}".format(new_hash))
         wait_until(lambda: node.getbestblockhash() == new_hash)
-        out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51, referee_hashes=[bytes.fromhex(blocks[400][2:])])
+        out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51,
+                                 referee_hashes=[bytes.fromhex(blocks[400][2:])])
         self.send_msg(node, NewBlock(block=out_block))
         time.sleep(3)
         node.expireblockgc(2)
@@ -69,6 +68,7 @@ class ExpireBlockTest(ConfluxTestFramework):
         for i in range(9, 11):
             self.send_msg(node, NewBlock(block=blocks[i]))
             wait_until(lambda: node.getbestblockhash() == blocks[i].hash_hex())
+
 
 if __name__ == "__main__":
     ExpireBlockTest().main()

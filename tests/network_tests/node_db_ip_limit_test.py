@@ -8,6 +8,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import DefaultNode
 from conflux.rpc import RpcClient
 
+
 class NodeDatabaseIpLimitTests(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -51,6 +52,7 @@ class NodeDatabaseIpLimitTests(ConfluxTestFramework):
 
         # n1 or n2 was evicted when adding n3
         assert [client.get_node(n1.key), client.get_node(n2.key)].count(None) == 1
+
 
 if __name__ == "__main__":
     NodeDatabaseIpLimitTests().main()

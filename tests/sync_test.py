@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from eth_utils import decode_hex, encode_hex
+from eth_utils import decode_hex
 
 from test_framework.blocktools import create_block
 from test_framework.mininode import *

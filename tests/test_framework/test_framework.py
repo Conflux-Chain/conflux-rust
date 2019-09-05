@@ -317,7 +317,8 @@ class ConfluxTestFramework:
                     no_pssh=no_pssh,
                 ))
 
-    def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=30, *args, **kwargs):
+    def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=30,
+                   *args, **kwargs):
         """Start a conflux node"""
 
         node = self.nodes[i]

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-from conflux.utils import privtoaddr
-from test_framework.smart_contract_bench_base import SmartContractBenchBase
-from easysolc import Solc
-
-from web3 import Web3
 import os
 import random
+
+from easysolc import Solc
+from web3 import Web3
+
+from conflux.utils import privtoaddr
+from test_framework.smart_contract_bench_base import SmartContractBenchBase
 
 
 class VoteTokenTest(SmartContractBenchBase):
@@ -36,11 +37,12 @@ class VoteTokenTest(SmartContractBenchBase):
 
     def generate_transactions(self, i):
         self.call_contract_function(self.vote_contract, "createIssue",
-                                    [i, Web3.toChecksumAddress(self.token_address), [j for j in range(self.num_of_options)],
+                                    [i, Web3.toChecksumAddress(self.token_address),
+                                     [j for j in range(self.num_of_options)],
                                      [Web3.toChecksumAddress(privtoaddr(acc)) for acc in self.accounts], "v"],
                                     self.default_account_key, self.vote_address, True, True)
         for i in range(self.num_of_options):
-            self.call_contract_function(self.vote_contract, "vote", [i, random.randint(0, self.num_of_options-1)],
+            self.call_contract_function(self.vote_contract, "vote", [i, random.randint(0, self.num_of_options - 1)],
                                         self.default_account_key, self.vote_address, True, True)
 
 
