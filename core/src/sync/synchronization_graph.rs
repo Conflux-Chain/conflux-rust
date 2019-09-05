@@ -890,13 +890,13 @@ impl SynchronizationGraph {
     pub fn recover_graph_from_db(&self, header_only: bool) {
         info!("Start fast recovery of the block DAG from database");
 
-        // recover the initial sequence number in consensus graph
+        // Recover the initial sequence number in consensus graph
         // based on the sequence number of genesis block in db.
         let genesis_hash = self.data_man.genesis_block().hash();
         let genesis_local_info =
             self.data_man.local_block_info_from_db(&genesis_hash);
         if genesis_local_info.is_none() {
-            // local info of genesis block must exist.
+            // Local info of genesis block must exist.
             panic!(
                 "failed to get local block info from db for genesis[{}]",
                 &genesis_hash
@@ -923,7 +923,7 @@ impl SynchronizationGraph {
         // Reconstruct the consensus graph by traversing backward from
         // terminals. This traversal will visit all the blocks under the
         // future of current era genesis till the terminals. However,
-        // some blocks may not be graph- ready since they may have
+        // some blocks may not be graph-ready since they may have
         // references or parents which are out of the current era. We
         // will remember these out-of-era dependencies and resolve them
         // accordingly.
@@ -935,13 +935,13 @@ impl SynchronizationGraph {
             visited_blocks.insert(terminal);
         }
 
-        // remember the hashes of blocks that belong to the current genesis
+        // Remember the hashes of blocks that belong to the current genesis
         // era but are missed in db. The missed blocks will be fetched from
         // peers.
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
         while let Some(hash) = queue.pop_front() {
             if hash == genesis_hash {
-                // genesis block is already in consensus graph.
+                // Genesis block is already in consensus graph.
                 continue;
             }
 

@@ -60,10 +60,10 @@ pub struct BlockDataManager {
     /// that produces the result when executed.
     /// It is also used for checking whether an epoch has been executed.
     /// It can be updated, i.e., adding new items, in the following cases:
-    /// 1) when a new epoch gets executed in normal execution;
-    /// 2) after syncing snapshot, we need to update execution commitment
+    /// 1) When a new epoch gets executed in normal execution;
+    /// 2) After syncing snapshot, we need to update execution commitment
     ///    for pivot blocks around snapshot block based on blaming information;
-    /// 3) after recovering block graph from db, update execution commitment
+    /// 3) After recovering block graph from db, update execution commitment
     ///    according to execution info from db;
     /// 4) In BlockDataManager::new(), update execution commitment of true
     ///    genesis block if it is the current era genesis in BlockDataManager.
