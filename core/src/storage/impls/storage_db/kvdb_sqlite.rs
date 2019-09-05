@@ -194,9 +194,9 @@ impl<ValueType> KvdbSqlite<ValueType> {
     }
 }
 
-impl ElementConstrainMark for SqlReadableIntoSelf {}
-impl<Element: 'static + SqlReadableIntoSelf> ElementSatisfy<SqlReadableIntoSelf>
-    for Element
+impl ElementConstrainMark for dyn SqlReadableIntoSelf {}
+impl<Element: 'static + SqlReadableIntoSelf>
+    ElementSatisfy<dyn SqlReadableIntoSelf> for Element
 {
     fn to_constrain_object(&self) -> &(dyn 'static + SqlReadableIntoSelf) {
         self
@@ -209,19 +209,19 @@ impl<Element: 'static + SqlReadableIntoSelf> ElementSatisfy<SqlReadableIntoSelf>
     }
 }
 
-impl ElementConstrainMark for BindValueAppendImpl<SqlBindable> {}
-impl<Element: 'static + BindValueAppendImpl<SqlBindable>>
-    ElementSatisfy<BindValueAppendImpl<SqlBindable>> for Element
+impl ElementConstrainMark for dyn BindValueAppendImpl<dyn SqlBindable> {}
+impl<Element: 'static + BindValueAppendImpl<dyn SqlBindable>>
+    ElementSatisfy<dyn BindValueAppendImpl<dyn SqlBindable>> for Element
 {
     fn to_constrain_object(
         &self,
-    ) -> &(dyn 'static + BindValueAppendImpl<SqlBindable>) {
+    ) -> &(dyn 'static + BindValueAppendImpl<dyn SqlBindable>) {
         self
     }
 
     fn to_constrain_object_mut(
         &mut self,
-    ) -> &mut (dyn 'static + BindValueAppendImpl<SqlBindable>) {
+    ) -> &mut (dyn 'static + BindValueAppendImpl<dyn SqlBindable>) {
         self
     }
 }

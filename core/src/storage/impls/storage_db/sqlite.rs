@@ -435,25 +435,27 @@ pub trait ValueRead {
 }
 
 impl ValueRead for Box<[u8]> {
-    type Kind = SqlReadableIntoSelf;
+    type Kind = dyn SqlReadableIntoSelf;
 }
 
-impl<ValueType: SqlReadable> ValueReadImpl<SqlReadableIntoSelf> for ValueType {
+impl<ValueType: SqlReadable> ValueReadImpl<dyn SqlReadableIntoSelf>
+    for ValueType
+{
     fn from_row_impl(row: &Statement<'_>) -> Result<Self> {
         ValueType::from_column(row, 0)
     }
 }
 
 impl<
-        ValueType: Default + TupleIndexExt + TupleIterate<SqlReadableIntoSelf>,
+        ValueType: Default + TupleIndexExt + TupleIterate<dyn SqlReadableIntoSelf>,
     > ValueRead for ValueType
 {
-    type Kind = ElementSatisfy<SqlReadableIntoSelf>;
+    type Kind = dyn ElementSatisfy<dyn SqlReadableIntoSelf>;
 }
 
 impl<
-        ValueType: Default + TupleIndexExt + TupleIterate<SqlReadableIntoSelf>,
-    > ValueReadImpl<ElementSatisfy<SqlReadableIntoSelf>> for ValueType
+        ValueType: Default + TupleIndexExt + TupleIterate<dyn SqlReadableIntoSelf>,
+    > ValueReadImpl<dyn ElementSatisfy<dyn SqlReadableIntoSelf>> for ValueType
 {
     fn from_row_impl(row: &Statement<'_>) -> Result<ValueType> {
         let mut result = Ok(ValueType::default());
@@ -465,18 +467,18 @@ impl<
         }
 
         impl<ValueType: TupleIndexExt>
-            IterCallFamilyTrait<ValueType, SqlReadableIntoSelf>
+            IterCallFamilyTrait<ValueType, dyn SqlReadableIntoSelf>
             for &mut Load<'_, '_, ValueType>
         {
             fn iter_step<
-                Index: OfElementSatisfiesOnTuple<ValueType, SqlReadableIntoSelf>,
+                Index: OfElementSatisfiesOnTuple<ValueType, dyn SqlReadableIntoSelf>,
             >(
                 &mut self, _: &'static Index, index: usize,
             ) {
                 match self.error {
                     None => {
                         let column_read_result = ElementSatisfy::<
-                            SqlReadableIntoSelf,
+                            dyn SqlReadableIntoSelf,
                         >::to_constrain_object_mut(
                             Index::getter_for_tuple_mut(self.t).get_mut_impl(),
                         )
@@ -511,22 +513,22 @@ pub trait SqlBindableValue {
 
 impl SqlBindableValue for [u8] {
     /// Use SqlBindable for all single element.
-    type Kind = SqlBindable;
+    type Kind = dyn SqlBindable;
 }
 
 impl SqlBindableValue for i64 {
-    type Kind = SqlBindable;
+    type Kind = dyn SqlBindable;
 }
 
 impl<
-        ValueType: Default + TupleIndexExt + TupleIterate<SqlReadableIntoSelf>,
+        ValueType: Default + TupleIndexExt + TupleIterate<dyn SqlReadableIntoSelf>,
     > SqlBindableValue for ValueType
 {
-    type Kind = ElementSatisfy<BindValueAppendImpl<SqlBindable>>;
+    type Kind = dyn ElementSatisfy<dyn BindValueAppendImpl<dyn SqlBindable>>;
 }
 
 impl<
-        ValueType: Default + TupleIndexExt + TupleIterate<SqlReadableIntoSelf>,
+        ValueType: Default + TupleIndexExt + TupleIterate<dyn SqlReadableIntoSelf>,
     > PutType for ValueType
 {
     type PutType = ValueType;
@@ -539,29 +541,31 @@ pub trait BindValueAppendImpl<Kind: ?Sized> {
 
 // FIXME: Clone? Is it possible to impl it for &T?
 impl<T: 'static + SqlBindableValue + SqlBindable + Clone>
-    BindValueAppendImpl<SqlBindable> for T
+    BindValueAppendImpl<dyn SqlBindable> for T
 {
     fn make_bind_list(&self) -> Vec<SqlBindableBox<'_>> {
         vec![Box::new(self.clone())]
     }
 }
 
-impl BindValueAppendImpl<SqlBindable> for [u8] {
+impl BindValueAppendImpl<dyn SqlBindable> for [u8] {
     fn make_bind_list(&self) -> Vec<SqlBindableBox<'_>> {
         vec![Box::new(Pin::new(self))]
     }
 }
 
-impl BindValueAppendImpl<SqlBindable> for Box<[u8]> {
+impl BindValueAppendImpl<dyn SqlBindable> for Box<[u8]> {
     fn make_bind_list(&self) -> Vec<SqlBindableBox<'_>> {
         vec![Box::new(Pin::new(self.deref()))]
     }
 }
 
 impl<
-        ValueType: TupleIndexExt + TupleIterate<BindValueAppendImpl<SqlBindable>>,
-    > BindValueAppendImpl<ElementSatisfy<BindValueAppendImpl<SqlBindable>>>
-    for ValueType
+        ValueType: TupleIndexExt + TupleIterate<dyn BindValueAppendImpl<dyn SqlBindable>>,
+    >
+    BindValueAppendImpl<
+        dyn ElementSatisfy<dyn BindValueAppendImpl<dyn SqlBindable>>,
+    > for ValueType
 {
     fn make_bind_list(&self) -> Vec<SqlBindableBox<'_>> {
         struct Append<'x, ValueType> {
@@ -570,8 +574,10 @@ impl<
         }
 
         impl<'x, ValueType>
-            IterCallFamilyTrait<ValueType, BindValueAppendImpl<SqlBindable>>
-            for Append<'x, ValueType>
+            IterCallFamilyTrait<
+                ValueType,
+                dyn BindValueAppendImpl<dyn SqlBindable>,
+            > for Append<'x, ValueType>
         {
             // FIXME: we shoull note that, if Self contains a mut pointer of
             // FIXME: a Tuple, then iter_step can only return a
@@ -581,13 +587,13 @@ impl<
             fn iter_step<
                 Index: OfElementSatisfiesOnTuple<
                     ValueType,
-                    BindValueAppendImpl<SqlBindable>,
+                    dyn BindValueAppendImpl<dyn SqlBindable>,
                 >,
             >(
                 &mut self, _: &'static Index, _: usize,
             ) {
                 let mut to_append = ElementSatisfy::<
-                    BindValueAppendImpl<SqlBindable>,
+                    dyn BindValueAppendImpl<dyn SqlBindable>,
                 >::to_constrain_object(
                     Index::getter_for_tuple(self.v).get_impl(),
                 )
