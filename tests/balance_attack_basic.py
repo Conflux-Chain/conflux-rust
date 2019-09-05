@@ -37,6 +37,8 @@ class P2PTest(ConfluxTestFramework):
             "mining_author": '"' + "0"*40 + '"',
             "log_level": "\"debug\"",
             "headers_request_timeout_ms": "30000",  # need to be larger than network latency
+            "heavy_block_difficulty_ratio": "1000",  # parameter used in the original experiments
+            "adaptive_weight_beta": "3000",  # parameter used in the original experiments
         }
         self._initialize_chain_clean()
 
