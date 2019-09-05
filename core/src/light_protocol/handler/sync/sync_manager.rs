@@ -4,8 +4,21 @@
 
 use parking_lot::RwLock;
 use std::{
-    collections::{BinaryHeap, HashMap},
+    cmp::Ord,
+    collections::HashMap,
+    fmt::Debug,
+    hash::Hash,
+    sync::Arc,
     time::{Duration, Instant},
+};
+
+use crate::{
+    light_protocol::{common::Peers, Error},
+    network::PeerId,
+};
+
+use super::{
+    super::FullPeerState, missing_item::HasKey, priority_queue::PriorityQueue,
 };
 
 #[derive(Debug)]
@@ -23,30 +36,15 @@ impl<T> InFlightRequest<T> {
     }
 }
 
-pub trait HasKey<Key>
-where Key: Clone
-{
-    fn key(&self) -> Key;
-}
-
-use super::super::FullPeerState;
-use crate::{
-    light_protocol::{common::Peers, Error},
-    network::PeerId,
-};
-use std::sync::Arc;
-
-use std::{cmp::Ord, fmt::Debug, hash::Hash};
-
 pub(super) struct SyncManager<Key, Item> {
     // headers requested but not received yet
     in_flight: RwLock<HashMap<Key, InFlightRequest<Item>>>,
 
-    // priority queue of headers we need excluding the ones in `in_flight`
-    waiting: RwLock<BinaryHeap<Item>>,
-
     // collection of all peers available
     peers: Arc<Peers<FullPeerState>>,
+
+    // priority queue of headers we need excluding the ones in `in_flight`
+    waiting: RwLock<PriorityQueue<Key, Item>>,
 }
 
 impl<Key, Item> SyncManager<Key, Item>
@@ -56,12 +54,12 @@ where
 {
     pub fn new(peers: Arc<Peers<FullPeerState>>) -> Self {
         let in_flight = RwLock::new(HashMap::new());
-        let waiting = RwLock::new(BinaryHeap::new());
+        let waiting = RwLock::new(PriorityQueue::new());
 
         SyncManager {
             in_flight,
-            waiting,
             peers,
+            waiting,
         }
     }
 
