@@ -173,5 +173,4 @@ pub trait Cfx {
     //        #[rpc(name = "cfx_getUnclesByBlockNumberAndIndex")]
     //        fn uncles_by_block_number_and_index(&self, BlockNumber, Index) ->
     // BoxFuture<Option<Block>>;
-
 }

@@ -17,11 +17,8 @@ use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES,
-    PeerInfo, SharedConsensusGraph,
-    storage::{
-        state::StateTrait, state_manager::StateManagerTrait,
-    },
-   SharedSynchronizationService,
+    storage::{state::StateTrait, state_manager::StateManagerTrait},
+    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
@@ -45,9 +42,9 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     tx_gen: Arc<TransactionGenerator>,
 }
+use cfxcore::storage::SnapshotAndEpochIdRef;
 use std::collections::HashMap;
 use txgen::TransactionGenerator;
-use cfxcore::storage::SnapshotAndEpochIdRef;
 
 impl RpcImpl {
     pub fn new(
@@ -427,15 +424,18 @@ impl RpcImpl {
         Ok(chain)
     }
 
-    fn get_executed_info(
-        &self, block_hash: H256,
-    ) -> RpcResult<(H256, H256)> {
-        let receipts_root = self.consensus.data_man.get_epoch_execution_commitments(&block_hash).ok_or(
-            RpcError::invalid_params(
+    fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
+        let receipts_root = self
+            .consensus
+            .data_man
+            .get_epoch_execution_commitments(&block_hash)
+            .ok_or(RpcError::invalid_params(
                 "No receipts root. Possibly never pivot?".to_owned(),
-            ),
-        )?.receipts_root;
-        let state_root = self.consensus.data_man
+            ))?
+            .receipts_root;
+        let state_root = self
+            .consensus
+            .data_man
             .storage_manager
             .get_state_no_commit(SnapshotAndEpochIdRef::new(&block_hash, None))
             .unwrap()
@@ -445,7 +445,10 @@ impl RpcImpl {
             .ok_or(RpcError::invalid_params(
                 "No state root. Possibly never pivot?".to_owned(),
             ))?;
-        Ok((receipts_root.clone().into(), state_root.state_root.compute_state_root_hash()))
+        Ok((
+            receipts_root.clone().into(),
+            state_root.state_root.compute_state_root_hash(),
+        ))
     }
 
     fn expire_block_gc(&self, timeout: u64) -> RpcResult<()> {

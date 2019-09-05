@@ -17,11 +17,11 @@ use std::{
     cmp::max,
     collections::HashSet,
     sync::{mpsc, Arc},
-    thread, time,
+    thread,
+    time::{self, Duration},
 };
 use time::{SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
-use std::time::Duration;
 lazy_static! {
     static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "packed_account_size");
@@ -107,7 +107,8 @@ impl Worker {
                                 // miner to stop mining
                                 // until the previous blocks is processed by
                                 // ConsensusGraph
-//                                problem = None;
+                                //                                problem =
+                                // None;
                                 break;
                             }
                             // This sleep is for test_mode mining of
@@ -692,7 +693,10 @@ impl BlockGenerator {
                             &new_solution.unwrap(),
                         )
                     {
-                        debug!("Get solution in loop {}", new_solution.unwrap().nonce);
+                        debug!(
+                            "Get solution in loop {}",
+                            new_solution.unwrap().nonce
+                        );
                         new_solution = receiver.try_recv();
                     } else {
                         break;
