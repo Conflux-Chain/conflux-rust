@@ -269,7 +269,10 @@ impl Configuration {
     }
 
     pub fn verification_config(&self) -> VerificationConfig {
-        VerificationConfig::new(self.raw_conf.test_mode, self.raw_conf.eth_compatibility_mode)
+        VerificationConfig::new(
+            self.raw_conf.test_mode,
+            self.raw_conf.eth_compatibility_mode,
+        )
     }
 
     pub fn tx_gen_config(&self) -> TransactionGeneratorConfig {

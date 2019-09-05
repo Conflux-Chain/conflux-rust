@@ -3,11 +3,9 @@ import rlp
 # import sender as sender
 from rlp.sedes import big_endian_int, binary
 
-from .exceptions import InvalidTransaction
 from . import utils
-from .utils import TT256, mk_contract_address, zpad, int_to_32bytearray, \
-    big_endian_to_int, ecsign, ecrecover_to_pub, normalize_key, str_to_bytes, \
-    encode_hex, address
+from .exceptions import InvalidTransaction
+from .utils import TT256, ecsign, normalize_key, encode_hex, address
 
 
 class Transaction(rlp.Serializable):
@@ -68,7 +66,7 @@ class Transaction(rlp.Serializable):
         key = normalize_key(key)
 
         v, r, s = ecsign(rawhash, key)
-        v = v - 27
+        #v = v - 27
 
         ret = self.copy(
             v=v, r=r, s=s

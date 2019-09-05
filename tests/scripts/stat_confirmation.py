@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-from stat_latency_map_reduce import LogAggregator, BlockLatencyType, Percentile, parse_value, Statistics
-from stat_latency import Table
-import pickle
+import math
+import os
 import sys
 from queue import Queue
-import os
-import math
+
+from stat_latency import Table
+from stat_latency_map_reduce import LogAggregator, BlockLatencyType, Percentile, parse_value, Statistics
+
 
 def accept(t, lambda_n, sib_tree_size, max_n, r):
     if t < 0:
@@ -139,7 +140,8 @@ def compute_latency(parents, refs, final_block, g_time, r_time, lambda_n=4, risk
         lat_s) * 0.25)], sum(lat_s) / len(lat_s), lat_s[int(len(lat_s) * 0.75)], lat_s[-1]))
     return lat_s
 
-def find_best_block(logs_dir:str):
+
+def find_best_block(logs_dir: str):
     full_path = os.path.abspath(logs_dir)
     log_path = os.path.join(os.path.dirname(full_path), "exp.log")
     if not os.path.exists(log_path):
@@ -158,13 +160,14 @@ def find_best_block(logs_dir:str):
     print("cannot find the best block in log file.")
     sys.exit(3)
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Parameter required: <logs_dir> <lambda_n> [<best_block>]")
         sys.exit(1)
 
     logs_dir = sys.argv[1]
-    lambda_n = 1/float(sys.argv[2])
+    lambda_n = 1 / float(sys.argv[2])
     best_block = sys.argv[3] if len(sys.argv) >= 4 else find_best_block(logs_dir)
 
     print("Loading logs ...")
@@ -183,12 +186,12 @@ if __name__ == "__main__":
         received_times_max[block.hash] = block.timestamp + latencies_stat.get(Percentile.Max)
         received_times_p99[block.hash] = block.timestamp + latencies_stat.get(Percentile.P99)
 
-    #print("computing with broadcast latency (Max) ...")
-    #latencies_max = compute_latency(parents, refs, best_block, generate_times, received_times_max, lambda_n)
+    # print("computing with broadcast latency (Max) ...")
+    # latencies_max = compute_latency(parents, refs, best_block, generate_times, received_times_max, lambda_n)
     print("computing with broadcast latency (P99) ...")
     latencies_p99 = compute_latency(parents, refs, best_block, generate_times, received_times_p99, lambda_n)
 
     table = Table.new_matrix("confirmation latency")
-    #table.add_data("Max", "%.2f", latencies_max)
+    # table.add_data("Max", "%.2f", latencies_max)
     table.add_data("P99", "%.2f", latencies_p99)
     table.pretty_print()

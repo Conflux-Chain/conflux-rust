@@ -7,6 +7,7 @@ sys.path.insert(1, os.path.dirname(sys.path[0]))
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import wait_until
 
+
 class AutoDiscovery(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -36,6 +37,7 @@ class AutoDiscovery(ConfluxTestFramework):
         self.log.info("Test AutoDiscovery")
         wait_until(lambda: [len(i.getpeerinfo()) for i in self.nodes].count(self.num_nodes - 1) == self.num_nodes)
         self.log.info("Passed")
+
 
 if __name__ == "__main__":
     AutoDiscovery().main()

@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
-from base64 import b64encode
-from binascii import hexlify, unhexlify
-from decimal import Decimal, ROUND_DOWN
-import hashlib
 import inspect
 import json
 import logging
 import os
 import random
 import re
-from subprocess import CalledProcessError
-import time
 import socket
 import threading
+import time
+from decimal import Decimal, ROUND_DOWN
+from subprocess import CalledProcessError
 
 import jsonrpcclient.exceptions
 
@@ -23,6 +20,7 @@ from .authproxy import AuthServiceProxy, JSONRPCException
 CONFLUX_RPC_WAIT_TIMEOUT = 60
 
 logger = logging.getLogger("TestFramework.utils")
+
 
 # Assert functions
 ##################
@@ -152,17 +150,18 @@ def assert_is_hex_string(string):
         raise AssertionError(
             "Couldn't interpret %r as hexadecimal; raised: %s" % (string, e))
 
+
 def assert_is_hash_string(string, length=64):
     if not isinstance(string, str):
         raise AssertionError("Expected a string, got type %r" % type(string))
 
     if string.startswith("0x"):
         string = string[2:]
-   
+
     if length and len(string) != length:
         raise AssertionError(
             "String of length %d expected; got %d" % (length, len(string)))
-    
+
     if not re.match('[abcdef0-9]+$', string):
         raise AssertionError(
             "String %r contains invalid characters for a hash." % string)
@@ -262,20 +261,20 @@ def initialize_datadir(dirname, n, conf_parameters):
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
         local_conf = {"port": str(p2p_port(n)),
-                        "jsonrpc_local_http_port": str(rpc_port(n)),
-                        "jsonrpc_http_port": str(remote_rpc_port(n)),
-                        "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
-                        "test_mode": "true",
-                        "log_level": "\"trace\"",
-                        "storage_cache_size": "200000",
-                        "storage_cache_start_size": "200000",
-                        "storage_node_map_size": "200000",
-                        "start_mining":"false",
-                        "subnet_quota": "0",
-                        "session_ip_limits": "\"0,0,0,0\"",
-                        "enable_discovery": "false",
-                        "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
-                        "metrics_enabled": "true",
+                      "jsonrpc_local_http_port": str(rpc_port(n)),
+                      "jsonrpc_http_port": str(remote_rpc_port(n)),
+                      "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
+                      "test_mode": "true",
+                      "log_level": "\"trace\"",
+                      "storage_cache_size": "200000",
+                      "storage_cache_start_size": "200000",
+                      "storage_node_map_size": "200000",
+                      "start_mining": "false",
+                      "subnet_quota": "0",
+                      "session_ip_limits": "\"0,0,0,0\"",
+                      "enable_discovery": "false",
+                      "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
+                      "metrics_enabled": "true",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]
@@ -353,8 +352,12 @@ def disconnect_nodes(nodes, from_connection, node_num):
             raise
 
     # wait to disconnect
-    wait_until(lambda: [peer for peer in nodes[from_connection].getpeerinfo() if peer["nodeid"] == nodes[node_num].key] == [], timeout=5)
-    wait_until(lambda: [peer for peer in nodes[node_num].getpeerinfo() if peer["nodeid"] == nodes[from_connection].key] == [], timeout=5)
+    wait_until(
+        lambda: [peer for peer in nodes[from_connection].getpeerinfo() if peer["nodeid"] == nodes[node_num].key] == [],
+        timeout=5)
+    wait_until(
+        lambda: [peer for peer in nodes[node_num].getpeerinfo() if peer["nodeid"] == nodes[from_connection].key] == [],
+        timeout=5)
 
 
 def check_handshake(from_connection, target_node_id):
@@ -432,6 +435,7 @@ class WaitHandler:
             if func is not None:
                 func(obj, msg)
             self.keep_wait = False
+
         node.set_callback(msgid, on_message)
 
     def wait(self, timeout=10):
@@ -488,12 +492,13 @@ def get_simple_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
 def p2p_port(n):
     assert (n <= MAX_NODES)
     return PORT_MIN + n + (MAX_NODES * PortSeed.n) % (
-        PORT_RANGE - 1 - MAX_NODES)
+            PORT_RANGE - 1 - MAX_NODES)
 
 
 def rpc_port(n):
-    return PORT_MIN + PORT_RANGE + n*2 + (MAX_NODES * PortSeed.n) % (
-        PORT_RANGE - 1 - MAX_NODES)
+    return PORT_MIN + PORT_RANGE + n * 2 + (MAX_NODES * PortSeed.n) % (
+            PORT_RANGE - 1 - MAX_NODES)
+
 
 def remote_rpc_port(n):
     return rpc_port(n) + 1
@@ -526,11 +531,12 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
 
     for i in range(num_nodes):
         # make sure all nodes are reachable
-        next = (i + 1) % num_nodes
-        peer[i].append(next)
-        lat = random.randint(latency_min, latency_max)
-        latencies[i][next] = lat
-        latencies[next][i] = lat
+        if num_nodes > 1:
+            next = (i + 1) % num_nodes
+            peer[i].append(next)
+            lat = random.randint(latency_min, latency_max)
+            latencies[i][next] = lat
+            latencies[next][i] = lat
 
         for _ in range(sample - 1):
             while True:
@@ -551,6 +557,7 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
         t.join(timeout)
         assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
         assert not t.failed, "connect_sample_nodes failed."
+
 
 class ConnectThread(threading.Thread):
     def __init__(self, nodes, a, peers, latencies, log, min_peers=3, daemon=True):
@@ -577,6 +584,8 @@ class ConnectThread(threading.Thread):
                     time.sleep(1)
         except Exception as e:
             node = self.nodes[self.a]
-            self.log.error("Node " + str(self.a) + " fails to be connected to " + str(self.peers) + ", ip={}, index={}".format(node.ip, node.index))
+            self.log.error(
+                "Node " + str(self.a) + " fails to be connected to " + str(self.peers) + ", ip={}, index={}".format(
+                    node.ip, node.index))
             self.log.error(e)
             self.failed = True

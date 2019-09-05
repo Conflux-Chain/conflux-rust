@@ -1,14 +1,16 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
+
 class TestGetBlocksByEpoch(RpcClient):
     def test_single_chain(self):
         self.generate_block()
         self.generate_blocks_to_state()
-        
+
         # earliest, stated, mined
         self.assert_blocks_in_epoch(self.EPOCH_EARLIEST, 1)
         self.assert_blocks_in_epoch(self.EPOCH_LATEST_STATE, 1)
@@ -22,7 +24,7 @@ class TestGetBlocksByEpoch(RpcClient):
         self.assert_blocks_in_epoch(self.EPOCH_NUM(0), 1)
 
         # invalid epoch number
-        assert_raises_rpc_error(None, None, self.block_hashes_by_epoch, self.EPOCH_NUM(valid_num+1))
+        assert_raises_rpc_error(None, None, self.block_hashes_by_epoch, self.EPOCH_NUM(valid_num + 1))
 
     def assert_blocks_in_epoch(self, epoch: str, num_blocks: int, block_hashes: list = None):
         blocks = self.block_hashes_by_epoch(epoch)
@@ -53,5 +55,3 @@ class TestGetBlocksByEpoch(RpcClient):
         self.assert_blocks_in_epoch(self.EPOCH_LATEST_MINED, 2, [b, f_ref])
         self.assert_blocks_in_epoch(self.EPOCH_NUM(epoch), 2, [b, f_ref])
         self.assert_blocks_in_epoch(self.EPOCH_NUM(epoch - 1), 1, [f_pivot])
-        
-

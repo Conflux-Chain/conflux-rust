@@ -295,13 +295,15 @@ impl NoncePoolNode {
 pub struct NoncePool {
     root: Option<Box<NoncePoolNode>>,
     rng: XorShiftRng,
+    eth_compatibility_mode: bool,
 }
 
 impl NoncePool {
-    pub fn new() -> Self {
+    pub fn new(eth_compatibility_mode: bool) -> Self {
         NoncePool {
             root: None,
             rng: XorShiftRng::from_entropy(),
+            eth_compatibility_mode,
         }
     }
 
@@ -352,7 +354,14 @@ impl NoncePool {
             // 2, b.0 - a.0 means number of transactions in `[nouce, tx.nouce]`
             // 3. x.nonce - nonce + 1 means expected number of transactions in
             // `[nouce, tx.nouce]`
-            U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <= balance
+            // U256::from(b.0 - a.0 - 1) == x.nonce - nonce && b.1 - a.1 <=
+            // balance
+            if self.eth_compatibility_mode {
+                U256::from(b.0 - a.0 - 1) == x.nonce - nonce
+            } else {
+                U256::from(b.0 - a.0 - 1) == x.nonce - nonce
+                    && b.1 - a.1 <= balance
+            }
         })
     }
 
@@ -399,7 +408,7 @@ mod nonce_pool_test {
                 value: U256::from(value),
                 data: Vec::new(),
             }
-            .sign(sender.secret()),
+            .sign(sender.secret(), false),
         )
     }
 
@@ -430,7 +439,7 @@ mod nonce_pool_test {
                 &me, i as usize, 10, 10000, false,
             ));
         }
-        let mut nonce_pool = NoncePool::new();
+        let mut nonce_pool = NoncePool::new(false);
         assert_eq!(nonce_pool.is_empty(), true);
         for i in 0..10 {
             assert_eq!(
@@ -479,7 +488,7 @@ mod nonce_pool_test {
         }
         let gas = 50000;
         let exact_cost = 4 * (gas * 10 + 10000);
-        let mut nonce_pool = NoncePool::new();
+        let mut nonce_pool = NoncePool::new(false);
 
         for i in vec![0, 1, 3, 4] {
             assert_eq!(
@@ -606,7 +615,7 @@ mod nonce_pool_test {
                 rng.next_u64() % 2 == 1,
             ));
         }
-        let mut nonce_pool = NoncePool::new();
+        let mut nonce_pool = NoncePool::new(false);
         let mut mock_nonce_pool = BTreeMap::new();
 
         // random insert

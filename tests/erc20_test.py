@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
+
+from easysolc import Solc
 from eth_utils import decode_hex
+from web3 import Web3
 
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, privtoaddr
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from web3 import Web3
 from easysolc import Solc

@@ -202,7 +202,7 @@ impl Validate {
         &self, txs: &Vec<SignedTransaction>,
     ) -> Result<(), Error> {
         for tx in txs {
-            match tx.verify_public(false /* skip */) {
+            match tx.verify_public(false /* skip */, None) {
                 Ok(true) => continue,
                 _ => {
                     warn!("Tx signature verification failed for {:?}", tx);

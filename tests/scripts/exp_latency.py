@@ -14,24 +14,30 @@ def execute(cmd, retry, cmd_description):
         assert retry > 0
         retry -= 1
 
-def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
+
+def pssh(ips_file: str, remote_cmd: str, retry=0, cmd_description=""):
     cmd = 'parallel-ssh -O "StrictHostKeyChecking no" -h {} -p 400 \"{}\" > /dev/null 2>&1'.format(ips_file, remote_cmd)
     execute(cmd, retry, cmd_description)
 
-def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
-    cmd = 'parallel-scp -O "StrictHostKeyChecking no" -h {} -p 400 {} {} > /dev/null 2>&1'.format(ips_file, local, remote)
+
+def pscp(ips_file: str, local: str, remote: str, retry=0, cmd_description=""):
+    cmd = 'parallel-scp -O "StrictHostKeyChecking no" -h {} -p 400 {} {} > /dev/null 2>&1'.format(ips_file, local,
+                                                                                                  remote)
     execute(cmd, retry, cmd_description)
 
-def kill_remote_conflux(ips_file:str):
+
+def kill_remote_conflux(ips_file: str):
     pssh(ips_file, "killall -9 conflux || echo already killed", 3, "kill remote conflux")
 
-def cleanup_remote_logs(ips_file:str):
+
+def cleanup_remote_logs(ips_file: str):
     pssh(ips_file, "rm -f *.tgz *.out; rm -rf /tmp/conflux_test_*")
+
 
 class ArgumentHolder:
     def __init__(self):
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
-        
+
         for arg_name in self.__dict__.keys():
             if type(self.__dict__[arg_name]) == bool:
                 parser.add_argument(
@@ -56,10 +62,11 @@ class ArgumentHolder:
         print("[Options]")
         for arg_name in self.__dict__.keys():
             print("{} <{}> ({})".format(
-                "--" + str(arg_name).replace("_", "-"), 
-                type(self.__dict__[arg_name]).__name__, 
+                "--" + str(arg_name).replace("_", "-"),
+                type(self.__dict__[arg_name]).__name__,
                 self.__dict__[arg_name]
             ))
+
 
 class RemoteSimulateConfig:
     def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks):
@@ -84,7 +91,8 @@ class RemoteSimulateConfig:
         for config in batch_config.split(","):
             fields = config.split(":")
             if len(fields) != 4 and len(fields) != 6:
-                raise AssertionError("invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:[<data_propagate_interval_ms>:<data_propagate_size>]")
+                raise AssertionError(
+                    "invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:[<data_propagate_interval_ms>:<data_propagate_size>]")
             config_groups.append(RemoteSimulateConfig(
                 int(fields[0]),
                 int(fields[1]),
@@ -98,6 +106,7 @@ class RemoteSimulateConfig:
                 config_groups[-1].data_propagate_size = int(fields[5])
 
         return config_groups
+
 
 class LatencyExperiment(ArgumentHolder):
     def __init__(self):
@@ -134,7 +143,7 @@ class LatencyExperiment(ArgumentHolder):
         for config in RemoteSimulateConfig.parse(self.batch_config):
             print("=========================================================")
             print("Experiment started, config = {} ...".format(config))
-            
+
             print("kill remote conflux and cleanup logs ...")
             kill_remote_conflux(self.ips_file)
             cleanup_remote_logs(self.ips_file)
@@ -167,7 +176,7 @@ class LatencyExperiment(ArgumentHolder):
         execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
-    def run_remote_simulate(self, config:RemoteSimulateConfig):
+    def run_remote_simulate(self, config: RemoteSimulateConfig):
         cmd = [
             "python3 ../remote_simulate.py",
             "--nodes-per-host", str(self.nodes_per_host),
@@ -203,11 +212,12 @@ class LatencyExperiment(ArgumentHolder):
         print("[CMD]: {}".format(cmd))
 
         ret = os.system(cmd)
-        assert ret == 0, "Failed to run remote simulator, return code = {}. Please check [{}] for more details".format(ret, self.simulate_log_file)
+        assert ret == 0, "Failed to run remote simulator, return code = {}. Please check [{}] for more details".format(
+            ret, self.simulate_log_file)
 
         os.system('grep "(ERROR)" {}'.format(self.simulate_log_file))
 
-    def tag(self, config:RemoteSimulateConfig):
+    def tag(self, config: RemoteSimulateConfig):
         block_size_kb = config.txs_per_block * config.tx_size // 1000
         return "{}ms_{}k_{}vms_{}nodes".format(
             config.block_gen_interval_ms,
@@ -216,7 +226,7 @@ class LatencyExperiment(ArgumentHolder):
             self.nodes_per_host,
         )
 
-    def stat_latency(self, config:RemoteSimulateConfig):
+    def stat_latency(self, config: RemoteSimulateConfig):
         os.system("echo ============================================================ >> {}".format(self.stat_log_file))
 
         if config.data_propagate_enabled:
@@ -232,6 +242,7 @@ class LatencyExperiment(ArgumentHolder):
             print("begin to statistic confirmation latency ...")
             ret = os.system("python3 stat_confirmation.py logs 4 >> {}".format(self.stat_log_file))
             assert ret == 0, "Failed to statistic block confirmation latency, return code = {}".format(ret)
+
 
 if __name__ == "__main__":
     LatencyExperiment().run()

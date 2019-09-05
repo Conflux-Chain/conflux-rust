@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import tarfile
 from argparse import ArgumentParser
 from collections import Counter
 import eth_utils
@@ -7,13 +8,14 @@ import rlp
 import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
-from conflux import utils
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int, pubtoaddr
-from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import ConfluxTestFramework
+from conflux.utils import encode_hex
+from scripts.exp_latency import pscp, pssh, kill_remote_conflux
+from scripts.stat_latency_map_reduce import Statistics
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+
 from scripts.stat_latency_map_reduce import Statistics
 from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 import csv
@@ -27,7 +29,7 @@ class RemoteSimulate(ConfluxTestFramework):
             "log_level": "\"debug\"",
         }
 
-    def add_options(self, parser:ArgumentParser):
+    def add_options(self, parser: ArgumentParser):
         parser.add_argument(
             "--nodes-per-host",
             dest="nodes_per_host",
@@ -189,14 +191,16 @@ class RemoteSimulate(ConfluxTestFramework):
         # storage
         self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_cache_start_size"] = str(1000000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["storage_cache_start_size"] = str(
+            1000000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
         # self.conf_parameters["storage_cache_size"] = "200000"
         self.conf_parameters["storage_idle_size"] = str(200000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["storage_node_map_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
 
         # txpool
-        self.conf_parameters["tx_pool_size"] = str(self.options.tx_pool_size // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["tx_pool_size"] = str(
+            self.options.tx_pool_size // target_memory * self.options.storage_memory_mb)
 
         # data propagation
         self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
@@ -210,7 +214,7 @@ class RemoteSimulate(ConfluxTestFramework):
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
             self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
         else:
-            self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
+            self.conf_parameters["send_tx_period_ms"] = "31536000000"  # one year to disable txs propagation
 
         # tx propagation setting
         self.conf_parameters["min_peers_propagation"] = str(self.options.min_peers_propagation)
@@ -297,7 +301,7 @@ class RemoteSimulate(ConfluxTestFramework):
         for i in range(1, self.options.num_blocks + 1):
             wait_sec = random.expovariate(1000 / self.options.generation_period_ms)
             start = time.time()
-            
+
             # find an idle node to generate block
             p = random.randint(0, num_nodes - 1)
             retry = 0
@@ -316,10 +320,12 @@ class RemoteSimulate(ConfluxTestFramework):
 
             if self.tx_propagation_enabled:
                 # Generate a block with the transactions in the node's local tx pool
-                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block,
+                                              self.options.generate_tx_data_len, self.log, rpc_times)
             else:
                 # Generate a fixed-size block with fake tx
-                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len,
+                                        self.log, rpc_times)
             thread.start()
             threads[p] = thread
 
@@ -371,14 +377,15 @@ class RemoteSimulate(ConfluxTestFramework):
 
             self.log.info("blocks: {}".format(Counter(block_counts)))
 
-            if block_counts.count(block_counts[0]) == len(self.nodes) and best_blocks.count(best_blocks[0]) == len(self.nodes):
+            if block_counts.count(block_counts[0]) == len(self.nodes) and best_blocks.count(best_blocks[0]) == len(
+                    self.nodes):
                 break
 
             time.sleep(5)
         self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         executor.shutdown()
 
-    def monitor(self, cur_block_count:int, retry_max:int):
+    def monitor(self, cur_block_count: int, retry_max: int):
         pre_block_count = 0
 
         retry = 0
@@ -401,7 +408,7 @@ class RemoteSimulate(ConfluxTestFramework):
 
 
 class GenerateThread(threading.Thread):
-    def __init__(self, nodes, i, tx_n, tx_data_len, log, rpc_times:list):
+    def __init__(self, nodes, i, tx_n, tx_data_len, log, rpc_times: list):
         threading.Thread.__init__(self, daemon=True)
         self.nodes = nodes
         self.i = i
@@ -417,7 +424,7 @@ class GenerateThread(threading.Thread):
             for i in range(self.tx_n):
                 addr = client.rand_addr()
                 tx_gas = client.DEFAULT_TX_GAS + 4 * self.tx_data_len
-                tx = client.new_tx(receiver=addr, nonce=10000+i, value=0, gas=tx_gas, data=b'\x00' * self.tx_data_len)
+                tx = client.new_tx(receiver=addr, nonce=10000 + i, value=0, gas=tx_gas, data=b'\x00' * self.tx_data_len)
                 # remove big data field and assemble on full node to reduce network load.
                 tx.__dict__["data"] = b''
                 txs.append(tx)

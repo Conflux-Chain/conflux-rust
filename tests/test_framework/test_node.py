@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 """Class for conflux node under test"""
 
-import decimal
 import errno
-from enum import Enum
 import http.client
-import json
-import logging
-import os
-import re
 import subprocess
 import tempfile
 import requests
 import time
 import urllib.parse
+from enum import Enum
 
 import eth_utils
 
 from conflux.utils import get_nodeid, sha3, encode_int32
-from .authproxy import JSONRPCException
 from .util import *
 
 
@@ -34,13 +28,14 @@ class ErrorMatch(Enum):
 
 class TestNode:
     def __init__(self, index, datadir, rpchost, confluxd, rpc_timeout=None, remote=False, ip=None, user=None,
-                 rpcport=None):
+                 rpcport=None, no_pssh=False):
         self.index = index
         self.datadir = datadir
         self.stdout_dir = os.path.join(self.datadir, "stdout")
         self.stderr_dir = os.path.join(self.datadir, "stderr")
         self.log = os.path.join(self.datadir, "node" + str(index) + ".log")
         self.remote = remote
+        self.no_pssh = no_pssh
         self.rpchost = rpchost
         if remote:
             self.ip = ip
@@ -91,7 +86,6 @@ class TestNode:
                 print(self.ip, self.index, subprocess.Popen(
                     cli_kill, shell=True).wait())
 
-
     def __getattr__(self, name):
         """Dispatches any unrecognised messages to the RPC connection."""
         assert self.rpc_connected and self.rpc is not None, self._node_msg(
@@ -123,19 +117,22 @@ class TestNode:
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
         my_env["RUST_BACKTRACE"] = "full"
-        if not self.remote:
-            # ssh_args = '-o "StrictHostKeyChecking no"'
-            # cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
-            #     ssh_args, self.user, self.ip, self.datadir)
-            # cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
-            #     self.datadir, self.user, self.ip, ssh_args)
-            # self.args[0] = "~/conflux"
-            # cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
-            #     ssh_args, self.user, self.ip, "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir) + " ".join(self.args))
-            # print(cli_mkdir + cli_conf + cli_exe)
-            # self.process = subprocess.Popen(cli_mkdir + cli_conf + cli_exe,
-            #                                 stdout=stdout, stderr=stderr, cwd=self.datadir, shell=True, **kwargs)
-        # else:
+        if self.remote and self.no_pssh:
+            ssh_args = '-o "StrictHostKeyChecking no"'
+            cli_mkdir = "ssh {} {}@{} mkdir -p {};".format(
+                ssh_args, self.user, self.ip, self.datadir)
+            cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
+                self.datadir, self.user, self.ip, ssh_args)
+            cli_kill = "ssh {}@{} killall conflux;".format(
+                self.user, self.ip)
+            self.args[0] = "~/conflux"
+            cli_exe = "ssh {} {}@{} \"{} > /dev/null\"".format(
+                ssh_args, self.user, self.ip,
+                "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir) + " ".join(self.args))
+            print(cli_mkdir + cli_kill + cli_conf + cli_exe)
+            self.process = subprocess.Popen(cli_mkdir + cli_kill + cli_conf + cli_exe,
+                                            stdout=stdout, stderr=stderr, cwd=self.datadir, shell=True, **kwargs)
+        else:
             self.process = subprocess.Popen(
                 self.args, stdout=stdout, stderr=stderr, cwd=self.datadir, env=my_env, **kwargs)
 
@@ -151,7 +148,7 @@ class TestNode:
                 raise FailedToStartError(
                     self._node_msg(
                         'conflux exited with status {} during initialization'.
-                        format(self.process.returncode)))
+                            format(self.process.returncode)))
             try:
                 self.rpc = get_simple_rpc_proxy(
                     rpc_url(self.index, self.rpchost, self.rpcport),
@@ -176,9 +173,11 @@ class TestNode:
                 if "No RPC credentials" not in str(e):
                     raise
             time.sleep(1.0 / poll_per_s)
-        self._raise_assertion_error("failed to get RPC proxy: index = {}, ip = {}, rpchost = {}, p2pport={}, rpcport = {}, rpc_url = {}".format(
-            self.index, self.ip, self.rpchost, self.port, self.rpcport, rpc_url(self.index, self.rpchost, self.rpcport)
-        ))
+        self._raise_assertion_error(
+            "failed to get RPC proxy: index = {}, ip = {}, rpchost = {}, p2pport={}, rpcport = {}, rpc_url = {}".format(
+                self.index, self.ip, self.rpchost, self.port, self.rpcport,
+                rpc_url(self.index, self.rpchost, self.rpcport)
+            ))
 
     def wait_for_recovery(self, phase_to_wait, wait_time):
         self.wait_for_phase(phase_to_wait, wait_time=wait_time)
@@ -200,7 +199,6 @@ class TestNode:
         self.key = eth_utils.encode_hex(pubkey)
         self.addr = sha3(encode_int32(x) + encode_int32(y))[12:]
         self.log.debug("Get node {} nodeid {}".format(self.index, self.key))
-
 
     def stop_node(self, expected_stderr='', kill=False):
         """Stop the node."""
@@ -291,17 +289,17 @@ class TestNode:
                                 flags=re.MULTILINE) is None:
                             self._raise_assertion_error(
                                 'Expected message "{}" does not partially match stderr:\n"{}"'.
-                                format(expected_msg, stderr))
+                                    format(expected_msg, stderr))
                     elif match == ErrorMatch.FULL_REGEX:
                         if re.fullmatch(expected_msg, stderr) is None:
                             self._raise_assertion_error(
                                 'Expected message "{}" does not fully match stderr:\n"{}"'.
-                                format(expected_msg, stderr))
+                                    format(expected_msg, stderr))
                     elif match == ErrorMatch.FULL_TEXT:
                         if expected_msg != stderr:
                             self._raise_assertion_error(
                                 'Expected message "{}" does not fully match stderr:\n"{}"'.
-                                format(expected_msg, stderr))
+                                    format(expected_msg, stderr))
             else:
                 if expected_msg is None:
                     assert_msg = "bitcoind should have exited with an error"

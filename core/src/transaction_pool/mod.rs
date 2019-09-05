@@ -16,7 +16,7 @@ extern crate rand;
 pub use self::impls::TreapMap;
 use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
-    executive, vm,
+    executive, verification::VerificationConfig, vm,
 };
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
@@ -54,6 +54,7 @@ pub struct TransactionPool {
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
+    verification_config: VerificationConfig,
 }
 
 pub type SharedTransactionPool = Arc<TransactionPool>;
@@ -61,10 +62,15 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 impl TransactionPool {
     pub fn with_capacity(
         capacity: usize, data_man: Arc<BlockDataManager>,
-    ) -> Self {
+        verification_config: VerificationConfig,
+    ) -> Self
+    {
         let genesis_hash = data_man.genesis_block.hash();
         TransactionPool {
-            inner: RwLock::new(TransactionPoolInner::with_capacity(capacity)),
+            inner: RwLock::new(TransactionPoolInner::with_capacity(
+                capacity,
+                verification_config,
+            )),
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man,
             spec: vm::Spec::new_spec(),
@@ -72,6 +78,7 @@ impl TransactionPool {
             consensus_best_info: Mutex::new(Arc::new(Default::default())),
             set_tx_requests: Mutex::new(Default::default()),
             recycle_tx_requests: Mutex::new(Default::default()),
+            verification_config,
         }
     }
 
@@ -154,6 +161,16 @@ impl TransactionPool {
         TX_POOL_GAUGE.update(self.total_unpacked());
         TX_POOL_READY_GAUGE.update(self.inner.read().total_ready_accounts());
 
+        if self.verification_config.eth_compatibility_mode && failure.len() != 0
+        {
+            for (_, msg) in failure.clone() {
+                if msg != String::from("Failed imported to deferred pool: Tx with same nonce already inserted, try to replace it with a higher gas price") {
+                    warn!("Failed insert tx due to: {}", msg);
+                    // TODO: will add a config to control if panic here
+                    panic!(msg);
+                }
+            }
+        }
         (passed_transactions, failure)
     }
 
@@ -182,24 +199,30 @@ impl TransactionPool {
             &transaction.data,
             &self.spec,
         );
-        if transaction.gas < (tx_intrinsic_gas as usize).into() {
-            debug!(
-                "Transaction discarded due to gas less than required: {} < {}",
-                transaction.gas, tx_intrinsic_gas
-            );
-            return Err(format!(
-                "transaction gas {} less than intrinsic gas {}",
-                transaction.gas, tx_intrinsic_gas
-            ));
-        }
 
-        // check transaction gas price
-        if transaction.gas_price < DEFAULT_MIN_TRANSACTION_GAS_PRICE.into() {
-            warn!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price);
-            return Err(format!(
-                "transaction gas price {} less than the minimum value {}",
-                transaction.gas_price, DEFAULT_MIN_TRANSACTION_GAS_PRICE
-            ));
+        if self.verification_config.eth_compatibility_mode {
+            // in eth-compatibility mode, we pass the following verification
+        } else {
+            if transaction.gas < (tx_intrinsic_gas as usize).into() {
+                debug!(
+                    "Transaction discarded due to gas less than required: {} < {}",
+                    transaction.gas, tx_intrinsic_gas
+                );
+                return Err(format!(
+                    "transaction gas {} less than intrinsic gas {}",
+                    transaction.gas, tx_intrinsic_gas
+                ));
+            }
+
+            // check transaction gas price
+            if transaction.gas_price < DEFAULT_MIN_TRANSACTION_GAS_PRICE.into()
+            {
+                debug!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price);
+                return Err(format!(
+                    "transaction gas price {} less than the minimum value {}",
+                    transaction.gas_price, DEFAULT_MIN_TRANSACTION_GAS_PRICE
+                ));
+            }
         }
 
         if let Err(e) = transaction.transaction.verify_basic() {

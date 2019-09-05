@@ -2,9 +2,9 @@
 
 from conflux.utils import convert_to_nodeid, privtoaddr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import  create_transaction
-from test_framework.test_framework import ConfluxTestFramework
+from test_framework.blocktools import create_transaction
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
 
@@ -12,7 +12,7 @@ class MessageTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 0
-        self.conf_parameters = {"log_level":"\"error\""}
+        self.conf_parameters = {"log_level": "\"error\""}
 
     def setup_network(self):
         self.setup_nodes()
@@ -34,12 +34,12 @@ class MessageTest(ConfluxTestFramework):
         self.rpc = get_simple_rpc_proxy(
             "http://127.0.0.1:12537",
             1)
-        challenge = random.randint(0, 2**32-1)
+        challenge = random.randint(0, 2 ** 32 - 1)
         signature = self.rpc.getnodeid(list(int_to_bytes(challenge)))
         node_id, x, y = convert_to_nodeid(signature, challenge)
         self.log.info("get nodeid %s", eth_utils.encode_hex(node_id))
 
-        block_gen_thread = BlockGenThread([self.rpc], self.log, num_txs = 100, interval_fixed=0.2)
+        block_gen_thread = BlockGenThread([self.rpc], self.log, num_txs=100, interval_fixed=0.2)
         block_gen_thread.start()
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}
@@ -50,7 +50,7 @@ class MessageTest(ConfluxTestFramework):
         all_txs = []
         tx_n = 10000
         gas_price = 1
-        self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/10/2)
+        self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n / 10 / 2)
         for i in range(tx_n):
             if i % 1000 == 0:
                 self.log.info("generated %d tx", i)

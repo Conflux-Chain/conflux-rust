@@ -9,16 +9,17 @@ from eth_utils import big_endian_to_int, encode_hex
 from conflux import utils
 from conflux.messages import *
 import asyncore
-from collections import defaultdict
-from io import BytesIO
-import rlp
-from rlp.sedes import binary, big_endian_int, CountableList, boolean
-import logging
 import socket
 import struct
-import sys
 import threading
+from collections import defaultdict
 
+from eth_utils import big_endian_to_int
+
+from conflux import utils
+from conflux.messages import *
+from conflux.utils import int_to_bytes, sha3_256, ecrecover_to_pub, ec_random_keys, ecsign, \
+    int_to_hex, rzpad
 from conflux.transactions import Transaction
 from conflux.utils import hash32, hash20, sha3, int_to_bytes, sha3_256, ecrecover_to_pub, ec_random_keys, ecsign, \
     bytes_to_int, encode_int32, int_to_hex, int_to_32bytearray, zpad, rzpad
@@ -212,7 +213,7 @@ class P2PConnection(asyncore.dispatcher):
 
         self.send_data(buf)
 
-    
+
     def send_data(self, data, pushbuf=False):
         if self.state != "connected" and not pushbuf:
             raise IOError('Not connected, no pushbuf')
@@ -264,7 +265,7 @@ class P2PInterface(P2PConnection):
     Individual testcases should subclass this and override the on_* methods
     if they want to alter message handling behaviour."""
 
-    def __init__(self, remote=False):
+    def __init__(self, remote=False, local_ip=None):
         super().__init__()
 
         # Track number of messages of each type received and the most recent
@@ -287,6 +288,7 @@ class P2PInterface(P2PConnection):
         self.had_status = False
         self.on_packet_func = {}
         self.remote = remote
+        self.local_ip = local_ip
 
     def peer_connect(self, *args, **kwargs):
         super().peer_connect(*args, **kwargs)
@@ -315,7 +317,7 @@ class P2PInterface(P2PConnection):
         with mininode_lock:
             try:
                 protocol = payload[0:3]
-                assert(protocol == self.protocol)  # Possible to be false?
+                assert (protocol == self.protocol)  # Possible to be false?
                 packet_type = payload[3]
                 payload = payload[4:]
                 self.protocol_message_count[packet_type] += 1
@@ -391,7 +393,10 @@ class P2PInterface(P2PConnection):
             "receive", "Hello, capabilities:{}".format(capabilities))
         ip = [127, 0, 0, 1]
         if self.remote:
+            # if hasattr(self, "local_ip") or not self.local_ip:
             ip = get_ip_address()
+            # else:
+            #     ip = self.local_ip
         endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
         hello = Hello([Capability(self.protocol, self.protocol_version)], endpoint)
 
@@ -406,7 +411,8 @@ class P2PInterface(P2PConnection):
         self.handshake = Handshake(self)
         self.handshake.write_auth()
 
-    def on_close(self): pass
+    def on_close(self):
+        pass
 
     def on_handshake(self, payload) -> bool:
         if self.handshake.state == "ReadingAck":
@@ -426,12 +432,13 @@ class P2PInterface(P2PConnection):
         self.send_protocol_msg(resp)
 
     def on_get_blocktxn(self, msg):
-        resp = GetBlockTxnResponse(reqid=msg.reqid, block_hash=b'\x00'*32, block_txn=[])
+        resp = GetBlockTxnResponse(reqid=msg.reqid, block_hash=b'\x00' * 32, block_txn=[])
         self.send_protocol_msg(resp)
 
     def on_get_block_hashes_by_epoch(self, msg):
         resp = BlockHashes(reqid=msg.reqid, hashes=[])
         self.send_protocol_msg(resp)
+
 
 # Keep our own socket map for asyncore, so that we can track disconnects
 # ourselves (to work around an issue with closing an asyncore socket when
@@ -446,11 +453,13 @@ mininode_socket_map = dict()
 # access to any data shared with the P2PInterface or P2PConnection.
 mininode_lock = threading.RLock()
 
+
 class DefaultNode(P2PInterface):
-    def __init__(self, remote = False):
-        super().__init__(remote)
+    def __init__(self, remote=False, local_ip=None):
+        super().__init__(remote, local_ip)
         self.protocol = b'cfx'
         self.protocol_version = 1
+
 
 class NetworkThread(threading.Thread):
 
@@ -494,16 +503,17 @@ def network_thread_join(timeout=10):
         thread.join(timeout)
         assert not thread.is_alive()
 
-def start_p2p_connection(nodes, remote=False):
+
+def start_p2p_connection(nodes, remote=False, local_ip=None):
     p2p_connections = []
 
     for node in nodes:
-        conn = DefaultNode(remote)
+        conn = DefaultNode(remote, local_ip)
         p2p_connections.append(conn)
         node.add_p2p_connection(conn)
 
     network_thread_start()
-    
+
     for p2p in p2p_connections:
         p2p.wait_for_status()
 

@@ -119,8 +119,12 @@ pub fn initialize_synchronization_graph(
         DataManagerConfiguration::new(false, true, 250000),
     ));
 
-    let txpool =
-        Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
+    let verification_config = VerificationConfig::new(true, false);
+    let txpool = Arc::new(TransactionPool::with_capacity(
+        500_000,
+        data_man.clone(),
+        verification_config,
+    ));
     let statistics = Arc::new(Statistics::new());
 
     let vm = VmFactory::new(1024 * 32);
@@ -148,7 +152,6 @@ pub fn initialize_synchronization_graph(
         pow_config.clone(),
     ));
 
-    let verification_config = VerificationConfig::new(true);
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
         verification_config,

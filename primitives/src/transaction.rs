@@ -173,30 +173,82 @@ pub struct Transaction {
     pub data: Bytes,
 }
 
+mod eth_compatible_signature {
+    pub fn add_chain_replay_protection(v: u64, chain_id: Option<u64>) -> u64 {
+        v + if let Some(n) = chain_id {
+            if n == 0 {
+                0
+            } else {
+                35 + n * 2
+            }
+        } else {
+            27
+        }
+    }
+}
+
 impl Transaction {
-    pub fn hash(&self) -> H256 {
-        let mut s = RlpStream::new();
-        s.append(self);
-        keccak(s.as_raw())
+    /// Append object with a without signature into RLP stream
+    pub fn rlp_append_unsigned_transaction(
+        &self, s: &mut RlpStream, chain_id: Option<u64>,
+    ) {
+        // FIXME: we should think more about the transaction spec as a base to
+        //  sign. Eth added 3 fields because it tries to be compatible
+        //  to v, r, s, but it doesn't make much sense. Another aspect
+        //  to consider is multi-sig account. Maybe we will need to add
+        //  sender address. And there must be a way to verify sender
+        //  address with the number of signatures.
+        let is_global = match chain_id {
+            None => true,
+            Some(0) => true,
+            _ => false,
+        };
+
+        s.begin_list(if is_global { 6 } else { 9 });
+        s.append(&self.nonce);
+        s.append(&self.gas_price);
+        s.append(&self.gas);
+        s.append(&self.action);
+        s.append(&self.value);
+        s.append(&self.data);
+        if !is_global {
+            let n = chain_id.unwrap();
+            s.append(&n);
+            s.append(&0u8);
+            s.append(&0u8);
+        }
     }
 
-    pub fn sign(self, secret: &Secret) -> SignedTransaction {
-        let sig = ::keylib::sign(secret, &self.hash())
+    pub fn hash(&self, chain_id: Option<u64>) -> H256 {
+        let mut stream = RlpStream::new();
+        self.rlp_append_unsigned_transaction(&mut stream, chain_id);
+        keccak(stream.as_raw())
+    }
+
+    pub fn sign(
+        self, secret: &Secret, chain_id: Option<u64>,
+    ) -> SignedTransaction {
+        let sig = ::keylib::sign(secret, &self.hash(chain_id))
             .expect("data is valid and context has signing capabilities; qed");
-        let tx_with_sig = self.with_signature(sig);
+        let tx_with_sig = self.with_signature(sig, chain_id);
         let public = tx_with_sig
             .recover_public()
             .expect("secret is valid so it's recoverable");
         SignedTransaction::new(public, tx_with_sig)
     }
 
-    /// Signs the transaction with signature.
-    pub fn with_signature(self, sig: Signature) -> TransactionWithSignature {
+    /// Signs the transaction with signature and chain_id
+    pub fn with_signature(
+        self, sig: Signature, chain_id: Option<u64>,
+    ) -> TransactionWithSignature {
         TransactionWithSignature {
             unsigned: self,
             r: sig.r().into(),
             s: sig.s().into(),
-            v: sig.v(),
+            v: eth_compatible_signature::add_chain_replay_protection(
+                sig.v() as u64,
+                chain_id,
+            ) as u8,
             hash: 0.into(),
             rlp_size: None,
         }
@@ -204,30 +256,30 @@ impl Transaction {
     }
 }
 
-impl Decodable for Transaction {
-    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
-        Ok(Transaction {
-            nonce: r.val_at(0)?,
-            gas_price: r.val_at(1)?,
-            gas: r.val_at(2)?,
-            action: r.val_at(3)?,
-            value: r.val_at(4)?,
-            data: r.val_at(5)?,
-        })
-    }
-}
-
-impl Encodable for Transaction {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(6);
-        s.append(&self.nonce);
-        s.append(&self.gas_price);
-        s.append(&self.gas);
-        s.append(&self.action);
-        s.append(&self.value);
-        s.append(&self.data);
-    }
-}
+//impl Decodable for Transaction {
+//    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
+//        Ok(Transaction {
+//            nonce: r.val_at(0)?,
+//            gas_price: r.val_at(1)?,
+//            gas: r.val_at(2)?,
+//            action: r.val_at(3)?,
+//            value: r.val_at(4)?,
+//            data: r.val_at(5)?,
+//        })
+//    }
+//}
+//
+//impl Encodable for Transaction {
+//    fn rlp_append(&self, s: &mut RlpStream) {
+//        s.begin_list(6);
+//        s.append(&self.nonce);
+//        s.append(&self.gas_price);
+//        s.append(&self.gas);
+//        s.append(&self.action);
+//        s.append(&self.value);
+//        s.append(&self.data);
+//    }
+//}
 
 impl MallocSizeOf for Transaction {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
@@ -297,7 +349,7 @@ impl TransactionWithSignature {
             unsigned: tx,
             s: 0.into(),
             r: 0.into(),
-            v: 0.into(),
+            v: 0,
             hash: Default::default(),
             rlp_size: None,
         }
@@ -329,12 +381,19 @@ impl TransactionWithSignature {
 
     /// Construct a signature object from the sig.
     pub fn signature(&self) -> Signature {
-        Signature::from_rsv(&self.r.into(), &self.s.into(), self.v)
+        if self.v < 2 {
+            Signature::from_rsv(&self.r.into(), &self.s.into(), self.v)
+        } else {
+            Signature::from_electrum(
+                &Signature::from_rsv(&self.r.into(), &self.s.into(), self.v)[..],
+            )
+        }
     }
 
     /// Checks whether the signature has a low 's' value.
     pub fn check_low_s(&self) -> Result<(), keylib::Error> {
         if !self.signature().is_low_s() {
+            debug!("check_low_s failed.");
             Err(keylib::Error::InvalidSignature.into())
         } else {
             Ok(())
@@ -343,9 +402,21 @@ impl TransactionWithSignature {
 
     pub fn hash(&self) -> H256 { self.hash }
 
+    /// The chain ID, or `None` if this is a global transaction.
+    pub fn chain_id(&self) -> Option<u64> {
+        match self.v {
+            v if self.is_unsigned() => Some(v.into()),
+            v if v >= 35 => Some(((v - 35) / 2).into()),
+            _ => None,
+        }
+    }
+
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
-        Ok(recover(&self.signature(), &self.unsigned.hash())?)
+        Ok(recover(
+            &self.signature(),
+            &self.unsigned.hash(self.chain_id()),
+        )?)
     }
 
     /// Verify basic signature params. Does not attempt sender recovery.
@@ -466,7 +537,7 @@ impl SignedTransaction {
 
     pub fn public(&self) -> &Option<Public> { &self.public }
 
-    pub fn verify_public(&self, skip: bool) -> Result<bool, keylib::Error> {
+    pub fn verify_public(&self, skip: bool, chain_id: Option<u64>) -> Result<bool, keylib::Error> {
         if self.public.is_none() {
             return Ok(false);
         }
@@ -476,7 +547,7 @@ impl SignedTransaction {
             Ok(verify_public(
                 &public,
                 &self.signature(),
-                &self.unsigned.hash(),
+                &self.unsigned.hash(chain_id),
             )?)
         } else {
             Ok(true)

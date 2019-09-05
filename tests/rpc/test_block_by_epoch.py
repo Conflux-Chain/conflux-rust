@@ -1,8 +1,10 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
+
 
 class TestGetBlockByEpoch(RpcClient):
     def test_last_mined(self):

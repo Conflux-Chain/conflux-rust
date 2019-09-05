@@ -8,13 +8,15 @@ from conflux.rpc import RpcClient
 from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.util import assert_greater_than_or_equal, assert_equal, assert_is_hash_string, sync_blocks
 
+
 class Account:
-    def __init__(self, address:str, priv_key:bytes, balance:int, nonce:int=0):
+    def __init__(self, address: str, priv_key: bytes, balance: int, nonce: int = 0):
         self.address = address
         self.priv_key = priv_key
         self.balance = balance
         self.nonce = nonce
         self.last_tx_hash = None
+
 
 class TxConsistencyTest(DefaultConfluxTestFramework):
     def run_test(self):
@@ -85,9 +87,9 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
         accounts = []
 
         client = RpcClient(self.nodes[0])
-        init_balance = int(client.GENESIS_ORIGIN_COIN *0.9 / num_accounts)
+        init_balance = int(client.GENESIS_ORIGIN_COIN * 0.9 / num_accounts)
         assert_greater_than_or_equal(client.GENESIS_ORIGIN_COIN, num_accounts * (init_balance + client.DEFAULT_TX_FEE))
-        
+
         for _ in range(num_accounts):
             to, priv_key = client.rand_account()
             tx = client.new_tx(receiver=to, value=init_balance)
@@ -99,7 +101,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
     def init_receivers(self, num_accounts):
         accounts = []
         client = RpcClient(self.nodes[0])
-        
+
         for _ in range(num_accounts):
             accounts.append(Account(client.rand_addr(), None, 0))
 
@@ -128,12 +130,12 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
     def sample_node_indices(self):
         ratio = random.randint(1, 10)
         sample = 1
-        
+
         if ratio > 8:
             sample = 3
         elif ratio > 5:
             sample = 2
-        
+
         assert_greater_than_or_equal(self.num_nodes, sample)
 
         indices = list(range(self.num_nodes))
@@ -171,7 +173,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
         def ensure_generate_block(node, txs):
             block_hash = RpcClient(node).generate_block(txs)
             assert_is_hash_string(block_hash)
-        
+
         for idx in self.sample_node_indices():
             t = threading.Thread(target=ensure_generate_block, args=(self.nodes[idx], num_tx), daemon=True)
             threads.append(t)
@@ -198,6 +200,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             self.log.info("check RPC: API = {}, Len = {}".format(client_rpc.__name__, len(expected_value)))
         else:
             self.log.info("check RPC: API = {}, Result = {}".format(client_rpc.__name__, expected_value))
+
 
 if __name__ == "__main__":
     TxConsistencyTest().main()

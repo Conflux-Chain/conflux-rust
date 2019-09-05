@@ -106,7 +106,7 @@ fn next_signed_transaction(rng: &mut ChaChaRng) -> SignedTransaction {
             action: Action::Call(0.into()),
             data: vec![],
         }
-        .with_signature(Signature::default()),
+        .with_eth_signature(Signature::default(), None),
     )
 }
 

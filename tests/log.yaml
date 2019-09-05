@@ -15,13 +15,13 @@ root:
     - logfile
 
 loggers:
-    network:
-        level: trace
-    cfxcore:
-        level: trace
-    rpc:
-        level: trace
-    discovery:
-        level: trace
-    sync:
-        level: trace
+  network:
+    level: trace
+  cfxcore:
+    level: trace
+  rpc:
+    level: trace
+  discovery:
+    level: trace
+  sync:
+    level: trace

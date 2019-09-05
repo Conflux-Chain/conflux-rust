@@ -3,6 +3,7 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
+use crate::verification::VerificationConfig;
 use cfx_types::{Address, H256, H512, U256, U512};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
@@ -13,7 +14,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000000000;
+pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET_ETH_MODE: u32 = 2000000000;
 pub const TIME_WINDOW: u64 = 100;
 
 lazy_static! {
@@ -29,12 +31,14 @@ lazy_static! {
 
 struct DeferredPool {
     buckets: HashMap<Address, NoncePool>,
+    eth_compatibility_mode: bool,
 }
 
 impl DeferredPool {
-    fn new() -> Self {
+    fn new(eth_compatibility_mode: bool) -> Self {
         DeferredPool {
             buckets: Default::default(),
+            eth_compatibility_mode,
         }
     }
 
@@ -43,7 +47,10 @@ impl DeferredPool {
     fn insert(&mut self, tx: TxWithReadyInfo, force: bool) -> InsertResult {
         // It's safe to create a new bucket, cause inserting to a empty bucket
         // will always be success
-        let bucket = self.buckets.entry(tx.sender).or_insert(NoncePool::new());
+        let bucket = self
+            .buckets
+            .entry(tx.sender)
+            .or_insert(NoncePool::new(self.eth_compatibility_mode));
         bucket.insert(&tx, force)
     }
 
@@ -149,8 +156,12 @@ impl ReadyAccountPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        self.treap
-            .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
+        if tx.gas_price == 0.into() {
+            self.treap.insert(tx.sender(), tx.clone(), U512::from(1))
+        } else {
+            self.treap
+                .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
+        }
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
@@ -182,19 +193,25 @@ pub struct TransactionPoolInner {
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
     garbage_collection_queue: VecDeque<(Address, u64)>,
     txs: HashMap<H256, Arc<SignedTransaction>>,
+    verification_config: VerificationConfig,
 }
 
 impl TransactionPoolInner {
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(
+        capacity: usize, verification_config: VerificationConfig,
+    ) -> Self {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
             unpacked_transaction_count: 0,
-            deferred_pool: DeferredPool::new(),
+            deferred_pool: DeferredPool::new(
+                verification_config.eth_compatibility_mode,
+            ),
             ready_account_pool: ReadyAccountPool::new(),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collection_queue: VecDeque::new(),
             txs: HashMap::new(),
+            verification_config,
         }
     }
 
@@ -324,6 +341,7 @@ impl TransactionPoolInner {
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
+                self.total_received_count += 1;
             }
             InsertResult::Failed(_) => {}
             InsertResult::Updated(replaced_tx) => {
@@ -564,10 +582,15 @@ impl TransactionPoolInner {
                 transaction.hash, transaction.sender, transaction.nonce, state_nonce
             );
         }
-        if transaction.nonce
-            >= state_nonce
-                + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
-        {
+        let furthest_offset =
+            match self.verification_config.eth_compatibility_mode {
+                false => U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET),
+                true => U256::from(
+                    FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET_ETH_MODE,
+                ),
+            };
+
+        if transaction.nonce >= state_nonce + furthest_offset {
             debug!(
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
@@ -627,7 +650,7 @@ mod test_transaction_pool_inner {
                 value: U256::from(value),
                 data: Vec::new(),
             }
-            .sign(sender.secret()),
+            .sign(sender.secret(), false),
         )
     }
 
@@ -645,7 +668,7 @@ mod test_transaction_pool_inner {
 
     #[test]
     fn test_deferred_pool_insert_and_remove() {
-        let mut deferred_pool = DeferredPool::new();
+        let mut deferred_pool = DeferredPool::new(false);
 
         // insert txs of same sender
         let alice = Random.generate().unwrap();
@@ -739,7 +762,7 @@ mod test_transaction_pool_inner {
 
     #[test]
     fn test_deferred_pool_recalculate_readiness() {
-        let mut deferred_pool = super::DeferredPool::new();
+        let mut deferred_pool = super::DeferredPool::new(false);
 
         let alice = Random.generate().unwrap();
 

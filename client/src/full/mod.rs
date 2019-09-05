@@ -173,9 +173,11 @@ impl FullClient {
             conf.data_mananger_config(),
         ));
 
+        let verification_config = conf.verification_config();
         let txpool = Arc::new(TransactionPool::with_capacity(
             conf.raw_conf.tx_pool_size,
             data_man.clone(),
+            verification_config,
         ));
 
         let statistics = Arc::new(Statistics::new());
@@ -192,7 +194,6 @@ impl FullClient {
         ));
 
         let protocol_config = conf.protocol_config();
-        let verification_config = conf.verification_config();
 
         let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),

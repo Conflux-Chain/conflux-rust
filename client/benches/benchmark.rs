@@ -53,7 +53,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         action: Action::Call(receiver_kp.address()),
         data: Bytes::new(),
     };
-    let tx = tx.sign(kp.secret());
+    let tx = tx.sign(kp.secret(), false);
     let machine = new_machine();
     let env = Env {
         number: 0, // TODO: replace 0 with correct cardinal number

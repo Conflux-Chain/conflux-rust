@@ -1,8 +1,10 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal
+
 
 class TestGetBestBlockHash(RpcClient):
     def test_single_chain(self):
@@ -33,4 +35,3 @@ class TestGetBestBlockHash(RpcClient):
         # new block on another fork, become the best block
         f3 = self.generate_block_with_parent(f2, [])
         assert_equal(self.best_block_hash(), f3)
-

@@ -1,40 +1,30 @@
 #!/usr/bin/env python3
-# Copyright (c) 2014-2018 The Bitcoin Core developers
-# Distributed under the MIT software license, see the accompanying
-# file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
 
-import configparser
-from enum import Enum
-import logging
 import argparse
+import logging
 import os
 import pdb
+import random
 import shutil
 import sys
 import tempfile
 import time
-import random
+from enum import Enum
 
-from .authproxy import JSONRPCException
 from . import coverage
+from .authproxy import JSONRPCException
 from .mininode import start_p2p_connection
 from .test_node import TestNode
 from .util import (
     CONFLUX_RPC_WAIT_TIMEOUT,
-    MAX_NODES,
     PortSeed,
     assert_equal,
     check_json_precision,
-    connect_nodes,
     connect_sample_nodes,
-    disconnect_nodes,
     get_datadir_path,
     initialize_datadir,
-    p2p_port,
-    set_node_times,
     sync_blocks,
-    sync_mempools,
 )
 
 
@@ -50,15 +40,17 @@ TEST_EXIT_SKIPPED = 77
 
 
 class ConfluxTestFramework:
-    """Base class for a bitcoin test script.
+    """Base class for a conflux test script.
 
-    Individual bitcoin test scripts should subclass this class and override the set_test_params() and run_test() methods.
+    Individual conflux test scripts should subclass this class and override these methods:
+    - set_test_params()
+    - run_test()
+    - setup_network()
 
     Individual tests can also override the following methods to customize the test setup:
 
     - add_options()
     - setup_chain()
-    - setup_network()
     - setup_nodes()
 
     The __init__() and main() methods should not be overridden.
@@ -67,7 +59,7 @@ class ConfluxTestFramework:
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        self.setup_clean_chain = False
+        self.setup_clean_chain = True
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
@@ -75,6 +67,9 @@ class ConfluxTestFramework:
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
+        self.options = None
+        self.num_nodes = 0
+        self.log = None
         self.set_test_params()
 
         assert hasattr(
@@ -90,30 +85,34 @@ class ConfluxTestFramework:
             dest="nocleanup",
             default=False,
             action="store_true",
-            help="Leave bitcoinds and test.* datadir on exit or error")
+            help="Leave conflux and test.* datadir on exit or error")
         parser.add_argument(
             "--noshutdown",
             dest="noshutdown",
             default=False,
             action="store_true",
-            help="Don't stop bitcoinds after the test execution")
+            help="Don't stop conflux nodes after the test execution")
         parser.add_argument(
             "--cachedir",
             dest="cachedir",
             default=os.path.abspath(
                 os.path.dirname(os.path.realpath(__file__)) + "/../../cache"),
-            help=
-            "Directory for caching pregenerated datadirs (default: %(default)s)"
+            help="Directory for caching pregenerated datadirs (default: %(default)s)"
         )
         parser.add_argument(
             "--tmpdir", dest="tmpdir", help="Root directory for datadirs")
+        parser.add_argument(
+            "--remoteips", default="", dest="remote_ips", help="The file of ip list for remote conflux nodes")
+        parser.add_argument(
+            "--localip", default="", dest="local_ip", help="Local ip")
         parser.add_argument(
             "-l",
             "--loglevel",
             dest="loglevel",
             default="INFO",
-            help=
-            "log events at this level and higher to the console. Can be set to DEBUG, INFO, WARNING, ERROR or CRITICAL. Passing --loglevel DEBUG will output all logs to console. Note that logs at all levels are always written to the test_framework.log file in the temporary test directory."
+            help="log events at this level and higher to the console. Can be set to DEBUG, INFO, WARNING, ERROR "
+                 "or CRITICAL. Passing --loglevel DEBUG will output all logs to console. Note that logs at all levels "
+                 "are always written to the test_framework.log file in the temporary test directory."
         )
         parser.add_argument(
             "--tracerpc",
@@ -126,8 +125,7 @@ class ConfluxTestFramework:
             dest="port_seed",
             default=os.getpid(),
             type=int,
-            help=
-            "The seed to use for assigning port numbers (default: current process id)"
+            help="The seed to use for assigning port numbers (default: current process id)"
         )
         parser.add_argument(
             "--coveragedir",
@@ -144,7 +142,7 @@ class ConfluxTestFramework:
             dest="usecli",
             default=False,
             action="store_true",
-            help="use bitcoin-cli instead of RPC for all commands")
+            help="use conflux-cli(N/A for now) instead of RPC for all commands")
         parser.add_argument(
             "--randomseed",
             dest="random_seed",
@@ -167,9 +165,8 @@ class ConfluxTestFramework:
 
         self.options.conflux = os.getenv(
             "CONFLUX",
-            default=os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "../../target/release/conflux"))
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/conflux")
+        )
 
         # Set up temp directory and start logging
         if self.options.tmpdir:
@@ -178,9 +175,10 @@ class ConfluxTestFramework:
         else:
             self.options.tmpdir = os.getenv(
                 "CONFLUX_TESTS_LOG_DIR",
-                default=tempfile.mkdtemp(prefix="conflux_test_"))
-        
-        self._start_logging()
+                tempfile.mkdtemp(prefix="conflux_test_")
+            )
+
+        self.start_logging()
         self.log.info("PortSeed.n=" + str(PortSeed.n))
 
         success = TestStatus.FAILED
@@ -196,18 +194,18 @@ class ConfluxTestFramework:
             self.setup_network()
             self.run_test()
             success = TestStatus.PASSED
-        except JSONRPCException as e:
-            self.log.exception("JSONRPC error")
+        except JSONRPCException:
+            self.log.exception("JSON-RPC error")
         except SkipTest as e:
             self.log.warning("Test Skipped: %s" % e.message)
             success = TestStatus.SKIPPED
-        except AssertionError as e:
+        except AssertionError:
             self.log.exception("Assertion failed")
-        except KeyError as e:
+        except KeyError:
             self.log.exception("Key error")
-        except Exception as e:
+        except Exception:
             self.log.exception("Unexpected exception caught during testing")
-        except KeyboardInterrupt as e:
+        except KeyboardInterrupt:
             self.log.warning("Exiting after keyboard interrupt")
 
         if success == TestStatus.FAILED and self.options.pdbonfailure:
@@ -224,7 +222,7 @@ class ConfluxTestFramework:
             for node in self.nodes:
                 node.cleanup_on_exit = False
             self.log.info(
-                "Note: bitcoinds were not stopped and may still be running")
+                "Note: conflux nodes were not stopped and may still be running")
 
         if not self.options.nocleanup and not self.options.noshutdown and success != TestStatus.FAILED:
             self.log.info("Cleaning up {} on exit".format(self.options.tmpdir))
@@ -253,10 +251,13 @@ class ConfluxTestFramework:
             shutil.rmtree(self.options.tmpdir)
         sys.exit(exit_code)
 
+    def run_test(self):
+        raise NotImplementedError("The test need to override the run_test method.")
+
     # Methods to override in subclass test scripts.
     def set_test_params(self):
         """Tests must this method to change default values for number of nodes, topology, etc"""
-        raise NotImplementedError
+        raise NotImplementedError("The test need to override the set_test_params method.")
 
     def add_options(self, parser):
         """Override this method to add command-line options to the test"""
@@ -270,21 +271,12 @@ class ConfluxTestFramework:
     def setup_chain(self):
         """Override this method to customize blockchain setup"""
         self.log.info("Initializing test directory " + self.options.tmpdir)
-        if self.setup_clean_chain:
-            self._initialize_chain_clean()
-        else:
-            self._initialize_chain()
+        assert self.setup_clean_chain
+        self.initialize_chain_clean()
 
     def setup_network(self):
         """Override this method to customize test network topology"""
-        self.setup_nodes()
-
-        # Connect the nodes as a "chain".  This allows us
-        # to split the network between nodes 1 and 2 to get
-        # two halves that can work on competing chains.
-        for i in range(self.num_nodes - 1):
-            connect_nodes(self.nodes, i, i + 1)
-        self.sync_all()
+        raise NotImplementedError("The test need to override the setup_network method.")
 
     def setup_nodes(self, binary=None):
         """Override this method to customize test node setup"""
@@ -306,7 +298,7 @@ class ConfluxTestFramework:
                     confluxd=binary[i],
                 ))
 
-    def add_remote_nodes(self, num_nodes, ip, user, rpchost=None, binary=None):
+    def add_remote_nodes(self, num_nodes, ip, user, rpchost=None, binary=None, no_pssh=False):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
@@ -321,11 +313,12 @@ class ConfluxTestFramework:
                     user=user,
                     rpc_timeout=self.rpc_timewait,
                     confluxd=binary[i],
-                    remote=True
+                    remote=True,
+                    no_pssh=no_pssh,
                 ))
 
     def start_node(self, i, extra_args=None, phase_to_wait=("NormalSyncPhase", "CatchUpSyncBlockPhase"), wait_time=30, *args, **kwargs):
-        """Start a bitcoind"""
+        """Start a conflux node"""
 
         node = self.nodes[i]
 
@@ -339,7 +332,7 @@ class ConfluxTestFramework:
             coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
 
     def start_nodes(self, extra_args=None, *args, **kwargs):
-        """Start multiple bitcoinds"""
+        """Start multiple conflux nodes"""
 
         try:
             for i, node in enumerate(self.nodes):
@@ -359,12 +352,12 @@ class ConfluxTestFramework:
                                                 node.rpc)
 
     def stop_node(self, i, expected_stderr='', kill=False):
-        """Stop a bitcoind test node"""
+        """Stop a conflux test node"""
         self.nodes[i].stop_node(expected_stderr, kill)
         self.nodes[i].wait_until_stopped()
 
     def stop_nodes(self):
-        """Stop multiple bitcoind test nodes"""
+        """Stop multiple conflux test nodes"""
         for node in self.nodes:
             # Issue RPC to stop nodes
             node.stop_node()
@@ -378,7 +371,7 @@ class ConfluxTestFramework:
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 
-    def _start_logging(self):
+    def start_logging(self):
         # Add logger and logging handlers
         self.log = logging.getLogger('TestFramework')
         self.log.setLevel(logging.DEBUG)
@@ -386,16 +379,17 @@ class ConfluxTestFramework:
         fh = logging.FileHandler(
             self.options.tmpdir + '/test_framework.log', encoding='utf-8')
         fh.setLevel(logging.DEBUG)
-        # Create console handler to log messages to stderr. By default this logs only error messages, but can be configured with --loglevel.
+        # Create console handler to log messages to stderr. By default this logs only error messages,
+        # but can be configured with --loglevel.
         ch = logging.StreamHandler(sys.stdout)
-        # User can provide log level as a number or string (eg DEBUG). loglevel was caught as a string, so try to convert it to an int
+        # User can provide log level as a number or string (eg DEBUG). loglevel was caught as a string,
+        # so try to convert it to an int
         ll = int(self.options.loglevel) if self.options.loglevel.isdigit(
         ) else self.options.loglevel.upper()
         ch.setLevel(ll)
-        # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
+        # Format logs the same as conflux's debug.log with microprecision (so log files can be concatenated and sorted)
         formatter = logging.Formatter(
-            fmt=
-            '%(asctime)s.%(msecs)03d000Z %(name)s (%(levelname)s): %(message)s',
+            fmt='%(asctime)s.%(msecs)03d000Z %(name)s (%(levelname)s): %(message)s',
             datefmt='%Y-%m-%dT%H:%M:%S')
         formatter.converter = time.gmtime
         fh.setFormatter(formatter)
@@ -411,93 +405,7 @@ class ConfluxTestFramework:
             rpc_handler.setLevel(logging.DEBUG)
             rpc_logger.addHandler(rpc_handler)
 
-    def _initialize_chain(self):
-        """Initialize a pre-mined blockchain for use by the test.
-
-        Create a cache of a 200-block-long chain (with wallet) for MAX_NODES
-        Afterward, create num_nodes copies from the cache."""
-
-        assert self.num_nodes <= MAX_NODES
-        create_cache = False
-        for i in range(MAX_NODES):
-            if not os.path.isdir(get_datadir_path(self.options.cachedir, i)):
-                create_cache = True
-                break
-
-        if create_cache:
-            self.log.debug("Creating data directories from cached datadir")
-
-            # find and delete old cache directories if any exist
-            for i in range(MAX_NODES):
-                if os.path.isdir(get_datadir_path(self.options.cachedir, i)):
-                    shutil.rmtree(get_datadir_path(self.options.cachedir, i))
-
-            # Create cache directories, run bitcoinds:
-            for i in range(MAX_NODES):
-                datadir = initialize_datadir(self.options.cachedir, i)
-                args = [self.options.bitcoind, "-datadir=" + datadir]
-                if i > 0:
-                    args.append("-connect=127.0.0.1:" + str(p2p_port(0)))
-                self.nodes.append(
-                    TestNode(
-                        i,
-                        get_datadir_path(self.options.cachedir, i),
-                        extra_conf=["bind=127.0.0.1"],
-                        extra_args=[],
-                        rpchost=None,
-                        rpc_timeout=self.rpc_timewait,
-                        bitcoind=self.options.bitcoind,
-                        bitcoin_cli=self.options.bitcoincli,
-                        mocktime=self.mocktime,
-                        coverage_dir=None))
-                self.nodes[i].args = args
-                self.start_node(i)
-
-            # Wait for RPC connections to be ready
-            for node in self.nodes:
-                node.wait_for_rpc_connection()
-
-            # Create a 200-block-long chain; each of the 4 first nodes
-            # gets 25 mature blocks and 25 immature.
-            # Note: To preserve compatibility with older versions of
-            # initialize_chain, only 4 nodes will generate coins.
-            #
-            # blocks are created with timestamps 10 minutes apart
-            # starting from 2010 minutes in the past
-            self.enable_mocktime()
-            block_time = self.mocktime - (201 * 10 * 60)
-            for i in range(2):
-                for peer in range(4):
-                    for j in range(25):
-                        set_node_times(self.nodes, block_time)
-                        self.nodes[peer].generate(1)
-                        block_time += 10 * 60
-                    # Must sync before next peer starts generating blocks
-                    sync_blocks(self.nodes)
-
-            # Shut them down, and clean up cache directories:
-            self.stop_nodes()
-            self.nodes = []
-            self.disable_mocktime()
-
-            def cache_path(n, *paths):
-                return os.path.join(
-                    get_datadir_path(self.options.cachedir, n), "regtest",
-                    *paths)
-
-            for i in range(MAX_NODES):
-                for entry in os.listdir(cache_path(i)):
-                    if entry not in ['wallets', 'chainstate', 'blocks']:
-                        os.remove(cache_path(i, entry))
-
-        for i in range(self.num_nodes):
-            from_dir = get_datadir_path(self.options.cachedir, i)
-            to_dir = get_datadir_path(self.options.tmpdir, i)
-            shutil.copytree(from_dir, to_dir)
-            initialize_datadir(self.options.tmpdir,
-                               i, self.conf_parameters)  # Overwrite port/rpcport in bitcoin.conf
-
-    def _initialize_chain_clean(self):
+    def initialize_chain_clean(self):
         """Initialize empty blockchain for use by the test.
 
         Create an empty blockchain and num_nodes wallets.
@@ -512,11 +420,12 @@ class SkipTest(Exception):
     def __init__(self, message):
         self.message = message
 
+
 class DefaultConfluxTestFramework(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
-        self.conf_parameters = {"log_level":"\"debug\""}
+        self.conf_parameters = {"log_level": "\"debug\""}
 
     def setup_network(self):
         self.log.info("setup nodes ...")
@@ -527,4 +436,6 @@ class DefaultConfluxTestFramework(ConfluxTestFramework):
         sync_blocks(self.nodes)
         self.log.info("start P2P connection ...")
         start_p2p_connection(self.nodes)
-        
+
+    def run_test(self):
+        self.log.info("Pass")

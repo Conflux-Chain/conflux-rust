@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
-
-from conflux import utils
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
-from test_framework.blocktools import create_block
-from test_framework.test_framework import ConfluxTestFramework
+from conflux.utils import encode_hex
 from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -33,7 +29,9 @@ class P2PTest(ConfluxTestFramework):
             pub_key = self.nodes[i].key
             addr = self.nodes[i].addr
             self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-            tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/self.num_nodes) - 21000, receiver=encode_hex(addr), nonce=i)
+            tx = client.new_tx(value=int(default_config["TOTAL_COIN"] / self.num_nodes) - 21000,
+                               receiver=encode_hex(addr),
+                               nonce=i)
             client.send_tx(tx)
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
@@ -44,7 +42,7 @@ class P2PTest(ConfluxTestFramework):
             self.log.debug("%d try to generate", chosen_peer)
             block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
             self.log.info("%d generate block %s", chosen_peer, block_hash)
-            time.sleep(random.random()/30)
+            time.sleep(random.random() / 30)
         wait_for_block_count(self.nodes[0], block_number)
         sync_blocks(self.nodes, timeout=30)
         hasha = self.nodes[0].getbestblockhash()
