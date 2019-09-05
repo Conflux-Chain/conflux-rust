@@ -2023,7 +2023,7 @@ impl ConsensusGraphInner {
             Some(epoch) => {
                 trace!("Block {} is in epoch {}", hash, epoch);
                 self.data_man
-                    .block_results_by_hash_with_epoch(
+                    .block_execution_result_by_hash_with_epoch(
                         hash,
                         &epoch,
                         update_cache,
@@ -2033,7 +2033,7 @@ impl ConsensusGraphInner {
             None => {
                 debug!("Block {:?} not in mem, try to read from db", hash);
                 self.data_man
-                    .block_results_by_hash_from_db(hash)
+                    .block_execution_result_by_hash_from_db(hash)
                     .map(|r| r.1.receipts)
             }
         }
