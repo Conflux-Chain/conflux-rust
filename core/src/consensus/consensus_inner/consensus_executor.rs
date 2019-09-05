@@ -1034,7 +1034,8 @@ impl ConsensusExecutionHandler {
                     | Err(ExecutionError::Internal(_)) => {
                         trace!(
                             "tx execution error: transaction={:?}, err={:?}",
-                            transaction, r
+                            transaction,
+                            r
                         );
                     }
                     Err(ExecutionError::InvalidNonce { expected, got }) => {

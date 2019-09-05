@@ -157,7 +157,6 @@ impl Encodable for Action {
     }
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Transaction {
     /// Nonce.
@@ -175,9 +174,9 @@ pub struct Transaction {
 }
 
 /// chain id - a number encoded in V to specify the version of chain.
-/// We don't need a chain id in Conflux test-net. The goal of importing chain id mechanism
-/// from Ethereum is to compatible with Ethereum history transactions in experiment, like
-/// replay them and test performance.
+/// We don't need a chain id in Conflux test-net. The goal of importing chain id
+/// mechanism from Ethereum is to compatible with Ethereum history transactions
+/// in experiment, like replay them and test performance.
 ///
 ///  1. Global transaction, used by Conflux test-net
 ///     chain id in Rust: None
