@@ -29,6 +29,7 @@ use super::{
 };
 use crate::{
     block_data_manager::BlockStatus,
+    message::decode_msg,
     parameters::sync::*,
     sync::{
         message::{Context, DynamicCapability},
@@ -1328,17 +1329,18 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
-        if raw.len() < 2 {
-            return self.handle_error(
-                io,
-                peer,
-                msgid::INVALID,
-                ErrorKind::InvalidMessageFormat.into(),
-            );
-        }
+        let (msg_id, rlp) = match decode_msg(raw) {
+            Some(msg) => msg,
+            None => {
+                return self.handle_error(
+                    io,
+                    peer,
+                    msgid::INVALID,
+                    ErrorKind::InvalidMessageFormat.into(),
+                )
+            }
+        };
 
-        let msg_id = raw[0];
-        let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
         self.dispatch_message(io, peer, msg_id.into(), rlp)
