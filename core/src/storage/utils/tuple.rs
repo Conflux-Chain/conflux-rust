@@ -151,10 +151,10 @@ pub trait OfElementSatisfiesOnTuple<ConcernedTuple, ElementConstrain: ?Sized>:
 
     fn getter_for_tuple(
         t: &ConcernedTuple,
-    ) -> &TupleGetIndexExt<Self, ElementType = Self::ElementType>;
+    ) -> &dyn TupleGetIndexExt<Self, ElementType = Self::ElementType>;
     fn getter_for_tuple_mut(
         t: &mut ConcernedTuple,
-    ) -> &mut TupleGetIndexExt<Self, ElementType = Self::ElementType>;
+    ) -> &mut dyn TupleGetIndexExt<Self, ElementType = Self::ElementType>;
 }
 
 impl<
@@ -168,7 +168,7 @@ impl<
 
     fn getter_for_tuple(
         t: &ConcernedTuple,
-    ) -> &TupleGetIndexExt<
+    ) -> &dyn TupleGetIndexExt<
         Self,
         ElementType = <ConcernedTuple as TupleGetIndexExt<Self>>::ElementType,
     > {
@@ -177,7 +177,7 @@ impl<
 
     fn getter_for_tuple_mut(
         t: &mut ConcernedTuple,
-    ) -> &mut TupleGetIndexExt<
+    ) -> &mut dyn TupleGetIndexExt<
         Self,
         ElementType = <ConcernedTuple as TupleGetIndexExt<Self>>::ElementType,
     > {
@@ -416,7 +416,7 @@ mod test {
     make_tuple_with_index_ext!(Test2(f64, Vec<u8>, Box<[u8]>, i32));
 
     trait ElementIsDebug: Debug {}
-    impl ElementConstrainMark for ElementIsDebug {}
+    impl ElementConstrainMark for dyn ElementIsDebug {}
     impl ElementIsDebug for i32 {}
     impl ElementIsDebug for f64 {}
     impl ElementIsDebug for Vec<u8> {}
@@ -425,7 +425,7 @@ mod test {
     trait ElementToPrint {
         fn to_string(&self) -> String;
     }
-    impl ElementConstrainMark for ElementToPrint {}
+    impl ElementConstrainMark for dyn ElementToPrint {}
 
     impl ElementToPrint for i32 {
         fn to_string(&self) -> String { ToString::to_string(self) }
@@ -445,7 +445,7 @@ mod test {
         }
     }
 
-    impl<Element: 'static + ElementToPrint> ElementSatisfy<ElementToPrint>
+    impl<Element: 'static + ElementToPrint> ElementSatisfy<dyn ElementToPrint>
         for Element
     {
         fn to_constrain_object(&self) -> &(dyn 'static + ElementToPrint) {
@@ -459,7 +459,7 @@ mod test {
         }
     }
 
-    impl<Element: 'static + ElementIsDebug> ElementSatisfy<ElementIsDebug>
+    impl<Element: 'static + ElementIsDebug> ElementSatisfy<dyn ElementIsDebug>
         for Element
     {
         fn to_constrain_object(&self) -> &(dyn 'static + ElementIsDebug) {

@@ -86,7 +86,9 @@ pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader {
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>>;
     fn delete_with_number_key(
         &self, key: i64,
-    ) -> Result<Option<Option<Self::ValueType>>>;
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete(key.to_string().as_bytes())
+    }
     fn put(
         &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>>;

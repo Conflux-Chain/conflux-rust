@@ -169,7 +169,9 @@ impl<'a> SetIoError for NodeInMerge<'a> {
     fn set_has_io_error(&self) { unsafe { &*self.has_io_error }.replace(true); }
 }
 
-fn rlp_key_value_len(key_len: u16, value_len: usize) -> i64 { unimplemented!() }
+fn rlp_key_value_len(_key_len: u16, _value_len: usize) -> i64 {
+    unimplemented!()
+}
 
 impl<'a> NodeInMerge<'a> {
     fn replace_value_valid(&mut self, value: Box<[u8]>) {
