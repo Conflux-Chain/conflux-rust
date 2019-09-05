@@ -24,7 +24,7 @@ impl Handleable for GetTerminalBlockHashes {
             None => best_info.bounded_terminal_block_hashes.clone(),
         };
         let response = GetTerminalBlockHashesResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             hashes: terminal_hashes,
         };
         ctx.send_response(&response)

@@ -64,8 +64,8 @@ impl Handleable for GetBlockTxn {
                     last += 1;
                 }
                 let response = GetBlockTxnResponse {
-                    request_id: self.request_id.clone(),
-                    block_hash: self.block_hash.clone(),
+                    request_id: self.request_id,
+                    block_hash: self.block_hash,
                     block_txn: tx_resp,
                 };
 
@@ -78,7 +78,7 @@ impl Handleable for GetBlockTxn {
                 );
 
                 let response = GetBlockTxnResponse {
-                    request_id: self.request_id.clone(),
+                    request_id: self.request_id,
                     block_hash: H256::default(),
                     block_txn: Vec::new(),
                 };

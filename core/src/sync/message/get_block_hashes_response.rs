@@ -31,8 +31,8 @@ impl Handleable for GetBlockHashesResponse {
 
         // assume received everything
         // FIXME: peer should signal error?
-        let req = epoch_req.epochs.clone().into_iter().collect();
-        let rec = epoch_req.epochs.clone().into_iter().collect();
+        let req = epoch_req.epochs.iter().cloned().collect();
+        let rec = epoch_req.epochs.iter().cloned().collect();
         ctx.manager
             .request_manager
             .epochs_received(ctx.io, req, rec);
