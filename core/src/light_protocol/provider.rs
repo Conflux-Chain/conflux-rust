@@ -31,7 +31,7 @@ use crate::{
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
-    message::{Message, MsgId},
+    message::{decode_msg, Message, MsgId},
     network::{
         throttling::THROTTLING_SERVICE, NetworkContext, NetworkProtocolHandler,
         NetworkService, PeerId,
@@ -543,17 +543,18 @@ impl NetworkProtocolHandler for Provider {
     fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
         trace!("on_message: peer={:?}, raw={:?}", peer, raw);
 
-        if raw.len() < 2 {
-            return handle_error(
-                io,
-                peer,
-                msgid::INVALID,
-                ErrorKind::InvalidMessageFormat.into(),
-            );
-        }
+        let (msg_id, rlp) = match decode_msg(raw) {
+            Some(msg) => msg,
+            None => {
+                return handle_error(
+                    io,
+                    peer,
+                    msgid::INVALID,
+                    ErrorKind::InvalidMessageFormat.into(),
+                )
+            }
+        };
 
-        let msg_id = raw[0];
-        let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
         if let Err(e) = self.dispatch_message(io, peer, msg_id.into(), rlp) {

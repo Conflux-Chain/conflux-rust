@@ -234,7 +234,7 @@ impl Handshake {
         assert_eq!(data.len(), 64);
         self.id.clone_from_slice(data);
         self.connection
-            .send(io, public.as_ref(), SendQueuePriority::High)?;
+            .send(io, public.to_vec(), SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
         Ok(())
     }
@@ -300,8 +300,7 @@ impl Handshake {
         let message = ecies::encrypt(&self.id, &[], &data)?;
 
         self.auth_cipher = message.clone();
-        self.connection
-            .send(io, &message, SendQueuePriority::High)?;
+        self.connection.send(io, message, SendQueuePriority::High)?;
         self.state = HandshakeState::ReadingAck;
 
         Ok(())
@@ -329,8 +328,7 @@ impl Handshake {
 
         let message = ecies::encrypt(&self.id, &[], &data)?;
         self.ack_cipher = message.clone();
-        self.connection
-            .send(io, &message, SendQueuePriority::High)?;
+        self.connection.send(io, message, SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
         Ok(())
     }
