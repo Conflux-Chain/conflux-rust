@@ -36,6 +36,7 @@ class P2PTest(ConfluxTestFramework):
             "test_mining_sleep_us": "10000",
             "mining_author": '"' + "0"*40 + '"',
             "log_level": "\"debug\"",
+            "headers_request_timeout_ms": "30000",  # need to be larger than network latency
         }
         self._initialize_chain_clean()
 
