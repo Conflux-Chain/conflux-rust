@@ -123,7 +123,7 @@ pub fn initialize_synchronization_graph(
     let txpool = Arc::new(TransactionPool::with_capacity(
         500_000,
         data_man.clone(),
-        verification_config,
+        verification_config.clone(),
     ));
     let statistics = Arc::new(Statistics::new());
 
@@ -150,6 +150,7 @@ pub fn initialize_synchronization_graph(
         statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
+        verification_config,
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(

@@ -175,14 +175,18 @@ pub struct Transaction {
 
 mod eth_compatible_signature {
     pub fn add_chain_replay_protection(v: u64, chain_id: Option<u64>) -> u64 {
-        v + if let Some(n) = chain_id {
-            if n == 0 {
-                0
-            } else {
-                35 + n * 2
-            }
-        } else {
-            27
+        v + match chain_id {
+            None => 0,
+            Some(0) => 27,
+            Some(n) => 35 + n * 2,
+        }
+    }
+
+    pub fn is_global(chain_id: Option<u64>) -> bool {
+        match chain_id {
+            None => true,
+            Some(0) => true,
+            _ => false,
         }
     }
 }
@@ -198,20 +202,21 @@ impl Transaction {
         //  to consider is multi-sig account. Maybe we will need to add
         //  sender address. And there must be a way to verify sender
         //  address with the number of signatures.
-        let is_global = match chain_id {
-            None => true,
-            Some(0) => true,
-            _ => false,
-        };
 
-        s.begin_list(if is_global { 6 } else { 9 });
+        s.begin_list(
+            if eth_compatible_signature::is_global(chain_id) {
+                6
+            } else {
+                9
+            },
+        );
         s.append(&self.nonce);
         s.append(&self.gas_price);
         s.append(&self.gas);
         s.append(&self.action);
         s.append(&self.value);
         s.append(&self.data);
-        if !is_global {
+        if !eth_compatible_signature::is_global(chain_id) {
             let n = chain_id.unwrap();
             s.append(&n);
             s.append(&0u8);
@@ -393,7 +398,7 @@ impl TransactionWithSignature {
     /// Checks whether the signature has a low 's' value.
     pub fn check_low_s(&self) -> Result<(), keylib::Error> {
         if !self.signature().is_low_s() {
-            debug!("check_low_s failed.");
+            //            debug!("check_low_s failed.");
             Err(keylib::Error::InvalidSignature.into())
         } else {
             Ok(())
@@ -407,6 +412,8 @@ impl TransactionWithSignature {
         match self.v {
             v if self.is_unsigned() => Some(v.into()),
             v if v >= 35 => Some(((v - 35) / 2).into()),
+            27 => Some(0),
+            28 => Some(0),
             _ => None,
         }
     }
@@ -537,7 +544,7 @@ impl SignedTransaction {
 
     pub fn public(&self) -> &Option<Public> { &self.public }
 
-    pub fn verify_public(&self, skip: bool, chain_id: Option<u64>) -> Result<bool, keylib::Error> {
+    pub fn verify_public(&self, skip: bool) -> Result<bool, keylib::Error> {
         if self.public.is_none() {
             return Ok(false);
         }
@@ -547,7 +554,7 @@ impl SignedTransaction {
             Ok(verify_public(
                 &public,
                 &self.signature(),
-                &self.unsigned.hash(chain_id),
+                &self.unsigned.hash(self.chain_id()),
             )?)
         } else {
             Ok(true)

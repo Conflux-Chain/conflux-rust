@@ -157,7 +157,7 @@ impl TransactionGenerator {
             action: Action::Call(receiver_address),
             data: Bytes::new(),
         };
-        let r = tx.sign(sender_kp.secret());
+        let r = tx.sign(sender_kp.secret(), None);
         r
     }
 
@@ -257,7 +257,8 @@ impl TransactionGenerator {
                 data: Bytes::new(),
             };
 
-            let signed_tx = tx.sign(&address_secret_pair[&sender_address]);
+            let signed_tx =
+                tx.sign(&address_secret_pair[&sender_address], None);
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
             let (txs, fail) =
@@ -392,7 +393,7 @@ impl TransactionGenerator {
                     data: Bytes::new(),
                 };
                 *sender_nonce += U256::one();
-                let signed_tx = tx.sign(initial_key_pair.secret());
+                let signed_tx = tx.sign(initial_key_pair.secret(), None);
                 let mut tx_to_insert = Vec::new();
                 tx_to_insert.push(signed_tx.transaction);
                 let (txs, _) =
@@ -462,7 +463,7 @@ impl TransactionGenerator {
                 data: Bytes::new(),
             };
 
-            let signed_tx = tx.sign(sender_kp.secret());
+            let signed_tx = tx.sign(sender_kp.secret(), None);
             let mut tx_to_insert = Vec::new();
             tx_to_insert.push(signed_tx.transaction);
             let (txs, fail) =
@@ -643,7 +644,7 @@ impl SpecialTransactionGenerator {
                 action: Action::Call(receiver_address),
                 data: vec![0u8; 128],
             };
-            let signed_transaction = tx.sign(sender_kp.secret());
+            let signed_transaction = tx.sign(sender_kp.secret(), None);
             let rlp_size = signed_transaction.transaction.rlp_bytes().len();
             if *block_size_limit <= rlp_size {
                 break;
@@ -723,7 +724,7 @@ impl SpecialTransactionGenerator {
                 action: Action::Call(self.erc20_address.clone()),
                 data: tx_data,
             };
-            let signed_transaction = tx.sign(sender_kp.secret());
+            let signed_transaction = tx.sign(sender_kp.secret(), None);
             let rlp_size = signed_transaction.transaction.rlp_bytes().len();
             if *block_size_limit <= rlp_size {
                 break;

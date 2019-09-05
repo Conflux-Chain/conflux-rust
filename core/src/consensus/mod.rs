@@ -15,7 +15,7 @@ use super::consensus::consensus_inner::{
 use crate::{
     block_data_manager::BlockDataManager, pow::ProofOfWorkConfig, state::State,
     statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
-    vm_factory::VmFactory,
+    verification::VerificationConfig, vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
@@ -134,6 +134,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
+        eth_compatibility_mode: bool,
     ) -> Self
     {
         let inner =
@@ -150,6 +151,7 @@ impl ConsensusGraph {
             vm,
             inner.clone(),
             conf.bench_mode,
+            eth_compatibility_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();
 
@@ -180,7 +182,7 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig,
+        pow_config: ProofOfWorkConfig, verification_config: VerificationConfig,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -192,6 +194,7 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
+            verification_config.eth_compatibility_mode,
         )
     }
 

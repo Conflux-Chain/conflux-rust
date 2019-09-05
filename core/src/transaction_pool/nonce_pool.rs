@@ -408,7 +408,7 @@ mod nonce_pool_test {
                 value: U256::from(value),
                 data: Vec::new(),
             }
-            .sign(sender.secret(), false),
+            .sign(sender.secret(), None),
         )
     }
 

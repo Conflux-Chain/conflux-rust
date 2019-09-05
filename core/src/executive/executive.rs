@@ -969,7 +969,9 @@ impl<'a, 'b> Executive<'a, 'b> {
 
     pub fn transact(
         &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
-    ) -> ExecutionResult<Executed> {
+        eth_compatibility_mode: bool,
+    ) -> ExecutionResult<Executed>
+    {
         *nonce_increased = false;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
@@ -985,14 +987,15 @@ impl<'a, 'b> Executive<'a, 'b> {
         ));
 
         if tx.gas < base_gas_required {
-            // FIXME: changed to be compatible to eth transactions.
-            /*
-            return Err(ExecutionError::NotEnoughBaseGas {
-                required: base_gas_required,
-                got: tx.gas,
-            });
-            */
-            base_gas_required = tx.gas;
+            if eth_compatibility_mode {
+                // FIXME: changed to be compatible to eth transactions.
+                base_gas_required = tx.gas;
+            } else {
+                return Err(ExecutionError::NotEnoughBaseGas {
+                    required: base_gas_required,
+                    got: tx.gas,
+                });
+            }
         }
 
         if !tx.is_unsigned()
@@ -1115,13 +1118,20 @@ impl<'a, 'b> Executive<'a, 'b> {
             }
         };
 
-        Ok(self.finalize(tx, substate, result, output)?)
+        Ok(self.finalize(
+            tx,
+            substate,
+            result,
+            output,
+            eth_compatibility_mode,
+        )?)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
         &mut self, tx: &SignedTransaction, substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
+        eth_compatibility_mode: bool,
     ) -> ExecutionResult<Executed>
     {
         let spec = self.spec;
@@ -1149,12 +1159,18 @@ impl<'a, 'b> Executive<'a, 'b> {
         // FIXME: preserve the refunded value.
         let gas_used = tx.gas - gas_left;
 
-        // FIXME: do not charge tx fee in eth replay test.
-        let refund_value = tx.gas * tx.gas_price;
-        let fees_value = gas_used * tx.gas_price;
-        // self.env.gas_used += tx.gas;
-        // let refund_value = U256::zero();
-        // let fees_value = tx.gas * tx.gas_price;
+        // do not charge tx fee in eth replay test.
+        let refund_value = if eth_compatibility_mode {
+            tx.gas * tx.gas_price
+        } else {
+            U256::zero()
+        };
+
+        let fees_value = if eth_compatibility_mode {
+            gas_used * tx.gas_price
+        } else {
+            tx.gas * tx.gas_price
+        };
 
         trace!("exec::finalize: tx.gas={}, sstore_refunds={}, suicide_refunds={}, refunds_bound={}, gas_left_prerefund={}, refunded={}, gas_left={}, gas_used={}, refund_value={}, fees_value={}\n",
                tx.gas, sstore_refunds, suicide_refunds, refunds_bound, gas_left_prerefund, refunded, gas_left, gas_used, refund_value, fees_value);
@@ -1593,7 +1609,7 @@ mod tests {
             gas_price: U256::one(),
             nonce: U256::zero(),
         }
-        .sign(keypair.secret(), false);
+        .sign(keypair.secret(), None);
         let sender = t.sender();
 
         let storage_manager = new_state_manager_for_testing();
@@ -1610,7 +1626,7 @@ mod tests {
         let res = {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             let mut nonce_increased = false;
-            ex.transact(&t, &mut nonce_increased)
+            ex.transact(&t, &mut nonce_increased, false)
         };
 
         match res {

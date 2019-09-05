@@ -650,7 +650,7 @@ mod test_transaction_pool_inner {
                 value: U256::from(value),
                 data: Vec::new(),
             }
-            .sign(sender.secret(), false),
+            .sign(sender.secret(), None),
         )
     }
 

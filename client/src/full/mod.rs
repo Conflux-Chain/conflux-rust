@@ -177,7 +177,7 @@ impl FullClient {
         let txpool = Arc::new(TransactionPool::with_capacity(
             conf.raw_conf.tx_pool_size,
             data_man.clone(),
-            verification_config,
+            verification_config.clone(),
         ));
 
         let statistics = Arc::new(Statistics::new());
@@ -191,6 +191,7 @@ impl FullClient {
             statistics.clone(),
             data_man.clone(),
             pow_config.clone(),
+            verification_config,
         ));
 
         let protocol_config = conf.protocol_config();

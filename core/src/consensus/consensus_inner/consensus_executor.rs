@@ -152,13 +152,14 @@ impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        bench_mode: bool,
+        bench_mode: bool, eth_compatibility_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
             vm,
+            eth_compatibility_mode,
         ));
         let (sender, receiver) = channel();
 
@@ -783,18 +784,20 @@ pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
+    eth_compatibility_mode: bool,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory,
+        vm: VmFactory, eth_compatibility_mode: bool,
     ) -> Self
     {
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
             vm,
+            eth_compatibility_mode,
         }
     }
 
@@ -1012,8 +1015,11 @@ impl ConsensusExecutionHandler {
                 let mut nonce_increased = false;
 
                 let r = {
-                    Executive::new(state, &env, &machine, &spec)
-                        .transact(transaction, &mut nonce_increased)
+                    Executive::new(state, &env, &machine, &spec).transact(
+                        transaction,
+                        &mut nonce_increased,
+                        self.eth_compatibility_mode,
+                    )
                 };
                 // TODO Store fine-grained output status in receipts.
                 // Note now NotEnoughCash has
@@ -1421,7 +1427,7 @@ impl ConsensusExecutionHandler {
         };
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut nonce_increased = false;
-        let r = ex.transact(tx, &mut nonce_increased);
+        let r = ex.transact(tx, &mut nonce_increased, false);
         trace!("Execution result {:?}", r);
         r.map(|r| (r.output, r.gas_used))
             .map_err(|e| format!("execution error: {:?}", e))
