@@ -2,22 +2,24 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+extern crate futures;
+
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
+use futures::{future, stream, Future, Stream};
+use std::{sync::Arc, time::Duration};
+
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, Receipt, SignedTransaction, StateRoot,
+    Account, EpochNumber, Receipt, SignedTransaction, StateRoot,
 };
-use std::sync::Arc;
-
-extern crate futures;
-use futures::{future, stream, Future, Stream};
 
 use crate::{
     consensus::ConsensusGraph,
     network::{NetworkService, PeerId},
     parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT, light::LOG_FILTERING_LOOKAHEAD,
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME_MS},
     },
     statedb::StorageKey,
     storage,
@@ -25,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    common::{poll_next, LedgerInfo},
+    common::{poll_next, with_timeout, LedgerInfo},
     handler::QueryResult,
     message::{GetStateEntry, GetStateRoot, GetTxs},
     Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
@@ -33,9 +35,6 @@ use super::{
 };
 
 pub struct QueryService {
-    // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
-
     // light protocol handler
     handler: Arc<LightHandler>,
 
@@ -56,7 +55,6 @@ impl QueryService {
         let ledger = LedgerInfo::new(consensus.clone());
 
         QueryService {
-            consensus,
             handler,
             ledger,
             network,
@@ -317,37 +315,52 @@ impl QueryService {
         Ok(matching)
     }
 
-    pub fn get_logs(
-        &self, filter: Filter,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+    fn get_height_from_epoch_number(
+        &self, epoch: EpochNumber,
+    ) -> Result<u64, FilterError> {
         // find highest epoch that we are able to verify based on witness info
         let latest_verified = self.handler.sync.witnesses.latest_verified();
 
         let latest_verifiable = match latest_verified {
-            n if n < DEFERRED_STATE_EPOCH_COUNT => return Ok(vec![]),
-            n => n - DEFERRED_STATE_EPOCH_COUNT,
+            n if n >= DEFERRED_STATE_EPOCH_COUNT => {
+                n - DEFERRED_STATE_EPOCH_COUNT
+            }
+            _ => {
+                return Err(FilterError::UnableToVerify {
+                    epoch: 0,
+                    latest_verifiable: 0,
+                })
+            }
         };
 
-        debug!(
-            "get_logs filter = {:?}, latest_verifiable = {}",
-            filter, latest_verifiable
+        trace!(
+            "get_height_from_epoch_number epoch = {:?}, latest_verifiable = {}",
+            epoch,
+            latest_verifiable
         );
+
+        match epoch {
+            EpochNumber::Earliest => Ok(0),
+            EpochNumber::LatestMined => Ok(latest_verifiable),
+            EpochNumber::LatestState => Ok(latest_verifiable),
+            EpochNumber::Number(n) if n <= latest_verifiable => Ok(n),
+            EpochNumber::Number(n) => Err(FilterError::UnableToVerify {
+                epoch: n,
+                latest_verifiable,
+            }),
+        }
+    }
+
+    pub fn get_logs(
+        &self, filter: Filter,
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+        debug!("get_logs filter = {:?}", filter);
 
         // find epochs to match against
-        let from_epoch = match self
-            .consensus
-            .get_height_from_epoch_number(filter.from_epoch.clone())
-        {
-            Ok(num) => std::cmp::min(num, latest_verifiable),
-            Err(_) => return Ok(vec![]),
-        };
-
-        let to_epoch = std::cmp::min(
-            latest_verifiable,
-            self.consensus
-                .get_height_from_epoch_number(filter.to_epoch.clone())
-                .unwrap_or(latest_verifiable),
-        );
+        let from_epoch =
+            self.get_height_from_epoch_number(filter.from_epoch.clone())?;
+        let to_epoch =
+            self.get_height_from_epoch_number(filter.to_epoch.clone())?;
 
         if from_epoch > to_epoch {
             return Err(FilterError::InvalidEpochNumber {
@@ -386,7 +399,12 @@ impl QueryService {
             // retrieve blooms
             .map(|epoch| {
                 debug!("Requesting blooms for {:?}", epoch);
-                self.handler.sync.blooms.request(epoch).map(move |bloom| (epoch, bloom))
+
+                with_timeout(
+                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+                    format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
+                    self.handler.sync.blooms.request(epoch)
+                ).map(move |bloom| (epoch, bloom))
             })
 
             // we first request blooms for up to `LOG_FILTERING_LOOKAHEAD`
@@ -410,7 +428,12 @@ impl QueryService {
             // retrieve receipts
             .map(|epoch| {
                 debug!("Requesting receipts for {:?}", epoch);
-                self.handler.sync.receipts.request(epoch).map(move |receipts| (epoch, receipts))
+
+                with_timeout(
+                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+                    format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
+                    self.handler.sync.receipts.request(epoch)
+                ).map(move |receipts| (epoch, receipts))
             })
 
             // we first request receipts for up to `LOG_FILTERING_LOOKAHEAD`
@@ -432,7 +455,12 @@ impl QueryService {
             // retrieve block txs
             .map(|log| {
                 debug!("Requesting block txs for {:?}", log.block_hash);
-                self.handler.sync.block_txs.request(log.block_hash).map(move |txs| (log, txs))
+
+                with_timeout(
+                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+                    format!("Timeout while retrieving block txs for block {}", log.block_hash), /* error */
+                    self.handler.sync.block_txs.request(log.block_hash)
+                ).map(move |txs| (log, txs))
             })
 
             // we first request txs for up to `LOG_FILTERING_LOOKAHEAD`
@@ -463,8 +491,14 @@ impl QueryService {
         // TODO(thegaram): review this
         let mut matching = vec![];
 
-        while let Ok(Some(x)) = poll_next(&mut stream) {
-            matching.push(x);
+        loop {
+            // NOTE: poll_next will poll indefinitely; the provided stream must
+            // make sure it terminates eventually.
+            match poll_next(&mut stream) {
+                Ok(None) => break,
+                Ok(Some(x)) => matching.push(x),
+                Err(e) => return Err(FilterError::Custom(format!("{}", e))),
+            }
         }
 
         matching.reverse();
