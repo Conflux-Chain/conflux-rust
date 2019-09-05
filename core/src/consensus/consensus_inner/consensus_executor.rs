@@ -39,13 +39,12 @@ use std::{
 };
 
 use crate::parameters::{consensus::*, consensus_internal::*};
-use elastic_array::core_::sync::atomic::Ordering::Relaxed;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
-    sync::atomic::AtomicBool,
+    sync::atomic::{AtomicBool, Ordering::Relaxed},
 };
 
 lazy_static! {
