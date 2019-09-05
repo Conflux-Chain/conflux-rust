@@ -84,6 +84,9 @@ pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader {
     /// Return Some(maybe_old_value) or None if the db don't support reading the
     /// old value at deletion.
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>>;
+    fn delete_with_number_key(
+        &self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>>;
     fn put(
         &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>>;

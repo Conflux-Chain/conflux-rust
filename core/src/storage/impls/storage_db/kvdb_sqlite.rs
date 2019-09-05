@@ -465,6 +465,7 @@ impl<
         ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > ReadImplByFamily<KvdbSqlite<ValueType>> for T
 where
+    // FIXME: merge where into +.
     T: KvdbSqliteDestructureTrait,
     T: KeyValueDbTypes<ValueType = ValueType>,
 {
