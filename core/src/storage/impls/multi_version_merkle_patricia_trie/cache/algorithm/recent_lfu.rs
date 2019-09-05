@@ -42,6 +42,8 @@ impl<PosT: PrimitiveNum> RecentLFUHandle<PosT> {
 
     fn placement_new_handle(&mut self, pos: PosT) { self.set_handle(pos); }
 
+    // The code is used by an currently unused class.
+    #[allow(unused)]
     fn placement_new_evicted(&mut self) { self.set_evicted(); }
 
     pub fn is_lru_hit(&self) -> bool { self.pos != PosT::from(Self::NULL_POS) }
@@ -98,7 +100,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
         RANDOM_BITS & rng.gen::<FrequencyType>()
     }
 
-    fn inc_visit_counter<RngT: Rng>(&mut self, rng: &mut RngT) {
+    fn inc_visit_counter<RngT: Rng>(&mut self, _rng: &mut RngT) {
         if !self.is_visit_counter_maximum() {
             self.frequency += RANDOM_BITS + 1
         }
@@ -239,8 +241,8 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
         };
 
         Self {
-            new_metadata: new_metadata,
-            metadata: metadata,
+            new_metadata,
+            metadata,
         }
     }
 }
@@ -256,7 +258,7 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheStoreUtil
     }
 
     fn get_most_recently_accessed(
-        &self, element_index: Self::ElementIndex,
+        &self, _element_index: Self::ElementIndex,
     ) -> LRUHandle<PosT> {
         self.new_metadata.lru_handle
     }
@@ -270,7 +272,7 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheStoreUtil
     }
 
     fn set_most_recently_accessed(
-        &mut self, element_index: <Self as CacheStoreUtil>::ElementIndex,
+        &mut self, _element_index: Self::ElementIndex,
         algo_data: &LRUHandle<PosT>,
     )
     {
@@ -527,9 +529,8 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
         }
     }
 
-    fn log_usage(&self, prefix: &String) {
-        self.frequency_lru
-            .log_usage(&"{} recent_lfu#frequency ".into());
+    fn log_usage(&self, prefix: &str) {
+        self.frequency_lru.log_usage("{} recent_lfu#frequency ");
         debug!(
             "{}recent_lfu: capacity {}, size {}",
             prefix,
@@ -539,12 +540,14 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     }
 }
 
+// The code is used in tests.
+#[allow(dead_code)]
 impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     RecentLFU<PosT, CacheIndexT>
 {
     pub fn new(capacity: PosT, lru_capacity: PosT) -> Self {
         Self {
-            capacity: capacity,
+            capacity,
             frequency_heap: RemovableHeap::new(lru_capacity),
             frequency_lru: LRU::new(lru_capacity),
             counter_rng: ChaChaRng::from_entropy(),
@@ -568,7 +571,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
             &mut self.frequency_heap,
             MetadataHeapUtil::<PosT, CacheIndexT, CacheStoreUtilT> {
                 frequency_lru: &mut self.frequency_lru,
-                cache_store_util: cache_store_util,
+                cache_store_util,
             },
         )
     }

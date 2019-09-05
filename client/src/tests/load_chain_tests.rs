@@ -5,14 +5,49 @@
 extern crate tempdir;
 
 use self::tempdir::TempDir;
-use super::super::{Client, Configuration};
+use crate::{
+    archive::{ArchiveClient, Configuration},
+    rpc::RpcBlock,
+};
 use cfx_types::H256;
 use parking_lot::{Condvar, Mutex};
+use primitives::Block;
+use serde_json::Value;
 use std::{
+    fs::File,
+    io::{BufReader, Read},
+    path::Path,
     sync::Arc,
     thread,
     time::{Duration, Instant},
 };
+
+fn get_expected_best_hash() -> String {
+    let mut file =
+        File::open(r#"../tests/blockchain_tests/general_2.json"#).unwrap();
+    let mut data = String::new();
+    file.read_to_string(&mut data).unwrap();
+
+    let json: Value = serde_json::from_str(data.as_str())
+        .expect("JSON was not well-formatted");
+
+    if let Value::Array(blocks) = json {
+        for block_value in blocks.iter().rev() {
+            if let Value::Object(ref block) = block_value {
+                let epoch_value = &block["epochNumber"];
+                if let Value::Null = epoch_value {
+                    continue;
+                }
+                let hash_value = &block["hash"];
+                if let Value::String(hash) = hash_value {
+                    return hash.clone();
+                }
+            }
+            panic!("JSON was not well-formatted");
+        }
+    }
+    panic!("JSON was not well-formatted");
+}
 
 #[test]
 fn test_load_chain() {
@@ -35,18 +70,41 @@ fn test_load_chain() {
             .into_string()
             .unwrap(),
     );
-    conf.raw_conf.load_test_chain =
-        Some(r#"../test/blockchain_tests/general_2.json"#.to_owned());
     conf.raw_conf.port = Some(13000);
     conf.raw_conf.jsonrpc_http_port = Some(18000);
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handle = Client::start(conf, exit.clone()).unwrap();
+    let handle = ArchiveClient::start(conf, exit.clone()).unwrap();
 
-    let expected =
-        "0x9a5769c6f014899721874c355111395fe1d136d994df6fda03b3245db3609492";
+    let chain_path = "../tests/blockchain_tests/general_2.json";
+
+    // make sure db recovery has completed
+    thread::sleep(Duration::from_secs(7));
+
+    let file_path = Path::new(&chain_path);
+    let file = File::open(file_path)
+        .map_err(|e| format!("Failed to open test-chain file {:?}", e))
+        .ok()
+        .unwrap();
+    let reader = BufReader::new(file);
+    let rpc_blocks: Vec<RpcBlock> = serde_json::from_reader(reader)
+        .map_err(|e| format!("Failed to parse blocks from json {:?}", e))
+        .ok()
+        .unwrap();
+    assert!(
+        !rpc_blocks.is_empty(),
+        "Error: The json data should not be empty."
+    );
+    for rpc_block in rpc_blocks.into_iter().skip(1) {
+        let primitive_block: Block = rpc_block.into_primitive().map_err(|e| {
+            format!("Failed to convert from a rpc_block to primitive block {:?}", e)
+        }).ok().unwrap();
+        handle.sync.on_mined_block(primitive_block);
+    }
+
+    let expected = get_expected_best_hash();
     let best_block_hash: H256 =
-        serde_json::from_str(&format!("{:?}", expected)).unwrap();
+        serde_json::from_str(&format!("{:?}", expected.as_str())).unwrap();
     let max_timeout = Duration::from_secs(60);
 
     let instant = Instant::now();
@@ -65,5 +123,5 @@ fn test_load_chain() {
 
     assert_eq!(best_block_hash, handle.consensus.best_block_hash());
 
-    Client::close(handle);
+    ArchiveClient::close(handle);
 }

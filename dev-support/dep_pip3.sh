@@ -16,6 +16,7 @@ install pysha3
 install trie
 install web3
 install easysolc
+install jsonrpcclient
 
 # TODO cross platform
 #yum install clang snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel

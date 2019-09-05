@@ -2,48 +2,259 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// TODO(yz): statically check the size to be "around" 64B + 64B (merkle_hash)
-// TODO(yz): TrieNode should leave one byte so that it can be used to indicate a
-// free slot in memory region, in order to implement EntryTrait.
+/// Methods that a trie node type should implement in general.
+/// Note that merkle hash isn't necessarily stored together with
+/// a trie node because the merkle hash is mainly used when
+/// obtaining a proof or computed when committing a block.
+/// Merkle hash maybe stored in different way for IO optimizations.
+pub trait TrieNodeTrait: Default {
+    type NodeRefType: NodeRefTrait;
+    type ChildrenTableType;
+
+    fn compressed_path_ref(&self) -> CompressedPathRef;
+
+    fn has_value(&self) -> bool;
+
+    fn get_children_count(&self) -> u8;
+
+    fn value_as_slice(&self) -> MptValue<&[u8]>;
+
+    fn set_compressed_path(&mut self, compressed_path: CompressedPathRaw);
+
+    /// Unsafe because it's assumed that the child_index is valid but the child
+    /// doesn't exist.
+    unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
+    where ChildrenTableItem<Self::NodeRefType>:
+            WrappedCreateFrom<T, Self::NodeRefType>;
+
+    /// Unsafe because it's assumed that the child_index already exists.
+    unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
+    where ChildrenTableItem<Self::NodeRefType>:
+            WrappedCreateFrom<T, Self::NodeRefType>;
+
+    /// Unsafe because it's assumed that the child_index already exists.
+    unsafe fn delete_child_unchecked(&mut self, child_index: u8);
+
+    /// Delete value when we know that it already exists.
+    unsafe fn delete_value_unchecked(&mut self) -> Box<[u8]>;
+
+    fn replace_value_valid(
+        &mut self, valid_value: Box<[u8]>,
+    ) -> MptValue<Box<[u8]>>;
+
+    fn get_children_table_ref(&self) -> &Self::ChildrenTableType;
+
+    fn compute_merkle(
+        &self, children_merkles: MaybeMerkleTableRef,
+    ) -> MerkleHash {
+        compute_merkle(
+            self.compressed_path_ref(),
+            children_merkles,
+            self.value_as_slice().into_option(),
+        )
+    }
+}
+
+// This trie node isn't memory efficient.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VanillaTrieNode<NodeRefT: NodeRefTrait> {
+    compressed_path: CompressedPathRaw,
+    maybe_value: Option<Box<[u8]>>,
+    children_table: VanillaChildrenTable<NodeRefT>,
+    merkle_hash: MerkleHash,
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> Default for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn default() -> Self {
+        Self {
+            compressed_path: Default::default(),
+            maybe_value: None,
+            children_table: Default::default(),
+            merkle_hash: MERKLE_NULL_NODE,
+        }
+    }
+}
+
+impl<'node, NodeRefT: 'static + NodeRefTrait> GetChildTrait<'node>
+    for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    type ChildIdType = &'node NodeRefT;
+
+    fn get_child(&'node self, child_index: u8) -> Option<&'node NodeRefT> {
+        self.children_table.get_child(child_index)
+    }
+}
+
+impl<'node, NodeRefT: 'static + NodeRefTrait> TrieNodeWalkTrait<'node>
+    for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> TrieNodeTrait
+    for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    type ChildrenTableType = VanillaChildrenTable<NodeRefT>;
+    type NodeRefType = NodeRefT;
+
+    fn compressed_path_ref(&self) -> CompressedPathRef {
+        self.compressed_path.as_ref()
+    }
+
+    fn has_value(&self) -> bool { self.maybe_value.is_some() }
+
+    fn get_children_count(&self) -> u8 {
+        self.children_table.get_children_count()
+    }
+
+    fn value_as_slice(&self) -> MptValue<&[u8]> {
+        match &self.maybe_value {
+            None => MptValue::None,
+            Some(v) => {
+                if v.len() == 0 {
+                    MptValue::TombStone
+                } else {
+                    MptValue::Some(v.as_ref())
+                }
+            }
+        }
+    }
+
+    fn set_compressed_path(&mut self, compressed_path: CompressedPathRaw) {
+        self.compressed_path = compressed_path;
+    }
+
+    unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
+    where ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT> {
+        ChildrenTableItem::<NodeRefT>::take_from(
+            self.children_table.get_child_mut_unchecked(child_index),
+            child,
+        );
+        *self.children_table.get_children_count_mut() += 1;
+    }
+
+    unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
+    where ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT> {
+        ChildrenTableItem::<NodeRefT>::take_from(
+            self.children_table.get_child_mut_unchecked(child_index),
+            child,
+        );
+    }
+
+    unsafe fn delete_child_unchecked(&mut self, child_index: u8) {
+        ChildrenTableItem::<NodeRefT>::take_from(
+            self.children_table.get_child_mut_unchecked(child_index),
+            ChildrenTableItem::<NodeRefT>::no_child(),
+        );
+        *self.children_table.get_children_count_mut() -= 1;
+    }
+
+    unsafe fn delete_value_unchecked(&mut self) -> Box<[u8]> {
+        self.maybe_value.take().unwrap()
+    }
+
+    fn replace_value_valid(
+        &mut self, valid_value: Box<[u8]>,
+    ) -> MptValue<Box<[u8]>> {
+        let old_value = self.maybe_value.replace(valid_value);
+
+        match old_value {
+            None => MptValue::None,
+            Some(v) => {
+                if v.len() == 0 {
+                    MptValue::TombStone
+                } else {
+                    MptValue::Some(v)
+                }
+            }
+        }
+    }
+
+    fn get_children_table_ref(&self) -> &VanillaChildrenTable<NodeRefT> {
+        &self.children_table
+    }
+}
+
+impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
+    pub fn new(
+        merkle: MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
+        maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
+    ) -> Self
+    {
+        Self {
+            compressed_path,
+            maybe_value,
+            children_table,
+            merkle_hash: merkle.clone(),
+        }
+    }
+
+    pub fn get_merkle(&self) -> &MerkleHash { &self.merkle_hash }
+
+    pub fn set_merkle(&mut self, merkle: &MerkleHash) {
+        self.merkle_hash = merkle.clone();
+    }
+}
+
+impl VanillaTrieNode<MerkleHash> {
+    pub fn get_children_merkle(&self) -> MaybeMerkleTableRef {
+        if self.get_children_count() > 0 {
+            Some(&self.children_table.get_children_table())
+        } else {
+            None
+        }
+    }
+}
+
 /// A node consists of an optional compressed path (concept of Patricia
 /// Trie), an optional ChildrenTable (if the node is intermediate), an
 /// optional value attached, and the Merkle hash for subtree.
 #[derive(Default)]
-pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
-    /// The number of children plus one if there is value attached.
-    /// After a delete operation, when there is no value attached to this
-    /// path, and if there is only one child left, path compression
-    /// should apply. Path compression can only happen when
-    /// number_of_children_plus_value drop from 2 to 1.
-    // TODO(yz): refactor out this value. Move the number_of_children counter
-    // to children_table.
-    number_of_children_plus_value: u8,
+pub struct MemOptimizedTrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
+    /// Slab entry section. We keep a next vacant index of slab in case if the
+    /// slot is vacant. By keeping the next vacant index, we save extra 8B
+    /// space per trie node.
+    ///
+    /// The next vacant index is xor()ed by
+    /// NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT so that 0 can be
+    /// reserved for "occupied" label.
+    slab_next_vacant_index: u32,
 
+    ///
+    ///
     /// CompactPath section. The CompactPath if defined as separate struct
-    /// would consume 16B, while the current layout plus the
-    /// previous u8 field consumes 16B in total and keep integers
-    /// aligned.
+    /// would consume 16B, while the current expanded layout plus other u8
+    /// and u16 fields consumes 24B instead of 32B.
 
-    /// Can be: "no mask" (0x00), "second half" (second_nibble), "first half"
-    /// (first_nibble). When there is only one half-byte in path and it's
-    /// the "first half", both path_begin_mask and path_end_mask are set.
-    /// This field is not used in comparison because matching one more
-    /// half-byte at the beginning doesn't matter.
-    // TODO(yz): remove since it's unused, now it's always 0.
-    path_begin_mask: u8,
-    /// Can be: "no mask" (0x00), "first half" (first_nibble).
-    /// When there is only one half-byte in path and it's the "second half",
-    /// only path_begin_mask is set, path_end_mask is set to "no mask",
-    /// because the first byte of path actually keeps the missing
-    /// "first half" so that it still matches to the corresponding byte of the
-    /// key.
+    /// Conceptually, path_begin_mask can be: "no mask" (0x00), "second half"
+    /// (second_nibble), "first half" (first_nibble).
+    /// path_end_mask can be: "no mask" (0x00), "first half" (first_nibble).
+    ///
+    /// When there is only one half-byte in path and it's the "first half",
+    /// path_end_mask is set. When there is only one half-byte in path and
+    /// it's the "second half", compressed_path is set to one full byte
+    /// with the missing "first half", and path_end_mask is set to "no
+    /// mask". In comparison it still matches the corresponding byte of the
+    /// key. We don't store path_begin_mask because it isn't used at all in
+    /// comparison.
     path_end_mask: u8,
     /// 4 bits per step.
     /// We limit the maximum key steps by u16.
-    path_steps: u16,
+    path_size: u16,
     path: MaybeInPlaceByteArray,
+    path_memory_manager: FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
+        u16,
+        TrivialSizeFieldConverterU16,
+        MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT>,
+        MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT>,
+    >,
+
     // End of CompactPath section
-    // TODO(yz): maybe unpack the fields from ChildrenTableDeltaMpt to save
+    // TODO(yz): Unpack the fields from ChildrenTableDeltaMpt to save
     // memory. In this case create temporary ChildrenTableDeltaMpt for
     // update / iteration.
     pub(super) children_table: ChildrenTableDeltaMpt,
@@ -53,47 +264,80 @@ pub struct TrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     /// manage the length and content separately.
     value_size: u32,
     value: MaybeInPlaceByteArray,
+    value_memory_manager: FieldsOffsetMaybeInPlaceByteArrayMemoryManager<
+        u32,
+        TrieNodeValueSizeFieldConverter,
+        MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT>,
+        MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT>,
+    >,
 
+    // TODO(yz): we don't have to store MerkleHash directly in TrieNode,
+    // because it's only used in proof and committing.
     /// The merkle hash without the compressed path.
-    pub(in super::super) merkle_hash: MerkleHash,
+    merkle_hash: MerkleHash,
 
     pub(in super::super) cache_algo_data: CacheAlgoDataT,
+}
+
+#[cfg(test)]
+use super::super::node_memory_manager::TrieNodeDeltaMpt;
+#[test]
+fn test_mem_optimized_trie_node_size() {
+    assert_eq!(std::mem::size_of::<TrieNodeDeltaMpt>(), 80);
+    // TrieNodeDeltaMpt itself as Slab entry saves space.
+    assert_ne!(std::mem::size_of::<Entry<TrieNodeDeltaMpt>>(), 80)
+}
+
+make_parallel_field_maybe_in_place_byte_array_memory_manager!(
+    MemOptimizedTrieNodePathMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
+    MemOptimizedTrieNode<CacheAlgoDataT>,
+    path_memory_manager,
+    path,
+    path_size: u16,
+    TrivialSizeFieldConverterU16,
+);
+
+make_parallel_field_maybe_in_place_byte_array_memory_manager!(
+    MemOptimizedTrieNodeValueMemoryManager<CacheAlgoDataT> where <CacheAlgoDataT: CacheAlgoDataTrait>,
+    MemOptimizedTrieNode<CacheAlgoDataT>,
+    value_memory_manager,
+    value,
+    value_size: u32,
+    TrieNodeValueSizeFieldConverter,
+);
+
+impl<CacheAlgoDataT: CacheAlgoDataTrait> Clone
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
+    fn clone(&self) -> Self {
+        Self::new(
+            self.merkle_hash.clone(),
+            self.children_table.clone(),
+            self.value_clone().into_option(),
+            self.compressed_path_ref().into(),
+        )
+    }
 }
 
 /// Compiler is not sure about the pointer in MaybeInPlaceByteArray fields.
 /// It's Send because TrieNode is move only and it's impossible to change any
 /// part of it without &mut.
 unsafe impl<CacheAlgoDataT: CacheAlgoDataTrait> Send
-    for TrieNode<CacheAlgoDataT>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
 {
 }
 /// Compiler is not sure about the pointer in MaybeInPlaceByteArray fields.
 /// We do not allow a &TrieNode to be able to change anything the pointer
 /// is pointing to, therefore TrieNode is Sync.
 unsafe impl<CacheAlgoDataT: CacheAlgoDataTrait> Sync
-    for TrieNode<CacheAlgoDataT>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
 {
 }
 
-/// Key length should be multiple of 8.
-// TODO(yz): align key @8B with mask.
-pub type KeyPart<'a> = &'a [u8];
-const EMPTY_KEY_PART: KeyPart = &[];
+#[derive(Default, Debug)]
+struct TrieNodeValueSizeFieldConverter {}
 
-impl<CacheAlgoDataT: CacheAlgoDataTrait> Drop for TrieNode<CacheAlgoDataT> {
-    fn drop(&mut self) {
-        unsafe {
-            let size = self.value_size as usize;
-            if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
-                self.value.ptr_into_vec(size);
-            }
-
-            self.clear_path();
-        }
-    }
-}
-
-impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
+impl TrieNodeValueSizeFieldConverter {
     const MAX_VALUE_SIZE: usize = 0xfffffffe;
     /// A special value to use in Delta Mpt to indicate that the value is
     /// deleted.
@@ -102,82 +346,50 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
     /// in serialized trie node and in methods manipulating value for trie
     /// node / MPT.
     const VALUE_TOMBSTONE: u32 = 0xffffffff;
+}
 
-    pub fn get_compressed_path_size(&self) -> u16 {
-        (self.path_steps / 2)
-            + (((self.path_begin_mask | self.path_end_mask) != 0) as u16)
+impl SizeFieldConverterTrait<u32> for TrieNodeValueSizeFieldConverter {
+    fn is_size_over_limit(size: usize) -> bool { size > Self::MAX_VALUE_SIZE }
+
+    fn get(size_field: &u32) -> usize {
+        if *size_field == Self::VALUE_TOMBSTONE {
+            0
+        } else {
+            (*size_field) as usize
+        }
     }
 
+    fn set(size_field: &mut u32, size: usize) { *size_field = size as u32; }
+}
+
+impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
+    pub fn get_compressed_path_size(&self) -> u16 { self.path_size }
+
     pub fn compressed_path_ref(&self) -> CompressedPathRef {
-        let size = self.get_compressed_path_size();
+        let size = self.path_size;
         CompressedPathRef {
             path_slice: self.path.get_slice(size as usize),
             end_mask: self.path_end_mask,
         }
     }
 
-    unsafe fn clear_path(&mut self) {
-        let size = self.get_compressed_path_size() as usize;
-        if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
-            self.path.ptr_into_vec(size);
-        }
-    }
-
-    fn compute_path_steps(path_size: u16, end_mask: u8) -> u16 {
-        path_size * 2 - (end_mask != 0) as u16
-    }
-
     pub fn copy_compressed_path(&mut self, new_path: CompressedPathRef) {
-        let path_slice = new_path.path_slice;
-
-        // Remove old path.
+        // Remove old path. Not unsafe because the path size is set right later.
         unsafe {
-            self.clear_path();
+            self.path_memory_manager.drop_value();
         }
-
-        self.path_steps = Self::compute_path_steps(
-            path_slice.len() as u16,
-            new_path.end_mask,
-        );
+        self.path_size = new_path.path_size();
         self.path_end_mask = new_path.end_mask;
+        let path_slice = new_path.path_slice;
         self.path =
             MaybeInPlaceByteArray::copy_from(path_slice, path_slice.len());
-    }
-
-    pub fn set_compressed_path(&mut self, path: CompressedPathRaw) {
-        // Remove old path.
-        unsafe {
-            self.clear_path();
-        }
-
-        self.path_steps =
-            Self::compute_path_steps(path.path_size, path.end_mask());
-        self.path_end_mask = path.end_mask();
-        self.path = path.path;
-    }
-
-    pub fn has_value(&self) -> bool { self.value_size > 0 }
-
-    fn get_children_count(&self) -> u8 {
-        self.children_table.get_children_count()
-    }
-
-    pub fn value_as_slice(&self) -> MptValue<&[u8]> {
-        let size = self.value_size;
-        if size == 0 {
-            MptValue::None
-        } else if size == Self::VALUE_TOMBSTONE {
-            MptValue::TombStone
-        } else {
-            MptValue::Some(self.value.get_slice(size as usize))
-        }
     }
 
     pub fn value_clone(&self) -> MptValue<Box<[u8]>> {
         let size = self.value_size;
         if size == 0 {
             MptValue::None
-        } else if size == Self::VALUE_TOMBSTONE {
+        } else if size == TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE {
             MptValue::TombStone
         } else {
             MptValue::Some(self.value.get_slice(size as usize).into())
@@ -193,7 +405,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         if size == 0 {
             maybe_value = MptValue::None;
         } else {
-            if size == Self::VALUE_TOMBSTONE {
+            if size == TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE {
                 maybe_value = MptValue::TombStone
             } else {
                 maybe_value =
@@ -204,25 +416,9 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         maybe_value
     }
 
-    pub fn replace_value_valid(
-        &mut self, valid_value: &[u8],
-    ) -> MptValue<Box<[u8]>> {
-        let old_value = self.value_into_boxed_slice();
-        let value_size = valid_value.len();
-        if value_size == 0 {
-            self.value_size = Self::VALUE_TOMBSTONE;
-        } else {
-            self.value =
-                MaybeInPlaceByteArray::copy_from(valid_value, value_size);
-            self.value_size = value_size as u32;
-        }
-
-        old_value
-    }
-
     pub fn check_value_size(value: &[u8]) -> Result<()> {
         let value_size = value.len();
-        if value_size > Self::MAX_VALUE_SIZE {
+        if TrieNodeValueSizeFieldConverter::is_size_over_limit(value_size) {
             // TODO(yz): value too long.
             return Err(Error::from_kind(ErrorKind::MPTInvalidValue));
         }
@@ -234,7 +430,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
 
     pub fn check_key_size(access_key: &[u8]) -> Result<()> {
         let key_size = access_key.len();
-        if key_size > MaybeInPlaceByteArray::MAX_SIZE_U16 {
+        if TrivialSizeFieldConverterU16::is_size_over_limit(key_size) {
             // TODO(yz): key too long.
             return Err(Error::from_kind(ErrorKind::MPTInvalidKey));
         }
@@ -247,259 +443,112 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
     }
 }
 
-pub enum WalkStop<'key> {
-    // path matching fails at some point. Want the new path_steps,
-    // path_end_mask, ..., etc Basically, a new node should be created to
-    // replace the current node from parent children table;
-    // modify this node or create a new node to insert as children of new
-    // node, (update path) then
-    // the child that should be followed is nil at the new node.
-    // if put single version, this node changes, this node replaced, parent
-    // update child and merkle. Before merkle update, this node must be saved
-    // in mem or into disk db (not that expensive). if get / delete (not
-    // found)
-    PathDiverted {
-        /// Key may terminate on the path.
-        key_child_index: Option<u8>,
-        key_remaining: KeyPart<'key>,
-        matched_path: CompressedPathRaw,
-        unmatched_child_index: u8,
-        unmatched_path_remaining: CompressedPathRaw,
-    },
+impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
+    type ChildrenTableType = ChildrenTableDeltaMpt;
+    type NodeRefType = NodeRefDeltaMptCompact;
 
-    // If exactly at this node.
-    // if put, update this node
-    // if delete, may cause deletion / path compression (delete this node,
-    // parent update child, update path of original child node)
-    Arrived,
-
-    Descent {
-        key_remaining: KeyPart<'key>,
-        child_index: u8,
-        child_node: NodeRefDeltaMpt,
-    },
-
-    // To descent, however child doesn't exists:
-    // to modify this node or create a new node to replace this node (update
-    // child) Then create a new node for remaining key_part (we don't care
-    // about begin_mask). if put single version, this node changes, parent
-    // update merkle. if get / delete (not found)
-    ChildNotFound {
-        key_remaining: KeyPart<'key>,
-        child_index: u8,
-    },
-}
-
-impl<'key> WalkStop<'key> {
-    fn child_not_found_uninitialized() -> Self {
-        WalkStop::ChildNotFound {
-            key_remaining: Default::default(),
-            child_index: 0,
+    fn compressed_path_ref(&self) -> CompressedPathRef {
+        let size = self.path_size;
+        CompressedPathRef {
+            path_slice: self.path.get_slice(size as usize),
+            end_mask: self.path_end_mask,
         }
     }
 
-    fn path_diverted_uninitialized() -> Self {
-        WalkStop::PathDiverted {
-            key_child_index: None,
-            key_remaining: Default::default(),
-            matched_path: Default::default(),
-            unmatched_child_index: 0,
-            unmatched_path_remaining: Default::default(),
-        }
-    }
-}
+    fn has_value(&self) -> bool { self.value_size > 0 }
 
-pub mod access_mode {
-    pub trait AccessMode {
-        fn is_read_only() -> bool;
+    fn get_children_count(&self) -> u8 {
+        self.children_table.get_children_count()
     }
 
-    pub struct Read {}
-    pub struct Write {}
-
-    impl AccessMode for Read {
-        fn is_read_only() -> bool { return true; }
-    }
-
-    impl AccessMode for Write {
-        fn is_read_only() -> bool { return false; }
-    }
-}
-
-/// Traverse.
-impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
-    // TODO(yz): write test.
-    /// The start of key is always aligned with compressed path of
-    /// current node, e.g. if compressed path starts at the second-half, so
-    /// should be key.
-    pub fn walk<'key, AM: AccessMode>(
-        &self, key: KeyPart<'key>,
-    ) -> WalkStop<'key> {
-        let path = self.compressed_path_ref();
-        let path_slice = path.path_slice;
-
-        // Compare bytes till the last full byte. The first byte is always
-        // included because even if it's the second-half, it must be
-        // already matched before entering this TrieNode.
-        let memcmp_len = min(
-            path_slice.len() - ((path.end_mask != 0) as usize),
-            key.len(),
-        );
-
-        for i in 0..memcmp_len {
-            if path_slice[i] != key[i] {
-                if AM::is_read_only() {
-                    return WalkStop::path_diverted_uninitialized();
-                } else {
-                    let matched_path: CompressedPathRaw;
-                    let key_child_index: u8;
-                    let key_remaining: &[u8];
-                    let unmatched_child_index: u8;
-                    let unmatched_path_remaining: &[u8];
-
-                    if CompressedPathRaw::first_nibble(path_slice[i] ^ key[i])
-                        == 0
-                    {
-                        // "First half" matched
-                        matched_path = CompressedPathRaw::new_and_apply_mask(
-                            &path_slice[0..i + 1],
-                            CompressedPathRaw::first_nibble(!0),
-                        );
-
-                        key_child_index =
-                            CompressedPathRaw::second_nibble(key[i]);
-                        key_remaining = &key[i + 1..];
-                        unmatched_child_index =
-                            CompressedPathRaw::second_nibble(path_slice[i]);
-                        unmatched_path_remaining = &path_slice[i + 1..];
-                    } else {
-                        matched_path =
-                            CompressedPathRaw::new(&path_slice[0..i], 0);
-                        key_child_index =
-                            CompressedPathRaw::first_nibble(key[i]);
-                        key_remaining = &key[i..];
-                        unmatched_child_index =
-                            CompressedPathRaw::first_nibble(path_slice[i]);
-                        unmatched_path_remaining = &path_slice[i..];
-                    }
-                    return WalkStop::PathDiverted {
-                        key_child_index: Some(key_child_index),
-                        key_remaining: key_remaining.into(),
-                        matched_path: matched_path,
-                        unmatched_child_index: unmatched_child_index,
-                        unmatched_path_remaining: CompressedPathRaw::new(
-                            unmatched_path_remaining,
-                            self.path_end_mask,
-                        ),
-                    };
-                }
-            }
-        }
-        // Key is fully consumed, get value attached.
-        if key.len() == memcmp_len {
-            // Compressed path isn't fully consumed.
-            if path_slice.len() > memcmp_len {
-                if AM::is_read_only() {
-                    return WalkStop::path_diverted_uninitialized();
-                } else {
-                    return WalkStop::PathDiverted {
-                        // key_remaining is empty, and key_child_index doesn't
-                        // make sense, but we need to
-                        // mark it.
-                        key_remaining: Default::default(),
-                        key_child_index: None,
-                        matched_path: CompressedPathRaw::new(
-                            &path_slice[0..memcmp_len],
-                            0,
-                        ),
-                        unmatched_child_index: CompressedPathRaw::first_nibble(
-                            path_slice[memcmp_len],
-                        ),
-                        unmatched_path_remaining: CompressedPathRaw::new(
-                            &path_slice[memcmp_len..],
-                            self.path_end_mask,
-                        ),
-                    };
-                }
-            } else {
-                return WalkStop::Arrived;
-            }
+    fn value_as_slice(&self) -> MptValue<&[u8]> {
+        let size = self.value_size;
+        if size == 0 {
+            MptValue::None
+        } else if size == TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE {
+            MptValue::TombStone
         } else {
-            // Key is not fully consumed.
-
-            // When path is fully consumed, check if child exists under
-            // child_index.
-            let child_index;
-            let key_remaining;
-
-            if path_slice.len() == memcmp_len {
-                // Compressed path is fully consumed. Descend into one child.
-                child_index = CompressedPathRaw::first_nibble(key[memcmp_len]);
-                key_remaining = &key[memcmp_len..];
-            } else {
-                // One half byte remaining to match with path. Consume it in the
-                // key.
-                if CompressedPathRaw::first_nibble(
-                    path_slice[memcmp_len] ^ key[memcmp_len],
-                ) != 0
-                {
-                    // Mismatch.
-                    if AM::is_read_only() {
-                        return WalkStop::path_diverted_uninitialized();
-                    } else {
-                        return WalkStop::PathDiverted {
-                            key_child_index: Some(
-                                CompressedPathRaw::first_nibble(
-                                    key[memcmp_len],
-                                ),
-                            ),
-                            key_remaining: &key[memcmp_len..],
-                            matched_path: CompressedPathRaw::new(
-                                &path_slice[0..memcmp_len],
-                                0,
-                            ),
-                            unmatched_child_index:
-                                CompressedPathRaw::first_nibble(
-                                    path_slice[memcmp_len],
-                                ),
-                            unmatched_path_remaining: CompressedPathRaw::new(
-                                &path_slice[memcmp_len..],
-                                self.path_end_mask,
-                            ),
-                        };
-                    }
-                } else {
-                    child_index =
-                        CompressedPathRaw::second_nibble(key[memcmp_len]);
-                    key_remaining = &key[memcmp_len + 1..];
-                }
-            }
-
-            match self.get_child(child_index) {
-                Option::None => {
-                    if AM::is_read_only() {
-                        return WalkStop::child_not_found_uninitialized();
-                    }
-                    return WalkStop::ChildNotFound {
-                        key_remaining: key_remaining,
-                        child_index: child_index,
-                    };
-                }
-                Option::Some(child_node) => {
-                    return WalkStop::Descent {
-                        key_remaining: key_remaining,
-                        child_node: child_node.into(),
-                        child_index: child_index,
-                    };
-                }
-            }
+            MptValue::Some(self.value.get_slice(size as usize))
         }
+    }
+
+    fn set_compressed_path(&mut self, mut path: CompressedPathRaw) {
+        self.path_end_mask = path.end_mask();
+
+        path.byte_array_memory_manager
+            .move_to(&mut self.path_memory_manager);
+    }
+
+    unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
+    where ChildrenTableItem<NodeRefDeltaMptCompact>:
+            WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
+        self.children_table = CompactedChildrenTable::insert_child_unchecked(
+            self.children_table.to_ref(),
+            child_index,
+            ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
+        );
+    }
+
+    unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
+    where ChildrenTableItem<NodeRefDeltaMptCompact>:
+            WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
+        self.children_table.set_child_unchecked(
+            child_index,
+            ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
+        );
+    }
+
+    unsafe fn delete_child_unchecked(&mut self, child_index: u8) {
+        self.children_table = CompactedChildrenTable::delete_child_unchecked(
+            self.children_table.to_ref(),
+            child_index,
+        );
+    }
+
+    unsafe fn delete_value_unchecked(&mut self) -> Box<[u8]> {
+        self.value_into_boxed_slice().unwrap()
+    }
+
+    fn replace_value_valid(
+        &mut self, valid_value: Box<[u8]>,
+    ) -> MptValue<Box<[u8]>> {
+        let old_value = self.value_into_boxed_slice();
+        let value_size = valid_value.len();
+        if value_size == 0 {
+            self.value_size = TrieNodeValueSizeFieldConverter::VALUE_TOMBSTONE;
+        } else {
+            self.value = MaybeInPlaceByteArray::new(valid_value, value_size);
+            self.value_size = value_size as u32;
+        }
+
+        old_value
+    }
+
+    fn get_children_table_ref(&self) -> &Self::ChildrenTableType {
+        &self.children_table
     }
 }
 
-/// The actions for the logical trie. Since we maintain a multiple version trie
-/// the action must be translated into trie node operations, which may vary
-/// depends on whether the node is owned by current version, etc.
+impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> GetChildTrait<'node>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
+    type ChildIdType = NodeRefDeltaMptCompact;
+
+    fn get_child(
+        &'node self, child_index: u8,
+    ) -> Option<NodeRefDeltaMptCompact> {
+        self.children_table.get_child(child_index)
+    }
+}
+
+impl<'node, CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeWalkTrait<'node>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
+}
+
+/// The action variants after a value deletion.
 pub enum TrieNodeAction {
     Modify,
     Delete,
@@ -509,21 +558,22 @@ pub enum TrieNodeAction {
     },
 }
 
-/// Update
-impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
+/// The actual TrieNode type used in DeltaMpt.
+/// We'd like to keep as many of them as possible in memory.
+impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn new(
-        merkle: &MerkleHash, children_table: ChildrenTableDeltaMpt,
-        maybe_value: Option<Vec<u8>>, compressed_path: CompressedPathRaw,
-    ) -> TrieNode<CacheAlgoDataT>
+        merkle: MerkleHash, children_table: ChildrenTableDeltaMpt,
+        maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
+    ) -> MemOptimizedTrieNode<CacheAlgoDataT>
     {
-        let mut ret = TrieNode::default();
+        let mut ret = MemOptimizedTrieNode::default();
 
-        ret.merkle_hash = *merkle;
+        ret.merkle_hash = merkle;
         ret.children_table = children_table;
         match maybe_value {
             None => {}
             Some(value) => {
-                ret.replace_value_valid(value.as_ref());
+                ret.replace_value_valid(value);
             }
         }
         ret.set_compressed_path(compressed_path);
@@ -539,12 +589,12 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
     /// 1. precondition on children_table;
     /// 2. delete value assumes that self contains some value.
     pub unsafe fn copy_and_replace_fields(
-        &self, new_value: Option<Option<&[u8]>>,
+        &self, new_value: Option<Option<Box<[u8]>>>,
         new_path: Option<CompressedPathRaw>,
         children_table: Option<ChildrenTableDeltaMpt>,
-    ) -> TrieNode<CacheAlgoDataT>
+    ) -> MemOptimizedTrieNode<CacheAlgoDataT>
     {
-        let mut ret = TrieNode::default();
+        let mut ret = MemOptimizedTrieNode::default();
 
         match new_value {
             Some(maybe_value) => match maybe_value {
@@ -574,45 +624,6 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         }
 
         ret
-    }
-
-    pub fn path_prepended(
-        &self, prefix: CompressedPathRaw, child_index: u8,
-    ) -> CompressedPathRaw {
-        let prefix_size = prefix.path_slice().len();
-        let path_size = self.get_compressed_path_size();
-        // TODO(yz): it happens to be the same no matter what end_mask is,
-        // because u8 = 2 nibbles. When we switch to u32 as path unit
-        // the concated size may vary.
-        let concated_size = prefix_size as u16 + path_size;
-
-        let path = self.compressed_path_ref();
-
-        let mut new_path =
-            CompressedPathRaw::new_zeroed(concated_size, path.end_mask);
-
-        {
-            let slice = new_path.path.get_slice_mut(concated_size as usize);
-            if prefix.end_mask() == 0 {
-                slice[0..prefix_size].copy_from_slice(prefix.path_slice());
-                slice[prefix_size..].copy_from_slice(path.path_slice);
-            } else {
-                slice[0..prefix_size - 1]
-                    .copy_from_slice(&prefix.path_slice()[0..prefix_size - 1]);
-                slice[prefix_size - 1] = CompressedPathRaw::set_second_nibble(
-                    prefix.path_slice()[prefix_size - 1],
-                    child_index,
-                );
-                slice[prefix_size..].copy_from_slice(path.path_slice);
-            }
-        }
-
-        new_path
-    }
-
-    /// Delete value when we know that it already exists.
-    pub unsafe fn delete_value_unchecked(&mut self) -> Box<[u8]> {
-        self.value_into_boxed_slice().unwrap()
     }
 
     /// Returns: old_value, is_self_about_to_delete, replacement_node_for_self
@@ -652,41 +663,11 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         unsafe { unreachable_unchecked() }
     }
 
-    fn get_child(&self, child_index: u8) -> Option<NodeRefDeltaMptCompact> {
-        self.children_table.get_child(child_index)
-    }
-
     pub unsafe fn set_first_child_unchecked(
         &mut self, child_index: u8, child: NodeRefDeltaMptCompact,
     ) {
         self.children_table =
             ChildrenTableDeltaMpt::new_from_one_child(child_index, child);
-    }
-
-    pub unsafe fn add_new_child_unchecked(
-        &mut self, child_index: u8, child: NodeRefDeltaMptCompact,
-    ) {
-        self.children_table = CompactedChildrenTable::insert_child_unchecked(
-            self.children_table.to_ref(),
-            child_index,
-            child,
-        );
-    }
-
-    /// Unsafe because it's assumed that the child_index already exists.
-    pub unsafe fn delete_child_unchecked(&mut self, child_index: u8) {
-        self.children_table = CompactedChildrenTable::delete_child_unchecked(
-            self.children_table.to_ref(),
-            child_index,
-        );
-    }
-
-    /// Unsafe because it's assumed that the child_index already exists.
-    pub unsafe fn replace_child_unchecked(
-        &mut self, child_index: u8, new_child_node: NodeRefDeltaMptCompact,
-    ) {
-        self.children_table
-            .set_child_unchecked(child_index, new_child_node);
     }
 
     /// Returns old_child, is_self_about_to_delete, replacement_node_for_self
@@ -704,21 +685,74 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNode<CacheAlgoDataT> {
         }
         return TrieNodeAction::Modify;
     }
+
+    pub fn get_merkle(&self) -> &MerkleHash { &self.merkle_hash }
+
+    pub fn set_merkle(&mut self, merkle: &MerkleHash) {
+        self.merkle_hash = merkle.clone();
+    }
+}
+
+impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
+    type EntryType = MemOptimizedTrieNode<CacheAlgoDataT>;
+
+    fn from_value(value: Self) -> Self { value }
+
+    fn from_vacant_index(next: usize) -> Self {
+        Self {
+            slab_next_vacant_index: (next as u32)
+                ^ NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT,
+            children_table: Default::default(),
+            merkle_hash: Default::default(),
+            path_end_mask: 0,
+            path_size: 0,
+            path: Default::default(),
+            path_memory_manager: Default::default(),
+            value_size: 0,
+            value: Default::default(),
+            value_memory_manager: Default::default(),
+            cache_algo_data: Default::default(),
+        }
+    }
+
+    fn is_vacant(&self) -> bool {
+        // A valid next vacant index can't be 0.
+        self.slab_next_vacant_index != MaybeNodeRefDeltaMptCompact::NULL
+    }
+
+    fn take_occupied_and_replace_with_vacant_index(
+        &mut self, next: usize,
+    ) -> MemOptimizedTrieNode<CacheAlgoDataT> {
+        std::mem::replace(self, Self::from_vacant_index(next))
+    }
+
+    fn get_next_vacant_index(&self) -> usize {
+        (self.slab_next_vacant_index ^ NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT)
+            as usize
+    }
+
+    fn get_occupied_ref(&self) -> &MemOptimizedTrieNode<CacheAlgoDataT> { self }
+
+    fn get_occupied_mut(
+        &mut self,
+    ) -> &mut MemOptimizedTrieNode<CacheAlgoDataT> {
+        self
+    }
 }
 
 impl<CacheAlgoDataT: CacheAlgoDataTrait> Encodable
-    for TrieNode<CacheAlgoDataT>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     fn rlp_append(&self, s: &mut RlpStream) {
-        // Format: [ merkle, children_table ([] or [*16], value (maybe empty) ]
-        // ( + [compressed_path] )
         s.begin_unbounded_list()
-            .append(&self.merkle_hash)
-            .append(&self.children_table.to_ref())
+            .append(self.get_merkle())
+            .append(&self.get_children_table_ref().to_ref())
             .append(&self.value_as_slice().into_option());
 
         let compressed_path_ref = self.compressed_path_ref();
-        if compressed_path_ref.path_slice.len() > 0 {
+        if compressed_path_ref.path_size() > 0 {
             s.append(&compressed_path_ref);
         }
 
@@ -727,7 +761,45 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Encodable
 }
 
 impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
-    for TrieNode<CacheAlgoDataT>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
+    fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
+        let compressed_path = if rlp.item_count()? != 4 {
+            CompressedPathRaw::new(&[], 0)
+        } else {
+            rlp.val_at(3)?
+        };
+
+        Ok(MemOptimizedTrieNode::new(
+            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            rlp.val_at::<ChildrenTableManagedDeltaMpt>(1)?.into(),
+            rlp.val_at::<Option<Vec<u8>>>(2)?
+                .map(|v| v.into_boxed_slice()),
+            compressed_path,
+        ))
+    }
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> Encodable for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_unbounded_list()
+            .append(self.get_merkle())
+            .append(self.get_children_table_ref())
+            .append(&self.value_as_slice().into_option());
+
+        let compressed_path_ref = self.compressed_path_ref();
+        if compressed_path_ref.path_size() > 0 {
+            s.append(&compressed_path_ref);
+        }
+
+        s.complete_unbounded_list();
+    }
+}
+
+impl<NodeRefT: 'static + NodeRefTrait> Decodable for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 {
     fn decode(rlp: &Rlp) -> ::std::result::Result<Self, DecoderError> {
         let compressed_path;
@@ -737,17 +809,18 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
             compressed_path = rlp.val_at(3)?;
         }
 
-        Ok(TrieNode::new(
-            &rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
-            rlp.val_at::<ChildrenTableManagedDeltaMpt>(1)?.into(),
-            rlp.val_at::<Option<Vec<u8>>>(2)?,
+        Ok(VanillaTrieNode::new(
+            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            rlp.val_at::<VanillaChildrenTable<NodeRefT>>(1)?,
+            rlp.val_at::<Option<Vec<u8>>>(2)?
+                .map(|v| v.into_boxed_slice()),
             compressed_path,
         ))
     }
 }
 
 impl<CacheAlgoDataT: CacheAlgoDataTrait> PartialEq
-    for TrieNode<CacheAlgoDataT>
+    for MemOptimizedTrieNode<CacheAlgoDataT>
 {
     fn eq(&self, other: &Self) -> bool {
         self.value_as_slice() == other.value_as_slice()
@@ -757,28 +830,33 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> PartialEq
     }
 }
 
-impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug for TrieNode<CacheAlgoDataT> {
+impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug
+    for MemOptimizedTrieNode<CacheAlgoDataT>
+{
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "TrieNode{{ merkle: {:?}, value: {:?}, children_table: {:?}, compressed_path: {:?} }}",
+        write!(f,
+               "TrieNode{{ merkle: {:?}, value: {:?}, children_table: {:?}, compressed_path: {:?} }}",
                self.merkle_hash, self.value_as_slice(),
                &self.children_table, self.compressed_path_ref())
     }
 }
 
-use self::access_mode::*;
 use super::{
     super::{
-        super::errors::*, cache::algorithm::CacheAlgoDataTrait, merkle::*,
-        node_ref::*,
+        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
+        slab::*,
     },
     children_table::*,
     compressed_path::*,
-    maybe_in_place_byte_array::MaybeInPlaceByteArray,
+    maybe_in_place_byte_array::*,
+    merkle::{compute_merkle, MaybeMerkleTableRef},
     mpt_value::MptValue,
+    walk::*,
+    WrappedCreateFrom,
 };
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
-    cmp::min,
     fmt::{Debug, Formatter},
     hint::unreachable_unchecked,
     marker::{Send, Sync},

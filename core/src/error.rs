@@ -26,16 +26,22 @@ pub enum BlockError {
     DifficultyOutOfBounds(OutOfBounds<U256>),
     /// Difficulty header field is invalid; this is a strong error used after
     /// getting a definitive value for difficulty (which is provided).
-    InvalidDifficulty(Mismatch<U256>),
+    InvalidDifficulty(OutOfBounds<U256>),
     /// Proof-of-work aspect of seal, which we assume is a 256-bit value, is
     /// invalid.
     InvalidProofOfWork(OutOfBounds<H256>),
     /// Gas limit header field is invalid.
     InvalidGasLimit(OutOfBounds<U256>),
+    /// Total gas limits of transactions in block is out of bound.
+    InvalidBlockGasLimit(OutOfBounds<U256>),
+    /// Total rlp sizes of transactions in block is out of bound.
+    InvalidBlockSize(OutOfBounds<u64>),
     /// Timestamp header field is invalid.
     InvalidTimestamp(OutOfBounds<SystemTime>),
     /// Timestamp header field is too far in future.
     TemporarilyInvalid(OutOfBounds<SystemTime>),
+    /// Too many referees in a block
+    TooManyReferees(OutOfBounds<usize>),
     /// Too many transactions from a particular address.
     TooManyTransactions(Address),
     /// Parent given is unknown.
@@ -65,13 +71,17 @@ impl fmt::Display for BlockError {
             DifficultyOutOfBounds(ref oob) => {
                 format!("Invalid block difficulty: {}", oob)
             }
-            InvalidDifficulty(ref mis) => {
-                format!("Invalid block difficulty: {}", mis)
+            InvalidDifficulty(ref oob) => {
+                format!("Invalid block difficulty: {}", oob)
             }
             InvalidProofOfWork(ref oob) => {
                 format!("Block has invalid PoW: {}", oob)
             }
             InvalidGasLimit(ref oob) => format!("Invalid gas limit: {}", oob),
+            InvalidBlockGasLimit(ref oob) => {
+                format!("Invalid block gas limit: {}", oob)
+            }
+            InvalidBlockSize(ref oob) => format!("Invalid block size: {}", oob),
             InvalidTimestamp(ref oob) => {
                 let oob =
                     oob.map(|st| st.elapsed().unwrap_or_default().as_secs());
@@ -83,6 +93,7 @@ impl fmt::Display for BlockError {
                 format!("Future timestamp in header: {}", oob)
             }
             UnknownParent(ref hash) => format!("Unknown parent: {}", hash),
+            TooManyReferees(ref num) => format!("Too many referees: {}", num),
             TooManyTransactions(ref address) => {
                 format!("Too many transactions from: {}", address)
             }

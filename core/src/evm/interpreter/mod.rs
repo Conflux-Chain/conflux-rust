@@ -192,7 +192,7 @@ pub struct Interpreter<Cost: CostType> {
 
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
-        mut self: Box<Self>, context: &mut vm::Context,
+        mut self: Box<Self>, context: &mut dyn vm::Context,
     ) -> vm::ExecTrapResult<GasLeft> {
         loop {
             let result = self.step(context);
@@ -218,7 +218,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
 impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
     fn resume_call(
         mut self: Box<Self>, result: MessageCallResult,
-    ) -> Box<vm::Exec> {
+    ) -> Box<dyn vm::Exec> {
         {
             let this = &mut *self;
             let (out_off, out_size) = this.resume_output_range.take().expect("Box<ResumeCall> is obtained from a call opcode; resume_output_range is always set after those opcodes are executed; qed");
@@ -263,7 +263,7 @@ impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
 impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
     fn resume_create(
         mut self: Box<Self>, result: ContractCreateResult,
-    ) -> Box<vm::Exec> {
+    ) -> Box<dyn vm::Exec> {
         match result {
             ContractCreateResult::Created(address, gas_left) => {
                 self.stack.push(address_to_u256(address));
@@ -328,7 +328,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 
     /// Execute a single step on the VM.
     #[inline(always)]
-    pub fn step(&mut self, context: &mut vm::Context) -> InterpreterResult {
+    pub fn step(&mut self, context: &mut dyn vm::Context) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -359,7 +359,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Inner helper function for step.
     #[inline(always)]
     fn step_inner(
-        &mut self, context: &mut vm::Context,
+        &mut self, context: &mut dyn vm::Context,
     ) -> Result<Never, InterpreterResult> {
         let result = match self.resume_result.take() {
             Some(result) => result,
@@ -507,11 +507,13 @@ impl<Cost: CostType> Interpreter<Cost> {
                 apply,
             } => {
                 let mem = mem::replace(&mut self.mem, Vec::new());
-                return Err(InterpreterResult::Done(Ok(GasLeft::NeedsReturn {
-                    gas_left: gas.as_u256(),
-                    data: mem.into_return_data(init_off, init_size),
-                    apply_state: apply,
-                })));
+                return Err(InterpreterResult::Done(Ok(
+                    GasLeft::NeedsReturn {
+                        gas_left: gas.as_u256(),
+                        data: mem.into_return_data(init_off, init_size),
+                        apply_state: apply,
+                    },
+                )));
             }
             InstructionResult::StopExecution => {
                 return Err(InterpreterResult::Done(Ok(GasLeft::Known(
@@ -539,7 +541,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn verify_instruction(
-        &self, context: &vm::Context, instruction: Instruction,
+        &self, context: &dyn vm::Context, instruction: Instruction,
         info: &InstructionInfo,
     ) -> vm::Result<()>
     {
@@ -584,7 +586,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn mem_written(
-        instruction: Instruction, stack: &Stack<U256>,
+        instruction: Instruction, stack: &dyn Stack<U256>,
     ) -> Option<(usize, usize)> {
         let read = |pos| stack.peek(pos).low_u64() as usize;
         let written = match instruction {
@@ -612,7 +614,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn store_written(
-        instruction: Instruction, stack: &Stack<U256>,
+        instruction: Instruction, stack: &dyn Stack<U256>,
     ) -> Option<(U256, U256)> {
         match instruction {
             instructions::SSTORE => {
@@ -623,7 +625,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn exec_instruction(
-        &mut self, gas: Cost, context: &mut vm::Context,
+        &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
     ) -> vm::Result<InstructionResult<Cost>>
     {
@@ -863,9 +865,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let init_size = self.stack.pop_back();
 
                 return Ok(InstructionResult::StopExecutionNeedsReturn {
-                    gas: gas,
-                    init_off: init_off,
-                    init_size: init_size,
+                    gas,
+                    init_off,
+                    init_size,
                     apply: true,
                 });
             }
@@ -874,9 +876,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let init_size = self.stack.pop_back();
 
                 return Ok(InstructionResult::StopExecutionNeedsReturn {
-                    gas: gas,
-                    init_off: init_off,
-                    init_size: init_size,
+                    gas,
+                    init_off,
+                    init_size,
                     apply: false,
                 });
             }
@@ -1106,20 +1108,19 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::COINBASE => {
                 self.stack
-                    .push(address_to_u256(context.env_info().author.clone()));
+                    .push(address_to_u256(context.env().author.clone()));
             }
             instructions::TIMESTAMP => {
-                self.stack.push(U256::from(context.env_info().timestamp));
+                self.stack.push(U256::from(context.env().timestamp));
             }
             instructions::NUMBER => {
-                //
-                // self.stack.push(U256::from(context.env_info().number));
+                self.stack.push(U256::from(context.env().number));
             }
             instructions::DIFFICULTY => {
-                self.stack.push(context.env_info().difficulty.clone());
+                self.stack.push(context.env().difficulty.clone());
             }
             instructions::GASLIMIT => {
-                self.stack.push(context.env_info().gas_limit.clone());
+                self.stack.push(context.env().gas_limit.clone());
             }
 
             // Stack instructions
@@ -1187,32 +1188,31 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::DIV => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
-                self.stack.push(if !b.is_zero() {
-                    match b {
-                        ONE => a,
-                        TWO => a >> 1,
-                        TWO_POW_5 => a >> 5,
-                        TWO_POW_8 => a >> 8,
-                        TWO_POW_16 => a >> 16,
-                        TWO_POW_24 => a >> 24,
-                        TWO_POW_64 => a >> 64,
-                        TWO_POW_96 => a >> 96,
-                        TWO_POW_224 => a >> 224,
-                        TWO_POW_248 => a >> 248,
-                        _ => a / b,
-                    }
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !b.is_zero() {
+                        match b {
+                            ONE => a,
+                            TWO => a >> 1,
+                            TWO_POW_5 => a >> 5,
+                            TWO_POW_8 => a >> 8,
+                            TWO_POW_16 => a >> 16,
+                            TWO_POW_24 => a >> 24,
+                            TWO_POW_64 => a >> 64,
+                            TWO_POW_96 => a >> 96,
+                            TWO_POW_224 => a >> 224,
+                            TWO_POW_248 => a >> 248,
+                            _ => a / b,
+                        }
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::MOD => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
-                self.stack.push(if !b.is_zero() {
-                    a % b
-                } else {
-                    U256::zero()
-                });
+                self.stack
+                    .push(if !b.is_zero() { a % b } else { U256::zero() });
             }
             instructions::SDIV => {
                 let (a, sign_a) = get_and_reset_sign(self.stack.pop_back());
@@ -1220,14 +1220,16 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 // -2^255
                 let min = (U256::one() << 255) - U256::one();
-                self.stack.push(if b.is_zero() {
-                    U256::zero()
-                } else if a == min && b == !U256::zero() {
-                    min
-                } else {
-                    let c = a / b;
-                    set_sign(c, sign_a ^ sign_b)
-                });
+                self.stack.push(
+                    if b.is_zero() {
+                        U256::zero()
+                    } else if a == min && b == !U256::zero() {
+                        min
+                    } else {
+                        let c = a / b;
+                        set_sign(c, sign_a ^ sign_b)
+                    },
+                );
             }
             instructions::SMOD => {
                 let ua = self.stack.pop_back();
@@ -1235,12 +1237,14 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let (a, sign_a) = get_and_reset_sign(ua);
                 let b = get_and_reset_sign(ub).0;
 
-                self.stack.push(if !b.is_zero() {
-                    let c = a % b;
-                    set_sign(c, sign_a)
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !b.is_zero() {
+                        let c = a % b;
+                        set_sign(c, sign_a)
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::EXP => {
                 let base = self.stack.pop_back();
@@ -1327,29 +1331,33 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let b = self.stack.pop_back();
                 let c = self.stack.pop_back();
 
-                self.stack.push(if !c.is_zero() {
-                    // upcast to 512
-                    let a5 = U512::from(a);
-                    let res = a5.overflowing_add(U512::from(b)).0;
-                    let x = res % U512::from(c);
-                    U256::from(x)
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !c.is_zero() {
+                        // upcast to 512
+                        let a5 = U512::from(a);
+                        let res = a5.overflowing_add(U512::from(b)).0;
+                        let x = res % U512::from(c);
+                        U256::from(x)
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::MULMOD => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
                 let c = self.stack.pop_back();
 
-                self.stack.push(if !c.is_zero() {
-                    let a5 = U512::from(a);
-                    let res = a5.overflowing_mul(U512::from(b)).0;
-                    let x = res % U512::from(c);
-                    U256::from(x)
-                } else {
-                    U256::zero()
-                });
+                self.stack.push(
+                    if !c.is_zero() {
+                        let a5 = U512::from(a);
+                        let res = a5.overflowing_mul(U512::from(b)).0;
+                        let x = res % U512::from(c);
+                        U256::from(x)
+                    } else {
+                        U256::zero()
+                    },
+                );
             }
             instructions::SIGNEXTEND => {
                 let bit = self.stack.pop_back();
@@ -1359,11 +1367,8 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                     let bit = number.bit(bit_position);
                     let mask = (U256::one() << bit_position) - U256::one();
-                    self.stack.push(if bit {
-                        number | !mask
-                    } else {
-                        number & mask
-                    });
+                    self.stack
+                        .push(if bit { number | !mask } else { number & mask });
                 }
             }
             instructions::SHL => {
@@ -1425,7 +1430,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn copy_data_to_memory(
-        mem: &mut Vec<u8>, stack: &mut Stack<U256>, source: &[u8],
+        mem: &mut Vec<u8>, stack: &mut dyn Stack<U256>, source: &[u8],
     ) {
         let dest_offset = stack.pop_back();
         let source_offset = stack.pop_back();
@@ -1512,7 +1517,9 @@ mod tests {
     use rustc_hex::FromHex;
     use std::sync::Arc;
 
-    fn interpreter(params: ActionParams, context: &vm::Context) -> Box<Exec> {
+    fn interpreter(
+        params: ActionParams, context: &dyn vm::Context,
+    ) -> Box<dyn Exec> {
         Factory::new(VMType::Interpreter, 1).create(
             params,
             context.spec(),

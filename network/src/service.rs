@@ -2,18 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::DisconnectReason;
 use crate::{
     discovery::{Discovery, DISCOVER_NODES_COUNT},
+    handshake::BYPASS_CRYPTOGRAPHY,
     io::*,
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
     node_table::*,
-    session::{self, Session, SessionData},
-    Capability, DisconnectReason, Error, IpFilter, NetworkConfiguration,
-    NetworkContext as NetworkContextTrait, NetworkIoMessage,
-    NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
+    session::{self, Session, SessionData, SessionDetails},
+    session_manager::SessionManager,
+    Capability, Error, ErrorKind, HandlerWorkType, IpFilter,
+    NetworkConfiguration, NetworkContext as NetworkContextTrait,
+    NetworkIoMessage, NetworkProtocolHandler, PeerId, PeerInfo, ProtocolId,
+    UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
+use cfx_types::H256;
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
 use mio::{deprecated::EventLoop, tcp::*, udp::*, *};
@@ -28,11 +33,11 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{atomic::Ordering as AtomicOrdering, Arc},
     time::{Duration, Instant},
 };
 
-type Slab<T> = ::slab::Slab<T, usize>;
+const NULL: usize = !0;
 
 const MAX_SESSIONS: usize = 2048;
 
@@ -49,6 +54,7 @@ const FAST_DISCOVERY_REFRESH: TimerToken = SYS_TIMER + 5;
 const DISCOVERY_ROUND: TimerToken = SYS_TIMER + 6;
 const NODE_TABLE: TimerToken = SYS_TIMER + 7;
 const SEND_DELAYED_MESSAGES: TimerToken = SYS_TIMER + 8;
+const CHECK_SESSIONS: TimerToken = SYS_TIMER + 9;
 const HANDLER_TIMER: TimerToken = LAST_SESSION + 256;
 
 pub const DEFAULT_HOUSEKEEPING_TIMEOUT: Duration = Duration::from_secs(1);
@@ -68,6 +74,7 @@ pub const DEFAULT_NODE_TABLE_TIMEOUT: Duration = Duration::from_secs(300);
 // to trusted.
 pub const DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION: Duration =
     Duration::from_secs(3 * 24 * 3600);
+const DEFAULT_CHECK_SESSIONS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub const MAX_DATAGRAM_SIZE: usize = 1280;
 
@@ -145,6 +152,10 @@ impl NetworkService {
         self.io_service = Some(raw_io_service);
 
         if self.inner.is_none() {
+            if self.config.test_mode {
+                BYPASS_CRYPTOGRAPHY.store(true, AtomicOrdering::Relaxed);
+            }
+
             let inner = Arc::new(match self.config.test_mode {
                 true => NetworkServiceInner::new_with_latency(&self.config)?,
                 false => NetworkServiceInner::new(&self.config)?,
@@ -185,7 +196,7 @@ impl NetworkService {
 
     /// Register a new protocol handler
     pub fn register_protocol(
-        &self, handler: Arc<NetworkProtocolHandler + Sync>,
+        &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId, versions: &[u8],
     ) -> Result<(), Error>
     {
@@ -200,12 +211,15 @@ impl NetworkService {
     }
 
     /// Executes action in the network context
-    pub fn with_context<F>(&self, protocol: ProtocolId, action: F)
-    where F: FnOnce(&NetworkContext) {
+    pub fn with_context<F, R, E: std::convert::From<String>>(
+        &self, protocol: ProtocolId, action: F,
+    ) -> Result<R, E>
+    where F: FnOnce(&NetworkContext) -> Result<R, E> {
         let io = IoContext::new(self.io_service.as_ref().unwrap().channel(), 0);
-        if let Some(ref inner) = self.inner {
-            inner.with_context(protocol, &io, action);
-        };
+        match self.inner {
+            Some(ref inner) => inner.with_context(protocol, &io, action),
+            None => Err("Network service not started yet!".to_owned().into()),
+        }
     }
 
     /// Return the current connected peers
@@ -217,14 +231,13 @@ impl NetworkService {
     pub fn sign_challenge(&self, challenge: Vec<u8>) -> Result<Vec<u8>, Error> {
         let hash = keccak(challenge);
         if let Some(ref inner) = self.inner {
-            let signature =
-                match sign(inner.metadata.read().keys.secret(), &hash) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        warn!(target: "network", "Error signing hello packet");
-                        return Err(Error::from(e));
-                    }
-                };
+            let signature = match sign(inner.metadata.keys.secret(), &hash) {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!("Error signing hello packet");
+                    return Err(Error::from(e));
+                }
+            };
             Ok(signature[..].to_owned())
         } else {
             Err("Network service not started yet!".into())
@@ -233,7 +246,7 @@ impl NetworkService {
 
     pub fn net_key_pair(&self) -> Result<KeyPair, Error> {
         if let Some(ref inner) = self.inner {
-            Ok(inner.metadata.read().keys.clone())
+            Ok(inner.metadata.keys.clone())
         } else {
             Err("Network service not started yet!".into())
         }
@@ -248,15 +261,60 @@ impl NetworkService {
             Err("Network service not started yet!".into())
         }
     }
+
+    pub fn get_node(&self, id: &NodeId) -> Option<(bool, Node)> {
+        let inner = self.inner.as_ref()?;
+        let node_db = inner.node_db.read();
+        let (trusted, node) = node_db.get_with_trusty(id)?;
+        Some((trusted, node.clone()))
+    }
+
+    pub fn get_detailed_sessions(
+        &self, node_id: Option<NodeId>,
+    ) -> Option<Vec<SessionDetails>> {
+        let inner = self.inner.as_ref()?;
+        match node_id {
+            None => Some(
+                inner
+                    .sessions
+                    .all()
+                    .iter()
+                    .map(|s| s.read().details())
+                    .collect(),
+            ),
+            Some(id) => {
+                let session = inner.sessions.get_by_id(&id)?;
+                let details = session.read().details();
+                Some(vec![details])
+            }
+        }
+    }
+
+    pub fn disconnect_node(
+        &self, id: &NodeId, op: Option<UpdateNodeOperation>,
+    ) -> Option<usize> {
+        let inner = self.inner.as_ref()?;
+        let peer = inner.sessions.get_index_by_id(id)?;
+        let io = IoContext::new(self.io_service.as_ref()?.channel(), 0);
+        inner.kill_connection(
+            peer,
+            &io,
+            true,
+            op,
+            Some(DisconnectReason::DisconnectRequested),
+        );
+        Some(peer)
+    }
 }
 
 type SharedSession = Arc<RwLock<Session>>;
 
 pub struct HostMetadata {
-    #[allow(unused)]
     /// Our private and public keys.
     pub keys: KeyPair,
-    pub capabilities: Vec<Capability>,
+    /// Connection nonce.
+    nonce: RwLock<H256>,
+    pub capabilities: RwLock<Vec<Capability>>,
     pub local_address: SocketAddr,
     /// Local address + discovery port
     pub local_endpoint: NodeEndpoint,
@@ -265,6 +323,14 @@ pub struct HostMetadata {
 }
 
 impl HostMetadata {
+    pub fn next_nonce(&self) -> H256 {
+        let mut nonce = self.nonce.write();
+        *nonce = keccak(&*nonce);
+        *nonce
+    }
+
+    pub(crate) fn secret(&self) -> &Secret { self.keys.secret() }
+
     pub(crate) fn id(&self) -> &NodeId { self.keys.public() }
 }
 
@@ -278,14 +344,15 @@ struct ProtocolTimer {
 /// RWLocks of the fields have to follow the defined order to avoid race
 #[allow(dead_code)]
 pub struct NetworkServiceInner {
-    sessions: Arc<RwLock<Slab<SharedSession>>>,
-    pub metadata: RwLock<HostMetadata>,
+    pub sessions: SessionManager,
+    pub metadata: HostMetadata,
     pub config: NetworkConfiguration,
     udp_socket: Mutex<UdpSocket>,
     tcp_listener: Mutex<TcpListener>,
     udp_channel: RwLock<UdpChannel>,
     discovery: Mutex<Option<Discovery>>,
-    handlers: RwLock<HashMap<ProtocolId, Arc<NetworkProtocolHandler + Sync>>>,
+    handlers:
+        RwLock<HashMap<ProtocolId, Arc<dyn NetworkProtocolHandler + Sync>>>,
     timers: RwLock<HashMap<TimerToken, ProtocolTimer>>,
     timer_counter: RwLock<usize>,
     pub node_db: RwLock<NodeDatabase>,
@@ -312,20 +379,36 @@ impl DelayedQueue {
 
     fn send_delayed_messages(&self, network_service: &NetworkServiceInner) {
         let context = self.queue.lock().pop().unwrap();
-        if context
-            .session
-            .write()
-            .send_packet(
-                &context.io,
-                Some(context.protocol),
-                session::PACKET_USER,
-                &context.msg,
-                context.priority,
-            )
-            .is_err()
-        {
-            debug!("Error sending delayed message");
-            network_service.kill_connection(context.peer, &context.io, true);
+        match context.session.write().send_packet(
+            &context.io,
+            Some(context.protocol),
+            session::PACKET_USER,
+            &context.msg,
+            context.priority,
+        ) {
+            Ok(_) => {}
+            Err(Error(ErrorKind::Expired, _)) => {
+                // If a connection is set expired, it should have been killed
+                // before, and the stored `context.peer` may have been reused by
+                // another connection, so we cannot kill it again
+                info!(
+                    "Error sending delayed message to expired connection {:?}",
+                    context.peer
+                );
+            }
+            Err(e) => {
+                info!(
+                    "Error sending delayed message: peer={:?} err={:?}",
+                    context.peer, e
+                );
+                network_service.kill_connection(
+                    context.peer,
+                    &context.io,
+                    true,
+                    Some(UpdateNodeOperation::Failure),
+                    None,
+                );
+            }
         };
     }
 }
@@ -373,7 +456,7 @@ impl NetworkServiceInner {
             listen_address.ip(),
             tcp_listener.local_addr()?.port(),
         );
-        debug!(target: "network", "Listening at {:?}", listen_address);
+        debug!("Listening at {:?}", listen_address);
         let udp_port = config.udp_port.unwrap_or_else(|| listen_address.port());
         let local_endpoint = NodeEndpoint {
             address: listen_address,
@@ -426,28 +509,31 @@ impl NetworkServiceInner {
         let nodes_path = config.config_path.clone();
 
         let mut inner = NetworkServiceInner {
-            metadata: RwLock::new(HostMetadata {
+            metadata: HostMetadata {
                 keys,
-                capabilities: Vec::new(),
+                nonce: RwLock::new(H256::random()),
+                capabilities: RwLock::new(Vec::new()),
                 local_address: listen_address,
                 local_endpoint,
                 public_endpoint,
-            }),
+            },
             config: config.clone(),
             udp_channel: RwLock::new(UdpChannel::new()),
             discovery: Mutex::new(discovery),
             udp_socket: Mutex::new(udp_socket),
             tcp_listener: Mutex::new(tcp_listener),
-            sessions: Arc::new(RwLock::new(Slab::new_starting_at(
+            sessions: SessionManager::new(
                 FIRST_SESSION,
-                LAST_SESSION,
-            ))),
+                MAX_SESSIONS,
+                config.max_incoming_peers,
+                &config.session_ip_limit_config,
+            ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
             timer_counter: RwLock::new(HANDLER_TIMER),
             node_db: RwLock::new(NodeDatabase::new(
                 nodes_path,
-                config.nodes_per_ip,
+                config.subnet_quota,
             )),
             reserved_nodes: RwLock::new(HashSet::new()),
             nodes: RwLock::new(HashMap::new()),
@@ -462,7 +548,7 @@ impl NetworkServiceInner {
         let reserved_nodes = config.reserved_nodes.clone();
         for n in reserved_nodes {
             if let Err(e) = inner.add_reserved_node(&n) {
-                debug!(target: "network", "Error parsing node id: {}: {:?}", n, e);
+                debug!("Error parsing node id: {}: {:?}", n, e);
             }
         }
 
@@ -503,7 +589,7 @@ impl NetworkServiceInner {
     fn add_boot_node(&self, id: &str) {
         match Node::from_str(id) {
             Err(e) => {
-                debug!(target: "network", "Could not add node {}: {:?}", id, e);
+                debug!("Could not add node {}: {:?}", id, e);
             }
             Ok(n) => {
                 self.node_db.write().insert_trusted(NodeEntry {
@@ -552,6 +638,7 @@ impl NetworkServiceInner {
             )?;
         }
         io.register_timer(NODE_TABLE, self.config.node_table_timeout)?;
+        io.register_timer(CHECK_SESSIONS, DEFAULT_CHECK_SESSIONS_TIMEOUT)?;
 
         Ok(())
     }
@@ -559,9 +646,9 @@ impl NetworkServiceInner {
     fn try_promote_untrusted(&self) {
         // Get NodeIds from incoming connections
         let mut incoming_ids: Vec<NodeId> = Vec::new();
-        for s in self.sessions.read().iter() {
-            if let Some(ref s) = s.try_read() {
-                if s.is_ready() && !s.metadata.originated {
+        for s in self.sessions.all() {
+            if let Some(s) = s.try_read() {
+                if s.is_ready() && !s.metadata.originated && !s.expired() {
                     // is live incoming connection
                     if let Some(id) = s.metadata.id {
                         incoming_ids.push(id);
@@ -578,9 +665,7 @@ impl NetworkServiceInner {
         );
     }
 
-    pub fn local_addr(&self) -> SocketAddr {
-        self.metadata.read().local_address
-    }
+    pub fn local_addr(&self) -> SocketAddr { self.metadata.local_address }
 
     fn drop_node(&self, local_id: NodeId) -> Result<(), Error> {
         let removed_node = self.node_db.write().remove(&local_id);
@@ -595,9 +680,15 @@ impl NetworkServiceInner {
         Ok(())
     }
 
-    fn has_enough_outgoing_peers(&self) -> bool {
-        let (_, egress_count, _) = self.session_count();
-        return egress_count >= self.config.max_outgoing_peers as usize;
+    fn has_enough_outgoing_peers(
+        &self, tag: Option<(&str, &str)>, max: usize,
+    ) -> bool {
+        let count = match tag {
+            Some((k, v)) => self.sessions.count_with_tag(&k.into(), &v.into()),
+            None => self.sessions.stat().1, // egress count
+        };
+
+        count >= max
     }
 
     fn on_housekeeping(&self, io: &IoContext<NetworkIoMessage>) {
@@ -607,48 +698,80 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        let meta = self.metadata.read();
-        if meta.capabilities.is_empty() {
+        if self.metadata.capabilities.read().is_empty() {
             return;
         }
 
-        let self_id = meta.id().clone();
-        let max_outgoing_peers = self.config.max_outgoing_peers as usize;
-        //let max_incoming_peers = self.config.max_incoming_peers;
-        let max_handshakes = self.config.max_handshakes;
-        let allow_ips = self.config.ip_filter.clone();
+        let self_id = self.metadata.id().clone();
+
+        let sampled_archive_nodes = self.sample_archive_nodes();
 
         let (handshake_count, egress_count, ingress_count) =
-            self.session_count();
+            self.sessions.stat();
         let samples;
         {
-            let egress_attempt_count = if max_outgoing_peers > egress_count {
-                max_outgoing_peers - egress_count
+            let egress_attempt_count = if self.config.max_outgoing_peers
+                > egress_count + sampled_archive_nodes.len()
+            {
+                self.config.max_outgoing_peers
+                    - egress_count
+                    - sampled_archive_nodes.len()
             } else {
                 0
             };
             samples = self.node_db.read().sample_trusted_node_ids(
                 egress_attempt_count as u32,
-                &allow_ips,
+                &self.config.ip_filter,
             );
         }
+
         let reserved_nodes = self.reserved_nodes.read();
         // Try to connect all reserved peers and trusted peers
-        let nodes = reserved_nodes.iter().cloned().chain(samples);
+        let nodes = reserved_nodes
+            .iter()
+            .cloned()
+            .chain(sampled_archive_nodes)
+            .chain(samples);
 
-        let max_handshakes_per_round = max_handshakes / 2;
+        let max_handshakes_per_round = self.config.max_handshakes / 2;
         let mut started: usize = 0;
         for id in nodes
-            .filter(|id| !self.have_session(id) && *id != self_id)
+            .filter(|id| !self.sessions.contains_node(id) && *id != self_id)
             .take(min(
-                max_handshakes_per_round as usize,
-                max_handshakes as usize - handshake_count,
+                max_handshakes_per_round,
+                self.config.max_handshakes - handshake_count,
             ))
         {
             self.connect_peer(&id, io);
             started += 1;
         }
-        debug!(target: "network", "Connecting peers: {} sessions, {} pending + {} started", egress_count + ingress_count, handshake_count, started);
+        debug!(
+            "Connecting peers: {} sessions, {} pending + {} started",
+            egress_count + ingress_count,
+            handshake_count,
+            started
+        );
+    }
+
+    /// Sample archive nodes for outgoing connections if not enough.
+    fn sample_archive_nodes(&self) -> HashSet<NodeId> {
+        if self.config.max_outgoing_peers_archive == 0 {
+            return HashSet::new();
+        }
+
+        let key: String = NODE_TAG_NODE_TYPE.into();
+        let value: String = NODE_TAG_ARCHIVE.into();
+        let archive_sessions = self.sessions.count_with_tag(&key, &value);
+
+        if archive_sessions >= self.config.max_outgoing_peers_archive {
+            return HashSet::new();
+        }
+
+        self.node_db.read().sample_trusted_node_ids_with_tag(
+            (self.config.max_outgoing_peers_archive - archive_sessions) as u32,
+            &key,
+            &value,
+        )
     }
 
     // Kill connections of all dropped peers
@@ -660,40 +783,20 @@ impl NetworkServiceInner {
         }
         let mut w = self.dropped_nodes.write();
         for token in w.iter() {
-            self.kill_connection(*token, io, true);
+            self.kill_connection(
+                *token,
+                io,
+                true,
+                Some(UpdateNodeOperation::Failure),
+                None,
+            );
         }
         w.clear();
     }
 
-    // returns (handshakes, egress, ingress)
-    fn session_count(&self) -> (usize, usize, usize) {
-        let mut handshakes = 0;
-        let mut egress = 0;
-        let mut ingress = 0;
-        for s in self.sessions.read().iter() {
-            match s.try_read() {
-                Some(ref s) if s.is_ready() && s.metadata.originated => {
-                    egress += 1
-                }
-                Some(ref s) if s.is_ready() && !s.metadata.originated => {
-                    ingress += 1
-                }
-                _ => handshakes += 1,
-            }
-        }
-        (handshakes, egress, ingress)
-    }
-
-    fn have_session(&self, id: &NodeId) -> bool {
-        self.sessions
-            .read()
-            .iter()
-            .any(|sess| sess.read().metadata.id == Some(*id))
-    }
-
     fn connect_peer(&self, id: &NodeId, io: &IoContext<NetworkIoMessage>) {
-        if self.have_session(id) {
-            trace!(target: "network", "Abort connect. Node already connected");
+        if self.sessions.contains_node(id) {
+            trace!("Abort connect. Node already connected");
             return;
         }
 
@@ -703,72 +806,75 @@ impl NetworkServiceInner {
                 if let Some(node) = self.node_db.read().get(id, true) {
                     node.endpoint.address
                 } else {
-                    debug!(target: "network", "Abort connect. Node expired");
+                    debug!("Abort connect. Node expired");
                     return;
                 }
             };
+
+            if !self.sessions.is_ip_allowed(&address.ip()) {
+                debug!("cannot create outgoing connection to node, id = {:?}, address = {:?}", id, address);
+                return;
+            }
+
             match TcpStream::connect(&address) {
                 Ok(socket) => {
-                    trace!(target: "network", "{}: connecting to {:?}", id, address);
+                    trace!("{}: connecting to {:?}", id, address);
                     (socket, address)
                 }
                 Err(e) => {
-                    self.node_db.write().note_failure(id, true, true);
-                    debug!(target: "network", "{}: can't connect o address {:?} {:?}", id, address, e);
+                    self.node_db.write().note_failure(
+                        id, true, /* by_connection */
+                        true, /* trusted_only */
+                    );
+                    debug!(
+                        "{}: can't connect o address {:?} {:?}",
+                        id, address, e
+                    );
                     return;
                 }
             }
         };
 
         if let Err(e) = self.create_connection(socket, address, Some(id), io) {
-            self.node_db.write().note_failure(id, true, true);
-            debug!(target: "network", "Can't create connection: {:?}", e);
+            self.node_db.write().note_failure(
+                id, true, /* by_connection */
+                true, /* trusted_only */
+            );
+            debug!("Can't create connection: {:?}", e);
         }
     }
 
     pub fn get_peer_info(&self) -> Vec<PeerInfo> {
-        let sessions = self.sessions.read();
-        let sessions = &*sessions;
+        debug!("get_peer_info: enter");
 
-        let mut peers = Vec::with_capacity(sessions.count());
-        for i in (0..MAX_SESSIONS).map(|x| x + FIRST_SESSION) {
-            let session = sessions.get(i);
-            if session.is_some() {
-                let sess = session.unwrap().read();
+        let mut peers = Vec::with_capacity(self.sessions.count());
+        debug!("get_peer_info: {} sessions in total", peers.capacity());
+
+        for session in self.sessions.all() {
+            let sess = session.read();
+            if !sess.expired() {
                 peers.push(PeerInfo {
-                    id: i,
+                    id: sess.token(),
                     nodeid: sess.id().unwrap_or(&NodeId::default()).clone(),
                     addr: sess.address(),
                     caps: sess.metadata.peer_capabilities.clone(),
-                })
+                });
             }
         }
+
+        debug!("get_peer_info: leave, {} peers retrieved", peers.len());
+
         peers
     }
 
     pub fn get_peer_node_id(&self, peer: PeerId) -> NodeId {
-        let sessions = self.sessions.read();
-        let session = sessions.get(peer);
-        if session.is_some() {
-            let sess = session.unwrap().read();
-            sess.id().unwrap_or(&NodeId::default()).clone()
-        } else {
-            NodeId::default()
-        }
-    }
-
-    #[allow(unused)]
-    pub fn connected_peers(&self) -> Vec<PeerId> {
-        let sessions = self.sessions.read();
-        let sessions = &*sessions;
-
-        let mut peers = Vec::with_capacity(sessions.count());
-        for i in (0..MAX_SESSIONS).map(|x| x + FIRST_SESSION) {
-            if sessions.get(i).is_some() {
-                peers.push(i);
+        match self.sessions.get(peer) {
+            Some(session) => {
+                let sess = session.read();
+                sess.id().unwrap_or(&NodeId::default()).clone()
             }
+            None => NodeId::default(),
         }
-        peers
     }
 
     fn start(&self, io: &IoContext<NetworkIoMessage>) -> Result<(), Error> {
@@ -786,27 +892,9 @@ impl NetworkServiceInner {
         io: &IoContext<NetworkIoMessage>,
     ) -> Result<(), Error>
     {
-        let mut sessions = self.sessions.write();
-
-        let token = sessions.insert_with_opt(|token| {
-            trace!(target: "network", "{}: Initiating session", token);
-            match Session::new(
-                io,
-                socket,
-                address,
-                id,
-                token,
-                self,
-            ) {
-                Ok(sess) => Some(Arc::new(RwLock::new(sess))),
-                Err(e) => {
-                    debug!(target: "network", "Error creating session: {:?}", e);
-                    None
-                }
-            }
-        });
-        match token {
-            Some(token) => {
+        match self.sessions.create(socket, address, id, io, self) {
+            Ok(token) => {
+                debug!("new session created, token = {}, address = {:?}, id = {:?}", token, address, id);
                 if let Some(id) = id {
                     // This is an outgoing connection.
                     // Outgoing connection must pick node from trusted node
@@ -815,8 +903,8 @@ impl NetworkServiceInner {
                 }
                 io.register_stream(token).map(|_| ()).map_err(Into::into)
             }
-            None => {
-                debug!(target: "network", "Max sessions reached");
+            Err(reason) => {
+                debug!("failed to create session, reason = {}, address = {:?}, id = {:?}", reason, address, id);
                 Ok(())
             }
         }
@@ -825,8 +913,14 @@ impl NetworkServiceInner {
     fn connection_closed(
         &self, stream: StreamToken, io: &IoContext<NetworkIoMessage>,
     ) {
-        trace!(target: "network", "Connection closed: {}", stream);
-        self.kill_connection(stream, io, true);
+        trace!("Connection closed: {}", stream);
+        self.kill_connection(
+            stream,
+            io,
+            true,
+            Some(UpdateNodeOperation::Failure),
+            None,
+        );
     }
 
     fn session_readable(
@@ -843,10 +937,9 @@ impl NetworkServiceInner {
         let mut ready_protocols: Vec<ProtocolId> = Vec::new();
         let mut messages: Vec<(ProtocolId, Vec<u8>)> = Vec::new();
         let mut kill = false;
-        let session = self.sessions.read().get(stream).cloned();
 
         // if let Some(session) = session.clone()
-        if let Some(session) = session {
+        if let Some(session) = self.sessions.get(stream) {
             loop {
                 let mut sess = session.write();
                 let data = sess.readable(io, self);
@@ -861,17 +954,17 @@ impl NetworkServiceInner {
                     }
                     Ok(SessionData::Message { data, protocol }) => {
                         match self.handlers.read().get(&protocol) {
-                            None => {
-                                warn!(target: "network", "No handler found for protocol: {:?}", protocol)
-                            }
+                            None => warn!(
+                                "No handler found for protocol: {:?}",
+                                protocol
+                            ),
                             Some(_) => messages.push((protocol, data)),
                         }
                     }
                     Ok(SessionData::Continue) => (),
                     Ok(SessionData::None) => break,
-                    Err(e) => {
-                        //let sess = session.lock();
-                        debug!("Error of readable {:?}", e);
+                    Err(Error(kind, _)) => {
+                        debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
                         kill = true;
                         break;
                     }
@@ -880,18 +973,20 @@ impl NetworkServiceInner {
         }
 
         if kill {
-            self.kill_connection(stream, io, true);
+            self.kill_connection(
+                stream,
+                io,
+                true,
+                Some(UpdateNodeOperation::Failure),
+                None,
+            );
         }
 
         let handlers = self.handlers.read();
         if !ready_protocols.is_empty() {
             for protocol in ready_protocols {
                 if let Some(handler) = handlers.get(&protocol).clone() {
-                    debug!(
-                        "Network Service: {}: peer {} connected",
-                        self.local_addr(),
-                        stream
-                    );
+                    debug!("session handshaked, token = {}", stream);
                     handler.on_peer_connected(
                         &NetworkContext::new(io, protocol, self),
                         stream,
@@ -920,12 +1015,10 @@ impl NetworkServiceInner {
             self.drop_peers(io);
         }
 
-        let session = self.sessions.read().get(stream).cloned();
-
-        if let Some(session) = session {
+        if let Some(session) = self.sessions.get(stream) {
             let mut sess = session.write();
             if let Err(e) = sess.writable(io) {
-                trace!(target: "network", "{}: Session write error: {:?}", stream, e);
+                trace!("{}: Session write error: {:?}", stream, e);
             }
             if sess.done() {
                 io.deregister_stream(stream).unwrap_or_else(|e| {
@@ -936,41 +1029,46 @@ impl NetworkServiceInner {
     }
 
     fn accept(&self, io: &IoContext<NetworkIoMessage>) {
-        trace!(target: "network", "Accepting incoming connection");
+        trace!("Accepting incoming connection");
         loop {
             let (socket, address) = match self.tcp_listener.lock().accept() {
                 Ok((sock, addr)) => (sock, addr),
                 Err(e) => {
                     if e.kind() != io::ErrorKind::WouldBlock {
-                        debug!(target: "network", "Error accepting connection: {:?}", e);
+                        debug!("Error accepting connection: {:?}", e);
                     }
                     break;
                 }
             };
+
             if let Err(e) = self.create_connection(socket, address, None, io) {
-                debug!(target: "netweork", "Can't accept connection: {:?}", e);
+                debug!("Can't accept connection: {:?}", e);
             }
         }
     }
 
     fn kill_connection(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
-        remote: bool,
+        remote: bool, op: Option<UpdateNodeOperation>,
+        reason: Option<DisconnectReason>,
     )
     {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
         let mut failure_id = None;
         let mut deregister = false;
 
-        if let FIRST_SESSION...LAST_SESSION = token {
-            let sessions = self.sessions.read();
-            if let Some(session) = sessions.get(token).cloned() {
+        if let FIRST_SESSION..=LAST_SESSION = token {
+            if let Some(session) = self.sessions.get(token) {
                 let mut sess = session.write();
                 if !sess.expired() {
                     if sess.is_ready() {
                         for (p, _) in self.handlers.read().iter() {
                             if sess.have_capability(*p) {
                                 to_disconnect.push(*p);
+
+                                if let Some(ref reason) = reason {
+                                    sess.send_disconnect(reason.clone());
+                                };
                             }
                         }
                     }
@@ -978,23 +1076,47 @@ impl NetworkServiceInner {
                 }
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
-                debug!("deregister stream {}? {}", token, deregister);
+                debug!(
+                    "kill connection, deregister = {}, resson = {:?}, session = {:?}",
+                    deregister, reason, *sess
+                );
             }
         }
+
         if let Some(id) = failure_id {
             if remote {
-                self.node_db.write().note_failure(&id, true, false);
+                if let Some(op) = op {
+                    match op {
+                        UpdateNodeOperation::Failure => {
+                            self.node_db.write().note_failure(
+                                &id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
+                        }
+                        UpdateNodeOperation::Demotion => {
+                            self.node_db.write().demote(&id);
+                            self.node_db.write().note_failure(
+                                &id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
+                        }
+                        UpdateNodeOperation::Remove => {
+                            self.node_db.write().set_blacklisted(&id);
+                        }
+                    }
+                }
             }
         }
+
         for p in to_disconnect {
             if let Some(h) = self.handlers.read().get(&p).clone() {
-                debug!("{}: peer {} disconnected", self.local_addr(), token);
                 h.on_peer_disconnected(
                     &NetworkContext::new(io, p, self),
                     token,
                 );
             }
         }
+
         if deregister {
             io.deregister_stream(token).unwrap_or_else(|e| {
                 debug!("Error deregistering stream {:?}", e);
@@ -1002,14 +1124,15 @@ impl NetworkServiceInner {
         }
     }
 
-    pub fn with_context<F>(
+    pub fn with_context<F, R, E>(
         &self, protocol: ProtocolId, io: &IoContext<NetworkIoMessage>,
         action: F,
-    ) where
-        F: FnOnce(&NetworkContext),
+    ) -> Result<R, E>
+    where
+        F: FnOnce(&NetworkContext) -> Result<R, E>,
     {
         let context = NetworkContext::new(io, protocol, self);
-        action(&context);
+        action(&context)
     }
 
     fn udp_readable(&self, io: &IoContext<NetworkIoMessage>) {
@@ -1022,14 +1145,16 @@ impl NetworkServiceInner {
 
         let mut buf = [0u8; MAX_DATAGRAM_SIZE];
         match udp_socket.recv_from(&mut buf) {
-			Ok(Some((len, address))) => self.on_udp_packet(&buf[0..len], address).unwrap_or_else(|e| {
-				debug!(target: "network", "Error processing UDP packet: {:?}", e);
-			}),
-			Ok(_) => {},
-			Err(e) => {
-				debug!(target: "network", "Error reading UDP socket: {:?}", e);
-			},
-		};
+            Ok(Some((len, address))) => self
+                .on_udp_packet(&buf[0..len], address)
+                .unwrap_or_else(|e| {
+                    debug!("Error processing UDP packet: {:?}", e);
+                }),
+            Ok(_) => {}
+            Err(e) => {
+                debug!("Error reading UDP socket: {:?}", e);
+            }
+        };
 
         let new_writable;
         {
@@ -1041,10 +1166,9 @@ impl NetworkServiceInner {
         // If it does, we might need to change monitor interest to All if
         // it is only Readable.
         if writable != new_writable {
-            io.update_registration(UDP_MESSAGE)
-                .unwrap_or_else(|e| {
-                    debug!(target: "network", "Error updating UDP registration: {:?}", e)
-                });
+            io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
+                debug!("Error updating UDP registration: {:?}", e)
+            });
         }
     }
 
@@ -1055,23 +1179,25 @@ impl NetworkServiceInner {
             match udp_socket.send_to(&data.payload, &data.address) {
                 Ok(Some(size)) if size == data.payload.len() => {}
                 Ok(Some(_)) => {
-                    warn!(target: "network", "UDP sent incomplete datagram");
+                    warn!("UDP sent incomplete datagram");
                 }
                 Ok(None) => {
                     udp_channel.requeue_send(data);
                     return;
                 }
                 Err(e) => {
-                    debug!(target: "network", "UDP send error: {:?}, address: {:?}", e, &data.address);
+                    debug!(
+                        "UDP send error: {:?}, address: {:?}",
+                        e, &data.address
+                    );
                     return;
                 }
             }
         }
         // look at whether the monitor interest can be set as Readable.
-        io.update_registration(UDP_MESSAGE)
-			.unwrap_or_else(|e| {
-				debug!(target: "network", "Error updating UDP registration: {:?}", e)
-			});
+        io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
+            debug!("Error updating UDP registration: {:?}", e)
+        });
     }
 
     fn on_udp_packet(
@@ -1091,16 +1217,32 @@ impl NetworkServiceInner {
                     )?;
                     Ok(())
                 } else {
-                    warn!(target: "network", "Discovery is not ready. Drop the message!");
+                    warn!("Discovery is not ready. Drop the message!");
                     Ok(())
                 }
             }
             _ => {
-                warn!(target: "network", "Unknown UDP protocol. Simply drops the message!");
+                warn!("Unknown UDP protocol. Simply drops the message!");
                 Ok(())
             }
         };
         res
+    }
+
+    fn on_check_sessions(&self, io: &IoContext<NetworkIoMessage>) {
+        let mut disconnect_peers = Vec::new();
+
+        for session in self.sessions.all() {
+            if let Some(sess) = session.try_read() {
+                if let (true, op) = sess.check_timeout() {
+                    disconnect_peers.push((sess.token(), op));
+                }
+            }
+        }
+
+        for (token, op) in disconnect_peers {
+            self.kill_connection(token, io, true, op, None);
+        }
     }
 }
 
@@ -1117,10 +1259,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     fn stream_hup(
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
-        trace!(target: "network", "Hup: {}", stream);
+        trace!("Hup: {}", stream);
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.connection_closed(stream, io),
-            _ => warn!(target: "network", "Unexpected hup"),
+            FIRST_SESSION..=LAST_SESSION => self.connection_closed(stream, io),
+            _ => warn!("Unexpected hup"),
         }
     }
 
@@ -1128,7 +1270,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.session_readable(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.session_readable(stream, io),
             TCP_ACCEPT => self.accept(io),
             UDP_MESSAGE => self.udp_readable(io),
             _ => panic!("Received unknown readable token"),
@@ -1139,7 +1281,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
         match stream {
-            FIRST_SESSION...LAST_SESSION => self.session_writable(stream, io),
+            FIRST_SESSION..=LAST_SESSION => self.session_writable(stream, io),
             UDP_MESSAGE => self.udp_writable(io),
             _ => panic!("Received unknown writable token"),
         }
@@ -1147,11 +1289,33 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
 
     fn timeout(&self, io: &IoContext<NetworkIoMessage>, token: TimerToken) {
         match token {
+            FIRST_SESSION..=LAST_SESSION => {
+                debug!("Connection timeout: {}", token);
+                self.kill_connection(
+                    token,
+                    io,
+                    true,
+                    Some(UpdateNodeOperation::Demotion),
+                    Some(DisconnectReason::Custom("session timeout".into())),
+                );
+            }
             HOUSEKEEPING => self.on_housekeeping(io),
             DISCOVERY_REFRESH => {
                 // Run the _slow_ discovery if enough peers are connected
-                if self.has_enough_outgoing_peers() {
-                    self.discovery.lock().as_mut().map(|d| d.refresh());
+                let disc_general = self.has_enough_outgoing_peers(
+                    None,
+                    self.config.max_outgoing_peers,
+                );
+                let disc_archive = self.has_enough_outgoing_peers(
+                    Some((NODE_TAG_NODE_TYPE, NODE_TAG_ARCHIVE)),
+                    self.config.max_outgoing_peers_archive,
+                );
+                if disc_general || disc_archive {
+                    self.discovery.lock().as_mut().map(|d| {
+                        d.disc_option.general = disc_general;
+                        d.disc_option.archive = disc_archive;
+                        d.refresh();
+                    });
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
@@ -1159,8 +1323,20 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             }
             FAST_DISCOVERY_REFRESH => {
                 // Run the fast discovery if not enough peers are connected
-                if !self.has_enough_outgoing_peers() {
-                    self.discovery.lock().as_mut().map(|d| d.refresh());
+                let disc_general = !self.has_enough_outgoing_peers(
+                    None,
+                    self.config.max_outgoing_peers,
+                );
+                let disc_archive = !self.has_enough_outgoing_peers(
+                    Some((NODE_TAG_NODE_TYPE, NODE_TAG_ARCHIVE)),
+                    self.config.max_outgoing_peers_archive,
+                );
+                if disc_general || disc_archive {
+                    self.discovery.lock().as_mut().map(|d| {
+                        d.disc_option.general = disc_general;
+                        d.disc_option.archive = disc_archive;
+                        d.refresh();
+                    });
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
@@ -1178,10 +1354,11 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 });
             }
             NODE_TABLE => {
-                trace!(target: "network", "Refreshing node table");
+                trace!("Refreshing node table");
                 self.try_promote_untrusted();
                 self.node_db.write().save();
             }
+            CHECK_SESSIONS => self.on_check_sessions(io),
             SEND_DELAYED_MESSAGES => {
                 if let Some(ref queue) = self.delayed_queue {
                     queue.send_delayed_messages(self);
@@ -1190,9 +1367,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             _ => match self.timers.read().get(&token).cloned() {
                 Some(timer) => {
                     match self.handlers.read().get(&timer.protocol).cloned() {
-                        None => {
-                            warn!(target: "network", "No handler found for protocol: {:?}", timer.protocol)
-                        }
+                        None => warn!(
+                            "No handler found for protocol: {:?}",
+                            timer.protocol
+                        ),
                         Some(h) => {
                             h.on_timeout(
                                 &NetworkContext::new(io, timer.protocol, self),
@@ -1223,9 +1401,9 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 let h = handler.clone();
                 h.initialize(&NetworkContext::new(io, *protocol, self));
                 self.handlers.write().insert(*protocol, h);
-                let mut metadata = self.metadata.write();
+                let mut caps = self.metadata.capabilities.write();
                 for &version in versions {
-                    metadata.capabilities.push(Capability {
+                    caps.push(Capability {
                         protocol: *protocol,
                         version,
                     });
@@ -1255,16 +1433,19 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                         debug!("Error registering timer {}: {:?}", token, e)
                     });
             }
-            NetworkIoMessage::Disconnect(ref peer) => {
-                let session = self.sessions.read().get(*peer).cloned();
-                if let Some(session) = session {
-                    session
-                        .write()
-                        .disconnect(io, DisconnectReason::DisconnectRequested);
+            NetworkIoMessage::DispatchWork {
+                ref protocol,
+                ref work_type,
+            } => {
+                if let Some(handler) = self.handlers.read().get(protocol) {
+                    handler.on_work_dispatch(
+                        &NetworkContext::new(io, *protocol, self),
+                        *work_type,
+                    );
+                } else {
+                    warn!("Work is dispatched to unknown handler");
                 }
-                trace!(target: "network", "Disconnect requested {}", peer);
-                self.kill_connection(*peer, io, false);
-            } //_ => {}
+            }
         }
     }
 
@@ -1274,9 +1455,8 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
-                let session = self.sessions.read().get(stream).cloned();
-                if let Some(session) = session {
+            FIRST_SESSION..=LAST_SESSION => {
+                if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
                         .register_socket(reg, event_loop)
@@ -1313,20 +1493,20 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
-                let mut sessions = self.sessions.write();
-                if let Some(session) = sessions.get(stream).cloned() {
+            FIRST_SESSION..=LAST_SESSION => {
+                if let Some(session) = self.sessions.get(stream) {
                     let sess = session.write();
                     if sess.expired() {
                         sess.deregister_socket(event_loop)
                             .expect("Error deregistering socket");
                         if let Some(node_id) = sess.id() {
-                            self.node_db
-                                .write()
-                                .note_failure(node_id, true, false);
+                            self.node_db.write().note_failure(
+                                node_id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
                         }
-                        debug!("Remove session {}", stream);
-                        sessions.remove(stream);
+                        self.sessions.remove(&*sess);
+                        debug!("Removed session: {:?}", *sess);
                     }
                 }
             }
@@ -1340,9 +1520,8 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     )
     {
         match stream {
-            FIRST_SESSION...LAST_SESSION => {
-                let session = self.sessions.read().get(stream).cloned();
-                if let Some(session) = session {
+            FIRST_SESSION..=LAST_SESSION => {
+                if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
                         .update_socket(reg, event_loop)
@@ -1453,9 +1632,21 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
     fn send(
         &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error> {
-        let sessions = self.network_service.sessions.read();
-        let session = sessions.get(peer);
-        trace!(target: "network", "Sending {} bytes to {}", msg.len(), peer);
+        if peer == NULL {
+            let protocol_handler = self
+                .network_service
+                .handlers
+                .read()
+                .get(&self.protocol)
+                .unwrap()
+                .clone();
+
+            protocol_handler.send_local_message(self, msg);
+            return Ok(());
+        }
+
+        let session = self.network_service.sessions.get(peer);
+        trace!("Sending {} bytes to {}", msg.len(), peer);
         if let Some(session) = session {
             let latency =
                 self.network_service
@@ -1479,7 +1670,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         ts_to_send,
                         self.io.clone(),
                         self.protocol,
-                        (*session).clone(),
+                        session.clone(),
                         peer,
                         msg,
                         priority,
@@ -1505,8 +1696,14 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         Ok(())
     }
 
-    fn disconnect_peer(&self, peer: PeerId) {
-        self.network_service.kill_connection(peer, self.io, true);
+    fn disconnect_peer(
+        &self, peer: PeerId, op: Option<UpdateNodeOperation>,
+        reason: Option<&'static str>,
+    )
+    {
+        let reason = reason.map(|r| DisconnectReason::Custom(r.into()));
+        self.network_service
+            .kill_connection(peer, self.io, true, op, reason);
     }
 
     fn register_timer(
@@ -1522,6 +1719,23 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                 warn!("Error sending network IO message: {:?}", e)
             });
         Ok(())
+    }
+
+    fn dispatch_work(&self, work_type: HandlerWorkType) {
+        self.io
+            .message(NetworkIoMessage::DispatchWork {
+                protocol: self.protocol,
+                work_type,
+            })
+            .expect("Error sending network IO message");
+    }
+
+    fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str) {
+        let id = self.network_service.get_peer_node_id(peer);
+        self.network_service.node_db.write().set_tag(id, key, value);
+        self.network_service
+            .sessions
+            .add_tag(peer, key.into(), value.into());
     }
 }
 
@@ -1541,7 +1755,7 @@ fn save_key(path: &Path, key: &Secret) {
         }
     };
     if let Err(e) = restrict_permissions_owner(path, true, false) {
-        warn!(target: "network", "Failed to modify permissions of the file ({})", e);
+        warn!("Failed to modify permissions of the file ({})", e);
     }
     if let Err(e) = file.write(&key.hex().into_bytes()[2..]) {
         warn!("Error writing key file: {:?}", e);
@@ -1554,7 +1768,7 @@ fn load_key(path: &Path) -> Option<Secret> {
     let mut file = match fs::File::open(path_buf.as_path()) {
         Ok(file) => file,
         Err(e) => {
-            debug!("Error opening key file: {:?}", e);
+            debug!("failed to open key file: {:?}", e);
             return None;
         }
     };

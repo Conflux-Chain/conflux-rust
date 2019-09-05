@@ -33,15 +33,15 @@ impl NodeRefDeltaMptCompact {
     pub const DIRTY_SLOT_LIMIT: u32 = 0x7fffffff;
     const PERSISTENT_KEY_BIT: u32 = 0x80000000;
 
-    pub fn new(value: u32) -> Self { Self { value: value } }
+    pub fn new(value: u32) -> Self { Self { value } }
 }
 
 impl MaybeNodeRefDeltaMptCompact {
-    const NULL: u32 = 0;
+    pub const NULL: u32 = 0;
     pub const NULL_NODE: MaybeNodeRefDeltaMptCompact =
         MaybeNodeRefDeltaMptCompact { value: Self::NULL };
 
-    pub fn new(value: u32) -> Self { Self { value: value } }
+    pub fn new(value: u32) -> Self { Self { value } }
 }
 
 // Manages access to a TrieNode. Converted from MaybeNodeRef. NodeRef is not

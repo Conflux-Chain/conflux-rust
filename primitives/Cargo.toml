@@ -12,9 +12,18 @@ keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", pac
 rlp = "0.3.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-heapsize = "0.4"
+malloc_size_of = {path = "../util/malloc_size_of"}
 log = "0.3"
 lru = "0.1"
 byteorder = "1.2.7"
 rand = "0.5"
+serde = "1.0"
+serde_derive = "1.0"
 siphasher = "0.3"
+
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "benchmark"
+harness = false

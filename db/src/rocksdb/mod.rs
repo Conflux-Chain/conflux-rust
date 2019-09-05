@@ -31,13 +31,13 @@ use std::{io, path::Path, str::FromStr, sync::Arc};
 pub struct SystemDB {
     // This is the general db that will be shared and used by
     // all the special db at upper layer.
-    key_value: Arc<KeyValueDB>,
+    key_value: Arc<dyn KeyValueDB>,
 }
 
 impl SystemDB {
-    pub fn key_value(&self) -> &Arc<KeyValueDB> { &self.key_value }
+    pub fn key_value(&self) -> &Arc<dyn KeyValueDB> { &self.key_value }
 
-    pub fn new(kvdb: Arc<KeyValueDB>) -> Self { Self { key_value: kvdb } }
+    pub fn new(kvdb: Arc<dyn KeyValueDB>) -> Self { Self { key_value: kvdb } }
 }
 
 /// db compaction profile

@@ -2,13 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-fn generate_keys() -> Vec<[u8; 4]> {
-    let number_of_keys = 100000;
+const DEFAULT_NUMBER_OF_KEYS: usize = 100000;
+
+fn generate_keys(number_of_keys: usize) -> Vec<[u8; 4]> {
     let mut rng = get_rng_for_test();
 
     let mut keys_num: Vec<u32> = Default::default();
 
-    for i in 0..number_of_keys {
+    for _i in 0..number_of_keys {
         keys_num.push(rng.gen());
     }
 
@@ -30,11 +31,29 @@ fn generate_keys() -> Vec<[u8; 4]> {
 fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
 
 #[test]
+fn test_empty_genesis_block() {
+    let state_manager = new_state_manager_for_testing();
+
+    let mut genesis_epoch_id = H256::default();
+    genesis_epoch_id[0] = 1;
+    {
+        let mut genesis_state = state_manager.get_state_for_genesis_write();
+        genesis_state.compute_state_root().unwrap();
+
+        genesis_state.commit(genesis_epoch_id).unwrap();
+    }
+
+    state_manager
+        .get_state_trees(&SnapshotAndEpochIdRef::new(&genesis_epoch_id, None))
+        .unwrap();
+}
+
+#[test]
 fn test_set_get() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
-    let mut state = state_manager.get_state_at(H256::default()).unwrap();
-    let mut keys: Vec<[u8; 4]> = generate_keys()
+    let mut state = state_manager.get_state_for_genesis_write();
+    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -43,7 +62,9 @@ fn test_set_get() {
     println!("Testing with {} set operations.", keys.len());
 
     for key in &keys {
-        state.set(key, key).expect("Failed to insert key.");
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
 
     rng.shuffle(keys.as_mut());
@@ -65,9 +86,8 @@ fn test_set_get() {
 
 #[test]
 fn test_get_set_at_second_commit() {
-    let rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
-    let keys: Vec<[u8; 4]> = generate_keys();
+    let keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
     let set_size = 10000;
     let (keys_0, keys_1_new, keys_remain, keys_1_overwritten) = (
         &keys[0..set_size * 2],
@@ -76,12 +96,13 @@ fn test_get_set_at_second_commit() {
         &keys[set_size..set_size * 2],
     );
 
-    let parent_epoch_0 = H256::default();
-    let mut state_0 = state_manager.get_state_at(parent_epoch_0).unwrap();
+    let mut state_0 = state_manager.get_state_for_genesis_write();
     println!("Setting state_0 with {} keys.", keys_0.len());
 
     for key in keys_0 {
-        state_0.set(key, key).expect("Failed to insert key.");
+        state_0
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
 
     let mut epoch_id_0 = H256::default();;
@@ -89,12 +110,15 @@ fn test_get_set_at_second_commit() {
     state_0.compute_state_root().unwrap();
     state_0.commit(epoch_id_0).unwrap();
 
-    let mut state_1 = state_manager.get_state_at(epoch_id_0).unwrap();
+    let mut state_1 = state_manager
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id_0, None))
+        .unwrap()
+        .unwrap();
     println!("Set new {} keys for state_1.", keys_1_new.len(),);
     for key in keys_1_new {
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(key, value.as_slice())
+            .set(key, value.into())
             .expect("Failed to insert key.");
     }
 
@@ -111,7 +135,7 @@ fn test_get_set_at_second_commit() {
         assert_eq!(equal, true);
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(key, value.as_slice())
+            .set(key, value.into())
             .expect("Failed to insert key.");
     }
 
@@ -152,21 +176,44 @@ fn test_get_set_at_second_commit() {
 fn test_set_delete() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
-    let mut state = state_manager.get_state_at(H256::default()).unwrap();
-    let mut keys: Vec<[u8; 4]> = generate_keys();
+
+    let mut state = state_manager.get_state_for_genesis_write();
+    let empty_state_root = state.compute_state_root().unwrap();
+
+    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
+    let (keys_0, keys_1) = (
+        &keys[0..DEFAULT_NUMBER_OF_KEYS / 2],
+        &keys[DEFAULT_NUMBER_OF_KEYS / 2..],
+    );
 
     println!("Testing with {} set operations.", keys.len());
 
-    for key in &keys {
-        state.set(key, key).expect("Failed to insert key.");
+    // Insert part 1 and commit.
+    for key in keys_0.iter() {
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
+    }
+    let mut epoch_id = H256::default();
+    epoch_id[0] = 1;
+    state.compute_state_root().unwrap();
+    state.commit(epoch_id).unwrap();
+
+    // In second state, insert part 2, then delete everything.
+    let mut state = state_manager
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id, None))
+        .unwrap()
+        .unwrap();
+    for key in keys_1.iter() {
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
     }
 
     rng.shuffle(keys.as_mut());
 
     println!("Testing with {} delete operations.", keys.len());
-    let mut count = 0;
     for key in &keys {
-        count += 1;
         let value = state
             .delete(key)
             .expect("Failed to delete key.")
@@ -176,12 +223,89 @@ fn test_set_delete() {
     }
 
     let mut epoch_id = H256::default();
+    epoch_id[0] = 2;
+    let state_root = state.compute_state_root().unwrap();
+    state.commit(epoch_id).unwrap();
+
+    assert_eq!(state_root, empty_state_root);
+}
+
+#[test]
+fn test_set_delete_all() {
+    let mut rng = get_rng_for_test();
+    let state_manager = new_state_manager_for_testing();
+
+    let mut state = state_manager.get_state_for_genesis_write();
+    let empty_state_root = state.compute_state_root().unwrap();
+
+    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
+    let (keys_0, keys_1) = (
+        &keys[0..DEFAULT_NUMBER_OF_KEYS / 2],
+        &keys[DEFAULT_NUMBER_OF_KEYS / 2..],
+    );
+
+    println!("Testing with {} set operations.", keys.len());
+
+    // Insert part 1 and commit.
+    for key in keys_0.iter() {
+        state
+            .set(vec![&key[..], &key[..]].concat().as_slice(), key[..].into())
+            .expect("Failed to insert key.");
+    }
+    let mut epoch_id = H256::default();
     epoch_id[0] = 1;
     state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
+
+    // In second state, insert part 2, then delete everything.
+    let mut state = state_manager
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id, None))
+        .unwrap()
+        .unwrap();
+    for key in keys_1.iter() {
+        state
+            .set(vec![&key[..], &key[..]].concat().as_slice(), key[..].into())
+            .expect("Failed to insert key.");
+    }
+
+    rng.shuffle(keys.as_mut());
+
+    println!("Testing with {} delete_all operations.", keys.len());
+    let mut values = Vec::with_capacity(keys.len());
+    for key in &keys {
+        let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
+
+        let value =
+            state.delete_all(key_prefix).expect("Failed to delete key.");
+        if value.is_none() {
+            continue;
+        }
+        let mut value = value.unwrap();
+        for (deleted_key, deleted_value) in &value {
+            assert_eq!(key_prefix, &deleted_key[0..key_prefix.len()]);
+            assert_eq!(deleted_key, &vec![deleted_value.as_ref(); 2].concat());
+        }
+
+        for item in value.drain(..) {
+            values.push(item);
+        }
+
+        let value = state.delete_all(key).expect("Failed to delete key.");
+        assert_eq!(value, None);
+    }
+
+    let mut epoch_id = H256::default();
+    epoch_id[0] = 2;
+    let state_root = state.compute_state_root().unwrap();
+    state.commit(epoch_id).unwrap();
+
+    assert_eq!(values.len(), keys.len());
+    assert_eq!(state_root, empty_state_root);
 }
 
-fn print(key: &[u8]) {
+// Kept for debugging.
+#[allow(dead_code)]
+pub fn print_mpt_key(key: &[u8]) {
     print!("key = (");
     for char in key {
         print!(
@@ -197,49 +321,246 @@ fn print(key: &[u8]) {
 fn test_set_order() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
-    let keys: Vec<[u8; 4]> = generate_keys()
+    let keys: Vec<[u8; 4]> = generate_keys(500000)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
         .collect();
 
-    let parent_epoch_0 = H256::default();
     let mut epoch_id = H256::default();
-    let mut state_0 = state_manager.get_state_at(parent_epoch_0).unwrap();
+    let mut state_0 = state_manager.get_state_for_genesis_write();
     println!("Setting state_0 with {} keys.", keys.len());
     for key in &keys {
-        state_0.set(key, key).expect("Failed to insert key.");
+        let key_slice = &key[..];
+        let actual_key = vec![key_slice; 3].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
+        state_0
+            .set(&actual_key, actual_value.into())
+            .expect("Failed to insert key.");
     }
-    let merkle_0 = state_0.compute_state_root().unwrap();
+    let _merkle_0 = state_0.compute_state_root().unwrap();
     epoch_id[0] = 1;
     state_0.commit(epoch_id).unwrap();
 
-    let mut state_1 = state_manager.get_state_at(parent_epoch_0).unwrap();
+    let mut state_1 = state_manager.get_state_for_genesis_write();
     println!("Setting state_1 with {} keys.", keys.len());
     for key in &keys {
-        state_1.set(key, key).expect("Failed to insert key.");
+        let key_slice = &key[..];
+        let actual_key = vec![key_slice; 3].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
+        state_1
+            .set(&actual_key, actual_value.into())
+            .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
     epoch_id[0] = 2;
     state_1.commit(epoch_id).unwrap();
 
-    let mut state_2 = state_manager.get_state_at(parent_epoch_0).unwrap();
+    let mut state_2 = state_manager.get_state_for_genesis_write();
     println!("Setting state_2 with {} keys.", keys.len());
     for key in keys.iter().rev() {
-        state_2.set(key, key).expect("Failed to insert key.");
-    }
-    for key in &keys {
-        assert_eq!(
-            *state_2.get(key).expect("Failed to insert key.").unwrap(),
-            *key
-        );
+        let key_slice = &key[..];
+        let actual_key = vec![key_slice; 3].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
+        state_2
+            .set(&actual_key, actual_value.into())
+            .expect("Failed to insert key.");
     }
     let merkle_2 = state_2.compute_state_root().unwrap();
     epoch_id[0] = 3;
     state_2.commit(epoch_id).unwrap();
 
-    assert_eq!(merkle_0, merkle_1);
-    assert_eq!(merkle_0, merkle_2);
+    assert_eq!(merkle_1, merkle_2);
+}
+
+#[test]
+fn test_set_order_concurrent() {
+    let mut rng = get_rng_for_test();
+    let state_manager = Arc::new(new_state_manager_for_testing());
+    let keys = Arc::new(
+        generate_keys(10000)
+            .iter()
+            .filter(|_| rng.gen_bool(0.5))
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
+
+    let mut epoch_id = H256::default();
+    let mut state_0 = state_manager.get_state_for_genesis_write();
+    println!("Setting state_0 with {} keys.", keys.len());
+    for key in keys.iter() {
+        let key_slice = &key[..];
+        let actual_key = vec![key_slice; 3].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
+        state_0
+            .set(&actual_key, actual_value.into())
+            .expect("Failed to insert key.");
+    }
+    let _merkle_0 = state_0.compute_state_root().unwrap();
+    epoch_id[0] = 1;
+    state_0.commit(epoch_id).unwrap();
+
+    let parent_epoch_0 = epoch_id;
+
+    let mut state_1 = state_manager
+        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+            &parent_epoch_0,
+            None,
+        ))
+        .unwrap()
+        .unwrap();
+    println!("Setting state_1 with {} keys.", keys.len());
+    for key in keys.iter() {
+        let key_slice = &key[..];
+        let actual_key = vec![key_slice; 3].concat();
+        let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
+        state_1
+            .set(&actual_key, actual_value.into())
+            .expect("Failed to insert key.");
+    }
+    let merkle_1 = state_1.compute_state_root().unwrap();
+    epoch_id[0] = 2;
+    state_1.commit(epoch_id).unwrap();
+
+    let thread_count = if cfg!(debug_assertions) {
+        // Debug build. Fewer threads.
+        10
+    } else {
+        // Release build.
+        500
+    };
+    let mut threads = Vec::with_capacity(thread_count);
+    for thread_id in 0..thread_count {
+        thread::sleep_ms(30);
+        let keys = keys.clone();
+        let state_manager = state_manager.clone();
+        let merkle_1 = merkle_1.clone();
+        threads.push(thread::spawn(move || {
+            let mut state_2 = state_manager
+                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+                    &parent_epoch_0,
+                    None,
+                ))
+                .unwrap()
+                .unwrap();
+            println!(
+                "Setting state_{} with {} keys.",
+                2 + thread_id,
+                keys.len()
+            );
+            for key in keys.iter().rev() {
+                let key_slice = &key[..];
+                let actual_key = vec![key_slice; 3].concat();
+                let actual_value =
+                    vec![key_slice; 1 + (key[0] % 32) as usize].concat();
+                state_2
+                    .set(&actual_key, actual_value.into())
+                    .expect("Failed to insert key.");
+            }
+            let merkle_2 = state_2.compute_state_root().unwrap();
+            epoch_id[0] = ((3 + thread_id) % 256) as u8;
+            epoch_id[1] = ((3 + thread_id) / 256) as u8;
+            state_2.commit(epoch_id).unwrap();
+
+            assert_eq!(merkle_1, merkle_2);
+        }));
+    }
+    {
+        let mut thread_id = 0;
+        for thread in threads.drain(..) {
+            thread
+                .join()
+                .expect(&format!("Thread {} failed.", thread_id));
+            thread_id += 1;
+        }
+    }
+}
+
+#[test]
+fn test_proofs() {
+    let mut rng = get_rng_for_test();
+    let state_manager = new_state_manager_for_testing();
+    let mut state = state_manager.get_state_for_genesis_write();
+    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
+        .iter()
+        .filter(|_| rng.gen_bool(0.5))
+        .cloned()
+        .collect();
+
+    for key in &keys {
+        state
+            .set(key, key[..].into())
+            .expect("Failed to insert key.");
+    }
+
+    let mut epoch_id = H256::default();
+    epoch_id[0] = 1;
+    let root = state.compute_state_root().unwrap().state_root;
+    state.commit(epoch_id).unwrap();
+
+    rng.shuffle(keys.as_mut());
+
+    for key in &keys {
+        let (value, proof) =
+            state.get_with_proof(key).expect("Failed to get key.");
+
+        let key = &key.to_vec();
+        let value = value.as_ref().map(|b| &**b);
+
+        // valid proof
+        assert!(proof.is_valid_kv(key, value, root.clone()));
+
+        // invalid state root
+        let mut invalid_root = root.delta_root.clone();
+        invalid_root[0] = 0x00;
+
+        assert!(!proof.is_valid_kv(
+            key,
+            value,
+            StateRoot {
+                snapshot_root: invalid_root,
+                intermediate_delta_root: invalid_root,
+                delta_root: invalid_root
+            },
+        ));
+
+        // invalid value
+        assert!(!proof.is_valid_kv(key, Some(&[0x00; 100][..]), root.clone()));
+
+        // invalid hash
+        let mut invalid_proof = proof.clone();
+        if let Some(delta_proof) = &mut invalid_proof.delta_proof {
+            let mut wrong_merkle = delta_proof.nodes[0].get_merkle().clone();
+            wrong_merkle[0] = 0x00;
+            delta_proof.nodes[0].set_merkle(&wrong_merkle);
+        }
+
+        assert!(!invalid_proof.is_valid_kv(key, value, root.clone()));
+
+        // test rlp
+        assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
+        assert_ne!(proof, rlp::decode(&rlp::encode(&invalid_proof)).unwrap());
+    }
+
+    let nonexistent_keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
+        .iter()
+        .filter(|_| rng.gen_bool(0.5))
+        .cloned()
+        .collect();
+
+    for key in &nonexistent_keys {
+        if keys.contains(key) {
+            continue;
+        }
+
+        let (value, proof) =
+            state.get_with_proof(key).expect("Failed to get key.");
+
+        assert_eq!(value, None);
+
+        // valid non-existence proof
+        assert!(proof.is_valid_kv(&key.to_vec(), None, root.clone()));
+    }
 }
 
 use super::{
@@ -250,5 +571,6 @@ use super::{
     new_state_manager_for_testing,
 };
 use cfx_types::H256;
+use primitives::StateRoot;
 use rand::{ChaChaRng, Rng, SeedableRng};
-use std::mem;
+use std::{mem, sync::Arc, thread};

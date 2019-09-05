@@ -90,6 +90,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
         }
     }
 
+    #[allow(unused)]
     fn get_mut_most_recently_accessed(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
     ) -> CacheAlgoDataSetterMostRecentlyAccessed<CacheStoreUtilT, CacheIndexT>
@@ -171,7 +172,7 @@ pub trait CacheAlgorithm: Send {
         cache_store_util: &mut CacheStoreUtilT,
     );
 
-    fn log_usage(&self, prefix: &String);
+    fn log_usage(&self, prefix: &str);
 }
 
 // TODO(yz): maybe replace it with a library.

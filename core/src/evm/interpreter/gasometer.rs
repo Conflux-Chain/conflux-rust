@@ -30,7 +30,7 @@ use super::{
 use crate::vm::{self, Spec};
 
 macro_rules! overflowing {
-    ($x: expr) => {{
+    ($x:expr) => {{
         let (v, overflow) = $x;
         if overflow {
             return Err(vm::Error::OutOfGas);
@@ -61,7 +61,7 @@ pub struct Gasometer<Gas> {
 impl<Gas: evm::CostType> Gasometer<Gas> {
     pub fn new(current_gas: Gas) -> Self {
         Gasometer {
-            current_gas: current_gas,
+            current_gas,
             current_mem_gas: Gas::from(0),
         }
     }
@@ -118,8 +118,9 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
     /// that the current context
     /// provides to the child context.
     pub fn requirements(
-        &mut self, context: &vm::Context, instruction: Instruction,
-        info: &InstructionInfo, stack: &Stack<U256>, current_mem_size: usize,
+        &mut self, context: &dyn vm::Context, instruction: Instruction,
+        info: &InstructionInfo, stack: &dyn Stack<U256>,
+        current_mem_size: usize,
     ) -> vm::Result<InstructionRequirements<Gas>>
     {
         let spec = context.spec();

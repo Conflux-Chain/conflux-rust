@@ -4,51 +4,46 @@
 
 use super::{
     Error, SharedSynchronizationGraph, SynchronizationProtocolHandler,
-    SYNCHRONIZATION_PROTOCOL_VERSION,
 };
 use crate::{
-    consensus::SharedConsensusGraph, pow::ProofOfWorkConfig,
-    sync::synchronization_protocol_handler::ProtocolConfiguration,
-    verification::VerificationConfig,
+    light_protocol::Provider as LightProvider,
+    parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
+    sync::{
+        synchronization_phases::SyncPhaseType,
+        synchronization_protocol_handler::ProtocolConfiguration,
+        SynchronizationPhaseTrait,
+    },
 };
 use cfx_types::H256;
-use keylib::KeyPair;
-use network::{
-    node_table::{NodeEntry, NodeId},
-    Error as NetworkError, NetworkConfiguration, NetworkService, PeerInfo,
-    ProtocolId,
-};
-use primitives::Block;
+use network::{NetworkService, ProtocolId};
+use primitives::{transaction::SignedTransaction, Block};
 use std::sync::Arc;
 
-pub struct SynchronizationConfiguration {
-    pub network: NetworkConfiguration,
-    pub consensus: SharedConsensusGraph,
-}
-
 pub struct SynchronizationService {
-    network: NetworkService,
+    network: Arc<NetworkService>,
     protocol_handler: Arc<SynchronizationProtocolHandler>,
     protocol: ProtocolId,
 }
 
 impl SynchronizationService {
     pub fn new(
-        config: SynchronizationConfiguration,
+        is_full_node: bool, network: Arc<NetworkService>,
+        sync_graph: SharedSynchronizationGraph,
         protocol_config: ProtocolConfiguration,
-        verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        fast_recover: bool,
+        initial_sync_phase: SyncPhaseType, light_provider: Arc<LightProvider>,
     ) -> Self
     {
+        let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
+            is_full_node,
+            protocol_config,
+            initial_sync_phase,
+            sync_graph,
+            light_provider,
+        ));
+
         SynchronizationService {
-            network: NetworkService::new(config.network),
-            protocol_handler: Arc::new(SynchronizationProtocolHandler::new(
-                protocol_config,
-                config.consensus,
-                verification_config,
-                pow_config,
-                fast_recover,
-            )),
+            network,
+            protocol_handler: sync_handler,
             protocol: *b"cfx",
         }
     }
@@ -61,8 +56,18 @@ impl SynchronizationService {
         self.protocol_handler.get_synchronization_graph()
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
-        self.network.start()?;
+    pub fn current_sync_phase(&self) -> Arc<dyn SynchronizationPhaseTrait> {
+        self.protocol_handler.phase_manager.get_current_phase()
+    }
+
+    pub fn append_received_transactions(
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+    ) {
+        self.protocol_handler
+            .append_received_transactions(transactions);
+    }
+
+    pub fn register(&self) -> Result<(), Error> {
         self.network.register_protocol(
             self.protocol_handler.clone(),
             self.protocol,
@@ -71,58 +76,23 @@ impl SynchronizationService {
         Ok(())
     }
 
-    pub fn announce_new_blocks(&self, hashes: &[H256]) {
-        self.network.with_context(self.protocol, |io| {
-            self.protocol_handler.announce_new_blocks(io, hashes);
-        });
-    }
-
-    pub fn relay_blocks(&self, need_to_relay: Vec<H256>) {
-        self.network.with_context(self.protocol, |io| {
-            // FIXME: We may need to propagate the error up
-            self.protocol_handler
-                .relay_blocks(io, need_to_relay)
-                .unwrap();
+    fn relay_blocks(&self, need_to_relay: Vec<H256>) {
+        // FIXME: We may need to propagate the error up
+        let _res = self.network.with_context(self.protocol, |io| {
+            self.protocol_handler.relay_blocks(io, need_to_relay)
         });
     }
 
     pub fn on_mined_block(&self, block: Block) {
         let hash = block.hash();
-        let need_to_relay = self.protocol_handler.on_mined_block(block);
-        self.relay_blocks(need_to_relay);
-        self.announce_new_blocks(&[hash]);
+        self.protocol_handler.on_mined_block(block);
+        self.relay_blocks(vec![hash]);
     }
 
-    pub fn add_peer(&self, node: NodeEntry) -> Result<(), NetworkError> {
-        self.network.add_peer(node)
-    }
-
-    pub fn drop_peer(&self, node: NodeEntry) -> Result<(), NetworkError> {
-        self.network.drop_peer(node)
-    }
-
-    pub fn get_peer_info(&self) -> Vec<PeerInfo> {
-        self.network.get_peer_info().unwrap()
-    }
-
-    pub fn sign_challenge(
-        &self, challenge: Vec<u8>,
-    ) -> Result<Vec<u8>, NetworkError> {
-        self.network.sign_challenge(challenge)
-    }
-
-    pub fn add_latency(
-        &self, id: NodeId, latency_ms: f64,
-    ) -> Result<(), NetworkError> {
-        self.network.add_latency(id, latency_ms)
-    }
-
-    pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
-        self.protocol_handler.block_by_hash(hash)
-    }
-
-    pub fn net_key_pair(&self) -> Result<KeyPair, NetworkError> {
-        self.network.net_key_pair()
+    pub fn expire_block_gc(&self, timeout: u64) {
+        let _res = self.network.with_context(self.protocol, |io| {
+            self.protocol_handler.expire_block_gc(io, timeout)
+        });
     }
 }
 

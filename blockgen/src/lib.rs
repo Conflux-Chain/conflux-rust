@@ -2,30 +2,29 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, H256, U256, U512};
+use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    consensus::{DEFERRED_STATE_EPOCH_COUNT, HEAVY_BLOCK_DIFFICULTY_RATIO},
-    pow::*,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    block_parameters::*, pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedSynchronizationGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use log::{debug, trace, warn};
-use parking_lot::RwLock;
-use primitives::{
-    block::{MAX_BLOCK_SIZE_IN_BYTES, MAX_TRANSACTION_COUNT_PER_BLOCK},
-    *,
-};
+use lazy_static::lazy_static;
+use log::{debug, info, trace, warn};
+use metrics::{Gauge, GaugeUsize};
+use parking_lot::{Mutex, RwLock};
+use primitives::*;
 use std::{
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, sleep},
-    time::{self, Duration},
+    cmp::max,
+    collections::HashSet,
+    sync::{mpsc, Arc},
+    thread, time,
 };
 use time::{SystemTime, UNIX_EPOCH};
-use txgen::SharedTransactionGenerator;
-
-pub struct BlockGeneratorConfig {
-    pub test_chain_path: Option<String>,
+use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
+use std::time::Duration;
+lazy_static! {
+    static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group("txpool", "packed_account_size");
 }
 
 enum MiningState {
@@ -40,6 +39,7 @@ pub struct BlockGenerator {
     graph: SharedSynchronizationGraph,
     txpool: SharedTransactionPool,
     txgen: SharedTransactionGenerator,
+    special_txgen: Arc<Mutex<SpecialTransactionGenerator>>,
     sync: SharedSynchronizationService,
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
@@ -112,7 +112,7 @@ impl Worker {
                             }
                             // This sleep is for test_mode mining of
                             // balance_attack
-                            debug!("Try nonce {}", nonce);
+                            // debug!("Try nonce {}", nonce);
                             if let Some(t) = bg.test_mining_sleep_time {
                                 thread::sleep(t);
                             }
@@ -131,6 +131,7 @@ impl BlockGenerator {
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, txgen: SharedTransactionGenerator,
+        special_txgen: Arc<Mutex<SpecialTransactionGenerator>>,
         pow_config: ProofOfWorkConfig, mining_author: Address,
         test_mining_sleep_time: Option<Duration>,
     ) -> Self
@@ -141,6 +142,7 @@ impl BlockGenerator {
             graph,
             txpool,
             txgen,
+            special_txgen,
             sync,
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
@@ -150,44 +152,61 @@ impl BlockGenerator {
 
     /// Stop mining
     pub fn stop(bg: &BlockGenerator) {
-        let mut write = bg.state.write();
-        *write = MiningState::Stop;
+        {
+            let mut write = bg.state.write();
+            *write = MiningState::Stop;
+        }
+        bg.txgen.stop()
     }
 
     /// Send new PoW problem to workers
     pub fn send_problem(bg: Arc<BlockGenerator>, problem: ProofOfWorkProblem) {
-        for item in bg.workers.lock().unwrap().iter() {
+        for item in bg.workers.lock().iter() {
             item.1
                 .send(problem)
                 .expect("Failed to send the PoW problem.")
         }
     }
 
+    // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
-        &self, parent_hash: H256, referee: Vec<H256>,
+        &self, parent_hash: H256, referee: Vec<H256>, blame: u32,
+        deferred_state_root_with_aux_info: StateRootWithAuxInfo,
         deferred_state_root: H256, deferred_receipts_root: H256,
-        block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
+        deferred_logs_bloom_hash: H256, block_gas_limit: U256,
+        transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
+        adaptive_opt: Option<bool>,
     ) -> Block
     {
         let parent_height =
             self.graph.block_height_by_hash(&parent_hash).unwrap();
 
+        let parent_timestamp =
+            self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
+
         trace!("{} txs packed", transactions.len());
 
         let mut expected_difficulty =
-            self.graph.inner.read().expected_difficulty(&parent_hash);
-        if self
-            .graph
-            .check_mining_heavy_block(&parent_hash, &expected_difficulty)
-        {
-            assert!(
-                U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-                    * U512::from(expected_difficulty)
-                    < U512::from(U256::max_value())
-            );
-            expected_difficulty =
-                U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO) * expected_difficulty;
+            self.graph.expected_difficulty(&parent_hash);
+        let adaptive = if let Some(x) = adaptive_opt {
+            x
+        } else {
+            self.graph.check_mining_adaptive_block(
+                &mut *self.graph.consensus.inner.write(),
+                &parent_hash,
+                &expected_difficulty,
+            )
+        };
+        if U256::from(difficulty) > expected_difficulty {
+            expected_difficulty = U256::from(difficulty);
         }
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let my_timestamp = max(parent_timestamp, now);
 
         let block_header = BlockHeaderBuilder::new()
             .with_transactions_root(Block::compute_transaction_root(
@@ -195,38 +214,44 @@ impl BlockGenerator {
             ))
             .with_parent_hash(parent_hash)
             .with_height(parent_height + 1)
-            .with_timestamp(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            )
-            //            .with_timestamp(0)
+            .with_timestamp(my_timestamp)
             .with_author(self.mining_author)
+            .with_blame(blame)
+            .with_deferred_state_root_with_aux_info(
+                deferred_state_root_with_aux_info,
+            )
             .with_deferred_state_root(deferred_state_root)
             .with_deferred_receipts_root(deferred_receipts_root)
+            .with_deferred_logs_bloom_hash(deferred_logs_bloom_hash)
             .with_difficulty(expected_difficulty)
+            .with_adaptive(adaptive)
             .with_referee_hashes(referee)
             .with_nonce(0)
             .with_gas_limit(block_gas_limit)
             .build();
 
-        Block {
-            block_header,
-            transactions,
-        }
+        Block::new(block_header, transactions)
     }
 
     /// Assemble a new block with specified parent and referee, this is for test
     /// only
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-    ) -> Block {
-        let (state_root, receipts_root) =
-            self.graph.consensus.compute_deferred_state_for_block(
+        difficulty: u64, adaptive: bool,
+    ) -> Result<Block, String>
+    {
+        let (
+            blame,
+            state_root_with_aux,
+            state_root,
+            receipts_root,
+            logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .force_compute_blame_and_deferred_state_for_generation(
                 &parent_hash,
-                DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-            );
+            )?;
 
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
         let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
@@ -235,43 +260,146 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
-            self.txgen.get_best_state(),
         );
 
-        self.assemble_new_block_impl(
+        Ok(self.assemble_new_block_impl(
             parent_hash,
             referee,
+            blame,
+            state_root_with_aux,
             state_root,
             receipts_root,
+            logs_bloom_hash,
             block_gas_limit,
             transactions,
-        )
+            difficulty,
+            Some(adaptive),
+        ))
     }
 
     /// Assemble a new block without nonce
-    pub fn assemble_new_block(&self, num_txs: usize) -> Block {
-        // get the best block
-        let best_info = self.graph.get_best_info();
-        let best_block_hash = best_info.best_block_hash;
-        let mut referee = best_info.terminal_block_hashes;
-        referee.retain(|r| *r != best_block_hash);
+    pub fn assemble_new_block(
+        &self, num_txs: usize, block_size_limit: usize,
+        additional_transactions: Vec<Arc<SignedTransaction>>,
+    ) -> Block
+    {
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
-        let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
 
-        let transactions = self.txpool.pack_transactions(
-            num_txs,
-            block_gas_limit,
-            block_size_limit,
-            self.txgen.get_best_state(),
-        );
+        let (best_info, transactions) =
+            self.txpool.get_best_info_with_packed_transactions(
+                num_txs,
+                block_size_limit,
+                block_gas_limit,
+                additional_transactions,
+            );
+
+        let mut sender_accounts = HashSet::new();
+        for tx in &transactions {
+            let tx_hash = tx.hash();
+            if tx_hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in packing block", tx_hash);
+            }
+            sender_accounts.insert(tx.sender);
+        }
+        PACKED_ACCOUNT_SIZE.update(sender_accounts.len());
+
+        let (
+            blame,
+            state_root_with_aux,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .get_blame_and_deferred_state_for_generation(
+                &best_info.best_block_hash,
+            )
+            .unwrap();
+
+        let best_block_hash = best_info.best_block_hash.clone();
+        let mut referee = best_info.bounded_terminal_block_hashes.clone();
+        referee.retain(|r| *r != best_block_hash);
 
         self.assemble_new_block_impl(
             best_block_hash,
             referee,
-            best_info.deferred_state_root,
-            best_info.deferred_receipts_root,
+            blame,
+            state_root_with_aux,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
             block_gas_limit,
             transactions,
+            0,
+            None,
+        )
+    }
+
+    /// Assemble a new block without nonce and with options to override the
+    /// states/blame. This function is used for testing only to generate
+    /// incorrect blocks
+    pub fn assemble_new_block_with_blame_info(
+        &self, num_txs: usize, block_size_limit: usize,
+        additional_transactions: Vec<Arc<SignedTransaction>>,
+        blame_override: Option<u32>, state_root_override: Option<H256>,
+        receipt_root_override: Option<H256>,
+        logs_bloom_hash_override: Option<H256>,
+    ) -> Block
+    {
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+
+        let (best_info, transactions) =
+            self.txpool.get_best_info_with_packed_transactions(
+                num_txs,
+                block_size_limit,
+                block_gas_limit,
+                additional_transactions,
+            );
+
+        let (
+            mut blame,
+            state_root_with_aux,
+            mut deferred_state_root,
+            mut deferred_receipts_root,
+            mut deferred_logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .get_blame_and_deferred_state_for_generation(
+                &best_info.best_block_hash,
+            )
+            .unwrap();
+
+        if let Some(x) = blame_override {
+            blame = x;
+        }
+        if let Some(x) = state_root_override {
+            deferred_state_root = x;
+        }
+        if let Some(x) = receipt_root_override {
+            deferred_receipts_root = x;
+        }
+        if let Some(x) = logs_bloom_hash_override {
+            deferred_logs_bloom_hash = x;
+        }
+
+        let best_block_hash = best_info.best_block_hash.clone();
+        let mut referee = best_info.bounded_terminal_block_hashes.clone();
+        referee.retain(|r| *r != best_block_hash);
+
+        self.assemble_new_block_impl(
+            best_block_hash,
+            referee,
+            blame,
+            state_root_with_aux,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+            block_gas_limit,
+            transactions,
+            0,
+            None,
         )
     }
 
@@ -281,10 +409,14 @@ impl BlockGenerator {
     }
 
     /// Check if we need to mine on a new block
-    pub fn is_mining_block_outdated(&self, block: &Block) -> bool {
+    pub fn is_mining_block_outdated(&self, block: Option<&Block>) -> bool {
+        if block.is_none() {
+            return true;
+        }
+
         // 1st Check: if the parent block changed
-        let best_block_hash = self.graph.get_best_info().best_block_hash;
-        if best_block_hash != *block.block_header.parent_hash() {
+        let best_block_hash = self.graph.consensus.best_block_hash();
+        if best_block_hash != *block.unwrap().block_header.parent_hash() {
             return true;
         }
         // TODO: 2nd check: if the referee hashes changed
@@ -292,64 +424,173 @@ impl BlockGenerator {
         false
     }
 
+    pub fn generate_special_transactions(
+        &self, block_size_limit: &mut usize, num_txs_simple: usize,
+        num_txs_erc20: usize,
+    ) -> Vec<Arc<SignedTransaction>>
+    {
+        self.special_txgen.lock().generate_transactions(
+            block_size_limit,
+            num_txs_simple,
+            num_txs_erc20,
+        )
+    }
+
     /// Generate a block with fake transactions
-    pub fn generate_block_with_transactions(&self, num_txs: usize) -> H256 {
+    pub fn generate_block_with_transactions(
+        &self, num_txs: usize, block_size_limit: usize,
+    ) -> H256 {
         let mut txs = Vec::new();
         for _ in 0..num_txs {
             let tx = self.txgen.generate_transaction();
             txs.push(tx);
         }
-        self.txpool.insert_new_transactions(
-            self.graph.consensus.best_state_block_hash(),
-            txs.into_iter().map(|tx| tx.transaction).collect(),
-        );
-        self.generate_block(num_txs)
+        self.generate_block(
+            num_txs,
+            block_size_limit,
+            txs.into_iter().map(|tx| Arc::new(tx)).collect(),
+        )
     }
 
     pub fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-    ) -> H256 {
-        let block =
-            self.assemble_new_fixed_block(parent_hash, referee, num_txs);
-        self.generate_block_impl(block)
+        difficulty: u64, adaptive: bool,
+    ) -> Result<H256, String>
+    {
+        let block = self.assemble_new_fixed_block(
+            parent_hash,
+            referee,
+            num_txs,
+            difficulty,
+            adaptive,
+        )?;
+        Ok(self.generate_block_impl(block))
     }
 
     /// Generate a block with transactions in the pool
-    pub fn generate_block(&self, num_txs: usize) -> H256 {
-        let block = self.assemble_new_block(num_txs);
+    pub fn generate_block(
+        &self, num_txs: usize, block_size_limit: usize,
+        additional_transactions: Vec<Arc<SignedTransaction>>,
+    ) -> H256
+    {
+        let block = self.assemble_new_block(
+            num_txs,
+            block_size_limit,
+            additional_transactions,
+        );
+        self.generate_block_impl(block)
+    }
+
+    /// Generate a block with transactions in the pool.
+    /// This is used for testing only
+    pub fn generate_block_with_blame_info(
+        &self, num_txs: usize, block_size_limit: usize,
+        additional_transactions: Vec<Arc<SignedTransaction>>,
+        blame: Option<u32>, state_root: Option<H256>,
+        receipts_root: Option<H256>, logs_bloom_hash: Option<H256>,
+    ) -> H256
+    {
+        let block = self.assemble_new_block_with_blame_info(
+            num_txs,
+            block_size_limit,
+            additional_transactions,
+            blame,
+            state_root,
+            receipts_root,
+            logs_bloom_hash,
+        );
         self.generate_block_impl(block)
     }
 
     pub fn generate_custom_block(
-        &self, parent_hash: H256, referee: Vec<H256>,
-        transactions: Vec<Arc<SignedTransaction>>,
-    ) -> H256
-    {
-        let (state_root, receipts_root) =
-            self.graph.consensus.compute_deferred_state_for_block(
-                &parent_hash,
-                DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+        &self, transactions: Vec<Arc<SignedTransaction>>,
+    ) -> H256 {
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+        // get the best block
+        let (best_info, _) =
+            self.txpool.get_best_info_with_packed_transactions(
+                0,
+                0,
+                block_gas_limit,
+                Vec::new(),
             );
+        let (
+            blame,
+            state_root_with_aux,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .get_blame_and_deferred_state_for_generation(
+                &best_info.best_block_hash,
+            )
+            .unwrap();
+
+        let best_block_hash = best_info.best_block_hash.clone();
+        let mut referee = best_info.bounded_terminal_block_hashes.clone();
+        referee.retain(|r| *r != best_block_hash);
 
         let block = self.assemble_new_block_impl(
-            parent_hash,
+            best_block_hash,
             referee,
-            state_root,
-            receipts_root,
-            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+            blame,
+            state_root_with_aux,
+            deferred_state_root,
+            deferred_receipts_root,
+            deferred_logs_bloom_hash,
+            block_gas_limit,
             transactions,
+            0,
+            None,
         );
 
         self.generate_block_impl(block)
     }
 
+    pub fn generate_custom_block_with_parent(
+        &self, parent_hash: H256, referee: Vec<H256>,
+        transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
+    ) -> Result<H256, String>
+    {
+        let (
+            blame,
+            state_root_with_aux,
+            state_root,
+            receipts_root,
+            logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .force_compute_blame_and_deferred_state_for_generation(
+                &parent_hash,
+            )?;
+
+        let block = self.assemble_new_block_impl(
+            parent_hash,
+            referee,
+            blame,
+            state_root_with_aux,
+            state_root,
+            receipts_root,
+            logs_bloom_hash,
+            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+            transactions,
+            0,
+            Some(adaptive),
+        );
+
+        Ok(self.generate_block_impl(block))
+    }
+
     fn generate_block_impl(&self, block_init: Block) -> H256 {
         let mut block = block_init;
-        let test_diff = block.block_header.difficulty().clone();
+        let difficulty = block.block_header.difficulty();
         let problem = ProofOfWorkProblem {
             block_hash: block.block_header.problem_hash(),
-            difficulty: test_diff.clone(),
-            boundary: difficulty_to_boundary(&test_diff),
+            difficulty: *difficulty,
+            boundary: difficulty_to_boundary(difficulty),
         };
         loop {
             let nonce = rand::random();
@@ -359,19 +600,20 @@ impl BlockGenerator {
             }
         }
         let hash = block.block_header.compute_hash();
-        debug!(
-            "generate_block with block header:{:?} tx_number:{}",
+        info!(
+            "generate_block with block header:{:?} tx_number:{}, block_size:{}",
             block.block_header,
-            block.transactions.len()
+            block.transactions.len(),
+            block.size(),
         );
         self.on_mined_block(block);
 
+        // FIXME: We should add a flag to enable/disable this wait
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
-        while self.graph.consensus.get_block_epoch_number(&hash).is_none() {
-            sleep(Duration::from_millis(100));
-        }
+        self.graph.consensus.wait_for_generation(&hash);
+
         hash
     }
 
@@ -384,7 +626,7 @@ impl BlockGenerator {
         num_worker: u32, bg: Arc<BlockGenerator>,
     ) -> mpsc::Receiver<ProofOfWorkSolution> {
         let (tx, rx) = mpsc::channel();
-        let mut workers = bg.workers.lock().unwrap();
+        let mut workers = bg.workers.lock();
         for _ in 0..num_worker {
             let (sender_handle, receiver_handle) = mpsc::channel();
             workers.push((
@@ -396,7 +638,7 @@ impl BlockGenerator {
     }
 
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
-        let mut current_mining_block = Block::default();
+        let mut current_mining_block = None;
         let mut current_problem: Option<ProofOfWorkProblem> = None;
         let sleep_duration = time::Duration::from_millis(2);
 
@@ -409,21 +651,29 @@ impl BlockGenerator {
                 _ => {}
             }
 
-            if bg.is_mining_block_outdated(&current_mining_block) {
+            if bg.is_mining_block_outdated(current_mining_block.as_ref()) {
                 // TODO: #transations TBD
-                if bg.sync.catch_up_mode() {
+                if !bg.pow_config.test_mode && bg.sync.catch_up_mode() {
                     thread::sleep(sleep_duration);
                     continue;
                 }
 
-                current_mining_block =
-                    bg.assemble_new_block(MAX_TRANSACTION_COUNT_PER_BLOCK);
+                current_mining_block = Some(bg.assemble_new_block(
+                    MAX_TRANSACTION_COUNT_PER_BLOCK,
+                    MAX_BLOCK_SIZE_IN_BYTES,
+                    vec![],
+                ));
 
                 // set a mining problem
-                let current_difficulty =
-                    current_mining_block.block_header.difficulty();
+                let current_difficulty = current_mining_block
+                    .as_ref()
+                    .unwrap()
+                    .block_header
+                    .difficulty();
                 let problem = ProofOfWorkProblem {
                     block_hash: current_mining_block
+                        .as_ref()
+                        .unwrap()
                         .block_header
                         .problem_hash(),
                     difficulty: *current_difficulty,
@@ -451,10 +701,18 @@ impl BlockGenerator {
                 if new_solution.is_ok() {
                     debug!("Get solution {}", new_solution.unwrap().nonce);
                     let solution = new_solution.unwrap();
-                    current_mining_block.block_header.set_nonce(solution.nonce);
-                    current_mining_block.block_header.compute_hash();
-                    bg.on_mined_block(current_mining_block);
-                    current_mining_block = Block::default();
+                    current_mining_block
+                        .as_mut()
+                        .unwrap()
+                        .block_header
+                        .set_nonce(solution.nonce);
+                    current_mining_block
+                        .as_mut()
+                        .unwrap()
+                        .block_header
+                        .compute_hash();
+                    bg.on_mined_block(current_mining_block.unwrap());
+                    current_mining_block = None;
                     current_problem = None;
                 } else {
                     // wait a moment and check again

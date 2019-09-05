@@ -2,29 +2,33 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use blockgen::BlockGeneratorConfig;
 use cfxcore::{
+    block_data_manager::DataManagerConfiguration,
+    consensus::{ConsensusConfig, ConsensusInnerConfig},
+    consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
     sync::ProtocolConfiguration,
 };
+use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
-/// usage:
-/// ```
-/// build_config! {
-///     {
-///         (name, (type), default_value)
-///         ...
-///     }
-///     {
-///         (name, (type), default_value, converter)
-///     }
-/// }
-/// ```
-/// `converter` is a function used to convert a provided String to `Result<type,
-/// String>`. For each entry, field `name` of type `type` will be created in
-/// `RawConfiguration`, and it will be assigned to the value passed through
-/// commandline argument or configuration file. Commandline argument will
-/// override the configuration file if the parameter is given in both.
+
+// usage:
+// ```
+// build_config! {
+//     {
+//         (name, (type), default_value)
+//         ...
+//     }
+//     {
+//         (name, (type), default_value, converter)
+//     }
+// }
+// ```
+// `converter` is a function used to convert a provided String to `Result<type,
+// String>`. For each entry, field `name` of type `type` will be created in
+// `RawConfiguration`, and it will be assigned to the value passed through
+// commandline argument or configuration file. Commandline argument will
+// override the configuration file if the parameter is given in both.
 build_config! {
     {
         (port, (Option<u16>), Some(32323))
@@ -35,6 +39,7 @@ build_config! {
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
+        (genesis_accounts, (Option<String>), None)
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
         (bootnodes, (Option<String>), None)
@@ -43,29 +48,35 @@ build_config! {
         (public_address, (Option<String>), None)
         (ledger_cache_size, (Option<usize>), Some(2048))
         (enable_discovery, (bool), true)
+        (discovery_fast_refresh_timeout_ms, (u64), 10000)
+        (discovery_round_timeout_ms, (u64), 500)
+        (discovery_housekeeping_timeout_ms, (u64), 1000)
         (node_table_timeout, (Option<u64>), Some(300))
         (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
-        (fast_recover, (bool), true)
         (test_mode, (bool), false)
         (test_mining_sleep_us, (Option<u64>), None)
         (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (generate_tx, (bool), false)
-        (generate_tx_period_ms, (Option<u64>), Some(100))
+        (generate_tx_period_us, (Option<u64>), Some(100_000))
+        (storage_db_path, (String), "./storage_db".to_string())
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
         (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
         (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (send_tx_period_ms, (u64), 1300)
-        (check_request_period_ms, (u64), 5000)
+        (check_request_period_ms, (u64), 1000)
         (block_cache_gc_period_ms, (u64), 5000)
-        (persist_terminal_period_ms, (u64), 60_000)
-        (headers_request_timeout_ms, (u64), 30_000)
-        (blocks_request_timeout_ms, (u64), 120_000)
-        (max_inflight_request_count, (u64), 32)
-        (load_test_chain, (Option<String>), None)
+        (headers_request_timeout_ms, (u64), 10_000)
+        (blocks_request_timeout_ms, (u64), 30_000)
+        (transaction_request_timeout_ms, (u64), 30_000)
+        (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
+        (max_inflight_request_count, (u64), 64)
+        (received_tx_index_maintain_timeout_ms, (u64), 600_000)
+        (max_trans_count_received_in_catch_up, (u64), 60_000)
+        (request_block_with_public, (bool), false)
         (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
@@ -73,12 +84,32 @@ build_config! {
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
-        (p2p_nodes_per_ip, (usize), 1)
-        (monitor_host, (Option<String>), None)
-        (monitor_db, (Option<String>), None)
-        (monitor_username, (Option<String>), None)
-        (monitor_password, (Option<String>), None)        
-        (monitor_node, (Option<String>), None)                
+        (subnet_quota, (usize), 32)
+        (session_ip_limits, (String), "1,8,4,2".into())
+        (data_propagate_enabled, (bool), false)
+        (data_propagate_interval_ms, (u64), 1000)
+        (data_propagate_size, (usize), 1000)
+        (record_tx_address, (bool), true)
+        // TODO Set default to true when we have new tx pool implementation
+        (enable_optimistic_execution, (bool), true)
+        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
+        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
+        (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
+        (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
+        (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
+        // FIXME: break into two options: one for enable, one for path.
+        (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
+        (metrics_enabled, (bool), false)
+        (metrics_report_interval_ms, (u64), 5000)
+        (metrics_output_file, (String), "metrics.log".to_string())
+        (min_peers_propagation, (usize), 8)
+        (max_peers_propagation, (usize), 128)
+        (future_block_buffer_capacity, (usize), 32768)
+        (txgen_account_count, (usize), 10)
+        (persist_header, (bool), true)
+        (tx_cache_count, (usize), 250000)
+        (max_download_state_peers, (usize), 8)
     }
     {
         (
@@ -116,7 +147,7 @@ impl Configuration {
         Ok(config)
     }
 
-    pub fn net_config(&self) -> NetworkConfiguration {
+    pub fn net_config(&self) -> Result<NetworkConfiguration, String> {
         let mut network_config = match self.raw_conf.port {
             Some(port) => NetworkConfiguration::new_with_port(port),
             None => NetworkConfiguration::default(),
@@ -124,7 +155,7 @@ impl Configuration {
 
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
-            .expect("Error parsing bootnodes!");
+            .map_err(|e| format!("failed to parse bootnodes: {}", e))?;
         if self.raw_conf.netconf_dir.is_some() {
             network_config.config_path = self.raw_conf.netconf_dir.clone();
         }
@@ -156,11 +187,21 @@ impl Configuration {
                 Duration::from_secs(nt_promotion_timeout);
         }
         network_config.test_mode = self.raw_conf.test_mode;
-        network_config.nodes_per_ip = self.raw_conf.p2p_nodes_per_ip;
-        network_config
+        network_config.subnet_quota = self.raw_conf.subnet_quota;
+        network_config.session_ip_limit_config =
+            self.raw_conf.session_ip_limits.clone().try_into().map_err(
+                |e| format!("failed to parse session ip limit config: {}", e),
+            )?;
+        network_config.fast_discovery_refresh_timeout = Duration::from_millis(
+            self.raw_conf.discovery_fast_refresh_timeout_ms,
+        );
+        network_config.discovery_round_timeout =
+            Duration::from_millis(self.raw_conf.discovery_round_timeout_ms);
+        network_config.housekeeping_timeout = Duration::from_millis(
+            self.raw_conf.discovery_housekeeping_timeout_ms,
+        );
+        Ok(network_config)
     }
-
-    pub fn fast_recover(&self) -> bool { self.raw_conf.fast_recover }
 
     pub fn cache_config(&self) -> CacheConfig {
         let mut cache_config = CacheConfig::default();
@@ -193,6 +234,33 @@ impl Configuration {
         )
     }
 
+    pub fn consensus_config(&self) -> ConsensusConfig {
+        ConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+            inner_conf: ConsensusInnerConfig {
+                adaptive_weight_alpha_num: self
+                    .raw_conf
+                    .adaptive_weight_alpha_num,
+                adaptive_weight_alpha_den: self
+                    .raw_conf
+                    .adaptive_weight_alpha_den,
+                adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
+                heavy_block_difficulty_ratio: self
+                    .raw_conf
+                    .heavy_block_difficulty_ratio,
+                era_epoch_count: self.raw_conf.era_epoch_count,
+                era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
+                enable_optimistic_execution: self
+                    .raw_conf
+                    .enable_optimistic_execution,
+            },
+            bench_mode: false,
+        }
+    }
+
     pub fn pow_config(&self) -> ProofOfWorkConfig {
         ProofOfWorkConfig::new(
             self.raw_conf.test_mode,
@@ -207,7 +275,8 @@ impl Configuration {
     pub fn tx_gen_config(&self) -> TransactionGeneratorConfig {
         TransactionGeneratorConfig::new(
             self.raw_conf.generate_tx,
-            self.raw_conf.generate_tx_period_ms.expect("has default"),
+            self.raw_conf.generate_tx_period_us.expect("has default"),
+            self.raw_conf.txgen_account_count,
         )
     }
 
@@ -232,25 +301,43 @@ impl Configuration {
             block_cache_gc_period: Duration::from_millis(
                 self.raw_conf.block_cache_gc_period_ms,
             ),
-            persist_terminal_period: Duration::from_millis(
-                self.raw_conf.persist_terminal_period_ms,
-            ),
             headers_request_timeout: Duration::from_millis(
                 self.raw_conf.headers_request_timeout_ms,
             ),
             blocks_request_timeout: Duration::from_millis(
                 self.raw_conf.blocks_request_timeout_ms,
             ),
+            transaction_request_timeout: Duration::from_millis(
+                self.raw_conf.transaction_request_timeout_ms,
+            ),
+            tx_maintained_for_peer_timeout: Duration::from_millis(
+                self.raw_conf.tx_maintained_for_peer_timeout_ms,
+            ),
             max_inflight_request_count: self
                 .raw_conf
                 .max_inflight_request_count,
+            request_block_with_public: self.raw_conf.request_block_with_public,
+            received_tx_index_maintain_timeout: Duration::from_millis(
+                self.raw_conf.received_tx_index_maintain_timeout_ms,
+            ),
+            max_trans_count_received_in_catch_up: self
+                .raw_conf
+                .max_trans_count_received_in_catch_up,
+            min_peers_propagation: self.raw_conf.min_peers_propagation,
+            max_peers_propagation: self.raw_conf.max_peers_propagation,
+            future_block_buffer_capacity: self
+                .raw_conf
+                .future_block_buffer_capacity,
+            max_download_state_peers: self.raw_conf.max_download_state_peers,
         }
     }
 
-    pub fn blockgen_config(&self) -> BlockGeneratorConfig {
-        BlockGeneratorConfig {
-            test_chain_path: self.raw_conf.load_test_chain.clone(),
-        }
+    pub fn data_mananger_config(&self) -> DataManagerConfiguration {
+        DataManagerConfiguration::new(
+            self.raw_conf.record_tx_address,
+            self.raw_conf.persist_header,
+            self.raw_conf.tx_cache_count,
+        )
     }
 }
 

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::H256;
-use heapsize::HeapSizeOf;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 /// Represents address of certain transaction within block
@@ -17,6 +17,6 @@ pub struct TransactionAddress {
     pub index: usize,
 }
 
-impl HeapSizeOf for TransactionAddress {
-    fn heap_size_of_children(&self) -> usize { 0 }
+impl MallocSizeOf for TransactionAddress {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }

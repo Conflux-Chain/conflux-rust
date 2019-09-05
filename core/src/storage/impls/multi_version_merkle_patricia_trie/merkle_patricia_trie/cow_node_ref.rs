@@ -16,7 +16,7 @@ pub struct CowNodeRef {
 }
 
 pub struct MaybeOwnedTrieNode<'a> {
-    trie_node: &'a TrieNodeDeltaMpt,
+    trie_node: &'a TrieNodeDeltaMptCell,
 }
 
 type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
@@ -26,7 +26,15 @@ type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
 
 /// This class can only be meaningfully used internally by CowNodeRef.
 pub struct MaybeOwnedTrieNodeAsCowCallParam {
-    trie_node: *const TrieNodeDeltaMpt,
+    trie_node: *mut TrieNodeDeltaMpt,
+}
+
+pub trait KVInserter<Value> {
+    fn push(&mut self, v: Value) -> Result<()>;
+}
+
+impl<Value> KVInserter<Value> for Vec<Value> {
+    fn push(&mut self, v: Value) -> Result<()> { Ok((*self).push(v)) }
 }
 
 impl MaybeOwnedTrieNodeAsCowCallParam {
@@ -35,7 +43,7 @@ impl MaybeOwnedTrieNodeAsCowCallParam {
     unsafe fn owned_as_mut_unchecked<'a>(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *(self.trie_node as *mut TrieNodeDeltaMpt)
+        &mut *self.trie_node
     }
 
     /// Do not implement in a trait to keep the call private.
@@ -50,13 +58,13 @@ impl<'a, GuardType> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
         GuardedValue::new(
             guard,
             MaybeOwnedTrieNodeAsCowCallParam {
-                trie_node: value.trie_node,
+                trie_node: value.trie_node.get(),
             },
         )
     }
 }
 
-impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMpt> {
+impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMptCell> {
     pub fn into_wrapped(
         x: Self,
     ) -> GuardedValue<GuardType, MaybeOwnedTrieNode<'a>> {
@@ -68,7 +76,7 @@ impl<'a, GuardType> GuardedValue<GuardType, &'a TrieNodeDeltaMpt> {
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub fn take(x: Self) -> MaybeOwnedTrieNodeAsCowCallParam {
         MaybeOwnedTrieNodeAsCowCallParam {
-            trie_node: x.trie_node,
+            trie_node: x.trie_node.get(),
         }
     }
 }
@@ -76,15 +84,14 @@ impl<'a> MaybeOwnedTrieNode<'a> {
 impl<'a> Deref for MaybeOwnedTrieNode<'a> {
     type Target = TrieNodeDeltaMpt;
 
-    fn deref(&self) -> &Self::Target { self.trie_node }
+    fn deref(&self) -> &Self::Target { self.trie_node.get_ref() }
 }
 
 impl<'a> MaybeOwnedTrieNode<'a> {
     pub unsafe fn owned_as_mut_unchecked(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *(self.trie_node as *const TrieNodeDeltaMpt
-            as *mut TrieNodeDeltaMpt)
+        self.trie_node.get_as_mut()
     }
 }
 
@@ -101,7 +108,7 @@ impl CowNodeRef {
         Ok((
             Self {
                 owned: true,
-                node_ref: node_ref,
+                node_ref,
             },
             new_entry,
         ))
@@ -112,7 +119,7 @@ impl CowNodeRef {
     ) -> Self {
         Self {
             owned: owned_node_set.contains(&node_ref),
-            node_ref: node_ref,
+            node_ref,
         }
     }
 
@@ -138,8 +145,9 @@ impl Drop for CowNodeRef {
 impl CowNodeRef {
     pub fn is_owned(&self) -> bool { self.owned }
 
+    // FIXME: refactor node_memory_manager?
     fn convert_to_owned<'a>(
-        &mut self, node_memory_manager: &'a NodeMemoryManagerDeltaMpt,
+        &mut self, _node_memory_manager: &'a NodeMemoryManagerDeltaMpt,
         allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet,
     ) -> Result<Option<SlabVacantEntryDeltaMpt<'a>>>
@@ -168,6 +176,7 @@ impl CowNodeRef {
     pub fn get_trie_node<'a, 'c: 'a>(
         &'a mut self, node_memory_manager: &'c NodeMemoryManagerDeltaMpt,
         allocator: AllocatorRefRefDeltaMpt<'a>,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<
         GuardedValue<
             Option<MutexGuard<'c, CacheManagerDeltaMpt>>,
@@ -176,10 +185,12 @@ impl CowNodeRef {
     >
     {
         Ok(GuardedValue::into_wrapped(
-            node_memory_manager.node_as_ref_with_cache_manager(
+            node_memory_manager.node_cell_with_cache_manager(
                 &allocator,
                 self.node_ref.clone(),
                 node_memory_manager.get_cache_manager(),
+                db,
+                &mut false,
             )?,
         ))
     }
@@ -188,6 +199,7 @@ impl CowNodeRef {
     /// of delete_node and into_child. when the trie node obtained from
     /// CowNodeRef is through get_trie_node, because the lifetime
     /// is shorter.
+    // FIXME: the comment above seems broken.
     pub fn delete_node(
         mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
         owned_node_set: &mut OwnedNodeSet,
@@ -210,12 +222,12 @@ impl CowNodeRef {
     }
 
     /// The deletion is always successful. When return value is Error, the
-    /// iteration fails.
+    /// failing part is iteration.
     pub fn delete_subtree(
-        mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &OwnedNodeSet,
+        mut self, trie: &DeltaMpt, owned_node_set: &OwnedNodeSet,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<()>
     {
         if self.owned {
@@ -238,10 +250,14 @@ impl CowNodeRef {
             for (i, node_ref) in children_table.iter() {
                 let mut cow_child_node =
                     Self::new((*node_ref).into(), owned_node_set);
-                let child_node = cow_child_node
-                    .get_trie_node(node_memory_manager, &allocator)?;
+                let child_node = cow_child_node.get_trie_node(
+                    node_memory_manager,
+                    &allocator,
+                    db,
+                )?;
                 let key_prefix = CompressedPathRaw::concat(
                     &key_prefix,
+                    i,
                     &child_node.compressed_path_ref(),
                 );
                 let child_node = GuardedValue::take(child_node);
@@ -251,6 +267,7 @@ impl CowNodeRef {
                     child_node,
                     key_prefix,
                     values,
+                    db,
                 )?;
             }
 
@@ -264,19 +281,22 @@ impl CowNodeRef {
                 guarded_trie_node,
                 key_prefix,
                 values,
+                db,
             )
         }
     }
 
-    fn commit_dirty_recurse_into_children(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet, trie_node: &mut TrieNodeDeltaMpt,
-        commit_transaction: &mut AtomicCommitTransaction,
+    fn commit_dirty_recurse_into_children<
+        Transaction: BorrowMut<dyn KeyValueDbTransactionTrait>,
+    >(
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
+        trie_node: &mut TrieNodeDeltaMpt,
+        commit_transaction: &mut AtomicCommitTransaction<Transaction>,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<()>
     {
-        for (i, node_ref_mut) in trie_node.children_table.iter_mut() {
+        for (_i, node_ref_mut) in trie_node.children_table.iter_mut() {
             let node_ref = node_ref_mut.clone();
             let mut cow_child_node = Self::new(node_ref.into(), owned_node_set);
             if cow_child_node.is_owned() {
@@ -313,21 +333,17 @@ impl CowNodeRef {
         trie_node: &mut TrieNodeDeltaMpt,
     ) -> MerkleHash
     {
-        let path_merkle = compute_merkle(
-            trie_node.compressed_path_ref(),
-            children_merkles,
-            trie_node.value_as_slice().into_option(),
-        );
-        trie_node.merkle_hash = path_merkle;
+        let path_merkle = trie_node.compute_merkle(children_merkles);
+        trie_node.set_merkle(&path_merkle);
 
         path_merkle
     }
 
     /// Get if unowned, compute if owned.
     pub fn get_or_compute_merkle(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet,
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         allocator_ref: AllocatorRefRefDeltaMpt,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -342,27 +358,37 @@ impl CowNodeRef {
                 owned_node_set,
                 trie_node,
                 allocator_ref,
+                db,
             )?;
 
             let merkle = self.set_merkle(children_merkles.as_ref(), trie_node);
 
             Ok(merkle)
         } else {
+            let mut load_from_db = false;
             let trie_node = trie
                 .get_node_memory_manager()
                 .node_as_ref_with_cache_manager(
                     allocator_ref,
                     self.node_ref.clone(),
                     trie.get_node_memory_manager().get_cache_manager(),
+                    db,
+                    &mut load_from_db,
                 )?;
-            Ok(trie_node.merkle_hash)
+            if load_from_db {
+                trie.get_node_memory_manager()
+                    .compute_merkle_db_loads
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(trie_node.get_merkle().clone())
         }
     }
 
     fn get_or_compute_children_merkles(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet, trie_node: &mut TrieNodeDeltaMpt,
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
+        trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<MaybeMerkleTable>
     {
         match trie_node.children_table.get_children_count() {
@@ -383,6 +409,7 @@ impl CowNodeRef {
                                 trie,
                                 owned_node_set,
                                 allocator_ref,
+                                db,
                             );
                             // There is no change to the child reference so the
                             // return value is dropped.
@@ -401,11 +428,13 @@ impl CowNodeRef {
     // FIXME: It's unnecessary to use owned_node_set for read-only access.
     // FIXME: Where to put which method? CowNodeRef, MVMPT / MPT,
     // FIXME: SubTrieVisitor?
-    pub fn iterate_internal(
-        &self, owned_node_set: &OwnedNodeSet,
-        trie: &MultiVersionMerklePatriciaTrie,
+    pub fn iterate_internal<
+        KVInserterType: KVInserter<(Vec<u8>, Box<[u8]>)>,
+    >(
+        &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
-        key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
+        key_prefix: CompressedPathRaw, values: &mut KVInserterType,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<()>
     {
         if guarded_trie_node.as_ref().as_ref().has_value() {
@@ -413,7 +442,7 @@ impl CowNodeRef {
             values.push((
                 key_prefix.path_slice().to_vec(),
                 guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
-            ));
+            ))?;
         }
 
         let children_table =
@@ -427,10 +456,14 @@ impl CowNodeRef {
         for (i, node_ref) in children_table.iter() {
             let mut cow_child_node =
                 Self::new((*node_ref).into(), owned_node_set);
-            let child_node = cow_child_node
-                .get_trie_node(node_memory_manager, &allocator)?;
+            let child_node = cow_child_node.get_trie_node(
+                node_memory_manager,
+                &allocator,
+                db,
+            )?;
             let key_prefix = CompressedPathRaw::concat(
                 &key_prefix,
+                i,
                 &child_node.compressed_path_ref(),
             );
             let child_node = GuardedValue::take(child_node);
@@ -440,6 +473,7 @@ impl CowNodeRef {
                 child_node,
                 key_prefix,
                 values,
+                db,
             )?;
         }
 
@@ -447,10 +481,12 @@ impl CowNodeRef {
     }
 
     /// Recursively commit dirty nodes.
-    pub fn commit_dirty_recursively(
-        &mut self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet, trie_node: &mut TrieNodeDeltaMpt,
-        commit_transaction: &mut AtomicCommitTransaction,
+    pub fn commit_dirty_recursively<
+        Transaction: BorrowMut<dyn KeyValueDbTransactionTrait>,
+    >(
+        &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
+        trie_node: &mut TrieNodeDeltaMpt,
+        commit_transaction: &mut AtomicCommitTransaction<Transaction>,
         cache_manager: &mut CacheManagerDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
     ) -> Result<bool>
@@ -466,11 +502,13 @@ impl CowNodeRef {
             )?;
 
             let db_key = commit_transaction.info.row_number.value;
-            commit_transaction.transaction.put(
-                COL_DELTA_TRIE,
-                commit_transaction.info.row_number.to_string().as_bytes(),
-                trie_node.rlp_bytes().as_slice(),
-            );
+            commit_transaction
+                .transaction
+                .borrow_mut()
+                .put_with_number_key(
+                    commit_transaction.info.row_number.value.into(),
+                    trie_node.rlp_bytes().as_slice(),
+                )?;
             commit_transaction.info.row_number =
                 commit_transaction.info.row_number.get_next()?;
 
@@ -478,22 +516,22 @@ impl CowNodeRef {
                 NodeRefDeltaMpt::Dirty { index } => *index,
                 _ => unsafe { unreachable_unchecked() },
             };
-            let committed_node_ref =
-                NodeRefDeltaMpt::Committed { db_key: db_key };
+            let committed_node_ref = NodeRefDeltaMpt::Committed { db_key };
             owned_node_set.insert(committed_node_ref.clone());
+            owned_node_set.remove(&self.node_ref);
             // We insert the new node_ref into owned_node_set first because in
             // general inserting to a set may fail, even though it
             // doesn't fail for the current implementation.
             //
-            // When it fails to insert into cache, it's fine to have an extra
-            // entry in owned_node_set because there is no-op in reverting in
-            // this case.
+            // It would be more difficult to deal with if the insertion to
+            // node_ref_map below fails while we haven't updated information
+            // about the current node: we may forget to rollback the insertion
+            // into node_ref_map and cache algorithm.
             cache_manager.insert_to_node_ref_map_and_call_cache_access(
                 db_key,
                 slot,
                 trie.get_node_memory_manager(),
             )?;
-            owned_node_set.remove(&self.node_ref);
             self.node_ref = committed_node_ref;
 
             Ok(true)
@@ -503,10 +541,10 @@ impl CowNodeRef {
     }
 
     pub fn cow_merge_path(
-        self, trie: &MultiVersionMerklePatriciaTrie,
-        owned_node_set: &mut OwnedNodeSet,
+        self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         child_node_ref: NodeRefDeltaMpt, child_index: u8,
+        db: &mut dyn KeyValueDbTraitOwnedRead,
     ) -> Result<CowNodeRef>
     {
         let node_memory_manager = trie.get_node_memory_manager();
@@ -529,9 +567,16 @@ impl CowNodeRef {
         // FIXME: value or itself isn't dirty as well. However if a
         // FIXME: dirty child node was removed, recovering the state
         // FIXME: becomes difficult.
-        let child_trie_node =
-            child_node_cow.get_trie_node(node_memory_manager, &allocator)?;
-        let new_path = child_trie_node.path_prepended(path_prefix, child_index);
+        let child_trie_node = child_node_cow.get_trie_node(
+            node_memory_manager,
+            &allocator,
+            db,
+        )?;
+        let new_path = CompressedPathRaw::concat(
+            &path_prefix,
+            child_index,
+            &child_trie_node.compressed_path_ref(),
+        );
 
         // FIXME: if child_trie_node isn't owned, but node_cow is owned, modify
         // FIXME: node_cow.
@@ -622,20 +667,25 @@ impl CowNodeRef {
     pub fn cow_replace_value_valid(
         &mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
         owned_node_set: &mut OwnedNodeSet,
-        trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam, value: &[u8],
+        trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam, value: Box<[u8]>,
     ) -> Result<MptValue<Box<[u8]>>>
     {
+        let value_to_take = Cell::new(Some(value));
+
         self.cow_modify_with_operation(
             node_memory_manager,
             &node_memory_manager.get_allocator(),
             owned_node_set,
             trie_node,
-            |owned_trie_node| owned_trie_node.replace_value_valid(value),
+            |owned_trie_node| {
+                owned_trie_node
+                    .replace_value_valid(value_to_take.replace(None).unwrap())
+            },
             |read_only_trie_node| {
                 (
                     unsafe {
                         read_only_trie_node.copy_and_replace_fields(
-                            Some(Some(value)),
+                            Some(value_to_take.replace(None)),
                             None,
                             None,
                         )
@@ -675,8 +725,7 @@ impl CowNodeRef {
             Some(new_entry) => {
                 let (new_trie_node, output) =
                     f_ref(trie_node.as_ref().as_ref());
-                let key = new_entry.key();
-                new_entry.insert(new_trie_node);
+                new_entry.insert(&new_trie_node);
                 Ok(output)
             }
         }
@@ -702,7 +751,7 @@ impl CowNodeRef {
                     .as_ref()
                     .copy_and_replace_fields(None, None, None);
                 let key = new_entry.key();
-                new_entry.insert(new_trie_node);
+                new_entry.insert(&new_trie_node);
                 Ok(NodeMemoryManagerDeltaMpt::get_in_memory_node_mut(
                     allocator, key,
                 ))
@@ -714,18 +763,24 @@ impl CowNodeRef {
 use super::{
     super::{
         super::{
+            super::storage_db::key_value_db::{
+                KeyValueDbTraitOwnedRead, KeyValueDbTransactionTrait,
+            },
             errors::*,
             state::OwnedNodeSet,
-            state_manager::{AtomicCommitTransaction, COL_DELTA_TRIE},
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,
-        MultiVersionMerklePatriciaTrie,
+        AtomicCommitTransaction, DeltaMpt, UnsafeCellExtension,
     },
     merkle::*,
     mpt_value::MptValue,
     *,
 };
 use parking_lot::MutexGuard;
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
-use std::{cell::Cell, hint::unreachable_unchecked, ops::Deref};
+use std::{
+    borrow::BorrowMut, cell::Cell, hint::unreachable_unchecked, ops::Deref,
+    sync::atomic::Ordering,
+};

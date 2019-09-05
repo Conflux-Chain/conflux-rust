@@ -4,14 +4,13 @@
 
 use crate::{
     error::{BlockError, Error},
+    parameters::block::*,
     pow,
+    sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use primitives::{Block, BlockHeader};
-use std::{
-    collections::HashSet,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Debug, Copy, Clone)]
@@ -41,8 +40,9 @@ impl VerificationConfig {
     pub fn verify_pow(&self, header: &mut BlockHeader) -> Result<(), Error> {
         let pow_hash = Self::compute_header_pow_quality(header);
         if header.difficulty().is_zero() {
-            return Err(BlockError::InvalidDifficulty(Mismatch {
-                expected: 0.into(),
+            return Err(BlockError::InvalidDifficulty(OutOfBounds {
+                min: Some(0.into()),
+                max: Some(0.into()),
                 found: 0.into(),
             })
             .into());
@@ -64,6 +64,17 @@ impl VerificationConfig {
         Ok(())
     }
 
+    pub fn validate_header_timestamp(
+        &self, header: &BlockHeader, now: u64,
+    ) -> Result<(), SyncError> {
+        let invalid_threshold = now + VALID_TIME_DRIFT;
+        if header.timestamp() > invalid_threshold {
+            warn!("block {} has incorrect timestamp", header.hash());
+            return Err(SyncErrorKind::InvalidTimestamp.into());
+        }
+        Ok(())
+    }
+
     /// Check basic header parameters.
     /// This does not require header to be graph or parental tree ready.
     pub fn verify_header_params(
@@ -71,6 +82,15 @@ impl VerificationConfig {
     ) -> Result<(), Error> {
         // verify POW
         self.verify_pow(header)?;
+
+        // A block will be invalid if it has more than REFEREE_BOUND referees
+        if header.referee_hashes().len() > REFEREE_BOUND {
+            return Err(From::from(BlockError::TooManyReferees(OutOfBounds {
+                min: Some(0),
+                max: Some(REFEREE_BOUND),
+                found: header.referee_hashes().len(),
+            })));
+        }
 
         // verify non-duplicated parent and referee hashes
         let mut direct_ancestor_hashes = HashSet::new();
@@ -89,37 +109,6 @@ impl VerificationConfig {
                 ));
             }
             direct_ancestor_hashes.insert(referee_hash.clone());
-        }
-
-        // verify timestamp drift
-        if self.verify_timestamp {
-            const ACCEPTABLE_DRIFT: Duration = Duration::from_secs(15);
-            let max_time = SystemTime::now() + ACCEPTABLE_DRIFT;
-            let invalid_threshold = max_time + ACCEPTABLE_DRIFT * 9;
-            let timestamp =
-                UNIX_EPOCH + Duration::from_secs(header.timestamp());
-
-            if timestamp > invalid_threshold {
-                warn!("block {} has incorrect timestamp", header.hash());
-                return Err(From::from(BlockError::InvalidTimestamp(
-                    OutOfBounds {
-                        max: Some(max_time),
-                        min: None,
-                        found: timestamp,
-                    },
-                )));
-            }
-
-            if timestamp > max_time {
-                warn!("block {} has incorrect timestamp", header.hash());
-                return Err(From::from(BlockError::TemporarilyInvalid(
-                    OutOfBounds {
-                        max: Some(max_time),
-                        min: None,
-                        found: timestamp,
-                    },
-                )));
-            }
         }
 
         Ok(())
@@ -151,8 +140,32 @@ impl VerificationConfig {
     pub fn verify_block_basic(&self, block: &Block) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
+        let mut block_size = 0;
+        let mut block_gas_limit = U256::zero();
         for t in &block.transactions {
             t.transaction.verify_basic()?;
+            block_size += t.rlp_size();
+            block_gas_limit += *t.gas_limit();
+        }
+
+        if block_size > MAX_BLOCK_SIZE_IN_BYTES {
+            return Err(From::from(BlockError::InvalidBlockSize(
+                OutOfBounds {
+                    min: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
+                    max: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
+                    found: block_size as u64,
+                },
+            )));
+        }
+
+        if block_gas_limit > *block.block_header.gas_limit() {
+            return Err(From::from(BlockError::InvalidBlockGasLimit(
+                OutOfBounds {
+                    min: Some(*block.block_header.gas_limit()),
+                    max: Some(*block.block_header.gas_limit()),
+                    found: block_gas_limit,
+                },
+            )));
         }
 
         Ok(())

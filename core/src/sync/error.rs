@@ -20,6 +20,11 @@ error_chain! {
             display("Invalid block"),
         }
 
+        InvalidMessageFormat {
+            description("Invalid message format"),
+            display("Invalid message format"),
+        }
+
         UnknownPeer {
             description("Unknown peer"),
             display("Unknown peer"),
@@ -30,14 +35,20 @@ error_chain! {
             display("Unexpected response"),
         }
 
-        Useless {
-            description("Useless block"),
-            display("Useless block"),
+        RequestNotFound {
+            description("The response is received after the request timeout or \
+            there is not request for the response"),
+            display("Request not found for the respond"),
         }
 
-        Unknown {
-            description("Unknown error"),
-            display("Unknown error"),
+        TooManyTrans {
+            description("Send too many transactions to node in catch-up mode"),
+            display("Sent too many transactions"),
+        }
+
+        InvalidTimestamp {
+            description("Peer timestamp drifts too much"),
+            display("Drift too much"),
         }
     }
 }

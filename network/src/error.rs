@@ -4,26 +4,70 @@
 
 use crate::io::IoError;
 use keylib;
-use rlp;
+use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{fmt, io, net};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DisconnectReason {
     DisconnectRequested,
     UselessPeer,
     WrongEndpointInfo,
     IpLimited,
+    UpdateNodeIdFailed,
+    Blacklisted,
+    Custom(String),
     Unknown,
 }
 
 impl DisconnectReason {
-    pub fn from_u8(n: u8) -> DisconnectReason {
-        match n {
-            0 => DisconnectReason::DisconnectRequested,
-            1 => DisconnectReason::UselessPeer,
-            2 => DisconnectReason::WrongEndpointInfo,
-            3 => DisconnectReason::IpLimited,
-            _ => DisconnectReason::Unknown,
+    fn code(&self) -> u8 {
+        match self {
+            DisconnectReason::DisconnectRequested => 0,
+            DisconnectReason::UselessPeer => 1,
+            DisconnectReason::WrongEndpointInfo => 2,
+            DisconnectReason::IpLimited => 3,
+            DisconnectReason::UpdateNodeIdFailed => 4,
+            DisconnectReason::Blacklisted => 5,
+            DisconnectReason::Custom(_) => 100,
+            DisconnectReason::Unknown => 0xff,
+        }
+    }
+}
+
+impl Encodable for DisconnectReason {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let mut raw = vec![self.code()];
+
+        if let DisconnectReason::Custom(msg) = self {
+            raw.extend(msg.bytes());
+        }
+
+        s.append_raw(&raw[..], raw.len());
+    }
+}
+
+impl Decodable for DisconnectReason {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        let raw = rlp.as_raw().to_vec();
+
+        if raw.is_empty() {
+            return Err(DecoderError::RlpIsTooShort);
+        }
+
+        match raw[0] {
+            0 => Ok(DisconnectReason::DisconnectRequested),
+            1 => Ok(DisconnectReason::UselessPeer),
+            2 => Ok(DisconnectReason::WrongEndpointInfo),
+            3 => Ok(DisconnectReason::IpLimited),
+            4 => Ok(DisconnectReason::UpdateNodeIdFailed),
+            5 => Ok(DisconnectReason::Blacklisted),
+            100 => match std::str::from_utf8(&raw[1..]) {
+                Err(_) => {
+                    Err(DecoderError::Custom("Unable to decode message part"))
+                }
+                Ok(msg) => Ok(DisconnectReason::Custom(msg.to_owned())),
+            },
+            _ => Ok(DisconnectReason::Unknown),
         }
     }
 }
@@ -35,6 +79,9 @@ impl fmt::Display for DisconnectReason {
             DisconnectReason::UselessPeer => "useless peer",
             DisconnectReason::WrongEndpointInfo => "wrong node id",
             DisconnectReason::IpLimited => "IP limited",
+            DisconnectReason::UpdateNodeIdFailed => "Update node id failed",
+            DisconnectReason::Blacklisted => "blacklisted",
+            DisconnectReason::Custom(ref msg) => &msg[..],
             DisconnectReason::Unknown => "unknown",
         };
 
@@ -149,4 +196,27 @@ impl From<keylib::crypto::Error> for Error {
 
 impl From<net::AddrParseError> for Error {
     fn from(_err: net::AddrParseError) -> Self { ErrorKind::BadAddr.into() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DisconnectReason::{self, *};
+    use rlp::{decode, encode};
+
+    fn check_rlp(r: DisconnectReason) {
+        assert_eq!(decode::<DisconnectReason>(&encode(&r)).unwrap(), r);
+    }
+
+    #[test]
+    fn test_disconnect_reason_rlp() {
+        check_rlp(DisconnectRequested);
+        check_rlp(UselessPeer);
+        check_rlp(WrongEndpointInfo);
+        check_rlp(IpLimited);
+        check_rlp(UpdateNodeIdFailed);
+        check_rlp(Unknown);
+
+        check_rlp(Custom("".to_owned()));
+        check_rlp(Custom("test test test".to_owned()));
+    }
 }

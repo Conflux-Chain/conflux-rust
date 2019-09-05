@@ -3,31 +3,40 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    cache_manager::{CacheId, CacheManager, CacheSize},
-    consensus::{SharedConsensusGraph, HEAVY_BLOCK_DIFFICULTY_RATIO},
-    db::COL_MISC,
+    block_data_manager::{BlockDataManager, BlockStatus},
+    consensus::{ConsensusGraphInner, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
     machine::new_machine,
     pow::ProofOfWorkConfig,
+    statistics::SharedStatistics,
     verification::*,
 };
-use cfx_types::{H256, U256, U512};
-use heapsize::HeapSizeOf;
+use cfx_types::{H256, U256};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
-use primitives::{block::CompactBlock, Block, BlockHeader};
-use rlp::Rlp;
+use primitives::{
+    transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
+};
 use slab::Slab;
 use std::{
-    cmp::{max, min},
+    cmp::max,
     collections::{HashMap, HashSet, VecDeque},
-    ops::DerefMut,
+    mem,
     sync::{
         mpsc::{self, Sender},
         Arc,
     },
     thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use unexpected::{Mismatch, OutOfBounds};
+
+lazy_static! {
+    static ref SYNC_INSERT_HEADER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "sync::insert_block_header");
+    static ref SYNC_INSERT_BLOCK: Arc<dyn Meter> =
+        register_meter_with_group("timer", "sync::insert_block");
+}
 
 const NULL: usize = !0;
 const BLOCK_INVALID: u8 = 0;
@@ -36,34 +45,30 @@ const BLOCK_HEADER_PARENTAL_TREE_READY: u8 = 2;
 const BLOCK_HEADER_GRAPH_READY: u8 = 3;
 const BLOCK_GRAPH_READY: u8 = 4;
 
+#[derive(Debug)]
 pub struct SyncGraphStatistics {
     pub inserted_block_count: usize,
 }
 
 impl SyncGraphStatistics {
-    fn new() -> SyncGraphStatistics {
+    pub fn new() -> SyncGraphStatistics {
         SyncGraphStatistics {
-            inserted_block_count: 0,
+            // Already counted genesis block
+            inserted_block_count: 1,
         }
     }
-}
 
-pub struct BestInformation {
-    pub best_block_hash: H256,
-    pub current_difficulty: U256,
-    pub terminal_block_hashes: Vec<H256>,
-    pub deferred_state_root: H256,
-    pub deferred_receipts_root: H256,
+    pub fn clear(&mut self) { self.inserted_block_count = 1; }
 }
 
 pub struct SynchronizationGraphNode {
     pub block_header: Arc<BlockHeader>,
     /// The status of graph connectivity in the current block view.
     pub graph_status: u8,
-    /// Whether the block is a heavy block
-    pub is_heavy: bool,
     /// Whether the block body is ready.
     pub block_ready: bool,
+    /// Whether parent is in old era and already reclaimed
+    pub parent_reclaimed: bool,
     /// The index of the parent of the block.
     pub parent: usize,
     /// The indices of the children of the block.
@@ -75,46 +80,43 @@ pub struct SynchronizationGraphNode {
     pub pending_referee_count: usize,
     /// The indices of the blocks referencing the block.
     pub referrers: Vec<usize>,
-    /// The indices set of the blocks in the epoch when the current
-    /// block is as pivot chain block. This set does not contain
-    /// the block itself.
-    pub blockset_in_own_view_of_epoch: HashSet<usize>,
-    /// The minimum epoch number of the block in the view of other
-    /// blocks including itself.
-    pub min_epoch_in_other_views: u64,
-}
-
-impl SynchronizationGraphNode {
-    pub fn light_difficulty(&self) -> U256 {
-        if self.is_heavy {
-            *self.block_header.difficulty()
-                / U256::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-        } else {
-            *self.block_header.difficulty()
-        }
-    }
+    /// the timestamp in seconds when graph_status updated
+    pub last_update_timestamp: u64,
 }
 
 pub struct SynchronizationGraphInner {
     pub arena: Slab<SynchronizationGraphNode>,
-    pub indices: HashMap<H256, usize>,
+    pub hash_to_arena_indices: HashMap<H256, usize>,
+    pub data_man: Arc<BlockDataManager>,
     pub genesis_block_index: usize,
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
-    pow_config: ProofOfWorkConfig,
+    pub pow_config: ProofOfWorkConfig,
+    /// the indices of blocks whose graph_status is not GRAPH_READY
+    pub not_ready_blocks_frontier: HashSet<usize>,
+    pub not_ready_blocks_count: usize,
+    pub old_era_blocks_frontier: VecDeque<usize>,
+    pub old_era_blocks_frontier_set: HashSet<usize>,
 }
 
 impl SynchronizationGraphInner {
     pub fn with_genesis_block(
         genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
-    ) -> Self {
+        data_man: Arc<BlockDataManager>,
+    ) -> Self
+    {
         let mut inner = SynchronizationGraphInner {
             arena: Slab::new(),
-            indices: HashMap::new(),
+            hash_to_arena_indices: HashMap::new(),
+            data_man,
             genesis_block_index: NULL,
             children_by_hash: HashMap::new(),
             referrers_by_hash: HashMap::new(),
             pow_config,
+            not_ready_blocks_frontier: HashSet::new(),
+            not_ready_blocks_count: 0,
+            old_era_blocks_frontier: Default::default(),
+            old_era_blocks_frontier_set: Default::default(),
         };
         inner.genesis_block_index = inner.insert(genesis_header);
         debug!(
@@ -123,24 +125,239 @@ impl SynchronizationGraphInner {
         );
 
         inner
+            .old_era_blocks_frontier
+            .push_back(inner.genesis_block_index);
+        inner
+            .old_era_blocks_frontier_set
+            .insert(inner.genesis_block_index);
+
+        inner
+    }
+
+    fn get_genesis_in_current_era(&self) -> usize {
+        let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
+        *self.hash_to_arena_indices.get(&genesis_hash).unwrap()
+    }
+
+    pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
+        let era_genesis = self.get_genesis_in_current_era();
+        (
+            self.arena[era_genesis].block_header.hash(),
+            self.arena[era_genesis].block_header.height(),
+        )
+    }
+
+    fn try_clear_old_era_blocks(&mut self) {
+        let max_num_of_cleared_blocks = 2;
+        let mut num_cleared = 0;
+        let era_genesis = self.get_genesis_in_current_era();
+        let mut era_genesis_in_frontier = false;
+
+        while let Some(index) = self.old_era_blocks_frontier.pop_front() {
+            if index == era_genesis {
+                era_genesis_in_frontier = true;
+                continue;
+            }
+
+            // Remove node with index
+            if !self.old_era_blocks_frontier_set.contains(&index) {
+                continue;
+            }
+
+            let hash = self.arena[index].block_header.hash();
+            assert!(self.arena[index].parent == NULL);
+
+            let referees: Vec<usize> =
+                self.arena[index].referees.iter().map(|x| *x).collect();
+            for referee in referees {
+                self.arena[referee].referrers.retain(|&x| x != index);
+            }
+            let referee_hashes: Vec<H256> = self.arena[index]
+                .block_header
+                .referee_hashes()
+                .iter()
+                .map(|x| *x)
+                .collect();
+            for referee_hash in referee_hashes {
+                let mut remove_referee_hash: bool = false;
+                if let Some(referrers) =
+                    self.referrers_by_hash.get_mut(&referee_hash)
+                {
+                    referrers.retain(|&x| x != index);
+                    remove_referee_hash = referrers.len() == 0;
+                }
+                // clean empty key
+                if remove_referee_hash {
+                    self.referrers_by_hash.remove(&referee_hash);
+                }
+            }
+
+            let children: Vec<usize> =
+                self.arena[index].children.iter().map(|x| *x).collect();
+            for child in children {
+                self.arena[child].parent = NULL;
+                self.arena[child].parent_reclaimed = true;
+                if self.arena[child].graph_status == BLOCK_GRAPH_READY {
+                    // We can only reclaim graph-ready blocks
+                    self.old_era_blocks_frontier.push_back(child);
+                    assert!(!self.old_era_blocks_frontier_set.contains(&child));
+                    self.old_era_blocks_frontier_set.insert(child);
+                }
+            }
+
+            let referrers: Vec<usize> =
+                self.arena[index].referrers.iter().map(|x| *x).collect();
+            for referrer in referrers {
+                self.arena[referrer].referees.retain(|&x| x != index);
+            }
+
+            self.old_era_blocks_frontier_set.remove(&index);
+            self.arena.remove(index);
+            self.hash_to_arena_indices.remove(&hash);
+            // only remove block header in memory cache
+            self.data_man
+                .remove_block_header(&hash, false /* remove_db */);
+
+            num_cleared += 1;
+            if num_cleared == max_num_of_cleared_blocks {
+                break;
+            }
+        }
+
+        if era_genesis_in_frontier {
+            self.old_era_blocks_frontier.push_front(era_genesis);
+        }
+    }
+
+    fn try_recover_expire_block(
+        &mut self,
+    ) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
+        let mut graph_ready_blocks = Vec::new();
+        let mut header_graph_ready_blocks = Vec::new();
+        let mut invalid_blocks = Vec::new();
+
+        let data_man = self.data_man.as_ref();
+        let mut is_block_graph_ready = |hash: &H256, index: &usize| {
+            if let Some(info) = data_man.local_block_info_from_db(hash) {
+                if info.get_status() == BlockStatus::Invalid {
+                    invalid_blocks.push(*index);
+                    false
+                } else {
+                    info.get_instance_id() == data_man.get_instance_id()
+                }
+            } else {
+                false
+            }
+        };
+
+        for index in &self.not_ready_blocks_frontier {
+            let parent_hash = self.arena[*index].block_header.parent_hash();
+
+            // No need to recover BLOCK_HEADER_GRAPH_READY blocks
+            if self.arena[*index].graph_status >= BLOCK_HEADER_GRAPH_READY {
+                continue;
+            }
+
+            // check whether parent is BLOCK_GRAPH_READY
+            // 1. `parent_reclaimed==true`, during recovery, parent is not in
+            // the future of the current checkpoint.
+            // 2. parent not in memory and not invalid in disk (assume this
+            // block was BLOCK_GRAPH_READY)
+            // 3. parent in memory and status is BLOCK_GRAPH_READY
+            let parent_graph_ready: bool = {
+                if self.arena[*index].parent == NULL {
+                    self.arena[*index].parent_reclaimed
+                        || is_block_graph_ready(parent_hash, index)
+                } else if self.arena[*index].parent != NULL
+                    && self.arena[self.arena[*index].parent].graph_status
+                        == BLOCK_GRAPH_READY
+                {
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if !parent_graph_ready {
+                continue;
+            } else if self.arena[*index].parent == NULL {
+                self.arena[*index].parent_reclaimed = true;
+            }
+
+            // check whether referees are BLOCK_GRAPH_READY
+            //  1. referees which are in memory and status is BLOCK_GRAPH_READY
+            //  2. referees which are not in memory and not invalid in disk
+            // (assume these blocks are BLOCK_GRAPH_READY)
+            let mut referee_graph_ready = true;
+            if self.arena[*index].pending_referee_count == 0 {
+                // since all relcaimed blocks are all BLOCK_GRAPH_READY, only
+                // need to check those in memory block
+                for referee in self.arena[*index].referees.iter() {
+                    referee_graph_ready &=
+                        self.arena[*referee].graph_status == BLOCK_GRAPH_READY;
+                }
+            } else {
+                let mut referee_hash_in_mem = HashSet::new();
+                for referee in self.arena[*index].referees.iter() {
+                    referee_graph_ready &=
+                        self.arena[*referee].graph_status == BLOCK_GRAPH_READY;
+                    referee_hash_in_mem
+                        .insert(self.arena[*referee].block_header.hash());
+                }
+
+                for referee_hash in
+                    self.arena[*index].block_header.referee_hashes()
+                {
+                    if !referee_hash_in_mem.contains(referee_hash)
+                        && referee_graph_ready
+                    {
+                        referee_graph_ready &=
+                            is_block_graph_ready(referee_hash, index);
+                    }
+                }
+            }
+
+            if referee_graph_ready {
+                // do check
+                let r = self.verify_header_graph_ready_block(*index);
+                if r.is_err() {
+                    continue;
+                }
+                // recover all ready blocks as BLOCK_HEADER_GRAPH_READY first so
+                // that the status can be properly propagated
+                header_graph_ready_blocks.push(*index);
+                if self.arena[*index].block_ready {
+                    // recover as BLOCK_GRAPH_READY
+                    graph_ready_blocks.push(*index);
+                }
+            }
+        }
+
+        (
+            graph_ready_blocks,
+            header_graph_ready_blocks,
+            invalid_blocks,
+        )
     }
 
     pub fn insert_invalid(&mut self, header: Arc<BlockHeader>) -> usize {
         let hash = header.hash();
         let me = self.arena.insert(SynchronizationGraphNode {
             graph_status: BLOCK_INVALID,
-            is_heavy: false,
             block_ready: false,
+            parent_reclaimed: false,
             parent: NULL,
             children: Vec::new(),
             referees: Vec::new(),
             pending_referee_count: 0,
             referrers: Vec::new(),
-            blockset_in_own_view_of_epoch: HashSet::new(),
-            min_epoch_in_other_views: header.height(),
             block_header: header,
+            last_update_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
         });
-        self.indices.insert(hash, me);
+        self.hash_to_arena_indices.insert(hash, me);
 
         if let Some(children) = self.children_by_hash.remove(&hash) {
             for child in &children {
@@ -167,28 +384,34 @@ impl SynchronizationGraphInner {
     /// Return the index of the inserted block.
     pub fn insert(&mut self, header: Arc<BlockHeader>) -> usize {
         let hash = header.hash();
+        let is_genesis = hash == self.data_man.genesis_block().hash();
+
         let me = self.arena.insert(SynchronizationGraphNode {
-            graph_status: if *header.parent_hash() == H256::default() {
+            graph_status: if is_genesis {
                 BLOCK_GRAPH_READY
             } else {
                 BLOCK_HEADER_ONLY
             },
-            is_heavy: false,
-            block_ready: *header.parent_hash() == H256::default(),
+            block_ready: is_genesis,
+            parent_reclaimed: false,
             parent: NULL,
             children: Vec::new(),
             referees: Vec::new(),
             pending_referee_count: 0,
             referrers: Vec::new(),
-            blockset_in_own_view_of_epoch: HashSet::new(),
-            min_epoch_in_other_views: header.height(),
             block_header: header.clone(),
+            last_update_timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
         });
-        self.indices.insert(hash, me);
+        self.hash_to_arena_indices.insert(hash, me);
 
-        let parent_hash = header.parent_hash().clone();
-        if parent_hash != H256::default() {
-            if let Some(parent) = self.indices.get(&parent_hash).cloned() {
+        if !is_genesis {
+            let parent_hash = header.parent_hash().clone();
+            if let Some(parent) =
+                self.hash_to_arena_indices.get(&parent_hash).cloned()
+            {
                 self.arena[me].parent = parent;
                 self.arena[parent].children.push(me);
             } else {
@@ -199,7 +422,9 @@ impl SynchronizationGraphInner {
             }
         }
         for referee_hash in header.referee_hashes() {
-            if let Some(referee) = self.indices.get(referee_hash).cloned() {
+            if let Some(referee) =
+                self.hash_to_arena_indices.get(referee_hash).cloned()
+            {
                 self.arena[me].referees.push(referee);
                 self.arena[referee].referrers.push(me);
             } else {
@@ -234,6 +459,8 @@ impl SynchronizationGraphInner {
         me
     }
 
+    pub fn block_older_than_checkpoint(&self, _hash: &H256) -> bool { false }
+
     pub fn new_to_be_header_parental_tree_ready(&self, index: usize) -> bool {
         let ref node_me = self.arena[index];
         if node_me.graph_status >= BLOCK_HEADER_PARENTAL_TREE_READY {
@@ -241,9 +468,10 @@ impl SynchronizationGraphInner {
         }
 
         let parent = node_me.parent;
-        parent != NULL
-            && self.arena[parent].graph_status
-                >= BLOCK_HEADER_PARENTAL_TREE_READY
+        node_me.parent_reclaimed
+            || (parent != NULL
+                && self.arena[parent].graph_status
+                    >= BLOCK_HEADER_PARENTAL_TREE_READY)
     }
 
     pub fn new_to_be_header_graph_ready(&self, index: usize) -> bool {
@@ -257,8 +485,9 @@ impl SynchronizationGraphInner {
         }
 
         let parent = node_me.parent;
-        parent != NULL
-            && self.arena[parent].graph_status >= BLOCK_HEADER_GRAPH_READY
+        (node_me.parent_reclaimed
+            || (parent != NULL
+                && self.arena[parent].graph_status >= BLOCK_HEADER_GRAPH_READY))
             && !node_me.referees.iter().any(|&referee| {
                 self.arena[referee].graph_status < BLOCK_HEADER_GRAPH_READY
             })
@@ -276,92 +505,103 @@ impl SynchronizationGraphInner {
 
         let parent = node_me.parent;
         node_me.graph_status >= BLOCK_HEADER_GRAPH_READY
-            && parent != NULL
-            && self.arena[parent].graph_status >= BLOCK_GRAPH_READY
+            && (node_me.parent_reclaimed
+                || (parent != NULL
+                    && self.arena[parent].graph_status >= BLOCK_GRAPH_READY))
             && !node_me.referees.iter().any(|&referee| {
                 self.arena[referee].graph_status < BLOCK_GRAPH_READY
             })
     }
 
-    fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
-        let mut queue = VecDeque::new();
-        for referee in &self.arena[pivot].referees {
-            queue.push_back(*referee);
+    // Get parent (height, timestamp, gas_limit, difficulty)
+    // This function assumes that the parent and referee information MUST exist
+    // in memory or in disk.
+    fn get_parent_and_referee_info(
+        &self, index: usize,
+    ) -> (u64, u64, U256, U256) {
+        let parent_height;
+        let parent_timestamp;
+        let parent_gas_limit;
+        let parent_difficulty;
+        let parent = self.arena[index].parent;
+        if parent != NULL {
+            parent_height = self.arena[parent].block_header.height();
+            parent_timestamp = self.arena[parent].block_header.timestamp();
+            parent_gas_limit = *self.arena[parent].block_header.gas_limit();
+            parent_difficulty = *self.arena[parent].block_header.difficulty();
+        } else {
+            let parent_hash = self.arena[index].block_header.parent_hash();
+            let parent_header = self
+                .data_man
+                .block_header_by_hash(parent_hash)
+                .unwrap()
+                .clone();
+            parent_height = parent_header.height();
+            parent_timestamp = parent_header.timestamp();
+            parent_gas_limit = *parent_header.gas_limit();
+            parent_difficulty = *parent_header.difficulty();
         }
 
-        let mut visited = HashSet::new();
-        while let Some(index) = queue.pop_front() {
-            visited.insert(index);
-            let mut in_old_epoch = false;
-            let mut cur_pivot = pivot;
-            loop {
-                let parent = self.arena[cur_pivot].parent;
-                debug_assert!(parent != NULL);
-                if self.arena[parent].block_header.height()
-                    < self.arena[index].min_epoch_in_other_views
-                {
-                    break;
-                }
-                if parent == index
-                    || self.arena[parent]
-                        .blockset_in_own_view_of_epoch
-                        .contains(&index)
-                {
-                    in_old_epoch = true;
-                    break;
-                }
-                cur_pivot = parent;
-            }
-
-            if !in_old_epoch {
-                let parent = self.arena[index].parent;
-                if !visited.contains(&parent) {
-                    queue.push_back(parent);
-                }
-                for referee in &self.arena[index].referees {
-                    if !visited.contains(referee) {
-                        queue.push_back(*referee);
-                    }
-                }
-                self.arena[index].min_epoch_in_other_views = min(
-                    self.arena[index].min_epoch_in_other_views,
-                    self.arena[pivot].block_header.height(),
-                );
-                self.arena[pivot]
-                    .blockset_in_own_view_of_epoch
-                    .insert(index);
-            }
-        }
+        (
+            parent_height,
+            parent_timestamp,
+            parent_gas_limit,
+            parent_difficulty,
+        )
     }
 
     fn verify_header_graph_ready_block(
         &self, index: usize,
-    ) -> Result<bool, Error> {
-        let mut is_heavy_block = false;
+    ) -> Result<(), Error> {
         let epoch = self.arena[index].block_header.height();
-        let parent = self.arena[index].parent;
-        if self.arena[parent].block_header.height() + 1 != epoch {
-            warn!(
-                "Invalid height. mine {}, parent {}",
-                epoch,
-                self.arena[parent].block_header.height()
-            );
+        let (
+            parent_height,
+            parent_timestamp,
+            parent_gas_limit,
+            parent_difficulty,
+        ) = self.get_parent_and_referee_info(index);
+
+        // Verify the height and epoch numbers are correct
+        if parent_height + 1 != epoch {
+            warn!("Invalid height. mine {}, parent {}", epoch, parent_height);
             return Err(From::from(BlockError::InvalidHeight(Mismatch {
-                expected: self.arena[parent].block_header.height() + 1,
+                expected: parent_height + 1,
                 found: epoch,
             })));
         }
 
+        // Verify the timestamp being correctly set
+        let my_timestamp = self.arena[index].block_header.timestamp();
+        if parent_timestamp > my_timestamp {
+            let my_timestamp = UNIX_EPOCH + Duration::from_secs(my_timestamp);
+            let pa_timestamp =
+                UNIX_EPOCH + Duration::from_secs(parent_timestamp);
+
+            warn!("Invalid timestamp: parent {:?} timestamp {}, me {:?} timestamp {}",
+                  self.arena[index].block_header.parent_hash().clone(),
+                  parent_timestamp,
+                  self.arena[index].block_header.hash(),
+                  self.arena[index].block_header.timestamp());
+            return Err(From::from(BlockError::InvalidTimestamp(
+                OutOfBounds {
+                    max: Some(my_timestamp),
+                    min: Some(pa_timestamp),
+                    found: my_timestamp,
+                },
+            )));
+        }
+
+        // Verify the gas limit is respected
         let machine = new_machine();
         let gas_limit_divisor = machine.params().gas_limit_bound_divisor;
         let min_gas_limit = machine.params().min_gas_limit;
-        let parent_gas_limit = *self.arena[parent].block_header.gas_limit();
         let gas_lower = max(
             parent_gas_limit - parent_gas_limit / gas_limit_divisor,
             min_gas_limit,
         );
         let gas_upper = parent_gas_limit + parent_gas_limit / gas_limit_divisor;
         let self_gas_limit = *self.arena[index].block_header.gas_limit();
+
         if self_gas_limit <= gas_lower || self_gas_limit >= gas_upper {
             return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
                 min: Some(gas_lower),
@@ -370,139 +610,182 @@ impl SynchronizationGraphInner {
             })));
         }
 
-        let expected_difficulty: U256 = self
-            .expected_difficulty(self.arena[index].block_header.parent_hash());
-        let my_difficulty = *self.arena[index].block_header.difficulty();
+        // Verify difficulty being correctly set
+        let mut difficulty_invalid = false;
+        let my_diff = *self.arena[index].block_header.difficulty();
+        let mut min_diff = my_diff;
+        let mut max_diff = my_diff;
+        let initial_difficulty: U256 =
+            self.pow_config.initial_difficulty.into();
 
-        if U512::from(my_difficulty)
-            == U512::from(expected_difficulty)
-                * U512::from(HEAVY_BLOCK_DIFFICULTY_RATIO)
-        {
-            is_heavy_block = true;
-        } else if my_difficulty != expected_difficulty {
-            warn!(
-                "expected_difficulty {}; difficulty {}",
-                expected_difficulty,
-                *self.arena[index].block_header.difficulty()
-            );
-            return Err(From::from(BlockError::InvalidDifficulty(Mismatch {
-                expected: expected_difficulty,
-                found: self.arena[index].block_header.difficulty().clone(),
-            })));
+        if parent_height < self.pow_config.difficulty_adjustment_epoch_period {
+            if my_diff != initial_difficulty {
+                difficulty_invalid = true;
+                min_diff = initial_difficulty;
+                max_diff = initial_difficulty;
+            }
+        } else {
+            let last_period_upper = (parent_height
+                / self.pow_config.difficulty_adjustment_epoch_period)
+                * self.pow_config.difficulty_adjustment_epoch_period;
+            if last_period_upper != parent_height {
+                // parent_epoch should not trigger difficulty adjustment
+                if my_diff != parent_difficulty {
+                    difficulty_invalid = true;
+                    min_diff = parent_difficulty;
+                    max_diff = parent_difficulty;
+                }
+            } else {
+                let (lower, upper) =
+                    self.pow_config.get_adjustment_bound(parent_difficulty);
+                min_diff = lower;
+                max_diff = upper;
+                if my_diff < min_diff || my_diff > max_diff {
+                    difficulty_invalid = true;
+                }
+            }
         }
 
-        Ok(is_heavy_block)
+        if difficulty_invalid {
+            return Err(From::from(BlockError::InvalidDifficulty(
+                OutOfBounds {
+                    min: Some(min_diff),
+                    max: Some(max_diff),
+                    found: my_diff,
+                },
+            )));
+        }
+
+        Ok(())
     }
 
-    /// The input `my_hash` must have been inserted to sync_graph, otherwise
-    /// it'll panic.
-    pub fn total_difficulty_in_own_epoch(&self, my_hash: &H256) -> U256 {
-        let my_index = *self.indices.get(my_hash).expect("exist");
-        self.arena[my_index]
-            .blockset_in_own_view_of_epoch
-            .iter()
-            .fold(
-                self.arena[my_index].block_header.difficulty().clone(),
-                |acc, x| acc + *self.arena[*x].block_header.difficulty(),
-            )
+    fn process_invalid_blocks(&mut self, invalid_set: &HashSet<usize>) {
+        for index in invalid_set {
+            let hash = self.arena[*index].block_header.hash();
+            // Mark this block as invalid, so we don't need to request/verify it
+            // again
+            self.data_man.invalidate_block(hash);
+        }
+        self.remove_blocks(invalid_set);
     }
 
-    /// The input `cur_hash` must have been inserted to sync_graph, otherwise
-    /// it'll panic.
-    pub fn target_difficulty(&self, cur_hash: &H256) -> U256 {
-        let cur_index = *self.indices.get(cur_hash).expect("exist");
-        let epoch = self.arena[cur_index].block_header.height();
-        assert_ne!(epoch, 0);
-        debug_assert!(
-            epoch
-                == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
-                    * self.pow_config.difficulty_adjustment_epoch_period
-        );
+    fn remove_blocks(&mut self, invalid_set: &HashSet<usize>) {
+        for index in invalid_set {
+            let hash = self.arena[*index].block_header.hash();
+            self.not_ready_blocks_frontier.remove(index);
+            self.not_ready_blocks_count -= 1;
+            self.old_era_blocks_frontier_set.remove(index);
 
-        let mut cur = cur_index;
-        let cur_difficulty = self.arena[cur].light_difficulty();
-        let mut block_count = 0 as u64;
-        let mut max_time = u64::min_value();
-        let mut min_time = u64::max_value();
-        for _ in 0..self.pow_config.difficulty_adjustment_epoch_period {
-            for index in self.arena[cur].blockset_in_own_view_of_epoch.iter() {
-                if self.arena[*index].is_heavy {
-                    block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
-                } else {
-                    block_count += 1;
+            let parent = self.arena[*index].parent;
+            if parent != NULL {
+                self.arena[parent].children.retain(|&x| x != *index);
+            }
+            let parent_hash = *self.arena[*index].block_header.parent_hash();
+            let mut remove_parent_hash: bool = false;
+            if let Some(children) = self.children_by_hash.get_mut(&parent_hash)
+            {
+                children.retain(|&x| x != *index);
+                remove_parent_hash = children.len() == 0;
+            }
+            // clean empty hash key
+            if remove_parent_hash {
+                self.children_by_hash.remove(&parent_hash);
+            }
+
+            let referees: Vec<usize> =
+                self.arena[*index].referees.iter().map(|x| *x).collect();
+            for referee in referees {
+                self.arena[referee].referrers.retain(|&x| x != *index);
+            }
+            let referee_hashes: Vec<H256> = self.arena[*index]
+                .block_header
+                .referee_hashes()
+                .iter()
+                .map(|x| *x)
+                .collect();
+            for referee_hash in referee_hashes {
+                let mut remove_referee_hash: bool = false;
+                if let Some(referrers) =
+                    self.referrers_by_hash.get_mut(&referee_hash)
+                {
+                    referrers.retain(|&x| x != *index);
+                    remove_referee_hash = referrers.len() == 0;
+                }
+                // clean empty hash key
+                if remove_referee_hash {
+                    self.referrers_by_hash.remove(&parent_hash);
                 }
             }
 
-            if self.arena[cur].is_heavy {
-                block_count += HEAVY_BLOCK_DIFFICULTY_RATIO as u64;
-            } else {
-                block_count += 1;
+            let children: Vec<usize> =
+                self.arena[*index].children.iter().map(|x| *x).collect();
+            for child in children {
+                debug_assert!(invalid_set.contains(&child));
+                debug_assert!(self.arena[child].graph_status == BLOCK_INVALID);
+                self.arena[child].parent = NULL;
             }
 
-            max_time = max(max_time, self.arena[cur].block_header.timestamp());
-            min_time = min(min_time, self.arena[cur].block_header.timestamp());
-            cur = self.arena[cur].parent;
-        }
-        self.pow_config.target_difficulty(
-            block_count,
-            max_time - min_time,
-            &cur_difficulty,
-        )
-    }
-
-    pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
-        let index = *self.indices.get(parent_hash).unwrap();
-        let epoch = self.arena[index].block_header.height();
-        if epoch < self.pow_config.difficulty_adjustment_epoch_period {
-            self.pow_config.initial_difficulty.into()
-        } else {
-            let last_period_upper = (epoch
-                / self.pow_config.difficulty_adjustment_epoch_period)
-                * self.pow_config.difficulty_adjustment_epoch_period;
-            let mut cur = index;
-            while self.arena[cur].block_header.height() > last_period_upper {
-                cur = self.arena[cur].parent;
+            let referrers: Vec<usize> =
+                self.arena[*index].referrers.iter().map(|x| *x).collect();
+            for referrer in referrers {
+                debug_assert!(invalid_set.contains(&referrer));
+                debug_assert!(
+                    self.arena[referrer].graph_status == BLOCK_INVALID
+                );
+                self.arena[referrer].referees.retain(|&x| x != *index);
             }
-            self.target_difficulty(&self.arena[cur].block_header.hash())
+
+            self.arena.remove(*index);
+            self.hash_to_arena_indices.remove(&hash);
+            // remove header/block in memory cache and header/block in db
+            self.data_man.remove_block(&hash, true /* remove_db */);
         }
     }
 
-    pub fn is_in_past(&self, index: usize, pivot: usize) -> bool {
-        let mut cur_pivot = pivot;
-        loop {
-            debug_assert!(cur_pivot != NULL);
-            if self.arena[cur_pivot].block_header.height()
-                < self.arena[index].min_epoch_in_other_views
-            {
-                break;
+    fn set_and_propagate_invalid(
+        &mut self, queue: &mut VecDeque<usize>,
+        invalid_set: &mut HashSet<usize>, index: usize,
+    )
+    {
+        let children =
+            mem::replace(&mut self.arena[index].children, Vec::new());
+        for child in &children {
+            if !invalid_set.contains(&child) {
+                self.arena[*child].graph_status = BLOCK_INVALID;
+                queue.push_back(*child);
+                invalid_set.insert(*child);
             }
-            if cur_pivot == index
-                || self.arena[cur_pivot]
-                    .blockset_in_own_view_of_epoch
-                    .contains(&index)
-            {
-                return true;
-            }
-            cur_pivot = self.arena[cur_pivot].parent;
         }
-        false
+        mem::replace(&mut self.arena[index].children, children);
+        let referrers =
+            mem::replace(&mut self.arena[index].referrers, Vec::new());
+        for referrer in &referrers {
+            if !invalid_set.contains(&referrer) {
+                self.arena[*referrer].graph_status = BLOCK_INVALID;
+                queue.push_back(*referrer);
+                invalid_set.insert(*referrer);
+            }
+        }
+        mem::replace(&mut self.arena[index].referrers, referrers);
     }
 }
 
 pub struct SynchronizationGraph {
     pub inner: Arc<RwLock<SynchronizationGraphInner>>,
     pub consensus: SharedConsensusGraph,
-    pub block_headers: Arc<RwLock<HashMap<H256, Arc<BlockHeader>>>>,
-    pub compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
-    pub blocks: Arc<RwLock<HashMap<H256, Arc<Block>>>>,
-    genesis_block_hash: H256,
+    pub data_man: Arc<BlockDataManager>,
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
-    pub cache_man: Arc<Mutex<CacheManager<CacheId>>>,
-    pub statistics: RwLock<SyncGraphStatistics>,
+    pub statistics: SharedStatistics,
+    /// This is the hash of latest graph ready block
+    /// Since the critical section is very short, a `Mutex` is enough.
+    pub latest_graph_ready_block: Mutex<H256>,
 
     /// Channel used to send work to `ConsensusGraph`
-    consensus_sender: Mutex<Sender<H256>>,
+    /// Each element is <block_hash, ignore_body>
+    consensus_sender: Mutex<Sender<(H256, bool)>>,
+    /// whether it is a archive node or full node
+    is_full_node: bool,
 }
 
 pub type SharedSynchronizationGraph = Arc<SynchronizationGraph>;
@@ -511,35 +794,30 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        fast_recover: bool,
+        is_full_node: bool,
     ) -> Self
     {
-        let genesis_block_hash = consensus.genesis_block().hash();
-        let genesis_block_header = consensus
-            .block_headers
-            .read()
-            .get(&genesis_block_hash)
-            .expect("genesis exists")
-            .clone();
+        let data_man = consensus.data_man.clone();
         let (consensus_sender, consensus_receiver) = mpsc::channel();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
-                genesis_block_header,
+                Arc::new(data_man.genesis_block().block_header.clone()),
                 pow_config,
+                data_man.clone(),
             ),
         ));
-        let mut sync_graph = SynchronizationGraph {
+        let sync_graph = SynchronizationGraph {
             inner: inner.clone(),
-            compact_blocks: RwLock::new(HashMap::new()),
-            blocks: consensus.blocks.clone(),
-            block_headers: consensus.block_headers.clone(),
-            genesis_block_hash,
+            data_man: data_man.clone(),
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
-            cache_man: consensus.cache_man.clone(),
             consensus: consensus.clone(),
-            statistics: RwLock::new(SyncGraphStatistics::new()),
+            statistics: consensus.statistics.clone(),
+            latest_graph_ready_block: Mutex::new(
+                data_man.genesis_block().block_header.hash(),
+            ),
             consensus_sender: Mutex::new(consensus_sender),
+            is_full_node,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
@@ -548,105 +826,94 @@ impl SynchronizationGraph {
             .name("Consensus Worker".into())
             .spawn(move || loop {
                 match consensus_receiver.recv() {
-                    Ok(hash) => consensus.on_new_block(&hash, inner.as_ref()),
+                    Ok((hash, ignore_body)) => {
+                        consensus.on_new_block(&hash, ignore_body)
+                    }
                     Err(_) => break,
                 }
             })
             .expect("Cannot fail");
-
-        if fast_recover {
-            sync_graph.fast_recover_graph_from_db();
-        } else {
-            sync_graph.recover_graph_from_db();
-        }
-
         sync_graph
     }
 
-    fn recover_graph_from_db(&mut self) {
-        info!("Start full recovery of the block DAG and state from database");
-        let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
-            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
-            {
-                Some(terminals) => {
-                    let rlp = Rlp::new(&terminals);
-                    rlp.as_list::<H256>().expect("Failed to decode terminals!")
-                }
-                None => {
-                    info!("No terminals got from db");
-                    return;
-                }
-            };
-
-        debug!("Get terminals {:?}", terminals);
-        let mut queue = VecDeque::new();
-        for terminal in terminals {
-            queue.push_back(terminal);
-        }
-
-        let mut missed_hashes = self.initial_missed_block_hashes.lock();
-        let mut visited_blocks: HashSet<H256> = HashSet::new();
-        while let Some(hash) = queue.pop_front() {
-            if hash == self.genesis_block_hash {
-                continue;
-            }
-
-            if let Some(mut block) = self.block_by_hash_from_db(&hash) {
-                // This is for constructing synchronization graph.
-                let res =
-                    self.insert_block_header(&mut block.block_header, true);
-                assert!(res.0);
-
-                let parent = block.block_header.parent_hash().clone();
-                let referees = block.block_header.referee_hashes().clone();
-
-                // This is necessary to construct consensus graph.
-                self.insert_block(block, true, false, false);
-
-                if !self.contains_block(&parent)
-                    && !visited_blocks.contains(&parent)
-                {
-                    queue.push_back(parent);
-                    visited_blocks.insert(parent);
-                }
-
-                for referee in referees {
-                    if !self.contains_block(&referee)
-                        && !visited_blocks.contains(&referee)
-                    {
-                        queue.push_back(referee);
-                        visited_blocks.insert(referee);
-                    }
-                }
-            } else {
-                missed_hashes.insert(hash);
-            }
-        }
-        debug!("Initial missed blocks {:?}", *missed_hashes);
-        info!(
-            "Finish recovering {} blocks for SyncGraph",
-            visited_blocks.len()
-        );
+    pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
+        self.inner
+            .read()
+            .get_genesis_hash_and_height_in_current_era()
     }
 
-    fn fast_recover_graph_from_db(&mut self) {
+    /// Compute the expected difficulty for a block given its
+    /// parent hash
+    pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
+        self.consensus.expected_difficulty(parent_hash)
+    }
+
+    pub fn get_to_propagate_trans(
+        &self,
+    ) -> HashMap<H256, Arc<SignedTransaction>> {
+        self.consensus.txpool.get_to_be_propagated_transactions()
+    }
+
+    pub fn set_to_propagate_trans(
+        &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
+    ) {
+        self.consensus
+            .txpool
+            .set_to_be_propagated_transactions(transactions);
+    }
+
+    fn try_remove_old_era_blocks_from_disk(&self) {
+        let mut num_of_blocks_to_remove = 2;
+        while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
+            // only full node should remove blocks in old eras
+            if self.is_full_node {
+                // TODO: remove state root
+                // remove block header in memory cache
+                self.data_man
+                    .remove_block_header(&hash, false /* remove_db */);
+                // remove block body in memory cache and db
+                self.data_man
+                    .remove_block_body(&hash, true /* remove_db */);
+            }
+            num_of_blocks_to_remove -= 1;
+            if num_of_blocks_to_remove == 0 {
+                break;
+            }
+        }
+    }
+
+    pub fn recover_graph_from_db(&self, header_only: bool) {
         info!("Start fast recovery of the block DAG from database");
-        let terminals = match self.consensus.db.key_value().get(COL_MISC, b"terminals")
-            .expect("Low-level database error when fetching 'terminals' block. Some issue with disk?")
-            {
-                Some(terminals) => {
-                    let rlp = Rlp::new(&terminals);
-                    rlp.as_list::<H256>().expect("Failed to decode terminals!")
-                }
-                None => {
-                    info!("No terminals got from db");
-                    return;
-                }
-            };
+        let terminals_opt = self.data_man.terminals_from_db();
+        if terminals_opt.is_none() {
+            return;
+        }
+        let terminals = terminals_opt.unwrap();
         debug!("Get terminals {:?}", terminals);
+
+        let genesis_hash = self.data_man.genesis_block().hash();
+
+        let genesis_local_info =
+            self.data_man.local_block_info_from_db(&genesis_hash);
+        if genesis_local_info.is_none() {
+            panic!(
+                "failed to get local block info from db for genesis[{}]",
+                &genesis_hash
+            );
+        }
+        let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
+        self.consensus
+            .inner
+            .write()
+            .set_initial_sequence_number(genesis_seq_num);
+        debug!(
+            "Get current genesis_block hash={:?}, seq_num={}",
+            genesis_hash, genesis_seq_num
+        );
 
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
+        let mut out_of_era_blocks = HashSet::new();
         for terminal in terminals {
             queue.push_back(terminal);
             visited_blocks.insert(terminal);
@@ -654,36 +921,58 @@ impl SynchronizationGraph {
 
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
         while let Some(hash) = queue.pop_front() {
-            if hash == self.genesis_block_hash {
+            if hash == genesis_hash {
                 continue;
             }
 
-            if let Some(mut block) = self.block_by_hash_from_db(&hash) {
+            // ignore blocks beyond current checkpoint
+            // if block_local_info is missing, consider it is in current
+            // checkpoint
+            if let Some(block_local_info) =
+                self.data_man.local_block_info_from_db(&hash)
+            {
+                if block_local_info.get_seq_num() < genesis_seq_num {
+                    out_of_era_blocks.insert(hash);
+                    debug!(
+                        "Skip block {:?} before checkpoint: seq_num={}",
+                        hash,
+                        block_local_info.get_seq_num()
+                    );
+                    continue;
+                }
+            }
+
+            if let Some(mut block) = self.data_man.block_from_db(&hash) {
                 // This is for constructing synchronization graph.
-                let res =
-                    self.insert_block_header(&mut block.block_header, true);
-                assert!(res.0);
+                let (success, _) = self.insert_block_header(
+                    &mut block.block_header,
+                    true,        /* need_to_verify */
+                    false,       /* bench_mode */
+                    header_only, /* insert_to_consensus */
+                    false,       /* persistent */
+                );
+                assert!(success);
 
                 let parent = block.block_header.parent_hash().clone();
                 let referees = block.block_header.referee_hashes().clone();
 
-                // TODO Avoid reading blocks from db twice,
-                // TODO possible by inserting blocks in topological order
-                // TODO Read only headers from db
                 // This is necessary to construct consensus graph.
-                self.insert_block(block, true, false, true);
+                if !header_only {
+                    let (success, _) = self.insert_block(
+                        block, true,  /* need_to_verify */
+                        false, /* persistent */
+                        true,  /* recover_from_db */
+                    );
+                    assert!(success);
+                }
 
-                if !self.contains_block(&parent)
-                    && !visited_blocks.contains(&parent)
-                {
+                if !visited_blocks.contains(&parent) {
                     queue.push_back(parent);
                     visited_blocks.insert(parent);
                 }
 
                 for referee in referees {
-                    if !self.contains_block(&referee)
-                        && !visited_blocks.contains(&referee)
-                    {
+                    if !visited_blocks.contains(&referee) {
                         queue.push_back(referee);
                         visited_blocks.insert(referee);
                     }
@@ -694,27 +983,43 @@ impl SynchronizationGraph {
         }
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
+        self.remove_expire_blocks(
+            0,    /* expire_time */
+            true, /* recover */
+            Some(out_of_era_blocks),
+        );
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        self.consensus.construct_pivot(&*self.inner.read());
+        if !header_only {
+            self.consensus.construct_pivot_state();
+        }
+        self.consensus
+            .update_best_info(&*self.consensus.inner.read());
+        self.consensus
+            .txpool
+            .notify_new_best_info(self.consensus.best_info());
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
-    pub fn check_mining_heavy_block(
-        &self, parent_hash: &H256, light_difficulty: &U256,
-    ) -> bool {
-        self.consensus
-            .check_mining_heavy_block(parent_hash, light_difficulty)
-    }
-
-    pub fn best_epoch_number(&self) -> u64 {
-        self.consensus.best_epoch_number() as u64
+    pub fn check_mining_adaptive_block(
+        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
+        difficulty: &U256,
+    ) -> bool
+    {
+        self.consensus.check_mining_adaptive_block(
+            inner,
+            parent_hash,
+            difficulty,
+        )
     }
 
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
-        self.block_headers
-            .read()
-            .get(hash)
-            .map(|header_ref| (**header_ref).clone())
+        if !self.contains_block_header(hash) {
+            // Only return headers in sync graph
+            return None;
+        }
+        self.data_man
+            .block_header_by_hash(hash)
+            .map(|header_ref| header_ref.as_ref().clone())
     }
 
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
@@ -722,143 +1027,181 @@ impl SynchronizationGraph {
             .map(|header| header.height())
     }
 
+    pub fn block_timestamp_by_hash(&self, hash: &H256) -> Option<u64> {
+        self.block_header_by_hash(hash)
+            .map(|header| header.timestamp())
+    }
+
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
-        self.consensus.block_by_hash(hash, true)
+        self.data_man.block_by_hash(hash, true /* update_cache */)
     }
 
-    pub fn block_by_hash_from_db(&self, hash: &H256) -> Option<Block> {
-        self.consensus.block_by_hash_from_db(hash)
-    }
-
-    pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {
-        self.compact_blocks.read().get(hash).map(|b| {
-            self.cache_man
-                .lock()
-                .note_used(CacheId::CompactBlock(b.hash()));
-            b.clone()
-        })
-    }
-
-    pub fn genesis_hash(&self) -> &H256 { &self.genesis_block_hash }
+    pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }
 
     pub fn contains_block_header(&self, hash: &H256) -> bool {
-        self.inner.read().indices.contains_key(hash)
-    }
-
-    pub fn contains_compact_block(&self, hash: &H256) -> bool {
-        self.compact_blocks.read().contains_key(hash)
-    }
-
-    pub fn insert_compact_block(&self, cb: CompactBlock) {
-        let hash = cb.hash();
-        self.compact_blocks.write().insert(hash, cb);
-        self.cache_man.lock().note_used(CacheId::CompactBlock(hash));
+        self.inner.read().hash_to_arena_indices.contains_key(hash)
     }
 
     fn parent_or_referees_invalid(&self, header: &BlockHeader) -> bool {
-        self.consensus.verified_invalid(header.parent_hash())
+        self.data_man.verified_invalid(header.parent_hash())
             || header
                 .referee_hashes()
                 .iter()
-                .any(|referee| self.consensus.verified_invalid(referee))
+                .any(|referee| self.data_man.verified_invalid(referee))
     }
 
-    fn set_and_propagate_invalid(
-        inner: &mut SynchronizationGraphInner, queue: &mut VecDeque<usize>,
-        invalid_set: &mut HashSet<usize>, index: usize,
-    )
-    {
-        if !invalid_set.contains(&index) {
-            invalid_set.insert(index);
-            let children: Vec<usize> =
-                inner.arena[index].children.iter().map(|x| *x).collect();
-            for child in children {
-                inner.arena[child].graph_status = BLOCK_INVALID;
-                queue.push_back(child);
-            }
-            let referrers: Vec<usize> =
-                inner.arena[index].referrers.iter().map(|x| *x).collect();
-            for referrer in referrers {
-                inner.arena[referrer].graph_status = BLOCK_INVALID;
-                queue.push_back(referrer);
-            }
-        }
-    }
-
-    fn process_invalid_blocks(
+    /// subroutine called by `insert_block_header` and `remove_expire_blocks`
+    fn propagate_header_graph_status(
         &self, inner: &mut SynchronizationGraphInner,
-        invalid_set: &HashSet<usize>,
-    )
+        frontier_index_list: Vec<usize>, need_to_verify: bool,
+        header_index_to_insert: usize, insert_to_consensus: bool,
+        persistent: bool,
+    ) -> (HashSet<usize>, Vec<H256>)
     {
-        for index in invalid_set {
-            let hash = inner.arena[*index].block_header.hash();
-            self.consensus.invalidate_block(&hash);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let mut need_to_relay: Vec<H256> = Vec::new();
+        let mut invalid_set: HashSet<usize> = HashSet::new();
+        let mut queue = VecDeque::new();
 
-            let parent = inner.arena[*index].parent;
-            if parent != NULL {
-                inner.arena[parent].children.retain(|&x| x != *index);
+        for index in frontier_index_list {
+            if inner.arena[index].graph_status == BLOCK_INVALID {
+                invalid_set.insert(index);
             }
-            let parent_hash = *inner.arena[*index].block_header.parent_hash();
-            if let Some(children) = inner.children_by_hash.get_mut(&parent_hash)
-            {
-                children.retain(|&x| x != *index);
-            }
+            queue.push_back(index);
+        }
 
-            let referees: Vec<usize> =
-                inner.arena[*index].referees.iter().map(|x| *x).collect();
-            for referee in referees {
-                inner.arena[referee].referrers.retain(|&x| x != *index);
-            }
-            let referee_hashes: Vec<H256> = inner.arena[*index]
-                .block_header
-                .referee_hashes()
-                .iter()
-                .map(|x| *x)
-                .collect();
-            for referee_hash in referee_hashes {
-                if let Some(referrers) =
-                    inner.referrers_by_hash.get_mut(&referee_hash)
-                {
-                    referrers.retain(|&x| x != *index);
+        while let Some(index) = queue.pop_front() {
+            if inner.arena[index].graph_status == BLOCK_INVALID {
+                inner.set_and_propagate_invalid(
+                    &mut queue,
+                    &mut invalid_set,
+                    index,
+                );
+            } else {
+                if inner.new_to_be_header_graph_ready(index) {
+                    inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
+                    inner.arena[index].last_update_timestamp = now;
+                    debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
+                           inner.arena[index].parent, inner.arena[index].block_header.hash());
+
+                    let r = inner.verify_header_graph_ready_block(index);
+
+                    if need_to_verify && r.is_err() {
+                        warn!(
+                            "Invalid header_arc! inserted_header={:?} err={:?}",
+                            inner.arena[index].block_header.clone(),
+                            r
+                        );
+                        invalid_set.insert(index);
+                        inner.arena[index].graph_status = BLOCK_INVALID;
+                        inner.set_and_propagate_invalid(
+                            &mut queue,
+                            &mut invalid_set,
+                            index,
+                        );
+                        continue;
+                    }
+
+                    // Note that when called by `insert_block_header` we have to
+                    // insert header here immediately instead of
+                    // after the loop because its children may
+                    // become ready and being processed in the loop later. It
+                    // requires this block already being inserted
+                    // into the BlockDataManager!
+                    if index == header_index_to_insert {
+                        self.data_man.insert_block_header(
+                            inner.arena[index].block_header.hash(),
+                            inner.arena[index].block_header.clone(),
+                            persistent,
+                        );
+                    }
+                    if insert_to_consensus {
+                        self.consensus_sender
+                            .lock()
+                            .send((
+                                inner.arena[index].block_header.hash(),
+                                true,
+                            ))
+                            .expect("Receiver not dropped");
+                    }
+
+                    // Passed verification on header_arc.
+                    if inner.arena[index].block_ready {
+                        need_to_relay
+                            .push(inner.arena[index].block_header.hash());
+                    }
+
+                    for child in &inner.arena[index].children {
+                        if inner.arena[*child].graph_status
+                            < BLOCK_HEADER_GRAPH_READY
+                        {
+                            queue.push_back(*child);
+                        }
+                    }
+                    for referrer in &inner.arena[index].referrers {
+                        if inner.arena[*referrer].graph_status
+                            < BLOCK_HEADER_GRAPH_READY
+                        {
+                            queue.push_back(*referrer);
+                        }
+                    }
+                } else if inner.new_to_be_header_parental_tree_ready(index) {
+                    trace!("BlockIndex {} parent_index {} hash {} is header parental tree ready", index,
+                           inner.arena[index].parent, inner.arena[index].block_header.hash());
+                    if index == header_index_to_insert {
+                        self.data_man.insert_block_header(
+                            inner.arena[index].block_header.hash(),
+                            inner.arena[index].block_header.clone(),
+                            persistent,
+                        );
+                    }
+                    inner.arena[index].graph_status =
+                        BLOCK_HEADER_PARENTAL_TREE_READY;
+                    inner.arena[index].last_update_timestamp = now;
+                    for child in &inner.arena[index].children {
+                        debug_assert!(
+                            inner.arena[*child].graph_status
+                                < BLOCK_HEADER_PARENTAL_TREE_READY
+                        );
+                        queue.push_back(*child);
+                    }
+                } else {
+                    trace!(
+                        "BlockIndex {} parent_index {} hash {} is not ready",
+                        index,
+                        inner.arena[index].parent,
+                        inner.arena[index].block_header.hash()
+                    );
+                    if index == header_index_to_insert {
+                        self.data_man.insert_block_header(
+                            inner.arena[index].block_header.hash(),
+                            inner.arena[index].block_header.clone(),
+                            persistent,
+                        );
+                    }
                 }
             }
-
-            let children: Vec<usize> =
-                inner.arena[*index].children.iter().map(|x| *x).collect();
-            for child in children {
-                debug_assert!(invalid_set.contains(&child));
-                debug_assert!(inner.arena[child].graph_status == BLOCK_INVALID);
-                inner.arena[child].parent = NULL;
-            }
-
-            let referrers: Vec<usize> =
-                inner.arena[*index].referrers.iter().map(|x| *x).collect();
-            for referrer in referrers {
-                debug_assert!(invalid_set.contains(&referrer));
-                debug_assert!(
-                    inner.arena[referrer].graph_status == BLOCK_INVALID
-                );
-                inner.arena[referrer].referees.retain(|&x| x != *index);
-            }
-
-            inner.arena.remove(*index);
-            inner.indices.remove(&hash);
-            self.block_headers.write().remove(&hash);
-            self.remove_block_from_kv(&hash);
         }
+        (invalid_set, need_to_relay)
     }
 
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool,
-    ) -> (bool, Vec<H256>) {
-        let mut inner = self.inner.write();
+        bench_mode: bool, insert_to_consensus: bool, persistent: bool,
+    ) -> (bool, Vec<H256>)
+    {
+        let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
+        let inner = &mut *self.inner.write();
         let hash = header.hash();
 
-        if self.verified_invalid(&hash) {
+        if self.data_man.verified_invalid(&hash) {
             return (false, Vec::new());
         }
 
-        if inner.indices.contains_key(&hash) {
+        if inner.hash_to_arena_indices.contains_key(&hash) {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
@@ -874,9 +1217,11 @@ impl SynchronizationGraph {
                     .verify_header_params(header)
                     .is_err())
         } else {
-            self.verification_config
-                .verify_pow(header)
-                .expect("local mined block should pass this check!");
+            if !bench_mode {
+                self.verification_config
+                    .verify_pow(header)
+                    .expect("local mined block should pass this check!");
+            }
             true
         };
 
@@ -887,153 +1232,182 @@ impl SynchronizationGraph {
             inner.insert_invalid(header_arc.clone())
         };
 
-        // Start to pass influence to descendants
-        let mut need_to_relay: Vec<H256> = Vec::new();
-        let mut me_invalid = false;
-        let mut invalid_set: HashSet<usize> = HashSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(me);
-        while let Some(index) = queue.pop_front() {
-            if inner.arena[index].graph_status == BLOCK_INVALID {
-                if me == index {
-                    me_invalid = true;
+        if inner.arena[me].graph_status != BLOCK_GRAPH_READY {
+            inner.not_ready_blocks_count += 1;
+            if inner.arena[me].parent == NULL
+                || inner.arena[inner.arena[me].parent].graph_status
+                    == BLOCK_GRAPH_READY
+            {
+                inner.not_ready_blocks_frontier.insert(me);
+            }
+            let mut to_be_removed = Vec::new();
+            for child in &inner.arena[me].children {
+                if inner.not_ready_blocks_frontier.contains(child) {
+                    to_be_removed.push(*child);
                 }
-                Self::set_and_propagate_invalid(
-                    inner.deref_mut(),
-                    &mut queue,
-                    &mut invalid_set,
-                    index,
-                );
-            } else if inner.new_to_be_header_graph_ready(index) {
-                inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
-                debug_assert!(inner.arena[index].parent != NULL);
-
-                let r = inner.verify_header_graph_ready_block(index);
-                inner.arena[index].is_heavy = match r {
-                    Ok(is_heavy) => is_heavy,
-                    _ => false,
-                };
-
-                if need_to_verify && r.is_err() {
-                    warn!(
-                        "Invalid header_arc! inserted_header={:?} err={:?}",
-                        header_arc, r
-                    );
-                    if me == index {
-                        me_invalid = true;
-                    }
-                    inner.arena[index].graph_status = BLOCK_INVALID;
-                    Self::set_and_propagate_invalid(
-                        inner.deref_mut(),
-                        &mut queue,
-                        &mut invalid_set,
-                        index,
-                    );
-                    continue;
-                }
-
-                // Passed verification on header_arc.
-                if inner.arena[index].block_ready {
-                    need_to_relay.push(inner.arena[index].block_header.hash());
-                }
-
-                inner.collect_blockset_in_own_view_of_epoch(index);
-
-                for child in &inner.arena[index].children {
-                    debug_assert!(
-                        inner.arena[*child].graph_status
-                            < BLOCK_HEADER_GRAPH_READY
-                    );
-                    queue.push_back(*child);
-                }
-                for referrer in &inner.arena[index].referrers {
-                    debug_assert!(
-                        inner.arena[*referrer].graph_status
-                            < BLOCK_HEADER_GRAPH_READY
-                    );
-                    queue.push_back(*referrer);
-                }
-            } else if inner.new_to_be_header_parental_tree_ready(index) {
-                inner.arena[index].graph_status =
-                    BLOCK_HEADER_PARENTAL_TREE_READY;
-                for child in &inner.arena[index].children {
-                    debug_assert!(
-                        inner.arena[*child].graph_status
-                            < BLOCK_HEADER_PARENTAL_TREE_READY
-                    );
-                    queue.push_back(*child);
-                }
+            }
+            for x in to_be_removed {
+                inner.not_ready_blocks_frontier.remove(&x);
             }
         }
 
+        debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
+               header.hash(), me, need_to_verify, bench_mode, insert_to_consensus);
+
+        // Start to pass influence to descendants
+        let (invalid_set, need_to_relay) = self.propagate_header_graph_status(
+            inner,
+            vec![me],
+            need_to_verify,
+            me,
+            insert_to_consensus,
+            persistent,
+        );
+
+        let me_invalid = invalid_set.contains(&me);
+
         // Post-processing invalid blocks.
-        self.process_invalid_blocks(inner.deref_mut(), &invalid_set);
+        inner.process_invalid_blocks(&invalid_set);
 
         if me_invalid {
             return (false, need_to_relay);
         }
 
-        self.block_headers
-            .write()
-            .insert(header_arc.hash(), header_arc);
+        inner.try_clear_old_era_blocks();
+        self.try_remove_old_era_blocks_from_disk();
+
         (true, need_to_relay)
     }
 
     pub fn contains_block(&self, hash: &H256) -> bool {
         let inner = self.inner.read();
-        if let Some(index) = inner.indices.get(hash) {
+        if let Some(index) = inner.hash_to_arena_indices.get(hash) {
             inner.arena[*index].block_ready
         } else {
             false
         }
     }
 
-    pub fn insert_block_to_kv(&self, block: Arc<Block>, persistent: bool) {
-        self.consensus.insert_block_to_kv(block, persistent)
+    fn set_graph_ready(
+        &self, inner: &mut SynchronizationGraphInner, index: usize,
+        recover_from_db: bool,
+    )
+    {
+        inner.arena[index].graph_status = BLOCK_GRAPH_READY;
+        if inner.arena[index].parent_reclaimed {
+            inner.old_era_blocks_frontier.push_back(index);
+            inner.old_era_blocks_frontier_set.insert(index);
+        }
+
+        // maintain not_ready_blocks_frontier
+        inner.not_ready_blocks_count -= 1;
+        inner.not_ready_blocks_frontier.remove(&index);
+        for child in &inner.arena[index].children {
+            inner.not_ready_blocks_frontier.insert(*child);
+        }
+
+        let h = inner.arena[index].block_header.hash();
+        debug!("Block {:?} is graph ready", h);
+        // If this block is recovered from db, we need to explicitly call
+        // consensus.on_new_block since we need to call
+        // consensus.construct_pivot_state after all the blocks are inserted
+        // into consensus graph; Otherwise Consensus Worker can handle the
+        // block in order asynchronously. In addition, if this block is
+        // recovered from db, we can simply ignore body.
+        *self.latest_graph_ready_block.lock() = h;
+        if !recover_from_db {
+            self.consensus_sender
+                .lock()
+                .send((h, false /* ignore_body */))
+                .expect("Cannot fail");
+        } else {
+            self.consensus.on_new_block(&h, true /* ignore_body */);
+        }
     }
 
-    fn remove_block_from_kv(&self, hash: &H256) {
-        self.consensus.remove_block_from_kv(hash)
+    /// subroutine called by `insert_block` and `remove_expire_blocks`
+    fn propagate_graph_status(
+        &self, inner: &mut SynchronizationGraphInner,
+        frontier_index_list: Vec<usize>, recover_from_db: bool,
+    ) -> HashSet<usize>
+    {
+        let mut queue = VecDeque::new();
+        let mut invalid_set = HashSet::new();
+        for index in frontier_index_list {
+            if inner.arena[index].graph_status == BLOCK_INVALID {
+                invalid_set.insert(index);
+            }
+            queue.push_back(index);
+        }
+
+        while let Some(index) = queue.pop_front() {
+            if inner.arena[index].graph_status == BLOCK_INVALID {
+                inner.set_and_propagate_invalid(
+                    &mut queue,
+                    &mut invalid_set,
+                    index,
+                );
+            } else if inner.new_to_be_block_graph_ready(index) {
+                self.set_graph_ready(inner, index, recover_from_db);
+                for child in &inner.arena[index].children {
+                    debug_assert!(
+                        inner.arena[*child].graph_status < BLOCK_GRAPH_READY
+                    );
+                    queue.push_back(*child);
+                }
+                for referrer in &inner.arena[index].referrers {
+                    debug_assert!(
+                        inner.arena[*referrer].graph_status < BLOCK_GRAPH_READY
+                    );
+                    queue.push_back(*referrer);
+                }
+            } else {
+                debug!("Block index {:?} not block_graph_ready, current frontier: {:?}", index, inner.not_ready_blocks_frontier);
+            }
+        }
+
+        invalid_set
     }
 
     pub fn insert_block(
         &self, block: Block, need_to_verify: bool, persistent: bool,
-        sync_graph_only: bool,
+        recover_from_db: bool,
     ) -> (bool, bool)
     {
+        let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
         let mut insert_success = true;
         let mut need_to_relay = false;
 
         let hash = block.hash();
 
-        let mut inner = self.inner.write();
+        debug!("insert_block {:?}", hash);
 
-        if self.verified_invalid(&hash) {
+        let inner = &mut *self.inner.write();
+
+        if self.data_man.verified_invalid(&hash) {
             insert_success = false;
             // (false, false)
             return (insert_success, need_to_relay);
         }
 
-        let contains_block = if let Some(index) = inner.indices.get(&hash) {
-            inner.arena[*index].block_ready
-        } else {
-            false
-        };
+        let contains_block =
+            if let Some(index) = inner.hash_to_arena_indices.get(&hash) {
+                inner.arena[*index].block_ready
+            } else {
+                // Sync graph is cleaned after inserting the header, so we can
+                // ignore the block body
+                return (true, false);
+            };
 
         if contains_block {
             // (true, false)
             return (insert_success, need_to_relay);
         }
 
-        self.stat_inc_inserted_count();
+        self.statistics.inc_sync_graph_inserted_block_count();
 
-        debug!(
-            "new block inserted into graph: block_header={:?} tx_count={},",
-            block.block_header,
-            block.transactions.len(),
-        );
+        let me = *inner.hash_to_arena_indices.get(&hash).unwrap();
 
-        let me = *inner.indices.get(&hash).unwrap();
         debug_assert!(hash == inner.arena[me].block_header.hash());
         debug_assert!(!inner.arena[me].block_ready);
         inner.arena[me].block_ready = true;
@@ -1060,200 +1434,220 @@ impl SynchronizationGraph {
             };
         }
 
-        let mut invalid_set: HashSet<usize> = HashSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(me);
-
         let block = Arc::new(block);
         if inner.arena[me].graph_status != BLOCK_INVALID {
             // If we are rebuilding the graph from db, we do not insert all
             // blocks into memory
-            if !sync_graph_only {
+            if !recover_from_db {
                 // Here we always build a new compact block because we should
                 // not reuse the nonce
-                self.insert_compact_block(block.to_compact());
-                self.insert_block_to_kv(block, persistent);
+                self.data_man.insert_compact_block(block.to_compact());
+                // block header was inserted in before, only insert block body
+                // here
+                self.data_man.insert_block_body(
+                    block.hash(),
+                    block.clone(),
+                    persistent,
+                );
             }
         } else {
             insert_success = false;
         }
 
-        while let Some(index) = queue.pop_front() {
-            if inner.arena[index].graph_status == BLOCK_INVALID {
-                Self::set_and_propagate_invalid(
-                    inner.deref_mut(),
-                    &mut queue,
-                    &mut invalid_set,
-                    index,
-                );
-            } else if inner.new_to_be_block_graph_ready(index) {
-                inner.arena[index].graph_status = BLOCK_GRAPH_READY;
+        let invalid_set =
+            self.propagate_graph_status(inner, vec![me], recover_from_db);
 
-                let h = inner.arena[index].block_header.hash();
-                debug!("Block {:?} is graph ready", h);
-                if !sync_graph_only {
-                    // Make Consensus Worker handle the block in order
-                    // asynchronously
-                    self.consensus_sender.lock().send(h).expect("Cannot fail");
-                } else {
-                    self.consensus.on_new_block_construction_only(&h, &*inner);
-                }
-
-                for child in &inner.arena[index].children {
-                    debug_assert!(
-                        inner.arena[*child].graph_status < BLOCK_GRAPH_READY
-                    );
-                    queue.push_back(*child);
-                }
-                for referrer in &inner.arena[index].referrers {
-                    debug_assert!(
-                        inner.arena[*referrer].graph_status < BLOCK_GRAPH_READY
-                    );
-                    queue.push_back(*referrer);
-                }
-            }
-        }
         if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
             need_to_relay = true;
         }
 
         // Post-processing invalid blocks.
-        self.process_invalid_blocks(inner.deref_mut(), &invalid_set);
-        if self.consensus.db.key_value().flush().is_err() {
+        inner.process_invalid_blocks(&invalid_set);
+        if self.data_man.db.key_value().flush().is_err() {
             warn!("db error when flushing block data");
             insert_success = false;
         }
 
+        debug!(
+            "new block inserted into graph: block_header={:?}, tx_count={}, block_size={}",
+            block.block_header,
+            block.transactions.len(),
+            block.size(),
+        );
+
         (insert_success, need_to_relay)
     }
 
-    pub fn get_best_info(&self) -> BestInformation {
-        let consensus_inner = self.consensus.inner.read();
-        BestInformation {
-            best_block_hash: consensus_inner.best_block_hash(),
-            current_difficulty: consensus_inner.current_difficulty,
-            terminal_block_hashes: consensus_inner.terminal_hashes(),
-            deferred_state_root: consensus_inner
-                .deferred_state_root_following_best_block(),
-            deferred_receipts_root: consensus_inner
-                .deferred_receipts_root_following_best_block(),
-        }
+    pub fn get_block_hashes_by_epoch(
+        &self, epoch_number: u64,
+    ) -> Result<Vec<H256>, String> {
+        self.consensus
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_number.into()))
     }
 
-    pub fn verified_invalid(&self, hash: &H256) -> bool {
-        self.consensus.verified_invalid(hash)
+    pub fn log_statistics(&self) { self.statistics.log_statistics(); }
+
+    pub fn update_total_weight_in_past(&self) {
+        self.consensus.update_total_weight_in_past();
     }
 
-    /// Get current cache size.
-    pub fn cache_size(&self) -> CacheSize {
-        let consensus_inner = self.consensus.inner.write();
-        let compact_blocks = self.compact_blocks.read().heap_size_of_children();
-        let blocks = self.blocks.read().heap_size_of_children();
-        let block_receipts =
-            consensus_inner.block_receipts.heap_size_of_children();
-        let transaction_addresses = consensus_inner
-            .transaction_addresses
-            .heap_size_of_children()
-            + self
-                .consensus
-                .txpool
-                .unexecuted_transaction_addresses
-                .lock()
-                .heap_size_of_children();
-        let transaction_pubkey = self
-            .consensus
-            .txpool
-            .transaction_pubkey_cache
-            .read()
-            .heap_size_of_children();
-        CacheSize {
-            blocks,
-            block_receipts,
-            transaction_addresses,
-            compact_blocks,
-            transaction_pubkey,
-        }
-    }
+    /// Get the current number of blocks in the synchronization graph
+    /// This only returns cached block count, and this is enough since this is
+    /// only used in test.
+    pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
 
-    pub fn block_cache_gc(&self) {
-        let current_size = self.cache_size().total();
-        let mut consensus_inner = self.consensus.inner.write();
-        let mut compact_blocks = self.compact_blocks.write();
-        let mut blocks = self.blocks.write();
-        let mut transaction_pubkey_cache =
-            self.consensus.txpool.transaction_pubkey_cache.write();
-        let mut unexecuted_transaction_addresses = self
-            .consensus
-            .txpool
-            .unexecuted_transaction_addresses
-            .lock();
-        let mut cache_man = self.cache_man.lock();
-        info!(
-            "Before gc cache_size={} {} {} {} {} {} {}",
-            current_size,
-            blocks.len(),
-            compact_blocks.len(),
-            consensus_inner.block_receipts.len(),
-            consensus_inner.transaction_addresses.len(),
-            transaction_pubkey_cache.len(),
-            unexecuted_transaction_addresses.len()
-        );
-
-        info!(
-            "Synchronization graph- inserted block count: {}",
-            self.stat_get_inserted_count()
-        );
-
-        cache_man.collect_garbage(current_size, |ids| {
-            for id in &ids {
-                match *id {
-                    CacheId::Block(ref h) => {
-                        blocks.remove(h);
+    /// remove all blocks which have not been updated for a long time
+    /// we maintain a set `not_ready_blocks_frontier` which is the root nodes in
+    /// the parental tree formed by not graph ready blocks. Find all expire
+    /// blocks which can be reeached by `not_ready_blocks_frontier`.
+    pub fn remove_expire_blocks(
+        &self, expire_time: u64, recover: bool,
+        maybe_out_of_era_blocks: Option<HashSet<H256>>,
+    ) -> Vec<H256>
+    {
+        let inner = &mut *self.inner.write();
+        if let Some(out_of_era_blocks) = &maybe_out_of_era_blocks {
+            for h in out_of_era_blocks {
+                if let Some(referrers) = inner.referrers_by_hash.get(h) {
+                    for referrer in referrers {
+                        debug!(
+                            "Remove pending_referee_count for {}, child={}",
+                            h, referrer
+                        );
+                        assert!(
+                            inner.arena[*referrer].pending_referee_count > 0
+                        );
+                        inner.arena[*referrer].pending_referee_count -= 1;
                     }
-                    CacheId::BlockReceipts(ref h) => {
-                        consensus_inner.block_receipts.remove(h);
-                    }
-                    CacheId::TransactionAddress(ref h) => {
-                        consensus_inner.transaction_addresses.remove(h);
-                    }
-                    CacheId::UnexecutedTransactionAddress(ref h) => {
-                        unexecuted_transaction_addresses.remove(h);
-                    }
-                    CacheId::CompactBlock(ref h) => {
-                        compact_blocks.remove(h);
-                    }
-                    CacheId::TransactionPubkey(ref h) => {
-                        transaction_pubkey_cache.remove(h);
+                }
+                if let Some(children) = inner.children_by_hash.get(h) {
+                    for child in children {
+                        debug!(
+                            "Set parent_reclaimed for {}, child={}",
+                            h, child
+                        );
+                        assert!(inner
+                            .not_ready_blocks_frontier
+                            .contains(child));
+                        inner.arena[*child].parent_reclaimed = true;
                     }
                 }
             }
+        }
+        let mut to_relay_blocks = Vec::new();
+        debug!(
+            "not_ready_blocks_frontier: {:?}",
+            inner.not_ready_blocks_frontier
+        );
+        if recover {
+            let (
+                new_graph_ready_blocks,
+                mut new_header_graph_ready_blocks,
+                invalid_blocks,
+            ) = inner.try_recover_expire_block();
+            debug!(
+                "Recover blocks into graph_ready {:?}",
+                new_graph_ready_blocks
+            );
 
-            blocks.shrink_to_fit();
-            consensus_inner.block_receipts.shrink_to_fit();
-            consensus_inner.transaction_addresses.shrink_to_fit();
-            transaction_pubkey_cache.shrink_to_fit();
-            unexecuted_transaction_addresses.shrink_to_fit();
-            compact_blocks.shrink_to_fit();
+            for index in &new_graph_ready_blocks {
+                to_relay_blocks.push(inner.arena[*index].block_header.hash());
+            }
 
-            blocks.heap_size_of_children()
-                + consensus_inner.block_receipts.heap_size_of_children()
-                + consensus_inner
-                    .transaction_addresses
-                    .heap_size_of_children()
-                + transaction_pubkey_cache.heap_size_of_children()
-                + unexecuted_transaction_addresses.heap_size_of_children()
-                + compact_blocks.heap_size_of_children()
-        });
-    }
+            for index in &new_header_graph_ready_blocks {
+                inner.arena[*index].pending_referee_count = 0;
+            }
 
-    // Manage statistics
+            for index in &invalid_blocks {
+                // propagate_header_graph_status will also pass BLOCK_INVALID to
+                // descendants
+                inner.arena[*index].graph_status = BLOCK_INVALID;
+                new_header_graph_ready_blocks.push(*index);
+            }
+            // propagate BLOCK_HEADER_GRAPH_READY status to descendants
+            let (invalid_set, need_to_relay) = self
+                .propagate_header_graph_status(
+                    inner,
+                    new_header_graph_ready_blocks,
+                    true,
+                    NULL,
+                    false,
+                    true,
+                );
+            inner.process_invalid_blocks(&invalid_set);
+            for hash in need_to_relay {
+                to_relay_blocks.push(hash);
+            }
 
-    pub fn stat_inc_inserted_count(&self) {
-        let mut stat = self.statistics.write();
-        stat.inserted_block_count += 1;
-    }
+            // since in `new_to_be_block_graph_ready`, we only check
+            // graph_status and parent_reclaimed
+            // in function `propagate_graph_status` will change graph status
+            // from BLOCK_HEADER_GRAPH_READY to BLOCK_GRAPH_READY
+            let invalid_set = self.propagate_graph_status(
+                inner,
+                new_graph_ready_blocks,
+                maybe_out_of_era_blocks.is_some(),
+            );
+            debug_assert!(invalid_set.len() == 0);
+        }
 
-    pub fn stat_get_inserted_count(&self) -> usize {
-        self.statistics.read().inserted_block_count
+        // only remove when there are more than 10% expired blocks
+        if inner.not_ready_blocks_count * 10 <= inner.arena.len() {
+            return to_relay_blocks;
+        }
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let mut queue = VecDeque::new();
+        let mut expire_set = HashSet::new();
+        let mut visited = HashSet::new();
+        // find expire blocks
+        for index in &inner.not_ready_blocks_frontier {
+            queue.push_back(*index);
+            visited.insert(*index);
+        }
+        while let Some(index) = queue.pop_front() {
+            if inner.arena[index].last_update_timestamp + expire_time < now {
+                expire_set.insert(index);
+            }
+            for child in &inner.arena[index].children {
+                if !visited.contains(child) {
+                    visited.insert(*child);
+                    queue.push_back(*child);
+                }
+            }
+            for referrer in &inner.arena[index].referrers {
+                if !visited.contains(referrer) {
+                    visited.insert(*referrer);
+                    queue.push_back(*referrer);
+                }
+            }
+        }
+        // find blocks reached by previous found expired blocks
+        for index in &expire_set {
+            queue.push_back(*index);
+        }
+        while let Some(index) = queue.pop_front() {
+            inner.arena[index].graph_status = BLOCK_INVALID;
+            for child in &inner.arena[index].children {
+                if !expire_set.contains(child) {
+                    expire_set.insert(*child);
+                    queue.push_back(*child);
+                }
+            }
+            for referrer in &inner.arena[index].referrers {
+                if !expire_set.contains(referrer) {
+                    expire_set.insert(*referrer);
+                    queue.push_back(*referrer);
+                }
+            }
+        }
+
+        debug!("expire_set: {:?}", expire_set);
+        inner.remove_blocks(&expire_set);
+
+        to_relay_blocks
     }
 }

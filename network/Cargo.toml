@@ -9,10 +9,10 @@ parking_lot = "0.6"
 log = "0.3"
 slab = "0.2"
 io = { path = "../util/io" }
-monitor = { path = "../util/monitor" }
 error-chain = { version = "0.12", default-features = false }
 bytes = "0.4"
 rlp = "0.3.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 ipnetwork = "0.12.6"
 serde = "1.0"
 serde_json = "1.0"
@@ -32,3 +32,4 @@ keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", pac
 lazy_static = "1.2.0"
 byte-unit = "1.1.0"
 priority-send-queue = { path = "../util/priority-send-queue" }
+metrics = { path = "../util/metrics" }

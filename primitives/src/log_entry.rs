@@ -4,9 +4,9 @@
 
 //! Log entry type definition.
 
-use crate::bytes::Bytes;
+use crate::{block::BlockNumber, bytes::Bytes};
 use cfx_types::{Address, Bloom, BloomInput, H256};
-use heapsize::HeapSizeOf;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::ops::Deref;
 
 /// A record of execution for a `LOG` operation.
@@ -21,9 +21,9 @@ pub struct LogEntry {
     pub data: Bytes,
 }
 
-impl HeapSizeOf for LogEntry {
-    fn heap_size_of_children(&self) -> usize {
-        self.topics.heap_size_of_children() + self.data.heap_size_of_children()
+impl MallocSizeOf for LogEntry {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.topics.size_of(ops) + self.data.size_of(ops)
     }
 }
 
@@ -47,6 +47,8 @@ pub struct LocalizedLogEntry {
     pub entry: LogEntry,
     /// Block in which this log was created.
     pub block_hash: H256,
+    /// Block number.
+    pub block_number: BlockNumber,
     /// Hash of transaction in which this log was created.
     pub transaction_hash: H256,
     /// Index of transaction within block.
@@ -75,7 +77,7 @@ mod tests {
             .parse::<Address>()
             .unwrap();
         let log = LogEntry {
-            address: address,
+            address,
             topics: vec![],
             data: vec![],
         };

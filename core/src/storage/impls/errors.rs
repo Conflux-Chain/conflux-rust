@@ -10,8 +10,10 @@ error_chain! {
 
     foreign_links {
         Io(io::Error);
+        IntegerConversionError(std::num::TryFromIntError);
         ParseIntError(num::ParseIntError);
-        RlpDecodeError(::rlp::DecoderError);
+        RlpDecodeError(rlp::DecoderError);
+        SqliteError(sqlite::Error);
     }
 
     errors {
@@ -55,6 +57,32 @@ error_chain! {
         StateCommitWithoutMerkleHash {
             description("State commit called before computing Merkle hash."),
             display("State commit called before computing Merkle hash."),
+        }
+
+        DbNotExist {
+            description("Failed to operate on an empty db."),
+            display("Failed to operate on an empty db."),
+        }
+
+        // TODO(yz): add error details.
+        DbValueError {
+            description("Unexpected result from db query."),
+            display("Unexpected result from db query."),
+        }
+
+        SnapshotCowCreation {
+            description("Failed to create new snapshot by COW."),
+            display("Failed to create new snapshot by COW. Use XFS on linux or APFS on Mac."),
+        }
+
+        SnapshotNotFound {
+            description("Snapshot file not found."),
+            display("Snapshot file not found."),
+        }
+
+        MPTMergeTrieNodeNotFound {
+            description("Trie node not found when merging Snapshot MPT and Delta."),
+            display("Trie node not found when merging Snapshot MPT and Delta."),
         }
     }
 }

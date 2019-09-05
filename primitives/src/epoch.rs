@@ -2,19 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{H256, U64};
+use cfx_types::H256;
 
 pub type EpochId = H256;
 
 /// Uniquely identifies epoch.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EpochNumber {
     /// Epoch number within canon blockchain.
-    Number(U64),
+    Number(u64),
     /// Earliest block (genesis).
     Earliest,
     /// Latest mined block.
     LatestMined,
     /// Latest block with state.
     LatestState,
+}
+
+impl Into<EpochNumber> for u64 {
+    fn into(self) -> EpochNumber { EpochNumber::Number(self) }
 }

@@ -32,22 +32,31 @@ extern crate strum;
 extern crate strum_macros;
 extern crate keccak_hash;
 
-pub type ProtocolId = [u8; 3];
+pub const PROTOCOL_ID_SIZE: usize = 3;
+pub type ProtocolId = [u8; PROTOCOL_ID_SIZE];
+pub type HandlerWorkType = u8;
 pub type PeerId = usize;
 
 mod connection;
 mod discovery;
 mod error;
+mod handshake;
+mod ip;
 mod ip_utils;
 mod node_database;
 pub mod node_table;
 mod service;
 mod session;
+mod session_manager;
 pub mod throttling;
 
 pub use crate::{
+    connection::get_high_priority_packets,
     error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
+    ip::SessionIpLimitConfig,
+    node_table::Node,
     service::NetworkService,
+    session::SessionDetails,
 };
 pub use io::TimerToken;
 
@@ -64,6 +73,7 @@ use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde_derive::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -71,6 +81,9 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+
+pub const NODE_TAG_NODE_TYPE: &str = "node_type";
+pub const NODE_TAG_ARCHIVE: &str = "archive";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkConfiguration {
@@ -89,11 +102,15 @@ pub struct NetworkConfiguration {
     /// Use provided node key instead of default
     pub use_secret: Option<Secret>,
     /// Maximum number of outgoing peers
-    pub max_outgoing_peers: u32,
+    pub max_outgoing_peers: usize,
+    /// Maximum number of outgoing connections to archive nodes. 0 represents
+    /// not required to connect to archive nodes. E.g. light node or full node
+    /// need not to connect to archive nodes.
+    pub max_outgoing_peers_archive: usize,
     /// Maximum number of incoming peers
-    pub max_incoming_peers: u32,
+    pub max_incoming_peers: usize,
     /// Maximum number of ongoing handshakes
-    pub max_handshakes: u32,
+    pub max_handshakes: usize,
     /// List of reserved node addresses.
     pub reserved_nodes: Vec<String>,
     /// IP filter
@@ -113,8 +130,9 @@ pub struct NetworkConfiguration {
     /// Connection lifetime threshold for promotion
     pub connection_lifetime_for_promotion: Duration,
     pub test_mode: bool,
-    /// Maximum number of P2P nodes per IP address.
-    pub nodes_per_ip: usize,
+    /// Maximum number of P2P nodes for subnet B (ip/16).
+    pub subnet_quota: usize,
+    pub session_ip_limit_config: SessionIpLimitConfig,
 }
 
 impl Default for NetworkConfiguration {
@@ -133,6 +151,7 @@ impl NetworkConfiguration {
             boot_nodes: Vec::new(),
             use_secret: None,
             max_outgoing_peers: 16,
+            max_outgoing_peers_archive: 0,
             max_incoming_peers: 32,
             max_handshakes: 64,
             reserved_nodes: Vec::new(),
@@ -146,7 +165,8 @@ impl NetworkConfiguration {
             connection_lifetime_for_promotion:
                 DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
             test_mode: false,
-            nodes_per_ip: 1,
+            subnet_quota: 32,
+            session_ip_limit_config: SessionIpLimitConfig::default(),
         }
     }
 
@@ -173,7 +193,7 @@ impl NetworkConfiguration {
 pub enum NetworkIoMessage {
     Start,
     AddHandler {
-        handler: Arc<NetworkProtocolHandler + Sync>,
+        handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId,
         versions: Vec<u8>,
     },
@@ -186,20 +206,38 @@ pub enum NetworkIoMessage {
         /// Timer delay.
         delay: Duration,
     },
-    /// Disconnect a peer.
-    Disconnect(PeerId),
+    DispatchWork {
+        /// Protocol Id.
+        protocol: ProtocolId,
+        /// Work type.
+        work_type: HandlerWorkType,
+    },
 }
 
 pub trait NetworkProtocolHandler: Sync + Send {
-    fn initialize(&self, _io: &NetworkContext) {}
+    fn initialize(&self, _io: &dyn NetworkContext) {}
 
-    fn on_message(&self, io: &NetworkContext, peer: PeerId, data: &[u8]);
+    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, data: &[u8]);
 
-    fn on_peer_connected(&self, io: &NetworkContext, peer: PeerId);
+    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId);
 
-    fn on_peer_disconnected(&self, io: &NetworkContext, peer: PeerId);
+    fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId);
 
-    fn on_timeout(&self, io: &NetworkContext, timer: TimerToken);
+    fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken);
+
+    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {}
+
+    fn on_work_dispatch(
+        &self, _io: &dyn NetworkContext, _work_type: HandlerWorkType,
+    ) {
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum UpdateNodeOperation {
+    Failure,
+    Demotion,
+    Remove,
 }
 
 pub trait NetworkContext {
@@ -209,13 +247,20 @@ pub trait NetworkContext {
         &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error>;
 
-    fn disconnect_peer(&self, peer: PeerId);
+    fn disconnect_peer(
+        &self, peer: PeerId, op: Option<UpdateNodeOperation>,
+        reason: Option<&'static str>,
+    );
 
     /// Register a new IO timer. 'IoHandler::timeout' will be called with the
     /// token.
     fn register_timer(
         &self, token: TimerToken, delay: Duration,
     ) -> Result<(), Error>;
+
+    fn dispatch_work(&self, work_type: HandlerWorkType);
+
+    fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str);
 }
 
 #[derive(Debug, Clone)]
@@ -226,7 +271,7 @@ pub struct SessionMetadata {
     pub originated: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Capability {
     pub protocol: ProtocolId,
     pub version: u8,
@@ -251,7 +296,7 @@ impl Decodable for Capability {
         let mut protocol: ProtocolId = [0u8; 3];
         protocol.clone_from_slice(&p);
         Ok(Capability {
-            protocol: protocol,
+            protocol,
             version: rlp.val_at(1)?,
         })
     }
@@ -269,7 +314,7 @@ impl Ord for Capability {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PeerInfo {
     pub id: PeerId,
     pub addr: SocketAddr,

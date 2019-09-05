@@ -7,7 +7,8 @@ use cfx_types::H512;
 use enum_map::EnumMap;
 use io::*;
 use rand::{self, Rng};
-use rlp::{DecoderError, Rlp, RlpStream};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde_derive::Serialize;
 use serde_json;
 use std::{
     collections::{HashMap, HashSet},
@@ -18,7 +19,7 @@ use std::{
         Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6,
         ToSocketAddrs,
     },
-    path::PathBuf,
+    path::{Path, PathBuf},
     slice,
     str::FromStr,
     time::{self, Duration, SystemTime},
@@ -28,7 +29,8 @@ use strum::IntoEnumIterator;
 /// Node public key
 pub type NodeId = H512;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 /// Node address info
 pub struct NodeEndpoint {
     /// IP(V4 or V6) address
@@ -87,9 +89,12 @@ impl NodeEndpoint {
                 ),
                 tcp_port,
             ))),
-            16 => unsafe {
-                let o: *const u16 = addr_bytes.as_ptr() as *const u16;
-                let o = slice::from_raw_parts(o, 8);
+            16 => {
+                let mut o: [u16; 8] = [0; 8];
+                for i in 0..8 {
+                    o[i] = ((addr_bytes[2 * i + 1] as u16) << 8)
+                        | (addr_bytes[2 * i] as u16);
+                }
                 Ok(SocketAddr::V6(SocketAddrV6::new(
                     Ipv6Addr::new(
                         o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7],
@@ -98,7 +103,7 @@ impl NodeEndpoint {
                     0,
                     0,
                 )))
-            },
+            }
             _ => Err(DecoderError::RlpInconsistentLengthAndData),
         }?;
         Ok(NodeEndpoint { address, udp_port })
@@ -158,6 +163,23 @@ pub struct NodeEntry {
     pub endpoint: NodeEndpoint,
 }
 
+impl Encodable for NodeEntry {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(4);
+        self.endpoint.to_rlp(s);
+        s.append(&self.id);
+    }
+}
+
+impl Decodable for NodeEntry {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(NodeEntry {
+            id: rlp.val_at(3)?,
+            endpoint: NodeEndpoint::from_rlp(rlp)?,
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum PeerType {
     _Required,
@@ -166,7 +188,8 @@ pub enum PeerType {
 
 /// A type for representing an interaction (contact) with a node at a given time
 /// that was either a success or a failure.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum NodeContact {
     Success(SystemTime),
     Failure(SystemTime),
@@ -177,7 +200,7 @@ impl NodeContact {
 
     pub fn failure() -> NodeContact { NodeContact::Failure(SystemTime::now()) }
 
-    fn time(&self) -> SystemTime {
+    pub fn time(&self) -> SystemTime {
         match *self {
             NodeContact::Success(t) | NodeContact::Failure(t) => t,
         }
@@ -214,7 +237,8 @@ impl NodeContact {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Node {
     pub id: NodeId,
     pub endpoint: NodeEndpoint,
@@ -232,6 +256,14 @@ pub struct Node {
     // does not need to be made persistent.
     pub last_connected: Option<NodeContact>,
     pub stream_token: Option<StreamToken>,
+    // Generally, it is used by protocol handler layer to attach
+    // some tags to node, so as to:
+    // 1. Sampling nodes with special tags, e.g.
+    //     - archive nodes first
+    //     - good credit nodes first
+    //     - good network nodes first
+    // 2. Refuse incoming connection from node with special tags.
+    pub tags: HashMap<String, String>,
 }
 
 impl Node {
@@ -242,6 +274,7 @@ impl Node {
             last_contact: None,
             last_connected: None,
             stream_token: None,
+            tags: Default::default(),
         }
     }
 }
@@ -283,6 +316,7 @@ impl FromStr for Node {
             last_contact: None,
             last_connected: None,
             stream_token: None,
+            tags: Default::default(),
         })
     }
 }
@@ -300,8 +334,6 @@ impl Hash for Node {
 }
 
 const MAX_NODES: usize = 4096;
-const TRUSTED_NODES_FILE: &str = "trusted_nodes.json";
-const UNTRUSTED_NODES_FILE: &str = "untrusted_nodes.json";
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter)]
 enum NodeReputation {
@@ -326,18 +358,22 @@ pub struct NodeTable {
     /// Map node id to the reputation level and the index in the above table
     node_index: HashMap<NodeId, NodeReputationIndex>,
     useless_nodes: HashSet<NodeId>,
-    path: Option<String>,
-    trusted: bool,
+    path: Option<PathBuf>,
 }
 
 impl NodeTable {
-    pub fn new(path: Option<String>, trusted: bool) -> NodeTable {
+    pub fn new(dir: Option<String>, filename: &str) -> NodeTable {
+        let path = dir.and_then(|dir| {
+            let mut buf = PathBuf::from(dir);
+            buf.push(filename);
+            Some(buf)
+        });
+
         let mut node_table = NodeTable {
             node_reputation_table: EnumMap::default(),
             node_index: HashMap::new(),
-            path: path.clone(),
+            path,
             useless_nodes: HashSet::new(),
-            trusted,
         };
 
         node_table.load_from_file();
@@ -357,22 +393,15 @@ impl NodeTable {
     }
 
     fn load_from_file(&mut self) {
-        let path = self.path.clone();
-        let path = match path {
-            Some(path) => {
-                if self.trusted {
-                    PathBuf::from(path).join(TRUSTED_NODES_FILE)
-                } else {
-                    PathBuf::from(path).join(UNTRUSTED_NODES_FILE)
-                }
-            }
+        let path = match self.path {
+            Some(ref path) => path,
             None => return,
         };
 
-        let file = match fs::File::open(&path) {
+        let file = match fs::File::open(path) {
             Ok(file) => file,
             Err(e) => {
-                debug!(target: "network", "Error opening node table file: {:?}", e);
+                debug!("node table file not found: {:?}", e);
                 return;
             }
         };
@@ -387,13 +416,13 @@ impl NodeTable {
                                 Self::node_reputation(&node.last_contact);
                             self.add_to_reputation_level(node_rep, node);
                         } else {
-                            warn!(target: "network", "There exist multiple entries for same node id: {:?}", node.id);
+                            warn!("There exist multiple entries for same node id: {:?}", node.id);
                         }
                     }
                 }
             }
             Err(e) => {
-                warn!(target: "network", "Error reading node table file: {:?}", e);
+                warn!("Error reading node table file: {:?}", e);
             }
         }
     }
@@ -430,7 +459,7 @@ impl NodeTable {
     /// Return a random sample set of nodes inside the table
     pub fn sample_node_ids(
         &self, count: u32, _filter: &IpFilter,
-    ) -> Vec<NodeId> {
+    ) -> HashSet<NodeId> {
         let mut node_id_set: HashSet<NodeId> = HashSet::new();
         let mut rng = rand::thread_rng();
         for _i in 0..count {
@@ -446,15 +475,11 @@ impl NodeTable {
             }
         }
 
-        let mut node_ids: Vec<NodeId> = Vec::new();
-        for n in node_id_set {
-            node_ids.push(n);
-        }
-
-        node_ids
+        node_id_set
     }
 
-    // If node exists, update last contact, insert otherwise
+    // If node exists, update last contact, insert otherwise.
+    // Endpoint will be updated if node exists.
     pub fn update_last_contact(&mut self, node: Node) {
         let mut _index = NodeReputationIndex::default();
         let mut exist = false;
@@ -472,12 +497,14 @@ impl NodeTable {
 
         // check whether the node position will change
         if target_node_rep == _index.0 {
-            self.node_reputation_table[_index.0][_index.1].last_contact =
-                node.last_contact;
+            let old_node = &mut self.node_reputation_table[_index.0][_index.1];
+            old_node.last_contact = node.last_contact;
+            old_node.endpoint = node.endpoint;
         } else {
             let mut removed_node =
                 self.remove_from_reputation_level(&_index).unwrap();
             removed_node.last_contact = node.last_contact;
+            removed_node.endpoint = node.endpoint;
             self.add_to_reputation_level(target_node_rep, removed_node);
         }
     }
@@ -763,24 +790,23 @@ impl NodeTable {
 
     /// Save the (un)trusted_nodes.json file.
     pub fn save(&self) {
-        let mut path = match self.path {
-            Some(ref path) => PathBuf::from(path),
+        let path = match self.path {
+            Some(ref path) => Path::new(path),
             None => return,
         };
-        if let Err(e) = fs::create_dir_all(&path) {
-            warn!(target: "network", "Error creating node table directory: {:?}", e);
-            return;
+
+        if let Some(dir) = path.parent() {
+            if let Err(e) = fs::create_dir_all(dir) {
+                warn!("Error creating node table directory: {:?}", e);
+                return;
+            }
         }
-        if self.trusted {
-            path.push(TRUSTED_NODES_FILE);
-        } else {
-            path.push(UNTRUSTED_NODES_FILE);
-        }
+
         let node_ids = self.nodes(&IpFilter::default());
         let nodes = node_ids
             .into_iter()
             .map(|id| {
-                let index = self.node_index.get(&id).unwrap();
+                let index = &self.node_index[&id];
                 &self.node_reputation_table[index.0][index.1]
             })
             .take(MAX_NODES)
@@ -791,22 +817,17 @@ impl NodeTable {
         match fs::File::create(&path) {
             Ok(file) => {
                 if let Err(e) = serde_json::to_writer_pretty(file, &table) {
-                    warn!(target: "network", "Error writing node table file: {:?}", e);
+                    warn!("Error writing node table file: {:?}", e);
                 }
             }
             Err(e) => {
-                warn!(target: "network", "Error creating node table file: {:?}", e);
+                warn!("Error creating node table file: {:?}", e);
             }
         }
     }
 
-    pub fn visit<F>(&self, mut visitor: F)
-    where F: FnMut(&H512) -> bool {
-        for key in self.node_index.keys() {
-            if !visitor(key) {
-                break;
-            }
-        }
+    pub fn all(&self) -> Vec<NodeId> {
+        self.node_index.keys().map(|id| id.clone()).collect()
     }
 }
 
@@ -855,6 +876,7 @@ mod json {
     pub struct Node {
         pub url: String,
         pub last_contact: Option<NodeContact>,
+        pub tags: HashMap<String, String>,
     }
 
     impl Node {
@@ -862,7 +884,8 @@ mod json {
             match super::Node::from_str(&self.url) {
                 Ok(mut node) => {
                     node.last_contact =
-                        self.last_contact.map(|c| c.into_node_contact());
+                        self.last_contact.map(NodeContact::into_node_contact);
+                    node.tags = self.tags;
                     Some(node)
                 }
                 _ => None,
@@ -886,6 +909,7 @@ mod json {
             Node {
                 url: format!("{}", node),
                 last_contact,
+                tags: node.tags.clone(),
             }
         }
     }

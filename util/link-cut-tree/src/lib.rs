@@ -2,415 +2,213 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::U256;
-use std::{convert, ops};
+use parking_lot::Mutex;
 
-const NULL: usize = !0;
+mod lct;
 
-#[derive(Copy, Clone)]
-pub struct SignedBigNum {
-    sign: bool,
-    num: U256,
+use lct::{
+    CaterpillarLinkCutTreeTrait, CaterpillarMinLinkCutTreeInner,
+    DefaultLinkCutTreeTrait, MinLinkCutTreeInner, SizeLinkCutTreeTrait,
+    SizeMinLinkCutTreeInner,
+};
+
+pub struct MinLinkCutTree<T> {
+    inner: Mutex<T>,
 }
 
-impl SignedBigNum {
-    fn zero() -> Self {
+impl<
+        T: DefaultLinkCutTreeTrait
+            + SizeLinkCutTreeTrait
+            + CaterpillarLinkCutTreeTrait,
+    > MinLinkCutTree<T>
+{
+    pub fn new() -> Self {
         Self {
-            sign: false,
-            num: U256::zero(),
+            inner: Mutex::new(T::new()),
         }
     }
 
-    pub fn neg(num: U256) -> Self { Self { sign: true, num } }
+    pub fn size(&self) -> usize { self.inner.lock().size() }
 
-    pub fn pos(num: U256) -> Self { Self { sign: false, num } }
+    pub fn make_tree(&mut self, v: usize) { self.inner.lock().make_tree(v); }
+
+    pub fn link(&mut self, v: usize, w: usize) { self.inner.lock().link(v, w); }
+
+    pub fn lca(&self, v: usize, w: usize) -> usize {
+        self.inner.lock().lca(v, w)
+    }
+
+    pub fn ancestor_at(&self, v: usize, at: usize) -> usize {
+        self.inner.lock().ancestor_at(v, at)
+    }
+
+    pub fn set(&mut self, v: usize, value: i128) {
+        self.inner.lock().set(v, value);
+    }
+
+    pub fn path_apply(&mut self, v: usize, delta: i128) {
+        self.inner.lock().path_apply(v, delta);
+    }
+
+    pub fn caterpillar_apply(&mut self, v: usize, caterpillar_delta: i128) {
+        self.inner.lock().caterpillar_apply(v, caterpillar_delta);
+    }
+
+    pub fn path_aggregate(&self, v: usize) -> i128 {
+        self.inner.lock().path_aggregate(v)
+    }
+
+    pub fn path_aggregate_chop(&mut self, v: usize, u: usize) -> i128 {
+        self.inner.lock().path_aggregate_chop(v, u)
+    }
+
+    pub fn split_root(&mut self, parent: usize, v: usize) {
+        self.inner.lock().split_root(parent, v);
+    }
+
+    pub fn get(&self, v: usize) -> i128 { self.inner.lock().get(v) }
 }
 
-impl convert::From<U256> for SignedBigNum {
-    fn from(num: U256) -> Self { Self { sign: false, num } }
-}
-
-impl convert::From<SignedBigNum> for U256 {
-    fn from(signed_num: SignedBigNum) -> Self {
-        assert!(!signed_num.sign);
-        signed_num.num
-    }
-}
-
-impl ops::Add<SignedBigNum> for SignedBigNum {
-    type Output = SignedBigNum;
-
-    fn add(self, other: SignedBigNum) -> SignedBigNum {
-        if self.sign == other.sign {
-            SignedBigNum {
-                sign: self.sign,
-                num: self.num + other.num,
-            }
-        } else if self.num == other.num {
-            SignedBigNum::zero()
-        } else if self.num < other.num {
-            SignedBigNum {
-                sign: other.sign,
-                num: other.num - self.num,
-            }
-        } else {
-            SignedBigNum {
-                sign: self.sign,
-                num: self.num - other.num,
-            }
-        }
-    }
-}
-
-impl ops::AddAssign<SignedBigNum> for SignedBigNum {
-    fn add_assign(&mut self, other: SignedBigNum) {
-        if self.sign == other.sign {
-            self.num += other.num;
-        } else if self.num == other.num {
-            self.sign = false;
-            self.num = U256::zero();
-        } else if self.num < other.num {
-            self.sign = other.sign;
-            self.num = other.num - self.num;
-        } else {
-            self.num -= other.num;
-        }
-    }
-}
-
-#[derive(Clone)]
-struct Node {
-    left_child: usize,
-    right_child: usize,
-    parent: usize,
-    path_parent: usize,
-    size: usize,
-    sum: SignedBigNum,
-    delta: SignedBigNum,
-}
-
-impl Default for Node {
-    fn default() -> Self {
-        Node {
-            left_child: NULL,
-            right_child: NULL,
-            parent: NULL,
-            path_parent: NULL,
-            size: 1,
-            sum: SignedBigNum::zero(),
-            delta: SignedBigNum::zero(),
-        }
-    }
-}
-
-pub struct LinkCutTree {
-    tree: Vec<Node>,
-}
-
-impl LinkCutTree {
-    pub fn new() -> Self { LinkCutTree { tree: Vec::new() } }
-
-    pub fn make_tree(&mut self, v: usize) {
-        if self.tree.len() <= v {
-            self.tree.resize(v + 1, Node::default());
-        }
-    }
-
-    fn rotate(&mut self, v: usize) {
-        if v == NULL {
-            return;
-        }
-        if self.tree[v].parent == NULL {
-            return;
-        }
-
-        let parent = self.tree[v].parent;
-        let grandparent = self.tree[parent].parent;
-
-        let sum =
-            self.tree[v].sum + self.tree[v].delta + self.tree[parent].delta;
-        self.tree[v].sum = sum;
-        if self.tree[parent].left_child == v {
-            let u = self.tree[v].right_child;
-            let w = self.tree[v].left_child;
-            self.tree[parent].size -= self.tree[v].size;
-            self.tree[parent].left_child = u;
-            if u != NULL {
-                self.tree[u].parent = parent;
-                self.tree[parent].size += self.tree[u].size;
-                self.tree[v].size -= self.tree[u].size;
-                let delta = self.tree[u].delta + self.tree[v].delta;
-                self.tree[u].delta = delta;
-            }
-            if w != NULL {
-                let delta = self.tree[w].delta
-                    + self.tree[v].delta
-                    + self.tree[parent].delta;
-                self.tree[w].delta = delta;
-            }
-            self.tree[v].delta = SignedBigNum::zero();
-            self.tree[v].right_child = parent;
-            self.tree[parent].parent = v;
-            self.tree[v].size += self.tree[parent].size;
-        } else {
-            let u = self.tree[v].left_child;
-            let w = self.tree[v].right_child;
-            self.tree[parent].size -= self.tree[v].size;
-            self.tree[parent].right_child = u;
-            if u != NULL {
-                self.tree[u].parent = parent;
-                self.tree[parent].size += self.tree[u].size;
-                self.tree[v].size -= self.tree[u].size;
-                let delta = self.tree[u].delta + self.tree[v].delta;
-                self.tree[u].delta = delta;
-            }
-            if w != NULL {
-                let delta = self.tree[w].delta
-                    + self.tree[v].delta
-                    + self.tree[parent].delta;
-                self.tree[w].delta = delta;
-            }
-            self.tree[v].delta = SignedBigNum::zero();
-            self.tree[v].left_child = parent;
-            self.tree[parent].parent = v;
-            self.tree[v].size += self.tree[parent].size;
-        }
-        self.tree[v].parent = grandparent;
-        if grandparent != NULL {
-            if self.tree[grandparent].left_child == parent {
-                self.tree[grandparent].left_child = v;
-            } else {
-                self.tree[grandparent].right_child = v;
-            }
-        }
-        self.tree[v].path_parent = self.tree[parent].path_parent;
-        self.tree[parent].path_parent = NULL;
-    }
-
-    fn splay(&mut self, v: usize) {
-        if v == NULL {
-            return;
-        }
-
-        while self.tree[v].parent != NULL {
-            let parent = self.tree[v].parent;
-            let grandparent = self.tree[parent].parent;
-            if grandparent == NULL {
-                // zig
-                self.rotate(v);
-            } else if (self.tree[parent].left_child == v)
-                == (self.tree[grandparent].left_child == parent)
-            {
-                // zig-zig
-                self.rotate(parent);
-                self.rotate(v);
-            } else {
-                // zig-zag
-                self.rotate(v);
-                self.rotate(v);
-            }
-        }
-    }
-
-    fn remove_preferred_child(&mut self, v: usize) {
-        if v == NULL {
-            return;
-        }
-
-        let u = self.tree[v].right_child;
-        if u != NULL {
-            self.tree[u].path_parent = v;
-            self.tree[u].parent = NULL;
-            self.tree[v].right_child = NULL;
-            self.tree[v].size -= self.tree[u].size;
-        }
-    }
-
-    fn access(&mut self, v: usize) {
-        if v == NULL {
-            return;
-        }
-
-        self.splay(v);
-        self.remove_preferred_child(v);
-
-        while self.tree[v].path_parent != NULL {
-            let w = self.tree[v].path_parent;
-            self.splay(w);
-            let u = self.tree[w].right_child;
-            if u != NULL {
-                self.tree[u].path_parent = w;
-                self.tree[u].parent = NULL;
-                self.tree[w].size -= self.tree[u].size;
-            }
-            self.tree[w].right_child = v;
-            self.tree[v].parent = w;
-            self.tree[w].size += self.tree[v].size;
-            self.splay(v);
-        }
-    }
-
-    #[allow(dead_code)]
-    fn debug(&self, num: usize) {
-        for v in 0..num {
-            println!("tree[{}]", v);
-            println!("\tleft_child={}", self.tree[v].left_child as i64);
-            println!("\tright_child={}", self.tree[v].right_child as i64);
-            println!("\tparent={}", self.tree[v].parent as i64);
-            println!("\tpath_parent={}", self.tree[v].path_parent as i64);
-            println!("\tsize={}", self.tree[v].size as i64);
-        }
-    }
-
-    /// Make w a new child of v
-    pub fn link(&mut self, v: usize, w: usize) {
-        if v == NULL || w == NULL {
-            return;
-        }
-
-        self.access(w);
-        self.tree[w].path_parent = v;
-    }
-
-    pub fn lca(&mut self, v: usize, w: usize) -> usize {
-        self.access(v);
-
-        self.splay(w);
-        self.remove_preferred_child(w);
-
-        let mut x = w;
-        let mut y = w;
-        while self.tree[y].path_parent != NULL {
-            let z = self.tree[y].path_parent;
-            self.splay(z);
-            if self.tree[z].path_parent == NULL {
-                x = z;
-            }
-            let u = self.tree[z].right_child;
-            if u != NULL {
-                self.tree[u].path_parent = z;
-                self.tree[u].parent = NULL;
-                self.tree[z].size -= self.tree[u].size;
-            }
-            self.tree[z].right_child = y;
-            self.tree[y].parent = z;
-            self.tree[z].size += self.tree[y].size;
-            self.tree[y].path_parent = NULL;
-            y = z;
-        }
-        self.splay(w);
-
-        x
-    }
-
-    pub fn ancestor_at(&mut self, v: usize, at: usize) -> usize {
-        self.access(v);
-
-        let mut u = self.tree[v].left_child;
-        let size = if u == NULL { 0 } else { self.tree[u].size };
-        let mut at = at;
-
-        if at < size {
-            loop {
-                let w = self.tree[u].left_child;
-                let size = if w == NULL { 0 } else { self.tree[w].size };
-                if at < size {
-                    u = w;
-                } else if at == size {
-                    return u;
-                } else {
-                    at -= size + 1;
-                    u = self.tree[u].right_child;
-                }
-            }
-        } else if at == size {
-            return v;
-        }
-
-        NULL
-    }
-
-    pub fn update_weight(&mut self, v: usize, weight: &SignedBigNum) {
-        self.access(v);
-
-        self.tree[v].sum += *weight;
-        let u = self.tree[v].left_child;
-        if u != NULL {
-            self.tree[u].delta += *weight;
-        }
-    }
-
-    pub fn subtree_weight(&mut self, v: usize) -> U256 {
-        self.access(v);
-        U256::from(self.tree[v].sum.clone())
-    }
-}
+/// default implementation of link cut tree, ancestor_at and caterpillar_apply
+/// not supported
+pub type DefaultMinLinkCutTree = MinLinkCutTree<MinLinkCutTreeInner>;
+/// link cut tree with support for ancestor_at
+pub type SizeMinLinkCutTree = MinLinkCutTree<SizeMinLinkCutTreeInner>;
+/// link cut tree with support for caterpillar_apply
+pub type CaterpillarMinLinkCutTree =
+    MinLinkCutTree<CaterpillarMinLinkCutTreeInner>;
 
 #[cfg(test)]
 mod tests {
-    use super::{LinkCutTree, U256};
-    use crate::SignedBigNum;
+    extern crate rand;
+    use super::{
+        CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
+    };
+    use crate::lct::NULL;
+    use rand::Rng;
 
-    #[test]
-    fn test_lca() {
-        let mut tree = LinkCutTree::new();
+    macro_rules! test_min_func {
+        ($class_name:ident, $func_name:ident) => {
+            #[test]
+            fn $func_name() {
+                let mut tree: $class_name = $class_name::new();
 
-        // 0
-        // |\
-        // 1 4
-        // |\
-        // 2 3
-        tree.make_tree(0);
-        tree.make_tree(1);
-        tree.make_tree(2);
-        tree.make_tree(3);
-        tree.make_tree(4);
-        tree.link(0, 1);
-        tree.link(1, 2);
-        tree.link(1, 3);
-        tree.link(0, 4);
+                // 0
+                // |\
+                // 1 4
+                // |\
+                // 2 3
+                tree.make_tree(0);
+                tree.make_tree(1);
+                tree.make_tree(2);
+                tree.make_tree(3);
+                tree.make_tree(4);
+                tree.link(0, 1);
+                tree.link(1, 2);
+                tree.link(1, 3);
+                tree.link(0, 4);
 
-        assert_eq!(tree.lca(0, 1), 0);
-        assert_eq!(tree.lca(2, 3), 1);
-        assert_eq!(tree.lca(1, 4), 0);
-        assert_eq!(tree.lca(1, 4), 0);
+                tree.set(0, 10);
+                tree.set(1, 9);
+                tree.set(2, 8);
+                tree.set(3, 7);
+                tree.set(4, 6);
+
+                assert_eq!(tree.path_aggregate(0), 10);
+                assert_eq!(tree.path_aggregate(1), 9);
+                assert_eq!(tree.path_aggregate(2), 8);
+                assert_eq!(tree.path_aggregate(3), 7);
+                assert_eq!(tree.path_aggregate(4), 6);
+
+                tree.path_apply(1, -5);
+
+                assert_eq!(tree.path_aggregate(0), 5);
+                assert_eq!(tree.path_aggregate(1), 4);
+                assert_eq!(tree.path_aggregate(2), 4);
+                assert_eq!(tree.path_aggregate(3), 4);
+                assert_eq!(tree.path_aggregate(4), 5);
+            }
+        };
     }
 
-    #[test]
-    fn test_subtree_weight() {
-        let mut tree = LinkCutTree::new();
-        tree.make_tree(0);
-        tree.make_tree(1);
-        tree.make_tree(2);
-        tree.make_tree(3);
-        tree.make_tree(4);
-        tree.link(0, 1);
-        tree.link(1, 2);
-        tree.link(1, 3);
-        tree.link(0, 4);
-        tree.update_weight(0, &SignedBigNum::pos(U256::from(1u64)));
-        tree.update_weight(1, &SignedBigNum::pos(U256::from(2u64)));
-        tree.update_weight(2, &SignedBigNum::pos(U256::from(3u64)));
-        tree.update_weight(3, &SignedBigNum::pos(U256::from(4u64)));
-        tree.update_weight(4, &SignedBigNum::pos(U256::from(5u64)));
+    macro_rules! test_lca_func {
+        ($class_name:ident, $func_name:ident) => {
+            #[test]
+            fn $func_name() {
+                let mut tree: $class_name = $class_name::new();
 
-        assert_eq!(tree.subtree_weight(0), U256::from(15u64));
-        assert_eq!(tree.subtree_weight(1), U256::from(9u64));
-        assert_eq!(tree.subtree_weight(2), U256::from(3u64));
-        assert_eq!(tree.subtree_weight(3), U256::from(4u64));
-        assert_eq!(tree.subtree_weight(4), U256::from(5u64));
+                // 0
+                // |\
+                // 1 4
+                // |\
+                // 2 3
+                tree.make_tree(0);
+                tree.make_tree(1);
+                tree.make_tree(2);
+                tree.make_tree(3);
+                tree.make_tree(4);
+                tree.link(0, 1);
+                tree.link(1, 2);
+                tree.link(1, 3);
+                tree.link(0, 4);
 
-        tree.update_weight(4, &SignedBigNum::neg(U256::from(5u64)));
-        assert_eq!(tree.subtree_weight(0), U256::from(10u64));
-        assert_eq!(tree.subtree_weight(1), U256::from(9u64));
-        assert_eq!(tree.subtree_weight(2), U256::from(3u64));
-        assert_eq!(tree.subtree_weight(3), U256::from(4u64));
-        assert_eq!(tree.subtree_weight(4), U256::from(0u64));
+                assert_eq!(tree.lca(0, 1), 0);
+                assert_eq!(tree.lca(2, 3), 1);
+                assert_eq!(tree.lca(1, 4), 0);
+                assert_eq!(tree.lca(1, 4), 0);
+            }
+        };
     }
+
+    macro_rules! test_get_func {
+        ($class_name:ident, $func_name:ident) => {
+            #[test]
+            fn $func_name() {
+                let mut tree: $class_name = $class_name::new();
+                tree.make_tree(0);
+                tree.make_tree(1);
+                tree.make_tree(2);
+                tree.make_tree(3);
+                tree.make_tree(4);
+                tree.link(0, 1);
+                tree.link(1, 2);
+                tree.link(1, 3);
+                tree.link(0, 4);
+                tree.path_apply(0, 1);
+                tree.path_apply(1, 2);
+                tree.path_apply(2, 3);
+                tree.path_apply(3, 4);
+                tree.path_apply(4, 5);
+
+                assert_eq!(tree.get(0), 15);
+                assert_eq!(tree.get(1), 9);
+                assert_eq!(tree.get(2), 3);
+                assert_eq!(tree.get(3), 4);
+                assert_eq!(tree.get(4), 5);
+
+                tree.path_apply(4, -5);
+                assert_eq!(tree.get(0), 10);
+                assert_eq!(tree.get(1), 9);
+                assert_eq!(tree.get(2), 3);
+                assert_eq!(tree.get(3), 4);
+                assert_eq!(tree.get(4), 0);
+            }
+        };
+    }
+
+    test_min_func!(DefaultMinLinkCutTree, test_min_default);
+    test_min_func!(SizeMinLinkCutTree, test_min_size);
+    test_min_func!(CaterpillarMinLinkCutTree, test_min_caterpillar);
+    test_lca_func!(DefaultMinLinkCutTree, test_lca_default);
+    test_lca_func!(SizeMinLinkCutTree, test_lca_size);
+    test_lca_func!(CaterpillarMinLinkCutTree, test_lca_caterpillar);
+    test_get_func!(DefaultMinLinkCutTree, test_get_default);
+    test_get_func!(SizeMinLinkCutTree, test_get_size);
+    test_get_func!(CaterpillarMinLinkCutTree, test_get_caterpillar);
 
     #[test]
     fn test_ancestor_at() {
-        let mut tree = LinkCutTree::new();
+        let mut tree: SizeMinLinkCutTree = SizeMinLinkCutTree::new();
         tree.make_tree(0);
         tree.make_tree(1);
         tree.make_tree(2);
@@ -428,5 +226,387 @@ mod tests {
         assert_eq!(tree.ancestor_at(5, 2), 3);
         assert_eq!(tree.ancestor_at(3, 1), 1);
         assert_eq!(tree.ancestor_at(4, 1), 4);
+    }
+
+    #[test]
+    fn test_caterpillar_apply() {
+        let mut tree: CaterpillarMinLinkCutTree =
+            CaterpillarMinLinkCutTree::new();
+        tree.make_tree(5);
+        tree.link(0, 1);
+        tree.link(1, 2);
+        tree.link(1, 3);
+        tree.link(0, 4);
+        tree.link(3, 5);
+
+        tree.caterpillar_apply(3, 1);
+        assert_eq!(tree.get(0), 1);
+        assert_eq!(tree.get(1), 1);
+        assert_eq!(tree.get(2), 1);
+        assert_eq!(tree.get(3), 1);
+        assert_eq!(tree.get(4), 1);
+        assert_eq!(tree.get(5), 1);
+
+        tree.caterpillar_apply(2, 2);
+        assert_eq!(tree.get(0), 3);
+        assert_eq!(tree.get(1), 3);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 3);
+        assert_eq!(tree.get(4), 3);
+        assert_eq!(tree.get(5), 1);
+
+        tree.path_apply(1, 1);
+        assert_eq!(tree.path_aggregate(2), 3);
+        //        assert_eq!(tree.path_aggregate_idx(2), 2);
+        tree.path_apply(0, -2);
+        assert_eq!(tree.path_aggregate(2), 2);
+        //        assert_eq!(tree.path_aggregate_idx(2), 0);
+    }
+
+    #[test]
+    fn test_link_and_split_root() {
+        let mut tree: CaterpillarMinLinkCutTree =
+            CaterpillarMinLinkCutTree::new();
+        tree.make_tree(5);
+        tree.link(0, 1);
+        tree.link(1, 2);
+        tree.link(1, 3);
+        tree.link(0, 4);
+
+        tree.caterpillar_apply(3, 1);
+
+        assert_eq!(tree.get(0), 1);
+        assert_eq!(tree.get(1), 1);
+        assert_eq!(tree.get(2), 1);
+        assert_eq!(tree.get(3), 1);
+        assert_eq!(tree.get(4), 1);
+        assert_eq!(tree.get(5), 0);
+
+        tree.link(3, 5);
+
+        assert_eq!(tree.get(0), 1);
+        assert_eq!(tree.get(1), 1);
+        assert_eq!(tree.get(2), 1);
+        assert_eq!(tree.get(3), 1);
+        assert_eq!(tree.get(4), 1);
+        assert_eq!(tree.get(5), 0);
+
+        tree.caterpillar_apply(2, 2);
+        assert_eq!(tree.get(0), 3);
+        assert_eq!(tree.get(1), 3);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 3);
+        assert_eq!(tree.get(4), 3);
+        assert_eq!(tree.get(5), 0);
+
+        tree.split_root(1, 3);
+
+        assert_eq!(tree.get(0), 3);
+        assert_eq!(tree.get(1), 3);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 3);
+        assert_eq!(tree.get(4), 3);
+        assert_eq!(tree.get(5), 0);
+    }
+
+    fn path_apply_brutal(
+        parent: &Vec<usize>, value: &mut Vec<i64>, u: usize, v: i64,
+    ) {
+        let mut p = u;
+        while p != NULL {
+            value[p] += v;
+            p = parent[p];
+        }
+    }
+
+    fn caterpillar_apply_brutal(
+        parent: &Vec<usize>, value: &mut Vec<i64>, u: usize, v: i64,
+    ) {
+        let mut mark: Vec<bool> = Vec::new();
+        mark.resize(parent.len(), false);
+        let mut p = u;
+        while p != NULL {
+            mark[p] = true;
+            p = parent[p];
+        }
+        for i in 0..parent.len() {
+            if mark[i] || i == 0 || mark[parent[i]] {
+                value[i] += v;
+            }
+        }
+    }
+
+    fn query_min_brutal(
+        parent: &Vec<usize>, value: &Vec<i64>, u: usize,
+    ) -> i64 {
+        let mut v = value[u];
+        let mut p = u;
+        while p != NULL {
+            v = std::cmp::min(v, value[p]);
+            p = parent[p];
+        }
+
+        v
+    }
+
+    fn lca_brutal(parent: &Vec<usize>, u: usize, v: usize) -> usize {
+        let mut mark: Vec<bool> = Vec::new();
+        mark.resize(parent.len(), false);
+        let mut p = u;
+        while p != NULL {
+            mark[p] = true;
+            p = parent[p];
+        }
+        let mut p = v;
+        while p != NULL {
+            if mark[p] {
+                return p;
+            }
+            p = parent[p];
+        }
+        NULL
+    }
+
+    fn ancestor_at_brutal(parent: &Vec<usize>, u: usize, at: usize) -> usize {
+        let mut path = Vec::new();
+        let mut p = u;
+        while p != NULL {
+            path.push(p);
+            p = parent[p];
+        }
+        path.reverse();
+        if at >= path.len() {
+            NULL
+        } else {
+            path[at]
+        }
+    }
+
+    #[test]
+    fn test_default_random_stress() {
+        let bound: i64 = 100000000;
+        let mut n: usize = 5000;
+        let mut parent: Vec<usize> = Vec::new();
+        let mut value: Vec<i64> = Vec::new();
+        parent.push(NULL);
+        for i in 1..n {
+            let p: usize = rand::thread_rng().gen_range(0, i) as usize;
+            parent.push(p);
+        }
+        value.resize(n, 0);
+        let mut tree: DefaultMinLinkCutTree = DefaultMinLinkCutTree::new();
+        tree.make_tree(n - 1);
+        for i in 1..n {
+            tree.link(parent[i], i);
+        }
+        assert_eq!(tree.size(), n);
+        for _ in 0..80000 {
+            let op: u32 = rand::thread_rng().gen_range(0, 7);
+            if op == 0 {
+                // path apply
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                tree.path_apply(u as usize, v as i128);
+                path_apply_brutal(&parent, &mut value, u, v);
+            } else if op == 1 {
+                // query min
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(
+                    query_min_brutal(&parent, &value, u),
+                    tree.path_aggregate(u) as i64
+                );
+            } else if op == 2 {
+                // lca
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(lca_brutal(&parent, u, v), tree.lca(u, v));
+            } else if op == 3 {
+                // query chop
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let mut p = u;
+                let mut v = value[p];
+                while p != NULL {
+                    if p != u {
+                        assert_eq!(v, tree.path_aggregate_chop(u, p) as i64);
+                    }
+                    v = std::cmp::min(v, value[p]);
+                    p = parent[p];
+                }
+            } else if op == 4 {
+                // set
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                tree.set(u, v as i128);
+                value[u] = v;
+            } else if op == 5 {
+                // get
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(value[u], tree.get(u) as i64);
+            } else if op == 6 {
+                let p: usize = rand::thread_rng().gen_range(0, n) as usize;
+                parent.push(p);
+                value.push(0);
+                tree.make_tree(n);
+                tree.link(p, n);
+                n += 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_size_random_stress() {
+        let bound: i64 = 100000000;
+        let mut n: usize = 5000;
+        let mut parent: Vec<usize> = Vec::new();
+        let mut value: Vec<i64> = Vec::new();
+        parent.push(NULL);
+        for i in 1..n {
+            let p: usize = rand::thread_rng().gen_range(0, i) as usize;
+            parent.push(p);
+        }
+        value.resize(n, 0);
+        let mut tree: SizeMinLinkCutTree = SizeMinLinkCutTree::new();
+        tree.make_tree(n - 1);
+        for i in 1..n {
+            tree.link(parent[i], i);
+        }
+        assert_eq!(tree.size(), n);
+        for _ in 0..80000 {
+            let op: u32 = rand::thread_rng().gen_range(0, 8);
+            if op == 0 {
+                // path apply
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                tree.path_apply(u as usize, v as i128);
+                path_apply_brutal(&parent, &mut value, u, v);
+            } else if op == 1 {
+                // query min
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(
+                    query_min_brutal(&parent, &value, u),
+                    tree.path_aggregate(u) as i64
+                );
+            } else if op == 2 {
+                // lca
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(lca_brutal(&parent, u, v), tree.lca(u, v));
+            } else if op == 3 {
+                // query chop
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let mut p = u;
+                let mut v = value[p];
+                while p != NULL {
+                    if p != u {
+                        assert_eq!(v, tree.path_aggregate_chop(u, p) as i64);
+                    }
+                    v = std::cmp::min(v, value[p]);
+                    p = parent[p];
+                }
+            } else if op == 4 {
+                // set
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                tree.set(u, v as i128);
+                value[u] = v;
+            } else if op == 5 {
+                // ancestor at
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let at: usize = rand::thread_rng().gen_range(0, 100) as usize;
+                assert_eq!(
+                    ancestor_at_brutal(&parent, u, at),
+                    tree.ancestor_at(u as usize, at)
+                );
+            } else if op == 6 {
+                // get
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(value[u], tree.get(u) as i64);
+            } else if op == 7 {
+                let p: usize = rand::thread_rng().gen_range(0, n) as usize;
+                parent.push(p);
+                value.push(0);
+                tree.make_tree(n);
+                tree.link(p, n);
+                n += 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_caterpillar_random_stress() {
+        let bound: i64 = 1000000;
+        let mut n: usize = 5000;
+        let mut parent: Vec<usize> = Vec::new();
+        let mut value: Vec<i64> = Vec::new();
+        parent.push(NULL);
+        for i in 1..n {
+            let p: usize = rand::thread_rng().gen_range(0, i) as usize;
+            parent.push(p);
+        }
+        value.resize(n, 0);
+        let mut tree: CaterpillarMinLinkCutTree =
+            CaterpillarMinLinkCutTree::new();
+        tree.make_tree(n - 1);
+        for i in 1..n {
+            tree.link(parent[i], i);
+        }
+        assert_eq!(tree.size(), n);
+        for _ in 0..80000 {
+            let op: u32 = rand::thread_rng().gen_range(0, 8);
+            if op == 0 {
+                // path apply
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                tree.path_apply(u as usize, v as i128);
+                path_apply_brutal(&parent, &mut value, u, v);
+            } else if op == 1 {
+                // caterpillar apply
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                tree.caterpillar_apply(u, v as i128);
+                caterpillar_apply_brutal(&parent, &mut value, u, v);
+            } else if op == 2 {
+                // query min
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(
+                    query_min_brutal(&parent, &value, u),
+                    tree.path_aggregate(u) as i64
+                );
+            } else if op == 3 {
+                // lca
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(lca_brutal(&parent, u, v), tree.lca(u, v));
+            } else if op == 4 {
+                // query chop
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let mut p = u;
+                let mut v = value[p];
+                while p != NULL {
+                    if p != u {
+                        assert_eq!(v, tree.path_aggregate_chop(u, p) as i64);
+                    }
+                    v = std::cmp::min(v, value[p]);
+                    p = parent[p];
+                }
+            } else if op == 5 {
+                // set
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                tree.set(u, v as i128);
+                value[u] = v;
+            } else if op == 6 {
+                // get
+                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                assert_eq!(value[u], tree.get(u) as i64);
+            } else if op == 7 {
+                let p: usize = rand::thread_rng().gen_range(0, n) as usize;
+                parent.push(p);
+                value.push(0);
+                tree.make_tree(n);
+                tree.link(p, n);
+                n += 1;
+            }
+        }
     }
 }

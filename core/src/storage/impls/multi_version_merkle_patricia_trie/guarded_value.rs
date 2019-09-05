@@ -11,25 +11,23 @@ pub struct GuardedValue<GuardType, ValueType> {
 
 impl<GuardType, ValueType> GuardedValue<GuardType, ValueType> {
     pub fn new(guard: GuardType, value: ValueType) -> Self {
-        Self {
-            guard: guard,
-            value: value,
-        }
+        Self { guard, value }
     }
 
     /// Not yet useful but defined for completeness.
     pub fn new_with_fn<F: FnOnce(&GuardType) -> ValueType>(
-        guard: GuardType, f: F,
+        _guard: GuardType, _f: F,
     ) -> Self {
-        unimplemented!()
+        unreachable!()
     }
 
     pub fn into(self) -> (GuardType, ValueType) { (self.guard, self.value) }
 }
 
 impl<GuardType, ValueType: Clone> GuardedValue<GuardType, ValueType> {
+    /// Unsafe because the lock guard is released.
     /// There is no guarantee for the validity of value especially when
-    /// ValueType is reference type.
+    /// ValueType is reference alike, e.g. an index.
     pub unsafe fn get_value(&self) -> ValueType { self.value.clone() }
 }
 

@@ -6,9 +6,6 @@ pub type ChildrenMerkleTable = [MerkleHash; CHILDREN_COUNT];
 pub type MaybeMerkleTable = Option<ChildrenMerkleTable>;
 pub type MaybeMerkleTableRef<'a> = Option<&'a ChildrenMerkleTable>;
 
-pub type MerkleHash = H256;
-pub const MERKLE_NULL_NODE: MerkleHash = KECCAK_EMPTY;
-
 pub fn compute_merkle_for_rlp(rlp_stream: &RlpStream) -> MerkleHash {
     keccak(rlp_stream.as_raw())
 }
@@ -20,6 +17,7 @@ pub fn compute_node_merkle(
     rlp_stream.begin_unbounded_list();
     match children_merkles {
         Some(merkles) => {
+            // TODO(yz): we may append merkle one by one so we save 2 more byte.
             rlp_stream.append_list(merkles);
         }
         _ => {}
@@ -61,6 +59,6 @@ pub fn compute_merkle(
 }
 
 use super::*;
-use crate::hash::{keccak, KECCAK_EMPTY};
-use cfx_types::H256;
+use crate::hash::keccak;
+use primitives::MerkleHash;
 use rlp::*;

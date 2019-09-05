@@ -4,67 +4,33 @@
 
 pub use super::super::super::db::COL_DELTA_TRIE;
 
-#[derive(Default)]
-pub struct AtomicCommit {
-    pub row_number: RowNumber,
-}
+// TODO: Set the parameter large enough because we haven't implement background
+// snapshotting.
+/// The rule should be somewhat friendly to new miners so that they know which
+/// block starts a new snapshot by looking at consensus graph.
+pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 1_000_000_000_000_000;
 
-pub struct AtomicCommitTransaction<'a> {
-    pub info: MutexGuard<'a, AtomicCommit>,
-    pub transaction: DBTransaction,
-}
+pub type DeltaDbManager = DeltaDbManagerRocksdb;
+pub type SnapshotDbManager = SnapshotDbManagerSqlite;
+pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
+
+// TODO: remove option on intermediate tree.
+pub type StateTrees = (
+    SnapshotDb,
+    Option<Arc<DeltaMpt>>,
+    Option<NodeRefDeltaMpt>,
+    Arc<DeltaMpt>,
+    Option<NodeRefDeltaMpt>,
+);
 
 pub struct StateManager {
-    delta_trie: MultiVersionMerklePatriciaTrie,
+    delta_trie: Arc<DeltaMpt>,
     pub db: Arc<SystemDB>,
-    commit_lock: Mutex<AtomicCommit>,
+    storage_manager: Arc<StorageManager>,
+    pub number_committed_nodes: AtomicUsize,
 }
 
 impl StateManager {
-    pub(super) fn get_delta_trie(&self) -> &MultiVersionMerklePatriciaTrie {
-        &self.delta_trie
-    }
-
-    pub fn start_commit(&self) -> AtomicCommitTransaction {
-        AtomicCommitTransaction {
-            info: self.commit_lock.lock().unwrap(),
-            transaction: self.db.key_value().transaction(),
-        }
-    }
-
-    fn load_state_root_node_ref_from_db(
-        &self, epoch_id: EpochId,
-    ) -> Result<Option<NodeRefDeltaMpt>> {
-        let db_key_result = Self::parse_row_number(
-            self.db.key_value().get(
-                COL_DELTA_TRIE,
-                [
-                    "state_root_db_key_for_epoch_id_".as_bytes(),
-                    epoch_id.as_ref(),
-                ]
-                .concat()
-                .as_slice(),
-            ),
-        )?;
-        match db_key_result {
-            Some(db_key) => {
-                Ok(Some(self.delta_trie.loaded_root_at_epoch(epoch_id, db_key)))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn get_state_root_node_ref(
-        &self, epoch_id: EpochId,
-    ) -> Result<Option<NodeRefDeltaMpt>> {
-        let node_ref = self.delta_trie.get_root_at_epoch(epoch_id);
-        if node_ref.is_none() {
-            self.load_state_root_node_ref_from_db(epoch_id)
-        } else {
-            Ok(node_ref)
-        }
-    }
-
     // TODO(ming): Should prevent from committing at existing epoch because
     // otherwise the overwritten trie nodes can not be reachable from db.
     // The current codebase overwrites because it didn't check if the state
@@ -76,132 +42,250 @@ impl StateManager {
         match root_node {
             None => {}
             Some(node) => {
+                // Debugging log.
+                info!("State root committed for epoch {:?}", epoch_id);
                 self.delta_trie.set_epoch_root(epoch_id, node.clone())
             }
         }
     }
 
-    fn parse_row_number(
-        x: io::Result<Option<DBValue>>,
-    ) -> Result<Option<RowNumberUnderlyingType>> {
-        Ok(match x?.as_ref() {
-            None => None,
-            Some(row_number_bytes) => Some(
-                unsafe { str::from_utf8_unchecked(row_number_bytes.as_ref()) }
-                    .parse::<RowNumberUnderlyingType>()?,
-            ),
-        })
-    }
-
+    // FIXME: change the parameter.
     pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Self {
-        let row_number = Self::parse_row_number(
-            db.key_value()
-                .get(COL_DELTA_TRIE, "last_row_number".as_bytes()),
-        )
-        // unwrap() on new is fine.
-        .unwrap()
-        .unwrap_or_default();
         debug!("Storage conf {:?}", conf);
 
+        let storage_manager =
+            Arc::new(StorageManager::new(DeltaDbManager::new(db.clone())));
+
+        // FIXME: move the commit_lock into delta_mpt, along with the row_number
+        // FIXME: reading into the new_delta_mpt method.
         Self {
-            delta_trie: MultiVersionMerklePatriciaTrie::new(
-                db.key_value().clone(),
+            delta_trie: StorageManager::new_delta_mpt(
+                storage_manager.clone(),
+                &MERKLE_NULL_NODE,
+                &MERKLE_NULL_NODE,
                 conf,
-            ),
-            db: db,
-            commit_lock: Mutex::new(AtomicCommit {
-                row_number: RowNumber { value: row_number },
-            }),
+            )
+            // It's fine to unwrap in initialization.
+            .unwrap(),
+            db,
+            storage_manager,
+            number_committed_nodes: Default::default(),
         }
     }
 
     /// ` test_net_version` is used to update the genesis author so that after
     /// resetting, the chain of the older version will be discarded
     pub fn initialize(
-        &self, secret_store: &SecretStore, genesis_gas_limit: U256,
-        test_net_version: Address,
+        &self, genesis_accounts: HashMap<Address, U256>,
+        genesis_gas_limit: U256, test_net_version: Address,
+        initial_difficulty: U256,
     ) -> Block
     {
-        let mut state = self.get_state_at(H256::default()).unwrap();
-        let kp = KeyPair::from_secret(
-            "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
-                .parse()
-                .unwrap(),
-        )
-        .unwrap();
-        let addr = kp.address();
-        let account = Account::new_empty_with_balance(
-            &addr,
-            &U256::from_dec_str("5000000000000000000000000000")
-                .expect("Not overflow"),
-            &0.into(),
-        );
-        state
-            .set(
-                StorageKey::new_account_key(&addr).as_ref(),
-                encode(&account).as_ref(),
-            )
-            .unwrap();
-        let root = state.compute_state_root().unwrap();
-        let genesis = Block {
-            block_header: BlockHeaderBuilder::new()
-                .with_deferred_state_root(root)
+        let mut state = StateDb::new(self.get_state_for_genesis_write());
+
+        for (addr, balance) in genesis_accounts {
+            let account =
+                Account::new_empty_with_balance(&addr, &balance, &0.into());
+            state.set(&state.account_key(&addr), &account).unwrap();
+        }
+
+        let state_root = state.compute_state_root().unwrap();
+        let mut genesis = Block::new(
+            BlockHeaderBuilder::new()
+                .with_deferred_state_root(
+                    state_root.state_root.compute_state_root_hash(),
+                )
+                .with_deferred_state_root_with_aux_info(state_root)
                 .with_gas_limit(genesis_gas_limit)
                 .with_author(test_net_version)
+                .with_difficulty(initial_difficulty)
                 .build(),
-            transactions: Vec::new(),
-        };
+            Vec::new(),
+        );
+        genesis.block_header.compute_hash();
         debug!("Genesis Block:{:?} hash={:?}", genesis, genesis.hash());
         state.commit(genesis.block_header.hash()).unwrap();
-        secret_store.insert(kp);
         genesis
     }
 
-    pub fn log_usage(&self) { self.delta_trie.log_usage(); }
+    pub fn log_usage(&self) {
+        self.delta_trie.log_usage();
+        info!(
+            "number of nodes committed to db {}",
+            self.number_committed_nodes.load(Ordering::Relaxed),
+        );
+    }
 
-    pub fn state_exists(&self, epoch_id: EpochId) -> bool {
-        if let Ok(state) = self.get_state_at(epoch_id) {
-            state.does_exist()
+    /// This is unsafe because if state for `epoch_id` does not exist, it'll
+    /// panic.
+    pub unsafe fn get_state_readonly_assumed_existence(
+        &self, epoch_id: EpochId,
+    ) -> Result<State> {
+        Ok(self
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(&epoch_id, None))?
+            .unwrap())
+    }
+
+    // FIXME: Fix implementation.
+    // Empty Snapshot is a Snapshot. Empty intermediate delta mpt should be a
+    // DeltaMpt.
+    pub fn get_state_trees(
+        &self, epoch_id: &SnapshotAndEpochIdRef,
+    ) -> Result<Option<StateTrees>> {
+        let maybe_snapshot =
+            self.storage_manager.get_snapshot(&epoch_id.snapshot_root)?;
+        let maybe_intermediate_mpt = None;
+        // FIXME: delta_mpt is determined by snapshot.
+        let delta_mpt = self.delta_trie.clone();
+
+        match maybe_snapshot {
+            None => Ok(None),
+            Some(snapshot) => {
+                let intermediate_root = None;
+                let maybe_delta_root =
+                    delta_mpt.get_state_root_node_ref(epoch_id.epoch_id)?;
+                if maybe_delta_root.is_none() {
+                    Ok(None)
+                } else {
+                    Ok(Some((
+                        snapshot,
+                        maybe_intermediate_mpt,
+                        intermediate_root,
+                        delta_mpt,
+                        maybe_delta_root,
+                    )))
+                }
+            }
+        }
+    }
+
+    pub fn get_state_trees_for_next_epoch(
+        &self, parent_epoch_id: &SnapshotAndEpochIdRef,
+    ) -> Result<Option<StateTrees>> {
+        let maybe_snapshot;
+        // TODO: implement shift logic for intermediate and delta mpt as well.
+        let maybe_intermediate_mpt = None;
+        let delta_mpt = self.delta_trie.clone();
+        let intermediate_root = None;
+        let delta_root;
+
+        // Should shift to a new snapshot
+        // When the delta_height is set to None (e.g. in tests), we assume that
+        // the snapshot shift check is disabled.
+        if parent_epoch_id.delta_height.unwrap_or_default()
+            == SNAPSHOT_EPOCHS_CAPACITY
+        {
+            maybe_snapshot = self.storage_manager.get_snapshot_by_epoch_id(
+                parent_epoch_id.intermediate_delta_epoch_id,
+            )?;
+            delta_root = None;
         } else {
-            warn!("Fail to load state");
-            false
+            maybe_snapshot = self
+                .storage_manager
+                .get_snapshot(&parent_epoch_id.snapshot_root)?;
+            delta_root =
+                delta_mpt.get_state_root_node_ref(parent_epoch_id.epoch_id)?;
+            if delta_root.is_none() {
+                return Ok(None);
+            }
+        }
+
+        match maybe_snapshot {
+            None => Ok(None),
+            Some(snapshot) => Ok(Some((
+                snapshot,
+                maybe_intermediate_mpt,
+                intermediate_root,
+                delta_mpt,
+                delta_root,
+            ))),
         }
     }
 }
 
 impl StateManagerTrait for StateManager {
-    fn from_snapshot(snapshot: &Snapshot) -> Self { unimplemented!() }
-
-    fn make_snapshot(&self, epoch_id: EpochId) -> Snapshot { unimplemented!() }
-
-    fn get_state_at(&self, epoch_id: EpochId) -> Result<State> {
-        Ok(State::new(self, self.get_state_root_node_ref(epoch_id)?))
+    fn get_state_no_commit(
+        &self, epoch_id: SnapshotAndEpochIdRef,
+    ) -> Result<Option<State>> {
+        let maybe_state_trees = self.get_state_trees(&epoch_id)?;
+        match maybe_state_trees {
+            None => Ok(None),
+            Some(state_trees) => Ok(Some(State::new(self, state_trees))),
+        }
     }
 
-    fn contains_state(&self, epoch_id: EpochId) -> bool {
-        self.get_state_at(epoch_id).unwrap().does_exist()
+    fn get_state_for_genesis_write(&self) -> State {
+        State::new(
+            self,
+            (
+                self.storage_manager
+                    .get_snapshot(&MERKLE_NULL_NODE)
+                    .unwrap()
+                    .unwrap(),
+                None,
+                None,
+                self.delta_trie.clone(),
+                None,
+            ),
+        )
     }
 
-    fn drop_state_outside(&self, epoch_id: EpochId) { unimplemented!() }
+    fn get_state_for_next_epoch(
+        &self, parent_epoch_id: SnapshotAndEpochIdRef,
+    ) -> Result<Option<State>> {
+        let maybe_state_trees =
+            self.get_state_trees_for_next_epoch(&parent_epoch_id)?;
+        match maybe_state_trees {
+            None => Ok(None),
+            Some(state_trees) => Ok(Some(State::new(self, state_trees))),
+        }
+    }
+
+    fn contains_state(&self, epoch_id: SnapshotAndEpochIdRef) -> Result<bool> {
+        let maybe_state_trees = self.get_state_trees(&epoch_id)?;
+        Ok(match maybe_state_trees {
+            None => {
+                warn!("Failed to load state for epoch {:?}", epoch_id);
+                false
+            }
+            Some(_) => true,
+        })
+    }
+
+    // FIXME: split into 2 methods.
+    fn drop_state_outside(&self, _epoch_id: EpochId) { unimplemented!() }
+
+    fn get_snapshot_wire_format(
+        &self, _snapshot_root: MerkleHash,
+    ) -> Result<Option<Snapshot>> {
+        unimplemented!()
+    }
 }
 
 use super::{
-    super::{state::*, state_manager::*},
+    super::{
+        snapshot_manager::SnapshotManagerTrait, state::*, state_manager::*,
+        storage_db::*,
+    },
     errors::*,
     multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::NodeRefDeltaMpt, row_number::*, *,
+        merkle_patricia_trie::NodeRefDeltaMpt, *,
     },
+    storage_db::{
+        delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
+        snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
+    },
+    storage_manager::storage_manager::StorageManager,
 };
-use crate::{
-    ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StorageKey,
+use crate::{ext_db::SystemDB, snapshot::snapshot::Snapshot, statedb::StateDb};
+use cfx_types::{Address, U256};
+use primitives::{
+    Account, Block, BlockHeaderBuilder, EpochId, MerkleHash, MERKLE_NULL_NODE,
 };
-use cfx_types::{Address, H256, U256};
-use keylib::KeyPair;
-use kvdb::{DBTransaction, DBValue};
-use primitives::{Account, Block, BlockHeaderBuilder, EpochId};
-use rlp::encode;
-use secret_store::SecretStore;
 use std::{
-    io, str,
-    sync::{Arc, Mutex, MutexGuard},
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };

@@ -30,8 +30,6 @@ impl<PosT: PrimitiveNum> LRUHandle<PosT> {
         self.set_handle(prev_pos);
     }
 
-    fn placement_new_evicted(&mut self) { self.set_evicted(); }
-
     pub fn is_hit(&self) -> bool { self.prev_pos != PosT::from(Self::NULL_POS) }
 
     fn set_evicted(&mut self) { self.prev_pos = PosT::from(Self::NULL_POS); }
@@ -79,7 +77,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> LRU<PosT, CacheIndexT> {
 
         Self {
             size: PosT::from(0),
-            capacity: capacity,
+            capacity,
             head: PosT::from(LRUHandle::<PosT>::NULL_POS),
             rear: PosT::from(LRUHandle::<PosT>::HEAD_POS),
             recent: Vec::with_capacity(capacity.into()),
@@ -173,7 +171,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
             }
             self.recent.push(DoubleLinkListNode {
                 next: old_head,
-                cache_index: cache_index,
+                cache_index,
             });
 
             // Update rear.
@@ -323,7 +321,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
         }
     }
 
-    fn log_usage(&self, prefix: &String) {
+    fn log_usage(&self, prefix: &str) {
         debug!(
             "{}lru: capacity {}, size {}",
             prefix, self.capacity, self.size

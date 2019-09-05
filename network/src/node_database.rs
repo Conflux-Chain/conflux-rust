@@ -3,150 +3,269 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    ip::{NodeIpLimit, NodeTagIndex, ValidateInsertResult},
     node_table::{Node, NodeContact, NodeEntry, NodeId, NodeTable},
     IpFilter,
 };
 use io::StreamToken;
-use std::{collections::HashMap, net::IpAddr, time::Duration};
+use std::{collections::HashSet, net::IpAddr, time::Duration};
+
+const TRUSTED_NODES_FILE: &str = "trusted_nodes.json";
+const UNTRUSTED_NODES_FILE: &str = "untrusted_nodes.json";
+const BLACKLISTED_NODES_FILE: &str = "blacklisted_nodes.json";
 
 /// Node database maintains all P2P nodes in trusted and untrusted node tables,
-/// and support to limit the number of nodes for the same IP address.
+/// and supports to limit the number of nodes for the same IP address.
+///
+/// # Insert a node
+///
+/// There are 3 scenarios to insert a node into database:
+/// 1. Receive the "hello" handshaking message from ingress TCP connection,
+/// and add the node with `StreamToken` as untrusted if not exists in database.
+/// Otherwise, overwrite the existing node in trusted or untrusted table,
+/// including endpoint, last contact and connection information.
+/// 2. Receive the "pong" message from UDP discovery, and add the node as
+/// trusted if not exists, or promote it to trusted if it is untrusted.
+/// Otherwise, just update the last contact information in trusted table.
+/// 3. RPC explicitly add a trusted node. If the node is an existing
+/// untrusted one, promote it to trusted.
+///
+/// # Update node information
+///
+/// ## note_success
+/// When actively connect to a sampled trusted node, updates the node last
+/// contact time. On the other hand, when received "ping" message from "UDP"
+/// message, update the node last contact time.
+///
+/// ## note_failure
+/// Mark the node's last contact to failure for any error, e.g.
+/// - UDP request timeout.
+/// - Failed to create TCP connection/session.
+/// - Failed to communicate due to invalid protocol message.
+///
+/// # Promote/Demote
+///
+/// ## Promote
+/// Periodically promote untrusted nodes from ingress TCP connection with
+/// configured timespan.
+///
+/// ## Demote
+/// Demote a node to untrusted when failed to handle protocol messages.
+///
+/// # Subnet limitation
+///
+/// Attacker could easily simulate a large amount of malicious nodes of
+/// different node IDs with same IP address or IPs from same subnet. To
+/// avoid such kind of attack, user could limits the number of nodes for
+/// one IP address and subnet. By default, only 1 node allowed for a
+/// single IP address and 32 nodes for a subnet C (ip/24), and will evict
+/// an existing old node in following 2 scenarios:
+///
+/// ## Scenario 1: add or update node with existing IP address
+/// For example, "node_1" with "IP_1" already in database, and to add a new node
+/// "node_2" with the same address "IP_1". "node_1" will be evicted, and then
+/// add "node_2" with "IP_1".
+///
+/// ## Scenario 2: add or update node with new IP address
+/// If the subnet quota of the IP address is not enough, some node in the
+/// same subnet may be evicted. If evict one, then add or update the node
+/// with new IP address. Otherwise, do not add or update the node.
+///
+/// ## Eviction rule
+/// If the subnet quota is not enough, the rule to select evictee is as
+/// following: 1. Select untrusted node prior to trusted node.
+/// 2. Select node that has been contacted long time ago.
+/// 3. Randomly select one without "fresher" bias.
 pub struct NodeDatabase {
+    // Trusted nodes to establish outgoing connections.
+    // A trusted node comes in 2 ways:
+    // 1. Incoming TCP connection for a long time.
+    // 2. Received trusted neighbors from UDP discovery.
     trusted_nodes: NodeTable,
+
+    // Add or updated by incoming TCP connection or PING discovery message.
     untrusted_nodes: NodeTable,
+
+    // Blacklisted nodes are refused to connect or update via UDP discovery.
+    // Generally, node is blacklisted due to protocol mismatch in runtime.
+    blacklisted_nodes: NodeTable,
+    // Maximum duration to blacklist a node since last contact.
+    blacklisted_lifetime: Duration,
+
+    // IP address/subnet index for trusted and untrusted nodes.
     ip_limit: NodeIpLimit,
+
+    // Only used for sampling trusted nodes with desired tag.
+    // It is updated in following cases:
+    // 1. add tag indices when initialize the trusted node table
+    // 2. add tag indices when promote a node
+    // 3. remove tag indices when demote a node
+    // 4. remove tag indices when delete a trusted node
+    trusted_node_tag_index: NodeTagIndex,
 }
 
 impl NodeDatabase {
-    pub fn new(path: Option<String>, nodes_per_ip: usize) -> Self {
-        let trusted_nodes = NodeTable::new(path.clone(), true);
-        let untrusted_nodes = NodeTable::new(path.clone(), false);
-        let mut ip_limit = NodeIpLimit::new(nodes_per_ip);
+    pub fn new(path: Option<String>, subnet_quota: usize) -> Self {
+        let trusted_nodes = NodeTable::new(path.clone(), TRUSTED_NODES_FILE);
+        let untrusted_nodes =
+            NodeTable::new(path.clone(), UNTRUSTED_NODES_FILE);
+        let ip_limit = NodeIpLimit::new(subnet_quota);
+        let trusted_node_tag_index =
+            NodeTagIndex::new_with_node_table(&trusted_nodes);
 
-        ip_limit.init(&trusted_nodes);
-        ip_limit.init(&untrusted_nodes);
-
-        NodeDatabase {
+        let mut db = NodeDatabase {
             trusted_nodes,
             untrusted_nodes,
+            blacklisted_nodes: NodeTable::new(path, BLACKLISTED_NODES_FILE),
+            blacklisted_lifetime: Duration::from_secs(7 * 24 * 3600),
             ip_limit,
-        }
+            trusted_node_tag_index,
+        };
+
+        db.init(false /* trusted */);
+        db.init(true /* trusted */);
+
+        db
     }
 
-    /// add or update a node with the specified `entry` and `stream_token`.
+    /// Add a new untrusted node if not exists. Otherwise, update the existing
+    /// node with specified `entry` and `stream_token`.
     pub fn insert_with_token(
         &mut self, entry: NodeEntry, stream_token: StreamToken,
-    ) -> InsertResult {
-        if self.trusted_nodes.contains(&entry.id) {
-            self.trusted_nodes.note_success(
-                &entry.id,
-                true,
-                Some(stream_token),
-            );
-            return InsertResult::Updated;
+    ) {
+        if self.evaluate_blacklisted(&entry.id) {
+            return;
         }
 
-        match self
-            .ip_limit
-            .validate_insertion(&self.untrusted_nodes, &entry)
-        {
-            result @ InsertResult::Added | result @ InsertResult::Updated => {
-                let mut node = Node::new(entry.id, entry.endpoint);
-                node.last_contact = Some(NodeContact::success());
-                node.last_connected = Some(NodeContact::success());
-                node.stream_token = Some(stream_token);
+        let mut node = Node::new(entry.id, entry.endpoint);
+        node.last_contact = Some(NodeContact::success());
+        node.last_connected = Some(NodeContact::success());
+        node.stream_token = Some(stream_token);
 
-                // overwrite endpoint of untrusted node.
-                self.untrusted_nodes.add_node(node, false);
+        let ip = node.endpoint.address.ip();
 
-                result
+        if self.trusted_nodes.contains(&node.id) {
+            if self.insert_ip_limit(
+                node.id.clone(),
+                ip,
+                true, /* trusted */
+            ) {
+                self.trusted_nodes
+                    .add_node(node, false /* preserve_last_contact */);
             }
-            result @ _ => result,
+        } else if self.insert_ip_limit(
+            node.id.clone(),
+            ip,
+            false, /* trusted */
+        ) {
+            self.untrusted_nodes
+                .add_node(node, false /* preserve_last_contact */);
         }
     }
 
-    /// Add or update a node with the specified `entry`.
-    pub fn insert(&mut self, entry: NodeEntry) -> InsertResult {
-        if self.trusted_nodes.contains(&entry.id) {
-            self.trusted_nodes.note_success(&entry.id, false, None);
-            return InsertResult::Updated;
+    fn insert_ip_limit(
+        &mut self, id: NodeId, ip: IpAddr, trusted: bool,
+    ) -> bool {
+        let mut evictee = None;
+
+        match self.ip_limit.validate_insertion(&id, &ip, self) {
+            ValidateInsertResult::AlreadyExists => return true,
+            ValidateInsertResult::QuotaNotEnough => return false,
+            ValidateInsertResult::QuotaEnough => {}
+            ValidateInsertResult::OccupyIp(id) => evictee = Some(id),
+            ValidateInsertResult::Evict(id) => evictee = Some(id),
         }
 
-        match self
-            .ip_limit
-            .validate_insertion(&self.untrusted_nodes, &entry)
-        {
-            result @ InsertResult::Added | result @ InsertResult::Updated => {
-                let mut node = Node::new(entry.id, entry.endpoint);
-                node.last_contact = Some(NodeContact::success());
-                self.untrusted_nodes.update_last_contact(node);
-                result
+        if let Some(id) = &evictee {
+            self.remove(id);
+        }
+
+        self.ip_limit.insert(id, ip, trusted, evictee)
+    }
+
+    /// Add a new trusted node if not exists. Otherwise, update the existing
+    /// node with the specified `entry`, and promote the node to trusted if it
+    /// is untrusted.
+    pub fn insert_with_promotion(&mut self, entry: NodeEntry) {
+        if self.evaluate_blacklisted(&entry.id) {
+            return;
+        }
+
+        let mut node = Node::new(entry.id, entry.endpoint);
+        node.last_contact = Some(NodeContact::success());
+
+        let ip = node.endpoint.address.ip();
+
+        if self.untrusted_nodes.contains(&node.id) {
+            if let Some(old_node) = self.promote_with_untrusted(&node.id, ip) {
+                node.last_connected = old_node.last_connected;
+                node.stream_token = old_node.stream_token;
+                self.trusted_node_tag_index.add_node(&node);
+                self.trusted_nodes
+                    .add_node(node, false /* preserve_last_contact */);
             }
-            result @ _ => result,
+        } else if self.insert_ip_limit(
+            node.id.clone(),
+            ip,
+            true, /* trusted */
+        ) {
+            self.trusted_nodes.update_last_contact(node);
         }
     }
 
-    /// Add or update a node with the specified `entry`, and promote the node to
-    /// trusted if it is untrusted.
-    pub fn insert_with_promotion(&mut self, entry: NodeEntry) -> InsertResult {
-        if self.trusted_nodes.contains(&entry.id) {
-            self.trusted_nodes.note_success(&entry.id, false, None);
-            return InsertResult::Updated;
+    fn promote_with_untrusted(
+        &mut self, id: &NodeId, new_ip: IpAddr,
+    ) -> Option<Node> {
+        let mut evictee = None;
+
+        match self.ip_limit.validate_insertion(id, &new_ip, self) {
+            ValidateInsertResult::AlreadyExists => {}
+            ValidateInsertResult::QuotaNotEnough => return None,
+            ValidateInsertResult::QuotaEnough => {}
+            ValidateInsertResult::OccupyIp(id) => evictee = Some(id),
+            ValidateInsertResult::Evict(id) => evictee = Some(id),
         }
 
-        match self
-            .ip_limit
-            .validate_insertion(&self.untrusted_nodes, &entry)
-        {
-            result @ InsertResult::Added | result @ InsertResult::Updated => {
-                let mut node = Node::new(entry.id, entry.endpoint);
-                node.last_contact = Some(NodeContact::success());
-
-                if let Some(old_node) =
-                    self.untrusted_nodes.remove_with_id(&entry.id)
-                {
-                    node.last_connected = old_node.last_connected;
-                    node.stream_token = old_node.stream_token;
-                }
-
-                self.trusted_nodes.add_node(node, false);
-
-                result
-            }
-            result @ _ => result,
+        if let Some(id) = &evictee {
+            self.remove(id);
         }
+
+        self.ip_limit.remove(id);
+        self.ip_limit.insert(id.clone(), new_ip, true, evictee);
+
+        self.untrusted_nodes.remove_with_id(id)
     }
 
-    /// Add a new trusted node if not exists, or promote an existing untrusted
+    /// Add a new trusted node if not exists, or promote the existing untrusted
     /// node.
-    pub fn insert_trusted(&mut self, entry: NodeEntry) -> Option<InsertResult> {
+    pub fn insert_trusted(&mut self, entry: NodeEntry) {
+        if self.evaluate_blacklisted(&entry.id) {
+            return;
+        }
+
         if self.trusted_nodes.contains(&entry.id) {
-            return None;
+            return;
         }
 
         let mut node = Node::new(entry.id.clone(), entry.endpoint.clone());
+        let ip = node.endpoint.address.ip();
 
-        match self
-            .ip_limit
-            .validate_insertion(&self.untrusted_nodes, &entry)
-        {
-            InsertResult::Added => {
-                self.trusted_nodes.add_node(node, false);
-                Some(InsertResult::Added)
+        if self.untrusted_nodes.contains(&node.id) {
+            if let Some(old_node) = self.promote_with_untrusted(&node.id, ip) {
+                node.last_contact = old_node.last_contact;
+                node.last_connected = old_node.last_connected;
+                node.stream_token = old_node.stream_token;
+                self.trusted_node_tag_index.add_node(&node);
+                self.trusted_nodes
+                    .add_node(node, false /* preserve_last_contact */);
             }
-            InsertResult::Updated => {
-                if let Some(old_node) =
-                    self.untrusted_nodes.remove_with_id(&entry.id)
-                {
-                    node.last_contact = old_node.last_contact;
-                    node.last_connected = old_node.last_connected;
-                    node.stream_token = old_node.stream_token;
-                }
-
-                self.trusted_nodes.add_node(node, false);
-                Some(InsertResult::Updated)
-            }
-            result @ _ => Some(result),
+        } else if self.insert_ip_limit(
+            node.id.clone(),
+            ip,
+            true, /* trusted */
+        ) {
+            self.trusted_nodes
+                .add_node(node, false /* preserve_last_contact */);
         }
     }
 
@@ -184,16 +303,68 @@ impl NodeDatabase {
         })
     }
 
+    /// Get node from trusted/untrusted node tables for the specified id.
+    pub fn get_with_trusty(&self, id: &NodeId) -> Option<(bool, &Node)> {
+        if let Some(node) = self.trusted_nodes.get(id) {
+            Some((true, node))
+        } else if let Some(node) = self.untrusted_nodes.get(id) {
+            Some((false, node))
+        } else {
+            None
+        }
+    }
+
     pub fn sample_trusted_nodes(
         &self, count: u32, filter: &IpFilter,
     ) -> Vec<NodeEntry> {
-        self.trusted_nodes.sample_nodes(count, filter)
+        if !self.ip_limit.is_enabled() {
+            return self.trusted_nodes.sample_nodes(count, filter);
+        }
+
+        let mut entries = Vec::new();
+
+        for id in self.ip_limit.sample_trusted(count) {
+            if let Some(node) = self.get(&id, true /* trusted_only */) {
+                entries.push(NodeEntry {
+                    id,
+                    endpoint: node.endpoint.clone(),
+                });
+            }
+        }
+
+        entries
     }
 
     pub fn sample_trusted_node_ids(
         &self, count: u32, filter: &IpFilter,
-    ) -> Vec<NodeId> {
-        self.trusted_nodes.sample_node_ids(count, filter)
+    ) -> HashSet<NodeId> {
+        if self.ip_limit.is_enabled() {
+            self.ip_limit.sample_trusted(count)
+        } else {
+            self.trusted_nodes.sample_node_ids(count, filter)
+        }
+    }
+
+    pub fn sample_trusted_node_ids_with_tag(
+        &self, count: u32, key: &String, value: &String,
+    ) -> HashSet<NodeId> {
+        // todo always enable ip_limit and remove the legacy sampling methods in
+        // node table
+        self.trusted_node_tag_index
+            .sample(count, key, value)
+            .unwrap_or_else(|| HashSet::new())
+    }
+
+    pub fn get_nodes(
+        &self, ids: HashSet<NodeId>, trusted_only: bool,
+    ) -> Vec<NodeEntry> {
+        ids.iter()
+            .filter_map(|id| self.get(id, trusted_only))
+            .map(|n| NodeEntry {
+                id: n.id.clone(),
+                endpoint: n.endpoint.clone(),
+            })
+            .collect()
     }
 
     /// Persist trust and untrusted node tables and clear all useless nodes.
@@ -203,6 +374,8 @@ impl NodeDatabase {
 
         self.untrusted_nodes.save();
         self.untrusted_nodes.clear_useless();
+
+        self.blacklisted_nodes.save();
     }
 
     /// Promote untrusted nodes to trusted with the given duration.
@@ -219,7 +392,11 @@ impl NodeDatabase {
                             self.untrusted_nodes.remove_with_id(id)
                         {
                             // IP address not changed and always allow to add.
-                            self.trusted_nodes.add_node(removed_node, false);
+                            self.trusted_node_tag_index.add_node(&removed_node);
+                            self.trusted_nodes.add_node(
+                                removed_node,
+                                false, /* preserve_last_contact */
+                            );
                         }
                     }
                 }
@@ -227,414 +404,364 @@ impl NodeDatabase {
         }
     }
 
+    /// Demote the specified node to untrusted if it is trusted.
+    pub fn demote(&mut self, node_id: &NodeId) {
+        if let Some(removed_trusted_node) =
+            self.trusted_nodes.remove_with_id(node_id)
+        {
+            self.trusted_node_tag_index
+                .remove_node(&removed_trusted_node);
+            self.untrusted_nodes.add_node(
+                removed_trusted_node,
+                false, /* preserve_last_contact */
+            );
+        }
+    }
+
     /// Remove node from database for the specified id
     pub fn remove(&mut self, id: &NodeId) -> Option<Node> {
-        let node = self
-            .trusted_nodes
-            .remove_with_id(id)
-            .or_else(|| self.untrusted_nodes.remove_with_id(id));
+        if let Some(node) = self.trusted_nodes.remove_with_id(id) {
+            self.trusted_node_tag_index.remove_node(&node);
+            self.ip_limit.remove(id);
+            Some(node)
+        } else if let Some(node) = self.untrusted_nodes.remove_with_id(id) {
+            self.ip_limit.remove(id);
+            Some(node)
+        } else if let Some(node) = self.blacklisted_nodes.remove_with_id(id) {
+            Some(node)
+        } else {
+            None
+        }
+    }
 
-        match node {
-            None => None,
-            Some(n) => {
-                self.ip_limit.on_delete(n.endpoint.address.ip());
-                Some(n)
+    fn init(&mut self, trusted: bool) {
+        let nodes = if trusted {
+            self.trusted_nodes.all()
+        } else {
+            self.untrusted_nodes.all()
+        };
+
+        for id in nodes {
+            let ip = if trusted {
+                self.trusted_nodes
+                    .get(&id)
+                    .expect("node not found in trusted table")
+                    .endpoint
+                    .address
+                    .ip()
+            } else {
+                self.untrusted_nodes
+                    .get(&id)
+                    .expect("node not found in untrusted table")
+                    .endpoint
+                    .address
+                    .ip()
+            };
+
+            let mut allowed = true;
+            let mut evictee = None;
+
+            match self.ip_limit.validate_insertion(&id, &ip, self) {
+                ValidateInsertResult::AlreadyExists => {
+                    panic!("node id is not unique in database")
+                }
+                ValidateInsertResult::QuotaNotEnough => allowed = false,
+                ValidateInsertResult::QuotaEnough => {}
+                ValidateInsertResult::OccupyIp(id) => evictee = Some(id),
+                ValidateInsertResult::Evict(id) => evictee = Some(id),
+            }
+
+            if allowed {
+                if let Some(evictee_id) = &evictee {
+                    if trusted {
+                        self.trusted_nodes.remove_with_id(&evictee_id);
+                    } else {
+                        self.untrusted_nodes.remove_with_id(&evictee_id);
+                    }
+                }
+
+                assert!(self.ip_limit.insert(id, ip, trusted, evictee));
+            } else {
+                if trusted {
+                    self.trusted_nodes.remove_with_id(&id);
+                } else {
+                    self.untrusted_nodes.remove_with_id(&id);
+                }
             }
         }
     }
-}
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum InsertResult {
-    Added,
-    Updated,
-    // the number of nodes reaches the maximum value for one IP address.
-    IpLimited,
-}
+    pub fn set_tag(&mut self, id: NodeId, key: &str, value: &str) {
+        let (trusted, node) =
+            if let Some(node) = self.trusted_nodes.get_mut(&id) {
+                (true, node)
+            } else if let Some(node) = self.untrusted_nodes.get_mut(&id) {
+                (false, node)
+            } else {
+                return;
+            };
 
-/// IP address limitation for P2P nodes.
-struct NodeIpLimit {
-    nodes_per_ip: usize, // 0 presents unlimited
-    ip_to_nodes: HashMap<IpAddr, usize>,
-}
+        // add or update tag for node
+        let removed = node.tags.insert(key.into(), value.into());
 
-impl NodeIpLimit {
-    fn new(nodes_per_ip: usize) -> Self {
-        debug!(target: "network", "NodeIpLimit::new: nodes_per_ip = {}", nodes_per_ip);
-        NodeIpLimit {
-            nodes_per_ip,
-            ip_to_nodes: HashMap::new(),
-        }
-    }
-
-    /// Initialize with give node table, and will not restrict the number
-    /// of nodes per IP address.
-    fn init(&mut self, table: &NodeTable) {
-        if !self.is_enabled() {
+        // do not update tag index for untrusted node
+        if !trusted {
             return;
         }
 
-        table.visit(|id| {
-            if let Some(node) = table.get(id) {
-                let ip = node.endpoint.address.ip();
-                let num = self.ip_to_nodes.entry(ip).or_insert(0);
-                *num += 1;
+        let subnet = self
+            .ip_limit
+            .subnet(&id)
+            .expect("node index should always exist");
 
-                if *num > self.nodes_per_ip {
-                    warn!(target: "network", "NodeIpLimit::init: too many nodes added, actual = {}, limited = {}", *num, self.nodes_per_ip);
-                }
-            } else {
-                error!(target: "network", "NodeIpLimit::init: node not found when visit table");
+        // remove the old tag index
+        if let Some(removed) = removed {
+            self.trusted_node_tag_index.remove(
+                &id,
+                subnet,
+                &key.into(),
+                &removed,
+            );
+        }
+
+        // add new tag index
+        self.trusted_node_tag_index.insert(
+            id,
+            subnet,
+            key.into(),
+            value.into(),
+        );
+    }
+
+    /// Set the specified node to blacklisted.
+    pub fn set_blacklisted(&mut self, id: &NodeId) {
+        // update the last failure time
+        self.note_failure(
+            id, true,  /* by_connection */
+            false, /* trusted_only */
+        );
+
+        // move to blacklisted node table
+        if let Some(node) = self.remove(id) {
+            self.blacklisted_nodes
+                .add_node(node, false /* preserve_last_contact */);
+        }
+    }
+
+    /// Check if the specified node is blacklisted.
+    /// If blacklisted for a long time, it will be removed from blacklisted node
+    /// table.
+    pub fn evaluate_blacklisted(&mut self, id: &NodeId) -> bool {
+        let node = match self.blacklisted_nodes.get_mut(id) {
+            Some(node) => node,
+            None => return false,
+        };
+
+        let last_contact = match node.last_contact {
+            Some(contact) => contact.time(),
+            None => {
+                // By default, the last_contact should not be empty.
+                // If changed to None (e.g. manually), just treat
+                // the node as non-blacklisted.
+                self.blacklisted_nodes.remove_with_id(id);
+                return false;
             }
+        };
 
-            true
-        });
-    }
-
-    fn is_enabled(&self) -> bool { self.nodes_per_ip > 0 }
-
-    /// Validate IP address when adding a new node.
-    fn on_add(&mut self, ip: IpAddr) -> bool {
-        if !self.is_enabled() {
-            return true;
+        if let Ok(elapsed) = last_contact.elapsed() {
+            if elapsed > self.blacklisted_lifetime {
+                self.blacklisted_nodes.remove_with_id(id);
+                return false;
+            }
         }
-
-        let num_nodes = self.ip_to_nodes.entry(ip).or_insert(0);
-        if *num_nodes < self.nodes_per_ip {
-            *num_nodes += 1;
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Validate IP address when updating an existing node.
-    fn on_update(&mut self, old_ip: IpAddr, new_ip: IpAddr) -> bool {
-        if !self.is_enabled() {
-            return true;
-        }
-
-        if old_ip == new_ip {
-            return true;
-        }
-
-        if !self.on_add(new_ip) {
-            return false;
-        }
-
-        self.on_delete(old_ip);
 
         true
-    }
-
-    /// Update the number of nodes for the specified IP address when deleting a
-    /// node.
-    fn on_delete(&mut self, ip: IpAddr) {
-        if !self.is_enabled() {
-            return;
-        }
-
-        if let Some(num) = self.ip_to_nodes.get_mut(&ip) {
-            if *num <= 1 {
-                self.ip_to_nodes.remove(&ip);
-            } else {
-                *num -= 1;
-            }
-        } else {
-            error!(target: "network", "NodeIpLimit::on_delete: ip not found");
-        }
-    }
-
-    fn validate_insertion(
-        &mut self, table: &NodeTable, entry: &NodeEntry,
-    ) -> InsertResult {
-        let new_ip = entry.endpoint.address.ip();
-
-        match table.get(&entry.id) {
-            Some(old_node) => {
-                let old_ip = old_node.endpoint.address.ip();
-
-                if !self.on_update(old_ip, new_ip) {
-                    InsertResult::IpLimited
-                } else {
-                    InsertResult::Updated
-                }
-            }
-            None => {
-                if !self.on_add(new_ip) {
-                    InsertResult::IpLimited
-                } else {
-                    InsertResult::Added
-                }
-            }
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::node_table::{Node, NodeEndpoint, NodeEntry, NodeId};
-    use std::{net::IpAddr, str::FromStr};
+    use super::NodeDatabase;
+    use crate::node_table::{NodeEndpoint, NodeEntry, NodeId};
+    use std::{str::FromStr, time::Duration};
 
-    fn new_node(addr: &str) -> Node {
-        Node::new(NodeId::random(), NodeEndpoint::from_str(addr).unwrap())
-    }
-
-    fn new_ip(ip: &str) -> IpAddr { IpAddr::from_str(ip).unwrap() }
-
-    fn new_entry(id: Option<NodeId>, addr: &str) -> NodeEntry {
-        let id = id.or_else(|| Some(NodeId::random())).unwrap();
-        let endpoint = NodeEndpoint::from_str(addr).unwrap();
-        NodeEntry { id, endpoint }
-    }
-
-    #[cfg(test)]
-    mod ip_limit_tests {
-        use super::{
-            super::{InsertResult, NodeIpLimit},
-            new_entry, new_ip, new_node,
-        };
-        use crate::node_table::NodeTable;
-
-        #[test]
-        fn test_enabled() {
-            assert_eq!(NodeIpLimit::new(0).is_enabled(), false);
-            assert_eq!(NodeIpLimit::new(1).is_enabled(), true);
-            assert_eq!(NodeIpLimit::new(4).is_enabled(), true);
-        }
-
-        #[test]
-        fn test_init() {
-            let mut table = NodeTable::new(None, true);
-            table.add_node(new_node("127.0.0.1:777"), false);
-            table.add_node(new_node("127.0.0.1:888"), false);
-            table.add_node(new_node("192.168.0.100:777"), false);
-
-            // not enabled
-            let mut limit = NodeIpLimit::new(0);
-            limit.init(&table);
-            assert_eq!(limit.ip_to_nodes.len(), 0);
-
-            // enabled
-            let mut limit = NodeIpLimit::new(1);
-            limit.init(&table);
-            assert_eq!(limit.ip_to_nodes.len(), 2);
-            assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 2);
-            assert_eq!(limit.ip_to_nodes[&new_ip("192.168.0.100")], 1);
-        }
-
-        #[test]
-        fn test_on_add() {
-            let mut limit = NodeIpLimit::new(2);
-            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-            assert_eq!(limit.on_add(new_ip("127.0.0.1")), false);
-            assert_eq!(limit.on_add(new_ip("127.0.0.1")), false);
-        }
-
-        #[test]
-        fn test_on_update() {
-            let mut limit = NodeIpLimit::new(1);
-            let ip1 = new_ip("127.0.0.1");
-            let ip2 = new_ip("127.0.0.2");
-            assert_eq!(limit.on_add(ip1), true);
-            assert_eq!(limit.on_add(ip2), true);
-
-            // same ip allowed
-            assert_eq!(limit.on_update(ip1, ip1), true);
-            // exist ip not allowed
-            assert_eq!(limit.on_update(ip1, ip2), false);
-
-            // new ip allowed
-            let ip3 = new_ip("127.0.0.3");
-            assert_eq!(limit.on_update(ip1, ip3), true);
-            assert_eq!(limit.ip_to_nodes.contains_key(&ip1), false);
-            assert_eq!(limit.ip_to_nodes.contains_key(&ip3), true);
-        }
-
-        #[test]
-        fn test_on_delete() {
-            let mut limit = NodeIpLimit::new(2);
-            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-            assert_eq!(limit.on_add(new_ip("127.0.0.1")), true);
-            assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 2);
-            limit.on_delete(new_ip("127.0.0.1"));
-            assert_eq!(limit.ip_to_nodes[&new_ip("127.0.0.1")], 1);
-            limit.on_delete(new_ip("127.0.0.1"));
-            assert_eq!(
-                limit.ip_to_nodes.contains_key(&new_ip("127.0.0.1")),
-                false
-            );
-        }
-
-        #[test]
-        fn test_validate_insertion() {
-            let mut table = NodeTable::new(None, true);
-            let node = new_node("127.0.0.1:777");
-            table.add_node(node.clone(), false);
-
-            let mut limit = NodeIpLimit::new(1);
-            limit.init(&table);
-
-            // new node id of same ip
-            let entry = new_entry(None, "127.0.0.1:999");
-            assert_eq!(
-                limit.validate_insertion(&table, &entry),
-                InsertResult::IpLimited
-            );
-
-            // new node id of new ip
-            let entry = new_entry(None, "127.0.0.2:999");
-            assert_eq!(
-                limit.validate_insertion(&table, &entry),
-                InsertResult::Added
-            );
-
-            // same node id of same ip
-            let entry = new_entry(Some(node.id.clone()), "127.0.0.1:777");
-            assert_eq!(
-                limit.validate_insertion(&table, &entry),
-                InsertResult::Updated
-            );
-
-            // same node id of exist ip
-            let entry = new_entry(Some(node.id.clone()), "127.0.0.2:777");
-            assert_eq!(
-                limit.validate_insertion(&table, &entry),
-                InsertResult::IpLimited
-            );
-
-            // same node id of new ip
-            let entry = new_entry(Some(node.id.clone()), "127.0.0.3:777");
-            assert_eq!(
-                limit.validate_insertion(&table, &entry),
-                InsertResult::Updated
-            );
+    fn new_entry(addr: &str) -> NodeEntry {
+        NodeEntry {
+            id: NodeId::random(),
+            endpoint: NodeEndpoint::from_str(addr).unwrap(),
         }
     }
 
-    #[cfg(test)]
-    mod node_database_tests {
-        use super::{
-            super::{InsertResult, NodeDatabase},
-            new_entry,
-        };
-        use crate::node_table::NodeId;
+    #[test]
+    fn test_insert_with_token_added() {
+        let mut db = NodeDatabase::new(None, 2);
 
-        #[test]
-        fn test_insert_with_token() {
-            let mut db = NodeDatabase::new(None, 1);
+        // add a new node
+        let entry = new_entry("127.0.0.1:999");
+        db.insert_with_token(entry.clone(), 5);
 
-            // add a trusted node
-            let entry = new_entry(None, "127.0.0.1:999");
-            assert_eq!(
-                db.insert_trusted(entry.clone()),
-                Some(InsertResult::Added)
-            );
+        // should be untrusted with stream token 5
+        assert_eq!(db.get(&entry.id, true /* trusted_only */), None);
+        assert_eq!(
+            db.get(&entry.id, false /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            Some(5)
+        );
+    }
 
-            // update trusted node
-            assert_eq!(
-                db.insert_with_token(entry.clone(), 3),
-                InsertResult::Updated
-            );
-            let node = db.get(&entry.id, true);
-            assert_eq!(node.is_some(), true);
-            assert_eq!(node.unwrap().stream_token, Some(3));
+    #[test]
+    fn test_insert_with_token_updated_trusted() {
+        let mut db = NodeDatabase::new(None, 2);
 
-            // add untrusted node
-            let entry = new_entry(None, "127.0.0.2:999");
-            assert_eq!(
-                db.insert_with_token(entry.clone(), 5),
-                InsertResult::Added
-            );
-            assert_eq!(db.get(&entry.id, true), None);
-            assert_eq!(db.get(&entry.id, false).unwrap().stream_token, Some(5));
+        // add trusted node, whose token is None
+        let entry = new_entry("127.0.0.1:999");
+        db.insert_trusted(entry.clone());
+        assert_eq!(
+            db.get(&entry.id, true /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            None
+        );
 
-            // update untrusted node, change endpoint and stream token
-            let entry = new_entry(Some(entry.id), "127.0.0.2:888");
-            assert_eq!(
-                db.insert_with_token(entry.clone(), 6),
-                InsertResult::Updated
-            );
-            assert_eq!(db.get(&entry.id, true), None);
-            let node = db.get(&entry.id, false).unwrap();
-            assert_eq!(node.endpoint, entry.endpoint); // endpoint updated
-            assert_eq!(node.stream_token, Some(6)); // stream token updated
-        }
+        // update node with token 3
+        db.insert_with_token(entry.clone(), 3);
+        assert_eq!(
+            db.get(&entry.id, true /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            Some(3)
+        );
+    }
 
-        #[test]
-        fn test_insert_with_promotion() {
-            let mut db = NodeDatabase::new(None, 1);
+    #[test]
+    fn test_insert_with_token_updated_untrusted() {
+        let mut db = NodeDatabase::new(None, 2);
 
-            // add untrusted node
-            let entry = new_entry(None, "127.0.0.1:999");
-            assert_eq!(db.insert(entry.clone()), InsertResult::Added);
-            assert_eq!(db.get(&entry.id, true), None);
-            assert_eq!(db.get(&entry.id, false).is_some(), true);
+        let entry = new_entry("127.0.0.1:999");
+        db.insert_with_token(entry.clone(), 5);
 
-            // update node and promote
-            assert_eq!(
-                db.insert_with_promotion(entry.clone()),
-                InsertResult::Updated
-            );
-            assert_eq!(db.get(&entry.id, true).is_some(), true);
-        }
+        // update node with new token
+        db.insert_with_token(entry.clone(), 8);
+        assert_eq!(db.get(&entry.id, true /* trusted_only */), None);
+        assert_eq!(
+            db.get(&entry.id, false /* trusted_only */)
+                .unwrap()
+                .stream_token,
+            Some(8)
+        );
+    }
 
-        #[test]
-        fn test_insert_trusted() {
-            let mut db = NodeDatabase::new(None, 1);
+    #[test]
+    fn test_insert_with_token_updated_new_ip() {
+        let mut db = NodeDatabase::new(None, 2);
 
-            // new added
-            let entry = new_entry(None, "127.0.0.1:999");
-            assert_eq!(
-                db.insert_trusted(entry.clone()),
-                Some(InsertResult::Added)
-            );
-            assert_eq!(db.get(&entry.id, true).is_some(), true);
+        let entry1 = new_entry("127.0.0.1:999");
+        db.insert_with_token(entry1.clone(), 5);
 
-            // already exists
-            assert_eq!(db.insert_trusted(entry.clone()), None);
+        // update node with new ip and token
+        let mut entry2 = new_entry("127.0.0.2:999");
+        entry2.id = entry1.id;
+        db.insert_with_token(entry2.clone(), 8);
+        let node = db.get(&entry1.id, false /* trusted_only */).unwrap();
+        assert_eq!(node.endpoint, entry2.endpoint);
+        assert_eq!(node.stream_token, Some(8));
+    }
 
-            // prepare untrusted node to promote
-            let entry = new_entry(None, "127.0.0.2:999");
-            assert_eq!(db.insert(entry.clone()), InsertResult::Added);
-            assert_eq!(db.get(&entry.id, true), None);
-            assert_eq!(db.get(&entry.id, false).is_some(), true);
+    #[test]
+    fn test_insert_with_token_updated_ip_exists() {
+        let mut db = NodeDatabase::new(None, 2);
 
-            // add trusted node to promote
-            assert_eq!(
-                db.insert_trusted(entry.clone()),
-                Some(InsertResult::Updated)
-            );
-            assert_eq!(db.get(&entry.id, true).is_some(), true);
-        }
+        // add node1
+        let entry1 = new_entry("127.0.0.1:999");
+        db.insert_with_token(entry1.clone(), 3);
 
-        #[test]
-        fn test_remove() {
-            let mut db = NodeDatabase::new(None, 1);
+        // add node2
+        let entry2 = new_entry("127.0.0.2:999");
+        db.insert_with_token(entry2.clone(), 4);
 
-            // add trusted node
-            let entry1 = new_entry(None, "127.0.0.1:999");
-            assert_eq!(
-                db.insert_trusted(entry1.clone()),
-                Some(InsertResult::Added)
-            );
+        // update node2's IP address to ip1, node1 will be removed
+        let mut entry = new_entry("127.0.0.1:999");
+        entry.id = entry2.id.clone();
+        db.insert_with_token(entry.clone(), 5);
 
-            // add untrusted node
-            let entry2 = new_entry(None, "127.0.0.2:999");
-            assert_eq!(
-                db.insert_with_token(entry2.clone(), 9),
-                InsertResult::Added
-            );
+        // node1 removed
+        assert_eq!(db.get(&entry1.id, false /* trusted_only */), None);
 
-            assert_eq!(db.ip_limit.ip_to_nodes.len(), 2);
+        // node2 updated
+        let node = db.get(&entry.id, false /* trusted_only */).unwrap();
+        assert_eq!(node.endpoint, entry.endpoint);
+        assert_eq!(node.stream_token, Some(5));
+    }
 
-            // delete nodes
-            assert_eq!(db.remove(&NodeId::random()), None);
-            assert_eq!(db.remove(&entry1.id).is_some(), true);
-            assert_eq!(db.remove(&entry2.id).is_some(), true);
+    #[test]
+    fn test_demote() {
+        let mut db = NodeDatabase::new(None, 2);
 
-            assert_eq!(db.ip_limit.ip_to_nodes.len(), 0);
-        }
+        // add a trusted node
+        let entry = new_entry("127.0.0.1:999");
+        db.insert_trusted(entry.clone());
+        assert_eq!(db.get(&entry.id, true /* trusted_only */).is_some(), true);
+
+        // demote the trusted node to untrusted
+        db.demote(&entry.id);
+        assert_eq!(db.get(&entry.id, true /* trusted_only */), None);
+        assert!(db.get(&entry.id, false /* trusted_only */).is_some());
+    }
+
+    #[test]
+    fn test_remove() {
+        let mut db = NodeDatabase::new(None, 2);
+
+        // add trusted node
+        let entry1 = new_entry("127.0.0.1:999");
+        db.insert_trusted(entry1.clone());
+        assert_eq!(db.get(&entry1.id, true /* trusted_only */).is_some(), true);
+
+        // add untrusted node
+        let entry2 = new_entry("127.0.0.2:999");
+        db.insert_with_token(entry2.clone(), 9);
+        assert_eq!(
+            db.get(&entry2.id, false /* trusted_only */).is_some(),
+            true
+        );
+
+        // delete nodes
+        assert_eq!(db.remove(&NodeId::random()), None);
+        assert_eq!(db.remove(&entry1.id).unwrap().endpoint, entry1.endpoint);
+        assert_eq!(db.remove(&entry2.id).unwrap().endpoint, entry2.endpoint);
+
+        assert_eq!(db.get(&entry1.id, true /* trusted_only */), None);
+        assert_eq!(db.get(&entry2.id, false /* trusted_only */), None);
+    }
+
+    #[test]
+    fn test_blacklisted() {
+        let mut db = NodeDatabase::new(None, 2);
+
+        let n = new_entry("127.0.0.1:999");
+        db.insert_trusted(n.clone());
+        assert_eq!(db.get(&n.id, true /* trusted_only */).unwrap().id, n.id);
+        assert_eq!(db.evaluate_blacklisted(&n.id), false);
+
+        // set to blacklisted
+        db.set_blacklisted(&n.id);
+        assert_eq!(db.evaluate_blacklisted(&n.id), true);
+        assert_eq!(db.get(&n.id, false), None);
+    }
+
+    #[test]
+    fn test_blacklisted_lifetime() {
+        let mut db = NodeDatabase::new(None, 2);
+
+        let n = new_entry("127.0.0.1:999");
+        db.insert_trusted(n.clone());
+        db.set_blacklisted(&n.id);
+
+        db.blacklisted_lifetime = Duration::from_millis(1);
+        std::thread::sleep(Duration::from_millis(2));
+
+        assert_eq!(db.evaluate_blacklisted(&n.id), false);
+        assert_eq!(db.get(&n.id, false), None);
     }
 }

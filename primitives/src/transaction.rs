@@ -4,8 +4,10 @@
 
 use crate::{bytes::Bytes, hash::keccak};
 use cfx_types::{Address, H160, H256, U256};
-use heapsize::HeapSizeOf;
-use keylib::{self, public_to_address, recover, Public, Secret, Signature};
+use keylib::{
+    self, public_to_address, recover, verify_public, Public, Secret, Signature,
+};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{error, fmt, mem, ops::Deref};
 use unexpected::OutOfBounds;
@@ -16,6 +18,8 @@ pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
 /// Shorter id for transactions in compact blocks
 // TODO should be u48
 pub type TxShortId = u64;
+
+pub type TxPropagateId = u32;
 
 #[derive(Debug, PartialEq, Clone)]
 /// Errors concerning transaction processing.
@@ -194,6 +198,7 @@ impl Transaction {
             s: sig.s().into(),
             v: sig.v(),
             hash: 0.into(),
+            rlp_size: None,
         }
         .compute_hash()
     }
@@ -224,9 +229,9 @@ impl Encodable for Transaction {
     }
 }
 
-impl HeapSizeOf for Transaction {
-    fn heap_size_of_children(&self) -> usize {
-        self.data.heap_size_of_children()
+impl MallocSizeOf for Transaction {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.data.size_of(ops)
     }
 }
 
@@ -244,6 +249,8 @@ pub struct TransactionWithSignature {
     pub s: U256,
     /// Hash of the transaction
     pub hash: H256,
+    /// The transaction size when serialized in rlp
+    pub rlp_size: Option<usize>,
 }
 
 impl Deref for TransactionWithSignature {
@@ -258,6 +265,7 @@ impl Decodable for TransactionWithSignature {
             return Err(DecoderError::RlpIncorrectListLen);
         }
         let hash = keccak(d.as_raw());
+        let rlp_size = Some(d.as_raw().len());
 
         Ok(TransactionWithSignature {
             unsigned: Transaction {
@@ -272,6 +280,7 @@ impl Decodable for TransactionWithSignature {
             r: d.val_at(7)?,
             s: d.val_at(8)?,
             hash,
+            rlp_size,
         })
     }
 }
@@ -290,6 +299,7 @@ impl TransactionWithSignature {
             r: 0.into(),
             v: 0.into(),
             hash: Default::default(),
+            rlp_size: None,
         }
     }
 
@@ -349,11 +359,15 @@ impl TransactionWithSignature {
 
         Ok(())
     }
+
+    pub fn rlp_size(&self) -> usize {
+        self.rlp_size.unwrap_or_else(|| self.rlp_bytes().len())
+    }
 }
 
-impl HeapSizeOf for TransactionWithSignature {
-    fn heap_size_of_children(&self) -> usize {
-        self.unsigned.heap_size_of_children()
+impl MallocSizeOf for TransactionWithSignature {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.unsigned.size_of(ops)
     }
 }
 
@@ -445,19 +459,33 @@ impl SignedTransaction {
     pub fn size(&self) -> usize {
         // FIXME: We should revisit the size of transaction after we finished
         // the persistent storage part
-        self.heap_size_of_children()
+        mem::size_of::<Self>()
     }
 
+    pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
+
     pub fn public(&self) -> &Option<Public> { &self.public }
+
+    pub fn verify_public(&self, skip: bool) -> Result<bool, keylib::Error> {
+        if self.public.is_none() {
+            return Ok(false);
+        }
+
+        if !skip {
+            let public = self.public.unwrap();
+            Ok(verify_public(
+                &public,
+                &self.signature(),
+                &self.unsigned.hash(),
+            )?)
+        } else {
+            Ok(true)
+        }
+    }
 }
 
-impl HeapSizeOf for SignedTransaction {
-    // This function only works for SignedTransaction in Arc,
-    // i.e., for SignedTransaction in Box, this function computes
-    // heap size of SignedTransaction wrongly. This is due to the
-    // wrong handling of heap_size_of_children() of Arc. In our case,
-    // we only have Arc<SignedTransaction>.
-    fn heap_size_of_children(&self) -> usize {
-        mem::size_of::<Self>() + self.transaction.heap_size_of_children()
+impl MallocSizeOf for SignedTransaction {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.transaction.size_of(ops)
     }
 }
