@@ -83,7 +83,7 @@ impl GetBlocks {
         &self, ctx: &Context, blocks: Vec<Block>,
     ) -> Result<(), Error> {
         let mut response = GetBlocksWithPublicResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             blocks,
         };
 
@@ -113,7 +113,7 @@ impl GetBlocks {
         &self, ctx: &Context, blocks: Vec<Block>,
     ) -> Result<(), Error> {
         let mut response = GetBlocksResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             blocks,
         };
 

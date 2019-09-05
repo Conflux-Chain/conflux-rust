@@ -11,7 +11,6 @@ use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
-use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum DynamicCapability {
@@ -78,16 +77,16 @@ impl Decodable for DynamicCapability {
 
 #[derive(Debug, Default)]
 pub struct DynamicCapabilitySet {
-    caps: HashMap<u8, DynamicCapability>,
+    caps: [Option<DynamicCapability>; 3],
 }
 
 impl DynamicCapabilitySet {
     pub fn insert(&mut self, cap: DynamicCapability) {
-        self.caps.insert(cap.code(), cap);
+        self.caps[cap.code() as usize] = Some(cap);
     }
 
     pub fn contains(&self, cap: DynamicCapability) -> bool {
-        match self.caps.get(&cap.code()) {
+        match self.caps[cap.code() as usize].as_ref() {
             Some(cur_cap) => cur_cap == &cap,
             None => return false,
         }
