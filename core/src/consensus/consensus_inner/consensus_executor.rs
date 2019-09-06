@@ -88,6 +88,9 @@ impl Debug for RewardExecutionInfo {
 enum ExecutionTask {
     ExecuteEpoch(EpochExecutionTask),
     GetResult(GetExecutionResultTask),
+
+    /// Stop task is used to stop the execution thread
+    Stop,
 }
 
 /// The EpochExecutionTask struct includes all the information needed to execute
@@ -617,7 +620,18 @@ impl ConsensusExecutor {
     }
 
     pub fn stop(&self) {
+        // `stopped` is usd to allow the execution thread to stopped even the
+        // queue is not empty and `ExecutionTask::Stop` has not been
+        // processed.
         self.stopped.store(true, Relaxed);
+
+        // We still need this task because otherwise if the execution queue is
+        // empty the execution thread will block on `recv` forever and
+        // unable to check `stopped`
+        self.sender
+            .lock()
+            .send(ExecutionTask::Stop)
+            .expect("execution receiver exists");
         if let Some(thread) = self.thread.lock().take() {
             thread.join().ok();
         }
@@ -826,6 +840,7 @@ impl ConsensusExecutionHandler {
                 self.handle_epoch_execution(task)
             }
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
+            ExecutionTask::Stop => return false,
         }
         true
     }
