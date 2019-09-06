@@ -5,17 +5,19 @@
 mod ledger_info;
 mod ledger_proof;
 mod peers;
+mod timeout;
 mod unique_id;
 mod validate;
 
 pub use ledger_info::LedgerInfo;
 pub use ledger_proof::LedgerProof;
 pub use peers::Peers;
+pub use timeout::{with_timeout, Timeout};
 pub use unique_id::UniqueId;
 pub use validate::Validate;
 
 extern crate futures;
-use crate::parameters::light::{MAX_POLL_TIME_MS, POLL_PERIOD_MS};
+use crate::parameters::light::POLL_PERIOD_MS;
 use futures::{Async, Stream};
 use std::cmp;
 
@@ -34,12 +36,7 @@ where
     T::Item: std::fmt::Debug,
     T::Error: std::fmt::Debug,
 {
-    // poll stream result
-    // TODO(thegaram): come up with something better
-    // we can consider returning the stream/future directly
-    let max_poll_num = MAX_POLL_TIME_MS / POLL_PERIOD_MS;
-
-    for ii in 0..max_poll_num {
+    for ii in 0.. {
         trace!("poll number {}", ii);
         match stream.poll() {
             Ok(Async::Ready(resp)) => {
@@ -61,6 +58,5 @@ where
         std::thread::sleep(d);
     }
 
-    trace!("poll timeout");
-    Err(ErrorKind::NoResponse.into())
+    unreachable!()
 }

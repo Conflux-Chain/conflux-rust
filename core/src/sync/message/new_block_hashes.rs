@@ -22,7 +22,7 @@ impl Handleable for NewBlockHashes {
             if let Ok(info) = ctx.manager.syn.get_peer_info(&ctx.peer) {
                 let mut info = info.write();
                 self.block_hashes.iter().for_each(|h| {
-                    info.latest_block_hashes.insert(h.clone());
+                    info.latest_block_hashes.insert(*h);
                 });
             }
             return Ok(());

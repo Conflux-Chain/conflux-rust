@@ -31,12 +31,14 @@ impl VerificationConfig {
         }
     }
 
+    #[inline]
     pub fn compute_header_pow_quality(header: &mut BlockHeader) -> H256 {
         let pow_hash = pow::compute(header.nonce(), &header.problem_hash());
         header.pow_quality = pow::boundary_to_difficulty(&pow_hash);
         pow_hash
     }
 
+    #[inline]
     pub fn verify_pow(&self, header: &mut BlockHeader) -> Result<(), Error> {
         let pow_hash = Self::compute_header_pow_quality(header);
         if header.difficulty().is_zero() {
@@ -64,6 +66,7 @@ impl VerificationConfig {
         Ok(())
     }
 
+    #[inline]
     pub fn validate_header_timestamp(
         &self, header: &BlockHeader, now: u64,
     ) -> Result<(), SyncError> {
@@ -77,6 +80,7 @@ impl VerificationConfig {
 
     /// Check basic header parameters.
     /// This does not require header to be graph or parental tree ready.
+    #[inline]
     pub fn verify_header_params(
         &self, header: &mut BlockHeader,
     ) -> Result<(), Error> {
@@ -115,6 +119,7 @@ impl VerificationConfig {
     }
 
     /// Verify block data against header: transactions root
+    #[inline]
     fn verify_block_integrity(&self, block: &Block) -> Result<(), Error> {
         let expected_root =
             Block::compute_transaction_root(&block.transactions);
@@ -137,6 +142,7 @@ impl VerificationConfig {
     /// body again from others. However, if the body matches the header and
     /// the body is incorrect, this means the block is invalid, and we
     /// should discard this block and all its descendants.
+    #[inline]
     pub fn verify_block_basic(&self, block: &Block) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 

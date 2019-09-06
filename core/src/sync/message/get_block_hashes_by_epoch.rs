@@ -65,7 +65,7 @@ impl Handleable for GetBlockHashesByEpoch {
             });
 
         let response = GetBlockHashesResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             hashes,
         };
 
