@@ -972,7 +972,6 @@ impl SynchronizationGraph {
         // accordingly.
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
-        let mut out_of_era_blocks = HashSet::new();
         for terminal in terminals {
             queue.push_back(terminal);
             visited_blocks.insert(terminal);
@@ -995,7 +994,6 @@ impl SynchronizationGraph {
                 self.data_man.local_block_info_from_db(&hash)
             {
                 if block_local_info.get_seq_num() < genesis_seq_num {
-                    out_of_era_blocks.insert(hash);
                     debug!(
                         "Skip block {:?} before checkpoint: seq_num={}",
                         hash,
@@ -1051,7 +1049,7 @@ impl SynchronizationGraph {
         debug!("Initial missed blocks {:?}", *missed_hashes);
 
         // Resolve out-of-era dependencies for not-graph-ready blocks.
-        self.resolve_outside_dependencies(Some(out_of_era_blocks));
+        self.resolve_outside_dependencies(true /* recover_from_db */);
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
         if !header_only {
             // Rebuild pivot chain state info.
@@ -1563,37 +1561,9 @@ impl SynchronizationGraph {
     /// Resolve outside parent or referees dependencies for blocks which are not
     /// in `BLOCK_GRAPH_READY`.
     pub fn resolve_outside_dependencies(
-        &self, maybe_out_of_era_blocks: Option<HashSet<H256>>,
+        &self, recover_from_db: bool,
     ) -> Vec<H256> {
         let inner = &mut *self.inner.write();
-        if let Some(out_of_era_blocks) = &maybe_out_of_era_blocks {
-            for h in out_of_era_blocks {
-                if let Some(referrers) = inner.referrers_by_hash.get(h) {
-                    for referrer in referrers {
-                        debug!(
-                            "Remove pending_referee_count for {}, child={}",
-                            h, referrer
-                        );
-                        assert!(
-                            inner.arena[*referrer].pending_referee_count > 0
-                        );
-                        inner.arena[*referrer].pending_referee_count -= 1;
-                    }
-                }
-                if let Some(children) = inner.children_by_hash.get(h) {
-                    for child in children {
-                        debug!(
-                            "Set parent_reclaimed for {}, child={}",
-                            h, child
-                        );
-                        assert!(inner
-                            .not_ready_blocks_frontier
-                            .contains(child));
-                        inner.arena[*child].parent_reclaimed = true;
-                    }
-                }
-            }
-        }
         let mut to_relay_blocks = Vec::new();
         debug!(
             "not_ready_blocks_frontier: {:?}",
@@ -1644,7 +1614,7 @@ impl SynchronizationGraph {
         let invalid_set = self.propagate_graph_status(
             inner,
             new_graph_ready_blocks,
-            maybe_out_of_era_blocks.is_some(),
+            recover_from_db,
         );
         assert!(invalid_set.len() == 0);
         to_relay_blocks
