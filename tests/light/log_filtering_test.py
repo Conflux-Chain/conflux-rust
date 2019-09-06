@@ -101,9 +101,8 @@ class LogFilteringTest(ConfluxTestFramework):
         self.check_filter(Filter())
         self.check_filter(Filter(from_epoch="0x0", to_epoch="0x0"))
 
-        # TODO(thegaram): support this
         # apply filter for specific block, we expect a single log with 3 topics
-        # self.check_filter(Filter(block_hashes=[receipt["blockHash"]]))
+        self.check_filter(Filter(block_hashes=[receipt["blockHash"]]))
 
         # apply filter for specific topics
         self.log.info("testing filter topics...")
