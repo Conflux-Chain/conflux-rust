@@ -1428,7 +1428,11 @@ impl ConsensusExecutionHandler {
         };
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut nonce_increased = false;
-        let r = ex.transact(tx, &mut nonce_increased, false);
+        let r = ex.transact(
+            tx,
+            &mut nonce_increased,
+            false, /* eth_compatibility_mode */
+        );
         trace!("Execution result {:?}", r);
         r.map(|r| (r.output, r.gas_used))
             .map_err(|e| format!("execution error: {:?}", e))

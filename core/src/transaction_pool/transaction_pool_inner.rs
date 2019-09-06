@@ -14,8 +14,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000000000;
-pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET_ETH_MODE: u32 = 2000000000;
+pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET_ETH_COMPATIBILITY_MODE: u32 =
+    2000000000;
 pub const TIME_WINDOW: u64 = 100;
 
 lazy_static! {
@@ -157,6 +158,8 @@ impl ReadyAccountPool {
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
         if tx.gas_price == 0.into() {
+            // if gas_price is 0 (only possible in eth_compatibility_mode),
+            // will treat it's weight as one
             self.treap.insert(tx.sender(), tx.clone(), U512::from(1))
         } else {
             self.treap
@@ -582,13 +585,14 @@ impl TransactionPoolInner {
                 transaction.hash, transaction.sender, transaction.nonce, state_nonce
             );
         }
-        let furthest_offset =
-            match self.verification_config.eth_compatibility_mode {
-                false => U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET),
-                true => U256::from(
-                    FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET_ETH_MODE,
-                ),
-            };
+        let furthest_offset = if self.verification_config.eth_compatibility_mode
+        {
+            U256::from(
+                FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET_ETH_COMPATIBILITY_MODE,
+            )
+        } else {
+            U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
+        };
 
         if transaction.nonce >= state_nonce + furthest_offset {
             debug!(
@@ -650,7 +654,7 @@ mod test_transaction_pool_inner {
                 value: U256::from(value),
                 data: Vec::new(),
             }
-            .sign(sender.secret(), None),
+            .sign(sender.secret(), None /* chain_id */),
         )
     }
 
@@ -668,7 +672,8 @@ mod test_transaction_pool_inner {
 
     #[test]
     fn test_deferred_pool_insert_and_remove() {
-        let mut deferred_pool = DeferredPool::new(false);
+        let mut deferred_pool =
+            DeferredPool::new(false /* eth_compatibility_mode */);
 
         // insert txs of same sender
         let alice = Random.generate().unwrap();
@@ -762,7 +767,8 @@ mod test_transaction_pool_inner {
 
     #[test]
     fn test_deferred_pool_recalculate_readiness() {
-        let mut deferred_pool = super::DeferredPool::new(false);
+        let mut deferred_pool =
+            super::DeferredPool::new(false /* eth_compatibility_mode */);
 
         let alice = Random.generate().unwrap();
 
