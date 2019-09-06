@@ -620,7 +620,7 @@ impl ConsensusExecutor {
     }
 
     pub fn stop(&self) {
-        // `stopped` is usd to allow the execution thread to stopped even the
+        // `stopped` is used to allow the execution thread to stopped even the
         // queue is not empty and `ExecutionTask::Stop` has not been
         // processed.
         self.stopped.store(true, Relaxed);
