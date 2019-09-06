@@ -5,7 +5,7 @@
 import os
 import sys
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
 
 import eth_utils
 
@@ -53,7 +53,8 @@ class LogFilteringTest(ConfluxTestFramework):
         self.nodes[FULLNODE1].wait_for_phase(["NormalSyncPhase"])
 
     def generate_correct_block(self, node=None):
-        if node is None: node = self.random_full_node()
+        if node is None:
+            node = self.random_full_node()
         return self.rpc[node].generate_block()
 
     def run_test(self):
@@ -61,8 +62,10 @@ class LogFilteringTest(ConfluxTestFramework):
         sender = eth_utils.encode_hex(privtoaddr(priv_key))
 
         # deploy contract
-        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
-        assert (os.path.isfile(bytecode_file))
+        bytecode_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH
+        )
+        assert os.path.isfile(bytecode_file)
         bytecode = open(bytecode_file).read()
         _, contractAddr = self.deploy_contract(sender, priv_key, bytecode)
         self.log.info("contract deployed")
@@ -70,7 +73,9 @@ class LogFilteringTest(ConfluxTestFramework):
         contract_epoch = hex(self.rpc[FULLNODE0].epoch_number())
 
         # call method once
-        receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+        receipt = self.call_contract(
+            sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()"))
+        )
         call_epoch = hex(self.rpc[FULLNODE0].epoch_number())
 
         # deploy another instance of the contract
@@ -78,7 +83,9 @@ class LogFilteringTest(ConfluxTestFramework):
 
         # call method multiple times
         for ii in range(0, NUM_CALLS - 3):
-            self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+            self.call_contract(
+                sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()"))
+            )
 
         # make sure we have enough blocks to be certain about the validity of previous blocks
         self.log.info("generating blocks...")
@@ -112,7 +119,15 @@ class LogFilteringTest(ConfluxTestFramework):
         self.check_filter(Filter(topics=[CONSTRUCTED_TOPIC]))
         self.check_filter(Filter(topics=[CALLED_TOPIC]))
         self.check_filter(Filter(topics=[None, self.address_to_topic(sender)]))
-        self.check_filter(Filter(topics=[CALLED_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]]))
+        self.check_filter(
+            Filter(
+                topics=[
+                    CALLED_TOPIC,
+                    None,
+                    [self.number_to_topic(3), self.number_to_topic(4)],
+                ]
+            )
+        )
 
         # apply filter with limit
         self.log.info("testing filter limit...")
@@ -126,7 +141,9 @@ class LogFilteringTest(ConfluxTestFramework):
         self.log.info("Pass")
 
     def check_filter(self, filter):
-        assert_equal(self.rpc[LIGHTNODE].get_logs(filter), self.rpc[FULLNODE0].get_logs(filter))
+        assert_equal(
+            self.rpc[LIGHTNODE].get_logs(filter), self.rpc[FULLNODE0].get_logs(filter)
+        )
 
     def address_to_topic(self, address):
         return "0x" + address[2:].zfill(64)
@@ -135,7 +152,9 @@ class LogFilteringTest(ConfluxTestFramework):
         return "0x" + ("%x" % number).zfill(64)
 
     def deploy_contract(self, sender, priv_key, data_hex):
-        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
+        tx = self.rpc[FULLNODE0].new_contract_tx(
+            receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key
+        )
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
@@ -143,7 +162,9 @@ class LogFilteringTest(ConfluxTestFramework):
         return receipt, address
 
     def call_contract(self, sender, priv_key, contract, data_hex):
-        tx = self.rpc[FULLNODE0].new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
+        tx = self.rpc[FULLNODE0].new_contract_tx(
+            receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key
+        )
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_receipt(tx.hash_hex())
         return receipt

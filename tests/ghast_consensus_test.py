@@ -15,13 +15,13 @@ except UnicodeDecodeError:
     CIRCLE = "o "
 
 BOLD, BLUE, RED, GREY = ("", ""), ("", ""), ("", ""), ("", "")
-if os.name == 'posix':
+if os.name == "posix":
     # primitive formatting on supported
     # terminal via ANSI escape sequences:
-    BOLD = ('\033[0m', '\033[1m')
-    BLUE = ('\033[0m', '\033[0;34m')
-    RED = ('\033[0m', '\033[0;31m')
-    GREY = ('\033[0m', '\033[1;30m')
+    BOLD = ("\033[0m", "\033[1m")
+    BLUE = ("\033[0m", "\033[0;34m")
+    RED = ("\033[0m", "\033[0;31m")
+    GREY = ("\033[0m", "\033[1;30m")
 
 TEST_INPUT = [
     "stable-case1.in",
@@ -36,7 +36,8 @@ TEST_INPUT = [
     "adaptive-case4.in",
     "era-case1.in",
     "era-case2.in",
-    "era-case3.in"]
+    "era-case3.in",
+]
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
 cur_dir = os.getcwd()
@@ -51,7 +52,11 @@ for inp in TEST_INPUT:
     color = BLUE
     glyph = TICK
     try:
-        subprocess.check_output(args=[bench_cmd, test_input_dir + inp, "--randomseed=1"], stdin=None, cwd=test_dir)
+        subprocess.check_output(
+            args=[bench_cmd, test_input_dir + inp, "--randomseed=1"],
+            stdin=None,
+            cwd=test_dir,
+        )
     except subprocess.CalledProcessError as err:
         color = RED
         glyph = CROSS

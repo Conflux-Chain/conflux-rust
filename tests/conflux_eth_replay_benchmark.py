@@ -27,7 +27,7 @@ class RlpIter:
         length = len(self.bytes)
         if not self.eof and length < RlpIter.BUFFER_SIZE * 2:
             to_append = self.f.read(RlpIter.BUFFER_SIZE * 2 - length)
-            self.eof = (len(to_append) == 0)
+            self.eof = len(to_append) == 0
             self.bytes += to_append
             length = len(self.bytes)
         if length > 0:
@@ -35,7 +35,9 @@ class RlpIter:
             txs = 0
             for i in range(0, self.batch_size):
                 try:
-                    (prefix, _type, length, end) = rlp.codec.consume_length_prefix(self.bytes, self.offset)
+                    (prefix, _type, length, end) = rlp.codec.consume_length_prefix(
+                        self.bytes, self.offset
+                    )
                     self.offset += len(prefix) + length
                     txs += 1
                 except Exception as e:
@@ -43,9 +45,9 @@ class RlpIter:
                     if self.offset == old_offset:
                         # We assume that a single transaction won't be larger than BUFFER_SIZE
                         raise e
-            rlpbytes = self.bytes[old_offset:self.offset]
+            rlpbytes = self.bytes[old_offset : self.offset]
             if self.offset >= RlpIter.BUFFER_SIZE:
-                self.bytes = self.bytes[RlpIter.BUFFER_SIZE:]
+                self.bytes = self.bytes[RlpIter.BUFFER_SIZE :]
                 self.offset -= RlpIter.BUFFER_SIZE
             return rlpbytes, txs
         else:
@@ -60,7 +62,9 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     INITIALIZE_TXS = 200000 + 400 + 400
     INITIALIZE_TPS = 4000
     INITIALIZE_SLEEP = 20
-    GENESIS_KEY = decode_hex("9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471")
+    GENESIS_KEY = decode_hex(
+        "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"
+    )
     TOTAL_TX_NUMBER = 4000000
 
     def __init__(self):
@@ -82,9 +86,9 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         if self.remote:
             ips = []
             try:
-                with open(self.options.remote_ips, 'r') as ip_file:
+                with open(self.options.remote_ips, "r") as ip_file:
                     for line in ip_file.readlines():
-                        ips.append(line.strip().strip(','))
+                        ips.append(line.strip().strip(","))
             except Exception:
                 pass
 
@@ -93,36 +97,54 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         else:
             self.num_nodes = 1
 
-        self.conf_parameters = {"log_level": "\"info\"",
-                                # "storage_cache_start_size": "1000000",
-                                # Do not re-alloc.
-                                "storage_cache_start_size": "20000000",
-                                "storage_cache_size": "20000000",
-                                "storage_idle_size": "2000000",
-                                "storage_node_map_size": "200000000",
-                                "ledger_cache_size": "3000",
-                                "send_tx_period_ms": "1300",
-                                "enable_discovery": "false",
-                                "egress_queue_capacity": "1024",
-                                "egress_min_throttle": "100",
-                                "egress_max_throttle": "1000", }
+        self.conf_parameters = {
+            "log_level": '"info"',
+            # "storage_cache_start_size": "1000000",
+            # Do not re-alloc.
+            "storage_cache_start_size": "20000000",
+            "storage_cache_size": "20000000",
+            "storage_idle_size": "2000000",
+            "storage_node_map_size": "200000000",
+            "ledger_cache_size": "3000",
+            "send_tx_period_ms": "1300",
+            "enable_discovery": "false",
+            "egress_queue_capacity": "1024",
+            "egress_min_throttle": "100",
+            "egress_max_throttle": "1000",
+        }
         self.initialize_chain_clean()
 
     def setup_network(self):
         if self.remote:
             binary_path = ["/home/ubuntu/conflux"]
             for ip in self.ips:
-                self.add_remote_nodes(1, user="ubuntu", ip=ip, binary=binary_path, no_pssh=True)
+                self.add_remote_nodes(
+                    1, user="ubuntu", ip=ip, binary=binary_path, no_pssh=True
+                )
             for i in range(len(self.nodes)):
-                self.log.info("Node " + str(i) + " bind to " + self.nodes[i].ip + ":" + self.nodes[i].port)
+                self.log.info(
+                    "Node "
+                    + str(i)
+                    + " bind to "
+                    + self.nodes[i].ip
+                    + ":"
+                    + self.nodes[i].port
+                )
             self.start_nodes()
             self.log.info("All nodes started, waiting to be connected")
-            connect_sample_nodes(nodes=self.nodes, log=self.log, sample=7, latency_min=0, latency_max=300)
+            connect_sample_nodes(
+                nodes=self.nodes, log=self.log, sample=7, latency_min=0, latency_max=300
+            )
         else:
-            self.setup_nodes(binary=[os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "../target/release/conflux")]
-                                    * self.num_nodes)
+            self.setup_nodes(
+                binary=[
+                    os.path.join(
+                        os.path.dirname(os.path.realpath(__file__)),
+                        "../target/release/conflux",
+                    )
+                ]
+                * self.num_nodes
+            )
 
     def run_test(self):
         # Start mininode connection
@@ -131,12 +153,16 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         block_gen_threads = []
         node_id = 0
         for node in self.nodes:
-            block_gen_thread = BlockGenThread(node_id, node, self.log, random.random(), 1.0 / self.num_nodes)
+            block_gen_thread = BlockGenThread(
+                node_id, node, self.log, random.random(), 1.0 / self.num_nodes
+            )
             block_gen_threads.append(block_gen_thread)
             block_gen_thread.start()
             node_id += 1
 
-        tx_file_path = "/Users/ypliu/Desktop/convert_eth_from_0_to_4141811_unknown_txs.rlp"
+        tx_file_path = (
+            "/Users/ypliu/Desktop/convert_eth_from_0_to_4141811_unknown_txs.rlp"
+        )
         f = open(tx_file_path, "rb")
 
         start_time = datetime.datetime.now()
@@ -159,19 +185,28 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             # peers_to_send = range(0, self.num_nodes)
             peer_to_send = random.choice(range(0, self.num_nodes))
             txs_rlp = rlp.codec.length_prefix(len(txs), 192) + txs
-            self.nodes[peer_to_send].p2p.send_protocol_packet(int_to_bytes(TRANSACTIONS) + txs_rlp)
+            self.nodes[peer_to_send].p2p.send_protocol_packet(
+                int_to_bytes(TRANSACTIONS) + txs_rlp
+            )
 
             tx_bytes += len(txs)
-            expected_elapsed_time = tx_received_slowdown + 1.0 * tx_bytes / ConfluxEthReplayTest.EXPECTED_TX_SIZE_PER_SEC
+            expected_elapsed_time = (
+                tx_received_slowdown
+                + 1.0 * tx_bytes / ConfluxEthReplayTest.EXPECTED_TX_SIZE_PER_SEC
+            )
 
             if int(elapsed_time - last_log_elapsed_time) >= 1:
                 txpool_status = self.nodes[peer_to_send].txpool_status()
                 txpool_received = txpool_status["received"]
                 last_log_elapsed_time = elapsed_time
 
-                self.log.info("elapsed %ss,\t sent %s/%s(%s%%) txs", elapsed_time, tx_count,
-                              ConfluxEthReplayTest.TOTAL_TX_NUMBER,
-                              tx_count * 100.0 / ConfluxEthReplayTest.TOTAL_TX_NUMBER)
+                self.log.info(
+                    "elapsed %ss,\t sent %s/%s(%s%%) txs",
+                    elapsed_time,
+                    tx_count,
+                    ConfluxEthReplayTest.TOTAL_TX_NUMBER,
+                    tx_count * 100.0 / ConfluxEthReplayTest.TOTAL_TX_NUMBER,
+                )
 
                 final_slow_down = 0
 
@@ -179,10 +214,19 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     if txpool_received == 0:
                         should_sleep = 1
                     else:
-                        should_sleep = elapsed_time * (tx_count - txpool_received + 45000) / txpool_received + 1
+                        should_sleep = (
+                            elapsed_time
+                            * (tx_count - txpool_received + 45000)
+                            / txpool_received
+                            + 1
+                        )
                     final_slow_down = max(final_slow_down, should_sleep)
-                    self.log.warning("Conflux node %s is slow by %s at receiving txs, slow down by %s.", peer_to_send,
-                                     tx_count - txpool_received, should_sleep)
+                    self.log.warning(
+                        "Conflux node %s is slow by %s at receiving txs, slow down by %s.",
+                        peer_to_send,
+                        tx_count - txpool_received,
+                        should_sleep,
+                    )
 
                 txpool_unpacked = txpool_status["unexecuted"]
                 unpacked_limit = 300000
@@ -190,12 +234,19 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     if txpool_received - txpool_unpacked == 0:
                         should_sleep = 1
                     else:
-                        should_sleep = elapsed_time * (txpool_unpacked - unpacked_limit) / (
-                                txpool_received - txpool_unpacked) + 1
+                        should_sleep = (
+                            elapsed_time
+                            * (txpool_unpacked - unpacked_limit)
+                            / (txpool_received - txpool_unpacked)
+                            + 1
+                        )
                     final_slow_down = max(final_slow_down, should_sleep)
-                    self.log.warning("Conflux node %s has too many unpacked txs %s. sleep %s", peer_to_send,
-                                     txpool_unpacked,
-                                     should_sleep)
+                    self.log.warning(
+                        "Conflux node %s has too many unpacked txs %s. sleep %s",
+                        peer_to_send,
+                        txpool_unpacked,
+                        should_sleep,
+                    )
                 tx_received_slowdown += final_slow_down
 
             tx_count += count
@@ -208,7 +259,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             block_gen_thread.stop()
         for block_gen_thread in block_gen_threads:
             block_gen_thread.join()
-        self.log.info("100%% Ethereum Transactions completely replayed. Time used: %f seconds", time_used)
+        self.log.info(
+            "100%% Ethereum Transactions completely replayed. Time used: %f seconds",
+            time_used,
+        )
         self.log.info("Transaction per second: %f", tx_count / time_used)
 
         # time.sleep(2000000)
@@ -259,12 +313,21 @@ class BlockGenThread(threading.Thread):
             try:
                 elapsed_sec = (datetime.datetime.now() - start_time).total_seconds()
                 sleep_sec = total_mining_sec - elapsed_sec
-                self.log.debug("%s elapsed time %s, total mining time %s sec, actually sleep %s sec",
-                               self.node_id, elapsed_sec, total_mining_sec, sleep_sec)
+                self.log.debug(
+                    "%s elapsed time %s, total mining time %s sec, actually sleep %s sec",
+                    self.node_id,
+                    elapsed_sec,
+                    total_mining_sec,
+                    sleep_sec,
+                )
                 if sleep_sec > 0:
                     time.sleep(sleep_sec)
 
-                mining = BlockGenThread.BLOCK_FREQ * numpy.random.exponential() / self.hashpower_percent
+                mining = (
+                    BlockGenThread.BLOCK_FREQ
+                    * numpy.random.exponential()
+                    / self.hashpower_percent
+                )
                 # self.log.info("%s sleep %s sec then generate block", self.node_id, mining)
                 total_mining_sec += mining
 
@@ -286,14 +349,30 @@ class BlockGenThread(threading.Thread):
                         generate_factor = 1.0"""
 
                 generate_factor = 1.0
-                simple_tx_count = math.ceil(BlockGenThread.SIMPLE_TX_PER_BLOCK * generate_factor)
-                erc20_tx_count = math.ceil(BlockGenThread.ERC20_TX_PER_BLOCK * generate_factor)
-                self.node.generateoneblockspecial(BlockGenThread.BLOCK_TX_LIMIT,
-                                                  BlockGenThread.BLOCK_SIZE_LIMIT, simple_tx_count, erc20_tx_count)
-                self.log.info("node %s generated one block with %s extra dummy tx and %s extra erc20 tx",
-                              self.node_id, simple_tx_count, erc20_tx_count)
+                simple_tx_count = math.ceil(
+                    BlockGenThread.SIMPLE_TX_PER_BLOCK * generate_factor
+                )
+                erc20_tx_count = math.ceil(
+                    BlockGenThread.ERC20_TX_PER_BLOCK * generate_factor
+                )
+                self.node.generateoneblockspecial(
+                    BlockGenThread.BLOCK_TX_LIMIT,
+                    BlockGenThread.BLOCK_SIZE_LIMIT,
+                    simple_tx_count,
+                    erc20_tx_count,
+                )
+                self.log.info(
+                    "node %s generated one block with %s extra dummy tx and %s extra erc20 tx",
+                    self.node_id,
+                    simple_tx_count,
+                    erc20_tx_count,
+                )
             except Exception as e:
-                self.log.warning("node %s Fails to generate blocks with error msg: %s", self.node_id, e)
+                self.log.warning(
+                    "node %s Fails to generate blocks with error msg: %s",
+                    self.node_id,
+                    e,
+                )
                 time.sleep(5)
         self.log.info("block gen %s thread is terminated", self.node_id)
 

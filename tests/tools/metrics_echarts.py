@@ -75,19 +75,16 @@ class MetricGrouping(Metric):
 
         chart.set_global_opts(
             title_opts=opts.TitleOpts(title=self.name),
-            legend_opts={
-                "padding": 10,
-                "bottom": 10,
-            }
+            legend_opts={"padding": 10, "bottom": 10},
         )
 
-        chart.options["grid"] = {
-            "bottom": 100 + (len(self.values) // 20) * 50,
-        }
+        chart.options["grid"] = {"bottom": 100 + (len(self.values) // 20) * 50}
 
 
 def generate_metric_chart(metrics_log_file: str, metric_name: Optional[str] = None):
-    assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(metrics_log_file)
+    assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(
+        metrics_log_file
+    )
     metrics = {}
 
     with open(metrics_log_file, "r", encoding="utf-8") as fp:
@@ -105,19 +102,19 @@ def generate_metric_chart(metrics_log_file: str, metric_name: Optional[str] = No
 
                 metrics[name].append(timestamp, value)
 
-    assert len(
-        metrics) > 0, "metrics log file is empty" if metric_name is None else "metric name [{}] not found".format(
-        metric_name)
+    assert len(metrics) > 0, (
+        "metrics log file is empty"
+        if metric_name is None
+        else "metric name [{}] not found".format(metric_name)
+    )
 
     for (key, metric) in metrics.items():
         chart = (
-            Line(init_opts=opts.InitOpts(
-                width="1400px",
-                height="700px",
-                page_title=key,
-            ))
-                .add_xaxis(metric.timestamps)
-                .set_global_opts(title_opts=opts.TitleOpts(title=key))
+            Line(
+                init_opts=opts.InitOpts(width="1400px", height="700px", page_title=key)
+            )
+            .add_xaxis(metric.timestamps)
+            .set_global_opts(title_opts=opts.TitleOpts(title=key))
         )
 
         metric.add_yaxis(chart)

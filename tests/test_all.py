@@ -15,23 +15,19 @@ except UnicodeDecodeError:
     CIRCLE = "o "
 
 BOLD, BLUE, RED, GREY = ("", ""), ("", ""), ("", ""), ("", "")
-if os.name == 'posix':
+if os.name == "posix":
     # primitive formatting on supported
     # terminal via ANSI escape sequences:
-    BOLD = ('\033[0m', '\033[1m')
-    BLUE = ('\033[0m', '\033[0;34m')
-    RED = ('\033[0m', '\033[0;31m')
-    GREY = ('\033[0m', '\033[1;30m')
+    BOLD = ("\033[0m", "\033[1m")
+    BLUE = ("\033[0m", "\033[0;34m")
+    RED = ("\033[0m", "\033[0;31m")
+    GREY = ("\033[0m", "\033[1;30m")
 
 TEST_SCRIPTS = []
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
 
-test_subdirs = [
-    "",  # include test_dir itself
-    "light",
-    "network_tests",
-]
+test_subdirs = ["", "light", "network_tests"]  # include test_dir itself
 
 # By default, run all *_test.py files in the specified subfolders.
 for subdir in test_subdirs:
@@ -52,7 +48,9 @@ for script in TEST_SCRIPTS:
         if hasattr(sys, "getwindowsversion"):
             py = "python"
 
-        subprocess.check_output(args=[py, script, "--randomseed=1"], stdin=None, cwd=test_dir)
+        subprocess.check_output(
+            args=[py, script, "--randomseed=1"], stdin=None, cwd=test_dir
+        )
     except subprocess.CalledProcessError as err:
         color = RED
         glyph = CROSS

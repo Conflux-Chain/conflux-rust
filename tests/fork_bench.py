@@ -10,7 +10,7 @@ class ForkBench(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
-        self.conf_parameters["log_level"] = "\"debug\""
+        self.conf_parameters["log_level"] = '"debug"'
 
     def setup_network(self):
         self.setup_nodes()
@@ -30,7 +30,9 @@ class ForkBench(ConfluxTestFramework):
                 self.log.info("generate %d blocks", i)
         prev_end = parent
         now = time.time()
-        self.log.info("Time to process main chain of %d blocks: %f", block_number, now - start)
+        self.log.info(
+            "Time to process main chain of %d blocks: %f", block_number, now - start
+        )
         start = now
         # process fork
         parent = genesis
@@ -40,7 +42,9 @@ class ForkBench(ConfluxTestFramework):
             if i % 100 == 0:
                 self.log.info("generate %d blocks", i)
         now = time.time()
-        self.log.info("Time to process fork of %d blocks: %f", block_number + 1, now - start)
+        self.log.info(
+            "Time to process fork of %d blocks: %f", block_number + 1, now - start
+        )
         # switch back to main chain
         parent = prev_end
         start = time.time()

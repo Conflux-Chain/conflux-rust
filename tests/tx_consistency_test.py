@@ -6,7 +6,12 @@ import time
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import DefaultConfluxTestFramework
-from test_framework.util import assert_greater_than_or_equal, assert_equal, assert_is_hash_string, sync_blocks
+from test_framework.util import (
+    assert_greater_than_or_equal,
+    assert_equal,
+    assert_is_hash_string,
+    sync_blocks,
+)
 
 
 class Account:
@@ -29,7 +34,9 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
         self.log.debug("Initializing {} receivers".format(num_receivers))
         receivers = self.init_receivers(num_receivers)
 
-        self.log.info("begin to send {} txs to nodes and generate blocks ...".format(num_txs))
+        self.log.info(
+            "begin to send {} txs to nodes and generate blocks ...".format(num_txs)
+        )
         txs = self.send_txs_async(senders, receivers, num_txs)
 
         # generate blocks to pack txs
@@ -42,7 +49,9 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
                 if receipt is not None:
                     break
 
-                assert retry > 0, "some tx not stated yet even after {} retries".format(num_txs)
+                assert retry > 0, "some tx not stated yet even after {} retries".format(
+                    num_txs
+                )
                 retry -= 1
 
                 self.generate_block(num_txs)
@@ -88,7 +97,10 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
 
         client = RpcClient(self.nodes[0])
         init_balance = int(client.GENESIS_ORIGIN_COIN * 0.9 / num_accounts)
-        assert_greater_than_or_equal(client.GENESIS_ORIGIN_COIN, num_accounts * (init_balance + client.DEFAULT_TX_FEE))
+        assert_greater_than_or_equal(
+            client.GENESIS_ORIGIN_COIN,
+            num_accounts * (init_balance + client.DEFAULT_TX_FEE),
+        )
 
         for _ in range(num_accounts):
             to, priv_key = client.rand_account()
@@ -115,9 +127,11 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             sender = senders[random.randint(0, len(senders) - 1)]
             receiver = receivers[random.randint(0, len(receivers) - 1)]
 
-            self.log.debug("send transaction_{}: from = {}, nonce = {}, to = {}".format(
-                i, sender.address, sender.nonce, receiver.address
-            ))
+            self.log.debug(
+                "send transaction_{}: from = {}, nonce = {}, to = {}".format(
+                    i, sender.address, sender.nonce, receiver.address
+                )
+            )
 
             tx = self.send_tx(sender, receiver)
             txs.append(tx)
@@ -144,7 +158,13 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
     # randomly select N nodes to send tx.
     def send_tx(self, sender: Account, receiver: Account):
         client = RpcClient(self.nodes[0])
-        tx = client.new_tx(sender.address, receiver.address, sender.nonce, value=9000, priv_key=sender.priv_key)
+        tx = client.new_tx(
+            sender.address,
+            receiver.address,
+            sender.nonce,
+            value=9000,
+            priv_key=sender.priv_key,
+        )
 
         def ensure_send_tx(node, tx):
             tx_hash = RpcClient(node).send_tx(tx)
@@ -152,7 +172,9 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
 
         threads = []
         for idx in self.sample_node_indices():
-            t = threading.Thread(target=ensure_send_tx, args=(self.nodes[idx], tx), daemon=True)
+            t = threading.Thread(
+                target=ensure_send_tx, args=(self.nodes[idx], tx), daemon=True
+            )
             threads.append(t)
             t.start()
 
@@ -175,7 +197,11 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             assert_is_hash_string(block_hash)
 
         for idx in self.sample_node_indices():
-            t = threading.Thread(target=ensure_generate_block, args=(self.nodes[idx], num_tx), daemon=True)
+            t = threading.Thread(
+                target=ensure_generate_block,
+                args=(self.nodes[idx], num_tx),
+                daemon=True,
+            )
             threads.append(t)
             t.start()
 
@@ -197,9 +223,17 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
                     assert_equal(value, expected_value)
 
         if collection_result:
-            self.log.info("check RPC: API = {}, Len = {}".format(client_rpc.__name__, len(expected_value)))
+            self.log.info(
+                "check RPC: API = {}, Len = {}".format(
+                    client_rpc.__name__, len(expected_value)
+                )
+            )
         else:
-            self.log.info("check RPC: API = {}, Result = {}".format(client_rpc.__name__, expected_value))
+            self.log.info(
+                "check RPC: API = {}, Result = {}".format(
+                    client_rpc.__name__, expected_value
+                )
+            )
 
 
 if __name__ == "__main__":

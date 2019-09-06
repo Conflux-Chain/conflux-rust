@@ -33,7 +33,9 @@ class TestGetNonce(RpcClient):
         assert_equal(nonce1, nonce2)
 
     def test_epoch_latest_mined(self):
-        assert_raises_rpc_error(None, None, self.get_nonce, self.GENESIS_ADDR, self.EPOCH_LATEST_MINED)
+        assert_raises_rpc_error(
+            None, None, self.get_nonce, self.GENESIS_ADDR, self.EPOCH_LATEST_MINED
+        )
 
     def test_epoch_num_0(self):
         addr = self.GENESIS_ADDR
@@ -42,11 +44,19 @@ class TestGetNonce(RpcClient):
 
     def test_epoch_num_too_large(self):
         mined_epoch = self.epoch_number()
-        assert_raises_rpc_error(None, None, self.get_nonce, self.GENESIS_ADDR, self.EPOCH_NUM(mined_epoch + 1))
+        assert_raises_rpc_error(
+            None,
+            None,
+            self.get_nonce,
+            self.GENESIS_ADDR,
+            self.EPOCH_NUM(mined_epoch + 1),
+        )
 
         stated_epoch = self.epoch_number(self.EPOCH_LATEST_STATE)
         for num in range(stated_epoch + 1, mined_epoch):
-            assert_raises_rpc_error(None, None, self.get_nonce, self.GENESIS_ADDR, self.EPOCH_NUM(num))
+            assert_raises_rpc_error(
+                None, None, self.get_nonce, self.GENESIS_ADDR, self.EPOCH_NUM(num)
+            )
 
     def test_epoch_num(self):
         addr = self.GENESIS_ADDR

@@ -42,18 +42,22 @@ class InvalidMessageTest(ConfluxTestFramework):
             wait[0] = False
 
         self.nodes[0].p2p.on_pong = on_pong
-        self.nodes[0].p2p.send_packet(PACKET_PING, b'')
+        self.nodes[0].p2p.send_packet(PACKET_PING, b"")
         wait_until(lambda: not wait[0], timeout=60)
 
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash]))
+        self.nodes[0].p2p.send_protocol_msg(
+            GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash])
+        )
         h.wait()
 
         def assert_length(_node, msg):
             assert_equal(len(msg.headers), 1)
 
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE, assert_length)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash]))
+        self.nodes[0].p2p.send_protocol_msg(
+            GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash])
+        )
         h.wait()
 
     def _test_new_block(self):
@@ -64,34 +68,38 @@ class InvalidMessageTest(ConfluxTestFramework):
         wait_until(lambda: self.nodes[0].getbestblockhash() == new_block.hash_hex())
 
         # Wrong payload
-        self.nodes[0].p2p.send_protocol_packet(int_to_bytes(NEW_BLOCK) + rlp.encode([0]))
+        self.nodes[0].p2p.send_protocol_packet(
+            int_to_bytes(NEW_BLOCK) + rlp.encode([0])
+        )
         time.sleep(1)
         assert_equal(self.nodes[0].getbestblockhash(), new_block.hash_hex())
         assert_equal(self.nodes[0].getblockcount(), 2)
 
         # Wrong-length parent hash
-        invalid_block = create_block(parent_hash=b'', height=2)
+        invalid_block = create_block(parent_hash=b"", height=2)
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].getbestblockhash(), new_block.hash_hex())
         assert_equal(self.nodes[0].getblockcount(), 2)
 
         # Wrong-length author
-        invalid_block = create_block(author=b'', height=2)
+        invalid_block = create_block(author=b"", height=2)
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].getbestblockhash(), new_block.hash_hex())
         assert_equal(self.nodes[0].getblockcount(), 2)
 
         # Wrong-length root
-        invalid_block = create_block(deferred_state_root=b'', height=2, deferred_receipts_root=b'')
+        invalid_block = create_block(
+            deferred_state_root=b"", height=2, deferred_receipts_root=b""
+        )
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].getbestblockhash(), new_block.hash_hex())
         assert_equal(self.nodes[0].getblockcount(), 2)
 
         # Nonexistent parent
-        invalid_block = create_block(parent_hash=b'\x00' * 32, height=2)
+        invalid_block = create_block(parent_hash=b"\x00" * 32, height=2)
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].getbestblockhash(), new_block.hash_hex())
@@ -105,7 +113,9 @@ class InvalidMessageTest(ConfluxTestFramework):
         assert_equal(self.nodes[0].getblockcount(), 2)
 
         # Invalid state root
-        partial_invalid_block = create_block(new_block.hash, 2, deferred_state_root=trie.UNINITIALIZED_STATE_ROOT)
+        partial_invalid_block = create_block(
+            new_block.hash, 2, deferred_state_root=trie.UNINITIALIZED_STATE_ROOT
+        )
         self.send_msg(NewBlock(block=partial_invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].getbestblockhash(), new_block.hash_hex())
@@ -118,8 +128,12 @@ class InvalidMessageTest(ConfluxTestFramework):
             if r < self.num_nodes:
                 self.nodes[r].generate(1, 0)
             else:
-                partial_invalid_block = create_block(new_block.hash, 2,
-                                                     deferred_state_root=trie.UNINITIALIZED_STATE_ROOT, timestamp=i)
+                partial_invalid_block = create_block(
+                    new_block.hash,
+                    2,
+                    deferred_state_root=trie.UNINITIALIZED_STATE_ROOT,
+                    timestamp=i,
+                )
                 self.send_msg(NewBlock(block=partial_invalid_block))
         wait_until(lambda: self.nodes[0].getblockcount() == 1003)
         sync_blocks(self.nodes)

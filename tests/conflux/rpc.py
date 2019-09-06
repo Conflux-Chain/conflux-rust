@@ -15,7 +15,8 @@ from test_framework.util import (
     assert_greater_than,
     assert_greater_than_or_equal,
     assert_is_hash_string,
-    wait_until, checktx
+    wait_until,
+    checktx,
 )
 
 
@@ -34,10 +35,12 @@ class RpcClient:
         self.UPDATE_NODE_OP_REMOVE = "Remove"
 
         # hash/address definitions
-        self.GENESIS_ADDR = eth_utils.encode_hex(privtoaddr(default_config["GENESIS_PRI_KEY"]))
+        self.GENESIS_ADDR = eth_utils.encode_hex(
+            privtoaddr(default_config["GENESIS_PRI_KEY"])
+        )
         self.COINBASE_ADDR = eth_utils.encode_hex(default_config["GENESIS_COINBASE"])
         self.GENESIS_ORIGIN_COIN = default_config["TOTAL_COIN"]
-        self.ZERO_HASH = eth_utils.encode_hex(b'\x00' * 32)
+        self.ZERO_HASH = eth_utils.encode_hex(b"\x00" * 32)
 
         # default tx values
         self.DEFAULT_TX_GAS_PRICE = 1
@@ -62,13 +65,17 @@ class RpcClient:
 
         return eth_utils.encode_hex(sha3_256(seed))
 
-    def generate_block(self, num_txs: int = 0, block_size_limit_bytes: int = 300000) -> str:
+    def generate_block(
+        self, num_txs: int = 0, block_size_limit_bytes: int = 300000
+    ) -> str:
         assert_greater_than_or_equal(num_txs, 0)
         block_hash = self.node.generateoneblock(num_txs, block_size_limit_bytes)
         assert_is_hash_string(block_hash)
         return block_hash
 
-    def generate_blocks(self, num_blocks: int, num_txs: int = 0, block_size_limit_bytes: int = 300000) -> list:
+    def generate_blocks(
+        self, num_blocks: int, num_txs: int = 0, block_size_limit_bytes: int = 300000
+    ) -> list:
         assert_greater_than(num_blocks, 0)
         assert_greater_than_or_equal(num_txs, 0)
 
@@ -82,8 +89,9 @@ class RpcClient:
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:
         return self.generate_blocks(num_blocks, num_txs)
 
-    def generate_block_with_parent(self, parent_hash: str, referee: list, num_txs: int = 0,
-                                   adaptive: bool = False) -> str:
+    def generate_block_with_parent(
+        self, parent_hash: str, referee: list, num_txs: int = 0, adaptive: bool = False
+    ) -> str:
         assert_is_hash_string(parent_hash)
 
         for r in referee:
@@ -91,7 +99,9 @@ class RpcClient:
 
         assert_greater_than_or_equal(num_txs, 0)
         # print(parent_hash)
-        block_hash = self.node.generatefixedblock(parent_hash, referee, num_txs, adaptive)
+        block_hash = self.node.generatefixedblock(
+            parent_hash, referee, num_txs, adaptive
+        )
         assert_is_hash_string(block_hash)
         return block_hash
 
@@ -103,7 +113,9 @@ class RpcClient:
 
         encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
 
-        block_hash = self.node.test_generatecustomblock(parent_hash, referee, encoded_txs)
+        block_hash = self.node.test_generatecustomblock(
+            parent_hash, referee, encoded_txs
+        )
         assert_is_hash_string(block_hash)
         return block_hash
 
@@ -150,10 +162,14 @@ class RpcClient:
         return tx_hash
 
     def send_usable_genesis_accounts(self, addresses: list, secrets: list):
-        self.node.cfx_sendUsableGenesisAccounts(eth_utils.encode_hex(rlp.encode(addresses)),
-                                                eth_utils.encode_hex(rlp.encode(secrets)))
+        self.node.cfx_sendUsableGenesisAccounts(
+            eth_utils.encode_hex(rlp.encode(addresses)),
+            eth_utils.encode_hex(rlp.encode(secrets)),
+        )
 
-    def wait_for_receipt(self, tx_hash: str, num_txs=1, timeout=10, state_before_wait=True):
+    def wait_for_receipt(
+        self, tx_hash: str, num_txs=1, timeout=10, state_before_wait=True
+    ):
         if state_before_wait:
             self.generate_blocks_to_state(num_txs=num_txs)
 
@@ -175,8 +191,18 @@ class RpcClient:
     def get_tx(self, tx_hash: str) -> dict:
         return self.node.cfx_getTransactionByHash(tx_hash)
 
-    def new_tx(self, sender=None, receiver=None, nonce=None, gas_price=1, gas=21000, value=100, data=b'', sign=True,
-               priv_key=None):
+    def new_tx(
+        self,
+        sender=None,
+        receiver=None,
+        nonce=None,
+        gas_price=1,
+        gas=21000,
+        value=100,
+        data=b"",
+        sign=True,
+        priv_key=None,
+    ):
         if sender is None:
             sender = self.GENESIS_ADDR
             if priv_key is None:
@@ -196,8 +222,17 @@ class RpcClient:
         else:
             return tx
 
-    def new_contract_tx(self, receiver: str, data_hex: str, sender=None, priv_key=None, nonce=None, gas_price=1,
-                        gas=10000000, value=0):
+    def new_contract_tx(
+        self,
+        receiver: str,
+        data_hex: str,
+        sender=None,
+        priv_key=None,
+        nonce=None,
+        gas_price=1,
+        gas=10000000,
+        value=0,
+    ):
         if sender is None:
             sender = self.GENESIS_ADDR
 
@@ -271,7 +306,9 @@ class RpcClient:
         gas = self.node.cfx_estimateGas(tx)
         return int(gas, 0)
 
-    def call(self, contract_addr: str, data_hex: str, nonce=None, epoch: str = None) -> str:
+    def call(
+        self, contract_addr: str, data_hex: str, nonce=None, epoch: str = None
+    ) -> str:
         tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
 
         if epoch is None:

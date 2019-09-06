@@ -19,114 +19,65 @@ class RemoteSimulate(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.rpc_timewait = 60
         self.num_nodes = 1
-        self.conf_parameters = {
-            "log_level": "\"debug\"",
-        }
+        self.conf_parameters = {"log_level": '"debug"'}
 
     def add_options(self, parser: ArgumentParser):
         parser.add_argument(
-            "--nodes-per-host",
-            dest="nodes_per_host",
-            default=3,
-            type=int
+            "--nodes-per-host", dest="nodes_per_host", default=3, type=int
         )
         parser.add_argument(
             "--generation-period-ms",
             dest="generation_period_ms",
             default=5000,
-            type=int
+            type=int,
+        )
+        parser.add_argument("--num-blocks", dest="num_blocks", default=100, type=int)
+        parser.add_argument(
+            "--block-sync-step", dest="block_sync_step", default=10, type=int
+        )
+        parser.add_argument("--ips-file", dest="ips_file", default="ips", type=str)
+        parser.add_argument(
+            "--txs-per-block", dest="txs_per_block", default=5, type=int
         )
         parser.add_argument(
-            "--num-blocks",
-            dest="num_blocks",
-            default=100,
-            type=int
+            "--generate-tx-data-len", dest="generate_tx_data_len", default=0, type=int
         )
         parser.add_argument(
-            "--block-sync-step",
-            dest="block_sync_step",
-            default=10,
-            type=int
+            "--connect-peers", dest="connect_peers", default=3, type=int
         )
         parser.add_argument(
-            "--ips-file",
-            dest="ips_file",
-            default="ips",
-            type=str
+            "--throttling", dest="throttling", default="512,1024,2048", type=str
         )
         parser.add_argument(
-            "--txs-per-block",
-            dest="txs_per_block",
-            default=5,
-            type=int
-        )
-        parser.add_argument(
-            "--generate-tx-data-len",
-            dest="generate_tx_data_len",
-            default=0,
-            type=int
-        )
-        parser.add_argument(
-            "--connect-peers",
-            dest="connect_peers",
-            default=3,
-            type=int
-        )
-        parser.add_argument(
-            "--throttling",
-            dest="throttling",
-            default="512,1024,2048",
-            type=str
-        )
-        parser.add_argument(
-            "--storage-memory-mb",
-            dest="storage_memory_mb",
-            default=2,
-            type=int
+            "--storage-memory-mb", dest="storage_memory_mb", default=2, type=int
         )
         parser.add_argument(
             "--data-propagate-enabled",
             dest="data_propagate_enabled",
-            action='store_true',
+            action="store_true",
         )
         parser.add_argument(
             "--data-propagate-interval-ms",
             dest="data_propagate_interval_ms",
             default=1000,
-            type=int
+            type=int,
         )
         parser.add_argument(
-            "--data-propagate-size",
-            dest="data_propagate_size",
-            default=1000,
-            type=int
+            "--data-propagate-size", dest="data_propagate_size", default=1000, type=int
         )
         # Tx generation will also be enabled if we enable tx propagation
         parser.add_argument(
             "--enable-tx-propagation",
             dest="tx_propagation_enabled",
-            action="store_true"
+            action="store_true",
         )
         # options for LAT_LATEST
-        parser.add_argument(
-            "--tps",
-            dest="tps",
-            default=1000,
-            type=int,
-        )
+        parser.add_argument("--tps", dest="tps", default=1000, type=int)
         # Bandwidth in Mbit/s
-        parser.add_argument(
-            "--bandwidth",
-            dest="bandwidth",
-            default=20,
-            type=int
-        )
+        parser.add_argument("--bandwidth", dest="bandwidth", default=20, type=int)
         # Peer propagation count
         parser.add_argument(
-            "--min-peers-propagation",
-            dest="min_peers_propagation",
-            default=8,
-            type=int,
+            "--min-peers-propagation", dest="min_peers_propagation", default=8, type=int
         )
         parser.add_argument(
             "--max-peers-propagation",
@@ -135,22 +86,13 @@ class RemoteSimulate(ConfluxTestFramework):
             type=int,
         )
         parser.add_argument(
-            "--send-tx-period-ms",
-            dest="send_tx_period_ms",
-            default=1300,
-            type=int,
+            "--send-tx-period-ms", dest="send_tx_period_ms", default=1300, type=int
         )
         parser.add_argument(
-            "--txgen-account-count",
-            dest="txgen_account_count",
-            default=1000,
-            type=int,
+            "--txgen-account-count", dest="txgen_account_count", default=1000, type=int
         )
         parser.add_argument(
-            "--tx-pool-size",
-            dest="tx_pool_size",
-            default=500000,
-            type=int,
+            "--tx-pool-size", dest="tx_pool_size", default=500000, type=int
         )
         parser.add_argument(
             "--genesis-accounts",
@@ -165,7 +107,7 @@ class RemoteSimulate(ConfluxTestFramework):
         self.num_nodes = self.options.nodes_per_host
 
         self.ips = []
-        with open(self.options.ips_file, 'r') as ip_file:
+        with open(self.options.ips_file, "r") as ip_file:
             for line in ip_file.readlines():
                 line = line[:-1]
                 self.ips.append(line)
@@ -183,40 +125,70 @@ class RemoteSimulate(ConfluxTestFramework):
         target_memory = 16
 
         # storage
-        self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["ledger_cache_size"] = str(
+            2000 // target_memory * self.options.storage_memory_mb
+        )
+        self.conf_parameters["db_cache_size"] = str(
+            128 // target_memory * self.options.storage_memory_mb
+        )
         self.conf_parameters["storage_cache_start_size"] = str(
-            1000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
+            1000000 // target_memory * self.options.storage_memory_mb
+        )
+        self.conf_parameters["storage_cache_size"] = str(
+            20000000 // target_memory * self.options.storage_memory_mb
+        )
         # self.conf_parameters["storage_cache_size"] = "200000"
-        self.conf_parameters["storage_idle_size"] = str(200000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_node_map_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["storage_idle_size"] = str(
+            200000 // target_memory * self.options.storage_memory_mb
+        )
+        self.conf_parameters["storage_node_map_size"] = str(
+            80000000 // target_memory * self.options.storage_memory_mb
+        )
 
         # txpool
         self.conf_parameters["tx_pool_size"] = str(
-            self.options.tx_pool_size // target_memory * self.options.storage_memory_mb)
+            self.options.tx_pool_size // target_memory * self.options.storage_memory_mb
+        )
 
         # data propagation
-        self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
-        self.conf_parameters["data_propagate_interval_ms"] = str(self.options.data_propagate_interval_ms)
-        self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
+        self.conf_parameters["data_propagate_enabled"] = str(
+            self.options.data_propagate_enabled
+        ).lower()
+        self.conf_parameters["data_propagate_interval_ms"] = str(
+            self.options.data_propagate_interval_ms
+        )
+        self.conf_parameters["data_propagate_size"] = str(
+            self.options.data_propagate_size
+        )
 
         # Do not keep track of tx address to save CPU/Disk costs because they are not used in the experiments
         self.conf_parameters["record_tx_address"] = "false"
         if self.tx_propagation_enabled:
             self.conf_parameters["generate_tx"] = "true"
-            self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
-            self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
+            self.conf_parameters["generate_tx_period_us"] = str(
+                1000000 * len(self.ips) // self.options.tps
+            )
+            self.conf_parameters["txgen_account_count"] = str(
+                self.options.txgen_account_count
+            )
         else:
-            self.conf_parameters["send_tx_period_ms"] = "31536000000"  # one year to disable txs propagation
+            self.conf_parameters[
+                "send_tx_period_ms"
+            ] = "31536000000"  # one year to disable txs propagation
 
         # tx propagation setting
-        self.conf_parameters["min_peers_propagation"] = str(self.options.min_peers_propagation)
-        self.conf_parameters["max_peers_propagation"] = str(self.options.max_peers_propagation)
+        self.conf_parameters["min_peers_propagation"] = str(
+            self.options.min_peers_propagation
+        )
+        self.conf_parameters["max_peers_propagation"] = str(
+            self.options.max_peers_propagation
+        )
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
         # genesis accounts
-        self.conf_parameters["genesis_accounts"] = str("\'{}\'".format(self.options.genesis_accounts))
+        self.conf_parameters["genesis_accounts"] = str(
+            "'{}'".format(self.options.genesis_accounts)
+        )
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
@@ -225,21 +197,36 @@ class RemoteSimulate(ConfluxTestFramework):
         # tar the config file for all nodes
         zipped_conf_file = os.path.join(self.options.tmpdir, "conflux_conf.tgz")
         with tarfile.open(zipped_conf_file, "w:gz") as tar_file:
-            tar_file.add(self.options.tmpdir, arcname=os.path.basename(self.options.tmpdir))
+            tar_file.add(
+                self.options.tmpdir, arcname=os.path.basename(self.options.tmpdir)
+            )
 
         self.log.info("copy conflux configuration files to remote nodes ...")
-        pscp(self.options.ips_file, zipped_conf_file, "~", 3, "copy conflux configuration files to remote nodes")
+        pscp(
+            self.options.ips_file,
+            zipped_conf_file,
+            "~",
+            3,
+            "copy conflux configuration files to remote nodes",
+        )
         os.remove(zipped_conf_file)
 
         # setup on remote nodes and start conflux
-        self.log.info("setup conflux runtime environment and start conflux on remote nodes ...")
+        self.log.info(
+            "setup conflux runtime environment and start conflux on remote nodes ..."
+        )
         cmd_kill_conflux = "killall -9 conflux || echo already killed"
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
         cmd_startup = "sh ./remote_start_conflux.sh {} {} {} {} &> start_conflux.out".format(
-            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, self.options.bandwidth,
+            self.options.tmpdir,
+            p2p_port(0),
+            self.options.nodes_per_host,
+            self.options.bandwidth,
         )
-        cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
+        cmd = "{}; {} && {} && {}".format(
+            cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup
+        )
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
 
     def setup_network(self):
@@ -249,13 +236,18 @@ class RemoteSimulate(ConfluxTestFramework):
         for ip in self.ips:
             self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=ip)
         for i in range(len(self.nodes)):
-            self.log.info("Node[{}]: ip={}, p2p_port={}, rpc_port={}".format(
-                i, self.nodes[i].ip, self.nodes[i].port, self.nodes[i].rpcport))
+            self.log.info(
+                "Node[{}]: ip={}, p2p_port={}, rpc_port={}".format(
+                    i, self.nodes[i].ip, self.nodes[i].port, self.nodes[i].rpcport
+                )
+            )
         self.log.info("Starting remote nodes ...")
         self.start_nodes()
         self.log.info("All nodes started, waiting to be connected")
 
-        connect_sample_nodes(self.nodes, self.log, sample=self.options.connect_peers, timeout=120)
+        connect_sample_nodes(
+            self.nodes, self.log, sample=self.options.connect_peers, timeout=120
+        )
 
         self.sync_blocks()
 
@@ -265,8 +257,8 @@ class RemoteSimulate(ConfluxTestFramework):
         if self.tx_propagation_enabled:
             # Setup balance for each node
             client = RpcClient(self.nodes[0])
-            with open('./genesis_keypairs.csv') as csv_file:
-                csv_reader = csv.reader(csv_file, delimiter=',')
+            with open("./genesis_keypairs.csv") as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=",")
                 start_time = time.time()
                 for i in range(num_nodes):
                     counter = 0
@@ -281,12 +273,18 @@ class RemoteSimulate(ConfluxTestFramework):
                             client.send_usable_genesis_accounts(addresses, secrets)
                             break
 
-                self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time() - start_time))
+                self.log.info(
+                    "Time spend (s) on setting up genesis accounts: {}".format(
+                        time.time() - start_time
+                    )
+                )
 
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
         # The monitor will check the block_count of nodes[0]
-        monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count, 100), daemon=True)
+        monitor_thread = threading.Thread(
+            target=self.monitor, args=(cur_block_count, 100), daemon=True
+        )
         monitor_thread.start()
 
         # generate blocks
@@ -309,17 +307,31 @@ class RemoteSimulate(ConfluxTestFramework):
                     break
 
             if retry >= 10:
-                self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
+                self.log.warn(
+                    "too many nodes are busy to generate block, stop to analyze logs."
+                )
                 break
 
             if self.tx_propagation_enabled:
                 # Generate a block with the transactions in the node's local tx pool
-                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block,
-                                              self.options.generate_tx_data_len, self.log, rpc_times)
+                thread = SimpleGenerateThread(
+                    self.nodes,
+                    p,
+                    self.options.txs_per_block,
+                    self.options.generate_tx_data_len,
+                    self.log,
+                    rpc_times,
+                )
             else:
                 # Generate a fixed-size block with fake tx
-                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len,
-                                        self.log, rpc_times)
+                thread = GenerateThread(
+                    self.nodes,
+                    p,
+                    self.options.txs_per_block,
+                    self.options.generate_tx_data_len,
+                    self.log,
+                    rpc_times,
+                )
             thread.start()
             threads[p] = thread
 
@@ -336,8 +348,12 @@ class RemoteSimulate(ConfluxTestFramework):
         monitor_thread.join()
         self.sync_blocks()
 
-        self.log.info("generateoneblock RPC latency: {}".format(Statistics(rpc_times, 3).__dict__))
-        self.log.info("Best block: {}".format(RpcClient(self.nodes[0]).best_block_hash()))
+        self.log.info(
+            "generateoneblock RPC latency: {}".format(Statistics(rpc_times, 3).__dict__)
+        )
+        self.log.info(
+            "Best block: {}".format(RpcClient(self.nodes[0]).best_block_hash())
+        )
 
     def sync_blocks(self):
         self.log.info("wait for all nodes to sync blocks ...")
@@ -358,7 +374,9 @@ class RemoteSimulate(ConfluxTestFramework):
                 best_block_futures.append(executor.submit(n.getbestblockhash))
 
             for f in block_count_futures:
-                assert f.exception() is None, "failed to get block count: {}".format(f.exception())
+                assert f.exception() is None, "failed to get block count: {}".format(
+                    f.exception()
+                )
                 block_counts.append(f.result())
             max_count = max(block_counts)
             for i in range(len(block_counts)):
@@ -366,13 +384,16 @@ class RemoteSimulate(ConfluxTestFramework):
                     self.log.info("Slow: {}: {}".format(i, block_counts[i]))
 
             for f in best_block_futures:
-                assert f.exception() is None, "failed to get best block: {}".format(f.exception())
+                assert f.exception() is None, "failed to get best block: {}".format(
+                    f.exception()
+                )
                 best_blocks.append(f.result())
 
             self.log.info("blocks: {}".format(Counter(block_counts)))
 
-            if block_counts.count(block_counts[0]) == len(self.nodes) and best_blocks.count(best_blocks[0]) == len(
-                    self.nodes):
+            if block_counts.count(block_counts[0]) == len(
+                self.nodes
+            ) and best_blocks.count(best_blocks[0]) == len(self.nodes):
                 break
 
             time.sleep(5)
@@ -395,7 +416,10 @@ class RemoteSimulate(ConfluxTestFramework):
             else:
                 retry += 1
                 if retry >= retry_max:
-                    self.log.error("No block generated after %d average block generation intervals", retry_max / 2)
+                    self.log.error(
+                        "No block generated after %d average block generation intervals",
+                        retry_max / 2,
+                    )
                     break
 
         self.log.info("monitor completed.")
@@ -418,14 +442,22 @@ class GenerateThread(threading.Thread):
             for i in range(self.tx_n):
                 addr = client.rand_addr()
                 tx_gas = client.DEFAULT_TX_GAS + 4 * self.tx_data_len
-                tx = client.new_tx(receiver=addr, nonce=10000 + i, value=0, gas=tx_gas, data=b'\x00' * self.tx_data_len)
+                tx = client.new_tx(
+                    receiver=addr,
+                    nonce=10000 + i,
+                    value=0,
+                    gas=tx_gas,
+                    data=b"\x00" * self.tx_data_len,
+                )
                 # remove big data field and assemble on full node to reduce network load.
-                tx.__dict__["data"] = b''
+                tx.__dict__["data"] = b""
                 txs.append(tx)
             encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
 
             start = time.time()
-            h = self.nodes[self.i].test_generateblockwithfaketxs(encoded_txs, self.tx_data_len)
+            h = self.nodes[self.i].test_generateblockwithfaketxs(
+                encoded_txs, self.tx_data_len
+            )
             self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:

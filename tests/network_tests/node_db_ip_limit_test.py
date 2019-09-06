@@ -14,9 +14,7 @@ class NodeDatabaseIpLimitTests(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 1
 
-        self.conf_parameters = {
-            "subnet_quota": "2"
-        }
+        self.conf_parameters = {"subnet_quota": "2"}
 
     def setup_network(self):
         self.setup_nodes()

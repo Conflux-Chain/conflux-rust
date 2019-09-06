@@ -3,7 +3,11 @@ import sys
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from test_framework.util import assert_equal, assert_raises_rpc_error, assert_greater_than
+from test_framework.util import (
+    assert_equal,
+    assert_raises_rpc_error,
+    assert_greater_than,
+)
 
 
 class TestGetBalance(RpcClient):
@@ -61,15 +65,25 @@ class TestGetBalance(RpcClient):
         assert_equal(balance1, balance2)
 
     def test_epoch_latest_mined(self):
-        assert_raises_rpc_error(None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_LATEST_MINED)
+        assert_raises_rpc_error(
+            None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_LATEST_MINED
+        )
 
     def test_epoch_num_too_large(self):
         mined_epoch = self.epoch_number()
-        assert_raises_rpc_error(None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_NUM(mined_epoch + 1))
+        assert_raises_rpc_error(
+            None,
+            None,
+            self.get_balance,
+            self.GENESIS_ADDR,
+            self.EPOCH_NUM(mined_epoch + 1),
+        )
 
         stated_epoch = self.epoch_number(self.EPOCH_LATEST_STATE)
         for num in range(stated_epoch + 1, mined_epoch):
-            assert_raises_rpc_error(None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_NUM(num))
+            assert_raises_rpc_error(
+                None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_NUM(num)
+            )
 
     def test_balance_after_tx(self):
         addr = self.GENESIS_ADDR

@@ -36,7 +36,9 @@ class MessageTest(ConfluxTestFramework):
             for header in msg.headers:
                 self.log.info("Block header: %s", encode_hex(header.hash))
 
-        handler = WaitHandler(default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers)
+        handler = WaitHandler(
+            default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers
+        )
         self.log.info("Send GetBlockHeaders message")
         self.send_msg(GetBlockHeaders(hashes=[blocks[0]]))
         handler.wait()
@@ -58,7 +60,7 @@ class MessageTest(ConfluxTestFramework):
         handler.wait()
         self.log.info("Received TerminalBlockHashes")
 
-        # FIXME: Currently, the transaction broadcast logic 
+        # FIXME: Currently, the transaction broadcast logic
         # has not been finished. Enable it later.
 
         # self.send_msg(Transactions(transactions=[new_transaction]))
@@ -85,17 +87,17 @@ class MessageTest(ConfluxTestFramework):
         wait_until(lambda: node.p2p.state != "connected", timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
-        p2p.send_packet(PACKET_DISCONNECT, b'')
+        p2p.send_packet(PACKET_DISCONNECT, b"")
         wait_until(lambda: p2p.state != "connected", timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
-        p2p.send_packet(PACKET_PROTOCOL, b'')
+        p2p.send_packet(PACKET_PROTOCOL, b"")
         wait_until(lambda: p2p.state != "connected", timeout=3)
 
         # legel payload
         p2p = start_p2p_connection([self.nodes[0]])[0]
-        p2p.send_packet(PACKET_PING, b'')
-        p2p.send_packet(PACKET_PONG, b'')
+        p2p.send_packet(PACKET_PING, b"")
+        p2p.send_packet(PACKET_PONG, b"")
         wait_until(lambda: p2p.state == "connected", timeout=3)
 
 

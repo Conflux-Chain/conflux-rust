@@ -27,7 +27,14 @@ class BlockLatencyType(enum.Enum):
 
 
 class Transaction:
-    def __init__(self, hash: str, timestamp: float, by_block=False, packed_timestamps=None, ready_pool_timstamps=None):
+    def __init__(
+        self,
+        hash: str,
+        timestamp: float,
+        by_block=False,
+        packed_timestamps=None,
+        ready_pool_timstamps=None,
+    ):
         self.hash = hash
         self.received_timestamps = [timestamp]
         self.by_block = by_block
@@ -112,7 +119,9 @@ class Transaction:
 
 
 class Block:
-    def __init__(self, hash: str, parent_hash: str, timestamp: float, height: int, referees: list):
+    def __init__(
+        self, hash: str, parent_hash: str, timestamp: float, height: int, referees: list
+    ):
         self.hash = hash
         self.parent = parent_hash
         self.timestamp = timestamp
@@ -133,12 +142,16 @@ class Block:
         height = int(parse_value(log_line, "height: ", ","))
         timestamp = int(parse_value(log_line, "timestamp: ", ","))
         block_hash = parse_value(log_line, "hash: Some(", ")")
-        assert len(block_hash) == 66, "invalid block hash length, line = {}".format(log_line)
+        assert len(block_hash) == 66, "invalid block hash length, line = {}".format(
+            log_line
+        )
         referees = []
         for ref_hash in parse_value(log_line, "referee_hashes: [", "]").split(","):
             ref_hash = ref_hash.strip()
             if len(ref_hash) > 0:
-                assert len(ref_hash) == 66, "invalid block referee hash length, line = {}".format(log_line)
+                assert (
+                    len(ref_hash) == 66
+                ), "invalid block referee hash length, line = {}".format(log_line)
                 referees.append(ref_hash)
         return Block(block_hash, parent_hash, timestamp, height, referees)
 
@@ -148,7 +161,9 @@ class Block:
         block = Block.__parse_block_header__(log_line)
         block.txs = int(parse_value(log_line, "tx_count=", ","))
         block.size = int(parse_value(log_line, "block_size=", None))
-        block.latencies[latency_type.name].append(round(log_timestamp - block.timestamp, 2))
+        block.latencies[latency_type.name].append(
+            round(log_timestamp - block.timestamp, 2)
+        )
         return block
 
     @staticmethod
@@ -234,7 +249,7 @@ class NodeLogMapper:
         return mapper
 
     def map(self):
-        with open(self.log_file, "r", encoding='UTF-8') as file:
+        with open(self.log_file, "r", encoding="UTF-8") as file:
             for line in file.readlines():
                 self.parse_log_line(line)
 
@@ -248,9 +263,17 @@ class NodeLogMapper:
             Block.add_or_merge(self.blocks, block)
 
         if "Statistics" in line:
-            sync_len = int(parse_value(line, "SyncGraphStatistics { inserted_block_count: ", " }"))
-            cons_len = int(parse_value(line, "ConsensusGraphStatistics { inserted_block_count: ", ","))
-            assert sync_len >= cons_len, "invalid statistics for sync/cons gap, log line = {}".format(line)
+            sync_len = int(
+                parse_value(line, "SyncGraphStatistics { inserted_block_count: ", " }")
+            )
+            cons_len = int(
+                parse_value(
+                    line, "ConsensusGraphStatistics { inserted_block_count: ", ","
+                )
+            )
+            assert (
+                sync_len >= cons_len
+            ), "invalid statistics for sync/cons gap, log line = {}".format(line)
             self.sync_cons_gaps.append(sync_len - cons_len)
 
         if "Sampled transaction" in line:
@@ -378,7 +401,9 @@ class LogAggregator:
 
         for tx in host_log.txs.values():
             if tx.packed_timestamps[0] is not None:
-                self.tx_wait_to_be_packed_time.append(tx.packed_timestamps[0] - min(tx.received_timestamps))
+                self.tx_wait_to_be_packed_time.append(
+                    tx.packed_timestamps[0] - min(tx.received_timestamps)
+                )
 
     def validate(self):
         num_nodes = len(self.sync_cons_gap_stats)
@@ -386,7 +411,11 @@ class LogAggregator:
         for block_hash in list(self.blocks.keys()):
             count_sync = self.blocks[block_hash].latency_count(BlockLatencyType.Sync)
             if count_sync != num_nodes:
-                print("sync graph missed block {}: received = {}, total = {}".format(block_hash, count_sync, num_nodes))
+                print(
+                    "sync graph missed block {}: received = {}, total = {}".format(
+                        block_hash, count_sync, num_nodes
+                    )
+                )
                 del self.blocks[block_hash]
         missing_tx = 0
         unpacked_tx = 0
@@ -396,8 +425,12 @@ class LogAggregator:
             if self.txs[tx_hash].packed_timestamps[0] is None:
                 unpacked_tx += 1
 
-        print("Removed tx count (txs have not fully propagated)", missing_tx)  # not counted in tx broadcast
-        print("Unpacked tx count", unpacked_tx)  # not counted in tx packed to block latency
+        print(
+            "Removed tx count (txs have not fully propagated)", missing_tx
+        )  # not counted in tx broadcast
+        print(
+            "Unpacked tx count", unpacked_tx
+        )  # not counted in tx packed to block latency
         print("Total tx count", len(self.txs))
 
     def stat_sync_cons_gap(self, p: Percentile):
@@ -411,14 +444,18 @@ class LogAggregator:
     def generate_latency_stat(self):
         for b in self.blocks.values():
             for t in BlockLatencyType:
-                self.block_latency_stats[t.name][b.hash] = Statistics(b.get_latencies(t))
+                self.block_latency_stats[t.name][b.hash] = Statistics(
+                    b.get_latencies(t)
+                )
 
         num_nodes = len(self.sync_cons_gap_stats)
         for tx in self.txs.values():
             if tx.latency_count() == num_nodes:
                 self.tx_latency_stats[tx.hash] = Statistics(tx.get_latencies())
             if tx.packed_timestamps[0] is not None:
-                self.tx_packed_to_block_latency[tx.hash] = Statistics(tx.get_packed_to_block_latencies())
+                self.tx_packed_to_block_latency[tx.hash] = Statistics(
+                    tx.get_packed_to_block_latencies()
+                )
 
                 tx_latency = tx.get_min_packed_to_block_latency()
                 if self.largest_min_tx_packed_latency_hash is not None:
@@ -431,7 +468,9 @@ class LogAggregator:
                 self.min_tx_packed_to_block_latency.append(tx_latency)
 
             if tx.ready_pool_timestamps[0] is not None:
-                self.min_tx_to_ready_pool_latency.append(tx.get_min_tx_to_ready_pool_latency())
+                self.min_tx_to_ready_pool_latency.append(
+                    tx.get_min_tx_to_ready_pool_latency()
+                )
 
     def get_largest_min_tx_packed_latency_hash(self):
         return self.largest_min_tx_packed_latency_hash

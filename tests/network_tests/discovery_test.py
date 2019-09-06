@@ -23,9 +23,18 @@ class AutoDiscovery(ConfluxTestFramework):
 
         # init boot node: 0
         self.bootnode = self.nodes[0]
-        extra_args = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
+        extra_args = [
+            "--enable-discovery",
+            "true",
+            "--node-table-timeout",
+            "1",
+            "--node-table-promotion-timeout",
+            "1",
+        ]
         self.start_node(0, extra_args)
-        self.bootnode_id = "cfxnode://{}@{}:{}".format(self.bootnode.key[2:], self.bootnode.ip, self.bootnode.port)
+        self.bootnode_id = "cfxnode://{}@{}:{}".format(
+            self.bootnode.key[2:], self.bootnode.ip, self.bootnode.port
+        )
 
         # init nodes: 1, 2, 3
         extra_args.extend(["--bootnodes", self.bootnode_id])
@@ -35,7 +44,10 @@ class AutoDiscovery(ConfluxTestFramework):
     def run_test(self):
         # nodes 0,1,2,3 will auto discover each other
         self.log.info("Test AutoDiscovery")
-        wait_until(lambda: [len(i.getpeerinfo()) for i in self.nodes].count(self.num_nodes - 1) == self.num_nodes)
+        wait_until(
+            lambda: [len(i.getpeerinfo()) for i in self.nodes].count(self.num_nodes - 1)
+            == self.num_nodes
+        )
         self.log.info("Passed")
 
 

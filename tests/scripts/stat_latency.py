@@ -4,7 +4,12 @@ import csv
 import sys
 
 from prettytable import PrettyTable
-from stat_latency_map_reduce import BlockLatencyType, Percentile, Statistics, LogAggregator
+from stat_latency_map_reduce import (
+    BlockLatencyType,
+    Percentile,
+    Statistics,
+    LogAggregator,
+)
 
 
 class Table:
@@ -26,7 +31,7 @@ class Table:
         print(table)
 
     def output_csv(self, output_file: str):
-        with open(output_file, "w", newline='') as fp:
+        with open(output_file, "w", newline="") as fp:
             writer = csv.writer(fp)
             writer.writerow(self.header)
             for row in self.rows:
@@ -87,20 +92,36 @@ class LogAnalyzer:
         # row: the P(n) time the transaction is packed into a block. Column: Percentage of the transactions.
         for p in Percentile:
             name_tx_packed_to_block = "tx packed to block latency ({})".format(p.name)
-            table.add_stat(name_tx_packed_to_block, "%.2f", self.agg.stat_tx_packed_to_block_latency(p))
+            table.add_stat(
+                name_tx_packed_to_block,
+                "%.2f",
+                self.agg.stat_tx_packed_to_block_latency(p),
+            )
 
         # the first time a transaction is packed to the first time the transaction is geneated.
-        table.add_stat("min tx packed to block latency", "%.2f", self.agg.stat_min_tx_packed_to_block_latency())
+        table.add_stat(
+            "min tx packed to block latency",
+            "%.2f",
+            self.agg.stat_min_tx_packed_to_block_latency(),
+        )
 
         # the time between the node receives the tx and the tx first time becomes ready
-        table.add_stat("min tx to ready pool latency", "%.2f", self.agg.stat_min_tx_to_ready_pool_latency())
+        table.add_stat(
+            "min tx to ready pool latency",
+            "%.2f",
+            self.agg.stat_min_tx_to_ready_pool_latency(),
+        )
 
         # colomn: P(n) nodes: percentage of the transactions is received by block.
         table.add_stat("by_block_ratio", "%.2f", self.agg.stat_tx_ratio())
 
         # colomn: shows the time a transaction from receiving to packing for every node, be aware of the transactions can be packed multiple times.
         # Therefore there may be mutiple values for the same transaction.
-        table.add_stat("Tx wait to be packed elasped time", "%.2f", self.agg.stat_tx_wait_to_be_packed())
+        table.add_stat(
+            "Tx wait to be packed elasped time",
+            "%.2f",
+            self.agg.stat_tx_wait_to_be_packed(),
+        )
 
         block_txs_list = []
         block_size_list = []
@@ -131,7 +152,13 @@ class LogAnalyzer:
             intervals.append(block_timestamp_list[i] - block_timestamp_list[i - 1])
         table.add_data("block generation interval", "%.2f", intervals)
 
-        for p in [Percentile.Avg, Percentile.P50, Percentile.P90, Percentile.P99, Percentile.Max]:
+        for p in [
+            Percentile.Avg,
+            Percentile.P50,
+            Percentile.P90,
+            Percentile.P99,
+            Percentile.Max,
+        ]:
             name = "node sync/cons gap ({})".format(p.name)
             if p is Percentile.Avg:
                 table.add_stat(name, None, self.agg.stat_sync_cons_gap(p))
@@ -141,7 +168,11 @@ class LogAnalyzer:
         tx_sum = sum(block_txs_list)
         print("{} txs generated".format(tx_sum))
         print("Throughput is {}".format(tx_sum / (max_time - min_time)))
-        print("Slowest packed transaction hash: {}".format(self.agg.get_largest_min_tx_packed_latency_hash()))
+        print(
+            "Slowest packed transaction hash: {}".format(
+                self.agg.get_largest_min_tx_packed_latency_hash()
+            )
+        )
         table.pretty_print()
         if self.csv_output is not None:
             table.output_csv(self.csv_output)

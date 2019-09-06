@@ -37,8 +37,10 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(result, [])
 
         # deploy contract
-        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
-        assert (os.path.isfile(bytecode_file))
+        bytecode_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH
+        )
+        assert os.path.isfile(bytecode_file)
         bytecode = open(bytecode_file).read()
         _, contractAddr = self.deploy_contract(sender, priv_key, bytecode)
 
@@ -54,7 +56,9 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(logs0[0]["topics"][1], self.address_to_topic(sender))
 
         # call method
-        receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+        receipt = self.call_contract(
+            sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()"))
+        )
 
         # apply filter, we expect two logs with 2 and 3 topics respectively
         filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
@@ -79,7 +83,9 @@ class LogFilteringTest(ConfluxTestFramework):
 
         # call many times
         for ii in range(0, NUM_CALLS - 2):
-            self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+            self.call_contract(
+                sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()"))
+            )
 
         # apply filter, we expect NUM_CALLS log entries with inreasing uint32 fields
         filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
@@ -91,7 +97,7 @@ class LogFilteringTest(ConfluxTestFramework):
         for ii in range(2, NUM_CALLS):
             assert_equal(len(logs[ii]["topics"]), 3)
             assert_equal(logs[ii]["topics"][0], CALLED_TOPIC)
-            assert (logs[ii]["topics"][1] == self.address_to_topic(sender))
+            assert logs[ii]["topics"][1] == self.address_to_topic(sender)
             assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii))
 
         # apply filter for specific topics
@@ -111,7 +117,13 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(len(logs), NUM_CALLS)
 
         # find logs with `CALLED_TOPIC` as 1st topic and `3` or `4` as 3rd topic
-        filter = Filter(topics=[CALLED_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]])
+        filter = Filter(
+            topics=[
+                CALLED_TOPIC,
+                None,
+                [self.number_to_topic(3), self.number_to_topic(4)],
+            ]
+        )
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), 2)
@@ -150,7 +162,9 @@ class LogFilteringTest(ConfluxTestFramework):
         return "0x" + ("%x" % number).zfill(64)
 
     def deploy_contract(self, sender, priv_key, data_hex):
-        tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
+        tx = self.rpc.new_contract_tx(
+            receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key
+        )
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
@@ -158,7 +172,9 @@ class LogFilteringTest(ConfluxTestFramework):
         return receipt, address
 
     def call_contract(self, sender, priv_key, contract, data_hex):
-        tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
+        tx = self.rpc.new_contract_tx(
+            receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key
+        )
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_receipt(tx.hash_hex())
         return receipt

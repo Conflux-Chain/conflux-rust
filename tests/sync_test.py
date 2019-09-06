@@ -26,25 +26,34 @@ class SyncTest(ConfluxTestFramework):
 
         best_block = self.nodes[1].generate(1, 0)[0]
         block1 = create_block(parent_hash=decode_hex(best_block), height=2)
-        block2 = create_block(parent_hash=decode_hex(best_block), height=2, author=b'\x01' * 20)
+        block2 = create_block(
+            parent_hash=decode_hex(best_block), height=2, author=b"\x01" * 20
+        )
         self.nodes[1].p2p.send_protocol_msg(NewBlock(block=block1))
         self.nodes[1].p2p.send_protocol_msg(NewBlock(block=block2))
         best_block = max(block1.hash, block2.hash)
         ref_block = min(block1.hash, block2.hash)
-        block3 = create_block(parent_hash=best_block, height=3, referee_hashes=[ref_block])
+        block3 = create_block(
+            parent_hash=best_block, height=3, referee_hashes=[ref_block]
+        )
         self.nodes[1].p2p.send_protocol_msg(NewBlock(block=block3))
         for block in [block1, block2, block3]:
             print(encode_hex(block.hash))
         connect_nodes(self.nodes, 0, 1)
         sync_blocks(self.nodes, timeout=5)
         best_block = self.nodes[0].getbestblockhash()
-        print("best from rust: %s \nbest from local: %s\n" % (best_block, encode_hex(block3.hash)))
+        print(
+            "best from rust: %s \nbest from local: %s\n"
+            % (best_block, encode_hex(block3.hash))
+        )
         assert_equal(best_block, encode_hex(block3.hash))
         self.log.info("Pass 1")
 
         disconnect_nodes(self.nodes, 0, 1)
         block1 = create_block(parent_hash=decode_hex(best_block), height=4)
-        block2 = create_block(parent_hash=decode_hex(best_block), height=4, author=b'\x01' * 20)
+        block2 = create_block(
+            parent_hash=decode_hex(best_block), height=4, author=b"\x01" * 20
+        )
         self.nodes[0].p2p.send_protocol_msg(NewBlock(block=block1))
         self.nodes[1].p2p.send_protocol_msg(NewBlock(block=block2))
         connect_nodes(self.nodes, 0, 1)

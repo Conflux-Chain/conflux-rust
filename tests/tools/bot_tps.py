@@ -19,7 +19,9 @@ DRIPS_PER_CFX = 10 ** 18
 
 
 class Sender:
-    def __init__(self, client: RpcClient, addr: str, priv_key_hex: str, balance: int, nonce: int):
+    def __init__(
+        self, client: RpcClient, addr: str, priv_key_hex: str, balance: int, nonce: int
+    ):
         self.client = client
         self.addr = addr
         self.priv_key = eth_utils.decode_hex(priv_key_hex)
@@ -35,7 +37,13 @@ class Sender:
 
     def new_sender(self, amount: int, rpc_url: str = None):
         (addr, priv_key) = self.client.rand_account()
-        tx = self.client.new_tx(sender=self.addr, receiver=addr, nonce=self.nonce, value=amount, priv_key=self.priv_key)
+        tx = self.client.new_tx(
+            sender=self.addr,
+            receiver=addr,
+            nonce=self.nonce,
+            value=amount,
+            priv_key=self.priv_key,
+        )
         assert_equal(self.client.send_tx(tx), tx.hash_hex())
 
         self.balance -= self.client.DEFAULT_TX_FEE + amount
@@ -59,7 +67,13 @@ class Sender:
         return self.client.get_nonce(self.addr)
 
     def send(self, to: str, amount: int, retry_interval=5):
-        tx = self.client.new_tx(sender=self.addr, receiver=to, nonce=self.nonce, value=amount, priv_key=self.priv_key)
+        tx = self.client.new_tx(
+            sender=self.addr,
+            receiver=to,
+            nonce=self.nonce,
+            value=amount,
+            priv_key=self.priv_key,
+        )
 
         while True:
             try:
@@ -94,7 +108,9 @@ class TpsWorker(threading.Thread):
 
 def load_boot_nodes():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_file_path = os.path.abspath(os.path.join(current_dir, "..", "..", "run", "default.toml"))
+    config_file_path = os.path.abspath(
+        os.path.join(current_dir, "..", "..", "run", "default.toml")
+    )
     if not os.path.exists(config_file_path):
         print("file not found:", config_file_path)
         sys.exit(1)
@@ -113,7 +129,13 @@ def new_client(rpc_url):
     return RpcClient(node=get_simple_rpc_proxy(rpc_url, 3))
 
 
-def work(faucet_addr, faucet_priv_key_hex, rpc_urls: list, num_threads: int, num_receivers: int):
+def work(
+    faucet_addr,
+    faucet_priv_key_hex,
+    rpc_urls: list,
+    num_threads: int,
+    num_receivers: int,
+):
     # init faucet
     print("Initialize faucet ...")
     faucet = Sender.new(rpc_urls[0], faucet_addr, faucet_priv_key_hex)
@@ -123,7 +145,11 @@ def work(faucet_addr, faucet_priv_key_hex, rpc_urls: list, num_threads: int, num
     print("Initialize global sender ...")
     global_sender = faucet.new_sender((len(rpc_urls) * num_threads + 1) * DRIPS_PER_CFX)
     global_sender.wait_for_balance()
-    print("Global sender: balance = {}, nonce = {}".format(global_sender.balance, global_sender.nonce))
+    print(
+        "Global sender: balance = {}, nonce = {}".format(
+            global_sender.balance, global_sender.nonce
+        )
+    )
 
     # init senders for all threads
     print("Initialize node/thread senders ...")

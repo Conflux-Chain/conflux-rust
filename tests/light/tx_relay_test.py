@@ -5,7 +5,7 @@
 import os
 import sys
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
@@ -49,15 +49,19 @@ class TxRelayTest(ConfluxTestFramework):
         return random.randint(0, self.num_nodes - 2)  # 0..1 inclusive
 
     def generate_correct_block(self, node=None):
-        if node is None: node = self.random_full_node()
+        if node is None:
+            node = self.random_full_node()
         return self.rpc[node].generate_block()
 
     def generate_incorrect_block(self, node=None):
-        if node is None: node = self.random_full_node()
+        if node is None:
+            node = self.random_full_node()
 
         blame_info = {}
-        blame_info['blame'] = 1
-        blame_info['deferredStateRoot'] = "0x1111111111111111111111111111111111111111111111111111111111111111"
+        blame_info["blame"] = 1
+        blame_info[
+            "deferredStateRoot"
+        ] = "0x1111111111111111111111111111111111111111111111111111111111111111"
 
         return self.nodes[node].test_generateblockwithblameinfo(1, 0, blame_info)[0]
 
@@ -127,7 +131,9 @@ class TxRelayTest(ConfluxTestFramework):
 
         self.log.info(f"Pass 3 - blame info correct\n")
         # ------------------------------------------------
-        self.log.info(f"Checking the resulting account balances through the light node...")
+        self.log.info(
+            f"Checking the resulting account balances through the light node..."
+        )
 
         # sync blocks to make sure the light client has the header with the latest state
         self.log.info("syncing blocks...")

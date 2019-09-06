@@ -5,7 +5,7 @@
 import os
 import sys
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
 
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
@@ -54,7 +54,7 @@ class LightSyncTest(ConfluxTestFramework):
         block_batch_size = 100
 
         # NOTE: do not start p2p for LIGHTNODE
-        start_p2p_connection(self.nodes[0: (self.num_nodes - 1)])
+        start_p2p_connection(self.nodes[0 : (self.num_nodes - 1)])
 
         # catch up
         self.disconnect_light_node([FULLNODE0, FULLNODE1])

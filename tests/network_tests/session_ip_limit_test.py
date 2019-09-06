@@ -21,7 +21,7 @@ class SessionIpLimitTests(ConfluxTestFramework):
         self.num_nodes = 1
 
         self.conf_parameters = {
-            "session_ip_limits": "\"{}\"".format(self.ip_limit_config)
+            "session_ip_limits": '"{}"'.format(self.ip_limit_config)
         }
 
     def setup_network(self):

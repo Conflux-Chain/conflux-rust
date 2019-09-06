@@ -13,7 +13,7 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["generate_tx"] = "true"
         # Every node generates 1 tx every second
         self.conf_parameters["generate_tx_period_us"] = "100000"
-        self.conf_parameters["log_level"] = "\"debug\""
+        self.conf_parameters["log_level"] = '"debug"'
 
     def setup_network(self):
         self.setup_nodes()
@@ -29,9 +29,11 @@ class P2PTest(ConfluxTestFramework):
             pub_key = self.nodes[i].key
             addr = self.nodes[i].addr
             self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-            tx = client.new_tx(value=int(default_config["TOTAL_COIN"] / self.num_nodes) - 21000,
-                               receiver=encode_hex(addr),
-                               nonce=i)
+            tx = client.new_tx(
+                value=int(default_config["TOTAL_COIN"] / self.num_nodes) - 21000,
+                receiver=encode_hex(addr),
+                nonce=i,
+            )
             client.send_tx(tx)
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
@@ -47,7 +49,7 @@ class P2PTest(ConfluxTestFramework):
         sync_blocks(self.nodes, timeout=30)
         hasha = self.nodes[0].getbestblockhash()
         block_a = client.block_by_hash(hasha)
-        self.log.info("Final height = %s", block_a['height'])
+        self.log.info("Final height = %s", block_a["height"])
         self.log.info("Pass")
 
 

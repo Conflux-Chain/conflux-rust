@@ -6,7 +6,11 @@ import rlp
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from test_framework.util import assert_equal, assert_raises_rpc_error, assert_is_hash_string
+from test_framework.util import (
+    assert_equal,
+    assert_raises_rpc_error,
+    assert_is_hash_string,
+)
 
 
 class TestSendTx(RpcClient):
@@ -23,8 +27,12 @@ class TestSendTx(RpcClient):
         tx = self.new_tx()
         encoded = eth_utils.encode_hex(rlp.encode(tx))
 
-        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded + "12")  # 1 more byte
-        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded[0:-2])  # 1 less byte
+        assert_raises_rpc_error(
+            None, None, self.send_raw_tx, encoded + "12"
+        )  # 1 more byte
+        assert_raises_rpc_error(
+            None, None, self.send_raw_tx, encoded[0:-2]
+        )  # 1 less byte
 
     def test_signature_empty(self):
         tx = self.new_tx(sign=False)
