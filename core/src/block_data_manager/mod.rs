@@ -43,14 +43,18 @@ use std::hash::Hash;
 pub const NULLU64: u64 = !0;
 
 pub struct BlockDataManager {
+    /// Garbage collect is managed by cache manager
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+
+    /// Garbage collect is managed by checkpoints
     epoch_execution_commitments:
         RwLock<HashMap<H256, EpochExecutionCommitments>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
+
     invalid_block_set: RwLock<HashSet<H256>>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
     cur_consensus_era_stable_hash: RwLock<H256>,
@@ -160,11 +164,13 @@ impl BlockDataManager {
             }
         }
 
+        // FIXME: Set execution context and past_num_blocks with data on disk
         data_man.insert_epoch_execution_context(
             data_man.genesis_block.hash(),
             EpochExecutionContext {
                 start_block_number: 0,
             },
+            true,
         );
 
         data_man
@@ -475,8 +481,11 @@ impl BlockDataManager {
             hash,
             &self.transaction_addresses,
             |key| self.db_manager.transaction_address_from_db(key),
-            CacheId::TransactionAddress,
-            update_cache,
+            if update_cache {
+                Some(CacheId::TransactionAddress(*hash))
+            } else {
+                None
+            },
         )
     }
 
@@ -500,40 +509,40 @@ impl BlockDataManager {
             .insert_transaction_address_to_db(hash, tx_address);
     }
 
-    //    fn insert<K, V, CacheF>(
-    //        &self, key: &K, value: V, in_mem: &RwLock<HashMap<K, V>>,
-    //        col: Option<u32>, db_key: &[u8], cache_id_f: CacheF, persistent:
-    // bool,    ) where
-    //        K: Clone + Eq + Hash,
-    //        V: Encodable,
-    //        CacheF: Fn(K) -> CacheId,
-    //    {
-    //        if persistent {
-    //            self.insert_to_db(db_key, &value, col, rlp::encode);
-    //        }
-    //        in_mem.write().insert(key.clone(), value);
-    //        self.cache_man.lock().note_used(cache_id_f(key.clone()));
-    //    }
+    fn insert<K, V, InsertF>(
+        &self, key: K, value: V, in_mem: &RwLock<HashMap<K, V>>,
+        insert_f: InsertF, maybe_cache_id: Option<CacheId>, persistent: bool,
+    ) where
+        K: Clone + Eq + Hash,
+        InsertF: Fn(&K, &V),
+    {
+        if persistent {
+            insert_f(&key, &value);
+        }
+        in_mem.write().insert(key.clone(), value);
+        if let Some(cache_id) = maybe_cache_id {
+            self.cache_man.lock().note_used(cache_id);
+        }
+    }
 
-    fn get<K, V, LoadF, CacheF>(
+    fn get<K, V, LoadF>(
         &self, key: &K, in_mem: &RwLock<HashMap<K, V>>, load_f: LoadF,
-        cache_id_f: CacheF, update_cache: bool,
+        maybe_cache_id: Option<CacheId>,
     ) -> Option<V>
     where
         K: Clone + Eq + Hash,
         V: Decodable + Clone,
         LoadF: Fn(&K) -> Option<V>,
-        CacheF: Fn(K) -> CacheId,
     {
         let upgradable_read_lock = in_mem.upgradable_read();
         if let Some(value) = upgradable_read_lock.get(key) {
             return Some(value.clone());
         }
         load_f(key).map(|value| {
-            if update_cache {
+            if let Some(cache_id) = maybe_cache_id {
                 RwLockUpgradableReadGuard::upgrade(upgradable_read_lock)
                     .insert(key.clone(), value.clone());
-                self.cache_man.lock().note_used(cache_id_f(key.clone()));
+                self.cache_man.lock().note_used(cache_id);
             }
             value
         })
@@ -600,6 +609,34 @@ impl BlockDataManager {
         }
     }
 
+    pub fn insert_epoch_execution_context(
+        &self, hash: H256, ctx: EpochExecutionContext, persistent: bool,
+    ) {
+        self.insert(
+            hash,
+            ctx,
+            &self.epoch_execution_contexts,
+            |key, value| {
+                self.db_manager.insert_execution_context_to_db(key, value)
+            },
+            None,
+            persistent,
+        );
+    }
+
+    /// The in-memory state will not be updated because it's only garbage collected explicitly
+    /// when we make checkpoints.
+    pub fn get_epoch_execution_context(
+        &self, hash: &H256,
+    ) -> Option<EpochExecutionContext> {
+        self.get(
+            hash,
+            &self.epoch_execution_contexts,
+            |key| self.db_manager.execution_context_from_db(key),
+            None,
+        )
+    }
+
     pub fn insert_epoch_execution_commitments(
         &self, block_hash: H256, receipts_root: H256, logs_bloom_hash: H256,
     ) {
@@ -612,27 +649,12 @@ impl BlockDataManager {
         );
     }
 
-    pub fn insert_epoch_execution_context(
-        &self, hash: H256, ctx: EpochExecutionContext,
-    ) {
-        self.epoch_execution_contexts.write().insert(hash, ctx);
-    }
-
     pub fn get_epoch_execution_commitments(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitments> {
         self.epoch_execution_commitments
             .read()
             .get(block_hash)
-            .map(Clone::clone)
-    }
-
-    pub fn get_epoch_execution_context(
-        &self, hash: &H256,
-    ) -> Option<EpochExecutionContext> {
-        self.epoch_execution_contexts
-            .read()
-            .get(hash)
             .map(Clone::clone)
     }
 

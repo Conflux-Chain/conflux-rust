@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 /// The number of blocks in the past of an epoch.
 /// Used in evm execution.
-#[derive(Clone)]
+#[derive(Clone, RlpEncodable, RlpDecodable)]
 pub struct EpochExecutionContext {
     pub start_block_number: u64,
 }

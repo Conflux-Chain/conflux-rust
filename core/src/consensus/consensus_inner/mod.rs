@@ -518,11 +518,13 @@ impl ConsensusGraphInner {
             last_pivot_in_past_blocks,
         });
 
+        // FIXME: Set execution context and past_num_blocks with data on disk
         inner.data_man.insert_epoch_execution_context(
             data_man.genesis_block().hash(),
             EpochExecutionContext {
                 start_block_number: 0,
             },
+            true,
         );
 
         inner
@@ -1507,6 +1509,7 @@ impl ConsensusGraphInner {
                     start_block_number: self
                         .get_epoch_start_block_number(index),
                 },
+                true,
             );
 
             self.arena[index].past_weight = past_weight;

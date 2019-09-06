@@ -1,11 +1,9 @@
 use crate::{
     block_data_manager::{
         BlockExecutionResultWithEpoch, CheckpointHashes,
-        ConsensusGraphExecutionInfo, LocalBlockInfo,
+        ConsensusGraphExecutionInfo, EpochExecutionContext, LocalBlockInfo,
     },
-    db::{
-        COL_BLOCKS, COL_DELTA_TRIE, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS,
-    },
+    db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
@@ -216,6 +214,25 @@ impl DBManager {
 
     pub fn instance_id_from_db(&self) -> Option<u64> {
         self.load_decodable_val(DBTable::Misc, b"instance")
+    }
+
+    pub fn insert_execution_context_to_db(
+        &self, hash: &H256, ctx: &EpochExecutionContext,
+    ) {
+        self.insert_encodable_val(
+            DBTable::Blocks,
+            &epoch_execution_context_key(hash),
+            ctx,
+        )
+    }
+
+    pub fn execution_context_from_db(
+        &self, hash: &H256,
+    ) -> Option<EpochExecutionContext> {
+        self.load_decodable_val(
+            DBTable::Blocks,
+            &epoch_execution_context_key(hash),
+        )
     }
 
     /// The functions below are private utils used by the DBManager to access
