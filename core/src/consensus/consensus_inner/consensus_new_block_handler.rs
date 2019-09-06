@@ -1353,7 +1353,7 @@ impl ConsensusNewBlockHandler {
                         inner,
                         epoch_arena_index,
                     );
-                self.executor.compute_epoch(EpochExecutionTask::new(
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
                     inner.arena[epoch_arena_index].hash,
                     inner.get_epoch_block_hashes(epoch_arena_index),
                     inner.get_epoch_start_block_number(epoch_arena_index),

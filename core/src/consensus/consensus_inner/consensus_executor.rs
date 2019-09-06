@@ -46,6 +46,7 @@ use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
+    sync::atomic::{AtomicBool, Ordering::Relaxed},
 };
 
 lazy_static! {
@@ -89,6 +90,8 @@ impl Debug for RewardExecutionInfo {
 enum ExecutionTask {
     ExecuteEpoch(EpochExecutionTask),
     GetResult(GetExecutionResultTask),
+
+    /// Stop task is used to stop the execution thread
     Stop,
 }
 
@@ -142,6 +145,9 @@ pub struct ConsensusExecutor {
     /// The sender to send tasks to be executed by `self.thread`
     sender: Mutex<Sender<ExecutionTask>>,
 
+    /// The state indicating whether the thread should be stopped
+    stopped: AtomicBool,
+
     /// The handler to provide functions to handle `ExecutionTask` and execute
     /// transactions It is used both asynchronously by `self.thread` and
     /// synchronously by the executor itself
@@ -167,6 +173,7 @@ impl ConsensusExecutor {
         let executor_raw = ConsensusExecutor {
             thread: Mutex::new(None),
             sender: Mutex::new(sender),
+            stopped: AtomicBool::new(false),
             handler: handler.clone(),
             bench_mode,
         };
@@ -176,6 +183,10 @@ impl ConsensusExecutor {
         let handle = thread::Builder::new()
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
+                if executor_thread.stopped.load(Relaxed) {
+                    // The thread should be stopped. The rest tasks in the queue will be discarded.
+                    break;
+                }
                 let maybe_task = receiver.try_recv();
                 match maybe_task {
                     Err(TryRecvError::Empty) => {
@@ -611,10 +622,18 @@ impl ConsensusExecutor {
     }
 
     pub fn stop(&self) {
+        // `stopped` is used to allow the execution thread to stopped even the
+        // queue is not empty and `ExecutionTask::Stop` has not been
+        // processed.
+        self.stopped.store(true, Relaxed);
+
+        // We still need this task because otherwise if the execution queue is
+        // empty the execution thread will block on `recv` forever and
+        // unable to check `stopped`
         self.sender
             .lock()
             .send(ExecutionTask::Stop)
-            .expect("Receiver exists");
+            .expect("execution receiver exists");
         if let Some(thread) = self.thread.lock().take() {
             thread.join().ok();
         }
@@ -807,10 +826,6 @@ impl ConsensusExecutionHandler {
         &self, maybe_task: Result<ExecutionTask, RecvError>,
     ) -> bool {
         match maybe_task {
-            Ok(ExecutionTask::Stop) => {
-                debug!("Consensus Executor stopped by receiving STOP task");
-                false
-            }
             Ok(task) => self.handle_execution_work(task),
             Err(e) => {
                 warn!("Consensus Executor stopped by Err={:?}", e);
@@ -827,7 +842,7 @@ impl ConsensusExecutionHandler {
                 self.handle_epoch_execution(task)
             }
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
-            _ => {}
+            ExecutionTask::Stop => return false,
         }
         true
     }
