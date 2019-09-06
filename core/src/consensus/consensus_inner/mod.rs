@@ -1929,9 +1929,12 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_epoch_number_from_hash(&self, hash: &H256) -> Option<u64> {
-        self.hash_to_arena_indices
-            .get(hash)
-            .map(|index| self.arena[*index].data.epoch_number)
+        self.hash_to_arena_indices.get(hash).and_then(|index| {
+            match self.arena[*index].data.epoch_number {
+                NULLU64 => None,
+                epoch => Some(epoch),
+            }
+        })
     }
 
     pub fn block_hashes_by_epoch(
