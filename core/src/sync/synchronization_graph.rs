@@ -254,19 +254,23 @@ impl SynchronizationGraphInner {
         // If the current synchronization phase is `CatchUpRecoverBlockFromDB`
         // or `CatchUpSyncBlock` or `Normal`, this function returns true only if
         // the block is in `BLOCK_GRAPH_READY`.
-        let mut is_graph_ready = |hash: &H256, index: &usize| {
-            if let Some(info) = data_man.local_block_info_from_db(hash) {
-                if info.get_status() == BlockStatus::Invalid {
-                    invalid_blocks.push(*index);
-                    false
+        let mut is_graph_ready =
+            |parent_or_referee_hash: &H256, index: &usize| {
+                if let Some(info) =
+                    data_man.local_block_info_from_db(parent_or_referee_hash)
+                {
+                    if info.get_status() == BlockStatus::Invalid {
+                        invalid_blocks.push(*index);
+                        false
+                    } else {
+                        info.get_seq_num() < genesis_seq_num
+                            || info.get_instance_id()
+                                == data_man.get_instance_id()
+                    }
                 } else {
-                    info.get_seq_num() < genesis_seq_num
-                        || info.get_instance_id() == data_man.get_instance_id()
+                    false
                 }
-            } else {
-                false
-            }
-        };
+            };
 
         for index in &self.not_ready_blocks_frontier {
             let parent_hash = self.arena[*index].block_header.parent_hash();
@@ -1002,7 +1006,7 @@ impl SynchronizationGraph {
                 }
             }
 
-            // FIXME: for full node in `CatchUpRecoverBlockHeaderFromDB` pahse,
+            // FIXME: for full node in `CatchUpRecoverBlockHeaderFromDB` phase,
             // we may only have header in db
             if let Some(mut block) = self.data_man.block_from_db(&hash) {
                 // Only construct synchronization graph if is not header_only.
@@ -1624,10 +1628,10 @@ impl SynchronizationGraph {
         let (invalid_set, need_to_relay) = self.propagate_header_graph_status(
             inner,
             new_header_graph_ready_blocks,
-            true,
-            NULL,
-            false,
-            true,
+            true,  /* need_to_verify */
+            NULL,  /* header_index_to_insert */
+            false, /* insert_to_consensus */
+            true,  /* persistent */
         );
         inner.process_invalid_blocks(&invalid_set);
         for hash in need_to_relay {
