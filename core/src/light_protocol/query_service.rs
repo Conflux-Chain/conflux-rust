@@ -6,7 +6,7 @@ extern crate futures;
 
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
 use futures::{future, stream, Future, Stream};
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use primitives::{
     filter::{Filter, FilterError},
@@ -35,6 +35,9 @@ use super::{
 };
 
 pub struct QueryService {
+    // shared consensus graph
+    consensus: Arc<ConsensusGraph>,
+
     // light protocol handler
     handler: Arc<LightHandler>,
 
@@ -55,6 +58,7 @@ impl QueryService {
         let ledger = LedgerInfo::new(consensus.clone());
 
         QueryService {
+            consensus,
             handler,
             ledger,
             network,
@@ -351,26 +355,61 @@ impl QueryService {
         }
     }
 
+    fn get_filter_epochs(
+        &self, filter: &Filter,
+    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool>), FilterError> {
+        match &filter.block_hashes {
+            None => {
+                let from_epoch = self
+                    .get_height_from_epoch_number(filter.from_epoch.clone())?;
+                let to_epoch =
+                    self.get_height_from_epoch_number(filter.to_epoch.clone())?;
+
+                if from_epoch > to_epoch {
+                    return Err(FilterError::InvalidEpochNumber {
+                        from_epoch,
+                        to_epoch,
+                    });
+                }
+
+                let epochs = (from_epoch..(to_epoch + 1)).rev().collect();
+                let block_filter = Box::new(|_| true);
+
+                Ok((epochs, block_filter))
+            }
+            Some(hashes) => {
+                // we use BTreeSet to make lookup efficient
+                let hashes: BTreeSet<_> = hashes.iter().cloned().collect();
+
+                // we use BTreeSet to ensure order and uniqueness
+                let mut epochs = BTreeSet::new();
+
+                for hash in &hashes {
+                    match self.consensus.get_epoch_number_from_hash(&hash) {
+                        Some(epoch) => epochs.insert(epoch),
+                        None => {
+                            return Err(FilterError::UnknownBlock {
+                                hash: *hash,
+                            })
+                        }
+                    };
+                }
+
+                let epochs = epochs.into_iter().rev().collect();
+                let block_filter = Box::new(move |hash| hashes.contains(&hash));
+
+                Ok((epochs, block_filter))
+            }
+        }
+    }
+
     pub fn get_logs(
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         debug!("get_logs filter = {:?}", filter);
 
-        // find epochs to match against
-        let from_epoch =
-            self.get_height_from_epoch_number(filter.from_epoch.clone())?;
-        let to_epoch =
-            self.get_height_from_epoch_number(filter.to_epoch.clone())?;
-
-        if from_epoch > to_epoch {
-            return Err(FilterError::InvalidEpochNumber {
-                from_epoch,
-                to_epoch,
-            });
-        }
-
-        let mut epochs: Vec<u64> = (from_epoch..(to_epoch + 1)).collect();
-        epochs.reverse();
+        // find epochs and blocks to match against
+        let (epochs, block_filter) = self.get_filter_epochs(&filter)?;
         debug!("Executing filter on epochs {:?}", epochs);
 
         // construct blooms for matching epochs
@@ -383,8 +422,6 @@ impl QueryService {
 
         // set maximum to number of logs returned
         let limit = filter.limit.unwrap_or(::std::usize::MAX) as u64;
-
-        // TODO(thegaram): add support for filter.block_hashes
 
         // construct a stream object for log filtering
         // we first retrieve the epoch blooms and try to match against them. for
@@ -451,6 +488,10 @@ impl QueryService {
 
             // Stream<Stream<Log>> -> Stream<Log>
             .flatten()
+
+            .filter(|log| {
+                block_filter(log.block_hash)
+            })
 
             // retrieve block txs
             .map(|log| {

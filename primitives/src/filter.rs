@@ -33,6 +33,9 @@ pub enum FilterError {
     /// Roots for verifying the requested epochs are unavailable.
     UnableToVerify { epoch: u64, latest_verifiable: u64 },
 
+    /// The block requested does not exist
+    UnknownBlock { hash: H256 },
+
     /// Filter error with custom error message (e.g. timeout)
     Custom(String),
 }
@@ -54,6 +57,9 @@ impl fmt::Display for FilterError {
             } => format! {
                 "Unable to verify epoch {} (latest verifiable epoch is {})",
                 epoch, latest_verifiable
+            },
+            UnknownBlock { hash } => format! {
+                "Unable to identify block {}", hash
             },
             Custom(ref s) => s.clone(),
         };

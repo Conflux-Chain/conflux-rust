@@ -1928,6 +1928,12 @@ impl ConsensusGraphInner {
         }
     }
 
+    pub fn get_epoch_number_from_hash(&self, hash: &H256) -> Option<u64> {
+        self.hash_to_arena_indices
+            .get(hash)
+            .map(|index| self.arena[*index].data.epoch_number)
+    }
+
     pub fn block_hashes_by_epoch(
         &self, epoch_number: u64,
     ) -> Result<Vec<H256>, String> {
@@ -1963,10 +1969,8 @@ impl ConsensusGraphInner {
     }
 
     fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
-        self.hash_to_arena_indices.get(hash).and_then(|index| {
-            let epoch_number = self.arena[*index].data.epoch_number;
-            self.epoch_hash(epoch_number)
-        })
+        self.get_epoch_number_from_hash(&hash)
+            .and_then(|epoch_number| self.epoch_hash(epoch_number))
     }
 
     pub fn get_balance(
