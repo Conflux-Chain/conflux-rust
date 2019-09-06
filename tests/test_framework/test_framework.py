@@ -59,7 +59,7 @@ class ConfluxTestFramework:
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        self.setup_clean_chain = True
+        self.setup_clean_chain = False
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
@@ -111,7 +111,7 @@ class ConfluxTestFramework:
             dest="remote_ips",
             help="The file of ip list for remote conflux nodes",
         )
-        parser.add_argument("--localip", default="", dest="local_ip", help="Local ip")
+        parser.add_argument("--localip", default="", dest="local_ip", help="The ip of local node (when running multi-nodes tests)")
         parser.add_argument(
             "-l",
             "--loglevel",
@@ -190,7 +190,7 @@ class ConfluxTestFramework:
                 "CONFLUX_TESTS_LOG_DIR", tempfile.mkdtemp(prefix="conflux_test_")
             )
 
-        self.start_logging()
+        self._start_logging()
         self.log.info("PortSeed.n=" + str(PortSeed.n))
 
         success = TestStatus.FAILED
@@ -407,7 +407,7 @@ class ConfluxTestFramework:
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 
-    def start_logging(self):
+    def _start_logging(self):
         # Add logger and logging handlers
         self.log = logging.getLogger("TestFramework")
         self.log.setLevel(logging.DEBUG)

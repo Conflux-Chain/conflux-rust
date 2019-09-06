@@ -198,14 +198,6 @@ mod eth_compatible_signature {
             Some(n) => 35 + n * 2,
         }
     }
-
-    pub fn is_global(chain_id: Option<u64>) -> bool {
-        match chain_id {
-            None => true,
-            Some(0) => true,
-            _ => false,
-        }
-    }
 }
 
 impl Transaction {
@@ -220,20 +212,20 @@ impl Transaction {
         //  sender address. And there must be a way to verify sender
         //  address with the number of signatures.
 
-        s.begin_list(
-            if eth_compatible_signature::is_global(chain_id) {
-                6
-            } else {
-                9
-            },
-        );
+        let without_chain_id = match chain_id {
+            None => true,
+            Some(0) => true,
+            _ => false,
+        };
+
+        s.begin_list(if without_chain_id { 6 } else { 9 });
         s.append(&self.nonce);
         s.append(&self.gas_price);
         s.append(&self.gas);
         s.append(&self.action);
         s.append(&self.value);
         s.append(&self.data);
-        if !eth_compatible_signature::is_global(chain_id) {
+        if !without_chain_id {
             let n = chain_id.unwrap();
             s.append(&n);
             s.append(&0u8);
@@ -277,31 +269,6 @@ impl Transaction {
         .compute_hash()
     }
 }
-
-//impl Decodable for Transaction {
-//    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
-//        Ok(Transaction {
-//            nonce: r.val_at(0)?,
-//            gas_price: r.val_at(1)?,
-//            gas: r.val_at(2)?,
-//            action: r.val_at(3)?,
-//            value: r.val_at(4)?,
-//            data: r.val_at(5)?,
-//        })
-//    }
-//}
-//
-//impl Encodable for Transaction {
-//    fn rlp_append(&self, s: &mut RlpStream) {
-//        s.begin_list(6);
-//        s.append(&self.nonce);
-//        s.append(&self.gas_price);
-//        s.append(&self.gas);
-//        s.append(&self.action);
-//        s.append(&self.value);
-//        s.append(&self.data);
-//    }
-//}
 
 impl MallocSizeOf for Transaction {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
@@ -404,8 +371,10 @@ impl TransactionWithSignature {
     /// Construct a signature object from the sig.
     pub fn signature(&self) -> Signature {
         if self.v < 2 {
+            // conflux transaction
             Signature::from_rsv(&self.r.into(), &self.s.into(), self.v)
         } else {
+            // ethereum transaction
             Signature::from_electrum(
                 &Signature::from_rsv(&self.r.into(), &self.s.into(), self.v)[..],
             )
@@ -415,7 +384,6 @@ impl TransactionWithSignature {
     /// Checks whether the signature has a low 's' value.
     pub fn check_low_s(&self) -> Result<(), keylib::Error> {
         if !self.signature().is_low_s() {
-            //            debug!("check_low_s failed.");
             Err(keylib::Error::InvalidSignature.into())
         } else {
             Ok(())

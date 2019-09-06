@@ -988,7 +988,6 @@ impl<'a, 'b> Executive<'a, 'b> {
 
         if tx.gas < base_gas_required {
             if eth_compatibility_mode {
-                // FIXME: changed to be compatible to eth transactions.
                 base_gas_required = tx.gas;
             } else {
                 return Err(ExecutionError::NotEnoughBaseGas {
@@ -1018,7 +1017,6 @@ impl<'a, 'b> Executive<'a, 'b> {
         // This should never happen because we have checked block gas limit
         // before SyncGraph Validate if transaction fits into give block
         if self.env.gas_used + tx.gas > self.env.gas_limit {
-            // FIXME: make gas limit configurable.
             debug!("block gas limit reached!");
             return Err(ExecutionError::BlockGasLimitReached {
                 gas_limit: self.env.gas_limit,
@@ -1609,7 +1607,7 @@ mod tests {
             gas_price: U256::one(),
             nonce: U256::zero(),
         }
-        .sign(keypair.secret(), None);
+        .sign(keypair.secret(), None /* chain_id */);
         let sender = t.sender();
 
         let storage_manager = new_state_manager_for_testing();
@@ -1626,7 +1624,11 @@ mod tests {
         let res = {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             let mut nonce_increased = false;
-            ex.transact(&t, &mut nonce_increased, false)
+            ex.transact(
+                &t,
+                &mut nonce_increased,
+                false, /* eth_compatibility_mode */
+            )
         };
 
         match res {

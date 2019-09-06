@@ -119,16 +119,20 @@ pub fn initialize_synchronization_graph(
         DataManagerConfiguration::new(false, true, 250000),
     ));
 
-    let verification_config = VerificationConfig::new(true, false);
+    let verification_config = VerificationConfig::new(
+        true,  /* test_mode */
+        false, /* eth_compatibility_mode */
+    );
     let txpool = Arc::new(TransactionPool::with_capacity(
         500_000,
         data_man.clone(),
-        verification_config.clone(),
+        verification_config,
     ));
     let statistics = Arc::new(Statistics::new());
 
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
+
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"

@@ -166,7 +166,7 @@ impl TransactionPool {
             for (_, msg) in failure.clone() {
                 if msg != String::from("Failed imported to deferred pool: Tx with same nonce already inserted, try to replace it with a higher gas price") {
                     warn!("Failed insert tx due to: {}", msg);
-                    // TODO: will add a config to control if panic here
+                    // TODO(ypliu): will add a config to control if panic here
                     panic!(msg);
                 }
             }

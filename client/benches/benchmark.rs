@@ -53,7 +53,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         action: Action::Call(receiver_kp.address()),
         data: Bytes::new(),
     };
-    let tx = tx.sign(kp.secret(), None);
+    let tx = tx.sign(kp.secret(), None /* chain_id */);
     let machine = new_machine();
     let env = Env {
         number: 0, // TODO: replace 0 with correct cardinal number
@@ -88,7 +88,12 @@ fn txexe_benchmark(c: &mut Criterion) {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut nonce_increased = false;
         b.iter(|| {
-            ex.transact(&tx, &mut nonce_increased, false).unwrap();
+            ex.transact(
+                &tx,
+                &mut nonce_increased,
+                false, /* eth_compatibility_mode */
+            )
+            .unwrap();
             ex.state.clear();
         })
     });
