@@ -41,12 +41,6 @@ class InvalidMessageTest(ConfluxTestFramework):
         # self.nodes[0].p2p.send_packet(PACKET_PROTOCOL, b'')
         wait = [True]
 
-        def on_pong():
-            wait[0] = False
-        self.nodes[0].p2p.on_pong = on_pong
-        self.nodes[0].p2p.send_packet(PACKET_PING, b'')
-        wait_until(lambda: not wait[0], timeout=60)
-
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE)
         self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash]))
         h.wait()

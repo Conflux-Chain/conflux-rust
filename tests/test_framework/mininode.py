@@ -179,10 +179,6 @@ class P2PConnection(asyncore.dispatcher):
                 elif packet_id == PACKET_DISCONNECT:
                     disconnect = rlp.decode(payload, Disconnect)
                     self.on_disconnect(disconnect)
-                elif packet_id == PACKET_PING:
-                    self.on_ping()
-                elif packet_id == PACKET_PONG:
-                    self.on_pong()
                 else:
                     assert packet_id == PACKET_PROTOCOL
                     self.on_protocol_packet(protocol, payload)
@@ -198,13 +194,6 @@ class P2PConnection(asyncore.dispatcher):
 
     def on_disconnect(self, disconnect):
         self.on_close()
-
-    def on_ping(self):
-        self.send_packet(PACKET_PONG, b"")
-        pass
-
-    def on_pong(self):
-        pass
 
     def on_protocol_packet(self, protocol, payload):
         """Callback for processing a protocol-specific P2P payload. Must be overridden by derived class."""

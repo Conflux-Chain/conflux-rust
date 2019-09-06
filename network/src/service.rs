@@ -961,7 +961,6 @@ impl NetworkServiceInner {
                             Some(_) => messages.push((protocol, data)),
                         }
                     }
-                    Ok(SessionData::Continue) => (),
                     Ok(SessionData::None) => break,
                     Err(Error(kind, _)) => {
                         debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);

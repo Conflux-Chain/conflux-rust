@@ -94,12 +94,5 @@ class MessageTest(ConfluxTestFramework):
         p2p.send_packet(PACKET_PROTOCOL, b'')
         wait_until(lambda: p2p.state != "connected", timeout=3)
 
-        # legel payload
-        p2p = start_p2p_connection([self.nodes[0]])[0]
-        p2p.send_packet(PACKET_PING, b'')
-        p2p.send_packet(PACKET_PONG, b'')
-        wait_until(lambda: p2p.state == "connected", timeout=3)
-
-
 if __name__ == "__main__":
     MessageTest().main()
