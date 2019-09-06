@@ -6,7 +6,7 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
     consensus::{ConsensusGraphInner, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
-    machine::new_machine,
+    machine::new_machine_with_builtin,
     pow::ProofOfWorkConfig,
     statistics::SharedStatistics,
     verification::*,
@@ -592,7 +592,7 @@ impl SynchronizationGraphInner {
         }
 
         // Verify the gas limit is respected
-        let machine = new_machine();
+        let machine = new_machine_with_builtin();
         let gas_limit_divisor = machine.params().gas_limit_bound_divisor;
         let min_gas_limit = machine.params().min_gas_limit;
         let gas_lower = max(

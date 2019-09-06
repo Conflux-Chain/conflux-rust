@@ -6,7 +6,7 @@ use cfx_bytes::Bytes;
 use cfx_types::U256;
 use cfxcore::{
     executive::Executive,
-    machine::new_machine,
+    machine::new_machine_with_builtin,
     state::State,
     statedb::StateDb,
     storage::state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
@@ -54,7 +54,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         data: Bytes::new(),
     };
     let tx = tx.sign(kp.secret());
-    let machine = new_machine();
+    let machine = new_machine_with_builtin();
     let env = Env {
         number: 0, // TODO: replace 0 with correct cardinal number
         author: Default::default(),
