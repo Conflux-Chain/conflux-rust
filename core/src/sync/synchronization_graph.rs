@@ -972,6 +972,7 @@ impl SynchronizationGraph {
         // accordingly.
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
+        let mut out_of_era_blocks = HashSet::new();
         for terminal in terminals {
             queue.push_back(terminal);
             visited_blocks.insert(terminal);
@@ -994,6 +995,7 @@ impl SynchronizationGraph {
                 self.data_man.local_block_info_from_db(&hash)
             {
                 if block_local_info.get_seq_num() < genesis_seq_num {
+                    out_of_era_blocks.insert(hash);
                     debug!(
                         "Skip block {:?} before checkpoint: seq_num={}",
                         hash,
@@ -1049,7 +1051,13 @@ impl SynchronizationGraph {
         debug!("Initial missed blocks {:?}", *missed_hashes);
 
         // Resolve out-of-era dependencies for not-graph-ready blocks.
-        self.resolve_outside_dependencies(true /* recover_from_db */);
+        while self.inner.read().not_ready_blocks_count > 0 {
+            self.resolve_outside_dependencies(true /* recover_from_db */);
+        }
+        debug!(
+            "Current frontier after recover from db: {:?}",
+            self.inner.read().not_ready_blocks_frontier
+        );
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
         if !header_only {
             // Rebuild pivot chain state info.
