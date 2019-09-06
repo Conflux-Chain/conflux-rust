@@ -6,7 +6,7 @@ use cfx_bytes::Bytes;
 use cfx_types::U256;
 use cfxcore::{
     executive::Executive,
-    machine::{new_machine, new_machine_with_builtin},
+    machine::{new_machine_with_builtin},
     state::State,
     statedb::StateDb,
     storage::state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
