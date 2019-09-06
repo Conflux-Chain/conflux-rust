@@ -67,11 +67,8 @@ pub(crate) struct Linear {
 }
 
 impl Linear {
-    pub(crate) fn new(base : usize, word : usize) -> Linear {
-        Linear{
-            base: base,
-            word: word
-        }
+    pub(crate) fn new(base: usize, word: usize) -> Linear {
+        Linear { base, word }
     }
 }
 
@@ -207,11 +204,13 @@ impl Builtin {
     /// Whether the builtin is activated at the given cardinal number.
     pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
 
-    pub fn new(pricer : Box<dyn Pricer>, native : Box<dyn Impl>, activate_at : u64) -> Builtin {
-        Builtin{
-            pricer : pricer,
-            native : native,
-            activate_at : activate_at
+    pub fn new(
+        pricer: Box<dyn Pricer>, native: Box<dyn Impl>, activate_at: u64,
+    ) -> Builtin {
+        Builtin {
+            pricer,
+            native,
+            activate_at,
         }
     }
 }

@@ -7,7 +7,6 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::ConsensusGraphInner,
     executive::{ExecutionError, Executive},
-    machine::new_machine,
     state::{CleanupMode, State},
     statedb::StateDb,
     storage::{
@@ -38,14 +37,16 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::parameters::{consensus::*, consensus_internal::*};
+use crate::{
+    machine::new_machine_with_builtin,
+    parameters::{consensus::*, consensus_internal::*},
+};
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
 };
-use crate::machine::new_machine_with_builtin;
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -1396,7 +1397,7 @@ impl ConsensusExecutionHandler {
         &self, tx: &SignedTransaction, epoch_id: &H256,
     ) -> Result<(Vec<u8>, U256), String> {
         let spec = Spec::new_spec();
-        let machine = new_machine();
+        let machine = new_machine_with_builtin();
         let mut state = State::new(
             StateDb::new(
                 self.data_man

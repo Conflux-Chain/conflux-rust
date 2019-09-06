@@ -51,7 +51,7 @@ class HTLCTest(SmartContractBenchBase):
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         self.tx_conf["to"] = contractAddr
-       
+        
         # interact with foo()
         data = contract.functions.foo().buildTransaction(self.tx_conf)["data"];
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
@@ -84,11 +84,11 @@ class HTLCTest(SmartContractBenchBase):
         data = contract.functions.byte32oo(self.solution).buildTransaction(self.tx_conf)["data"];
         result = self.rpc.call(contractAddr, data)
         assert_equal(result, self.solution)
-       
+        
         # call const function getSha256(solution)
         data = contract.functions.getSha256(self.solution).buildTransaction(self.tx_conf)["data"];
         result = self.rpc.call(contractAddr, data)
-        #assert_equal(result, self.problem)
+        assert_equal(result, self.problem)
     
     def testBallotContract(self):
         CONTRACT_PATH = "contracts/ballot_bytecode.dat"
@@ -181,7 +181,7 @@ class HTLCTest(SmartContractBenchBase):
         
         #interact with withdraw
         data = contract.functions.withdraw(self.sender_checksum).buildTransaction(self.tx_conf)["data"];
-        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, 0)
         b2 = self.rpc.get_balance(self.sender)
         bc = self.rpc.get_balance(contractAddr)
         logs = self.rpc.get_logs(self.filter)

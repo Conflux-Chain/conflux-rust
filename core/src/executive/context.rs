@@ -28,6 +28,7 @@ pub enum OutputPolicy {
 }
 
 /// Transaction properties that externalities need to know about.
+#[derive(Debug)]
 pub struct OriginInfo {
     address: Address,
     origin: Address,
@@ -365,7 +366,7 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
 mod tests {
     use super::*;
     use crate::{
-        machine::new_machine,
+        machine::{new_machine, new_machine_with_builtin},
         statedb::StateDb,
         storage::{
             new_storage_manager_for_testing, state::StateTrait, StorageManager,
@@ -417,7 +418,7 @@ mod tests {
 
         fn new() -> Self {
             let storage_manager = Box::new(new_storage_manager_for_testing());
-            let machine = new_machine();
+            let machine = new_machine_with_builtin();
             let env = get_test_env();
             let spec = machine.spec(env.number);
 
