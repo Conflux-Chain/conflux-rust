@@ -1353,7 +1353,7 @@ impl ConsensusNewBlockHandler {
                         inner,
                         epoch_arena_index,
                     );
-                self.executor.compute_epoch(EpochExecutionTask::new(
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
                     inner.arena[epoch_arena_index].hash,
                     inner.get_epoch_block_hashes(epoch_arena_index),
                     inner.get_epoch_start_block_number(epoch_arena_index),
@@ -1392,7 +1392,12 @@ impl ConsensusNewBlockHandler {
             .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
     }
 
-    /// recover receipts_root and logs_bloom_hash in pivot chain
+    /// construct_pivot_state() rebuild pivot chain state info from db
+    /// avoiding intermediate redundant computation triggered by
+    /// on_new_block().
+    /// It also recovers receipts_root and logs_bloom_hash in pivot chain.
+    /// This function is only invoked from recover_graph_from_db with
+    /// header_only being false.
     pub fn construct_pivot_state(&self, inner: &mut ConsensusGraphInner) {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;

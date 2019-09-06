@@ -3,8 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use super::builtin::Builtin;
-use crate::vm::Spec;
-use cfx_types::{Address, U256};
+use crate::{
+    builtin::{builtin_factory, Linear},
+    vm::Spec,
+};
+use cfx_types::{Address, H256, U256};
 use primitives::BlockNumber;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -100,6 +103,47 @@ pub fn new_machine() -> Machine {
     Machine {
         params: CommonParams::common_params(),
         builtins: Arc::new(BTreeMap::new()),
+        spec_rules: None,
+    }
+}
+
+pub fn new_machine_with_builtin() -> Machine {
+    let mut btree = BTreeMap::new();
+    btree.insert(
+        Address::from(H256::from(1)),
+        Builtin::new(
+            Box::new(Linear::new(3000, 0)),
+            builtin_factory("ecrecover"),
+            0,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from(2)),
+        Builtin::new(
+            Box::new(Linear::new(60, 12)),
+            builtin_factory("sha256"),
+            0,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from(3)),
+        Builtin::new(
+            Box::new(Linear::new(600, 120)),
+            builtin_factory("ripemd160"),
+            0,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from(4)),
+        Builtin::new(
+            Box::new(Linear::new(15, 3)),
+            builtin_factory("identity"),
+            0,
+        ),
+    );
+    Machine {
+        params: CommonParams::common_params(),
+        builtins: Arc::new(btree),
         spec_rules: None,
     }
 }

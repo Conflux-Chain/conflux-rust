@@ -109,6 +109,50 @@ class P2PConnection(asyncore.dispatcher):
             self.recvbuf += buf
             self._on_data()
 
+    def read_connection_packet(self):
+        if len(self.recvbuf) < 3:
+            return None
+
+        packet_size = struct.unpack("<L", rzpad(self.recvbuf[:3], 4))[0]
+        if len(self.recvbuf) < 3 + packet_size:
+            return
+
+        self.recvbuf = self.recvbuf[3:]
+        packet = self.recvbuf[:packet_size]
+        self.recvbuf = self.recvbuf[packet_size:]
+
+        if len(packet) > 3:
+            packet = packet[-3:] + packet[:-3]
+
+        return packet
+
+    def assemble_connection_packet(self, data):
+        data_len = struct.pack("<L", len(data))[:3]
+
+        if len(data) > 3:
+            return data_len + data[3:] + data[:3]
+        else:
+            return data_len + data
+
+    def read_session_packet(self, packet):
+        if packet[-2] == 0:
+            return (packet[-1], None, packet[:-2])
+        else:
+            return (packet[-1], packet[-5:-2], packet[:-5])
+
+    def assemble_session_packet(self, packet_id, protocol, payload):
+        packet_id = struct.pack("<B", packet_id)
+        if protocol is None:
+            return payload + b'\x00' + packet_id
+        else:
+            return payload + protocol + b'\x01' + packet_id
+
+    def read_protocol_msg(self, msg):
+        return (msg[-1], msg[:-1])
+
+    def assemble_protocol_msg(self, msg):
+        return rlp.encode(msg) + int_to_bytes(get_msg_id(msg))
+
     def _on_data(self):
         """Try to read P2P messages from the recv buffer.
 
@@ -117,23 +161,15 @@ class P2PConnection(asyncore.dispatcher):
         the on_message callback for processing."""
         try:
             while True:
-                if len(self.recvbuf) < 3:
+                packet = self.read_connection_packet()
+                if packet is None:
                     return
-
-                packet_size = struct.unpack("<L", rzpad(self.recvbuf[:3], 4))[0]
-                if len(self.recvbuf) < 3 + packet_size:
-                    return
-
-                self.recvbuf = self.recvbuf[3:]
-                packet = self.recvbuf[:packet_size]
-                self.recvbuf = self.recvbuf[packet_size:]
 
                 if self.on_handshake(packet):
                     continue
 
-                packet_id = packet[0]
+                packet_id, protocol, payload = self.read_session_packet(packet)
                 self._log_message("receive", packet_id)
-                payload = packet[1:]
 
                 if packet_id != PACKET_HELLO and packet_id != PACKET_DISCONNECT and (not self.had_hello):
                     raise ValueError("bad protocol")
@@ -149,7 +185,7 @@ class P2PConnection(asyncore.dispatcher):
                     self.on_pong()
                 else:
                     assert packet_id == PACKET_PROTOCOL
-                    self.on_protocol_packet(payload)
+                    self.on_protocol_packet(protocol, payload)
         except Exception as e:
             logger.exception('Error reading message: ' + repr(e))
             raise
@@ -170,7 +206,7 @@ class P2PConnection(asyncore.dispatcher):
     def on_pong(self):
         pass
 
-    def on_protocol_packet(self, payload):
+    def on_protocol_packet(self, protocol, payload):
         """Callback for processing a protocol-specific P2P payload. Must be overridden by derived class."""
         raise NotImplementedError
 
@@ -207,18 +243,16 @@ class P2PConnection(asyncore.dispatcher):
         This method takes a P2P payload, builds the P2P header and adds
         the message to the send buffer to be sent over the socket."""
         self._log_message("send", packet_id)
-        buf = struct.pack("<B", packet_id)
-        buf += payload
+        buf = self.assemble_session_packet(packet_id, None, payload)
 
         self.send_data(buf)
 
-    
+
     def send_data(self, data, pushbuf=False):
         if self.state != "connected" and not pushbuf:
             raise IOError('Not connected, no pushbuf')
 
-        buf = struct.pack("<L", len(data))[:3]
-        buf += data
+        buf = self.assemble_connection_packet(data)
 
         with mininode_lock:
             if (len(self.sendbuf) == 0 and not pushbuf):
@@ -232,12 +266,13 @@ class P2PConnection(asyncore.dispatcher):
 
     def send_protocol_packet(self, payload):
         """Send packet of protocols"""
-        self.send_packet(PACKET_PROTOCOL, self.protocol + payload)
+        buf = self.assemble_session_packet(PACKET_PROTOCOL, self.protocol, payload)
+        self.send_data(buf)
 
     def send_protocol_msg(self, msg):
         """Send packet of protocols"""
-        self.send_protocol_packet(int_to_bytes(
-            get_msg_id(msg)) + rlp.encode(msg))
+        payload = self.assemble_protocol_msg(msg)
+        self.send_protocol_packet(payload)
 
     # Class utility methods
 
@@ -307,17 +342,15 @@ class P2PInterface(P2PConnection):
                         self.genesis.block_header.hash, 0, [self.best_block_hash])
         self.send_protocol_msg(status)
 
-    def on_protocol_packet(self, payload):
+    def on_protocol_packet(self, protocol, payload):
         """Receive message and dispatch message to appropriate callback.
 
         We keep a count of how many of each message type has been received
         and the most recent message of each type."""
         with mininode_lock:
             try:
-                protocol = payload[0:3]
                 assert(protocol == self.protocol)  # Possible to be false?
-                packet_type = payload[3]
-                payload = payload[4:]
+                packet_type, payload = self.read_protocol_msg(payload)
                 self.protocol_message_count[packet_type] += 1
                 msg = None
                 msg_class = get_msg_class(packet_type)

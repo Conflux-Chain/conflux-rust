@@ -38,8 +38,7 @@ impl Handleable for GetBlockHeadersResponse {
         debug!("on_block_headers_response, msg=:{:?}", self);
 
         if ctx.peer == NULL {
-            let requested =
-                self.headers.iter().map(|h| h.hash().clone()).collect();
+            let requested = self.headers.iter().map(|h| h.hash()).collect();
 
             self.handle_block_headers(ctx, &self.headers, requested, None);
             return Ok(());
@@ -83,7 +82,7 @@ impl Handleable for GetBlockHeadersResponse {
         };
 
         // re-request headers requested but not received
-        let requested: Vec<H256> = req.hashes.iter().cloned().collect();
+        let requested: HashSet<H256> = req.hashes.iter().cloned().collect();
         self.handle_block_headers(ctx, &self.headers, requested, chosen_peer);
 
         timestamp_validation_result
@@ -94,13 +93,15 @@ impl GetBlockHeadersResponse {
     // FIXME Remove recursive call if block headers exist db
     fn handle_block_headers(
         &self, ctx: &Context, block_headers: &Vec<BlockHeader>,
-        requested: Vec<H256>, chosen_peer: Option<usize>,
+        requested: HashSet<H256>, chosen_peer: Option<usize>,
     )
     {
-        let mut hashes = HashSet::new();
+        // This stores the block hashes for blocks without block body.
+        let mut hashes = Vec::new();
         let mut dependent_hashes_bounded = HashSet::new();
         let mut dependent_hashes_unbounded = HashSet::new();
-        let mut need_to_relay = HashSet::new();
+        // This stores the block hashes for blocks which can relay to peers.
+        let mut need_to_relay = Vec::new();
         let mut returned_headers = HashSet::new();
         let best_height = ctx.manager.graph.consensus.best_epoch_number();
         let now_timestamp = SystemTime::now()
@@ -109,13 +110,13 @@ impl GetBlockHeadersResponse {
             .as_secs();
         for header in block_headers {
             let hash = header.hash();
+            returned_headers.insert(hash);
             if ctx.manager.graph.contains_block_header(&hash) {
                 // A block header might be loaded from db and sent to the local
                 // queue multiple times, but we should only
                 // process it and request its dependence once.
                 continue;
             }
-            returned_headers.insert(hash);
             // check timestamp drift
             if ctx.manager.graph.verification_config.verify_timestamp {
                 if header.timestamp() > now_timestamp + ACCEPTABLE_TIME_DRIFT {
@@ -140,10 +141,10 @@ impl GetBlockHeadersResponse {
             // insert into sync graph
             let (valid, to_relay) = ctx.manager.graph.insert_block_header(
                 &mut header.clone(),
-                true,
-                false,
+                true,  /* need_to_verify */
+                false, /* bench_mode */
                 ctx.manager.insert_header_to_consensus(),
-                true,
+                true, /* persistent */
             );
             if !valid {
                 continue;
@@ -171,7 +172,7 @@ impl GetBlockHeadersResponse {
 
             // check block body
             if !ctx.manager.graph.contains_block(&hash) {
-                hashes.insert(hash);
+                hashes.push(hash);
             }
         }
 
@@ -193,7 +194,7 @@ impl GetBlockHeadersResponse {
 
         ctx.manager.request_manager.headers_received(
             ctx.io,
-            requested.into_iter().collect(),
+            requested,
             returned_headers,
         );
 
@@ -214,16 +215,11 @@ impl GetBlockHeadersResponse {
 
         if ctx.manager.need_requesting_blocks() {
             // request missing blocks
-            ctx.manager.request_missing_blocks(
-                ctx.io,
-                chosen_peer,
-                hashes.into_iter().collect(),
-            );
+            ctx.manager
+                .request_missing_blocks(ctx.io, chosen_peer, hashes);
 
             // relay if necessary
-            ctx.manager
-                .relay_blocks(ctx.io, need_to_relay.into_iter().collect())
-                .ok();
+            ctx.manager.relay_blocks(ctx.io, need_to_relay).ok();
         }
     }
 }

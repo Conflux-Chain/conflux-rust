@@ -1727,6 +1727,24 @@ impl ConsensusGraphInner {
         total_weight
     }
 
+    /// Compute the expected difficulty of a new block given its parent.
+    /// Assume the difficulty adjustment period being p.
+    /// The period boundary is [i*p+1, (i+1)*p].
+    /// Genesis block does not belong to any period, and the first
+    /// period is [1, p]. Then, if parent height is less than p, the
+    /// current block belongs to the first period, and its difficulty
+    /// should be the initial difficulty. Otherwise, we need to consider
+    /// 2 cases:
+    ///
+    /// 1. The parent height is at the period boundary, i.e., the height
+    /// is exactly divisible by p. In this case, the new block and its
+    /// parent do not belong to the same period. The expected difficulty
+    /// of the new block should be computed based on the situation of
+    /// parent's period.
+    ///
+    /// 2. The parent height is not at the period boundary. In this case,
+    /// the new block and its parent belong to the same period, and hence,
+    /// its difficulty should be same as its parent's.
     pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
         let parent_arena_index =
             *self.hash_to_arena_indices.get(parent_hash).unwrap();
@@ -1741,14 +1759,10 @@ impl ConsensusGraphInner {
             if last_period_upper != parent_epoch {
                 self.arena[parent_arena_index].difficulty
             } else {
-                let mut cur = parent_arena_index;
-                while self.arena[cur].height > last_period_upper {
-                    cur = self.arena[cur].parent;
-                }
                 target_difficulty(
                     &self.data_man,
                     &self.pow_config,
-                    &self.arena[cur].hash,
+                    &self.arena[parent_arena_index].hash,
                     |h| {
                         let index = self.hash_to_arena_indices.get(h).unwrap();
                         self.arena[*index].data.num_epoch_blocks_in_2era
@@ -1917,6 +1931,15 @@ impl ConsensusGraphInner {
         }
     }
 
+    pub fn get_epoch_number_from_hash(&self, hash: &H256) -> Option<u64> {
+        self.hash_to_arena_indices.get(hash).and_then(|index| {
+            match self.arena[*index].data.epoch_number {
+                NULLU64 => None,
+                epoch => Some(epoch),
+            }
+        })
+    }
+
     pub fn block_hashes_by_epoch(
         &self, epoch_number: u64,
     ) -> Result<Vec<H256>, String> {
@@ -1952,10 +1975,8 @@ impl ConsensusGraphInner {
     }
 
     fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
-        self.hash_to_arena_indices.get(hash).and_then(|index| {
-            let epoch_number = self.arena[*index].data.epoch_number;
-            self.epoch_hash(epoch_number)
-        })
+        self.get_epoch_number_from_hash(&hash)
+            .and_then(|epoch_number| self.epoch_hash(epoch_number))
     }
 
     pub fn get_balance(

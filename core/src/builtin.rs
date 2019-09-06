@@ -61,9 +61,15 @@ pub trait Pricer: Send + Sync {
 /// A linear pricing model. This computes a price using a base cost and a cost
 /// per-word.
 #[allow(dead_code)]
-struct Linear {
+pub(crate) struct Linear {
     base: usize,
     word: usize,
+}
+
+impl Linear {
+    pub(crate) fn new(base: usize, word: usize) -> Linear {
+        Linear { base, word }
+    }
 }
 
 /// A special pricing model for modular exponentiation.
@@ -197,10 +203,19 @@ impl Builtin {
 
     /// Whether the builtin is activated at the given cardinal number.
     pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
+
+    pub fn new(
+        pricer: Box<dyn Pricer>, native: Box<dyn Impl>, activate_at: u64,
+    ) -> Builtin {
+        Builtin {
+            pricer,
+            native,
+            activate_at,
+        }
+    }
 }
 
 /// Built-in instruction factory.
-#[allow(dead_code)]
 pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
     match name {
         "identity" => Box::new(Identity) as Box<dyn Impl>,

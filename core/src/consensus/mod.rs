@@ -527,6 +527,10 @@ impl ConsensusGraph {
             })
     }
 
+    pub fn get_epoch_number_from_hash(&self, hash: &H256) -> Option<u64> {
+        self.inner.read().get_epoch_number_from_hash(&hash)
+    }
+
     pub fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
