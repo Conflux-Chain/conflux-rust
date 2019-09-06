@@ -29,6 +29,12 @@ use std::{error, fmt};
 pub enum FilterError {
     /// Filter has wrong epoch numbers set.
     InvalidEpochNumber { from_epoch: u64, to_epoch: u64 },
+
+    /// Roots for verifying the requested epochs are unavailable.
+    UnableToVerify { epoch: u64, latest_verifiable: u64 },
+
+    /// Filter error with custom error message (e.g. timeout)
+    Custom(String),
 }
 
 impl fmt::Display for FilterError {
@@ -42,9 +48,17 @@ impl fmt::Display for FilterError {
                 "Filter has wrong epoch numbers set (from: {}, to: {})",
                 from_epoch, to_epoch
             },
+            UnableToVerify {
+                epoch,
+                latest_verifiable,
+            } => format! {
+                "Unable to verify epoch {} (latest verifiable epoch is {})",
+                epoch, latest_verifiable
+            },
+            Custom(ref s) => s.clone(),
         };
 
-        f.write_fmt(format_args!("Filter error ({})", msg))
+        f.write_fmt(format_args!("Filter error: {}", msg))
     }
 }
 
