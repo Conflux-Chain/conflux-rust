@@ -8,6 +8,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import DefaultNode, network_thread_start
 from test_framework.util import wait_until, connect_nodes
 
+
 class HandshakeTests(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -25,6 +26,7 @@ class HandshakeTests(ConfluxTestFramework):
 
         # full node handshake
         connect_nodes(self.nodes, 0, 1)
+
 
 if __name__ == "__main__":
     HandshakeTests().main()

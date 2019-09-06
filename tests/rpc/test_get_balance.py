@@ -2,10 +2,16 @@ import os
 import eth_utils
 import rlp
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from test_framework.util import assert_equal, assert_raises_rpc_error, assert_greater_than
+from test_framework.util import (
+    assert_equal,
+    assert_raises_rpc_error,
+    assert_greater_than,
+)
+
 
 class TestGetBalance(RpcClient):
     def test_genesis_account_balance(self):
@@ -62,15 +68,25 @@ class TestGetBalance(RpcClient):
         assert_equal(balance1, balance2)
 
     def test_epoch_latest_mined(self):
-        assert_raises_rpc_error(None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_LATEST_MINED)
+        assert_raises_rpc_error(
+            None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_LATEST_MINED
+        )
 
     def test_epoch_num_too_large(self):
         mined_epoch = self.epoch_number()
-        assert_raises_rpc_error(None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_NUM(mined_epoch + 1))
+        assert_raises_rpc_error(
+            None,
+            None,
+            self.get_balance,
+            self.GENESIS_ADDR,
+            self.EPOCH_NUM(mined_epoch + 1),
+        )
 
         stated_epoch = self.epoch_number(self.EPOCH_LATEST_STATE)
         for num in range(stated_epoch + 1, mined_epoch):
-            assert_raises_rpc_error(None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_NUM(num))
+            assert_raises_rpc_error(
+                None, None, self.get_balance, self.GENESIS_ADDR, self.EPOCH_NUM(num)
+            )
 
     def test_balance_after_tx(self):
         addr = self.GENESIS_ADDR
@@ -84,7 +100,7 @@ class TestGetBalance(RpcClient):
         cost = 789 + self.DEFAULT_TX_FEE
         new_balance = self.get_balance(addr)
         assert_equal(original_balance - cost, new_balance)
-    
+
     def test_pivot_chain_changed(self):
         root = self.generate_block()
         original_epoch = self.epoch_number()
@@ -103,9 +119,8 @@ class TestGetBalance(RpcClient):
             parent = self.generate_block_with_parent(parent, [])
         assert_equal(self.best_block_hash(), parent)
         assert_equal(self.get_balance(self.GENESIS_ADDR), original_balance)
-        
+
         # generate a block on new pivot chain and refer the previous block
         # that contains the above tx
         self.wait_for_receipt(tx.hash_hex())
         assert_equal(self.get_balance(self.GENESIS_ADDR), changed_balance)
-        

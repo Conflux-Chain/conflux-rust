@@ -1,14 +1,16 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
+
 class TestGetBlocksByEpoch(RpcClient):
     def test_single_chain(self):
         self.generate_block()
         self.generate_blocks_to_state()
-        
+
         # earliest, stated, mined
         self.assert_blocks_in_epoch(self.EPOCH_EARLIEST, 1)
         self.assert_blocks_in_epoch(self.EPOCH_LATEST_STATE, 1)
@@ -22,9 +24,13 @@ class TestGetBlocksByEpoch(RpcClient):
         self.assert_blocks_in_epoch(self.EPOCH_NUM(0), 1)
 
         # invalid epoch number
-        assert_raises_rpc_error(None, None, self.block_hashes_by_epoch, self.EPOCH_NUM(valid_num+1))
+        assert_raises_rpc_error(
+            None, None, self.block_hashes_by_epoch, self.EPOCH_NUM(valid_num + 1)
+        )
 
-    def assert_blocks_in_epoch(self, epoch: str, num_blocks: int, block_hashes: list = None):
+    def assert_blocks_in_epoch(
+        self, epoch: str, num_blocks: int, block_hashes: list = None
+    ):
         blocks = self.block_hashes_by_epoch(epoch)
         assert_equal(len(blocks), num_blocks)
 
@@ -38,7 +44,9 @@ class TestGetBlocksByEpoch(RpcClient):
             if epoch.startswith("0x"):
                 assert_equal(block["epochNumber"], epoch)
             else:
-                assert_equal(block["epochNumber"], self.EPOCH_NUM(self.epoch_number(epoch)))
+                assert_equal(
+                    block["epochNumber"], self.EPOCH_NUM(self.epoch_number(epoch))
+                )
 
     def test_two_chains(self):
         root = self.generate_block()
@@ -53,5 +61,3 @@ class TestGetBlocksByEpoch(RpcClient):
         self.assert_blocks_in_epoch(self.EPOCH_LATEST_MINED, 2, [b, f_ref])
         self.assert_blocks_in_epoch(self.EPOCH_NUM(epoch), 2, [b, f_ref])
         self.assert_blocks_in_epoch(self.EPOCH_NUM(epoch - 1), 1, [f_pivot])
-        
-

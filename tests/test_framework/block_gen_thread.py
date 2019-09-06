@@ -3,6 +3,7 @@ import random
 import time
 import threading
 
+
 class BlockGenThread(threading.Thread):
     def __init__(self, nodes, log, num_txs=1000, interval_fixed=None, interval_base=1):
         threading.Thread.__init__(self, daemon=True)

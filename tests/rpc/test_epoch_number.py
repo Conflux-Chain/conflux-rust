@@ -1,13 +1,15 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
+
 class TestEpochNumber(RpcClient):
     def test_num_default(self):
         epoch = self.epoch_number()
-        
+
         # 1 new blocks
         self.generate_block()
         epoch2 = self.epoch_number()
@@ -29,7 +31,9 @@ class TestEpochNumber(RpcClient):
     def test_num_invalid(self):
         assert_raises_rpc_error(None, None, self.epoch_number, "")
         assert_raises_rpc_error(None, None, self.epoch_number, "dummy_num")
-        assert_raises_rpc_error(None, None, self.epoch_number, self.EPOCH_LATEST_MINED.upper())
+        assert_raises_rpc_error(
+            None, None, self.epoch_number, self.EPOCH_LATEST_MINED.upper()
+        )
         assert_raises_rpc_error(None, None, self.epoch_number, "Latest_mined")
         assert_raises_rpc_error(None, None, self.epoch_number, "6")
         assert_raises_rpc_error(None, None, self.epoch_number, "0X5")

@@ -12,6 +12,7 @@ from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
+
 class GenerateSampleChain(DefaultConfluxTestFramework):
     def set_test_params(self):
         self.delay_factor = 1
@@ -22,7 +23,9 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
         self.log.info("setup nodes ...")
         self.setup_nodes()
         self.log.info("connect peers ...")
-        connect_sample_nodes(self.nodes, self.log, latency_min=0, latency_max=3000*self.delay_factor)
+        connect_sample_nodes(
+            self.nodes, self.log, latency_min=0, latency_max=3000 * self.delay_factor
+        )
         self.log.info("sync up with blocks among nodes ...")
         sync_blocks(self.nodes)
         self.log.info("start P2P connection ...")
@@ -31,8 +34,12 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
     def run_test(self):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}
-        self.log.info("Initial State: (sk:%d, addr:%s, balance:%d)", bytes_to_int(genesis_key),
-                      eth_utils.encode_hex(privtoaddr(genesis_key)), balance_map[genesis_key])
+        self.log.info(
+            "Initial State: (sk:%d, addr:%s, balance:%d)",
+            bytes_to_int(genesis_key),
+            eth_utils.encode_hex(privtoaddr(genesis_key)),
+            balance_map[genesis_key],
+        )
         nonce_map = {genesis_key: 0}
 
         # '''Check if transaction from uncommitted new address can be accepted'''
@@ -56,7 +63,9 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
         #                    value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
         #     self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
         #     time.sleep(random.random() / 10 * self.delay_factor)
-        block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=self.delay_factor)
+        block_gen_thread = BlockGenThread(
+            self.nodes, self.log, interval_base=self.delay_factor
+        )
         block_gen_thread.start()
         # for k in balance_map:
         #     self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
@@ -64,10 +73,14 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
         # self.log.info("Pass 1")
         # self.register_test("general_1.json")
 
-        '''Test Random Transactions'''
+        """Test Random Transactions"""
         all_txs = []
         tx_n = 1000
-        self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/10/2*self.delay_factor)
+        self.log.info(
+            "start to generate %d transactions with about %d seconds",
+            tx_n,
+            tx_n / 10 / 2 * self.delay_factor,
+        )
         for i in range(tx_n):
             sender_key = random.choice(list(balance_map))
             nonce = nonce_map[sender_key]
@@ -82,17 +95,30 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
                 balance_map[receiver_sk] += value
             # not enough transaction fee (gas_price * gas_limit) should not happen for now
             assert balance_map[sender_key] >= value + gas_price * 21000
-            tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
-                                    gas_price=gas_price)
+            tx = create_transaction(
+                pri_key=sender_key,
+                receiver=privtoaddr(receiver_sk),
+                value=value,
+                nonce=nonce,
+                gas_price=gas_price,
+            )
             r = random.randint(0, self.num_nodes - 1)
             self.nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
             all_txs.append(tx)
             nonce_map[sender_key] = nonce + 1
             balance_map[sender_key] -= value + gas_price * 21000
-            self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d nonce:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                           value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk], nonce)
+            self.log.debug(
+                "New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d nonce:%d",
+                encode_hex(tx.hash),
+                eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
+                value,
+                eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:],
+                balance_map[sender_key],
+                balance_map[receiver_sk],
+                nonce,
+            )
             self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
-            time.sleep(random.random()/10*self.delay_factor)
+            time.sleep(random.random() / 10 * self.delay_factor)
         for k in balance_map:
             self.log.info("Account %s with balance:%s", bytes_to_int(k), balance_map[k])
         for tx in all_txs:
@@ -102,7 +128,10 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
                     retry = True
                     while retry:
                         try:
-                            wait_until(lambda: checktx(self.nodes[0], tx.hash_hex()), timeout=60*self.delay_factor)
+                            wait_until(
+                                lambda: checktx(self.nodes[0], tx.hash_hex()),
+                                timeout=60 * self.delay_factor,
+                            )
                             retry = False
                         except CannotSendRequest:
                             time.sleep(0.01)
@@ -110,14 +139,23 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
                 except AssertionError as _:
                     self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 if i == 2:
-                    raise AssertionError("Tx {} not confirmed after 30 seconds".format(tx.hash_hex()))
+                    raise AssertionError(
+                        "Tx {} not confirmed after 30 seconds".format(tx.hash_hex())
+                    )
 
         for k in balance_map:
-            self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
-            wait_until(lambda: self.check_account(k, balance_map), timeout=60*self.delay_factor)
+            self.log.info(
+                "Check account sk:%s addr:%s",
+                bytes_to_int(k),
+                eth_utils.encode_hex(privtoaddr(k)),
+            )
+            wait_until(
+                lambda: self.check_account(k, balance_map),
+                timeout=60 * self.delay_factor,
+            )
         block_gen_thread.stop()
         block_gen_thread.join()
-        sync_blocks(self.nodes, timeout=60*self.delay_factor)
+        sync_blocks(self.nodes, timeout=60 * self.delay_factor)
         self.log.info("Pass")
         self.register_test("general_2.json")
 
@@ -131,17 +169,21 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
         if balance == balance_map[k]:
             return True
         else:
-            self.log.info("Remote balance:%d, local balance:%d", balance, balance_map[k])
+            self.log.info(
+                "Remote balance:%d, local balance:%d", balance, balance_map[k]
+            )
             time.sleep(1)
             return False
 
     def register_test(self, file_name):
         chain = self.nodes[0].cfx_getChain()
-        test_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "blockchain_tests")
+        test_file_path = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "blockchain_tests"
+        )
         test_file = os.path.join(test_file_path, file_name)
         if not os.path.exists(test_file_path):
             os.makedirs(test_file_path)
-        with open(test_file, 'w') as outfile:
+        with open(test_file, "w") as outfile:
             json.dump(chain, outfile, indent=4, sort_keys=True)
 
 

@@ -7,18 +7,20 @@ from typing import Optional
 from pyecharts.charts import Line
 from pyecharts import options as opts
 
-def parse_value(log_line:str, prefix:str, suffix:str):
+
+def parse_value(log_line: str, prefix: str, suffix: str):
     start = 0 if prefix is None else log_line.index(prefix) + len(prefix)
     end = len(log_line) if suffix is None else log_line.index(suffix, start)
     return log_line[start:end]
 
+
 class Metric:
-    def __init__(self, name:str):
+    def __init__(self, name: str):
         self.name = name
         self.timestamps = []
 
     @staticmethod
-    def create_metric(metric_type:str, name:str):
+    def create_metric(metric_type: str, name: str):
         if metric_type in ["Group", "Meter", "Histogram"]:
             return MetricGrouping(name)
         elif metric_type in ["Gauge", "Counter"]:
@@ -29,11 +31,12 @@ class Metric:
     def append(self, timestamp, metric):
         pass
 
-    def add_yaxis(self, chart:Line):
+    def add_yaxis(self, chart: Line):
         pass
 
+
 class MetricGauge(Metric):
-    def __init__(self, name:str):
+    def __init__(self, name: str):
         Metric.__init__(self, name)
         self.values = []
 
@@ -41,11 +44,12 @@ class MetricGauge(Metric):
         self.timestamps.append(timestamp)
         self.values.append(metric)
 
-    def add_yaxis(self, chart:Line):
+    def add_yaxis(self, chart: Line):
         chart.add_yaxis(None, self.values)
 
+
 class MetricGrouping(Metric):
-    def __init__(self, name:str):
+    def __init__(self, name: str):
         Metric.__init__(self, name)
         self.values = {}
 
@@ -62,7 +66,7 @@ class MetricGrouping(Metric):
             else:
                 self.values[key].append(value)
 
-    def add_yaxis(self, chart:Line):
+    def add_yaxis(self, chart: Line):
         selected = len(self.values) < 10
         names = list(self.values.keys())
         names.sort()
@@ -71,18 +75,16 @@ class MetricGrouping(Metric):
 
         chart.set_global_opts(
             title_opts=opts.TitleOpts(title=self.name),
-            legend_opts={
-                "padding": 10,
-                "bottom": 10,
-            }
+            legend_opts={"padding": 10, "bottom": 10},
         )
 
-        chart.options["grid"] = {
-            "bottom": 100 + (len(self.values) // 20) * 50,
-        }
+        chart.options["grid"] = {"bottom": 100 + (len(self.values) // 20) * 50}
 
-def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
-    assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(metrics_log_file)
+
+def generate_metric_chart(metrics_log_file: str, metric_name: Optional[str] = None):
+    assert os.path.exists(metrics_log_file), "metrics log file not found: {}".format(
+        metrics_log_file
+    )
     metrics = {}
 
     with open(metrics_log_file, "r", encoding="utf-8") as fp:
@@ -100,15 +102,17 @@ def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
 
                 metrics[name].append(timestamp, value)
 
-    assert len(metrics) > 0, "metrics log file is empty" if metric_name is None else "metric name [{}] not found".format(metric_name)
+    assert len(metrics) > 0, (
+        "metrics log file is empty"
+        if metric_name is None
+        else "metric name [{}] not found".format(metric_name)
+    )
 
     for (key, metric) in metrics.items():
         chart = (
-            Line(init_opts=opts.InitOpts(
-                width="1400px",
-                height="700px",
-                page_title=key,
-            ))
+            Line(
+                init_opts=opts.InitOpts(width="1400px", height="700px", page_title=key)
+            )
             .add_xaxis(metric.timestamps)
             .set_global_opts(title_opts=opts.TitleOpts(title=key))
         )
@@ -118,6 +122,7 @@ def generate_metric_chart(metrics_log_file:str, metric_name:Optional[str]=None):
         output_html_file = metrics_log_file + ".{}.html".format(key)
         print("[{}]: {}".format(key, output_html_file))
         chart.render(output_html_file)
+
 
 if __name__ == "__main__":
     assert len(sys.argv) >= 2, "Parameter required: <metrics_log_file> [<metric_name>]"

@@ -22,7 +22,9 @@ with tarfile.open(exp_archive_file, "r:gz") as tar_file:
 
 # generate charts for latency
 latency_stat_file = os.path.join(output_dir, "exp_stat_latency.log")
-assert os.path.exists(latency_stat_file), "Latency statistics file not found: {}".format(latency_stat_file)
+assert os.path.exists(
+    latency_stat_file
+), "Latency statistics file not found: {}".format(latency_stat_file)
 
 tags = []
 latencies = {}
@@ -40,14 +42,16 @@ with open(latency_stat_file, "r", encoding="utf-8") as fp:
                 metric = parse_value(fields[1], "block broadcast latency (", ")")
                 if not latencies.get(metric):
                     latencies[metric] = []
-                latencies[metric].append(fields[2])     # fields[2] = Avg
+                latencies[metric].append(fields[2])  # fields[2] = Avg
 
 chart = (
     Line()
     .add_xaxis(tags)
     .set_global_opts(
         title_opts=opts.TitleOpts(title="Block Broadcast Latency (Average)"),
-        legend_opts=opts.LegendOpts(orient="vertical", pos_left="right", pos_top="middle"),
+        legend_opts=opts.LegendOpts(
+            orient="vertical", pos_left="right", pos_top="middle"
+        ),
     )
 )
 

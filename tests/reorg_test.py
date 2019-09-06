@@ -7,6 +7,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
+
 class ReorgTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -16,7 +17,9 @@ class ReorgTest(ConfluxTestFramework):
 
     def setup_network(self):
         self.setup_nodes()
-        assert self.num_nodes % self.n_shard == 0, "each shard should have the same size"
+        assert (
+            self.num_nodes % self.n_shard == 0
+        ), "each shard should have the same size"
         for s in range(self.n_shard):
             for i in range(s * self.shard_size, (s + 1) * self.shard_size - 1):
                 connect_nodes(self.nodes, i, i + 1)
@@ -31,14 +34,19 @@ class ReorgTest(ConfluxTestFramework):
         shard_balance = []
 
         for s in range(self.n_shard):
-            ''' Send random transactions to this shard s '''
-            shard_nodes = self.nodes[s * self.shard_size: (s + 1) * self.shard_size]
+            """ Send random transactions to this shard s """
+            shard_nodes = self.nodes[s * self.shard_size : (s + 1) * self.shard_size]
             receiver_sk, _ = ec_random_keys()
             value = default_config["TOTAL_COIN"] - 21000
             balance_map = {receiver_sk: value}
             nonce_map = {receiver_sk: 0}
-            tx = create_transaction(pri_key=genesis_key, receiver=privtoaddr(receiver_sk), value=value, nonce=0,
-                                    gas_price=gas_price)
+            tx = create_transaction(
+                pri_key=genesis_key,
+                receiver=privtoaddr(receiver_sk),
+                value=value,
+                nonce=0,
+                gas_price=gas_price,
+            )
             shard_nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
             for i in range(tx_n):
                 sender_key = random.choice(list(balance_map))
@@ -52,18 +60,34 @@ class ReorgTest(ConfluxTestFramework):
                     value = 1
                     receiver_sk = random.choice(list(balance_map))
                     balance_map[receiver_sk] += value
-                tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
-                                        gas_price=gas_price)
+                tx = create_transaction(
+                    pri_key=sender_key,
+                    receiver=privtoaddr(receiver_sk),
+                    value=value,
+                    nonce=nonce,
+                    gas_price=gas_price,
+                )
                 r = random.randint(0, self.shard_size - 1)
                 shard_nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000
-                self.log.info("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                               value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
+                self.log.info(
+                    "New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d",
+                    encode_hex(tx.hash),
+                    eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
+                    value,
+                    eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:],
+                    balance_map[sender_key],
+                    balance_map[receiver_sk],
+                )
                 self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
                 time.sleep(random.random() / 10)
             for k in balance_map:
-                self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
+                self.log.info(
+                    "Check account sk:%s addr:%s",
+                    bytes_to_int(k),
+                    eth_utils.encode_hex(privtoaddr(k)),
+                )
                 wait_until(lambda: self.check_account(k, balance_map, shard_nodes[0]))
             shard_balance.append(balance_map)
 
@@ -75,12 +99,14 @@ class ReorgTest(ConfluxTestFramework):
         wait_until(lambda: epochCheck(self.nodes[int(self.num_nodes / self.n_shard)]))
         for s in range(self.n_shard):
             for idx in range(self.shard_size):
-                connect_nodes(self.nodes, s * self.shard_size - 1 + idx, s * self.shard_size + idx)
+                connect_nodes(
+                    self.nodes, s * self.shard_size - 1 + idx, s * self.shard_size + idx
+                )
         block_gen_thread.stop()
         block_gen_thread.join()
         sync_blocks(self.nodes)
 
-        ''' Check if the balance state of every node matches '''
+        """ Check if the balance state of every node matches """
         success_shard = -1
         # use the state of node 0 to find the winning shard
         for s in range(self.n_shard):
@@ -89,7 +115,9 @@ class ReorgTest(ConfluxTestFramework):
             for k in balance_map:
                 if not self.check_account(k, balance_map, self.nodes[0]):
                     unmatch = True
-                    self.log.info("Final balance does not match shard %s, check next", s)
+                    self.log.info(
+                        "Final balance does not match shard %s, check next", s
+                    )
                     break
             if unmatch:
                 continue
@@ -101,7 +129,11 @@ class ReorgTest(ConfluxTestFramework):
             balance_map = shard_balance[success_shard]
             for k in balance_map:
                 if not self.check_account(k, balance_map, self.nodes[i]):
-                    raise AssertionError("Final balance of node {} does not match node 0, sender={}".format(i, k))
+                    raise AssertionError(
+                        "Final balance of node {} does not match node 0, sender={}".format(
+                            i, k
+                        )
+                    )
         self.log.info("Pass")
 
     def check_account(self, k, balance_map, node):
@@ -114,7 +146,9 @@ class ReorgTest(ConfluxTestFramework):
         if balance == balance_map[k]:
             return True
         else:
-            self.log.info("Remote balance:%d, local balance:%d", balance, balance_map[k])
+            self.log.info(
+                "Remote balance:%d, local balance:%d", balance, balance_map[k]
+            )
             time.sleep(1)
             return False
 

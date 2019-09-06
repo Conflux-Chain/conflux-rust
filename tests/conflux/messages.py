@@ -45,12 +45,12 @@ GET_BLOCK_HEADERS_RESPONSE = 0x06
 GET_BLOCK_BODIES = 0x07
 GET_BLOCK_BODIES_RESPONSE = 0x08
 NEW_BLOCK = 0x09
-GET_TERMINAL_BLOCK_HASHES_RESPONSE = 0x0a
-GET_TERMINAL_BLOCK_HASHES = 0x0b
-GET_BLOCKS = 0x0c
-GET_BLOCKS_RESPONSE = 0x0d
-GET_BLOCKS_WITH_PUBLIC_RESPONSE = 0x0e
-GET_CMPCT_BLOCKS = 0x0f
+GET_TERMINAL_BLOCK_HASHES_RESPONSE = 0x0A
+GET_TERMINAL_BLOCK_HASHES = 0x0B
+GET_BLOCKS = 0x0C
+GET_BLOCKS_RESPONSE = 0x0D
+GET_BLOCKS_WITH_PUBLIC_RESPONSE = 0x0E
+GET_CMPCT_BLOCKS = 0x0F
 GET_CMPCT_BLOCKS_RESPONSE = 0x10
 GET_BLOCK_TXN = 0x11
 GET_BLOCK_TXN_RESPONSE = 0x12
@@ -58,61 +58,56 @@ GET_BLOCK_TXN_RESPONSE = 0x12
 GET_BLOCK_HASHES_BY_EPOCH = 0x17
 GET_BLOCK_HEADER_CHAIN = 0x18
 
-from rlp.exceptions import (
-    DeserializationError,
-    SerializationError,
-)
+from rlp.exceptions import DeserializationError, SerializationError
 
 # Copied from rlp.sedes.Boolean, but encode False to 0x00, not empty.
 class Boolean:
     """A sedes for booleans
     """
+
     def serialize(self, obj):
         if not isinstance(obj, bool):
-            raise SerializationError('Can only serialize bool', obj)
+            raise SerializationError("Can only serialize bool", obj)
 
         if obj is False:
-            return b'\x00'
+            return b"\x00"
         elif obj is True:
-            return b'\x01'
+            return b"\x01"
         else:
             raise Exception("Invariant: no other options for boolean values")
 
     def deserialize(self, serial):
-        if serial == b'\x00':
+        if serial == b"\x00":
             return False
-        elif serial == b'\x01':
+        elif serial == b"\x01":
             return True
         else:
             raise DeserializationError(
-                'Invalid serialized boolean.  Must be either 0x01 or 0x00',
-                serial
+                "Invalid serialized boolean.  Must be either 0x01 or 0x00", serial
             )
 
+
 class Capability(rlp.Serializable):
-    fields = [
-        ("protocol", binary),
-        ("version", big_endian_int)
-    ]
+    fields = [("protocol", binary), ("version", big_endian_int)]
 
 
 class NodeEndpoint(rlp.Serializable):
     fields = [
         ("address", binary),
         ("udp_port", big_endian_int),
-        ("port", big_endian_int)
+        ("port", big_endian_int),
     ]
 
 
 class Hello(rlp.Serializable):
     fields = [
         ("capabilities", CountableList(Capability)),
-        ("node_endpoint", NodeEndpoint)
+        ("node_endpoint", NodeEndpoint),
     ]
 
 
 class Disconnect(rlp.Serializable):
-    def __init__(self, code:int, msg:str=None):
+    def __init__(self, code: int, msg: str = None):
         self.code = code
         self.msg = msg
 
@@ -177,48 +172,30 @@ class GetBlockHashes(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
         ("hash", hash32),
-        ("max_blocks", big_endian_int)
+        ("max_blocks", big_endian_int),
     ]
 
     def __init__(self, hash, max_blocks, reqid=0):
-        super().__init__(
-            reqid=reqid,
-            hash=hash,
-            max_blocks=max_blocks,
-        )
+        super().__init__(reqid=reqid, hash=hash, max_blocks=max_blocks)
 
 
 class GetBlockHashesByEpoch(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("epochs", CountableList(big_endian_int)),
-    ]
+    fields = [("reqid", big_endian_int), ("epochs", CountableList(big_endian_int))]
 
     def __init__(self, epochs, reqid=0):
-        super().__init__(
-            reqid=reqid,
-            epochs=epochs
-        )
+        super().__init__(reqid=reqid, epochs=epochs)
 
 
 class BlockHashes(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("hashes", CountableList(hash32)),
-    ]
+    fields = [("reqid", big_endian_int), ("hashes", CountableList(hash32))]
 
 
 class GetBlockHeaders(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("hashes", CountableList(hash32)),
-    ]
+    fields = [("reqid", big_endian_int), ("hashes", CountableList(hash32))]
 
     def __init__(self, hashes, reqid=0):
-        super().__init__(
-            reqid=reqid,
-            hashes=hashes,
-        )
+        super().__init__(reqid=reqid, hashes=hashes)
+
 
 class BlockHeader(rlp.Serializable):
     fields = [
@@ -239,25 +216,26 @@ class BlockHeader(rlp.Serializable):
         ("state_root_with_aux_info", CountableList(CountableList(binary))),
     ]
 
-    def __init__(self,
-                 parent_hash=default_config['GENESIS_PREVHASH'],
-                 height=0,
-                 timestamp=0,
-                 author=default_config['GENESIS_COINBASE'],
-                 transactions_root=trie.BLANK_ROOT,
-                 deferred_state_root=sha3(rlp.encode(trie.state_root())),
-                 deferred_receipts_root=trie.BLANK_ROOT,
-                 deferred_logs_bloom_hash=default_config['GENESIS_LOGS_BLOOM_HASH'],
-                 blame=0,
-                 difficulty=default_config['GENESIS_DIFFICULTY'],
-                 gas_limit=0,
-                 referee_hashes=[],
-                 adaptive=0,
-                 nonce=0,
-                 state_root_with_aux_info=[trie.state_root(), [trie.NULL_ROOT, trie.NULL_ROOT]]):
+    def __init__(
+        self,
+        parent_hash=default_config["GENESIS_PREVHASH"],
+        height=0,
+        timestamp=0,
+        author=default_config["GENESIS_COINBASE"],
+        transactions_root=trie.BLANK_ROOT,
+        deferred_state_root=sha3(rlp.encode(trie.state_root())),
+        deferred_receipts_root=trie.BLANK_ROOT,
+        deferred_logs_bloom_hash=default_config["GENESIS_LOGS_BLOOM_HASH"],
+        blame=0,
+        difficulty=default_config["GENESIS_DIFFICULTY"],
+        gas_limit=0,
+        referee_hashes=[],
+        adaptive=0,
+        nonce=0,
+        state_root_with_aux_info=[trie.state_root(), [trie.NULL_ROOT, trie.NULL_ROOT]],
+    ):
         # at the beginning of a method, locals() is a dict of all arguments
-        fields = {k: v for k, v in locals().items() if
-                  k not in ['self', '__class__']}
+        fields = {k: v for k, v in locals().items() if k not in ["self", "__class__"]}
         self.block = None
         super(BlockHeader, self).__init__(**fields)
 
@@ -275,25 +253,33 @@ class BlockHeader(rlp.Serializable):
         return bytes_to_int(sha3(rlp.encode([self.problem_hash(), self.nonce])))
 
     def without_nonce(self):
-        fields = {field: getattr(self, field) for field in BlockHeaderWithoutNonce._meta.field_names}
+        fields = {
+            field: getattr(self, field)
+            for field in BlockHeaderWithoutNonce._meta.field_names
+        }
         return BlockHeaderWithoutNonce(**fields)
 
     def rlp_part(self):
-        fields = {field: getattr(self, field) for field in BlockHeaderRlpPart._meta.field_names}
+        fields = {
+            field: getattr(self, field)
+            for field in BlockHeaderRlpPart._meta.field_names
+        }
         return BlockHeaderRlpPart(**fields)
 
 
 class BlockHeaderRlpPart(rlp.Serializable):
     fields = [
-        (field, sedes) for field, sedes in BlockHeader._meta.fields if
-        field not in ["state_root_with_aux_info"]
+        (field, sedes)
+        for field, sedes in BlockHeader._meta.fields
+        if field not in ["state_root_with_aux_info"]
     ]
 
 
 class BlockHeaderWithoutNonce(rlp.Serializable):
     fields = [
-        (field, sedes) for field, sedes in BlockHeader._meta.fields if
-        field not in ["state_root_with_aux_info", "nonce"]
+        (field, sedes)
+        for field, sedes in BlockHeader._meta.fields
+        if field not in ["state_root_with_aux_info", "nonce"]
     ]
 
 
@@ -302,35 +288,25 @@ class BlockHeaderWithoutNonce(rlp.Serializable):
 #         ("headers", CountableList(BlockHeader))
 #     ]
 class BlockHeaders(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("headers", CountableList(BlockHeader)),
-    ]
+    fields = [("reqid", big_endian_int), ("headers", CountableList(BlockHeader))]
 
 
 class GetBlockBodies(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("hashes", CountableList(hash32)),
-    ]
+    fields = [("reqid", big_endian_int), ("hashes", CountableList(hash32))]
 
     def __init__(self, reqid=0, hashes=[]):
-        super().__init__(
-            reqid=reqid,
-            hashes=hashes
-        )
+        super().__init__(reqid=reqid, hashes=hashes)
 
 
 class Block(rlp.Serializable):
     fields = [
         ("block_header", BlockHeader),
-        ("transactions", CountableList(Transaction))
+        ("transactions", CountableList(Transaction)),
     ]
 
     def __init__(self, block_header, transactions=None):
         super(Block, self).__init__(
-            block_header=block_header,
-            transactions=(transactions or []),
+            block_header=block_header, transactions=(transactions or [])
         )
 
     @property
@@ -342,10 +318,7 @@ class Block(rlp.Serializable):
 
 
 class BlockBodies(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("bodies", CountableList(Block)),
-    ]
+    fields = [("reqid", big_endian_int), ("bodies", CountableList(Block))]
 
 
 class NewBlock(rlp.Serializable):
@@ -354,7 +327,7 @@ class NewBlock(rlp.Serializable):
 
     @classmethod
     def serializable(cls, obj):
-            return True
+        return True
 
     @classmethod
     def serialize(cls, obj):
@@ -366,16 +339,11 @@ class NewBlock(rlp.Serializable):
 
 
 class TerminalBlockHashes(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("hashes", CountableList(hash32)),
-    ]
+    fields = [("reqid", big_endian_int), ("hashes", CountableList(hash32))]
 
 
 class GetTerminalBlockHashes(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-    ]
+    fields = [("reqid", big_endian_int)]
 
     def __init__(self, reqid=0):
         super().__init__(reqid)
@@ -389,25 +357,15 @@ class GetBlocks(rlp.Serializable):
     ]
 
     def __init__(self, reqid=0, with_public=False, hashes=[]):
-        super().__init__(
-            reqid=reqid,
-            with_public=with_public,
-            hashes=hashes
-        )
+        super().__init__(reqid=reqid, with_public=with_public, hashes=hashes)
 
 
 class Blocks(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("blocks", CountableList(Block)),
-    ]
+    fields = [("reqid", big_endian_int), ("blocks", CountableList(Block))]
 
 
 class GetCompactBlocks(rlp.Serializable):
-    fields = [
-        ("reqid", big_endian_int),
-        ("hashes", CountableList(hash32)),
-    ]
+    fields = [("reqid", big_endian_int), ("hashes", CountableList(hash32))]
 
 
 class CompactBlock(rlp.Serializable):
@@ -422,7 +380,7 @@ class GetCompactBlocksResponse(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
         ("compact_blocks", CountableList(CompactBlock)),
-        ("blocks", CountableList(Block))
+        ("blocks", CountableList(Block)),
     ]
 
 
@@ -438,7 +396,7 @@ class GetBlockTxnResponse(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
         ("block_hash", hash32),
-        ("block_txn", CountableList(Transaction))
+        ("block_txn", CountableList(Transaction)),
     ]
 
 

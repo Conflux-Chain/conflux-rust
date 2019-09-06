@@ -10,6 +10,7 @@ from test_framework.mininode import DefaultNode, network_thread_start
 from test_framework.util import connect_nodes, get_peer_addr, wait_until
 from conflux.rpc import RpcClient
 
+
 class NodeReputationTests(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -19,7 +20,7 @@ class NodeReputationTests(ConfluxTestFramework):
         self.test_house_keeping_ms = 300
 
         self.conf_parameters = {
-            "discovery_housekeeping_timeout_ms": str(self.test_house_keeping_ms),
+            "discovery_housekeeping_timeout_ms": str(self.test_house_keeping_ms)
         }
 
     def setup_network(self):
@@ -45,7 +46,7 @@ class NodeReputationTests(ConfluxTestFramework):
 
         return node
 
-    def compare_node_time(self, t1:dict, t2:dict):
+    def compare_node_time(self, t1: dict, t2: dict):
         if t1["secs_since_epoch"] > t2["secs_since_epoch"]:
             return 1
 
@@ -63,7 +64,10 @@ class NodeReputationTests(ConfluxTestFramework):
     def test_disconnect_with_failure(self, client0: RpcClient):
         n = self.connect_nodes(client0, 1)
 
-        assert client0.disconnect_peer(self.nodes[1].key, client0.UPDATE_NODE_OP_FAILURE) == n[1]["streamToken"]
+        assert (
+            client0.disconnect_peer(self.nodes[1].key, client0.UPDATE_NODE_OP_FAILURE)
+            == n[1]["streamToken"]
+        )
 
         # Node 1 is still in trusted node table, only marked as failure.
         # But it may be auto connected again (by timer).
@@ -76,8 +80,19 @@ class NodeReputationTests(ConfluxTestFramework):
             assert node[1]["streamToken"] == n[1]["streamToken"]
         else:
             # Node 1 auto connected by timer, so timestamp changed
-            assert self.compare_node_time(node[1]["lastConnected"]["success"], n[1]["lastConnected"]["success"]) == 1
-            assert self.compare_node_time(node[1]["lastContact"]["success"], n[1]["lastContact"]["success"]) == 1
+            assert (
+                self.compare_node_time(
+                    node[1]["lastConnected"]["success"],
+                    n[1]["lastConnected"]["success"],
+                )
+                == 1
+            )
+            assert (
+                self.compare_node_time(
+                    node[1]["lastContact"]["success"], n[1]["lastContact"]["success"]
+                )
+                == 1
+            )
 
         # Node 0 still create outgoing connection to Node 1
         time.sleep((self.test_house_keeping_ms + 100) / 1000)
@@ -86,7 +101,10 @@ class NodeReputationTests(ConfluxTestFramework):
     def test_disconnect_with_demote(self, client0: RpcClient):
         n = self.connect_nodes(client0, 2)
 
-        assert client0.disconnect_peer(self.nodes[2].key, client0.UPDATE_NODE_OP_DEMOTE) == n[1]["streamToken"]
+        assert (
+            client0.disconnect_peer(self.nodes[2].key, client0.UPDATE_NODE_OP_DEMOTE)
+            == n[1]["streamToken"]
+        )
 
         # demote to untrusted node table
         node = client0.get_node(self.nodes[2].key)
@@ -102,7 +120,10 @@ class NodeReputationTests(ConfluxTestFramework):
     def test_disconnect_with_remove(self, client0: RpcClient):
         n = self.connect_nodes(client0, 3)
 
-        assert client0.disconnect_peer(self.nodes[3].key, client0.UPDATE_NODE_OP_REMOVE) == n[1]["streamToken"]
+        assert (
+            client0.disconnect_peer(self.nodes[3].key, client0.UPDATE_NODE_OP_REMOVE)
+            == n[1]["streamToken"]
+        )
 
         # On node 0: node 3 is blacklisted, and cannot immediately add it again
         assert client0.get_node(self.nodes[3].key) is None
@@ -121,6 +142,7 @@ class NodeReputationTests(ConfluxTestFramework):
         peer0 = client3.get_peer(self.nodes[0].key)
         # refused during handshake or not handshaked yet
         assert peer0 is None or len(peer0["caps"]) == 0
+
 
 if __name__ == "__main__":
     NodeReputationTests().main()

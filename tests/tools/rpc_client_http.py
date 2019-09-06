@@ -17,7 +17,9 @@ for example:
 
 Note, when URL specified, it should be of format http://ip:port."""
 
-assert len(sys.argv) > 1, "Parameter required: [<url: http://ip:port>] <method_name> [<method_args>*]"
+assert (
+    len(sys.argv) > 1
+), "Parameter required: [<url: http://ip:port>] <method_name> [<method_args>*]"
 
 rpc_url = "http://localhost:12537"
 method_name = sys.argv[1]
@@ -29,7 +31,7 @@ if sys.argv[1].lower().startswith("http://"):
     method_name = sys.argv[2]
     method_args = sys.argv[3:]
 
-node=get_simple_rpc_proxy(rpc_url, 3)
-method_args = ["\"" + arg + "\"" for arg in method_args]
+node = get_simple_rpc_proxy(rpc_url, 3)
+method_args = ['"' + arg + '"' for arg in method_args]
 rpc = "node.{}({})".format(method_name, ", ".join(method_args))
 print(json.dumps(eval(rpc), indent=4))

@@ -1,4 +1,5 @@
 import jsonrpcclient.client
+
 jsonrpcclient.client.request_log.propagate = False
 jsonrpcclient.client.response_log.propagate = False
 
@@ -8,6 +9,7 @@ class SimpleRpcProxy:
         self.url = url
         self.timeout = timeout
         from jsonrpcclient.clients.http_client import HTTPClient
+
         self.client = HTTPClient(url)
 
     def __getattr__(self, name):
@@ -22,8 +24,9 @@ class RpcCaller:
 
     def __call__(self, *args, **argsn):
         if argsn:
-            raise ValueError('json rpc 2 only supports array arguments')
+            raise ValueError("json rpc 2 only supports array arguments")
         from jsonrpcclient.requests import Request
+
         request = Request(self.method, *args)
         response = self.client.send(request, timeout=self.timeout)
         return response.data.result

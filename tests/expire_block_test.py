@@ -8,6 +8,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
+
 class ExpireBlockTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -40,7 +41,11 @@ class ExpireBlockTest(ConfluxTestFramework):
             blocks.append(new_hash)
             self.log.info("generate block={}".format(new_hash))
         wait_until(lambda: node.getbestblockhash() == new_hash)
-        out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51, referee_hashes=[bytes.fromhex(blocks[400][2:])])
+        out_block = create_block(
+            parent_hash=bytes.fromhex(blocks[50][2:]),
+            height=51,
+            referee_hashes=[bytes.fromhex(blocks[400][2:])],
+        )
         self.send_msg(node, NewBlock(block=out_block))
         time.sleep(3)
         node.expireblockgc(2)
@@ -69,6 +74,7 @@ class ExpireBlockTest(ConfluxTestFramework):
         for i in range(9, 11):
             self.send_msg(node, NewBlock(block=blocks[i]))
             wait_until(lambda: node.getbestblockhash() == blocks[i].hash_hex())
+
 
 if __name__ == "__main__":
     ExpireBlockTest().main()

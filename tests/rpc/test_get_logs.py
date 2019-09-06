@@ -1,9 +1,11 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
+
 
 class TestGetLogs(RpcClient):
     def test_invalid_filter(self):
@@ -11,7 +13,9 @@ class TestGetLogs(RpcClient):
         filter = Filter(from_epoch=0)
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
-        filter = Filter(from_epoch="latest") # should be `latest_state` or `latest_mined`
+        filter = Filter(
+            from_epoch="latest"
+        )  # should be `latest_state` or `latest_mined`
         assert_raises_rpc_error(None, None, self.get_logs, filter)
 
         # inconsistent epoch numbers
@@ -65,7 +69,12 @@ class TestGetLogs(RpcClient):
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        filter = Filter(address=["0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000"])
+        filter = Filter(
+            address=[
+                "0x0000000000000000000000000000000000000000",
+                "0x0000000000000000000000000000000000000000",
+            ]
+        )
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
@@ -74,11 +83,20 @@ class TestGetLogs(RpcClient):
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        filter = Filter(topics=["0x0000000000000000000000000000000000000000000000000000000000000000"])
+        filter = Filter(
+            topics=[
+                "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ]
+        )
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
-        filter = Filter(topics=["0x0000000000000000000000000000000000000000000000000000000000000000", ["0x0000000000000000000000000000000000000000000000000000000000000000"]])
+        filter = Filter(
+            topics=[
+                "0x0000000000000000000000000000000000000000000000000000000000000000",
+                ["0x0000000000000000000000000000000000000000000000000000000000000000"],
+            ]
+        )
         logs = self.get_logs(filter)
         assert_equal(logs, [])
 
@@ -86,12 +104,18 @@ class TestGetLogs(RpcClient):
         filter = Filter(
             from_epoch="0x0",
             to_epoch="latest_state",
-            block_hashes=["0x0000000000000000000000000000000000000000000000000000000000000000"],
+            block_hashes=[
+                "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ],
             address=["0x0000000000000000000000000000000000000000"],
             topics=[
                 "0x0000000000000000000000000000000000000000000000000000000000000000",
-                ["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]],
-            limit="0x1"
+                [
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                ],
+            ],
+            limit="0x1",
         )
         logs = self.get_logs(filter)
         assert_equal(logs, [])

@@ -18,17 +18,26 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
-        self.conf_parameters["log_level"] = "\"debug\""
+        self.conf_parameters["log_level"] = '"debug"'
         self.conf_parameters["era_epoch_count"] = "150"
         self.conf_parameters["era_checkpoint_gap"] = "150"
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
         bootnode = self.nodes[0]
-        extra_args0 = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1",
-                       "--archive"]
-        self.start_node(0, extra_args = extra_args0)
-        bootnode_id = "cfxnode://{}@{}:{}".format(bootnode.key[2:], bootnode.ip, bootnode.port)
+        extra_args0 = [
+            "--enable-discovery",
+            "true",
+            "--node-table-timeout",
+            "1",
+            "--node-table-promotion-timeout",
+            "1",
+            "--archive",
+        ]
+        self.start_node(0, extra_args=extra_args0)
+        bootnode_id = "cfxnode://{}@{}:{}".format(
+            bootnode.key[2:], bootnode.ip, bootnode.port
+        )
         self.node_extra_args = ["--bootnodes", bootnode_id] + extra_args0
         for i in range(1, self.num_nodes):
             self.start_node(i, extra_args=self.node_extra_args)
@@ -66,29 +75,48 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         value = 1
         receiver_sk, _ = ec_random_keys()
         sender_key = default_config["GENESIS_PRI_KEY"]
-        tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=0,
-                                gas_price=gas_price)
+        tx = create_transaction(
+            pri_key=sender_key,
+            receiver=privtoaddr(receiver_sk),
+            value=value,
+            nonce=0,
+            gas_price=gas_price,
+        )
         self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
-        self.log.debug("New tx %s: %s send value %d to %s", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                       value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:])
+        self.log.debug(
+            "New tx %s: %s send value %d to %s",
+            encode_hex(tx.hash),
+            eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
+            value,
+            eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:],
+        )
+
         def check_packed():
             client = RpcClient(self.nodes[0])
             client.generate_block(1)
             return checktx(self.nodes[0], tx.hash_hex())
+
         wait_until(lambda: check_packed())
         sender_addr = eth_utils.encode_hex(privtoaddr(sender_key))
         receiver_addr = eth_utils.encode_hex(privtoaddr(receiver_sk))
         sender_balance = default_config["TOTAL_COIN"] - value - gas_price * 21000
         # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
         self.nodes[0].generate(2000, 0)
-        assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance)
+        assert_equal(
+            parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance
+        )
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)), value)
         time.sleep(1)
         self.stop_node(0)
         self.start_node(0)
         self.log.info("Wait for node 0 to recover from crash")
-        wait_until(lambda: parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)) == sender_balance)
-        wait_until(lambda: parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)) == value)
+        wait_until(
+            lambda: parse_as_int(self.nodes[0].cfx_getBalance(sender_addr))
+            == sender_balance
+        )
+        wait_until(
+            lambda: parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)) == value
+        )
         self.log.info("Pass 2")
 
 

@@ -1,20 +1,30 @@
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
+
 
 class TestGetBlockByHash(RpcClient):
     def test_invalid_params(self):
         # empty hash
         assert_raises_rpc_error(None, None, self.block_by_hash, "", False)
         assert_raises_rpc_error(None, None, self.block_by_hash, "0x", True)
-        
+
         # invalid hash
-        assert_raises_rpc_error(None, None, self.block_by_hash, "0x123", False) # too short
-        assert_raises_rpc_error(None, None, self.block_by_hash, self.rand_hash() + "123", True) # too long
-        assert_raises_rpc_error(None, None, self.block_by_hash, self.rand_hash()[0:-1] + "G", False) # invalid char
-        assert_raises_rpc_error(None, None, self.block_by_hash, self.rand_hash()[2:], True) # without 0x prefix
+        assert_raises_rpc_error(
+            None, None, self.block_by_hash, "0x123", False
+        )  # too short
+        assert_raises_rpc_error(
+            None, None, self.block_by_hash, self.rand_hash() + "123", True
+        )  # too long
+        assert_raises_rpc_error(
+            None, None, self.block_by_hash, self.rand_hash()[0:-1] + "G", False
+        )  # invalid char
+        assert_raises_rpc_error(
+            None, None, self.block_by_hash, self.rand_hash()[2:], True
+        )  # without 0x prefix
 
     def test_block_not_found(self):
         dummy_hash = self.rand_hash()
@@ -23,7 +33,7 @@ class TestGetBlockByHash(RpcClient):
 
     def test_valid_block(self):
         block_hash = self.generate_block()
-        
+
         block1 = self.block_by_hash(block_hash)
         assert_equal(block1["hash"], block_hash)
 

@@ -10,7 +10,15 @@ from conflux.utils import int_to_hex, privtoaddr, encode_hex
 from test_framework.blocktools import make_genesis, create_transaction
 from test_framework.mininode import start_p2p_connection
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler, checktx
+from test_framework.util import (
+    assert_equal,
+    connect_nodes,
+    get_peer_addr,
+    wait_until,
+    WaitHandler,
+    checktx,
+)
+
 
 class RpcTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -25,7 +33,7 @@ class RpcTest(ConfluxTestFramework):
         self._test_sayhello()
 
         blocks = self.nodes[0].generate(1, 0)
-        self.best_block_hash = blocks[-1] #make_genesis().block_header.hash
+        self.best_block_hash = blocks[-1]  # make_genesis().block_header.hash
 
         self._test_getblockcount()
         self._test_getbestblockhash()
@@ -58,7 +66,7 @@ class RpcTest(ConfluxTestFramework):
 
     def _test_class(self, class_name, class_type):
         obj = class_type(self.nodes[0])
-        
+
         for name in dir(obj):
             m = getattr(obj, name)
             if type(m) is types.MethodType and name.startswith("test_"):
@@ -90,7 +98,7 @@ class RpcTest(ConfluxTestFramework):
         res = self.nodes[0].getpeerinfo()
         assert_equal(len(res), 1)
         assert_equal(len(self.nodes[1].getpeerinfo()), 1)
-        assert_equal(res[0]['addr'], get_peer_addr(self.nodes[1]))
+        assert_equal(res[0]["addr"], get_peer_addr(self.nodes[1]))
         self.nodes[0].removenode(self.nodes[1].key, get_peer_addr(self.nodes[1]))
         try:
             wait_until(lambda: len(self.nodes[0].getpeerinfo()) == 0, timeout=10)
@@ -111,15 +119,19 @@ class RpcTest(ConfluxTestFramework):
         self.nodes[0].addlatency(default_node.key, latency_ms)
         default_node.start_time = datetime.datetime.now()
         default_node.latency_ms = latency_ms
-        handler = WaitHandler(default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[default_node.genesis.block_header.hash]))
+        handler = WaitHandler(
+            default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers
+        )
+        self.nodes[0].p2p.send_protocol_msg(
+            GetBlockHeaders(hashes=[default_node.genesis.block_header.hash])
+        )
         handler.wait()
 
     def _test_getstatus(self):
         self.log.info("Test getstatus")
         res = self.nodes[0].getstatus()
         block_count = self.nodes[0].getblockcount()
-        assert_equal(block_count, res['blockNumber'])
+        assert_equal(block_count, res["blockNumber"])
 
     def _test_stop(self):
         self.log.info("Test stop")

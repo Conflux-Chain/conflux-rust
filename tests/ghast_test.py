@@ -8,6 +8,7 @@ from conflux.rpc import RpcClient
 
 INITIAL_DIFFICULTY = 2000
 
+
 class GHASTTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -25,7 +26,7 @@ class GHASTTest(ConfluxTestFramework):
 
         a = self.nodes[0].generatefixedblock(genesis, [], 0, False, INITIAL_DIFFICULTY)
         block_a = client0.block_by_hash(a)
-        assert(block_a['stable'] == True)
+        assert block_a["stable"] == True
         b = self.nodes[0].generatefixedblock(a, [], 0, False, INITIAL_DIFFICULTY)
         c = self.nodes[0].generatefixedblock(genesis, [], 0, False, INITIAL_DIFFICULTY)
         d = self.nodes[0].generatefixedblock(c, [], 0, False, INITIAL_DIFFICULTY)
@@ -34,7 +35,8 @@ class GHASTTest(ConfluxTestFramework):
         else:
             e = self.nodes[0].generatefixedblock(d, [b], 0, True, INITIAL_DIFFICULTY)
         block_e = client0.block_by_hash(e)
-        assert(block_e['stable'] == False)
+        assert block_e["stable"] == False
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     GHASTTest().main()

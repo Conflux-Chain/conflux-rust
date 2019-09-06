@@ -1,10 +1,16 @@
 import eth_utils
 import rlp
 import sys
+
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from test_framework.util import assert_equal, assert_raises_rpc_error, assert_is_hash_string
+from test_framework.util import (
+    assert_equal,
+    assert_raises_rpc_error,
+    assert_is_hash_string,
+)
+
 
 class TestSendTx(RpcClient):
     def test_encode_invalid_hex(self):
@@ -20,27 +26,31 @@ class TestSendTx(RpcClient):
         tx = self.new_tx()
         encoded = eth_utils.encode_hex(rlp.encode(tx))
 
-        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded + "12") # 1 more byte
-        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded[0:-2])  # 1 less byte
+        assert_raises_rpc_error(
+            None, None, self.send_raw_tx, encoded + "12"
+        )  # 1 more byte
+        assert_raises_rpc_error(
+            None, None, self.send_raw_tx, encoded[0:-2]
+        )  # 1 less byte
 
     def test_signature_empty(self):
         tx = self.new_tx(sign=False)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
 
     def test_gas_zero(self):
-        tx = self.new_tx(gas = 0)
+        tx = self.new_tx(gas=0)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
 
     def test_gas_intrinsic(self):
-        tx = self.new_tx(gas = self.DEFAULT_TX_GAS - 1)
+        tx = self.new_tx(gas=self.DEFAULT_TX_GAS - 1)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
 
     def test_gas_too_large(self):
-        tx = self.new_tx(gas = 10**9 + 1)
+        tx = self.new_tx(gas=10 ** 9 + 1)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
 
     def test_price_zero(self):
-        tx = self.new_tx(gas_price = 0)
+        tx = self.new_tx(gas_price=0)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
 
     # FIXME check the maximum size of tx data
@@ -62,7 +72,7 @@ class TestSendTx(RpcClient):
         balance = self.get_balance(self.GENESIS_ADDR)
 
         # value = balance - gas_fee
-        tx = self.new_tx(value=balance-self.DEFAULT_TX_FEE+1)
+        tx = self.new_tx(value=balance - self.DEFAULT_TX_FEE + 1)
         assert_equal(self.send_tx(tx), self.ZERO_HASH)
 
     def test_tx_already_executed(self):
@@ -98,17 +108,17 @@ class TestSendTx(RpcClient):
     def test_replace_pending_price_too_low(self):
         self.clear_tx_pool()
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
-        tx = self.new_tx(nonce=cur_nonce+1, gas_price=10)
+        tx = self.new_tx(nonce=cur_nonce + 1, gas_price=10)
         assert_equal(self.send_tx(tx), tx.hash_hex())
         assert_equal(self.txpool_status(), (1, 0))
 
         # replace with lower gas price
-        new_tx = self.new_tx(nonce=cur_nonce+1, gas_price=7)
+        new_tx = self.new_tx(nonce=cur_nonce + 1, gas_price=7)
         assert_raises_rpc_error(None, None, self.send_tx, new_tx)
         assert_equal(self.txpool_status(), (1, 0))
 
         # replace with equal gas grice
-        new_tx = self.new_tx(nonce=cur_nonce+1, gas_price=10)
+        new_tx = self.new_tx(nonce=cur_nonce + 1, gas_price=10)
         assert_raises_rpc_error(None, None, self.send_tx, new_tx)
         assert_equal(self.txpool_status(), (1, 0))
 
@@ -131,24 +141,24 @@ class TestSendTx(RpcClient):
 
         # cannot get the old tx anymore
         assert_equal(self.get_tx(tx.hash_hex()), None)
-        
+
         self.wait_for_receipt(new_tx.hash_hex())
 
     def test_replace_pending_price_higher(self):
         self.clear_tx_pool()
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
-        tx = self.new_tx(nonce=cur_nonce+1, gas_price=10)
+        tx = self.new_tx(nonce=cur_nonce + 1, gas_price=10)
         assert_equal(self.send_tx(tx), tx.hash_hex())
         assert_equal(self.txpool_status(), (1, 0))
 
         # replace with higher gas price
-        new_tx = self.new_tx(nonce=cur_nonce+1, gas_price=13)
+        new_tx = self.new_tx(nonce=cur_nonce + 1, gas_price=13)
         assert_equal(self.send_tx(new_tx), new_tx.hash_hex())
         assert_equal(self.txpool_status(), (1, 0))
 
         # cannot get the old tx anymore
         assert_equal(self.get_tx(tx.hash_hex()), None)
-        
+
         missed_tx = self.new_tx(nonce=cur_nonce)
         self.send_tx(missed_tx, True)
         self.wait_for_receipt(new_tx.hash_hex())
@@ -162,7 +172,7 @@ class TestSendTx(RpcClient):
     def test_larger_nonce(self):
         # send tx with nonce + 1
         cur_nonce = self.get_nonce(self.GENESIS_ADDR)
-        tx = self.new_tx(nonce=cur_nonce+1)
+        tx = self.new_tx(nonce=cur_nonce + 1)
         tx_hash = self.send_tx(tx)
         assert_equal(tx_hash, tx.hash_hex())
 
@@ -189,18 +199,18 @@ class TestSendTx(RpcClient):
         assert_equal(self.txpool_status(), (1, 1))
 
         # enter ready queue since tx0 in ready queue
-        tx1 = self.new_tx(nonce=cur_nonce+1)
+        tx1 = self.new_tx(nonce=cur_nonce + 1)
         assert_equal(self.send_tx(tx1), tx1.hash_hex())
         assert_equal(self.txpool_status(), (2, 1))
 
         # enter pending queue since tx2 not in ready queue
-        tx3 = self.new_tx(nonce=cur_nonce+3)
+        tx3 = self.new_tx(nonce=cur_nonce + 3)
         assert_equal(self.send_tx(tx3), tx3.hash_hex())
         assert_equal(self.txpool_status(), (3, 1))
 
         # enter the ready queue since tx1 in ready queue,
         # and also promote the tx3 into ready queue.
-        tx2 = self.new_tx(nonce=cur_nonce+2)
+        tx2 = self.new_tx(nonce=cur_nonce + 2)
         assert_equal(self.send_tx(tx2), tx2.hash_hex())
         assert_equal(self.txpool_status(), (4, 1))
 

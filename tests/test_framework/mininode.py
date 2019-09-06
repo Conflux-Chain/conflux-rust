@@ -20,8 +20,22 @@ import sys
 import threading
 
 from conflux.transactions import Transaction
-from conflux.utils import hash32, hash20, sha3, int_to_bytes, sha3_256, ecrecover_to_pub, ec_random_keys, ecsign, \
-    bytes_to_int, encode_int32, int_to_hex, int_to_32bytearray, zpad, rzpad
+from conflux.utils import (
+    hash32,
+    hash20,
+    sha3,
+    int_to_bytes,
+    sha3_256,
+    ecrecover_to_pub,
+    ec_random_keys,
+    ecsign,
+    bytes_to_int,
+    encode_int32,
+    int_to_hex,
+    int_to_32bytearray,
+    zpad,
+    rzpad,
+)
 from test_framework.blocktools import make_genesis
 from test_framework.util import wait_until, get_ip_address
 
@@ -57,8 +71,7 @@ class P2PConnection(asyncore.dispatcher):
         self.disconnect = False
         self.had_hello = False
 
-        logger.debug('Connecting to Conflux Node: %s:%d' %
-                     (self.dstaddr, self.dstport))
+        logger.debug("Connecting to Conflux Node: %s:%d" % (self.dstaddr, self.dstport))
 
         try:
             self.connect((dstaddr, dstport))
@@ -75,15 +88,13 @@ class P2PConnection(asyncore.dispatcher):
     def handle_connect(self):
         """asyncore callback when a connection is opened."""
         if self.state != "connected":
-            logger.debug("Connected & Listening: %s:%d" %
-                         (self.dstaddr, self.dstport))
+            logger.debug("Connected & Listening: %s:%d" % (self.dstaddr, self.dstport))
             self.state = "connected"
             self.on_open()
 
     def handle_close(self):
         """asyncore callback when a connection is closed."""
-        logger.debug("Closing connection to: %s:%d" %
-                     (self.dstaddr, self.dstport))
+        logger.debug("Closing connection to: %s:%d" % (self.dstaddr, self.dstport))
         self.state = "closed"
         self.recvbuf = b""
         self.sendbuf = b""
@@ -143,9 +154,9 @@ class P2PConnection(asyncore.dispatcher):
     def assemble_session_packet(self, packet_id, protocol, payload):
         packet_id = struct.pack("<B", packet_id)
         if protocol is None:
-            return payload + b'\x00' + packet_id
+            return payload + b"\x00" + packet_id
         else:
-            return payload + protocol + b'\x01' + packet_id
+            return payload + protocol + b"\x01" + packet_id
 
     def read_protocol_msg(self, msg):
         return (msg[-1], msg[:-1])
@@ -171,7 +182,11 @@ class P2PConnection(asyncore.dispatcher):
                 packet_id, protocol, payload = self.read_session_packet(packet)
                 self._log_message("receive", packet_id)
 
-                if packet_id != PACKET_HELLO and packet_id != PACKET_DISCONNECT and (not self.had_hello):
+                if (
+                    packet_id != PACKET_HELLO
+                    and packet_id != PACKET_DISCONNECT
+                    and (not self.had_hello)
+                ):
                     raise ValueError("bad protocol")
 
                 if packet_id == PACKET_HELLO:
@@ -187,7 +202,7 @@ class P2PConnection(asyncore.dispatcher):
                     assert packet_id == PACKET_PROTOCOL
                     self.on_protocol_packet(protocol, payload)
         except Exception as e:
-            logger.exception('Error reading message: ' + repr(e))
+            logger.exception("Error reading message: " + repr(e))
             raise
 
     def on_handshake(self, payload) -> bool:
@@ -217,7 +232,7 @@ class P2PConnection(asyncore.dispatcher):
         with mininode_lock:
             pre_connection = self.state == "connecting"
             length = len(self.sendbuf)
-        return (length > 0 or pre_connection)
+        return length > 0 or pre_connection
 
     def handle_write(self):
         """asyncore callback when data should be written to the socket."""
@@ -247,15 +262,14 @@ class P2PConnection(asyncore.dispatcher):
 
         self.send_data(buf)
 
-
     def send_data(self, data, pushbuf=False):
         if self.state != "connected" and not pushbuf:
-            raise IOError('Not connected, no pushbuf')
+            raise IOError("Not connected, no pushbuf")
 
         buf = self.assemble_connection_packet(data)
 
         with mininode_lock:
-            if (len(self.sendbuf) == 0 and not pushbuf):
+            if len(self.sendbuf) == 0 and not pushbuf:
                 try:
                     sent = self.send(buf)
                     self.sendbuf = buf[sent:]
@@ -282,8 +296,7 @@ class P2PConnection(asyncore.dispatcher):
             log_message = "Send message to "
         elif direction == "receive":
             log_message = "Received message from "
-        log_message += "%s:%d: %s" % (self.dstaddr,
-                                      self.dstport, repr(msg)[:500])
+        log_message += "%s:%d: %s" % (self.dstaddr, self.dstport, repr(msg)[:500])
         if len(log_message) > 500:
             log_message += "... (msg truncated)"
         logger.debug(log_message)
@@ -310,7 +323,7 @@ class P2PInterface(P2PConnection):
         self.last_protocol_message = {}
 
         # Default protocol version
-        self.protocol = b'cfx'
+        self.protocol = b"cfx"
         self.protocol_version = 1
         self.genesis = make_genesis()
         self.best_block_hash = self.genesis.block_header.hash
@@ -318,7 +331,11 @@ class P2PInterface(P2PConnection):
         self.peer_pubkey = None
         self.priv_key, self.pub_key = ec_random_keys()
         x, y = self.pub_key
-        self.key = "0x" + encode_hex(bytes(int_to_32bytearray(x)))[2:] + encode_hex(bytes(int_to_32bytearray(y)))[2:]
+        self.key = (
+            "0x"
+            + encode_hex(bytes(int_to_32bytearray(x)))[2:]
+            + encode_hex(bytes(int_to_32bytearray(y)))[2:]
+        )
         self.had_status = False
         self.on_packet_func = {}
         self.remote = remote
@@ -338,8 +355,13 @@ class P2PInterface(P2PConnection):
     # Message receiving methods
 
     def send_status(self):
-        status = Status(self.protocol_version, 0,
-                        self.genesis.block_header.hash, 0, [self.best_block_hash])
+        status = Status(
+            self.protocol_version,
+            0,
+            self.genesis.block_header.hash,
+            0,
+            [self.best_block_hash],
+        )
         self.send_protocol_msg(status)
 
     def on_protocol_packet(self, protocol, payload):
@@ -349,7 +371,7 @@ class P2PInterface(P2PConnection):
         and the most recent message of each type."""
         with mininode_lock:
             try:
-                assert(protocol == self.protocol)  # Possible to be false?
+                assert protocol == self.protocol  # Possible to be false?
                 packet_type, payload = self.read_protocol_msg(payload)
                 self.protocol_message_count[packet_type] += 1
                 msg = None
@@ -358,56 +380,111 @@ class P2PInterface(P2PConnection):
                 if msg_class is not None:
                     msg = rlp.decode(payload, msg_class)
                 if packet_type == STATUS:
-                    self._log_message("receive", "STATUS, protocol_version:{}, terminal_hashes:{}"
-                                      .format(msg.protocol_version,
-                                              [utils.encode_hex(i) for i in msg.terminal_block_hashes]))
+                    self._log_message(
+                        "receive",
+                        "STATUS, protocol_version:{}, terminal_hashes:{}".format(
+                            msg.protocol_version,
+                            [utils.encode_hex(i) for i in msg.terminal_block_hashes],
+                        ),
+                    )
                     self.had_status = True
                 elif packet_type == GET_BLOCK_HEADERS:
-                    self._log_message("receive", "GET_BLOCK_HEADERS of {}".format(msg.hashes))
+                    self._log_message(
+                        "receive", "GET_BLOCK_HEADERS of {}".format(msg.hashes)
+                    )
                 elif packet_type == GET_BLOCK_HEADER_CHAIN:
-                    self._log_message("receive", "GET_BLOCK_HEADER_CHAIN of {} {}".format(msg.hash, msg.max_blocks))
+                    self._log_message(
+                        "receive",
+                        "GET_BLOCK_HEADER_CHAIN of {} {}".format(
+                            msg.hash, msg.max_blocks
+                        ),
+                    )
                 elif packet_type == GET_BLOCK_BODIES:
                     hashes = msg.hashes
-                    self._log_message("receive", "GET_BLOCK_BODIES of {} blocks".format(len(hashes)))
+                    self._log_message(
+                        "receive", "GET_BLOCK_BODIES of {} blocks".format(len(hashes))
+                    )
                 elif packet_type == GET_BLOCK_HEADERS_RESPONSE:
-                    self._log_message("receive", "BLOCK_HEADERS of {} headers".format(len(msg.headers)))
+                    self._log_message(
+                        "receive",
+                        "BLOCK_HEADERS of {} headers".format(len(msg.headers)),
+                    )
                 elif packet_type == GET_BLOCK_BODIES_RESPONSE:
-                    self._log_message("receive", "BLOCK_BODIES of {} blocks".format(len(msg)))
+                    self._log_message(
+                        "receive", "BLOCK_BODIES of {} blocks".format(len(msg))
+                    )
                 elif packet_type == NEW_BLOCK:
-                    self._log_message("receive", "NEW_BLOCK, hash:{}".format(msg.block.block_header.hash))
+                    self._log_message(
+                        "receive",
+                        "NEW_BLOCK, hash:{}".format(msg.block.block_header.hash),
+                    )
                 elif packet_type == GET_BLOCK_HASHES:
-                    self._log_message("receive", "GET_BLOCK_HASHES, hash:{}, max_blocks:{}"
-                                      .format(msg.hash, msg.max_blocks))
+                    self._log_message(
+                        "receive",
+                        "GET_BLOCK_HASHES, hash:{}, max_blocks:{}".format(
+                            msg.hash, msg.max_blocks
+                        ),
+                    )
                 elif packet_type == GET_BLOCK_HASHES_RESPONSE:
-                    self._log_message("receive", "BLOCK_HASHES, {} hashes".format(len(msg.hashes)))
+                    self._log_message(
+                        "receive", "BLOCK_HASHES, {} hashes".format(len(msg.hashes))
+                    )
                 elif packet_type == GET_TERMINAL_BLOCK_HASHES:
                     self._log_message("receive", "GET_TERMINAL_BLOCK_HASHES")
                 elif packet_type == TRANSACTIONS:
-                    self._log_message("receive", "TRANSACTIONS, {} transactions".format(len(msg.transactions)))
+                    self._log_message(
+                        "receive",
+                        "TRANSACTIONS, {} transactions".format(len(msg.transactions)),
+                    )
                 elif packet_type == GET_TERMINAL_BLOCK_HASHES_RESPONSE:
-                    self._log_message("receive", "TERMINAL_BLOCK_HASHES, {} hashes".format(len(msg.hashes)))
+                    self._log_message(
+                        "receive",
+                        "TERMINAL_BLOCK_HASHES, {} hashes".format(len(msg.hashes)),
+                    )
                 elif packet_type == NEW_BLOCK_HASHES:
-                    self._log_message("receive", "NEW_BLOCK_HASHES, {} hashes".format(len(msg.block_hashes)))
+                    self._log_message(
+                        "receive",
+                        "NEW_BLOCK_HASHES, {} hashes".format(len(msg.block_hashes)),
+                    )
                 elif packet_type == GET_BLOCKS_RESPONSE:
-                    self._log_message("receive", "BLOCKS, {} blocks".format(len(msg.blocks)))
+                    self._log_message(
+                        "receive", "BLOCKS, {} blocks".format(len(msg.blocks))
+                    )
                 elif packet_type == GET_CMPCT_BLOCKS_RESPONSE:
-                    self._log_message("receive", "GET_CMPCT_BLOCKS_RESPONSE, {} blocks".format(len(msg.blocks)))
+                    self._log_message(
+                        "receive",
+                        "GET_CMPCT_BLOCKS_RESPONSE, {} blocks".format(len(msg.blocks)),
+                    )
                 elif packet_type == GET_BLOCK_TXN_RESPONSE:
-                    self._log_message("receive", "GET_BLOCK_TXN_RESPONSE, block:{}".format(len(msg.block_hash)))
+                    self._log_message(
+                        "receive",
+                        "GET_BLOCK_TXN_RESPONSE, block:{}".format(len(msg.block_hash)),
+                    )
                 elif packet_type == GET_BLOCKS:
-                    self._log_message("receive", "GET_BLOCKS, {} hashes".format(len(msg.hashes)))
+                    self._log_message(
+                        "receive", "GET_BLOCKS, {} hashes".format(len(msg.hashes))
+                    )
                     self.on_get_blocks(msg)
                 elif packet_type == GET_CMPCT_BLOCKS:
-                    self._log_message("receive", "GET_CMPCT_BLOCKS, {} hashes".format(len(msg.hashes)))
+                    self._log_message(
+                        "receive", "GET_CMPCT_BLOCKS, {} hashes".format(len(msg.hashes))
+                    )
                     self.on_get_compact_blocks(msg)
                 elif packet_type == GET_BLOCK_TXN:
-                    self._log_message("receive", "GET_BLOCK_TXN, hash={}".format(len(msg.block_hash)))
+                    self._log_message(
+                        "receive", "GET_BLOCK_TXN, hash={}".format(len(msg.block_hash))
+                    )
                     self.on_get_blocktxn(msg)
                 elif packet_type == GET_BLOCK_HASHES_BY_EPOCH:
-                    self._log_message("receive", "GET_BLOCK_HASHES_BY_EPOCH, epochs: {}".format(msg.epochs))
+                    self._log_message(
+                        "receive",
+                        "GET_BLOCK_HASHES_BY_EPOCH, epochs: {}".format(msg.epochs),
+                    )
                     self.on_get_block_hashes_by_epoch(msg)
                 else:
-                    self._log_message("receive", "Unknown packet {}".format(packet_type))
+                    self._log_message(
+                        "receive", "Unknown packet {}".format(packet_type)
+                    )
                     return
                 if packet_type in self.on_packet_func and msg is not None:
                     self.on_packet_func[packet_type](self, msg)
@@ -420,8 +497,7 @@ class P2PInterface(P2PConnection):
         capabilities = []
         for c in hello.capabilities:
             capabilities.append((c.protocol, c.version))
-        self._log_message(
-            "receive", "Hello, capabilities:{}".format(capabilities))
+        self._log_message("receive", "Hello, capabilities:{}".format(capabilities))
         ip = [127, 0, 0, 1]
         if self.remote:
             ip = get_ip_address()
@@ -439,7 +515,8 @@ class P2PInterface(P2PConnection):
         self.handshake = Handshake(self)
         self.handshake.write_auth()
 
-    def on_close(self): pass
+    def on_close(self):
+        pass
 
     def on_handshake(self, payload) -> bool:
         if self.handshake.state == "ReadingAck":
@@ -459,12 +536,15 @@ class P2PInterface(P2PConnection):
         self.send_protocol_msg(resp)
 
     def on_get_blocktxn(self, msg):
-        resp = GetBlockTxnResponse(reqid=msg.reqid, block_hash=b'\x00'*32, block_txn=[])
+        resp = GetBlockTxnResponse(
+            reqid=msg.reqid, block_hash=b"\x00" * 32, block_txn=[]
+        )
         self.send_protocol_msg(resp)
 
     def on_get_block_hashes_by_epoch(self, msg):
         resp = BlockHashes(reqid=msg.reqid, hashes=[])
         self.send_protocol_msg(resp)
+
 
 # Keep our own socket map for asyncore, so that we can track disconnects
 # ourselves (to work around an issue with closing an asyncore socket when
@@ -479,14 +559,15 @@ mininode_socket_map = dict()
 # access to any data shared with the P2PInterface or P2PConnection.
 mininode_lock = threading.RLock()
 
+
 class DefaultNode(P2PInterface):
-    def __init__(self, remote = False):
+    def __init__(self, remote=False):
         super().__init__(remote)
-        self.protocol = b'cfx'
+        self.protocol = b"cfx"
         self.protocol_version = 1
 
-class NetworkThread(threading.Thread):
 
+class NetworkThread(threading.Thread):
     def __init__(self):
         super().__init__(name="NetworkThread")
 
@@ -521,11 +602,13 @@ def network_thread_join(timeout=10):
 
     Throw if network thread doesn't terminate in timeout seconds."""
     network_threads = [
-        thread for thread in threading.enumerate() if thread.name == "NetworkThread"]
+        thread for thread in threading.enumerate() if thread.name == "NetworkThread"
+    ]
     assert len(network_threads) <= 1
     for thread in network_threads:
         thread.join(timeout)
         assert not thread.is_alive()
+
 
 def start_p2p_connection(nodes, remote=False):
     p2p_connections = []
@@ -536,11 +619,12 @@ def start_p2p_connection(nodes, remote=False):
         node.add_p2p_connection(conn)
 
     network_thread_start()
-    
+
     for p2p in p2p_connections:
         p2p.wait_for_status()
 
     return p2p_connections
+
 
 class Handshake:
     def __init__(self, peer: P2PInterface):
@@ -553,6 +637,8 @@ class Handshake:
         self.state = "ReadingAck"
 
     def read_ack(self, remote_node_id: bytes):
-        assert len(remote_node_id) == 64, "invalid node id length {}".format(len(remote_node_id))
+        assert len(remote_node_id) == 64, "invalid node id length {}".format(
+            len(remote_node_id)
+        )
         self.peer.peer_key = utils.encode_hex(remote_node_id)
         self.state = "StartSession"

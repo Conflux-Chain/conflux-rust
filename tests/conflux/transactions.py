@@ -1,13 +1,24 @@
 import eth_utils
 import rlp
+
 # import sender as sender
 from rlp.sedes import big_endian_int, binary
 
 from .exceptions import InvalidTransaction
 from . import utils
-from .utils import TT256, mk_contract_address, zpad, int_to_32bytearray, \
-    big_endian_to_int, ecsign, ecrecover_to_pub, normalize_key, str_to_bytes, \
-    encode_hex, address
+from .utils import (
+    TT256,
+    mk_contract_address,
+    zpad,
+    int_to_32bytearray,
+    big_endian_to_int,
+    ecsign,
+    ecrecover_to_pub,
+    normalize_key,
+    str_to_bytes,
+    encode_hex,
+    address,
+)
 
 
 class Transaction(rlp.Serializable):
@@ -30,27 +41,25 @@ class Transaction(rlp.Serializable):
     """
 
     fields = [
-        ('nonce', big_endian_int),
-        ('gas_price', big_endian_int),
-        ('gas', big_endian_int),
-        ('action', address),
-        ('value', big_endian_int),
-        ('data', binary),
-        ('v', big_endian_int),
-        ('r', big_endian_int),
-        ('s', big_endian_int),
+        ("nonce", big_endian_int),
+        ("gas_price", big_endian_int),
+        ("gas", big_endian_int),
+        ("action", address),
+        ("value", big_endian_int),
+        ("data", binary),
+        ("v", big_endian_int),
+        ("r", big_endian_int),
+        ("s", big_endian_int),
     ]
 
     _sender = None
 
-    def __init__(self, nonce, gas_price, gas, action, value, data, v=0, r=0,
-                 s=0):
+    def __init__(self, nonce, gas_price, gas, action, value, data, v=0, r=0, s=0):
 
         super(Transaction, self).__init__(
             nonce, gas_price, gas, action, value, data, v, r, s
         )
-        if self.gas_price >= TT256 or \
-                self.value >= TT256 or self.nonce >= TT256:
+        if self.gas_price >= TT256 or self.value >= TT256 or self.nonce >= TT256:
             raise InvalidTransaction("Values way too high!")
 
     @property
@@ -62,17 +71,14 @@ class Transaction(rlp.Serializable):
         self._sender = value
 
     def sign(self, key):
-        rawhash = utils.sha3(
-            rlp.encode(unsigned_tx_from_tx(self), UnsignedTransaction))
+        rawhash = utils.sha3(rlp.encode(unsigned_tx_from_tx(self), UnsignedTransaction))
 
         key = normalize_key(key)
 
         v, r, s = ecsign(rawhash, key)
         v = v - 27
 
-        ret = self.copy(
-            v=v, r=r, s=s
-        )
+        ret = self.copy(v=v, r=r, s=s)
         ret._sender = utils.privtoaddr(key)
         return ret
 
@@ -87,8 +93,8 @@ class Transaction(rlp.Serializable):
         d = {}
         for name, _ in self.__class__._meta.fields:
             d[name] = getattr(self, name)
-        d['sender'] = '0x' + encode_hex(self.sender)
-        d['hash'] = '0x' + encode_hex(self.hash)
+        d["sender"] = "0x" + encode_hex(self.sender)
+        d["hash"] = "0x" + encode_hex(self.hash)
         return d
 
     def __eq__(self, other):
@@ -104,13 +110,14 @@ class Transaction(rlp.Serializable):
         return not self.__eq__(other)
 
     def __repr__(self):
-        return '<Transaction(%s)>' % encode_hex(self.hash)[:4]
+        return "<Transaction(%s)>" % encode_hex(self.hash)[:4]
 
 
 class UnsignedTransaction(rlp.Serializable):
     fields = [
-        (field, sedes) for field, sedes in Transaction._meta.fields if
-        field not in "vrs"
+        (field, sedes)
+        for field, sedes in Transaction._meta.fields
+        if field not in "vrs"
     ]
 
 
@@ -121,5 +128,5 @@ def unsigned_tx_from_tx(tx):
         gas=tx.gas,
         value=tx.value,
         action=tx.action,
-        data=tx.data
+        data=tx.data,
     )
