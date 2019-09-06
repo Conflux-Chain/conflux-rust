@@ -349,10 +349,9 @@ impl SynchronizationGraphInner {
                         && (referee_block_graph_ready
                             || referee_header_graph_ready)
                     {
-                        if is_graph_ready(referee_hash, index) {
-                            referee_block_graph_ready &= true;
-                            referee_header_graph_ready &= true;
-                        }
+                        let graph_ready = is_graph_ready(referee_hash, index);
+                        referee_block_graph_ready &= graph_ready;
+                        referee_header_graph_ready &= graph_ready;
                     }
                 }
             }
