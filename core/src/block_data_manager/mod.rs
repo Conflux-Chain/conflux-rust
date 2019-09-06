@@ -25,7 +25,7 @@ use primitives::{
     Block, BlockHeader, SignedTransaction, TransactionAddress,
     TransactionWithSignature,
 };
-use rlp::{Decodable, DecoderError};
+use rlp::DecoderError;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -278,31 +278,20 @@ impl BlockDataManager {
         self.blocks.write().remove(hash);
     }
 
+    /// TODO Also set block header
     pub fn block_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<Arc<Block>> {
-        // Check cache first
-        {
-            let read = self.blocks.read();
-            if let Some(v) = read.get(hash) {
-                return Some(v.clone());
-            }
-        }
-
-        let header = self.block_header_by_hash(hash)?;
-        let block = Arc::new(Block {
-            block_header: header.as_ref().clone(),
-            transactions: self.db_manager.block_body_from_db(hash)?,
-            approximated_rlp_size: 0,
-            approximated_rlp_size_with_public: 0,
-        });
-
-        if update_cache {
-            let mut write = self.blocks.write();
-            write.insert(*hash, block.clone());
-            self.cache_man.lock().note_used(CacheId::Block(*hash));
-        }
-        Some(block)
+        self.get(
+            hash,
+            &self.blocks,
+            |key| self.db_manager.block_from_db(key).map(Arc::new),
+            if update_cache {
+                Some(CacheId::Block(*hash))
+            } else {
+                None
+            },
+        )
     }
 
     /// This function returns the block from db without wrapping it in `Arc`.
@@ -340,31 +329,27 @@ impl BlockDataManager {
     pub fn block_header_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<BlockHeader>> {
-        let block_headers = self.block_headers.upgradable_read();
-        if let Some(header) = block_headers.get(hash) {
-            return Some(header.clone());
-        } else {
-            let maybe_header = self.db_manager.block_header_from_db(hash);
-            maybe_header.map(|header| {
-                let header_arc = Arc::new(header);
-                RwLockUpgradableReadGuard::upgrade(block_headers)
-                    .insert(header_arc.hash(), header_arc.clone());
-                self.cache_man
-                    .lock()
-                    .note_used(CacheId::BlockHeader(header_arc.hash()));
-                header_arc
-            })
-        }
+        self.get(
+            hash,
+            &self.block_headers,
+            |key| self.db_manager.block_header_from_db(key).map(Arc::new),
+            Some(CacheId::BlockHeader(*hash)),
+        )
     }
 
     pub fn insert_block_header(
         &self, hash: H256, header: Arc<BlockHeader>, persistent: bool,
     ) {
-        if persistent {
-            self.db_manager.insert_block_header_to_db(&header);
-        }
-        self.cache_man.lock().note_used(CacheId::BlockHeader(hash));
-        self.block_headers.write().insert(hash, header);
+        self.insert(
+            hash,
+            header,
+            &self.block_headers,
+            |_, value| {
+                self.db_manager.insert_block_header_to_db(value.as_ref())
+            },
+            Some(CacheId::BlockHeader(hash)),
+            persistent,
+        )
     }
 
     /// remove block header in memory cache and db
@@ -531,7 +516,7 @@ impl BlockDataManager {
     ) -> Option<V>
     where
         K: Clone + Eq + Hash,
-        V: Decodable + Clone,
+        V: Clone,
         LoadF: Fn(&K) -> Option<V>,
     {
         let upgradable_read_lock = in_mem.upgradable_read();
@@ -624,8 +609,8 @@ impl BlockDataManager {
         );
     }
 
-    /// The in-memory state will not be updated because it's only garbage collected explicitly
-    /// when we make checkpoints.
+    /// The in-memory state will not be updated because it's only garbage
+    /// collected explicitly when we make checkpoints.
     pub fn get_epoch_execution_context(
         &self, hash: &H256,
     ) -> Option<EpochExecutionContext> {

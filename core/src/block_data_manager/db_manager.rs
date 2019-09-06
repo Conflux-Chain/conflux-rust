@@ -43,6 +43,7 @@ pub struct DBManager {
 }
 
 impl DBManager {
+    /// TODO Use new_with_rlp_size
     pub fn block_from_db(&self, block_hash: &H256) -> Option<Block> {
         Some(Block::new(
             self.block_header_from_db(block_hash)?,
