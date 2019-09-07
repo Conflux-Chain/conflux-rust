@@ -161,7 +161,7 @@ class LatencyExperiment(ArgumentHolder):
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
-        os.system("tar cvfz {} {} *.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file))
+        os.system("tar cvfz {} {} *.csv *.metrics.log *.conflux.svg".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
         execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
