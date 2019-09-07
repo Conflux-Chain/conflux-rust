@@ -45,13 +45,10 @@ pub enum SessionData {
     None,
     Ready,
     Message { data: Vec<u8>, protocol: ProtocolId },
-    Continue,
 }
 
 const PACKET_HELLO: u8 = 0x80;
 const PACKET_DISCONNECT: u8 = 0x01;
-const PACKET_PING: u8 = 0x02;
-const PACKET_PONG: u8 = 0x03;
 pub const PACKET_USER: u8 = 0x10;
 
 impl Session {
@@ -196,17 +193,15 @@ impl Session {
                 Ok(SessionData::None)
             }
             State::Session(ref mut c) => match c.readable()? {
-                Some(data) => Ok(self.read_packet(io, data, host)?),
+                Some(data) => Ok(self.read_packet(data, host)?),
                 None => Ok(SessionData::None),
             },
         }
     }
 
-    fn read_packet<Message: Send + Sync + Clone>(
-        &mut self, io: &IoContext<Message>, data: Bytes,
-        host: &NetworkServiceInner,
-    ) -> Result<SessionData, Error>
-    {
+    fn read_packet(
+        &mut self, data: Bytes, host: &NetworkServiceInner,
+    ) -> Result<SessionData, Error> {
         let packet = SessionPacket::parse(data)?;
 
         if packet.id != PACKET_HELLO
@@ -221,7 +216,7 @@ impl Session {
                 self.update_ingress_node_id(host)?;
 
                 let rlp = Rlp::new(&packet.data);
-                self.read_hello(io, &rlp, host)?;
+                self.read_hello(&rlp, host)?;
                 Ok(SessionData::Ready)
             }
             PACKET_DISCONNECT => {
@@ -233,11 +228,6 @@ impl Session {
                 );
                 Err(ErrorKind::Disconnect(reason).into())
             }
-            PACKET_PING => {
-                self.send_pong(io)?;
-                Ok(SessionData::Continue)
-            }
-            PACKET_PONG => Ok(SessionData::Continue),
             PACKET_USER => Ok(SessionData::Message {
                 data: packet.data.to_vec(),
                 protocol: packet
@@ -249,7 +239,7 @@ impl Session {
                     "read packet UNKNOWN, packet_id = {:?}, session = {:?}",
                     packet.id, self
                 );
-                Ok(SessionData::Continue)
+                Err(ErrorKind::BadProtocol.into())
             }
         }
     }
@@ -280,11 +270,9 @@ impl Session {
             })
     }
 
-    fn read_hello<Message: Send + Sync + Clone>(
-        &mut self, io: &IoContext<Message>, rlp: &Rlp,
-        host: &NetworkServiceInner,
-    ) -> Result<(), Error>
-    {
+    fn read_hello(
+        &mut self, rlp: &Rlp, host: &NetworkServiceInner,
+    ) -> Result<(), Error> {
         let peer_caps: Vec<Capability> = rlp.list_at(0)?;
 
         let mut caps: Vec<Capability> = Vec::new();
@@ -359,7 +347,6 @@ impl Session {
             host.node_db.write().insert_with_token(entry, self.token());
         }
 
-        self.send_ping(io)?;
         self.had_hello = Some(Instant::now());
 
         Ok(())
@@ -410,32 +397,6 @@ impl Session {
         let packet = rlp::encode(&reason);
         let _ = self.send_packet_immediately(None, PACKET_DISCONNECT, packet);
         ErrorKind::Disconnect(reason).into()
-    }
-
-    fn send_ping<Message: Send + Sync + Clone>(
-        &mut self, io: &IoContext<Message>,
-    ) -> Result<(), Error> {
-        self.send_packet(
-            io,
-            None,
-            PACKET_PING,
-            Vec::new(),
-            SendQueuePriority::High,
-        )
-        .map(|_| ())
-    }
-
-    fn send_pong<Message: Send + Sync + Clone>(
-        &mut self, io: &IoContext<Message>,
-    ) -> Result<(), Error> {
-        self.send_packet(
-            io,
-            None,
-            PACKET_PONG,
-            Vec::new(),
-            SendQueuePriority::High,
-        )
-        .map(|_| ())
     }
 
     fn write_hello<Message: Send + Sync + Clone>(
