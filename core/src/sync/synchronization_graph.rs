@@ -236,7 +236,7 @@ impl SynchronizationGraphInner {
     // This function tries to recover graph-unready blocks to be ready
     // again by checking whether the parent and referees of a graph-unready
     // block are all graph-ready based on their on-disk information.
-    // There is only two cases to consider. For clarity, let's consider
+    // There are only two cases to consider. For clarity, let's consider
     // block `young` and block `old`. `young`->`old`, where -> can be
     // parent or reference edge.
     // 1) `young` and `old` both exist in synchronization graph once,
@@ -258,6 +258,10 @@ impl SynchronizationGraphInner {
     //    comes to synchronization graph. In this case, `old` is
     //    graph-ready if and only if `old`.seq_num < genesis_seq_num
     //    or `old`.instance_id == current_instance_id.
+    //
+    // The graph-ready is header-graph-ready in phases
+    // `CatchUpRecoverBlockHeaderFromDB` or `CatchUpSyncBlockHeader`.
+    // And it is block-graph-ready for other phase.
     fn try_recover_graph_unready_block(
         &mut self,
     ) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
@@ -1596,7 +1600,9 @@ impl SynchronizationGraph {
     /// are not graph-ready.
     /// The parameter `recover_from_db` is needed for deciding to invoke
     /// consensus.on_new_block() in sync or async mode for the blocks that
-    /// just become graph-ready.
+    /// just become graph-ready. When  `recover_from_db` is true, the
+    /// consensus.on_new_block() will be called in sync mode with
+    /// `ignore_body` being true.
     pub fn resolve_outside_dependencies(
         &self, recover_from_db: bool,
     ) -> Vec<H256> {
