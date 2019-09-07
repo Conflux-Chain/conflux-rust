@@ -176,7 +176,7 @@ impl CowNodeRef {
     pub fn get_trie_node<'a, 'c: 'a>(
         &'a mut self, node_memory_manager: &'c NodeMemoryManagerDeltaMpt,
         allocator: AllocatorRefRefDeltaMpt<'a>,
-        db: &mut dyn KeyValueDbTraitOwnedRead,
+        db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<
         GuardedValue<
             Option<MutexGuard<'c, CacheManagerDeltaMpt>>,
@@ -227,7 +227,7 @@ impl CowNodeRef {
         mut self, trie: &DeltaMpt, owned_node_set: &OwnedNodeSet,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut Vec<(Vec<u8>, Box<[u8]>)>,
-        db: &mut dyn KeyValueDbTraitOwnedRead,
+        db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<()>
     {
         if self.owned {
@@ -287,7 +287,7 @@ impl CowNodeRef {
     }
 
     fn commit_dirty_recurse_into_children<
-        Transaction: BorrowMut<dyn KeyValueDbTransactionTrait>,
+        Transaction: BorrowMut<DeltaDbTransactionTraitObj>,
     >(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
@@ -343,7 +343,7 @@ impl CowNodeRef {
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         allocator_ref: AllocatorRefRefDeltaMpt,
-        db: &mut dyn KeyValueDbTraitOwnedRead,
+        db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -388,7 +388,7 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
-        db: &mut dyn KeyValueDbTraitOwnedRead,
+        db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<MaybeMerkleTable>
     {
         match trie_node.children_table.get_children_count() {
@@ -434,7 +434,7 @@ impl CowNodeRef {
         &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, values: &mut KVInserterType,
-        db: &mut dyn KeyValueDbTraitOwnedRead,
+        db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<()>
     {
         if guarded_trie_node.as_ref().as_ref().has_value() {
@@ -482,7 +482,7 @@ impl CowNodeRef {
 
     /// Recursively commit dirty nodes.
     pub fn commit_dirty_recursively<
-        Transaction: BorrowMut<dyn KeyValueDbTransactionTrait>,
+        Transaction: BorrowMut<DeltaDbTransactionTraitObj>,
     >(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
@@ -544,7 +544,7 @@ impl CowNodeRef {
         self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         child_node_ref: NodeRefDeltaMpt, child_index: u8,
-        db: &mut dyn KeyValueDbTraitOwnedRead,
+        db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<CowNodeRef>
     {
         let node_memory_manager = trie.get_node_memory_manager();
@@ -763,8 +763,8 @@ impl CowNodeRef {
 use super::{
     super::{
         super::{
-            super::storage_db::key_value_db::{
-                KeyValueDbTraitOwnedRead, KeyValueDbTransactionTrait,
+            super::storage_db::delta_db_manager::{
+                DeltaDbOwnedReadTraitObj, DeltaDbTransactionTraitObj,
             },
             errors::*,
             state::OwnedNodeSet,
