@@ -147,7 +147,7 @@ fn test_remove_expire_blocks() {
 
             println!(
                 "not_ready_blocks_frontier={:?}",
-                inner.not_ready_blocks_frontier
+                inner.not_ready_blocks_frontier.get_frontier()
             );
             assert!(inner.arena.len() == 12);
             assert!(inner.hash_to_arena_indices.len() == 12);
