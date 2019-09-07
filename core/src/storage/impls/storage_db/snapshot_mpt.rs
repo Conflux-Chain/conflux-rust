@@ -2,10 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub type SnapshotMptValue = (Box<[u8]>, Box<[u8]>, i64);
-
 pub struct SnapshotMpt<
-    DbType: KeyValueDbTraitOwnedRead + ?Sized,
+    DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
     BorrowType: Borrow<DbType>,
 > {
     pub db: BorrowType,
@@ -72,7 +70,7 @@ fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
 }
 
 impl<
-        DbType: KeyValueDbTraitOwnedRead + ?Sized,
+        DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitReadOnly for SnapshotMpt<DbType, BorrowType>
 where DbType:
@@ -82,13 +80,16 @@ where DbType:
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
-    ) -> Result<Option<VanillaTrieNode<MerkleHash>>> {
+    ) -> Result<Option<SnapshotMptNode>> {
         let key = mpt_node_path_to_db_key(path);
         match self.db.borrow_mut().get_mut(&key)? {
             None => Ok(None),
-            Some(rlp) => Ok(Some(VanillaTrieNode::<MerkleHash>::decode(
-                &Rlp::new(&rlp),
-            )?)),
+            Some(SnapshotMptDbValue(rlp, subtree_size)) => {
+                Ok(Some(SnapshotMptNode(
+                    VanillaTrieNode::<MerkleHash>::decode(&Rlp::new(&rlp))?,
+                    subtree_size,
+                )))
+            }
         }
     }
 
@@ -129,7 +130,7 @@ where DbType:
 }
 
 impl<
-        DbType: KeyValueDbTraitSingleWriter + ?Sized,
+        DbType: KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue> + ?Sized,
         BorrowType: BorrowMut<DbType>,
     > SnapshotMptTraitSingleWriter for SnapshotMpt<DbType, BorrowType>
 where DbType:
@@ -142,12 +143,16 @@ where DbType:
     }
 
     fn write_node(
-        &mut self, path: &dyn CompressedPathTrait,
-        trie_node: &VanillaTrieNode<MerkleHash>,
-    ) -> Result<()>
-    {
+        &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
+    ) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
-        self.db.borrow_mut().put(&key, &trie_node.rlp_bytes())?;
+        self.db.borrow_mut().put(
+            &key,
+            &SnapshotMptDbValue(
+                trie_node.0.rlp_bytes().into_boxed_slice(),
+                trie_node.1,
+            ),
+        )?;
         Ok(())
     }
 }
@@ -159,10 +164,7 @@ use super::{
                 KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
                 KeyValueDbTraitSingleWriter,
             },
-            snapshot_mpt::{
-                SnapshotMptIteraterTrait, SnapshotMptTraitReadOnly,
-                SnapshotMptTraitSingleWriter,
-            },
+            snapshot_mpt::*,
         },
         errors::*,
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{
