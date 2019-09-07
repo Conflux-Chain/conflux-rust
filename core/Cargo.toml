@@ -49,6 +49,7 @@ futures = "0.1"
 memoffset = "0.5.1"
 malloc_size_of = {path = "../util/malloc_size_of"}
 fallible-iterator = "0.2"
+strfmt = "0.1"
 
 [dev-dependencies]
 rustc-hex = "1.0"
