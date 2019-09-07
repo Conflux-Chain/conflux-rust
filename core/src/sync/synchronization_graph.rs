@@ -92,7 +92,11 @@ pub struct SynchronizationGraphInner {
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
     pub pow_config: ProofOfWorkConfig,
-    /// the indices of blocks whose graph_status is not GRAPH_READY
+    /// The indices of blocks whose graph_status is not GRAPH_READY.
+    /// It may consider not header-graph-ready in phases
+    /// `CatchUpRecoverBlockHeaderFromDB` and `CatchUpSyncBlockHeader`.
+    /// Or, it may consider not block-graph-ready in phases
+    /// `CatchUpRecoverBlockFromDB`, `CatchUpSyncBlock`, and `Normal`.
     pub not_ready_blocks_frontier: HashSet<usize>,
     pub not_ready_blocks_count: usize,
     pub old_era_blocks_frontier: VecDeque<usize>,
@@ -229,7 +233,36 @@ impl SynchronizationGraphInner {
         }
     }
 
-    fn try_recover_expire_block(
+    // This function tries to recover graph-unready blocks to be ready
+    // again by checking whether the parent and referees of a graph-unready
+    // block are all graph-ready based on their on-disk information.
+    // There are only two cases to consider. For clarity, let's consider
+    // block `young` and block `old`. `young`->`old`, where -> can be
+    // parent or reference edge.
+    // 1) `young` and `old` both exist in synchronization graph once,
+    //    but `old` is removed out of memory by memory reclamation
+    //    mechanism for handling era forward movement, and `old` must
+    //    be already graph-ready in this case.
+
+    //    Then, if -> is parent edge,
+    //    `young`.parent == NULL && `young`.parent_reclaimed == true.
+    //    So, this predicate assures `old` to be graph-ready.
+    //
+    //    If -> is reference edge, `young`.pending_referee_count
+    //    has removed the 1 of `old`, and `old` is removed from
+    //    `young`.referees. Therefore, we do not really care about
+    //    whether `old` is graph-ready or not, and only need to
+    //    consider other edges of `young`.
+    //
+    // 2) `old` has already not existed in memory when `young`
+    //    comes to synchronization graph. In this case, `old` is
+    //    graph-ready if and only if `old`.seq_num < genesis_seq_num
+    //    or `old`.instance_id == current_instance_id.
+    //
+    // The graph-ready is header-graph-ready in phases
+    // `CatchUpRecoverBlockHeaderFromDB` or `CatchUpSyncBlockHeader`.
+    // And it is block-graph-ready for other phase.
+    fn try_recover_graph_unready_block(
         &mut self,
     ) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
         let mut graph_ready_blocks = Vec::new();
@@ -248,12 +281,17 @@ impl SynchronizationGraphInner {
             .unwrap()
             .get_seq_num();
 
+        // This function decides graph-ready based on block info from db
+        // which is persisted after a block enters consensus graph.
         // If the current synchronization phase is
         // `CatchUpRecoverBlockHeaderFromDB` or `CatchUpSyncBlockHeader`, this
-        // function returns true only if the block is in `HEADER_GRAPH_READY`.
+        // function returns true only if the block is in `HEADER_GRAPH_READY`,
+        // because in these phases, header-graph-ready block can be sent into
+        // consensus graph.
         // If the current synchronization phase is `CatchUpRecoverBlockFromDB`
         // or `CatchUpSyncBlock` or `Normal`, this function returns true only if
-        // the block is in `BLOCK_GRAPH_READY`.
+        // the block is in `BLOCK_GRAPH_READY`, because in these phases, only
+        // block-graph-ready block can be put into consensus graph.
         let mut is_graph_ready =
             |parent_or_referee_hash: &H256, index: &usize| {
                 if let Some(info) =
@@ -968,8 +1006,8 @@ impl SynchronizationGraph {
         // future of current era genesis till the terminals. However,
         // some blocks may not be graph-ready since they may have
         // references or parents which are out of the current era. We
-        // will remember these out-of-era dependencies and resolve them
-        // accordingly.
+        // need to resolve these out-of-era dependencies later and make
+        // those blocks be graph-ready again.
         let mut queue = VecDeque::new();
         let mut visited_blocks: HashSet<H256> = HashSet::new();
         for terminal in terminals {
@@ -1048,7 +1086,7 @@ impl SynchronizationGraph {
 
         debug!("Initial missed blocks {:?}", *missed_hashes);
 
-        // Resolve out-of-era dependencies for not-graph-ready blocks.
+        // Resolve out-of-era dependencies for graph-unready blocks.
         while self.inner.read().not_ready_blocks_count > 0 {
             self.resolve_outside_dependencies(true /* recover_from_db */);
         }
@@ -1056,6 +1094,7 @@ impl SynchronizationGraph {
             "Current frontier after recover from db: {:?}",
             self.inner.read().not_ready_blocks_frontier
         );
+
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
         if !header_only {
             // Rebuild pivot chain state info.
@@ -1564,22 +1603,31 @@ impl SynchronizationGraph {
     /// only used in test.
     pub fn block_count(&self) -> usize { self.data_man.cached_block_count() }
 
-    /// Resolve outside parent or referees dependencies for blocks which are not
-    /// in `BLOCK_GRAPH_READY`.
+    /// Resolve outside parent or referees dependencies for blocks which
+    /// are not graph-ready.
+    /// The parameter `recover_from_db` is needed for deciding to invoke
+    /// consensus.on_new_block() in sync or async mode for the blocks that
+    /// just become graph-ready. When  `recover_from_db` is true, the
+    /// consensus.on_new_block() will be called in sync mode with
+    /// `ignore_body` being true.
     pub fn resolve_outside_dependencies(
         &self, recover_from_db: bool,
     ) -> Vec<H256> {
         let inner = &mut *self.inner.write();
+
+        // Maintains the set of blocks that just become block-graph-ready
+        // and may need to be relayed to peers.
         let mut to_relay_blocks = Vec::new();
         debug!(
             "not_ready_blocks_frontier: {:?}",
             inner.not_ready_blocks_frontier
         );
+
         let (
             new_graph_ready_blocks,
             mut new_header_graph_ready_blocks,
             invalid_blocks,
-        ) = inner.try_recover_expire_block();
+        ) = inner.try_recover_graph_unready_block();
         debug!(
             "Recover blocks into graph_ready {:?}",
             new_graph_ready_blocks
