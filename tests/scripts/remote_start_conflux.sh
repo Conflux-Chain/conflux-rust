@@ -12,7 +12,14 @@ echo "num_conflux = $3"
 
 export RUST_BACKTRACE=full
 
+# support perf
+sudo apt install -y linux-tools-common
+sudo apt install -y linux-tools-`uname -r`
+echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+# limit bandwidth
 ./throttle_bitcoin_bandwidth.sh $bandwidth $num
+
 for i in `seq 1 $num`
 do
 	nid=$(($i-1))
