@@ -486,11 +486,11 @@ mod test {
             t: &'a Test,
         }
 
-        impl IterCallFamilyTrait<Test, ElementToPrint> for F<'_> {
+        impl IterCallFamilyTrait<Test, dyn ElementToPrint> for F<'_> {
             fn prepare_iter(&mut self) {}
 
             fn iter_step<
-                Index: OfElementSatisfiesOnTuple<Test, ElementToPrint>,
+                Index: OfElementSatisfiesOnTuple<Test, dyn ElementToPrint>,
             >(
                 &mut self, _placeholder: &'static Index, index: usize,
             ) {
@@ -514,11 +514,11 @@ mod test {
             t: &'a Test,
         }
 
-        impl IterCallFamilyTrait<Test, ElementIsDebug> for G<'_> {
+        impl IterCallFamilyTrait<Test, dyn ElementIsDebug> for G<'_> {
             fn prepare_iter(&mut self) {}
 
             fn iter_step<
-                Index: OfElementSatisfiesOnTuple<Test, ElementIsDebug>,
+                Index: OfElementSatisfiesOnTuple<Test, dyn ElementIsDebug>,
             >(
                 &mut self, _placeholder: &'static Index, index: usize,
             ) {
