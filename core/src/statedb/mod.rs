@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::storage::{
-    Error as StorageError, ErrorKind as StorageErrorKind, StateProof, Storage,
-    StorageTrait,
+use crate::{
+    bytes::Bytes,
+    storage::{
+        Error as StorageError, ErrorKind as StorageErrorKind, StateProof,
+        Storage, StorageTrait,
+    },
 };
 use cfx_types::{Address, H256};
 use primitives::{Account, EpochId, StateRootWithAuxInfo};
@@ -60,6 +63,18 @@ impl<'a> StateDb<'a> {
         };
         //        println!("get key={:?} value={:?}", key, raw);
         Ok(Some(::rlp::decode::<T>(raw.as_ref())?))
+    }
+
+    pub fn get_code(
+        &self, address: &Address, code_hash: &H256,
+    ) -> Option<Bytes> {
+        match self.get_raw(&self.code_key(address, code_hash)) {
+            Ok(Some(code)) => Some(code.to_vec()),
+            _ => {
+                warn!("Failed reverse get of {}", code_hash);
+                None
+            }
+        }
     }
 
     // TODO: check if we need storage root, if so, implement.
