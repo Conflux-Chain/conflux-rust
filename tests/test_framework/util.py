@@ -526,9 +526,9 @@ def checktx(node, tx_hash):
 
 def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
     """
-    Establish connections among nodes with each node having 'sample' peers.
+    Establish connections among nodes with each node having 'sample' outgoing peers.
     It first lets all the nodes link as a loop, then randomly pick 'sample-1'
-    peers for each node.    
+    outgoing peers for each node.    
     """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
