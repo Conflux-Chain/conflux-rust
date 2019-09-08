@@ -340,6 +340,9 @@ class RemoteSimulate(ConfluxTestFramework):
         self.log.info("Best block: {}".format(RpcClient(self.nodes[0]).best_block_hash()))
 
     def sync_blocks(self):
+        """
+        Wait for all nodes to reach same block count and best block
+        """
         self.log.info("wait for all nodes to sync blocks ...")
 
         executor = ThreadPoolExecutor()
