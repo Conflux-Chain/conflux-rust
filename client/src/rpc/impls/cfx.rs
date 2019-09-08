@@ -58,7 +58,7 @@ impl RpcImpl {
         }
     }
 
-    fn code_at(
+    fn code(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         let epoch_number = epoch_number.unwrap_or(EpochNumber::LatestState);
@@ -453,7 +453,7 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
-            fn code_at(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;

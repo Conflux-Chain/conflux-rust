@@ -51,7 +51,7 @@ pub trait Cfx {
 
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
-    fn code_at(
+    fn code(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<Bytes>;
 

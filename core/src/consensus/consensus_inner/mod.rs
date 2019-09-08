@@ -1986,33 +1986,37 @@ impl ConsensusGraphInner {
             .storage_manager
             .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
             .map_err(|e| format!("Error to get state, err={:?}", e))?;
-        if let Some(state) = maybe_state {
-            let state_db = StateDb::new(state);
-            if let Ok(Some(maybe_acc)) = state_db.get_account(&address) {
-                if let Some(code) =
-                    state_db.get_code(&address, &maybe_acc.code_hash)
-                {
-                    Ok(code)
-                } else {
-                    Err(format!(
-                        "Account code (address={:?} code_hash={:?} number={:?} hash={:?}) does not exist",
-                        address, maybe_acc.code_hash, epoch_number, hash
-                    )
-                        .into())
-                }
-            } else {
-                Err(format!(
+        let state = match maybe_state {
+            Some(state) => state,
+            None => {
+                return Err(format!(
+                    "State for epoch (number={:?} hash={:?}) does not exist",
+                    epoch_number, hash
+                )
+                .into())
+            }
+        };
+
+        let state_db = StateDb::new(state);
+        let acc = match state_db.get_account(&address) {
+            Ok(Some(acc)) => acc,
+            _ => {
+                return Err(format!(
                     "Account {:?} (number={:?} hash={:?}) does not exist",
                     address, epoch_number, hash
                 )
                 .into())
             }
+        };
+
+        if let Some(code) = state_db.get_code(&address, &acc.code_hash) {
+            Ok(code)
         } else {
             Err(format!(
-                "State for epoch (number={:?} hash={:?}) does not exist",
-                epoch_number, hash
+                "Account code (address={:?} code_hash={:?} number={:?} hash={:?}) does not exist",
+                address, acc.code_hash, epoch_number, hash
             )
-            .into())
+                .into())
         }
     }
 
