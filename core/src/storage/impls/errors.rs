@@ -81,9 +81,9 @@ error_chain! {
             display("Snapshot file not found."),
         }
 
-        MPTMergeTrieNodeNotFound {
-            description("Trie node not found when merging Snapshot MPT and Delta."),
-            display("Trie node not found when merging Snapshot MPT and Delta."),
+        SnapshotMPTTrieNodeNotFound {
+            description("Trie node not found when loading Snapshot MPT."),
+            display("Trie node not found when loading Snapshot MPT."),
         }
     }
 }

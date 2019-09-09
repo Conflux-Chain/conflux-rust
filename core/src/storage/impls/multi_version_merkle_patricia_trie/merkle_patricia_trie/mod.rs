@@ -10,6 +10,7 @@ pub(self) mod compressed_path;
 pub mod cow_node_ref;
 pub(self) mod maybe_in_place_byte_array;
 pub mod merkle;
+pub mod mpt_cursor;
 pub mod mpt_merger;
 pub mod mpt_value;
 pub mod node_ref;
