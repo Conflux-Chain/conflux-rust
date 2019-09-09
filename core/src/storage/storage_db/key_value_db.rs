@@ -2,10 +2,20 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub trait KeyValueDbTraitRead {
-    fn get(&self, key: &[u8]) -> Result<Option<Box<[u8]>>>;
+// FIXME: Rename to DbPutValue
+pub trait PutType {
+    // FIXME: Rename to type.
+    type PutType: ?Sized;
+}
 
-    fn get_with_number_key(&self, key: i64) -> Result<Option<Box<[u8]>>> {
+pub trait KeyValueDbTypes {
+    type ValueType: PutType;
+}
+
+pub trait KeyValueDbTraitRead: KeyValueDbTypes {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::ValueType>>;
+
+    fn get_with_number_key(&self, key: i64) -> Result<Option<Self::ValueType>> {
         self.get(key.to_string().as_bytes())
     }
 }
@@ -18,12 +28,12 @@ pub trait KeyValueDbTraitMultiReader: KeyValueDbTraitRead {}
 /// These special get methods are provided for db like sqlite, where concurrency
 /// can only be achieved by opening a separate connection, otherwise
 /// lock is required for concurrent read.
-pub trait KeyValueDbTraitOwnedRead {
-    fn get_mut(&mut self, key: &[u8]) -> Result<Option<Box<[u8]>>>;
+pub trait KeyValueDbTraitOwnedRead: KeyValueDbTypes {
+    fn get_mut(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>>;
 
     fn get_mut_with_number_key(
         &mut self, key: i64,
-    ) -> Result<Option<Box<[u8]>>> {
+    ) -> Result<Option<Self::ValueType>> {
         self.get_mut(key.to_string().as_bytes())
     }
 }
@@ -48,13 +58,19 @@ pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
 pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitOwnedRead {
     /// Return Some(maybe_old_value) or None if the db don't support reading the
     /// old value at deletion.
-    fn delete(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>>;
+    fn delete(&mut self, key: &[u8])
+        -> Result<Option<Option<Self::ValueType>>>;
+    fn delete_with_number_key(
+        &mut self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete(key.to_string().as_bytes())
+    }
     fn put(
-        &mut self, key: &[u8], value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>>;
+        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>>;
     fn put_with_number_key(
-        &mut self, key: i64, value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>> {
+        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
         self.put(key.to_string().as_bytes(), value)
     }
 }
@@ -67,17 +83,24 @@ pub trait KeyValueDbTraitSingleWriterMultiReader:
 pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader {
     /// Return Some(maybe_old_value) or None if the db don't support reading the
     /// old value at deletion.
-    fn delete(&self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>>;
+    fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>>;
+    fn delete_with_number_key(
+        &self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete(key.to_string().as_bytes())
+    }
     fn put(
-        &self, key: &[u8], value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>>;
+        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>>;
     fn put_with_number_key(
-        &self, key: i64, value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>> {
+        &self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
         self.put(key.to_string().as_bytes(), value)
     }
 }
 
+// FIXME: Is it possible to detach SingleWriter from it, so that the
+// implementation doesn't look so ugly on KvdbSqliteTransaction?
 pub trait KeyValueDbTransactionTrait:
     KeyValueDbTraitSingleWriter + Drop
 {
@@ -94,16 +117,18 @@ pub trait KeyValueDbTransactionTrait:
 
 /// This trait is to help with the committing of the transaction for which
 /// the db object should be provided for serialization.
-pub trait KeyValueDbAsAnyTrait {
+pub trait KeyValueDbAsAnyTrait: KeyValueDbTypes {
     fn as_any(&self) -> &dyn Any;
 }
 
-impl<T: Any> KeyValueDbAsAnyTrait for T {
+impl<T: KeyValueDbTypes + Any> KeyValueDbAsAnyTrait for T {
     fn as_any(&self) -> &dyn Any { self }
 }
 
 pub trait KeyValueDbTraitTransactional: KeyValueDbAsAnyTrait {
-    type TransactionType: KeyValueDbTransactionTrait;
+    type TransactionType: KeyValueDbTransactionTrait<
+        ValueType = Self::ValueType,
+    >;
 
     /// Immediate_write indicates whether the transaction should acquire a
     /// write-lock immediately if any.
@@ -115,7 +140,7 @@ pub trait KeyValueDbTraitTransactional: KeyValueDbAsAnyTrait {
 pub trait KeyValueDbTraitTransactionalDyn: KeyValueDbAsAnyTrait {
     fn start_transaction_dyn(
         &self, immediate_write: bool,
-    ) -> Result<Box<dyn KeyValueDbTransactionTrait>>;
+    ) -> Result<Box<dyn KeyValueDbTransactionTrait<ValueType = Self::ValueType>>>;
 }
 
 impl<T: KeyValueDbTraitTransactional> KeyValueDbTraitTransactionalDyn for T
@@ -123,19 +148,28 @@ where T::TransactionType: 'static
 {
     fn start_transaction_dyn(
         &self, immediate_write: bool,
-    ) -> Result<Box<dyn KeyValueDbTransactionTrait>> {
+    ) -> Result<Box<dyn KeyValueDbTransactionTrait<ValueType = Self::ValueType>>>
+    {
         Ok(Box::new(self.start_transaction(immediate_write)?))
     }
 }
 
-pub trait KeyValueDbToOwnedReadTrait {
-    fn to_owned_read(&self) -> Result<Box<dyn '_ + KeyValueDbTraitOwnedRead>>;
+pub trait KeyValueDbToOwnedReadTrait: KeyValueDbTypes {
+    fn to_owned_read(
+        &self,
+    ) -> Result<
+        Box<dyn '_ + KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>,
+    >;
 }
 
 impl<T: 'static + KeyValueDbTraitMultiReader> KeyValueDbToOwnedReadTrait for T
-where for<'a> &'a T: KeyValueDbTraitOwnedRead
+where for<'a> &'a T: KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>
 {
-    fn to_owned_read(&self) -> Result<Box<dyn '_ + KeyValueDbTraitOwnedRead>> {
+    fn to_owned_read(
+        &self,
+    ) -> Result<
+        Box<dyn '_ + KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>,
+    > {
         Ok(Box::new(self))
     }
 }
@@ -156,13 +190,13 @@ impl<
     > KeyValueDbTraitOwnedRead for T
 where T: OwnedReadImplFamily
 {
-    fn get_mut(&mut self, key: &[u8]) -> Result<Option<Box<[u8]>>> {
+    fn get_mut(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         self.get_mut_impl(key)
     }
 
     fn get_mut_with_number_key(
         &mut self, key: i64,
-    ) -> Result<Option<Box<[u8]>>> {
+    ) -> Result<Option<Self::ValueType>> {
         self.get_mut_with_number_key_impl(key)
     }
 }
@@ -171,11 +205,13 @@ pub trait OwnedReadImplFamily {
     type FamilyRepresentitive: ?Sized;
 }
 
-pub trait OwnedReadImplByFamily<FamilyRepresentative: ?Sized> {
-    fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Box<[u8]>>>;
+pub trait OwnedReadImplByFamily<FamilyRepresentative: ?Sized>:
+    KeyValueDbTypes
+{
+    fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>>;
     fn get_mut_with_number_key_impl(
         &mut self, key: i64,
-    ) -> Result<Option<Box<[u8]>>>;
+    ) -> Result<Option<Self::ValueType>>;
 }
 
 impl<
@@ -188,19 +224,27 @@ where
     // KeyValueDbTraitSingleWriter must also be KeyValueDbTraitOwnedRead
     T: KeyValueDbTraitOwnedRead,
 {
-    fn delete(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+    fn delete(
+        &mut self, key: &[u8],
+    ) -> Result<Option<Option<Self::ValueType>>> {
         self.delete_impl(key)
     }
 
+    fn delete_with_number_key(
+        &mut self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete_with_number_key_impl(key)
+    }
+
     fn put(
-        &mut self, key: &[u8], value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>> {
+        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_impl(key, value)
     }
 
     fn put_with_number_key(
-        &mut self, key: i64, value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>> {
+        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_with_number_key_impl(key, value)
     }
 }
@@ -209,27 +253,35 @@ pub trait SingleWriterImplFamily {
     type FamilyRepresentitive: ?Sized;
 }
 
-pub trait SingleWriterImplByFamily<FamilyRepresentative: ?Sized> {
-    fn delete_impl(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>>;
+pub trait SingleWriterImplByFamily<FamilyRepresentative: ?Sized>:
+    KeyValueDbTypes
+{
+    fn delete_impl(
+        &mut self, key: &[u8],
+    ) -> Result<Option<Option<Self::ValueType>>>;
+
+    fn delete_with_number_key_impl(
+        &mut self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>>;
 
     fn put_impl(
-        &mut self, key: &[u8], value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>>;
+        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>>;
 
     fn put_with_number_key_impl(
-        &mut self, key: i64, value: &[u8],
-    ) -> Result<Option<Option<Box<[u8]>>>>;
+        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>>;
 }
 
 impl<T: ReadImplByFamily<<T as ReadImplFamily>::FamilyRepresentitive>>
     KeyValueDbTraitRead for T
 where T: ReadImplFamily
 {
-    fn get(&self, key: &[u8]) -> Result<Option<Box<[u8]>>> {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         self.get_impl(key)
     }
 
-    fn get_with_number_key(&self, key: i64) -> Result<Option<Box<[u8]>>> {
+    fn get_with_number_key(&self, key: i64) -> Result<Option<Self::ValueType>> {
         self.get_with_number_key_impl(key)
     }
 }
@@ -238,28 +290,47 @@ pub trait ReadImplFamily {
     type FamilyRepresentitive: ?Sized;
 }
 
-pub trait ReadImplByFamily<FamilyRepresentative: ?Sized> {
-    fn get_impl(&self, key: &[u8]) -> Result<Option<Box<[u8]>>>;
+pub trait ReadImplByFamily<FamilyRepresentative: ?Sized>:
+    KeyValueDbTypes
+{
+    fn get_impl(&self, key: &[u8]) -> Result<Option<Self::ValueType>>;
 
-    fn get_with_number_key_impl(&self, key: i64) -> Result<Option<Box<[u8]>>>;
+    fn get_with_number_key_impl(
+        &self, key: i64,
+    ) -> Result<Option<Self::ValueType>>;
 }
 
-impl OwnedReadImplFamily for dyn KeyValueDbTraitMultiReader {
-    type FamilyRepresentitive = dyn KeyValueDbTraitMultiReader;
+impl<ValueType: PutType> OwnedReadImplFamily
+    for dyn KeyValueDbTraitMultiReader<ValueType = ValueType>
+{
+    type FamilyRepresentitive =
+        dyn KeyValueDbTraitMultiReader<ValueType = ValueType>;
 }
 
 /// Implement KeyValueDbTraitOwnedRead automatically for database engine which
 /// satisfies KeyValueDbTraitMultiReader.
-impl<T: KeyValueDbTraitMultiReader>
-    OwnedReadImplByFamily<dyn KeyValueDbTraitMultiReader> for &T
+impl<
+        T: KeyValueDbTraitMultiReader<ValueType = ValueType>,
+        ValueType: PutType,
+    > KeyValueDbTypes for &T
 {
-    fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Box<[u8]>>> {
+    type ValueType = T::ValueType;
+}
+
+impl<
+        T: KeyValueDbTraitMultiReader<ValueType = ValueType>,
+        ValueType: PutType,
+    >
+    OwnedReadImplByFamily<dyn KeyValueDbTraitMultiReader<ValueType = ValueType>>
+    for &T
+{
+    fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         self.get(key)
     }
 
     fn get_mut_with_number_key_impl(
         &mut self, key: i64,
-    ) -> Result<Option<Box<[u8]>>> {
+    ) -> Result<Option<Self::ValueType>> {
         self.get_with_number_key(key)
     }
 }
@@ -269,9 +340,19 @@ macro_rules! mark_kvdb_multi_reader {
         impl KeyValueDbTraitMultiReader for $type {}
         // Family dispatching
         impl OwnedReadImplFamily for &$type {
-            type FamilyRepresentitive = dyn KeyValueDbTraitMultiReader;
+            type FamilyRepresentitive = dyn KeyValueDbTraitMultiReader<
+                ValueType = <$type as KeyValueDbTypes>::ValueType,
+            >;
         }
     };
+}
+
+impl PutType for Box<[u8]> {
+    type PutType = [u8];
+}
+
+impl PutType for i64 {
+    type PutType = i64;
 }
 
 use super::super::impls::errors::*;

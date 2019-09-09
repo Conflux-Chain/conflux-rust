@@ -38,7 +38,7 @@ trait SetIoError {
     fn load_node_wrapper<'a>(
         &self, mpts_in_request: &mut MptsInRequest<'a>,
         path: &CompressedPathRaw,
-    ) -> Result<VanillaTrieNode<MerkleHash>>
+    ) -> Result<SnapshotMptNode>
     {
         let result = if mpts_in_request.maybe_readonly_mpt.is_some() {
             mpts_in_request
@@ -94,14 +94,18 @@ impl<'a> MptMerger<'a> {
             Ok(iter) => iter,
         };
         loop {
-            if let Some((path, trie_node, _subtree_size)) = match iter.next() {
+            // FIXME: path, SnapshotMptNode.
+            if let Some((path, trie_node, subtree_size)) = match iter.next() {
                 Err(e) => {
                     subtree_root.has_io_error.set_has_io_error();
                     bail!(e);
                 }
                 Ok(item) => item,
             } {
-                let result = dest_mpt.write_node(&path, &trie_node);
+                let result = dest_mpt.write_node(
+                    &path,
+                    &SnapshotMptNode(trie_node, subtree_size),
+                );
                 if result.is_err() {
                     subtree_root.has_io_error.set_has_io_error();
                     return result;
@@ -119,7 +123,7 @@ impl CacheAlgoDataTrait for () {}
 struct NodeInMerge<'a> {
     mpts_in_request: Option<MptsInRequest<'a>>,
 
-    trie_node: VanillaTrieNode<MerkleHash>,
+    trie_node: SnapshotMptNode,
     // path_start_steps is changed when compressed path changes happen, but it
     // doesn't matter because it only happens to node removed from current MPT
     // path.
@@ -136,6 +140,8 @@ struct NodeInMerge<'a> {
 
     first_realized_child_index: u8,
     the_first_child: Option<Box<NodeInMerge<'a>>>,
+
+    subtree_size_delta: i64,
 
     has_io_error: *const Cell<bool>,
     db_committed: bool,
@@ -163,7 +169,39 @@ impl<'a> SetIoError for NodeInMerge<'a> {
     fn set_has_io_error(&self) { unsafe { &*self.has_io_error }.replace(true); }
 }
 
+fn rlp_key_value_len(_key_len: u16, _value_len: usize) -> i64 {
+    unimplemented!()
+}
+
 impl<'a> NodeInMerge<'a> {
+    fn replace_value_valid(&mut self, value: Box<[u8]>) {
+        let key_len = self.full_path_to_node.path_size();
+        let mut size_delta: i64 = rlp_key_value_len(key_len, value.len());
+        let maybe_old_value = self.trie_node.replace_value_valid(value);
+        match maybe_old_value {
+            MptValue::None => {
+                // No-op
+            }
+            MptValue::TombStone => {
+                // There is no TombStone in Snapshot MPT.
+                unreachable!()
+            }
+            MptValue::Some(old_value) => {
+                size_delta += rlp_key_value_len(key_len, old_value.len())
+            }
+        }
+
+        self.subtree_size_delta += size_delta;
+    }
+
+    fn delete_value_assumed_existence(&mut self) {
+        let old_value = unsafe { self.trie_node.delete_value_unchecked() };
+        self.subtree_size_delta -= rlp_key_value_len(
+            self.full_path_to_node.path_size(),
+            old_value.len(),
+        );
+    }
+
     fn new_root(
         mpt_merger: &mut MptMerger<'a>, supposed_merkle_root: &MerkleHash,
     ) -> Result<NodeInMerge<'a>> {
@@ -190,6 +228,7 @@ impl<'a> NodeInMerge<'a> {
             next_child_index: 0,
             first_realized_child_index: 0,
             the_first_child: None,
+            subtree_size_delta: 0,
             has_io_error: &mpt_merger.io_error,
             db_committed: false,
         })
@@ -234,16 +273,15 @@ impl<'a> NodeInMerge<'a> {
             next_child_index: 0,
             first_realized_child_index: 0,
             the_first_child: None,
+            subtree_size_delta: 0,
             has_io_error: parent_node.has_io_error,
             db_committed: false,
         })
     }
 
     fn new(
-        trie_node: VanillaTrieNode<MerkleHash>,
-        parent_node: &mut NodeInMerge<'a>,
-        child_index: u8,
-        // path_db_key: CompressedPathRaw,
+        trie_node: SnapshotMptNode, parent_node: &mut NodeInMerge<'a>,
+        child_index: u8, value_size: usize,
     ) -> NodeInMerge<'a>
     {
         let full_path_to_node = CompressedPathRaw::concat(
@@ -251,6 +289,11 @@ impl<'a> NodeInMerge<'a> {
             child_index,
             &trie_node.compressed_path_ref(),
         );
+        let key_value_rlp_size = if value_size > 0 {
+            rlp_key_value_len(full_path_to_node.path_size(), value_size)
+        } else {
+            0
+        };
         Self {
             mpts_in_request: parent_node.mpts_in_request.take(),
             trie_node,
@@ -264,6 +307,7 @@ impl<'a> NodeInMerge<'a> {
             next_child_index: 0,
             first_realized_child_index: 0,
             the_first_child: None,
+            subtree_size_delta: key_value_rlp_size,
             has_io_error: parent_node.has_io_error,
             db_committed: false,
         }
@@ -286,6 +330,8 @@ impl<'a> NodeInMerge<'a> {
                 }
             }
         } else {
+            self.trie_node.1 += self.subtree_size_delta;
+
             let result = self
                 .mpts_in_request
                 .io_mpts_assumed_owner()
@@ -310,6 +356,11 @@ impl<'a> NodeInMerge<'a> {
                     if !self.trie_node.has_value()
                         && self.trie_node.get_children_count() == 1
                     {
+                        // Since the current trie node is empty, we
+                        // update the child_node and replace current trie_node
+                        // with it.
+                        //
+                        // The subtree size isn't affected.
                         let mut child_node = child;
                         let child_trie_node = &mut child_node.trie_node;
                         let new_path = CompressedPathRaw::concat(
@@ -322,10 +373,7 @@ impl<'a> NodeInMerge<'a> {
 
                         mem::replace(
                             &mut self.trie_node,
-                            mem::replace(
-                                child_trie_node,
-                                VanillaTrieNode::default(),
-                            ),
+                            mem::replace(child_trie_node, Default::default()),
                         );
 
                         child_node.write_out()?;
@@ -449,6 +497,8 @@ impl<'a> NodeInMerge<'a> {
     fn set_concluded_child(
         &mut self, child_node: NodeInMerge<'a>,
     ) -> Result<()> {
+        self.subtree_size_delta += child_node.subtree_size_delta;
+
         if !child_node.is_node_empty() {
             // The safety is guaranteed by condition.
             unsafe {
@@ -666,7 +716,6 @@ impl<'a> MptMerger<'a> {
                 self.path_nodes
                     .last_mut()
                     .unwrap()
-                    .trie_node
                     .replace_value_valid(value);
             }
             MptMergerPopNodesRemaining::PathDiverted(path_diverted) => {
@@ -688,15 +737,23 @@ impl<'a> MptMerger<'a> {
                         None => {
                             // Create a new node for child_index, key_remaining
                             // and value.
+                            let value_len = value.len();
                             let new_node = NodeInMerge::new(
-                                VanillaTrieNode::new(
-                                    MERKLE_NULL_NODE,
-                                    Default::default(),
-                                    Some(value),
-                                    key_remaining.into(),
+                                SnapshotMptNode(
+                                    VanillaTrieNode::new(
+                                        MERKLE_NULL_NODE,
+                                        Default::default(),
+                                        // Save the value now because we
+                                        // immmediately
+                                        // return.
+                                        Some(value),
+                                        key_remaining.into(),
+                                    ),
+                                    0,
                                 ),
                                 self.path_nodes.last_mut().unwrap(),
                                 child_index,
+                                value_len,
                             );
                             self.path_nodes.push(new_node);
                             return Ok(());
@@ -709,7 +766,7 @@ impl<'a> MptMerger<'a> {
                     );
                     match &next_step {
                         WalkStop::Arrived => {
-                            new_node.trie_node.replace_value_valid(value);
+                            new_node.replace_value_valid(value);
                             self.path_nodes.push(new_node);
                         }
                         // The scenario of Descent is classified into
@@ -765,17 +822,21 @@ impl<'a> MptMerger<'a> {
                             .set_compressed_path(unmatched_path_remaining);
 
                         let mut fork_node = NodeInMerge::new(
-                            VanillaTrieNode::new(
-                                MERKLE_NULL_NODE,
-                                VanillaChildrenTable::new_from_one_child(
-                                    unmatched_child_index,
-                                    &MERKLE_NULL_NODE,
+                            SnapshotMptNode(
+                                VanillaTrieNode::new(
+                                    MERKLE_NULL_NODE,
+                                    VanillaChildrenTable::new_from_one_child(
+                                        unmatched_child_index,
+                                        &MERKLE_NULL_NODE,
+                                    ),
+                                    None,
+                                    matched_path,
                                 ),
-                                None,
-                                matched_path,
+                                0,
                             ),
                             parent_node,
                             parent_node.next_child_index,
+                            0,
                         );
                         fork_node.next_child_index = unmatched_child_index;
 
@@ -798,15 +859,23 @@ impl<'a> MptMerger<'a> {
                                 );
                                 fork_node.next_child_index = child_index;
 
+                                let value_size = value_last_step_diverted
+                                    .as_ref()
+                                    .unwrap()
+                                    .len();
                                 let value_node = NodeInMerge::new(
-                                    VanillaTrieNode::new(
-                                        MERKLE_NULL_NODE,
-                                        Default::default(),
-                                        value_last_step_diverted,
-                                        key_remaining.into(),
+                                    SnapshotMptNode(
+                                        VanillaTrieNode::new(
+                                            MERKLE_NULL_NODE,
+                                            Default::default(),
+                                            value_last_step_diverted,
+                                            key_remaining.into(),
+                                        ),
+                                        0,
                                     ),
                                     &mut fork_node,
                                     child_index,
+                                    value_size,
                                 );
 
                                 self.path_nodes.push(fork_node);
@@ -836,9 +905,7 @@ impl<'a> MptMerger<'a> {
             MptMergerPopNodesRemaining::Arrived => {
                 let last_node = self.path_nodes.last_mut().unwrap();
                 if last_node.trie_node.has_value() {
-                    unsafe {
-                        last_node.trie_node.delete_value_unchecked();
-                    }
+                    last_node.delete_value_assumed_existence();
                 // The action here is as simple as delete the value. It
                 // seems tricky if there is no children left, or if
                 // there is only one children left. Actually, the
@@ -881,11 +948,7 @@ impl<'a> MptMerger<'a> {
                     ) {
                         WalkStop::Arrived => {
                             if new_node.trie_node.has_value() {
-                                unsafe {
-                                    last_node
-                                        .trie_node
-                                        .delete_value_unchecked();
-                                }
+                                last_node.delete_value_assumed_existence();
                             } else {
                                 warn!(
                                     "In MPT merging, non-existing key {:?} is asked to be deleted.",
@@ -1036,13 +1099,11 @@ impl<'a> MptMerger<'a> {
 use super::{
     super::{
         super::{
-            super::storage_db::snapshot_mpt::{
-                SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
-            },
-            errors::*,
+            super::storage_db::snapshot_mpt::*, errors::*,
             storage_manager::DeltaMptInserter,
         },
         cache::algorithm::CacheAlgoDataTrait,
+        mpt_value::MptValue,
     },
     children_table::*,
     compressed_path::CompressedPathTrait,

@@ -45,6 +45,7 @@ pub enum SessionData {
     None,
     Ready,
     Message { data: Vec<u8>, protocol: ProtocolId },
+    Continue,
 }
 
 const PACKET_HELLO: u8 = 0x80;
@@ -183,14 +184,19 @@ impl Session {
         match self.state {
             State::Handshake(ref mut h) => {
                 let h = h.get_mut();
-                h.readable(io, &host.metadata)?;
+
+                if !h.readable(io, &host.metadata)? {
+                    return Ok(SessionData::None);
+                }
+
                 if h.done() {
                     self.complete_handshake(io, host)?;
                     io.update_registration(self.token()).unwrap_or_else(|e| {
                         debug!("Token registration error: {:?}", e)
                     });
                 }
-                Ok(SessionData::None)
+
+                Ok(SessionData::Continue)
             }
             State::Session(ref mut c) => match c.readable()? {
                 Some(data) => Ok(self.read_packet(data, host)?),

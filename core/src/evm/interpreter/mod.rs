@@ -629,6 +629,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         instruction: Instruction, provided: Option<Cost>,
     ) -> vm::Result<InstructionResult<Cost>>
     {
+        trace!("exec instruction: {:?}", instruction);
         match instruction {
             instructions::JUMP => {
                 let jump = self.stack.pop_back();
