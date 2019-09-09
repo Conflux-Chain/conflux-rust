@@ -4,9 +4,7 @@ use crate::{
         ConsensusGraphExecutionInfo, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
-    storage::{
-        storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
-    },
+    storage::{storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite},
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
@@ -14,7 +12,7 @@ use cfx_types::H256;
 use db::SystemDB;
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionAddress};
 use rlp::{Decodable, Encodable, Rlp};
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
@@ -77,6 +75,9 @@ impl DBManager {
 
 impl DBManager {
     pub fn new_from_sqlite(db_path: &Path) -> Self {
+        if let Err(e) = fs::create_dir_all(db_path) {
+            panic!("Error creating database directory: {:?}", e);
+        }
         let mut table_db = HashMap::new();
         for table in vec![
             DBTable::Misc,
@@ -86,8 +87,9 @@ impl DBManager {
         ] {
             let table_str = sqlite_db_table(table);
             let sqlite_db = KvdbSqlite::create_and_open(
-                &db_path.join(table_str.as_str()), /* Use separate database for
-                                                 * different table */
+                &db_path.join(table_str.as_str()), /* Use separate database
+                                                    * for
+                                                    * different table */
                 table_str.as_str(),
                 &[&"value"],
                 &[&"BLOB"],

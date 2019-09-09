@@ -44,28 +44,30 @@ impl KvdbSqliteStatements {
     pub const BYTES_KEY_TABLE_SUFFIX: &'static str = "_bytes_key";
     // TODO(yz): check if WITHOUT ROWID is faster: see https://www.sqlite.org/withoutrowid.html.
     pub const CREATE_TABLE_BLOB_KV_STATEMENT_TMPL: &'static str =
-        "CREATE TABLE :table_name ( key BLOB PRIMARY KEY, {value_columns_def} ) WITHOUT ROWID";
+        "CREATE TABLE {table_name} ( key BLOB PRIMARY KEY, {value_columns_def} ) WITHOUT ROWID";
     // INTEGER PRIMARY KEY is special, see https://www.sqlite.org/lang_createtable.html#rowid.
     pub const CREATE_TABLE_NUMBER_KV_STATEMENT_TMPL: &'static str =
-        "CREATE TABLE :table_name ( key INTEGER PRIMARY KEY, {value_columns_def} )";
+        "CREATE TABLE {table_name} ( key INTEGER PRIMARY KEY, {value_columns_def} )";
     pub const DELETE_STATEMENT: &'static str =
-        "DELETE FROM :table_name where key = :key";
-    pub const DROP_TABLE_STATEMENT: &'static str = "DROP TABLE :table_name";
+        "DELETE FROM {table_name} where key = :key";
+    pub const DROP_TABLE_STATEMENT: &'static str = "DROP TABLE {table_name}";
     pub const GET_STATEMENT_TMPL: &'static str =
-        "SELECT {value_columns} FROM :table_name WHERE key = :key";
+        "SELECT {value_columns} FROM {table_name} WHERE key = :key";
     pub const PUT_STATEMENT_TMPL: &'static str =
-        "INSERT OR REPLACE INTO :table_name VALUES (:key, {value_columns_to_bind})";
+        "INSERT OR REPLACE INTO {table_name} VALUES (:key, {value_columns_to_bind})";
     pub const RANGE_EXCL_SELECT_STATEMENT: &'static str =
-        "SELECT key, {value_columns} FROM :table_name \
+        "SELECT key, {value_columns} FROM {table_name} \
         WHERE key > :lower_bound_excl AND key < :upper_bound_excl ORDERED BY key ASC";
 
     pub fn make_statements(
         value_column_names: &[&str], value_column_types: &[&str],
-    ) -> Result<Self> {
+        table_name: &str,
+    ) -> Result<Self>
+    {
         let value_columns_def = value_column_names
             .iter()
             .zip(value_column_types.iter())
-            .map(|(n, t)| n.to_string() + t)
+            .map(|(n, t)| format!("{} {}", n, t))
             .collect::<Vec<String>>()
             .join(", ");
         let value_columns = value_column_names.join(", ");
@@ -80,6 +82,7 @@ impl KvdbSqliteStatements {
         strfmt_vars.insert("value_columns".to_string(), value_columns);
         strfmt_vars
             .insert("value_columns_to_bind".to_string(), value_columns_to_bind);
+        strfmt_vars.insert("table_name".to_string(), table_name.to_string());
 
         Ok(Self {
             create_table: strfmt(
@@ -127,6 +130,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
             statements: Arc::new(KvdbSqliteStatements::make_statements(
                 value_column_names,
                 value_column_types,
+                table_name,
             )?),
             __marker_value: Default::default(),
         })
@@ -159,6 +163,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
         let statements = Arc::new(KvdbSqliteStatements::make_statements(
             value_column_names,
             value_column_types,
+            table_name,
         )?);
 
         // Table for number key.
@@ -169,7 +174,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
             connection
                 .execute(
                     &statements.create_table_number_key,
-                    &[&&table_name as SqlBindableRef],
+                    &[] as &[SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
         } else {
@@ -178,10 +183,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
 
         // Table for string key.
         connection
-            .execute(
-                &statements.create_table,
-                &[&&bytes_key_table_name as SqlBindableRef],
-            )?
+            .execute(&statements.create_table, &[] as &[SqlBindableRef])?
             .finish_ignore_rows()?;;
 
         Ok(Self {
@@ -463,7 +465,7 @@ impl<
 /// FIXME: These are just ad-hoc fix. Might need to impl this in a better way.
 impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>> {
-        let (connection, _table_name, bytes_key_table_name, statements) =
+        let (connection, _table_name, _bytes_key_table_name, statements) =
             self.destructure();
         match connection {
             None => Ok(None),
@@ -479,7 +481,7 @@ impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
                 )?;
                 SqliteConnection::execute_locked(
                     statement,
-                    &[&&bytes_key_table_name as SqlBindableRef, &&key],
+                    &[&&key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
                 Ok(None)
@@ -490,7 +492,7 @@ impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
     fn put(
         &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>> {
-        let (connection, _table_name, bytes_key_table_name, statements) =
+        let (connection, _table_name, _bytes_key_table_name, statements) =
             self.destructure();
         match connection {
             None => Ok(None),
@@ -506,7 +508,6 @@ impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
                 )?;
 
                 let mut bind_list = Vec::<SqlBindableBox>::new();
-                bind_list.push(Box::new(&bytes_key_table_name));
                 bind_list.push(Box::new(&key));
                 let mut value_bind_list = value.make_bind_list();
                 bind_list.append(&mut value_bind_list);
@@ -532,7 +533,7 @@ where
     T: KeyValueDbTypes<ValueType = ValueType>,
 {
     fn get_impl(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
-        let (connection, _table_name, bytes_key_table_name, statements) =
+        let (connection, _table_name, _bytes_key_table_name, statements) =
             self.destructure();
         match connection {
             None => Ok(None),
@@ -548,7 +549,7 @@ where
                 )?;
                 let mut maybe_rows = SqliteConnection::execute_locked(
                     statement,
-                    &[&&bytes_key_table_name as SqlBindableRef, &&key],
+                    &[&&key as SqlBindableRef],
                 )?
                 .map(|row| KvdbSqlite::<ValueType>::from_row(row));
                 Ok(maybe_rows.expect_one_row()?.transpose()?)
@@ -592,15 +593,12 @@ where
     T: KeyValueDbTypes<ValueType = ValueType>,
 {
     fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {
-        let (connection, _table_name, bytes_key_table_name, statements) =
+        let (connection, _table_name, _bytes_key_table_name, statements) =
             self.destructure_mut();
         match connection {
             None => Ok(None),
             Some(conn) => Ok(conn
-                .execute(
-                    &statements.get,
-                    &[&&bytes_key_table_name as SqlBindableRef, &&key],
-                )?
+                .execute(&statements.get, &[&&key as SqlBindableRef])?
                 .map(|row| KvdbSqlite::<ValueType>::from_row(row))
                 .expect_one_row()?
                 .transpose()?),
@@ -641,16 +639,13 @@ where
     fn delete_impl(
         &mut self, key: &[u8],
     ) -> Result<Option<Option<Self::ValueType>>> {
-        let (connection, _table_name, bytes_key_table_name, statements) =
+        let (connection, _table_name, _bytes_key_table_name, statements) =
             self.destructure_mut();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
             Some(conn) => {
-                conn.execute(
-                    statements.delete,
-                    &[&&bytes_key_table_name as SqlBindableRef, &&key],
-                )?
-                .finish_ignore_rows()?;;
+                conn.execute(statements.delete, &[&&key as SqlBindableRef])?
+                    .finish_ignore_rows()?;;
                 Ok(None)
             }
         }
@@ -677,13 +672,12 @@ where
     fn put_impl(
         &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
     ) -> Result<Option<Option<Self::ValueType>>> {
-        let (connection, _table_name, bytes_key_table_name, statements) =
+        let (connection, _table_name, _bytes_key_table_name, statements) =
             self.destructure_mut();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
             Some(conn) => {
                 let mut bind_list = Vec::<SqlBindableBox>::new();
-                bind_list.push(Box::new(&bytes_key_table_name));
                 bind_list.push(Box::new(&key));
                 let mut value_bind_list = value.make_bind_list();
                 bind_list.append(&mut value_bind_list);

@@ -15,12 +15,16 @@ pub struct SnapshotDbStatements {
 
 lazy_static! {
     pub static ref SNAPSHOT_DB_STATEMENTS: SnapshotDbStatements = {
-        let kvdb_statements =
-            KvdbSqliteStatements::make_statements(&["value"], &["BLOB"])
-                .unwrap();
+        let kvdb_statements = KvdbSqliteStatements::make_statements(
+            &["value"],
+            &["BLOB"],
+            SnapshotDbSqlite::SNAPSHOT_KV_TABLE_NAME,
+        )
+        .unwrap();
         let mpt_statements = KvdbSqliteStatements::make_statements(
             &["node_rlp", "subtree_kv_rlp_size"],
             &["BLOB", "INTEGER"],
+            SnapshotDbSqlite::SNAPSHOT_MPT_TABLE_NAME,
         )
         .unwrap();
 

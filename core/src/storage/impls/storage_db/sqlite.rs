@@ -298,6 +298,18 @@ impl<'db> MaybeRows<'db> {
     }
 }
 
+impl<'db> Drop for MaybeRows<'db> {
+    fn drop(&mut self) {
+        match &mut self.0 {
+            None => {}
+            Some(stmt) => {
+                debug!("Drop MaybeRows");
+                stmt.reset().ok();
+            }
+        }
+    }
+}
+
 pub struct ConnectionWithRowParser<Connection, RowParser>(
     pub Connection,
     pub RowParser,
@@ -315,6 +327,7 @@ impl<F> Drop for MappedRows<'_, F> {
         match &mut self.maybe_rows {
             None => {}
             Some(stmt) => {
+                debug!("Drop MappedRows");
                 stmt.reset().ok();
             }
         }
@@ -416,7 +429,12 @@ impl ScopedStatement {
 
         let result = self.stmt.next();
         match result {
-            Ok(State::Done) => Ok(None),
+            Ok(State::Done) => {
+                // The statement will not be returned, so we can only reset it
+                // here.
+                self.stmt.reset().ok();
+                Ok(None)
+            }
             Ok(State::Row) => Ok(Some(self.as_mut())),
             Err(e) => {
                 self.stmt.reset().ok();
