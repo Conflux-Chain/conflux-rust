@@ -179,7 +179,7 @@ impl BlockDataManager {
             EpochExecutionContext {
                 start_block_number: 0,
             },
-            true,
+            true, // persistent to db
         );
 
         data_man
