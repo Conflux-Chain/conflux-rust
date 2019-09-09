@@ -145,6 +145,20 @@ impl<ValueType> KvdbSqlite<ValueType> {
             statements: self.statements.clone(),
             __marker_value: Default::default(),
         })
+}
+
+impl<ValueType> KvdbSqlite<ValueType> {
+    pub fn try_clone(&self) -> Result<Self> {
+        Ok(Self {
+            table_name: self.table_name.clone(),
+            bytes_key_table_name: self.bytes_key_table_name.clone(),
+            connection: match &self.connection {
+                None => None,
+                Some(conn) => Some(conn.try_clone()?),
+            },
+            statements: self.statements.clone(),
+            __marker_value: Default::default(),
+        })
     }
 
     pub fn create_and_open<P: AsRef<Path>>(

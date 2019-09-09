@@ -23,7 +23,7 @@ def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
     execute(cmd, retry, cmd_description)
 
 def kill_remote_conflux(ips_file:str):
-    pssh(ips_file, "killall -9 conflux || echo already killed", 3, "kill remote conflux")
+    pssh(ips_file, "killall conflux || echo already killed", 3, "kill remote conflux")
 
 def cleanup_remote_logs(ips_file:str):
     pssh(ips_file, "rm -f *.tgz *.out; rm -rf /tmp/conflux_test_*")
@@ -161,7 +161,7 @@ class LatencyExperiment(ArgumentHolder):
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
-        os.system("tar cvfz {} {} *.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file))
+        os.system("tar cvfz {} {} *.csv *.metrics.log *.conflux.svg".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
         execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
