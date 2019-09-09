@@ -303,7 +303,6 @@ impl<'db> Drop for MaybeRows<'db> {
         match &mut self.0 {
             None => {}
             Some(stmt) => {
-                debug!("Drop MaybeRows");
                 stmt.reset().ok();
             }
         }
@@ -327,7 +326,6 @@ impl<F> Drop for MappedRows<'_, F> {
         match &mut self.maybe_rows {
             None => {}
             Some(stmt) => {
-                debug!("Drop MappedRows");
                 stmt.reset().ok();
             }
         }
