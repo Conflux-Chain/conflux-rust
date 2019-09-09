@@ -2,13 +2,14 @@
 set -euxo pipefail
 
 if [ $# -lt 2 ]; then
-    echo "Parameters required: <key_pair> <instance_count> [<branch_name>] [<repository_url>]"
+    echo "Parameters required: <key_pair> <instance_count> [<enable_flamegraph>] [<branch_name>] [<repository_url>]"
     exit 1
 fi
 key_pair="$1"
 slave_count=$2
-branch="${3:-master}"
-repo="${4:-https://github.com/Conflux-Chain/conflux-rust}"
+enable_flamegraph=${3:-false}
+branch="${4:-master}"
+repo="${5:-https://github.com/Conflux-Chain/conflux-rust}"
 slave_role=${key_pair}_exp_slave
 
 run_latency_exp () {
@@ -29,7 +30,11 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;cargo build --release --features \"deadlock_detection\";parallel-scp -O \"StrictHostKeyChecking no\" -h ips -l ubuntu -p 1000 ../../target/release/conflux ~ |grep FAILURE|wc -l;"
 
     #4) Run experiments
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --send-tx-period-ms 50 --txgen-account-count $account_count"
+    flamegraph_option=""
+    if [ $enable_flamegraph = true ]; then
+        flamegraph_option="--enable-flamegraph"
+    fi
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --batch-config \"$exp_config\" --storage-memory-mb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --send-tx-period-ms 50 --txgen-account-count $account_count $flamegraph_option"
 
     #5) Terminate slave instances
     rm -rf tmp_data

@@ -162,6 +162,11 @@ class RemoteSimulate(ConfluxTestFramework):
             default="/home/ubuntu/genesis_accounts.toml",
             type=str,
         )
+        parser.add_argument(
+            "--enable-flamegraph",
+            dest="flamegraph_enabled",
+            action="store_true"
+        )
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
@@ -238,8 +243,9 @@ class RemoteSimulate(ConfluxTestFramework):
         cmd_kill_conflux = "killall -9 conflux || echo already killed"
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
-        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} {} &> start_conflux.out".format(
-            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, self.options.bandwidth,
+        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} {} {}&> start_conflux.out".format(
+            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, 
+            self.options.bandwidth, str(self.options.flamegraph_enabled).lower()
         )
         cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
