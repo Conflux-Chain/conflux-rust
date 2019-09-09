@@ -99,6 +99,10 @@ impl BlockDataManager {
         )));
         let tx_data_manager =
             TransactionDataManager::new(config.tx_cache_count, worker_pool);
+        let db_manager = match config.db_type {
+            DbType::Rocksdb => DBManager::new_from_rocksdb(db),
+            DbType::Sqlite => DBManager::new_from_sqlite("./sqlite_db"),
+        };
 
         let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
@@ -119,7 +123,7 @@ impl BlockDataManager {
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
             cur_consensus_era_stable_hash: RwLock::new(genesis_hash),
             tx_data_manager,
-            db_manager: DBManager { db },
+            db_manager,
         };
 
         data_man.initialize_instance_id();
@@ -879,16 +883,24 @@ impl BlockDataManager {
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum DbType {
+    Rocksdb,
+    Sqlite,
+}
+
 pub struct DataManagerConfiguration {
     record_tx_address: bool,
     tx_cache_count: usize,
+    db_type: DbType,
 }
 
 impl DataManagerConfiguration {
-    pub fn new(record_tx_address: bool, tx_cache_count: usize) -> Self {
+    pub fn new(record_tx_address: bool, tx_cache_count: usize, db_type: DbType) -> Self {
         Self {
             record_tx_address,
             tx_cache_count,
+            db_type,
         }
     }
 }

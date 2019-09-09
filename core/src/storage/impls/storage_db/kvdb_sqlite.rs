@@ -460,6 +460,67 @@ impl<
     }
 }
 
+/// FIXME: These are just ad-hoc fix. Might need to impl this in a better way.
+impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
+    fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>> {
+        let (connection, _table_name, bytes_key_table_name, statements) =
+            self.destructure();
+        match connection {
+            None => Ok(None),
+            Some(conn) => {
+                // TODO try clone connection
+                let mut db = conn.lock_db();
+                let mut statement_cache = conn.lock_statement_cache();
+
+                let statement = SqliteConnection::prepare(
+                    &mut db,
+                    &mut statement_cache,
+                    &statements.delete,
+                )?;
+                SqliteConnection::execute_locked(
+                    statement,
+                    &[&&bytes_key_table_name as SqlBindableRef, &&key],
+                )?.finish_ignore_rows()?;
+                Ok(None)
+            }
+        }
+    }
+
+    fn put(&self, key: &[u8], value: &<Self::ValueType as PutType>::PutType) -> Result<Option<Option<Self::ValueType>>> {
+        let (connection, _table_name, bytes_key_table_name, statements) =
+            self.destructure();
+        match connection {
+            None => Ok(None),
+            Some(conn) => {
+                // TODO try clone connection
+                let mut db = conn.lock_db();
+                let mut statement_cache = conn.lock_statement_cache();
+
+                let statement = SqliteConnection::prepare(
+                    &mut db,
+                    &mut statement_cache,
+                    &statements.put,
+                )?;
+
+                let mut bind_list = Vec::<SqlBindableBox>::new();
+                bind_list.push(Box::new(&bytes_key_table_name));
+                bind_list.push(Box::new(&key));
+                let mut value_bind_list = value.make_bind_list();
+                bind_list.append(&mut value_bind_list);
+                SqliteConnection::execute_locked(
+                    statement,
+                    &bind_list,
+                )?.finish_ignore_rows()?;
+                Ok(None)
+            }
+        }
+    }
+}
+
+impl KeyValueDbTraitMultiReader for KvdbSqlite<Box<[u8]>> {}
+unsafe impl Sync for KvdbSqlite<Box<[u8]>> {}
+unsafe impl Send for KvdbSqlite<Box<[u8]>> {}
+
 impl<
         T: ReadImplFamily<FamilyRepresentitive = KvdbSqlite<ValueType>>,
         ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,

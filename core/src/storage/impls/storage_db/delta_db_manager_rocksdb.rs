@@ -21,6 +21,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
     ) -> Result<Self::DeltaDb> {
         Ok(KvdbRocksdb {
             kvdb: self.system_db.key_value().clone(),
+            col: COL_DELTA_TRIE,
         })
     }
 
@@ -42,5 +43,5 @@ use super::{
     },
     kvdb_rocksdb::KvdbRocksdb,
 };
-use crate::ext_db::SystemDB;
+use crate::{db::COL_DELTA_TRIE, ext_db::SystemDB};
 use std::sync::Arc;
