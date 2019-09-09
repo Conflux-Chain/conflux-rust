@@ -11,10 +11,7 @@ use primitives::{
 
 use crate::{
     consensus::ConsensusGraph,
-    light_protocol::{
-        message::{StateRootWithProof, WitnessInfoWithHeight},
-        Error, ErrorKind,
-    },
+    light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     statedb::StateDb,
     storage::{
@@ -150,23 +147,6 @@ impl LedgerInfo {
         }
     }
 
-    /// Get the state trie roots corresponding to the execution of `epoch`.
-    /// Returns a ledger proof along with the state trie roots.
-    #[inline]
-    pub fn state_root_with_proof_of(
-        &self, epoch: u64,
-    ) -> Result<StateRootWithProof, Error> {
-        let root = self.state_root_of(epoch)?;
-
-        let proof = self
-            .headers_needed_to_verify(epoch)?
-            .into_iter()
-            .map(|h| self.correct_deferred_state_root_hash_of(h))
-            .collect::<Result<Vec<H256>, Error>>()?;
-
-        Ok(StateRootWithProof { root, proof })
-    }
-
     /// Get the state trie entry under `key` at `epoch`.
     #[inline]
     pub fn state_entry_at(
@@ -232,38 +212,6 @@ impl LedgerInfo {
         self.consensus.first_trusted_header_starting_from(height)
     }
 
-    /// Get the witness height that can be used to retrieve the correct header
-    /// information corresponding to the execution of `epoch`.
-    #[inline]
-    pub fn witness_of_state_at(&self, epoch: u64) -> Option<u64> {
-        let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
-        self.consensus.first_trusted_header_starting_from(height)
-    }
-
-    /// Get a list of header heights required to verify the roots at `epoch`
-    /// based on the blame information.
-    #[inline]
-    pub fn headers_needed_to_verify(
-        &self, epoch: u64,
-    ) -> Result<Vec<u64>, Error> {
-        // find the first header that can verify the state root requested
-        let witness = match self.witness_of_state_at(epoch) {
-            Some(epoch) => epoch,
-            None => {
-                warn!("Unable to produce state proof for epoch {}", epoch);
-                return Err(ErrorKind::UnableToProduceProof.into());
-            }
-        };
-
-        let blame = self.pivot_header_of(witness)?.blame() as u64;
-
-        // assumption: the state root requested can be verified by the witness
-        assert!(witness >= epoch + DEFERRED_STATE_EPOCH_COUNT);
-        assert!(witness <= epoch + DEFERRED_STATE_EPOCH_COUNT + blame);
-
-        self.headers_seen_by_witness(witness)
-    }
-
     /// Get a list of all headers for which the block at height `witness` on the
     /// pivot chain stores the correct roots based on the blame information.
     /// NOTE: This list will contains `witness` in all cases.
@@ -281,43 +229,27 @@ impl LedgerInfo {
         Ok((0..(blame + 1)).map(|ii| witness - ii).collect())
     }
 
-    /// Get a list of all correct receipts roots stored in the header at
-    /// height `witness` on the pivot chain.
-    #[inline]
-    pub fn receipts_roots_seen_by_witness(
-        &self, witness: u64,
-    ) -> Result<Vec<H256>, Error> {
-        self.headers_seen_by_witness(witness)?
-            .into_iter()
-            .map(|height| self.correct_deferred_receipts_root_hash_of(height))
-            .collect()
-    }
-
-    /// Get a list of all correct log bloom hashes stored in the header at
-    /// height `witness` on the pivot chain.
-    #[inline]
-    pub fn bloom_hashes_seen_by_witness(
-        &self, witness: u64,
-    ) -> Result<Vec<H256>, Error> {
-        self.headers_seen_by_witness(witness)?
-            .into_iter()
-            .map(|height| self.correct_deferred_logs_root_hash_of(height))
-            .collect()
-    }
-
-    /// Get a list of all correct log bloom hashes stored in the header at
-    /// height `witness` on the pivot chain.
+    /// Get all correct state roots, receipts roots, and bloom hashes seen by
+    /// the header at height `witness`.
     #[inline]
     pub fn witness_info(
         &self, witness: u64,
     ) -> Result<WitnessInfoWithHeight, Error> {
-        let receipt_hashes = self.receipts_roots_seen_by_witness(witness)?;
-        let bloom_hashes = self.bloom_hashes_seen_by_witness(witness)?;
+        let mut states = vec![];
+        let mut receipts = vec![];
+        let mut blooms = vec![];
+
+        for h in self.headers_seen_by_witness(witness)? {
+            states.push(self.correct_deferred_state_root_hash_of(h)?);
+            receipts.push(self.correct_deferred_receipts_root_hash_of(h)?);
+            blooms.push(self.correct_deferred_logs_root_hash_of(h)?);
+        }
 
         Ok(WitnessInfoWithHeight {
             height: witness,
-            receipt_hashes,
-            bloom_hashes,
+            state_roots: states,
+            receipt_hashes: receipts,
+            bloom_hashes: blooms,
         })
     }
 }

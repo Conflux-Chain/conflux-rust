@@ -11,12 +11,12 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, EpochNumber, Receipt, SignedTransaction, StateRoot,
+    Account, EpochNumber, Receipt, SignedTransaction,
 };
 
 use crate::{
     consensus::ConsensusGraph,
-    network::{NetworkService, PeerId},
+    network::{NetworkContext, NetworkService, PeerId},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME_MS},
@@ -27,9 +27,9 @@ use crate::{
 };
 
 use super::{
-    common::{poll_next, with_timeout, LedgerInfo},
+    common::{poll_future, poll_stream, with_timeout, LedgerInfo},
     handler::QueryResult,
-    message::{GetStateEntry, GetStateRoot, GetTxs},
+    message::GetTxs,
     Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
     LIGHT_PROTOCOL_VERSION,
 };
@@ -77,96 +77,87 @@ impl QueryService {
             })
     }
 
-    pub fn query_state_root(
-        &self, peer: PeerId, epoch: u64,
-    ) -> Result<StateRoot, Error> {
-        // TODO(thegaram): retrieve from cache
-        info!("query_state_root epoch={:?}", epoch);
-
-        let req = GetStateRoot {
-            request_id: 0,
-            epoch,
-        };
-
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            match self.handler.query.execute(io, peer, req)? {
-                QueryResult::StateRoot(sr) => Ok(sr),
-                _ => Err(ErrorKind::UnexpectedResponse.into()),
-            }
-        })
+    fn with_io<T>(&self, f: impl FnOnce(&dyn NetworkContext) -> T) -> T {
+        let res: Result<T, Error> =
+            self.network.with_context(LIGHT_PROTOCOL_ID, |io| Ok(f(io)));
+        res.unwrap()
     }
 
-    pub fn query_state_entry(
-        &self, peer: PeerId, epoch: u64, key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, Error> {
-        info!("query_state_entry epoch={:?} key={:?}", epoch, key);
-
-        let req = GetStateEntry {
-            request_id: 0,
-            epoch,
-            key,
-        };
-
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            match self.handler.query.execute(io, peer, req)? {
-                QueryResult::StateEntry(entry) => Ok(entry),
-                _ => Err(ErrorKind::UnexpectedResponse.into()),
-            }
-        })
-    }
-
-    pub fn query_account(
-        &self, peer: PeerId, epoch: u64, address: H160,
-    ) -> Result<Option<Account>, Error> {
-        info!(
-            "query_account peer={:?} epoch={:?} address={:?}",
-            peer, epoch, address
-        );
-
-        // retrieve state root from peer
-        let state_root = self.query_state_root(peer, epoch)?;
-
-        // calculate corresponding state trie key
-        let key = {
-            let padding = storage::MultiVersionMerklePatriciaTrie::padding(
-                &state_root.snapshot_root,
-                &state_root.intermediate_delta_root,
-            );
-
-            StorageKey::new_account_key(&address, &padding)
-                .as_ref()
-                .to_vec()
-        };
-
-        // retrieve state entry from peer
-        let entry = self.query_state_entry(peer, epoch, key)?;
-
-        let account = match entry {
-            None => None,
-            Some(entry) => Some(rlp::decode(&entry[..])?),
-        };
-
-        Ok(account)
-    }
-
-    pub fn get_account(&self, epoch: u64, address: H160) -> Option<Account> {
+    pub fn get_account(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<Account>, String> {
         info!("get_account epoch={:?} address={:?}", epoch, address);
 
-        // try each peer until we succeed
-        // TODO(thegaram): only query peers who already have `epoch`
-        for peer in self.handler.peers.all_peers_shuffled() {
-            match self.query_account(peer, epoch, address) {
-                Ok(account) => return account,
-                Err(e) => {
-                    warn!(
-                        "Failed to get account from peer={:?}: {:?}",
-                        peer, e
-                    );
-                }
-            };
-        }
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
 
-        None
+        let mut account = future::ok(epoch)
+            // request state root
+            .and_then(|epoch| {
+                trace!("epoch = {:?}", epoch);
+
+                let root = self.with_io(|io| {
+                    self.handler
+                        .sync
+                        .state_roots
+                        .request_now(io, epoch)
+                });
+
+                with_timeout(
+                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+                    format!("Timeout while retrieving state root for epoch {}", epoch), /* error */
+                    root
+                )
+            })
+
+            // calculate state trie key for account
+            .map(|root| {
+                trace!("root = {:?}", root);
+
+                let padding = storage::MultiVersionMerklePatriciaTrie::padding(
+                    &root.snapshot_root,
+                    &root.intermediate_delta_root,
+                );
+
+                StorageKey::new_account_key(&address, &padding)
+                    .as_ref()
+                    .to_vec()
+            })
+
+            // request state trie entry
+            .and_then(|key| {
+                trace!("key = {:?}", key);
+
+                let entry = self.with_io(|io| {
+                    self.handler
+                        .sync
+                        .state_entries
+                        .request_now(io, epoch, key.clone())
+                });
+
+                with_timeout(
+                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+                    format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key), /* error */
+                    entry
+                )
+            })
+
+            // decode account
+            .and_then(|entry| match entry {
+                Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
+                None => Ok(None),
+            });
+
+        // // match fut.wait() {
+        match poll_future(&mut account) {
+            Ok(account) => Ok(account),
+            Err(e) => {
+                warn!("Error while retrieving account: {}", e);
+                Err(format!("{}", e))
+            }
+        }
     }
 
     /// Relay raw transaction to all peers.
@@ -533,9 +524,7 @@ impl QueryService {
         let mut matching = vec![];
 
         loop {
-            // NOTE: poll_next will poll indefinitely; the provided stream must
-            // make sure it terminates eventually.
-            match poll_next(&mut stream) {
+            match poll_stream(&mut stream) {
                 Ok(None) => break,
                 Ok(Some(x)) => matching.push(x),
                 Err(e) => return Err(FilterError::Custom(format!("{}", e))),

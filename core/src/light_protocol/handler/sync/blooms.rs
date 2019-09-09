@@ -10,12 +10,12 @@ use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
-    consensus::ConsensusGraph,
+    hash::keccak,
     light_protocol::{
-        common::{Peers, UniqueId, Validate},
+        common::{Peers, UniqueId},
         handler::FullPeerState,
         message::{BloomWithEpoch, GetBlooms},
-        Error,
+        Error, ErrorKind,
     },
     message::Message,
     network::{NetworkContext, PeerId},
@@ -27,7 +27,7 @@ use crate::{
 
 use super::{
     future_item::FutureItem, missing_item::KeyOrdered,
-    sync_manager::SyncManager,
+    sync_manager::SyncManager, witnesses::Witnesses,
 };
 
 #[derive(Debug)]
@@ -46,22 +46,20 @@ pub struct Blooms {
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingBloom>,
-
-    // helper API for validating ledger and state information
-    validate: Validate,
-
     // bloom filters received from full node
     verified: Arc<RwLock<HashMap<u64, Bloom>>>,
+
+    // witness sync manager
+    witnesses: Arc<Witnesses>,
 }
 
 impl Blooms {
     pub(super) fn new(
-        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
-        request_id_allocator: Arc<UniqueId>,
+        peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
+        witnesses: Arc<Witnesses>,
     ) -> Self
     {
         let sync_manager = SyncManager::new(peers.clone());
-        let validate = Validate::new(consensus.clone());
         let verified = Arc::new(RwLock::new(HashMap::new()));
 
         verified.write().insert(0, Bloom::zero());
@@ -69,8 +67,8 @@ impl Blooms {
         Blooms {
             request_id_allocator,
             sync_manager,
-            validate,
             verified,
+            witnesses,
         }
     }
 
@@ -101,7 +99,7 @@ impl Blooms {
     ) -> Result<(), Error> {
         for BloomWithEpoch { epoch, bloom } in blooms {
             info!("Validating bloom {:?} with epoch {}", bloom, epoch);
-            self.validate.bloom_with_local_info(epoch, bloom)?;
+            self.validate_bloom(epoch, bloom)?;
 
             self.verified.write().insert(epoch, bloom);
             self.sync_manager.remove_in_flight(&epoch);
@@ -145,5 +143,34 @@ impl Blooms {
             BLOOM_REQUEST_BATCH_SIZE,
             |peer, epochs| self.send_request(io, peer, epochs),
         );
+    }
+
+    #[inline]
+    fn validate_bloom(&self, epoch: u64, bloom: Bloom) -> Result<(), Error> {
+        // calculate received bloom hash
+        let received = keccak(bloom);
+
+        // retrieve local bloom hash
+        let local = match self.witnesses.root_hashes_of(epoch) {
+            Some((_, _, bloom_hash)) => bloom_hash,
+            None => {
+                warn!(
+                    "Bloom hash not found, epoch={}, bloom={:?}",
+                    epoch, bloom
+                );
+                return Err(ErrorKind::InternalError.into());
+            }
+        };
+
+        // check
+        if received != local {
+            warn!(
+                "Bloom validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidBloom.into());
+        }
+
+        Ok(())
     }
 }

@@ -18,11 +18,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         common::{UniqueId, Validate},
-        message::{
-            GetStateEntry, GetStateRoot, GetTxs,
-            StateEntry as GetStateEntryResponse,
-            StateRoot as GetStateRootResponse, Txs as GetTxsResponse,
-        },
+        message::{GetTxs, Txs as GetTxsResponse},
         Error, ErrorKind,
     },
     message::{HasRequestId, Message, RequestId},
@@ -87,52 +83,6 @@ impl QueryHandler {
                 Err(ErrorKind::UnexpectedResponse.into())
             }
         }
-    }
-
-    pub(super) fn on_state_root(
-        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetStateRootResponse = rlp.as_val()?;
-        info!("on_state_root resp={:?}", resp);
-
-        let id = resp.request_id;
-        let (req, sender) = self.match_request::<GetStateRoot>(peer, id)?;
-
-        self.validate.pivot_hash(req.epoch, resp.pivot_hash)?;
-        self.validate.state_root(req.epoch, &resp.state_root)?;
-
-        sender.complete(QueryResult::StateRoot(resp.state_root.root));
-        // note: in case of early return, `sender` will be cancelled
-
-        Ok(())
-    }
-
-    pub(super) fn on_state_entry(
-        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetStateEntryResponse = rlp.as_val()?;
-        info!("on_state_entry resp={:?}", resp);
-
-        let id = resp.request_id;
-        let (req, sender) = self.match_request::<GetStateEntry>(peer, id)?;
-
-        self.validate.pivot_hash(req.epoch, resp.pivot_hash)?;
-        self.validate.state_root(req.epoch, &resp.state_root)?;
-
-        // validate proof
-        let key = &req.key;
-        let value = resp.entry.as_ref().map(|v| &**v);
-        let root = resp.state_root.root;
-
-        if !resp.proof.is_valid_kv(key, value, root) {
-            info!("Invalid proof from peer={}", peer);
-            return Err(ErrorKind::InvalidStateProof.into());
-        }
-
-        sender.complete(QueryResult::StateEntry(resp.entry));
-        // note: in case of early return, `sender` will be cancelled
-
-        Ok(())
     }
 
     pub(super) fn on_txs(
