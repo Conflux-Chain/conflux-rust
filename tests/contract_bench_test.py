@@ -17,7 +17,7 @@ from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, privtoaddr, parse_as_int, int_to_hex
 
 from web3 import Web3
 from easysolc import Solc

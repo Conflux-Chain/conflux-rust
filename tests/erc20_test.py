@@ -6,7 +6,7 @@ from eth_utils import decode_hex
 from web3 import Web3
 
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr
+from conflux.utils import encode_hex, privtoaddr, int_to_hex, sha3_256
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.mininode import *
