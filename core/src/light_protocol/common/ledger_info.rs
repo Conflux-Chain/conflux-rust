@@ -194,7 +194,7 @@ impl LedgerInfo {
             .map(|h| {
                 self.consensus
                     .data_man
-                    .block_results_by_hash_with_epoch(
+                    .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_cache */
                     )
                     .map(|res| (*res.receipts).clone())
@@ -214,7 +214,7 @@ impl LedgerInfo {
             .map(|h| {
                 self.consensus
                     .data_man
-                    .block_results_by_hash_with_epoch(
+                    .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_cache */
                     )
                     .map(|res| res.bloom)

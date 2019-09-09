@@ -475,6 +475,7 @@ where
         match connection {
             None => Ok(None),
             Some(conn) => {
+                // TODO try clone connection
                 let mut db = conn.lock_db();
                 let mut statement_cache = conn.lock_statement_cache();
 

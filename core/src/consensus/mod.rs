@@ -641,7 +641,7 @@ impl ConsensusGraph {
                     let hash = inner.arena[*index].hash;
                     if let Some(block_log_bloom) = self
                         .data_man
-                        .block_results_by_hash_with_epoch(
+                        .block_execution_result_by_hash_with_epoch(
                             &hash,
                             &epoch_hash,
                             false, /* update_cache */

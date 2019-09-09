@@ -519,11 +519,13 @@ impl ConsensusGraphInner {
             last_pivot_in_past_blocks,
         });
 
+        // FIXME: Set execution context and past_num_blocks with data on disk
         inner.data_man.insert_epoch_execution_context(
             data_man.genesis_block().hash(),
             EpochExecutionContext {
                 start_block_number: 0,
             },
+            true, /* persistent to db */
         );
 
         inner
@@ -1508,6 +1510,7 @@ impl ConsensusGraphInner {
                     start_block_number: self
                         .get_epoch_start_block_number(index),
                 },
+                true, /* persistent to db */
             );
 
             self.arena[index].past_weight = past_weight;
@@ -2088,7 +2091,7 @@ impl ConsensusGraphInner {
             Some(epoch) => {
                 trace!("Block {} is in epoch {}", hash, epoch);
                 self.data_man
-                    .block_results_by_hash_with_epoch(
+                    .block_execution_result_by_hash_with_epoch(
                         hash,
                         &epoch,
                         update_cache,
@@ -2098,7 +2101,7 @@ impl ConsensusGraphInner {
             None => {
                 debug!("Block {:?} not in mem, try to read from db", hash);
                 self.data_man
-                    .block_results_by_hash_from_db(hash)
+                    .block_execution_result_by_hash_from_db(hash)
                     .map(|r| r.1.receipts)
             }
         }

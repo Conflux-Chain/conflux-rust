@@ -1242,11 +1242,13 @@ impl ConsensusExecutionHandler {
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
             let block_hash = block.hash();
             // TODO: better redesign to avoid recomputation.
-            let receipts = match self.data_man.block_results_by_hash_with_epoch(
-                &block_hash,
-                &reward_epoch_hash,
-                true, /* update_cache */
-            ) {
+            let receipts = match self
+                .data_man
+                .block_execution_result_by_hash_with_epoch(
+                    &block_hash,
+                    &reward_epoch_hash,
+                    true, /* update_cache */
+                ) {
                 Some(receipts) => receipts.receipts,
                 None => {
                     let ctx = self
