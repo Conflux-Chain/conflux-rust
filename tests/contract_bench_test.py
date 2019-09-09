@@ -144,10 +144,57 @@ class HTLCTest(SmartContractBenchBase):
         assert_equal(logs[-1]["topics"][1], self.address_to_topic(self.sender))
         assert_equal(logs[-1]["topics"][2], self.number_to_topic(16))
 
-        # call const function getNow()
+        # call getNow()
         data = contract.functions.getNow().buildTransaction(self.tx_conf)["data"];
         result = self.rpc.call(contractAddr, data)
-        print(result, int(time.time()))
+        assert(int(result, 0) - int(time.time()) < 5)
+
+        b0 = self.rpc.get_balance(self.sender)
+        fee = 10000000
+        # interact with newContract(), sender send conflux to himself
+        time_lock = int(time.time()) + 7200
+        data = contract.functions.newContract(self.sender_checksum, self.problem, time_lock).buildTransaction(self.tx_conf)["data"];
+        cost = 5000000000000000000
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
+        logs = self.rpc.get_logs(self.filter)
+        assert_equal(len(logs), l + 2)
+        assert_equal(self.rpc.get_balance(contractAddr), cost)
+        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - fee)
+        contract_id = logs[-1]["topics"][1]
+
+        # call getContract
+        data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"];
+        result = self.rpc.call(contractAddr, data)
+        result = result[2:]
+        res = ['0x'+result[i * 64 : (i + 1) * 64] for i in range(8)]
+        assert_equal(res[0][-20:], self.sender[-20:])
+        assert_equal(res[1][-20:], self.sender[-20:])
+        assert_equal(int(res[2], 0), cost)
+        assert_equal(res[3], self.problem)
+        assert_equal(int(res[4], 0), time_lock)
+        assert_equal(int(res[5], 0), 0)
+        assert_equal(int(res[6], 0), 0)
+        assert_equal(int(res[7], 0), 0)
+
+        # interact with withdraw()
+        data = contract.functions.withdraw(contract_id, self.solution).buildTransaction(self.tx_conf)["data"];
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
+        assert_equal(self.rpc.get_balance(contractAddr), 0)
+        assert_equal(self.rpc.get_balance(self.sender), b0 - fee * 2)
+        
+        # call getContract
+        data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"];
+        result = self.rpc.call(contractAddr, data)
+        result = result[2:]
+        res = ['0x'+result[i * 64 : (i + 1) * 64] for i in range(8)]
+        assert_equal(res[0][-20:], self.sender[-20:])
+        assert_equal(res[1][-20:], self.sender[-20:])
+        assert_equal(int(res[2], 0), cost)
+        assert_equal(res[3], self.problem)
+        assert_equal(int(res[4], 0), time_lock)
+        assert_equal(int(res[5], 0), 1)
+        assert_equal(int(res[6], 0), 0)
+        assert_equal(res[7], self.solution)
     
     def testPayContract(self):
         CONTRACT_PATH = "contracts/pay_bytecode.dat"
@@ -209,6 +256,8 @@ class HTLCTest(SmartContractBenchBase):
         self.testBallotContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testPayContract()
+        self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
+        self.testHTLCContract()
         self.log.info("Pass")
 
     def address_to_topic(self, address):
