@@ -45,9 +45,9 @@ class RlpIter:
                     if self.offset == old_offset:
                         # We assume that a single transaction won't be larger than BUFFER_SIZE
                         raise e
-            rlpbytes = self.bytes[old_offset : self.offset]
+            rlpbytes = self.bytes[old_offset: self.offset]
             if self.offset >= RlpIter.BUFFER_SIZE:
-                self.bytes = self.bytes[RlpIter.BUFFER_SIZE :]
+                self.bytes = self.bytes[RlpIter.BUFFER_SIZE:]
                 self.offset -= RlpIter.BUFFER_SIZE
             return rlpbytes, txs
         else:
@@ -65,6 +65,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     GENESIS_KEY = decode_hex(
         "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"
     )
+    TX_FILE = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "../../../convert_eth_from_0_to_4141811_unknown_txs.rlp", )
+
     TOTAL_TX_NUMBER = 4000000
 
     def __init__(self):
@@ -98,9 +102,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             self.num_nodes = 1
 
         self.conf_parameters = {
-            "log_level": '"info"',
+            "log_level": '"debug"',
             # "storage_cache_start_size": "1000000",
             # Do not re-alloc.
+            "eth_compatibility_mode": "true",
             "storage_cache_start_size": "20000000",
             "storage_cache_size": "20000000",
             "storage_idle_size": "2000000",
@@ -138,12 +143,12 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         else:
             self.setup_nodes(
                 binary=[
-                    os.path.join(
-                        os.path.dirname(os.path.realpath(__file__)),
-                        "../target/release/conflux",
-                    )
-                ]
-                * self.num_nodes
+                           os.path.join(
+                               os.path.dirname(os.path.realpath(__file__)),
+                               "../target/release/conflux",
+                           )
+                       ]
+                       * self.num_nodes
             )
 
     def run_test(self):
@@ -161,7 +166,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             node_id += 1
 
         tx_file_path = (
-            "/Users/ypliu/Desktop/convert_eth_from_0_to_4141811_unknown_txs.rlp"
+            self.TX_FILE
         )
         f = open(tx_file_path, "rb")
 
@@ -186,13 +191,13 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             peer_to_send = random.choice(range(0, self.num_nodes))
             txs_rlp = rlp.codec.length_prefix(len(txs), 192) + txs
             self.nodes[peer_to_send].p2p.send_protocol_packet(
-                int_to_bytes(TRANSACTIONS) + txs_rlp
+                txs_rlp + int_to_bytes(TRANSACTIONS)
             )
 
             tx_bytes += len(txs)
             expected_elapsed_time = (
-                tx_received_slowdown
-                + 1.0 * tx_bytes / ConfluxEthReplayTest.EXPECTED_TX_SIZE_PER_SEC
+                    tx_received_slowdown
+                    + 1.0 * tx_bytes / ConfluxEthReplayTest.EXPECTED_TX_SIZE_PER_SEC
             )
 
             if int(elapsed_time - last_log_elapsed_time) >= 1:
@@ -215,10 +220,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                         should_sleep = 1
                     else:
                         should_sleep = (
-                            elapsed_time
-                            * (tx_count - txpool_received + 45000)
-                            / txpool_received
-                            + 1
+                                elapsed_time
+                                * (tx_count - txpool_received + 45000)
+                                / txpool_received
+                                + 1
                         )
                     final_slow_down = max(final_slow_down, should_sleep)
                     self.log.warning(
@@ -235,10 +240,10 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                         should_sleep = 1
                     else:
                         should_sleep = (
-                            elapsed_time
-                            * (txpool_unpacked - unpacked_limit)
-                            / (txpool_received - txpool_unpacked)
-                            + 1
+                                elapsed_time
+                                * (txpool_unpacked - unpacked_limit)
+                                / (txpool_received - txpool_unpacked)
+                                + 1
                         )
                     final_slow_down = max(final_slow_down, should_sleep)
                     self.log.warning(
@@ -324,16 +329,16 @@ class BlockGenThread(threading.Thread):
                     time.sleep(sleep_sec)
 
                 mining = (
-                    BlockGenThread.BLOCK_FREQ
-                    * numpy.random.exponential()
-                    / self.hashpower_percent
+                        BlockGenThread.BLOCK_FREQ
+                        * numpy.random.exponential()
+                        / self.hashpower_percent
                 )
                 # self.log.info("%s sleep %s sec then generate block", self.node_id, mining)
                 total_mining_sec += mining
 
                 # TODO: open the flag
                 """ if False:
-                    # Use getblockcount to compare with number of generated blocks to compare with expectation, 
+                    # Use getblockcount to compare with number of generated blocks to compare with expectation,
                     # then set number of generated txs, also report the number of generated txs to help calculation.
                     received_blocks = self.node.getblockcount()
                     expected_generated_blocks = pre_generated_blocks \

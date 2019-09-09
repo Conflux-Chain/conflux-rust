@@ -187,6 +187,7 @@ class P2PConnection(asyncore.dispatcher):
         self.had_hello = True
 
     def on_disconnect(self, disconnect):
+        logger.info("on disconnect" + disconnect)
         self.on_close()
 
     def on_protocol_packet(self, protocol, payload):

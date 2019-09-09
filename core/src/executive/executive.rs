@@ -558,7 +558,7 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let res = match out {
                     Ok(val) => {
-                        println!("{:?}", val);
+                        debug!("{:?}", val);
                         val
                     }
                     Err(TrapError::Call(subparams, resume)) => {
@@ -934,8 +934,6 @@ impl<'a, 'b> Executive<'a, 'b> {
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
     ) -> vm::Result<FinalizationResult> {
-        println!("gas={:?}", params.gas);
-
         self.create_with_stack_depth(params, substate, 0)
     }
 

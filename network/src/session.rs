@@ -394,6 +394,7 @@ impl Session {
     }
 
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
+        info!("disconnect! {:?}", reason);
         let packet = rlp::encode(&reason);
         let _ = self.send_packet_immediately(None, PACKET_DISCONNECT, packet);
         ErrorKind::Disconnect(reason).into()
