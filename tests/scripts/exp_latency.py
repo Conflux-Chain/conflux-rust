@@ -106,6 +106,7 @@ class LatencyExperiment(ArgumentHolder):
         self.simulate_log_file = "exp.log"
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
+        self.enable_flamegraph = False
 
         self.exp_name = "latency_latest"
         self.nodes_per_host = 1
@@ -196,6 +197,9 @@ class LatencyExperiment(ArgumentHolder):
 
         if self.enable_tx_propagation:
             cmd.extend(["--enable-tx-propagation"])
+
+        if self.enable_flamegraph:
+            cmd.extend(["--enable-flamegraph"])
 
         cmd.extend([">", self.simulate_log_file])
         cmd = " ".join(cmd)
