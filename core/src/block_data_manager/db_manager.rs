@@ -5,7 +5,7 @@ use crate::{
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
     storage::{
-        storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite, SqliteConnection,
+        storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
     },
     verification::VerificationConfig,
 };
@@ -14,7 +14,7 @@ use cfx_types::H256;
 use db::SystemDB;
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionAddress};
 use rlp::{Decodable, Encodable, Rlp};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
@@ -76,12 +76,7 @@ impl DBManager {
 }
 
 impl DBManager {
-    pub fn new_from_sqlite(db_path: &str) -> Self {
-        let connection = SqliteConnection::create_and_open(
-            db_path,
-            SqliteConnection::default_open_flags(),
-        )
-        .expect("failure in opening sqlite");
+    pub fn new_from_sqlite(db_path: &Path) -> Self {
         let mut table_db = HashMap::new();
         for table in vec![
             DBTable::Misc,
@@ -89,22 +84,19 @@ impl DBManager {
             DBTable::Transactions,
             DBTable::EpochNumbers,
         ] {
+            let table_str = sqlite_db_table(table);
+            let sqlite_db = KvdbSqlite::create_and_open(
+                &db_path.join(table_str.as_str()), /* Use separate database for
+                                                 * different table */
+                table_str.as_str(),
+                &[&"value"],
+                &[&"BLOB"],
+                false,
+            )
+            .expect("Open sqlite failure");
             table_db.insert(
                 table,
-                Arc::new(
-                    KvdbSqlite::new(
-                        Some(
-                            connection.try_clone().expect(
-                                "failure in cloneing sqlite connection",
-                            ),
-                        ),
-                        sqlite_db_table(table).as_str(),
-                        false,
-                        &[&"value"],
-                        &[&"BLOB"],
-                    )
-                    .expect("new sqlite failure"),
-                )
+                Arc::new(sqlite_db)
                     as Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }

@@ -39,6 +39,7 @@ use crate::block_data_manager::{
 };
 pub use block_data_types::*;
 use std::hash::Hash;
+use std::path::Path;
 
 pub const NULLU64: u64 = !0;
 
@@ -101,7 +102,7 @@ impl BlockDataManager {
             TransactionDataManager::new(config.tx_cache_count, worker_pool);
         let db_manager = match config.db_type {
             DbType::Rocksdb => DBManager::new_from_rocksdb(db),
-            DbType::Sqlite => DBManager::new_from_sqlite("./sqlite_db"),
+            DbType::Sqlite => DBManager::new_from_sqlite(Path::new("./sqlite_db")),
         };
 
         let mut data_man = Self {
