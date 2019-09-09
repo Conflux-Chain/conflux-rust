@@ -44,10 +44,10 @@ impl KvdbSqliteStatements {
     pub const BYTES_KEY_TABLE_SUFFIX: &'static str = "_bytes_key";
     // TODO(yz): check if WITHOUT ROWID is faster: see https://www.sqlite.org/withoutrowid.html.
     pub const CREATE_TABLE_BLOB_KV_STATEMENT_TMPL: &'static str =
-        "CREATE TABLE {table_name} ( key BLOB PRIMARY KEY, {value_columns_def} ) WITHOUT ROWID";
+        "CREATE TABLE IF NOT EXISTS {table_name} ( key BLOB PRIMARY KEY, {value_columns_def} ) WITHOUT ROWID";
     // INTEGER PRIMARY KEY is special, see https://www.sqlite.org/lang_createtable.html#rowid.
     pub const CREATE_TABLE_NUMBER_KV_STATEMENT_TMPL: &'static str =
-        "CREATE TABLE {table_name} ( key INTEGER PRIMARY KEY, {value_columns_def} )";
+        "CREATE TABLE IF NOT EXISTS {table_name} ( key INTEGER PRIMARY KEY, {value_columns_def} )";
     pub const DELETE_STATEMENT: &'static str =
         "DELETE FROM {table_name} where key = :key";
     pub const DROP_TABLE_STATEMENT: &'static str = "DROP TABLE {table_name}";
@@ -519,9 +519,14 @@ impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
     }
 }
 
-impl KeyValueDbTraitMultiReader for KvdbSqlite<Box<[u8]>> {}
-unsafe impl Sync for KvdbSqlite<Box<[u8]>> {}
-unsafe impl Send for KvdbSqlite<Box<[u8]>> {}
+/// TODO: Check if these assumptions are correct
+impl<
+        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > KeyValueDbTraitMultiReader for KvdbSqlite<ValueType>
+{
+}
+unsafe impl<ValueType> Sync for KvdbSqlite<ValueType> {}
+unsafe impl<ValueType> Send for KvdbSqlite<ValueType> {}
 
 impl<
         T: ReadImplFamily<FamilyRepresentitive = KvdbSqlite<ValueType>>,

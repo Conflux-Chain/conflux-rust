@@ -38,9 +38,9 @@ lazy_static! {
 impl SnapshotDbSqlite {
     // TODO(yz): check if WITHOUT ROWID is faster: see https://www.sqlite.org/withoutrowid.html.
     pub const CREATE_TABLE_BLOB_KEY_STATEMENT: &'static str =
-        "CREATE TABLE :table_name ( key BLOB PRIMARY KEY ) WITHOUT ROWID";
+        "CREATE TABLE {} ( key BLOB PRIMARY KEY ) WITHOUT ROWID";
     pub const DELETE_TABLE_KEY_INSERT_STATEMENT: &'static str =
-        "INSERT INTO :table_name VALUES :key";
+        "INSERT INTO {} VALUES :key";
     /// These two tables are temporary table for the merging process, but they
     /// remain to help other nodes to do 1-step syncing.
     pub const DELTA_KV_DELETE_TABLE_NAME: &'static str =
@@ -315,8 +315,12 @@ impl SnapshotDbSqlite {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
-                Self::CREATE_TABLE_BLOB_KEY_STATEMENT,
-                &[&&Self::DELTA_KV_DELETE_TABLE_NAME as SqlBindableRef],
+                format!(
+                    "CREATE TABLE {} ( key BLOB PRIMARY KEY ) WITHOUT ROWID",
+                    Self::DELTA_KV_DELETE_TABLE_NAME
+                )
+                .as_str(),
+                &[] as &[SqlBindableRef],
             )?
             .finish_ignore_rows()?;
         sqlite
@@ -387,12 +391,12 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .as_mut()
                 .unwrap()
                 .execute(
-                    SnapshotDbSqlite::DELETE_TABLE_KEY_INSERT_STATEMENT,
-                    &[
-                        &&SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME
-                            as SqlBindableRef,
-                        &&key,
-                    ],
+                    format!(
+                        "INSERT INTO {} VALUES :key",
+                        SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME
+                    )
+                    .as_str(),
+                    &[&&key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
         }
