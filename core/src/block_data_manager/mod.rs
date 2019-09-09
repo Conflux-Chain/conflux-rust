@@ -414,6 +414,11 @@ impl BlockDataManager {
                     receipt_info.get_receipts_at_epoch(assumed_epoch)
                 });
         if maybe_receipts.is_some() {
+            if update_cache {
+                self.cache_man
+                    .lock()
+                    .note_used(CacheId::BlockReceipts(*hash));
+            }
             return maybe_receipts;
         }
         let BlockExecutionResultWithEpoch(epoch, receipts) =
