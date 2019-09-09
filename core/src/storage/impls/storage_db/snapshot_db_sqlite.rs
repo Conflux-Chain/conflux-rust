@@ -8,18 +8,35 @@ pub struct SnapshotDbSqlite {
     height: i64,
 }
 
+pub struct SnapshotDbStatements {
+    kvdb_statements: KvdbSqliteStatements,
+    mpt_statements: KvdbSqliteStatements,
+}
+
+lazy_static! {
+    pub static ref SNAPSHOT_DB_STATEMENTS: SnapshotDbStatements = {
+        let kvdb_statements =
+            KvdbSqliteStatements::make_statements(&["value"], &["BLOB"])
+                .unwrap();
+        let mpt_statements = KvdbSqliteStatements::make_statements(
+            &["node_rlp", "subtree_kv_rlp_size"],
+            &["BLOB", "INTEGER"],
+        )
+        .unwrap();
+
+        SnapshotDbStatements {
+            kvdb_statements,
+            mpt_statements,
+        }
+    };
+}
+
 impl SnapshotDbSqlite {
     // TODO(yz): check if WITHOUT ROWID is faster: see https://www.sqlite.org/withoutrowid.html.
     pub const CREATE_TABLE_BLOB_KEY_STATEMENT: &'static str =
         "CREATE TABLE :table_name ( key BLOB PRIMARY KEY ) WITHOUT ROWID";
-    pub const CREATE_TABLE_BLOB_KEY_VALUE_VERSION_STATEMENT: &'static str =
-        "CREATE TABLE :table_name ( key BLOB PRIMARY KEY, value: BLOB, version: INTEGER ) WITHOUT ROWID";
-    pub const CREATE_TABLE_BLOB_KEY_VERSION_STATEMENT: &'static str =
-        "CREATE TABLE :table_name ( key BLOB PRIMARY KEY, version: INTEGER ) WITHOUT ROWID";
     pub const DELETE_TABLE_KEY_INSERT_STATEMENT: &'static str =
         "INSERT INTO :table_name VALUES :key";
-    pub const DELETE_TABLE_KEY_VERSION_INSERT_STATEMENT: &'static str =
-        "INSERT INTO :table_name VALUES (:key, :version)";
     /// These two tables are temporary table for the merging process, but they
     /// remain to help other nodes to do 1-step syncing.
     pub const DELTA_KV_DELETE_TABLE_NAME: &'static str =
@@ -32,12 +49,14 @@ impl SnapshotDbSqlite {
     // FIXME: for archive mode, the delete table may live in its own db file
     // FIXME: which contains delete table for a version range.
     // FIXME: model this fact and refactor.
+    /*
     pub const KVV_PUT_STATEMENT: &'static str =
         "INSERT OR REPLACE INTO :table_name VALUES (:key, :value, :version)";
     /// Key is not unique, because the same key can appear with different
     /// version number.
     pub const SNAPSHOT_KV_DELETE_TABLE_NAME: &'static str =
         "snapshot_key_value_delete";
+    */
     /// Key-Value table. Key is unique key in this table.
     pub const SNAPSHOT_KV_TABLE_NAME: &'static str = "snapshot_key_value";
     /// MPT Table.
@@ -45,38 +64,62 @@ impl SnapshotDbSqlite {
 }
 
 impl KvdbSqliteDestructureTrait for SnapshotDbSqlite {
-    fn destructure(&self) -> (Option<&SqliteConnection>, &str) {
-        (self.maybe_db.as_ref(), Self::SNAPSHOT_KV_TABLE_NAME)
+    fn destructure(
+        &self,
+    ) -> (Option<&SqliteConnection>, &str, &str, &KvdbSqliteStatements) {
+        (
+            self.maybe_db.as_ref(),
+            Self::SNAPSHOT_KV_TABLE_NAME,
+            Self::SNAPSHOT_KV_TABLE_NAME,
+            &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
+        )
     }
 
-    fn destructure_mut(&mut self) -> (Option<&mut SqliteConnection>, &str) {
-        (self.maybe_db.as_mut(), Self::SNAPSHOT_KV_TABLE_NAME)
+    fn destructure_mut(
+        &mut self,
+    ) -> (
+        Option<&mut SqliteConnection>,
+        &str,
+        &str,
+        &KvdbSqliteStatements,
+    ) {
+        (
+            self.maybe_db.as_mut(),
+            Self::SNAPSHOT_KV_TABLE_NAME,
+            Self::SNAPSHOT_KV_TABLE_NAME,
+            &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
+        )
     }
+}
+
+impl KeyValueDbTypes for SnapshotDbSqlite {
+    type ValueType = Box<[u8]>;
 }
 
 /// Automatically implement KeyValueDbTraitRead with the same code of
 /// KvdbSqlite.
 impl ReadImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentitive = KvdbSqlite;
+    type FamilyRepresentitive = KvdbSqlite<Box<[u8]>>;
 }
 
 impl OwnedReadImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentitive = KvdbSqlite;
+    type FamilyRepresentitive = KvdbSqlite<Box<[u8]>>;
 }
 
 impl SingleWriterImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentitive = KvdbSqlite;
+    type FamilyRepresentitive = KvdbSqlite<Box<[u8]>>;
 }
 
 impl KeyValueDbToOwnedReadTrait for SnapshotDbSqlite {
     fn to_owned_read<'a>(
         &'a self,
-    ) -> Result<Box<dyn 'a + KeyValueDbTraitOwnedRead>> {
+    ) -> Result<
+        Box<dyn 'a + KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>,
+    > {
         Ok(Box::new(self.try_clone()?))
     }
 }
 
-// FIXME: move appropriate methods into SnapshotDbTrait.
 impl SnapshotDbTrait for SnapshotDbSqlite {
     fn get_null_snapshot() -> Self {
         Self {
@@ -118,20 +161,14 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
             snapshot_db
                 .execute(
-                    Self::CREATE_TABLE_BLOB_KEY_VERSION_STATEMENT,
-                    &[&&Self::SNAPSHOT_KV_DELETE_TABLE_NAME],
+                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.create_table,
+                    &[&&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
             snapshot_db
                 .execute(
-                    Self::CREATE_TABLE_BLOB_KEY_VALUE_VERSION_STATEMENT,
-                    &[&&Self::SNAPSHOT_KV_TABLE_NAME],
-                )?
-                .finish_ignore_rows()?;
-            snapshot_db
-                .execute(
-                    KvdbSqlite::CREATE_TABLE_BLOB_KV_STATEMENT,
-                    &[&&Self::SNAPSHOT_MPT_TABLE_NAME],
+                    &SNAPSHOT_DB_STATEMENTS.mpt_statements.create_table,
+                    &[&&Self::SNAPSHOT_MPT_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
             // FIXME: create index.
@@ -149,13 +186,13 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             // FIXME: maintain snapshot_key_value_delete?
             sqlite.execute(
                 "DELETE FROM :snapshot_table_name WHERE KEY IN (SELECT :delta_kv_delete_table_name.key)",
-                &[&&Self::SNAPSHOT_KV_TABLE_NAME, &&Self::DELTA_KV_DELETE_TABLE_NAME],
+                &[&&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef, &&Self::DELTA_KV_DELETE_TABLE_NAME],
             )?.finish_ignore_rows()?;
             sqlite.execute(
                 "INSERT OR REPLACE INTO :snapshot_table_name (key, value, version) SELECT \
             :delta_kv_insert_table_name.key, :delta_kv_insert_table_name.value, :version",
                 &[
-                    &&Self::SNAPSHOT_KV_TABLE_NAME,
+                    &&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef,
                     &&Self::DELTA_KV_INSERT_TABLE_NAME,
                     &self.height]
             )?.finish_ignore_rows()?;
@@ -215,11 +252,11 @@ impl SnapshotDbSqlite {
     ) -> Result<
         SnapshotMpt<
             ConnectionWithRowParser<
-                KvdbSqliteBorrowMut,
+                KvdbSqliteBorrowMut<SnapshotMptDbValue>,
                 SnapshotMptValueParserSqlite,
             >,
             ConnectionWithRowParser<
-                KvdbSqliteBorrowMut,
+                KvdbSqliteBorrowMut<SnapshotMptDbValue>,
                 SnapshotMptValueParserSqlite,
             >,
         >,
@@ -229,6 +266,8 @@ impl SnapshotDbSqlite {
                 KvdbSqliteBorrowMut::new((
                     self.maybe_db.as_mut(),
                     Self::SNAPSHOT_MPT_TABLE_NAME,
+                    Self::SNAPSHOT_MPT_TABLE_NAME,
+                    &SNAPSHOT_DB_STATEMENTS.mpt_statements,
                 )),
                 Box::new(|x| Self::snapshot_mpt_row_parser(x)),
             ),
@@ -241,11 +280,11 @@ impl SnapshotDbSqlite {
     ) -> Result<
         SnapshotMpt<
             ConnectionWithRowParser<
-                KvdbSqliteBorrowMutReadOnly,
+                KvdbSqliteBorrowMutReadOnly<SnapshotMptDbValue>,
                 SnapshotMptValueParserSqlite,
             >,
             ConnectionWithRowParser<
-                KvdbSqliteBorrowMutReadOnly,
+                KvdbSqliteBorrowMutReadOnly<SnapshotMptDbValue>,
                 SnapshotMptValueParserSqlite,
             >,
         >,
@@ -255,6 +294,8 @@ impl SnapshotDbSqlite {
                 KvdbSqliteBorrowMutReadOnly::new((
                     self.maybe_db.as_mut(),
                     Self::SNAPSHOT_MPT_TABLE_NAME,
+                    Self::SNAPSHOT_MPT_TABLE_NAME,
+                    &SNAPSHOT_DB_STATEMENTS.mpt_statements,
                 )),
                 Box::new(|x| Self::snapshot_mpt_row_parser(x)),
             ),
@@ -271,13 +312,13 @@ impl SnapshotDbSqlite {
         sqlite
             .execute(
                 Self::CREATE_TABLE_BLOB_KEY_STATEMENT,
-                &[&&Self::DELTA_KV_DELETE_TABLE_NAME],
+                &[&&Self::DELTA_KV_DELETE_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
         sqlite
             .execute(
-                KvdbSqlite::CREATE_TABLE_BLOB_KV_STATEMENT,
-                &[&&Self::DELTA_KV_INSERT_TABLE_NAME],
+                &SNAPSHOT_DB_STATEMENTS.kvdb_statements.create_table,
+                &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
 
@@ -291,15 +332,15 @@ impl SnapshotDbSqlite {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
-                KvdbSqlite::DROP_TABLE_STATEMENT,
-                &[&&Self::DELTA_KV_INSERT_TABLE_NAME],
+                SNAPSHOT_DB_STATEMENTS.kvdb_statements.drop_table,
+                &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
 
         sqlite
             .execute(
-                KvdbSqlite::DROP_TABLE_STATEMENT,
-                &[&&Self::DELTA_KV_DELETE_TABLE_NAME],
+                KvdbSqliteStatements::DROP_TABLE_STATEMENT,
+                &[&&Self::DELTA_KV_DELETE_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
 
@@ -327,9 +368,10 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .as_mut()
                 .unwrap()
                 .execute(
-                    KvdbSqlite::PUT_STATEMENT,
+                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.put,
                     &[
-                        &&SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME,
+                        &&SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME
+                            as SqlBindableRef,
                         &&key,
                         &&value,
                     ],
@@ -342,7 +384,11 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .unwrap()
                 .execute(
                     SnapshotDbSqlite::DELETE_TABLE_KEY_INSERT_STATEMENT,
-                    &[&&SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME, &&key],
+                    &[
+                        &&SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME
+                            as SqlBindableRef,
+                        &&key,
+                    ],
                 )?
                 .finish_ignore_rows()?;
         }
@@ -358,9 +404,10 @@ use super::{
     super::{
         super::storage_db::{
             KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
-            OwnedReadImplFamily, ReadImplFamily, SingleWriterImplFamily,
-            SnapshotDbTrait, SnapshotMptTraitReadOnly,
-            SnapshotMptTraitSingleWriter,
+            KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
+            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
+            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+            SnapshotMptValue,
         },
         errors::*,
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{
@@ -370,10 +417,10 @@ use super::{
     },
     kvdb_sqlite::{
         KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
-        KvdbSqliteDestructureTrait,
+        KvdbSqliteDestructureTrait, KvdbSqliteStatements,
     },
-    snapshot_mpt::{SnapshotMpt, SnapshotMptValue},
-    sqlite::{ConnectionWithRowParser, SqliteConnection},
+    snapshot_mpt::SnapshotMpt,
+    sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
 };
 use primitives::MerkleHash;
 use sqlite::Statement;

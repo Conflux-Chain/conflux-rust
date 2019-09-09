@@ -129,7 +129,7 @@ impl Handleable for GetCompactBlocksResponse {
         ctx.manager.blocks_received(
             ctx.io,
             failed_blocks,
-            completed_blocks.clone().into_iter().collect(),
+            completed_blocks.iter().cloned().collect(),
             true,
             Some(ctx.peer),
         );

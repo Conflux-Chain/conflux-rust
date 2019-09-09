@@ -27,6 +27,11 @@ apt_wait
 sudo apt install -y iotop clang git jq pssh libsqlite3-dev xutils-dev
 pip3 install prettytable
 
+sudo apt install -y linux-tools-common
+sudo apt install -y linux-tools-`uname -r`
+cargo install flamegraph
+echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
 if [[ ! -d conflux-rust ]]; then
   git clone https://github.com/Conflux-Chain/conflux-rust
 fi

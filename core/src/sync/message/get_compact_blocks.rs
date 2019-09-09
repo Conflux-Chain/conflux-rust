@@ -82,7 +82,7 @@ impl Handleable for GetCompactBlocks {
         }
 
         let response = GetCompactBlocksResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             compact_blocks,
             blocks,
         };

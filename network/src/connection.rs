@@ -305,10 +305,10 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
 
-            SEND_METER.mark(size);
             let packet = Packet::new(data, priority)?;
             self.send_queue.push_back(packet, priority);
 
+            SEND_METER.mark(size);
             match priority {
                 SendQueuePriority::High => {
                     SEND_HIGH_PRIORITY_METER.mark(size);

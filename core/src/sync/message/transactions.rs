@@ -103,6 +103,9 @@ impl Handleable for TransactionDigests {
             {
                 bail!(ErrorKind::TooManyTrans);
             }
+            if self.trans_short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES != 0 {
+                bail!(ErrorKind::InvalidMessageFormat);
+            }
         }
 
         ctx.manager
@@ -158,7 +161,7 @@ impl TransactionDigests {
         }
     }
 
-    pub fn get_decomposed_short_ids(&self) -> (Vec<u8>, Vec<TxPropagateId>) {
+    pub fn get_decomposed_short_ids(self) -> (Vec<u8>, Vec<TxPropagateId>) {
         let mut random_byte_vector: Vec<u8> = Vec::new();
         let mut fixed_bytes_vector: Vec<TxPropagateId> = Vec::new();
 
@@ -245,7 +248,7 @@ impl Handleable for GetTransactions {
             .request_manager
             .get_sent_transactions(self.window_index, &self.indices);
         let response = GetTransactionsResponse {
-            request_id: self.request_id.clone(),
+            request_id: self.request_id,
             transactions,
         };
         debug!(

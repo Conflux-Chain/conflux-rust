@@ -5,7 +5,7 @@
 use crate::sync::message::msgid;
 use cfx_types::H256;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 pub enum Key {
@@ -17,17 +17,20 @@ pub enum Key {
 /// Common key container for all inflight requests. The supported message types
 /// are all registered in the Default constructor.
 pub struct KeyContainer {
-    keys: HashMap<u8, RwLock<HashSet<Key>>>,
+    keys: Vec<Option<RwLock<HashSet<Key>>>>,
 }
 
 impl Default for KeyContainer {
     fn default() -> Self {
-        let mut keys: HashMap<u8, RwLock<HashSet<Key>>> = Default::default();
-
-        keys.insert(msgid::GET_BLOCK_HASHES_BY_EPOCH, Default::default());
-        keys.insert(msgid::GET_BLOCK_HEADERS, Default::default());
-        keys.insert(msgid::GET_BLOCKS, Default::default());
-        keys.insert(msgid::GET_TRANSACTIONS, Default::default());
+        let mut keys: Vec<Option<RwLock<HashSet<Key>>>> = Default::default();
+        for _ in 0..256 {
+            keys.push(None);
+        }
+        keys[msgid::GET_BLOCK_HASHES_BY_EPOCH as usize] =
+            Some(Default::default());
+        keys[msgid::GET_BLOCK_HEADERS as usize] = Some(Default::default());
+        keys[msgid::GET_BLOCKS as usize] = Some(Default::default());
+        keys[msgid::GET_TRANSACTIONS as usize] = Some(Default::default());
 
         KeyContainer { keys }
     }
@@ -35,11 +38,17 @@ impl Default for KeyContainer {
 
 impl KeyContainer {
     pub fn read(&self, msg_type: u8) -> RwLockReadGuard<HashSet<Key>> {
-        self.keys.get(&msg_type).expect("msg not supported").read()
+        self.keys[msg_type as usize]
+            .as_ref()
+            .expect("msg not supported")
+            .read()
     }
 
     pub fn write(&self, msg_type: u8) -> RwLockWriteGuard<HashSet<Key>> {
-        self.keys.get(&msg_type).expect("msg not supported").write()
+        self.keys[msg_type as usize]
+            .as_ref()
+            .expect("msg not supported")
+            .write()
     }
 
     pub fn add(&mut self, msg_type: u8, key: Key) -> bool {

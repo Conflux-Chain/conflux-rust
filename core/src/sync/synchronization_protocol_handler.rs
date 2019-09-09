@@ -1279,10 +1279,10 @@ impl SynchronizationProtocolHandler {
     pub fn expire_block_gc(
         &self, io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
-        let need_to_relay = self.graph.remove_expire_blocks(
-            timeout, true, /* recover */
-            None, /* maybe_out_of_era_blocks */
-        );
+        let need_to_relay = self
+            .graph
+            .resolve_outside_dependencies(false /* recover_from_db */);
+        self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }
 }

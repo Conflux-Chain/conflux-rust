@@ -35,9 +35,8 @@ def pscp(ips_file: str, local: str, remote: str, retry=0, cmd_description=""):
 
 def kill_remote_conflux(ips_file: str):
     pssh(
-        ips_file, "killall -9 conflux || echo already killed", 3, "kill remote conflux"
+        ips_file, "killall conflux || echo already killed", 3, "kill remote conflux"
     )
-
 
 def cleanup_remote_logs(ips_file: str):
     pssh(ips_file, "rm -f *.tgz *.out; rm -rf /tmp/conflux_test_*")
@@ -126,6 +125,7 @@ class LatencyExperiment(ArgumentHolder):
         self.simulate_log_file = "exp.log"
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
+        self.enable_flamegraph = False
 
         self.exp_name = "latency_latest"
         self.nodes_per_host = 1
@@ -190,7 +190,7 @@ class LatencyExperiment(ArgumentHolder):
             )
         )
         os.system(
-            "tar cvfz {} {} *.csv *.metrics.log".format(
+            "tar cvfz {} {} *.csv *.metrics.log *.conflux.svg".format(
                 self.stat_archive_file, self.stat_log_file
             )
         )
@@ -247,6 +247,9 @@ class LatencyExperiment(ArgumentHolder):
 
         if self.enable_tx_propagation:
             cmd.extend(["--enable-tx-propagation"])
+
+        if self.enable_flamegraph:
+            cmd.extend(["--enable-flamegraph"])
 
         cmd.extend([">", self.simulate_log_file])
         cmd = " ".join(cmd)
