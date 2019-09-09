@@ -1,5 +1,5 @@
 use crate::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
@@ -20,7 +20,6 @@ use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc};
 use threadpool::ThreadPool;
-use crate::block_data_manager::DbType;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,

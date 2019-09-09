@@ -896,7 +896,9 @@ pub struct DataManagerConfiguration {
 }
 
 impl DataManagerConfiguration {
-    pub fn new(record_tx_address: bool, tx_cache_count: usize, db_type: DbType) -> Self {
+    pub fn new(
+        record_tx_address: bool, tx_cache_count: usize, db_type: DbType,
+    ) -> Self {
         Self {
             record_tx_address,
             tx_cache_count,

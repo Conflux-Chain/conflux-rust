@@ -4,7 +4,9 @@ use crate::{
         ConsensusGraphExecutionInfo, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
-    storage::{storage_db::KeyValueDbTrait, KvdbRocksdb},
+    storage::{
+        storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite, SqliteConnection,
+    },
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
@@ -13,7 +15,6 @@ use db::SystemDB;
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionAddress};
 use rlp::{Decodable, Encodable, Rlp};
 use std::{collections::HashMap, sync::Arc};
-use crate::storage::{KvdbSqlite, SqliteConnection};
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
@@ -52,7 +53,6 @@ pub struct DBManager {
     table_db: HashMap<DBTable, Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
 }
 
-
 impl DBManager {
     pub fn new_from_rocksdb(db: Arc<SystemDB>) -> Self {
         let mut table_db = HashMap::new();
@@ -67,17 +67,21 @@ impl DBManager {
                 Arc::new(KvdbRocksdb {
                     kvdb: db.key_value().clone(),
                     col: rocks_db_col(table),
-                }) as Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
+                })
+                    as Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
         Self { table_db }
     }
 }
 
-
 impl DBManager {
     pub fn new_from_sqlite(db_path: &str) -> Self {
-        let connection = SqliteConnection::create_and_open(db_path, SqliteConnection::default_open_flags()).expect("failure in opening sqlite");
+        let connection = SqliteConnection::create_and_open(
+            db_path,
+            SqliteConnection::default_open_flags(),
+        )
+        .expect("failure in opening sqlite");
         let mut table_db = HashMap::new();
         for table in vec![
             DBTable::Misc,
@@ -87,20 +91,28 @@ impl DBManager {
         ] {
             table_db.insert(
                 table,
-                Arc::new(KvdbSqlite::new (
-                    Some(connection.try_clone().expect("failure in cloneing sqlite connection")),
-                    sqlite_db_table(table).as_str(),
-                    false,
-                    &[&"value"],
-                    &[&"BLOB"],
-                ).expect("new sqlite failure")) as Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
+                Arc::new(
+                    KvdbSqlite::new(
+                        Some(
+                            connection.try_clone().expect(
+                                "failure in cloneing sqlite connection",
+                            ),
+                        ),
+                        sqlite_db_table(table).as_str(),
+                        false,
+                        &[&"value"],
+                        &[&"BLOB"],
+                    )
+                    .expect("new sqlite failure"),
+                )
+                    as Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
         Self { table_db }
     }
 }
 
-impl DBManager{
+impl DBManager {
     /// TODO Use new_with_rlp_size
     pub fn block_from_db(&self, block_hash: &H256) -> Option<Block> {
         Some(Block::new(
@@ -304,9 +316,7 @@ impl DBManager{
         self.table_db.get(&table).unwrap().delete(db_key).ok();
     }
 
-    fn load_from_db(
-        &self, table: DBTable, db_key: &[u8],
-    ) -> Option<Box<[u8]>> {
+    fn load_from_db(&self, table: DBTable, db_key: &[u8]) -> Option<Box<[u8]>> {
         self.table_db.get(&table).unwrap().get(db_key).unwrap()
     }
 

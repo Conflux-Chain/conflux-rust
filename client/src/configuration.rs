@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfxcore::{
-    block_data_manager::DataManagerConfiguration,
+    block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
@@ -11,7 +11,6 @@ use cfxcore::{
 };
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
-use cfxcore::block_data_manager::DbType;
 
 // usage:
 // ```
@@ -340,7 +339,7 @@ impl Configuration {
                 "rocksdb" => DbType::Rocksdb,
                 "sqlite" => DbType::Sqlite,
                 _ => panic!("Invalid block_db_type parameter!"),
-            }
+            },
         )
     }
 }

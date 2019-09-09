@@ -14,7 +14,6 @@ pub struct KvdbRocksdb {
 unsafe impl Sync for KvdbRocksdb {}
 unsafe impl Send for KvdbRocksdb {}
 
-
 pub struct KvdbRocksDbTransaction {
     pending: DBTransaction,
 

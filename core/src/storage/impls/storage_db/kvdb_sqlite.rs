@@ -480,13 +480,16 @@ impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
                 SqliteConnection::execute_locked(
                     statement,
                     &[&&bytes_key_table_name as SqlBindableRef, &&key],
-                )?.finish_ignore_rows()?;
+                )?
+                .finish_ignore_rows()?;
                 Ok(None)
             }
         }
     }
 
-    fn put(&self, key: &[u8], value: &<Self::ValueType as PutType>::PutType) -> Result<Option<Option<Self::ValueType>>> {
+    fn put(
+        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, _table_name, bytes_key_table_name, statements) =
             self.destructure();
         match connection {
@@ -507,10 +510,8 @@ impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
                 bind_list.push(Box::new(&key));
                 let mut value_bind_list = value.make_bind_list();
                 bind_list.append(&mut value_bind_list);
-                SqliteConnection::execute_locked(
-                    statement,
-                    &bind_list,
-                )?.finish_ignore_rows()?;
+                SqliteConnection::execute_locked(statement, &bind_list)?
+                    .finish_ignore_rows()?;
                 Ok(None)
             }
         }
