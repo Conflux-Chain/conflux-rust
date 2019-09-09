@@ -49,6 +49,12 @@ pub trait Cfx {
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<RpcU256>;
 
+    /// Returns the code at given address at given time (epoch number).
+    #[rpc(name = "cfx_getCode")]
+    fn code(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<Bytes>;
+
     //        /// Returns content of the storage at given address.
     //        #[rpc(name = "cfx_getStorageAt")]
     //        fn storage_at(&self, RpcH160, RpcU256, Option<BlockNumber>) ->
@@ -102,11 +108,6 @@ pub trait Cfx {
     // number.        #[rpc(name = "cfx_getUnclesCountByBlockNumber")]
     //        fn block_uncles_count_by_number(&self, BlockNumber) ->
     // BoxFuture<Option<RpcU256>>;
-
-    //        /// Returns the code at given address at given time (block
-    // number).        #[rpc(name = "cfx_getCode")]
-    //        fn code_at(&self, RpcH160, Option<BlockNumber>) ->
-    // BoxFuture<Bytes>;
 
     /// Sends signed transaction, returning its hash.
     #[rpc(name = "cfx_sendRawTransaction")]

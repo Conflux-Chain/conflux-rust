@@ -63,6 +63,12 @@ impl RpcImpl {
         }
     }
 
+    fn code(
+        &self, _addr: RpcH160, _epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        unimplemented!()
+    }
+
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
@@ -194,6 +200,7 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
+            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
