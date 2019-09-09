@@ -524,7 +524,7 @@ impl ConsensusGraphInner {
             EpochExecutionContext {
                 start_block_number: 0,
             },
-            true,  // persistent to db
+            true, /* persistent to db */
         );
 
         inner
@@ -1509,7 +1509,7 @@ impl ConsensusGraphInner {
                     start_block_number: self
                         .get_epoch_start_block_number(index),
                 },
-                true, // persistent to db
+                true, /* persistent to db */
             );
 
             self.arena[index].past_weight = past_weight;

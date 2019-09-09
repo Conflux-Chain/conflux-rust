@@ -179,7 +179,7 @@ impl BlockDataManager {
             EpochExecutionContext {
                 start_block_number: 0,
             },
-            true, // persistent to db
+            true, /* persistent to db */
         );
 
         data_man
@@ -408,6 +408,11 @@ impl BlockDataManager {
                     receipt_info.get_receipts_at_epoch(assumed_epoch)
                 });
         if maybe_receipts.is_some() {
+            if update_cache {
+                self.cache_man
+                    .lock()
+                    .note_used(CacheId::BlockReceipts(*hash));
+            }
             return maybe_receipts;
         }
         let BlockExecutionResultWithEpoch(epoch, receipts) =
@@ -530,6 +535,9 @@ impl BlockDataManager {
     {
         let upgradable_read_lock = in_mem.upgradable_read();
         if let Some(value) = upgradable_read_lock.get(key) {
+            if let Some(cache_id) = maybe_cache_id {
+                self.cache_man.lock().note_used(cache_id);
+            }
             return Some(value.clone());
         }
         load_f(key).map(|value| {
