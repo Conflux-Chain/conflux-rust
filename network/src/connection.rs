@@ -75,7 +75,9 @@ impl GenericSocket for TcpStream {}
 pub trait PacketAssembler: Send + Sync {
     fn is_oversized(&self, len: usize) -> bool;
     fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error>;
-    fn load(&self, buf: &mut BytesMut) -> Option<BytesMut>;
+    fn read(
+        &self, reader: &mut dyn Read, buf: &mut BytesMut,
+    ) -> Result<Option<BytesMut>, Error>;
 }
 
 /// Packet with guard to automatically update throttling and high priority
@@ -156,33 +158,15 @@ pub struct GenericConnection<Socket: GenericSocket> {
 }
 
 impl<Socket: GenericSocket> GenericConnection<Socket> {
-    pub fn readable(&mut self) -> io::Result<Option<Bytes>> {
-        let mut buf: [u8; 1024] = [0; 1024];
-        loop {
-            match self.socket.read(&mut buf) {
-                Ok(size) => {
-                    trace!(
-                        "Succeed to read socket data, token = {}, size = {}",
-                        self.token,
-                        size
-                    );
-                    READ_METER.mark(size);
-                    if size == 0 {
-                        break;
-                    }
-                    self.recv_buf.extend_from_slice(&buf[0..size]);
-                }
-                Err(e) => {
-                    if e.kind() != io::ErrorKind::WouldBlock {
-                        debug!("Failed to read socket data, token = {}, err = {:?}", self.token, e);
-                        return Err(e);
-                    }
-                    break;
-                }
-            }
-        }
+    pub fn readable(&mut self) -> Result<Option<Bytes>, Error> {
+        trace!(
+            "begin to read socket data, token = {}, recv_buf_len = {}",
+            self.token,
+            self.recv_buf.len()
+        );
 
-        let packet = self.assembler.load(&mut self.recv_buf);
+        let packet =
+            self.assembler.read(&mut self.socket, &mut self.recv_buf)?;
 
         if let Some(ref p) = packet {
             trace!(
@@ -504,18 +488,77 @@ impl PacketAssembler for PacketWithLenAssembler {
         Ok(())
     }
 
+    fn read(
+        &self, reader: &mut dyn Read, buf: &mut BytesMut,
+    ) -> Result<Option<BytesMut>, Error> {
+        if !self.read_with_len(reader, buf, self.data_len_bytes)? {
+            return Ok(None);
+        }
+
+        let data_len = self.parse_data_len(buf);
+
+        if !self.read_with_len(reader, buf, self.data_len_bytes + data_len)? {
+            return Ok(None);
+        }
+
+        Ok(self.load(buf))
+    }
+}
+
+impl PacketWithLenAssembler {
+    fn read_with_len(
+        &self, reader: &mut dyn Read, buf: &mut BytesMut, len: usize,
+    ) -> Result<bool, Error> {
+        if buf.len() >= len {
+            return Ok(true);
+        }
+
+        let mut start = buf.len();
+        buf.resize(len, 0);
+
+        while start < len {
+            match reader.read(&mut buf[start..]) {
+                Ok(size) if size > 0 => {
+                    trace!("Succeed to read socket data, size = {}", size);
+                    READ_METER.mark(size);
+                    start += size;
+                }
+                Ok(_) => {
+                    buf.truncate(start);
+                    return Ok(false);
+                }
+                Err(e) => {
+                    buf.truncate(start);
+
+                    if e.kind() != io::ErrorKind::WouldBlock {
+                        debug!("Failed to read socket data, err = {:?}", e);
+                        return Err(e.into());
+                    } else {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+
+        Ok(true)
+    }
+
+    fn parse_data_len(&self, buf: &BytesMut) -> usize {
+        let mut le_bytes = [0u8; 8];
+        le_bytes
+            .split_at_mut(self.data_len_bytes)
+            .0
+            .copy_from_slice(&buf[..self.data_len_bytes]);
+        usize::from_le_bytes(le_bytes)
+    }
+
     fn load(&self, buf: &mut BytesMut) -> Option<BytesMut> {
         if buf.len() < self.data_len_bytes {
             return None;
         }
 
         // parse data length from first n-bytes
-        let mut le_bytes = [0u8; 8];
-        le_bytes
-            .split_at_mut(self.data_len_bytes)
-            .0
-            .copy_from_slice(&buf[..self.data_len_bytes]);
-        let data_size = usize::from_le_bytes(le_bytes);
+        let data_size = self.parse_data_len(buf);
 
         // some data not received yet
         if buf.len() < self.data_len_bytes + data_size {
