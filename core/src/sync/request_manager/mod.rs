@@ -215,9 +215,9 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
 
         let window_index: usize = transaction_digests.window_index;
+        let random_position: u8 = transaction_digests.random_position;
         let (random_byte_vector, fixed_bytes_vector) =
             transaction_digests.get_decomposed_short_ids();
-        let random_position: u8 = transaction_digests.random_position;
 
         if fixed_bytes_vector.is_empty() {
             return;

@@ -23,6 +23,10 @@ impl KeyValueDbTraitRead for KvdbRocksdb {
 
 mark_kvdb_multi_reader!(KvdbRocksdb);
 
+impl KeyValueDbTypes for KvdbRocksdb {
+    type ValueType = Box<[u8]>;
+}
+
 impl KeyValueDbTrait for KvdbRocksdb {
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
         let mut transaction = self.kvdb.transaction();
@@ -38,6 +42,10 @@ impl KeyValueDbTrait for KvdbRocksdb {
         self.kvdb.write(transaction)?;
         Ok(None)
     }
+}
+
+impl KeyValueDbTypes for KvdbRocksDbTransaction {
+    type ValueType = Box<[u8]>;
 }
 
 impl KeyValueDbTraitSingleWriter for KvdbRocksDbTransaction {

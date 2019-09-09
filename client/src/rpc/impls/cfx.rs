@@ -25,8 +25,7 @@ use network::{
     throttling, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{
-    filter::FilterError, Action, SignedTransaction, Transaction,
-    TransactionWithSignature,
+    Action, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
@@ -371,11 +370,8 @@ impl RpcImpl {
         info!("RPC Request: cfx_getLogs({:?})", filter);
         self.consensus
             .logs(filter.into())
-            .map_err(|e| match e {
-                FilterError::InvalidEpochNumber { .. } => {
-                    RpcError::invalid_params(format!("{}", e))
-                }
-            })
+            .map_err(|e| format!("{}", e))
+            .map_err(RpcError::invalid_params)
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
     }
 

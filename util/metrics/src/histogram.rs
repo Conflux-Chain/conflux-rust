@@ -13,14 +13,14 @@ use std::{
 
 pub trait Histogram: Send + Sync {
     fn count(&self) -> usize { 0 }
-    fn max(&self) -> usize { 0 }
+    fn max(&self) -> u64 { 0 }
     fn mean(&self) -> f64 { 0.0 }
-    fn min(&self) -> usize { 0 }
-    fn percentile(&self, _p: f64) -> usize { 0 }
+    fn min(&self) -> u64 { 0 }
+    fn percentile(&self, _p: f64) -> u64 { 0 }
     fn snapshot(&self) -> Arc<dyn Histogram> { Arc::new(Snapshot::default()) }
     fn stddev(&self) -> f64 { self.variance().sqrt() }
-    fn sum(&self) -> usize { 0 }
-    fn update(&self, _v: usize) {}
+    fn sum(&self) -> u64 { 0 }
+    fn update(&self, _v: u64) {}
     fn variance(&self) -> f64 { 0.0 }
 }
 
@@ -31,7 +31,7 @@ pub enum Sample {
 
 impl Sample {
     pub fn register(
-        &self, name: &'static str, reservoir_size: usize,
+        &self, name: &str, reservoir_size: usize,
     ) -> Arc<dyn Histogram> {
         if !is_enabled() {
             return Arc::new(NoopHistogram);
@@ -59,7 +59,7 @@ impl Sample {
     }
 
     pub fn register_with_group(
-        &self, group: &'static str, name: &'static str, reservoir_size: usize,
+        &self, group: &str, name: &str, reservoir_size: usize,
     ) -> Arc<dyn Histogram> {
         if !is_enabled() {
             return Arc::new(NoopHistogram);
@@ -97,13 +97,13 @@ impl Histogram for NoopHistogram {}
 #[derive(Default, Clone)]
 struct Snapshot {
     count: usize,
-    values: Vec<usize>,
+    values: Vec<u64>,
 }
 
 impl Histogram for Snapshot {
     fn count(&self) -> usize { self.count }
 
-    fn max(&self) -> usize { self.values.iter().max().cloned().unwrap_or(0) }
+    fn max(&self) -> u64 { self.values.iter().max().cloned().unwrap_or(0) }
 
     fn mean(&self) -> f64 {
         if self.values.is_empty() {
@@ -113,18 +113,18 @@ impl Histogram for Snapshot {
         }
     }
 
-    fn min(&self) -> usize { self.values.iter().min().cloned().unwrap_or(0) }
+    fn min(&self) -> u64 { self.values.iter().min().cloned().unwrap_or(0) }
 
-    fn percentile(&self, p: f64) -> usize { sample_percentile(&self.values, p) }
+    fn percentile(&self, p: f64) -> u64 { sample_percentile(&self.values, p) }
 
     fn snapshot(&self) -> Arc<dyn Histogram> { Arc::new(self.clone()) }
 
-    fn sum(&self) -> usize { self.values.iter().sum() }
+    fn sum(&self) -> u64 { self.values.iter().sum() }
 
     fn variance(&self) -> f64 { sample_variance(&self.values) }
 }
 
-fn sample_percentile(sorted_values: &Vec<usize>, p: f64) -> usize {
+fn sample_percentile(sorted_values: &Vec<u64>, p: f64) -> u64 {
     assert!(p > 0.0 && p < 1.0);
     if sorted_values.is_empty() {
         return 0;
@@ -134,12 +134,12 @@ fn sample_percentile(sorted_values: &Vec<usize>, p: f64) -> usize {
     sorted_values.get(pos as usize).cloned().unwrap_or(0)
 }
 
-fn sample_variance(values: &Vec<usize>) -> f64 {
+fn sample_variance(values: &Vec<u64>) -> f64 {
     if values.is_empty() {
         return 0.0;
     }
 
-    let sum: usize = values.iter().sum();
+    let sum: u64 = values.iter().sum();
     let mean = sum as f64 / values.len() as f64;
 
     let mut sum = 0.0;
@@ -172,13 +172,13 @@ impl UniformSample {
 impl Histogram for UniformSample {
     fn count(&self) -> usize { self.data.read().count() }
 
-    fn max(&self) -> usize { self.data.read().max() }
+    fn max(&self) -> u64 { self.data.read().max() }
 
     fn mean(&self) -> f64 { self.data.read().mean() }
 
-    fn min(&self) -> usize { self.data.read().min() }
+    fn min(&self) -> u64 { self.data.read().min() }
 
-    fn percentile(&self, p: f64) -> usize {
+    fn percentile(&self, p: f64) -> u64 {
         let mut data = self.data.write();
         data.values.sort();
         sample_percentile(&data.values, p)
@@ -188,9 +188,9 @@ impl Histogram for UniformSample {
         Arc::new(self.data.read().clone())
     }
 
-    fn sum(&self) -> usize { self.data.read().sum() }
+    fn sum(&self) -> u64 { self.data.read().sum() }
 
-    fn update(&self, v: usize) {
+    fn update(&self, v: u64) {
         let mut data = self.data.write();
 
         data.count += 1;
@@ -212,7 +212,7 @@ impl Histogram for UniformSample {
 }
 
 impl Metric for UniformSample {
-    fn get_type(&self) -> &'static str { "Histogram" }
+    fn get_type(&self) -> &str { "Histogram" }
 }
 
 const RESCALE_THRESHOLD: Duration = Duration::from_secs(3600);
@@ -254,7 +254,7 @@ impl ExpDecaySample {
 impl Histogram for ExpDecaySample {
     fn count(&self) -> usize { self.data.read().count }
 
-    fn max(&self) -> usize {
+    fn max(&self) -> u64 {
         let data = self.data.read();
         data.values.iter().map(|item| item.v).max().unwrap_or(0)
     }
@@ -266,18 +266,18 @@ impl Histogram for ExpDecaySample {
             return 0.0;
         }
 
-        let sum: usize = data.values.iter().map(|item| item.v).sum();
+        let sum: u64 = data.values.iter().map(|item| item.v).sum();
         sum as f64 / data.values.len() as f64
     }
 
-    fn min(&self) -> usize {
+    fn min(&self) -> u64 {
         let data = self.data.read();
         data.values.iter().map(|item| item.v).min().unwrap_or(0)
     }
 
-    fn percentile(&self, p: f64) -> usize {
+    fn percentile(&self, p: f64) -> u64 {
         let data = self.data.read();
-        let mut values: Vec<usize> =
+        let mut values: Vec<u64> =
             data.values.iter().map(|item| item.v).collect();
         values.sort();
         sample_percentile(&values, p)
@@ -285,7 +285,7 @@ impl Histogram for ExpDecaySample {
 
     fn snapshot(&self) -> Arc<dyn Histogram> {
         let data = self.data.read();
-        let mut values: Vec<usize> =
+        let mut values: Vec<u64> =
             data.values.iter().map(|item| item.v).collect();
         values.sort();
         Arc::new(Snapshot {
@@ -294,12 +294,12 @@ impl Histogram for ExpDecaySample {
         })
     }
 
-    fn sum(&self) -> usize {
+    fn sum(&self) -> u64 {
         let data = self.data.read();
         data.values.iter().map(|item| item.v).sum()
     }
 
-    fn update(&self, v: usize) {
+    fn update(&self, v: u64) {
         let mut data = self.data.write();
 
         data.count += 1;
@@ -333,19 +333,18 @@ impl Histogram for ExpDecaySample {
 
     fn variance(&self) -> f64 {
         let data = self.data.read();
-        let values: Vec<usize> =
-            data.values.iter().map(|item| item.v).collect();
+        let values: Vec<u64> = data.values.iter().map(|item| item.v).collect();
         sample_variance(&values)
     }
 }
 
 impl Metric for ExpDecaySample {
-    fn get_type(&self) -> &'static str { "Histogram" }
+    fn get_type(&self) -> &str { "Histogram" }
 }
 
 struct ExpDecaySampleItem {
     k: f64,
-    v: usize,
+    v: u64,
 }
 
 impl PartialEq for ExpDecaySampleItem {

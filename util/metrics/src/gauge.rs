@@ -21,7 +21,7 @@ macro_rules! construct_gauge {
         }
 
         impl $name {
-            pub fn register(name: &'static str) -> Arc<dyn Gauge<$data_type>> {
+            pub fn register(name: &str) -> Arc<dyn Gauge<$data_type>> {
                 if !is_enabled() {
                     return Arc::new(NoopGauge);
                 }
@@ -35,7 +35,7 @@ macro_rules! construct_gauge {
             }
 
             pub fn register_with_group(
-                group: &'static str, name: &'static str,
+                group: &str, name: &str,
             ) -> Arc<dyn Gauge<$data_type>> {
                 if !is_enabled() {
                     return Arc::new(NoopGauge);
@@ -59,7 +59,7 @@ macro_rules! construct_gauge {
         }
 
         impl Metric for $name {
-            fn get_type(&self) -> &'static str { "Gauge" }
+            fn get_type(&self) -> &str { "Gauge" }
         }
     };
 }

@@ -30,8 +30,6 @@ logger = logging.getLogger("TestFramework.mininode")
 
 PACKET_HELLO = 0x80
 PACKET_DISCONNECT = 0x01
-PACKET_PING = 0x02
-PACKET_PONG = 0x03
 PACKET_PROTOCOL = 0x10
 
 STATUS = 0x00

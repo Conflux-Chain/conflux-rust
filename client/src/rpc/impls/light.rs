@@ -109,7 +109,7 @@ impl RpcImpl {
         self.light
             .get_logs(filter.into())
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
-            .map_err(|e| format!("Log filtering failed: {:?}", e))
+            .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)
     }
 
