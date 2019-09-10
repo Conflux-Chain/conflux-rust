@@ -31,7 +31,7 @@ class HTLCTest(SmartContractBenchBase):
         self.setup_nodes()       
 
     def testEventContract(self):
-        CONTRACT_PATH = "contracts/event_bytecode.dat"
+        CONTRACT_PATH = "contracts/event_bytecode_new.dat"
         logs = self.rpc.get_logs(self.filter)
         l = len(logs)
         # deploy contract
@@ -47,7 +47,7 @@ class HTLCTest(SmartContractBenchBase):
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
         contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/event_abi.json"),
+            abi_file = os.path.join(file_dir, "contracts/event_abi_new.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         self.tx_conf["to"] = contractAddr
@@ -122,7 +122,7 @@ class HTLCTest(SmartContractBenchBase):
         assert_equal(result, self.number_to_topic(5))
     
     def testHTLCContract(self):
-        CONTRACT_PATH = "contracts/htlc_bytecode.dat"
+        CONTRACT_PATH = "contracts/htlc_bytecode_new.dat"
         logs = self.rpc.get_logs(self.filter)
         l = len(logs)
 
@@ -130,7 +130,7 @@ class HTLCTest(SmartContractBenchBase):
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
         contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/htlc_abi.json"),
+            abi_file = os.path.join(file_dir, "contracts/htlc_abi_new.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         
