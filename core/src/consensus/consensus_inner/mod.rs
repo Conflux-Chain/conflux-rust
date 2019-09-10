@@ -2012,14 +2012,9 @@ impl ConsensusGraphInner {
             }
         };
 
-        if let Some(code) = state_db.get_code(&address, &acc.code_hash) {
-            Ok(code)
-        } else {
-            Err(format!(
-                "Account code (address={:?} code_hash={:?} number={:?} hash={:?}) does not exist",
-                address, acc.code_hash, epoch_number, hash
-            )
-                .into())
+        match state_db.get_code(&address, &acc.code_hash) {
+            Some(code) => Ok(code),
+            None => Ok(vec![]),
         }
     }
 

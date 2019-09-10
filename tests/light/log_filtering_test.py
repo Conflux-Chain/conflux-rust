@@ -94,6 +94,10 @@ class LogFilteringTest(ConfluxTestFramework):
         self.log.info("syncing light node...")
         sync_blocks(self.nodes[:])
 
+        # retrieve contract code
+        self.log.info("retrieving contract code...")
+        self.check_code(contractAddr, contract_epoch)
+
         # apply filter, we expect a single log with 2 topics
         self.log.info("testing filter range...")
         self.check_filter(Filter(from_epoch="earliest", to_epoch=contract_epoch))
@@ -124,6 +128,9 @@ class LogFilteringTest(ConfluxTestFramework):
 
     def check_filter(self, filter):
         assert_equal(self.rpc[LIGHTNODE].get_logs(filter), self.rpc[FULLNODE0].get_logs(filter))
+
+    def check_code(self, address, epoch):
+        assert_equal(self.rpc[LIGHTNODE].get_code(address, epoch), self.rpc[FULLNODE0].get_code(address, epoch))
 
     def address_to_topic(self, address):
         return "0x" + address[2:].zfill(64)

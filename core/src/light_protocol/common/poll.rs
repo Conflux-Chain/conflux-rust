@@ -11,7 +11,7 @@ use crate::{
     parameters::light::POLL_PERIOD_MS,
 };
 
-pub fn poll_future<T: Future>(future: &mut T) -> Result<T::Item, Error>
+pub fn poll_future<T: Future>(future: &mut T) -> Result<T::Item, String>
 where
     T::Item: std::fmt::Debug,
     T::Error: std::fmt::Debug,
@@ -28,7 +28,7 @@ where
             }
             Err(e) => {
                 trace!("poll result: Error");
-                return Err(ErrorKind::Msg(format!("{:?}", e)).into());
+                return Err(format!("{:?}", e));
             }
         }
 
