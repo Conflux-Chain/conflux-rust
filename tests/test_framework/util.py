@@ -397,7 +397,7 @@ def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
     """
     stop_time = time.time() + timeout
     while time.time() <= stop_time:
-        best_hash = [x.getbestblockhash() for x in rpc_connections]
+        best_hash = [x.best_block_hash() for x in rpc_connections]
         block_count = [x.getblockcount() for x in rpc_connections]
         if best_hash.count(best_hash[0]) == len(rpc_connections) and (not sync_count or block_count.count(block_count[0]) == len(rpc_connections)):
             return

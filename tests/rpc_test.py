@@ -28,7 +28,7 @@ class RpcTest(ConfluxTestFramework):
         self.best_block_hash = blocks[-1] #make_genesis().block_header.hash
 
         self._test_getblockcount()
-        self._test_getbestblockhash()
+        self._test_best_block_hash()
         self._test_getpeerinfo()
         self._test_addlatency()
         self._test_getstatus()
@@ -79,9 +79,9 @@ class RpcTest(ConfluxTestFramework):
         self.log.info("Test getgoodput")
         # TODO test in the future
 
-    def _test_getbestblockhash(self):
-        self.log.info("Test getbestblockhash")
-        res = self.nodes[0].getbestblockhash()
+    def _test_best_block_hash(self):
+        self.log.info("Test best_block_hash")
+        res = self.nodes[0].best_block_hash()
         assert_equal(self.best_block_hash, res)
 
     def _test_getpeerinfo(self):

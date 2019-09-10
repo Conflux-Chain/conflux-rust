@@ -50,7 +50,7 @@ class P2PTest(ConfluxTestFramework):
         # wait_for_block_count(self.nodes[0], block_number)
         sync_blocks(self.nodes, timeout=120, sync_count=False)
         self.log.info("block count:%d", self.nodes[0].getblockcount())
-        hasha = self.nodes[0].getbestblockhash()
+        hasha = self.nodes[0].best_block_hash()
         block_a = client.block_by_hash(hasha)
         self.log.info("Final height = %s", block_a['height'])
         self.log.info("Pass")

@@ -274,16 +274,6 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_best_block_hash(&self) -> RpcResult<H256> {
-        info!("RPC Request: get_best_block_hash()");
-        Ok(self
-            .state_exposer
-            .read()
-            .consensus_graph
-            .best_block_hash
-            .into())
-    }
-
     pub fn get_block_count(&self) -> RpcResult<u64> {
         info!("RPC Request: get_block_count()");
         let count = self.consensus.block_count();

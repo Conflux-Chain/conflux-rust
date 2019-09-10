@@ -23,44 +23,44 @@ class FixedGenerateTest(ConfluxTestFramework):
 
     def run_test(self):
         time.sleep(7)
-        genesis = self.nodes[0].getbestblockhash()
+        genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
         blocks = self.nodes[0].generate(3, 0)
         assert (self.nodes[0].getblockcount() == 4)
-        besthash0 = self.nodes[0].getbestblockhash()
+        besthash0 = self.nodes[0].best_block_hash()
         assert (besthash0 == blocks[2])
         self.log.info("Generate three blocks in one chain for node 0")
 
         blocks1 = self.nodes[1].generate(4, 0)
         assert (self.nodes[1].getblockcount() == 5)
-        besthash1 = self.nodes[1].getbestblockhash()
+        besthash1 = self.nodes[1].best_block_hash()
         self.log.info("Generate four blocks in another chain for node 1")
 
         connect_nodes(self.nodes, 0, 1)
         sync_blocks(self.nodes[0:2])
 
-        self.add_predicate("getbestblockhash",
+        self.add_predicate("best_block_hash",
                            lambda x: self.check_best_block_hash(x, besthash1))
         self.make_snapshot()
         assert self.verify()
 
         assert (self.nodes[0].getblockcount() == 8)
-        assert (self.nodes[0].getbestblockhash() == besthash1)
+        assert (self.nodes[0].best_block_hash() == besthash1)
         self.log.info("Connect together now have 8 blocks in total")
 
         blocka = self.nodes[1].generatefixedblock(blocks[0], [], 0, False)
         blockb = self.nodes[1].generatefixedblock(blocks[0], [], 0, False)
         sync_blocks(self.nodes[0:2])
 
-        self.add_predicate("getbestblockhash",
+        self.add_predicate("best_block_hash",
                            lambda x: self.check_best_block_hash(x, besthash0))
         self.make_snapshot()
         assert self.verify()
 
         self.log.info("Generate two more blocks on the shorter chain")
         assert (self.nodes[0].getblockcount() == 10)
-        assert (self.nodes[0].getbestblockhash() == besthash0)
+        assert (self.nodes[0].best_block_hash() == besthash0)
         self.log.info("Pivot chain switched!")
 
         blocka = self.nodes[1].generatefixedblock(
@@ -69,26 +69,26 @@ class FixedGenerateTest(ConfluxTestFramework):
             blocks1[0], [besthash0], 0, False)
         sync_blocks(self.nodes[0:2])
 
-        self.add_predicate("getbestblockhash",
+        self.add_predicate("best_block_hash",
                            lambda x: self.check_best_block_hash(x, besthash0))
         self.make_snapshot()
         assert self.verify()
 
-        assert (self.nodes[0].getbestblockhash() == besthash0)
-        assert (self.nodes[1].getbestblockhash() == besthash0)
+        assert (self.nodes[0].best_block_hash() == besthash0)
+        assert (self.nodes[1].best_block_hash() == besthash0)
         self.log.info("Partially invalid blocks do not affect the pivot chain")
 
         blocka = self.nodes[1].generatefixedblock(blocks1[0], [], 0, False)
         blockb = self.nodes[1].generatefixedblock(blocks1[0], [], 0, False)
         sync_blocks(self.nodes[0:2])
 
-        self.add_predicate("getbestblockhash",
+        self.add_predicate("best_block_hash",
                            lambda x: self.check_best_block_hash(x, besthash1))
         self.make_snapshot()
         assert self.verify()
 
-        assert (self.nodes[0].getbestblockhash() == besthash1)
-        assert (self.nodes[1].getbestblockhash() == besthash1)
+        assert (self.nodes[0].best_block_hash() == besthash1)
+        assert (self.nodes[1].best_block_hash() == besthash1)
         self.log.info("Pivot chain switched again!")
 
 
