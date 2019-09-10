@@ -142,11 +142,11 @@ impl Handler {
             msgid::BLOOMS => self.sync.on_blooms(io, peer, &rlp),
             msgid::NEW_BLOCK_HASHES => self.sync.on_new_block_hashes(io, peer, &rlp),
             msgid::RECEIPTS => self.sync.on_receipts(io, peer, &rlp),
+            msgid::STATE_ENTRIES => self.sync.on_state_entries(io, peer, &rlp),
+            msgid::STATE_ROOTS => self.sync.on_state_roots(io, peer, &rlp),
             msgid::WITNESS_INFO => self.sync.on_witness_info(io, peer, &rlp),
 
             // messages related to queries
-            msgid::STATE_ENTRY => self.query.on_state_entry(io, peer, &rlp),
-            msgid::STATE_ROOT => self.query.on_state_root(io, peer, &rlp),
             msgid::TXS => self.query.on_txs(io, peer, &rlp),
 
             _ => Err(ErrorKind::UnknownMessage.into()),

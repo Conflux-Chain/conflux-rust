@@ -195,7 +195,7 @@ impl LightClient {
         ));
         light.register().unwrap();
 
-        let rpc_impl = Arc::new(RpcImpl::new(consensus.clone(), light.clone()));
+        let rpc_impl = Arc::new(RpcImpl::new(light.clone()));
 
         let common_impl = Arc::new(CommonImpl::new(
             exit,

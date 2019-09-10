@@ -135,6 +135,8 @@ pub mod light {
     pub const BLOOM_REQUEST_TIMEOUT_MS: u64 = 2000;
     pub const RECEIPT_REQUEST_TIMEOUT_MS: u64 = 2000;
     pub const BLOCK_TX_REQUEST_TIMEOUT_MS: u64 = 2000;
+    pub const STATE_ROOT_REQUEST_TIMEOUT_MS: u64 = 2000;
+    pub const STATE_ENTRY_REQUEST_TIMEOUT_MS: u64 = 2000;
 
     /// Maximum time period we wait for a response for an on-demand query.
     /// After this timeout has been reached, we try another peer or give up.
@@ -150,6 +152,8 @@ pub mod light {
     pub const WITNESS_REQUEST_BATCH_SIZE: usize = 10;
     pub const RECEIPT_REQUEST_BATCH_SIZE: usize = 30;
     pub const BLOCK_TX_REQUEST_BATCH_SIZE: usize = 30;
+    pub const STATE_ROOT_REQUEST_BATCH_SIZE: usize = 30;
+    pub const STATE_ENTRY_REQUEST_BATCH_SIZE: usize = 30;
 
     /// Maximum number of in-flight items at any given time.
     /// If we reach this limit, we will not request any more.
@@ -158,6 +162,8 @@ pub mod light {
     pub const MAX_BLOOMS_IN_FLIGHT: usize = 500;
     pub const MAX_RECEIPTS_IN_FLIGHT: usize = 100;
     pub const MAX_BLOCK_TXS_IN_FLIGHT: usize = 100;
+    pub const MAX_STATE_ROOTS_IN_FLIGHT: usize = 100;
+    pub const MAX_STATE_ENTRIES_IN_FLIGHT: usize = 100;
 
     /// Maximum number of in-flight epoch requests at any given time.
     /// Similar to `MAX_HEADERS_IN_FLIGHT`. However, it is hard to match
