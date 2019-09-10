@@ -45,7 +45,7 @@ impl KvdbSqliteStatements {
         "CREATE TABLE IF NOT EXISTS {table_name} ( key BLOB PRIMARY KEY, {value_columns_def} ) WITHOUT ROWID";
     // INTEGER PRIMARY KEY is special, see https://www.sqlite.org/lang_createtable.html#rowid.
     pub const CREATE_TABLE_NUMBER_KV_STATEMENT_TMPL: &'static str =
-        "CREATE TABLE IF NOT EXISTS {number_table_name} ( key INTEGER PRIMARY KEY, {value_columns_def} )";
+        "CREATE TABLE IF NOT EXISTS {table_name} ( key INTEGER PRIMARY KEY, {value_columns_def} )";
     pub const DELETE_STATEMENT: &'static str =
         "DELETE FROM {table_name} where key = :key";
     pub const DROP_TABLE_STATEMENT: &'static str = "DROP TABLE {table_name}";

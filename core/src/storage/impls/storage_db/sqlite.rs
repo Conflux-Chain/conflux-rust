@@ -297,17 +297,6 @@ impl<'db> MaybeRows<'db> {
     }
 }
 
-impl<'db> Drop for MaybeRows<'db> {
-    fn drop(&mut self) {
-        match &mut self.0 {
-            None => {}
-            Some(stmt) => {
-                stmt.reset().ok();
-            }
-        }
-    }
-}
-
 pub struct ConnectionWithRowParser<Connection, RowParser>(
     pub Connection,
     pub RowParser,
@@ -318,17 +307,6 @@ pub struct MappedRows<'db, F> {
     /// default construct it for the empty database.
     maybe_rows: MaybeUnfinishedStatement<'db>,
     f: F,
-}
-
-impl<F> Drop for MappedRows<'_, F> {
-    fn drop(&mut self) {
-        match &mut self.maybe_rows {
-            None => {}
-            Some(stmt) => {
-                stmt.reset().ok();
-            }
-        }
-    }
 }
 
 impl<'db, Item, F: FnMut(&Statement<'db>) -> Item> MappedRows<'db, F> {
@@ -412,6 +390,7 @@ impl ScopedStatement {
     fn bind<'p, Param: Borrow<dyn SqlBindable + 'p>>(
         &mut self, params: &[Param],
     ) -> Result<()> {
+        self.stmt.reset().ok();
         for i in 0..params.len() {
             // Sqlite index starts at 1.
             self.stmt.bind(i + 1, params[i].borrow())?
@@ -426,15 +405,9 @@ impl ScopedStatement {
 
         let result = self.stmt.next();
         match result {
-            Ok(State::Done) => {
-                // The statement will not be returned, so we can only reset it
-                // here.
-                self.stmt.reset().ok();
-                Ok(None)
-            }
+            Ok(State::Done) => Ok(None),
             Ok(State::Row) => Ok(Some(self.as_mut())),
             Err(e) => {
-                self.stmt.reset().ok();
                 bail!(e);
             }
         }
