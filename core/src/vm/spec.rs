@@ -267,6 +267,8 @@ impl Spec {
         spec.have_revert = true;
         spec.have_static_call = true;
         spec.have_return_data = true;
+        spec.have_bitwise_shifting = true;
+        spec.have_extcodehash = true;
         spec
     }
 
