@@ -18,7 +18,6 @@ use crate::{
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
-use cfx_types::H256;
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
 use mio::{deprecated::EventLoop, tcp::*, udp::*, *};
@@ -312,8 +311,6 @@ type SharedSession = Arc<RwLock<Session>>;
 pub struct HostMetadata {
     /// Our private and public keys.
     pub keys: KeyPair,
-    /// Connection nonce.
-    nonce: RwLock<H256>,
     pub capabilities: RwLock<Vec<Capability>>,
     pub local_address: SocketAddr,
     /// Local address + discovery port
@@ -323,12 +320,6 @@ pub struct HostMetadata {
 }
 
 impl HostMetadata {
-    pub fn next_nonce(&self) -> H256 {
-        let mut nonce = self.nonce.write();
-        *nonce = keccak(&*nonce);
-        *nonce
-    }
-
     pub(crate) fn secret(&self) -> &Secret { self.keys.secret() }
 
     pub(crate) fn id(&self) -> &NodeId { self.keys.public() }
@@ -511,7 +502,6 @@ impl NetworkServiceInner {
         let mut inner = NetworkServiceInner {
             metadata: HostMetadata {
                 keys,
-                nonce: RwLock::new(H256::random()),
                 capabilities: RwLock::new(Vec::new()),
                 local_address: listen_address,
                 local_endpoint,
