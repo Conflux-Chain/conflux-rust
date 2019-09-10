@@ -14,7 +14,7 @@ use log4rs::{
 };
 use network::throttling::THROTTLING_SERVICE;
 use parking_lot::{Condvar, Mutex};
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 fn main() -> Result<(), String> {
     #[cfg(feature = "deadlock_detection")]
@@ -150,11 +150,4 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
-}
-
-fn from_str_validator<T: FromStr>(arg: String) -> Result<(), String> {
-    match arg.parse::<T>() {
-        Ok(_) => Ok(()),
-        Err(_) => Err(arg),
-    }
 }
