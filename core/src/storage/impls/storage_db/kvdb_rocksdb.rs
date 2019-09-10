@@ -11,10 +11,6 @@ pub struct KvdbRocksdb {
     pub col: Option<u32>,
 }
 
-/// This should be safe because `col` with only written during initialization
-unsafe impl Sync for KvdbRocksdb {}
-unsafe impl Send for KvdbRocksdb {}
-
 pub struct KvdbRocksDbTransaction {
     pending: DBTransaction,
 

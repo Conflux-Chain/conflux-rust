@@ -48,7 +48,7 @@ fn sqlite_db_table(table: DBTable) -> String {
 }
 
 pub struct DBManager {
-    table_db: HashMap<DBTable, Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
+    table_db: HashMap<DBTable, Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
 }
 
 impl DBManager {
@@ -62,11 +62,11 @@ impl DBManager {
         ] {
             table_db.insert(
                 table,
-                Arc::new(KvdbRocksdb {
+                Box::new(KvdbRocksdb {
                     kvdb: db.key_value().clone(),
                     col: rocks_db_col(table),
                 })
-                    as Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
+                    as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
         Self { table_db }
@@ -98,8 +98,8 @@ impl DBManager {
             .expect("Open sqlite failure");
             table_db.insert(
                 table,
-                Arc::new(sqlite_db)
-                    as Arc<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
+                Box::new(sqlite_db)
+                    as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
             );
         }
         Self { table_db }

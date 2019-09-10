@@ -519,14 +519,12 @@ impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
     }
 }
 
-/// TODO: Check if these assumptions are correct
+/// TODO: Check if these are correct
 impl<
         ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTraitMultiReader for KvdbSqlite<ValueType>
 {
 }
-unsafe impl<ValueType> Sync for KvdbSqlite<ValueType> {}
-unsafe impl<ValueType> Send for KvdbSqlite<ValueType> {}
 
 impl<
         T: ReadImplFamily<FamilyRepresentitive = KvdbSqlite<ValueType>>,
