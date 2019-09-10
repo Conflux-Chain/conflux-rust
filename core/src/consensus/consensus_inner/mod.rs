@@ -10,6 +10,7 @@ use crate::{
     block_data_manager::{
         BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
     },
+    bytes::Bytes,
     consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
@@ -518,11 +519,13 @@ impl ConsensusGraphInner {
             last_pivot_in_past_blocks,
         });
 
+        // FIXME: Set execution context and past_num_blocks with data on disk
         inner.data_man.insert_epoch_execution_context(
             data_man.genesis_block().hash(),
             EpochExecutionContext {
                 start_block_number: 0,
             },
+            true, /* persistent to db */
         );
 
         inner
@@ -1507,6 +1510,7 @@ impl ConsensusGraphInner {
                     start_block_number: self
                         .get_epoch_start_block_number(index),
                 },
+                true, /* persistent to db */
             );
 
             self.arena[index].past_weight = past_weight;
@@ -1976,6 +1980,49 @@ impl ConsensusGraphInner {
             .and_then(|epoch_number| self.epoch_hash(epoch_number))
     }
 
+    pub fn get_code(
+        &self, address: H160, epoch_number: u64,
+    ) -> Result<Bytes, String> {
+        let hash = self.get_hash_from_epoch_number(epoch_number)?;
+        let maybe_state = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
+            .map_err(|e| format!("Error to get state, err={:?}", e))?;
+        let state = match maybe_state {
+            Some(state) => state,
+            None => {
+                return Err(format!(
+                    "State for epoch (number={:?} hash={:?}) does not exist",
+                    epoch_number, hash
+                )
+                .into())
+            }
+        };
+
+        let state_db = StateDb::new(state);
+        let acc = match state_db.get_account(&address) {
+            Ok(Some(acc)) => acc,
+            _ => {
+                return Err(format!(
+                    "Account {:?} (number={:?} hash={:?}) does not exist",
+                    address, epoch_number, hash
+                )
+                .into())
+            }
+        };
+
+        if let Some(code) = state_db.get_code(&address, &acc.code_hash) {
+            Ok(code)
+        } else {
+            Err(format!(
+                "Account code (address={:?} code_hash={:?} number={:?} hash={:?}) does not exist",
+                address, acc.code_hash, epoch_number, hash
+            )
+                .into())
+        }
+    }
+
     pub fn get_balance(
         &self, address: H160, epoch_number: u64,
     ) -> Result<U256, String> {
@@ -2044,7 +2091,7 @@ impl ConsensusGraphInner {
             Some(epoch) => {
                 trace!("Block {} is in epoch {}", hash, epoch);
                 self.data_man
-                    .block_results_by_hash_with_epoch(
+                    .block_execution_result_by_hash_with_epoch(
                         hash,
                         &epoch,
                         update_cache,
@@ -2054,7 +2101,7 @@ impl ConsensusGraphInner {
             None => {
                 debug!("Block {:?} not in mem, try to read from db", hash);
                 self.data_man
-                    .block_results_by_hash_from_db(hash)
+                    .block_execution_result_by_hash_from_db(hash)
                     .map(|r| r.1.receipts)
             }
         }

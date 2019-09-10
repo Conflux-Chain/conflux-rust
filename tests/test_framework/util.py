@@ -358,6 +358,10 @@ def disconnect_nodes(nodes, from_connection, node_num):
 
 
 def check_handshake(from_connection, target_node_id):
+    """
+    Check whether node 'from_connection' has already
+    added node 'target_node_id' into its peer set.
+    """
     peers = from_connection.getpeerinfo()
     for peer in peers:
         if peer["nodeid"] == target_node_id and len(peer['caps']) > 0:
@@ -370,6 +374,9 @@ def get_peer_addr(connection):
 
 
 def connect_nodes(nodes, a, node_num):
+    """
+    Let node[a] connect to node[node_num]
+    """
     from_connection = nodes[a]
     to_connection = nodes[node_num]
     key = nodes[node_num].key
@@ -518,6 +525,11 @@ def checktx(node, tx_hash):
 
 
 def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
+    """
+    Establish connections among nodes with each node having 'sample' outgoing peers.
+    It first lets all the nodes link as a loop, then randomly pick 'sample-1'
+    outgoing peers for each node.    
+    """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
     threads = []

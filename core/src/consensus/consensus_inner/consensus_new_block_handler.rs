@@ -956,7 +956,7 @@ impl ConsensusNewBlockHandler {
         for h in &inner.terminal_hashes {
             terminals.push(h.clone());
         }
-        self.data_man.insert_terminals_to_db(&terminals);
+        self.data_man.insert_terminals_to_db(terminals);
     }
 
     fn try_clear_blockset_in_own_view_of_epoch(
@@ -1438,7 +1438,7 @@ impl ConsensusNewBlockHandler {
                 let mut receipts_correct = true;
                 for i in epoch_arena_indices {
                     if let Some(r) =
-                        self.data_man.block_results_by_hash_with_epoch(
+                        self.data_man.block_execution_result_by_hash_with_epoch(
                             &inner.arena[*i].hash,
                             &pivot_hash,
                             true, /* update_cache */

@@ -116,7 +116,10 @@ pub fn initialize_synchronization_graph(
         ledger_db.clone(),
         storage_manager,
         worker_thread_pool,
-        DataManagerConfiguration::new(false, true, 250000),
+        DataManagerConfiguration::new(
+            false,  /* do not record transaction address */
+            250000, /* max cached tx count */
+        ),
     ));
 
     let txpool =

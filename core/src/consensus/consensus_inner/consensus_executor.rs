@@ -1242,11 +1242,13 @@ impl ConsensusExecutionHandler {
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
             let block_hash = block.hash();
             // TODO: better redesign to avoid recomputation.
-            let receipts = match self.data_man.block_results_by_hash_with_epoch(
-                &block_hash,
-                &reward_epoch_hash,
-                true, /* update_cache */
-            ) {
+            let receipts = match self
+                .data_man
+                .block_execution_result_by_hash_with_epoch(
+                    &block_hash,
+                    &reward_epoch_hash,
+                    true, /* update_cache */
+                ) {
                 Some(receipts) => receipts.receipts,
                 None => {
                     let ctx = self
@@ -1427,10 +1429,16 @@ impl ConsensusExecutionHandler {
             0.into(),
             self.vm.clone(),
         );
+        let best_block_header = self.data_man.block_header_by_hash(epoch_id);
+        trace!("best_block_header: {:?}", best_block_header);
+        let time_stamp = match best_block_header {
+            Some(header) => header.timestamp(),
+            None => Default::default(),
+        };
         let env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number
             author: Default::default(),
-            timestamp: Default::default(),
+            timestamp: time_stamp,
             difficulty: Default::default(),
             gas_used: U256::zero(),
             last_hashes: Arc::new(vec![]),

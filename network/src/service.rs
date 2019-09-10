@@ -962,6 +962,7 @@ impl NetworkServiceInner {
                         }
                     }
                     Ok(SessionData::None) => break,
+                    Ok(SessionData::Continue) => {}
                     Err(Error(kind, _)) => {
                         debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
                         kill = true;
