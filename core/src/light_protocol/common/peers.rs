@@ -2,11 +2,30 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::H256;
 use parking_lot::RwLock;
 use rand::Rng;
-use std::{collections::HashMap, sync::Arc};
+
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::network::PeerId;
+
+#[derive(Default)]
+pub struct FullPeerState {
+    pub best_epoch: u64,
+    pub handshake_completed: bool,
+    pub protocol_version: u8,
+    pub terminals: HashSet<H256>,
+}
+
+#[derive(Default)]
+pub struct LightPeerState {
+    pub handshake_completed: bool,
+    pub protocol_version: u8,
+}
 
 #[derive(Default)]
 pub struct Peers<T: Default>(RwLock<HashMap<PeerId, Arc<RwLock<T>>>>);

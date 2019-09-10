@@ -11,8 +11,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, Peers, UniqueId},
         message::{GetStateRoots, StateRootWithEpoch},
         Error, ErrorKind,
     },
@@ -25,8 +24,8 @@ use crate::{
 };
 
 use super::{
-    future_item::FutureItem, missing_item::TimeOrdered,
-    sync_manager::SyncManager, witnesses::Witnesses,
+    common::{FutureItem, SyncManager, TimeOrdered},
+    witnesses::Witnesses,
 };
 
 #[derive(Debug)]
@@ -53,7 +52,7 @@ pub struct StateRoots {
 }
 
 impl StateRoots {
-    pub(super) fn new(
+    pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         witnesses: Arc<Witnesses>,
     ) -> Self
@@ -100,7 +99,7 @@ impl StateRoots {
     }
 
     #[inline]
-    pub(super) fn receive(
+    pub fn receive(
         &self, state_roots: impl Iterator<Item = StateRootWithEpoch>,
     ) -> Result<(), Error> {
         for StateRootWithEpoch { epoch, state_root } in state_roots {
@@ -118,7 +117,7 @@ impl StateRoots {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
+    pub fn clean_up(&self) {
         let timeout = Duration::from_millis(STATE_ROOT_REQUEST_TIMEOUT_MS);
         let state_roots = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(state_roots.into_iter());
@@ -144,7 +143,7 @@ impl StateRoots {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("state root sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(

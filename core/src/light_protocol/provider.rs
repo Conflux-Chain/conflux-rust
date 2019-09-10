@@ -14,7 +14,7 @@ use primitives::{SignedTransaction, TransactionWithSignature};
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{LedgerInfo, Peers, Validate},
+        common::{LedgerInfo, LightPeerState, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -44,12 +44,6 @@ use crate::{
     TransactionPool,
 };
 
-#[derive(Default)]
-pub struct LightPeerState {
-    pub handshake_completed: bool,
-    pub protocol_version: u8,
-}
-
 pub struct Provider {
     // shared consensus graph
     consensus: Arc<ConsensusGraph>,
@@ -69,9 +63,6 @@ pub struct Provider {
 
     // shared transaction pool
     tx_pool: Arc<TransactionPool>,
-
-    // helper API for validating ledger and state information
-    validate: Validate,
 }
 
 impl Provider {
@@ -82,7 +73,6 @@ impl Provider {
     {
         let ledger = LedgerInfo::new(consensus.clone());
         let peers = Peers::new();
-        let validate = Validate::new(consensus.clone());
 
         Provider {
             consensus,
@@ -91,7 +81,6 @@ impl Provider {
             network,
             peers,
             tx_pool,
-            validate,
         }
     }
 
@@ -212,6 +201,20 @@ impl Provider {
         }
     }
 
+    #[inline]
+    fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
+        match self.consensus.data_man.true_genesis_block.hash() {
+            h if h == genesis => Ok(()),
+            h => {
+                debug!(
+                    "Genesis mismatch (ours: {:?}, theirs: {:?})",
+                    h, genesis
+                );
+                Err(ErrorKind::GenesisMismatch.into())
+            }
+        }
+    }
+
     fn on_status(
         &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -219,7 +222,7 @@ impl Provider {
         info!("on_status peer={:?} status={:?}", peer, status);
 
         self.validate_peer_type(&status.node_type)?;
-        self.validate.genesis_hash(status.genesis_hash)?;
+        self.validate_genesis_hash(status.genesis_hash)?;
 
         if let Err(e) = self.send_status(io, peer) {
             warn!("Failed to send status to peer={:?}: {:?}", peer, e);

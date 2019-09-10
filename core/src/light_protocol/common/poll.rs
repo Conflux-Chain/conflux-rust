@@ -25,7 +25,6 @@ where
             }
             Ok(Async::NotReady) => {
                 trace!("poll result: NotReady");
-                ()
             }
             Err(e) => {
                 trace!("poll result: Error");
@@ -55,7 +54,6 @@ where
             }
             Ok(Async::NotReady) => {
                 trace!("poll result: NotReady");
-                ()
             }
             Err(e) => {
                 trace!("poll result: Error");
