@@ -34,12 +34,6 @@ pub struct RpcImpl {
 impl RpcImpl {
     pub fn new(light: Arc<QueryService>) -> Self { RpcImpl { light } }
 
-    fn code(
-        &self, _addr: RpcH160, _epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
-        unimplemented!()
-    }
-
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
@@ -54,7 +48,6 @@ impl RpcImpl {
         let account = self
             .light
             .get_account(epoch, address)
-            .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)?;
 
         Ok(account
@@ -68,6 +61,24 @@ impl RpcImpl {
     ) -> RpcResult<Bytes> {
         // TODO
         unimplemented!()
+    }
+
+    fn code(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        let address: H160 = address.into();
+        let epoch = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getCode address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        self.light
+            .get_code(epoch, address)
+            .map(|code| code.unwrap_or_default())
+            .map(Bytes::new)
+            .map_err(RpcError::invalid_params)
     }
 
     #[allow(unused_variables)]
@@ -126,7 +137,6 @@ impl RpcImpl {
         let tx = self
             .light
             .get_tx(hash.into())
-            .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)?;
 
         Ok(Some(RpcTransaction::from_signed(&tx, None)))
@@ -172,9 +182,9 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
-            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
