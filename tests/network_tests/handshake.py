@@ -24,7 +24,7 @@ class HandshakeTests(ConfluxTestFramework):
         wait_until(lambda: peer.had_status, timeout=3)
 
         # full node handshake
-        connect_nodes(self.nodes, 0, 1)
+        connect_nodes(self.nodes, 0, 1, timeout=3)
 
 if __name__ == "__main__":
     HandshakeTests().main()
