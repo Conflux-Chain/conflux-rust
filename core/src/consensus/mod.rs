@@ -14,8 +14,9 @@ use super::consensus::consensus_inner::{
 };
 use crate::{
     block_data_manager::BlockDataManager, bytes::Bytes, pow::ProofOfWorkConfig,
-    state::State, statistics::SharedStatistics,
-    transaction_pool::SharedTransactionPool, vm_factory::VmFactory,
+    state::State, state_exposer::SharedStateExposer,
+    statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
+    vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
@@ -122,6 +123,7 @@ pub struct ConsensusGraph {
     /// We use `Mutex` here because other thread will only modify it once and
     /// after that only current thread will operate this map.
     pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+    state_exposer: SharedStateExposer,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -134,6 +136,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
+        state_exposer: SharedStateExposer,
     ) -> Self
     {
         let inner =
@@ -166,6 +169,7 @@ impl ConsensusGraph {
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Mutex::new(Default::default()),
+            state_exposer,
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -180,7 +184,7 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig,
+        pow_config: ProofOfWorkConfig, state_exposer: SharedStateExposer,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -192,6 +196,7 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
+            state_exposer,
         )
     }
 
@@ -392,6 +397,8 @@ impl ConsensusGraph {
     /// getting inner locks.
     pub fn update_best_info(&self, inner: &ConsensusGraphInner) {
         let mut best_info = self.best_info.write();
+        self.state_exposer.write().consensus_graph.best_block_hash =
+            inner.best_block_hash();
 
         let terminal_hashes = inner.terminal_hashes();
         let (terminal_block_hashes, bounded_terminal_block_hashes) =

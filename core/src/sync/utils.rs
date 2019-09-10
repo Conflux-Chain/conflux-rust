@@ -7,6 +7,7 @@ use crate::{
         consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
     },
     pow::ProofOfWorkConfig,
+    state_exposer::{SharedStateExposer, StateExposer},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::SynchronizationGraph,
@@ -125,6 +126,7 @@ pub fn initialize_synchronization_graph(
     let txpool =
         Arc::new(TransactionPool::with_capacity(500_000, data_man.clone()));
     let statistics = Arc::new(Statistics::new());
+    let state_exposer = SharedStateExposer::new(StateExposer::new());
 
     let vm = VmFactory::new(1024 * 32);
     let pow_config = ProofOfWorkConfig::new(true, Some(10));
@@ -149,6 +151,7 @@ pub fn initialize_synchronization_graph(
         statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
+        state_exposer.clone(),
     ));
 
     let verification_config = VerificationConfig::new(true);
