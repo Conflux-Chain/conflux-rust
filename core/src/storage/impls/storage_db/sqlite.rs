@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[allow(unused)]
 pub const SQLITE_NO_PARAM: &[SqlBindableRef] = &[];
 pub type SqlBindableRef<'a> = &'a (dyn SqlBindable + 'a);
 pub type SqlBindableBox<'a> = Box<dyn SqlBindable + 'a>;

@@ -70,27 +70,18 @@ impl SnapshotDbSqlite {
 impl KvdbSqliteDestructureTrait for SnapshotDbSqlite {
     fn destructure(
         &self,
-    ) -> (Option<&SqliteConnection>, &str, &str, &KvdbSqliteStatements) {
+    ) -> (Option<&SqliteConnection>, &KvdbSqliteStatements) {
         (
             self.maybe_db.as_ref(),
-            Self::SNAPSHOT_KV_TABLE_NAME,
-            Self::SNAPSHOT_KV_TABLE_NAME,
             &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
         )
     }
 
     fn destructure_mut(
         &mut self,
-    ) -> (
-        Option<&mut SqliteConnection>,
-        &str,
-        &str,
-        &KvdbSqliteStatements,
-    ) {
+    ) -> (Option<&mut SqliteConnection>, &KvdbSqliteStatements) {
         (
             self.maybe_db.as_mut(),
-            Self::SNAPSHOT_KV_TABLE_NAME,
-            Self::SNAPSHOT_KV_TABLE_NAME,
             &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
         )
     }
@@ -165,13 +156,13 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
             snapshot_db
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.create_table,
+                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.create_table,
                     &[&&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
             snapshot_db
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.mpt_statements.create_table,
+                    &SNAPSHOT_DB_STATEMENTS.mpt_statements.stmts.create_table,
                     &[&&Self::SNAPSHOT_MPT_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
@@ -269,8 +260,6 @@ impl SnapshotDbSqlite {
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMut::new((
                     self.maybe_db.as_mut(),
-                    Self::SNAPSHOT_MPT_TABLE_NAME,
-                    Self::SNAPSHOT_MPT_TABLE_NAME,
                     &SNAPSHOT_DB_STATEMENTS.mpt_statements,
                 )),
                 Box::new(|x| Self::snapshot_mpt_row_parser(x)),
@@ -320,12 +309,12 @@ impl SnapshotDbSqlite {
                     Self::DELTA_KV_DELETE_TABLE_NAME
                 )
                 .as_str(),
-                &[] as &[SqlBindableRef],
+                SQLITE_NO_PARAM,
             )?
             .finish_ignore_rows()?;
         sqlite
             .execute(
-                &SNAPSHOT_DB_STATEMENTS.kvdb_statements.create_table,
+                &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.create_table,
                 &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
@@ -340,7 +329,7 @@ impl SnapshotDbSqlite {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
-                SNAPSHOT_DB_STATEMENTS.kvdb_statements.drop_table,
+                SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.drop_table,
                 &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
@@ -376,7 +365,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .as_mut()
                 .unwrap()
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.put,
+                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.put,
                     &[
                         &&SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME
                             as SqlBindableRef,
@@ -430,6 +419,7 @@ use super::{
     snapshot_mpt::SnapshotMpt,
     sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
 };
+use crate::storage::impls::storage_db::sqlite::SQLITE_NO_PARAM;
 use primitives::MerkleHash;
 use sqlite::Statement;
 use std::path::Path;
