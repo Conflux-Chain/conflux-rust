@@ -154,16 +154,11 @@ impl Headers {
             .cloned()
             .map(|h| MissingHeader::new(h, source.clone()));
 
-        match self.send_request(io, peer, hashes.clone()) {
-            Ok(_) => self.sync_manager.insert_in_flight(headers),
-            Err(e) => {
-                warn!(
-                    "Failed to request {:?} from {:?}: {:?}",
-                    hashes, peer, e
-                );
-                self.sync_manager.insert_waiting(headers);
-            }
-        }
+        self.sync_manager.request_now_from_peer(
+            headers,
+            peer,
+            |peer, hashes| self.send_request(io, peer, hashes),
+        );
     }
 
     pub fn receive<I>(&self, headers: I)

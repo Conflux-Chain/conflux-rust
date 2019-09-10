@@ -7,7 +7,7 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use cfx_types::{H160, H256};
-use cfxcore::{light_protocol::QueryService, ConsensusGraph, PeerInfo};
+use cfxcore::{light_protocol::QueryService, PeerInfo};
 use primitives::TransactionWithSignature;
 
 use network::{
@@ -28,65 +28,38 @@ use crate::rpc::{
 use super::common::RpcImpl as CommonImpl;
 
 pub struct RpcImpl {
-    consensus: Arc<ConsensusGraph>,
     light: Arc<QueryService>,
 }
 
 impl RpcImpl {
-    pub fn new(
-        consensus: Arc<ConsensusGraph>, light: Arc<QueryService>,
-    ) -> Self {
-        RpcImpl { consensus, light }
-    }
+    pub fn new(light: Arc<QueryService>) -> Self { RpcImpl { light } }
 
-    fn epoch_to_height(&self, epoch: EpochNumber) -> Result<u64, String> {
-        // NOTE: The epoch returned by consensus.best_state_epoch_number() is
-        // not guaranteed to exist, so we use the previous one instead. This
-        // way, the block `best_with_state_root + DEFERRED_STATE_EPOCH_COUNT`
-        // exists and we can safely use its `deferred_state_root` field for
-        // state validation.
-        let best_with_state_root = self.consensus.best_state_epoch_number() - 1;
-
-        match epoch {
-            EpochNumber::Earliest => Ok(0),
-            EpochNumber::LatestMined => Ok(best_with_state_root),
-            EpochNumber::LatestState => Ok(best_with_state_root),
-            EpochNumber::Num(num) => {
-                if num > best_with_state_root {
-                    return Err(format!(
-                        "Epoch number too large. Received: {}. Largest: {}.",
-                        num, best_with_state_root
-                    ));
-                }
-                Ok(num)
-            }
-        }
+    fn code(
+        &self, _addr: RpcH160, _epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        unimplemented!()
     }
 
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         let address: H160 = address.into();
-        let num = num.unwrap_or(EpochNumber::LatestState).into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
-            "RPC Request: cfx_getBalance address={:?} num={:?}",
-            address, num
+            "RPC Request: cfx_getBalance address={:?} epoch={:?}",
+            address, epoch
         );
 
-        let epoch = self
-            .epoch_to_height(num)
-            .map_err(RpcError::invalid_params)?;
-
-        debug!("Epoch number is {}", epoch);
-
-        let balance = self
+        let account = self
             .light
             .get_account(epoch, address)
-            .map(|account| account.balance.into())
-            .unwrap_or_default();
+            .map_err(|e| format!("{}", e))
+            .map_err(RpcError::invalid_params)?;
 
-        Ok(balance)
+        Ok(account
+            .map(|account| account.balance.into())
+            .unwrap_or_default())
     }
 
     #[allow(unused_variables)]
@@ -194,6 +167,7 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
+            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;

@@ -10,10 +10,10 @@ use std::any::Any;
 // TODO(thegaram): reorder message ids
 build_msgid! {
     STATUS_PING = 0x00
-    GET_STATE_ROOT = 0x01
-    STATE_ROOT = 0x02
-    GET_STATE_ENTRY = 0x03
-    STATE_ENTRY = 0x04
+    GET_STATE_ROOTS = 0x01
+    STATE_ROOTS = 0x02
+    GET_STATE_ENTRIES = 0x03
+    STATE_ENTRIES = 0x04
     GET_BLOCK_HASHES_BY_EPOCH = 0x05
     BLOCK_HASHES = 0x06
     GET_BLOCK_HEADERS = 0x07
@@ -38,10 +38,10 @@ build_msgid! {
 // generate `impl Message for _` for each message type
 build_msg_impl! { StatusPing, msgid::STATUS_PING, "StatusPing" }
 build_msg_impl! { StatusPong, msgid::STATUS_PONG, "StatusPong" }
-build_msg_impl! { GetStateRoot, msgid::GET_STATE_ROOT, "GetStateRoot" }
-build_msg_impl! { StateRoot, msgid::STATE_ROOT, "StateRoot" }
-build_msg_impl! { GetStateEntry, msgid::GET_STATE_ENTRY, "GetStateEntry" }
-build_msg_impl! { StateEntry, msgid::STATE_ENTRY, "StateEntry" }
+build_msg_impl! { GetStateRoots, msgid::GET_STATE_ROOTS, "GetStateRoots" }
+build_msg_impl! { StateRoots, msgid::STATE_ROOTS, "StateRoots" }
+build_msg_impl! { GetStateEntries, msgid::GET_STATE_ENTRIES, "GetStateEntries" }
+build_msg_impl! { StateEntries, msgid::STATE_ENTRIES, "StateEntries" }
 build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
 build_msg_impl! { BlockHashes, msgid::BLOCK_HASHES, "BlockHashes" }
 build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
@@ -60,7 +60,4 @@ build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs" }
 build_msg_impl! { BlockTxs, msgid::BLOCK_TXS, "BlockTxs" }
 
 // generate `impl HasRequestId for _` for each request type
-build_has_request_id_impl! { GetStateRoot }
-build_has_request_id_impl! { GetStateEntry }
-build_has_request_id_impl! { GetReceipts }
 build_has_request_id_impl! { GetTxs }

@@ -13,9 +13,9 @@ use super::consensus::consensus_inner::{
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
 use crate::{
-    block_data_manager::BlockDataManager, pow::ProofOfWorkConfig, state::State,
-    statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
-    vm_factory::VmFactory,
+    block_data_manager::BlockDataManager, bytes::Bytes, pow::ProofOfWorkConfig,
+    state::State, statistics::SharedStatistics,
+    transaction_pool::SharedTransactionPool, vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
@@ -338,6 +338,15 @@ impl ConsensusGraph {
         Ok(())
     }
 
+    /// Get the code of an address
+    pub fn get_code(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<Bytes, String> {
+        self.validate_stated_epoch(&epoch_number)?;
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| self.inner.read().get_code(address, height))
+    }
+
     /// Get the current balance of an address
     pub fn get_balance(
         &self, address: H160, epoch_number: EpochNumber,
@@ -632,7 +641,7 @@ impl ConsensusGraph {
                     let hash = inner.arena[*index].hash;
                     if let Some(block_log_bloom) = self
                         .data_man
-                        .block_results_by_hash_with_epoch(
+                        .block_execution_result_by_hash_with_epoch(
                             &hash,
                             &epoch_hash,
                             false, /* update_cache */

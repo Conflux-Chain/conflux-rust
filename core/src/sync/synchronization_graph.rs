@@ -1604,10 +1604,6 @@ impl SynchronizationGraph {
 
         // Post-processing invalid blocks.
         inner.process_invalid_blocks(&invalid_set);
-        if self.data_man.db.key_value().flush().is_err() {
-            warn!("db error when flushing block data");
-            insert_success = false;
-        }
 
         debug!(
             "new block inserted into graph: block_header={:?}, tx_count={}, block_size={}",

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub use super::super::super::db::COL_DELTA_TRIE;
-
 // TODO: Set the parameter large enough because we haven't implement background
 // snapshotting.
 /// The rule should be somewhat friendly to new miners so that they know which

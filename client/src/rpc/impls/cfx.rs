@@ -58,6 +58,22 @@ impl RpcImpl {
         }
     }
 
+    fn code(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        let epoch_number = epoch_number.unwrap_or(EpochNumber::LatestState);
+        let address: H160 = addr.into();
+        info!(
+            "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
+            address, epoch_number
+        );
+
+        self.consensus
+            .get_code(address, epoch_number.into())
+            .map(Bytes::new)
+            .map_err(|err| RpcError::invalid_params(err))
+    }
+
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
@@ -437,6 +453,7 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
+            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;

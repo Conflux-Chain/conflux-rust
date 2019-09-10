@@ -10,6 +10,8 @@ mod headers;
 mod missing_item;
 mod priority_queue;
 mod receipts;
+mod state_entries;
+mod state_roots;
 mod sync_manager;
 mod witnesses;
 
@@ -26,6 +28,8 @@ use crate::{
             BlockHeaders as GetBlockHeadersResponse,
             BlockTxs as GetBlockTxsResponse, Blooms as GetBloomsResponse,
             NewBlockHashes, Receipts as GetReceiptsResponse,
+            StateEntries as GetStateEntriesResponse,
+            StateRoots as GetStateRootsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
         Error,
@@ -40,6 +44,8 @@ use blooms::Blooms;
 use epochs::Epochs;
 use headers::{HashSource, Headers};
 use receipts::Receipts;
+use state_entries::StateEntries;
+use state_roots::StateRoots;
 use witnesses::Witnesses;
 
 #[derive(Debug)]
@@ -70,8 +76,14 @@ pub struct SyncHandler {
     // receipt sync manager
     pub receipts: Receipts,
 
+    // state entry sync manager
+    pub state_entries: StateEntries,
+
+    // state root sync manager
+    pub state_roots: Arc<StateRoots>,
+
     // witness sync manager
-    pub witnesses: Witnesses,
+    pub witnesses: Arc<Witnesses>,
 }
 
 impl SyncHandler {
@@ -104,21 +116,33 @@ impl SyncHandler {
             request_id_allocator.clone(),
         );
 
-        let blooms = Blooms::new(
+        let witnesses = Arc::new(Witnesses::new(
             consensus.clone(),
             peers.clone(),
             request_id_allocator.clone(),
-        );
+        ));
 
-        let witnesses = Witnesses::new(
-            consensus.clone(),
+        let blooms = Blooms::new(
             peers.clone(),
             request_id_allocator.clone(),
+            witnesses.clone(),
         );
 
         let receipts = Receipts::new(
-            consensus.clone(),
             peers.clone(),
+            request_id_allocator.clone(),
+            witnesses.clone(),
+        );
+
+        let state_roots = Arc::new(StateRoots::new(
+            peers.clone(),
+            request_id_allocator.clone(),
+            witnesses.clone(),
+        ));
+
+        let state_entries = StateEntries::new(
+            peers.clone(),
+            state_roots.clone(),
             request_id_allocator.clone(),
         );
 
@@ -130,6 +154,8 @@ impl SyncHandler {
             headers,
             peers,
             receipts,
+            state_entries,
+            state_roots,
             witnesses,
         }
     }
@@ -241,7 +267,7 @@ impl SyncHandler {
 
         self.witnesses.receive(resp.infos.into_iter())?;
 
-        self.start_sync(io);
+        self.witnesses.sync(io);
         Ok(())
     }
 
@@ -253,7 +279,7 @@ impl SyncHandler {
 
         self.blooms.receive(resp.blooms.into_iter())?;
 
-        self.start_sync(io);
+        self.blooms.sync(io);
         Ok(())
     }
 
@@ -265,7 +291,31 @@ impl SyncHandler {
 
         self.receipts.receive(resp.receipts.into_iter())?;
 
-        self.start_sync(io);
+        self.receipts.sync(io);
+        Ok(())
+    }
+
+    pub(super) fn on_state_entries(
+        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let resp: GetStateEntriesResponse = rlp.as_val()?;
+        info!("on_state_entries resp={:?}", resp);
+
+        self.state_entries.receive(resp.entries.into_iter())?;
+
+        self.state_entries.sync(io);
+        Ok(())
+    }
+
+    pub(super) fn on_state_roots(
+        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let resp: GetStateRootsResponse = rlp.as_val()?;
+        info!("on_state_roots resp={:?}", resp);
+
+        self.state_roots.receive(resp.state_roots.into_iter())?;
+
+        self.state_roots.sync(io);
         Ok(())
     }
 
@@ -277,7 +327,7 @@ impl SyncHandler {
 
         self.block_txs.receive(resp.block_txs.into_iter())?;
 
-        self.start_sync(io);
+        self.block_txs.sync(io);
         Ok(())
     }
 
@@ -292,6 +342,8 @@ impl SyncHandler {
                 self.blooms.sync(io);
                 self.receipts.sync(io);
                 self.block_txs.sync(io);
+                self.state_entries.sync(io);
+                self.state_roots.sync(io);
             }
             false => {
                 self.collect_terminals();
@@ -300,6 +352,8 @@ impl SyncHandler {
                 self.blooms.sync(io);
                 self.receipts.sync(io);
                 self.block_txs.sync(io);
+                self.state_entries.sync(io);
+                self.state_roots.sync(io);
             }
         };
     }
@@ -312,5 +366,7 @@ impl SyncHandler {
         self.witnesses.clean_up();
         self.receipts.clean_up();
         self.block_txs.clean_up();
+        self.state_entries.clean_up();
+        self.state_roots.clean_up();
     }
 }

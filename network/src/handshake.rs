@@ -129,41 +129,43 @@ impl Handshake {
     /// Readable IO handler. Drives the state change.
     pub fn readable<Message>(
         &mut self, io: &IoContext<Message>, host: &HostMetadata,
-    ) -> Result<(), Error>
+    ) -> Result<bool, Error>
     where Message: Send + Clone + Sync + 'static {
         trace!("handshake readable enter, state = {:?}", self.state);
 
-        while let Some(data) = self.connection.readable()? {
-            match self.state {
-                HandshakeState::New => {
-                    error!("handshake readable invalid for New state");
-                }
-                HandshakeState::StartSession => {
-                    error!("handshake readable invalid for StartSession state");
-                }
-                HandshakeState::ReadingAuth => {
-                    if data.len() == 64
-                        && BYPASS_CRYPTOGRAPHY.load(Ordering::Relaxed)
-                    {
-                        self.read_node_id(io, host.id(), &data)?;
-                    } else {
-                        self.read_auth(io, host.secret(), &data)?;
-                    }
-                }
-                HandshakeState::ReadingAck => {
-                    self.read_ack(host.secret(), &data)?;
-                }
-            }
+        let data = match self.connection.readable()? {
+            Some(data) => data,
+            None => return Ok(false),
+        };
 
-            if self.state == HandshakeState::StartSession {
-                io.clear_timer(self.connection.token()).ok();
-                break;
+        match self.state {
+            HandshakeState::New => {
+                error!("handshake readable invalid for New state");
             }
+            HandshakeState::StartSession => {
+                error!("handshake readable invalid for StartSession state");
+            }
+            HandshakeState::ReadingAuth => {
+                if data.len() == 64
+                    && BYPASS_CRYPTOGRAPHY.load(Ordering::Relaxed)
+                {
+                    self.read_node_id(io, host.id(), &data)?;
+                } else {
+                    self.read_auth(io, host.secret(), &data)?;
+                }
+            }
+            HandshakeState::ReadingAck => {
+                self.read_ack(host.secret(), &data)?;
+            }
+        }
+
+        if self.state == HandshakeState::StartSession {
+            io.clear_timer(self.connection.token()).ok();
         }
 
         trace!("handshake readable leave, state = {:?}", self.state);
 
-        Ok(())
+        Ok(true)
     }
 
     /// Writable IO handler.

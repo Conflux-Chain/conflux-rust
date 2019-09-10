@@ -137,7 +137,7 @@ class TxRelayTest(ConfluxTestFramework):
         for (_, receiver, value) in txs:
             # pick random epoch from the ones that have all balance information
             # this way, ~50% of our queries will have to deal with blaming blocks
-            epoch = random.randint(epoch_before_blamed_blocks, latest_epoch - 5)
+            epoch = random.randint(epoch_before_blamed_blocks, latest_epoch - 26)
 
             node0_balance = self.rpc[FULLNODE0].get_balance(receiver)
             node1_balance = self.rpc[FULLNODE1].get_balance(receiver)
