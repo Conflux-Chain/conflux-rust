@@ -373,7 +373,7 @@ def get_peer_addr(connection):
     return "{}:{}".format(connection.ip, connection.port)
 
 
-def connect_nodes(nodes, a, node_num):
+def connect_nodes(nodes, a, node_num, timeout=60):
     """
     Let node[a] connect to node[node_num]
     """
@@ -384,7 +384,7 @@ def connect_nodes(nodes, a, node_num):
     from_connection.addnode(key, peer_addr)
     # poll until hello handshake complete to avoid race conditions
     # with transaction relaying
-    wait_until(lambda: check_handshake(from_connection, to_connection.key))
+    wait_until(lambda: check_handshake(from_connection, to_connection.key), timeout=timeout)
 
 
 def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):

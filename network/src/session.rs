@@ -60,9 +60,8 @@ impl Session {
     {
         let originated = id.is_some();
 
-        let nonce = host.metadata.next_nonce();
-        let mut handshake = Handshake::new(token, id, socket, nonce)?;
-        handshake.start(io, &host.metadata, originated)?;
+        let mut handshake = Handshake::new(token, id, socket);
+        handshake.start(io, &host.metadata)?;
 
         Ok(Session {
             metadata: SessionMetadata {
@@ -425,21 +424,9 @@ impl Session {
     pub fn writable<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
-        let result = match self.state {
-            State::Handshake(ref mut h) => h.get_mut().writable(io),
-            State::Session(ref mut s) => s.writable(io),
-        };
-
-        match result {
-            Ok(status) => {
-                self.last_write = (Instant::now(), Some(status));
-                Ok(())
-            }
-            Err(e) => {
-                self.last_write = (Instant::now(), None);
-                Err(e)
-            }
-        }
+        let status = self.connection_mut().writable(io)?;
+        self.last_write = (Instant::now(), Some(status));
+        Ok(())
     }
 
     pub fn details(&self) -> SessionDetails {
