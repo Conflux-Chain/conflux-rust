@@ -208,6 +208,35 @@ impl RpcImpl {
         }
     }
 
+    fn get_transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> RpcResult<Option<RpcReceipt>> {
+        let hash: H256 = tx_hash.into();
+        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        let transaction_info =
+            self.consensus.get_transaction_info_by_hash(&hash);
+        let receipt = match transaction_info {
+            Some((tx, receipt, address)) => {
+                let hash = tx.hash.into();
+                let mut receipt = RpcReceipt::new(tx, receipt, address);
+                let inner = &*self.consensus.inner.read();
+                let maybe_block =
+                    self.consensus.data_man.block_by_hash(&hash, false);
+                if maybe_block.is_some() {
+                    let block = maybe_block.unwrap();
+                    let result_block = RpcBlock::new(&*block, inner, false);
+                    receipt.set_deferred_state_root(
+                        result_block.deferred_state_root,
+                    );
+                    receipt.set_epoch_number(result_block.epoch_number);
+                }
+                Some(receipt)
+            }
+            None => None,
+        };
+        Ok(receipt)
+    }
+
     fn generate(
         &self, num_blocks: usize, num_txs: usize,
     ) -> RpcResult<Vec<H256>> {
@@ -461,6 +490,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn send_usable_genesis_accounts(& self,raw_addresses:Bytes, raw_secrets:Bytes) ->RpcResult<Bytes>;
+            fn get_transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
     }
 }
