@@ -16,7 +16,7 @@ use primitives::{
 
 use crate::{
     consensus::ConsensusGraph,
-    network::{NetworkContext, NetworkService, PeerId},
+    network::{NetworkContext, NetworkService},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME_MS},
@@ -28,10 +28,7 @@ use crate::{
 
 use super::{
     common::{poll_future, poll_stream, with_timeout, LedgerInfo},
-    handler::QueryResult,
-    message::GetTxs,
-    Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
-    LIGHT_PROTOCOL_VERSION,
+    Error, Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
 
 pub struct QueryService {
@@ -100,7 +97,6 @@ impl QueryService {
 
                 let root = self.with_io(|io| {
                     self.handler
-                        .sync
                         .state_roots
                         .request_now(io, epoch)
                 });
@@ -132,7 +128,6 @@ impl QueryService {
 
                 let entry = self.with_io(|io| {
                     self.handler
-                        .sync
                         .state_entries
                         .request_now(io, epoch, key.clone())
                 });
@@ -150,7 +145,6 @@ impl QueryService {
                 None => Ok(None),
             });
 
-        // // match fut.wait() {
         match poll_future(&mut account) {
             Ok(account) => Ok(account),
             Err(e) => {
@@ -187,48 +181,28 @@ impl QueryService {
         success
     }
 
-    pub fn query_txs(
-        &self, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<Vec<SignedTransaction>, Error> {
-        info!("query_txs peer={:?} hashes={:?}", peer, hashes);
-
-        let req = GetTxs {
-            request_id: 0,
-            hashes,
-        };
-
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            match self.handler.query.execute(io, peer, req)? {
-                QueryResult::Txs(txs) => Ok(txs),
-                _ => Err(ErrorKind::UnexpectedResponse.into()),
-            }
-        })
-    }
-
-    pub fn get_tx(&self, hash: H256) -> Option<SignedTransaction> {
+    pub fn get_tx(&self, hash: H256) -> Result<SignedTransaction, String> {
         info!("get_tx hash={:?}", hash);
 
-        // try each peer until we succeed
-        for peer in self.handler.peers.all_peers_shuffled() {
-            match self.query_txs(peer, vec![hash]) {
-                Err(e) => {
-                    warn!("Failed to get txs from peer={:?}: {:?}", peer, e);
-                }
-                Ok(txs) => {
-                    match txs.iter().find(|tx| tx.hash() == hash).cloned() {
-                        Some(tx) => return Some(tx),
-                        None => {
-                            warn!(
-                                "Peer {} returned {:?}, target tx not found!",
-                                peer, txs
-                            );
-                        }
-                    }
-                }
-            };
-        }
+        let mut tx = future::ok(hash).and_then(|hash| {
+            trace!("hash = {:?}", hash);
 
-        None
+            let tx = self.with_io(|io| self.handler.txs.request_now(io, hash));
+
+            with_timeout(
+                Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+                format!("Timeout while retrieving tx {}", hash), /* error */
+                tx,
+            )
+        });
+
+        match poll_future(&mut tx) {
+            Ok(tx) => Ok(tx),
+            Err(e) => {
+                warn!("Error while retrieving tx: {}", e);
+                Err(format!("{}", e))
+            }
+        }
     }
 
     /// Apply filter to all logs within a receipt.
@@ -314,7 +288,7 @@ impl QueryService {
         &self, epoch: EpochNumber,
     ) -> Result<u64, FilterError> {
         // find highest epoch that we are able to verify based on witness info
-        let latest_verified = self.handler.sync.witnesses.latest_verified();
+        let latest_verified = self.handler.witnesses.latest_verified();
 
         let latest_verifiable = match latest_verified {
             n if n >= DEFERRED_STATE_EPOCH_COUNT => {
@@ -431,7 +405,7 @@ impl QueryService {
                 with_timeout(
                     Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
                     format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
-                    self.handler.sync.blooms.request(epoch)
+                    self.handler.blooms.request(epoch)
                 ).map(move |bloom| (epoch, bloom))
             })
 
@@ -460,7 +434,7 @@ impl QueryService {
                 with_timeout(
                     Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
                     format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
-                    self.handler.sync.receipts.request(epoch)
+                    self.handler.receipts.request(epoch)
                 ).map(move |receipts| (epoch, receipts))
             })
 
@@ -491,7 +465,7 @@ impl QueryService {
                 with_timeout(
                     Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
                     format!("Timeout while retrieving block txs for block {}", log.block_hash), /* error */
-                    self.handler.sync.block_txs.request(log.block_hash)
+                    self.handler.block_txs.request(log.block_hash)
                 ).map(move |txs| (log, txs))
             })
 

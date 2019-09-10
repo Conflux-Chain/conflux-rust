@@ -10,8 +10,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, Peers, UniqueId},
         message::{GetStateEntries, StateEntryWithKey, StateKey},
         Error, ErrorKind,
     },
@@ -25,8 +24,8 @@ use crate::{
 };
 
 use super::{
-    future_item::FutureItem, missing_item::TimeOrdered,
-    state_roots::StateRoots, sync_manager::SyncManager,
+    common::{FutureItem, SyncManager, TimeOrdered},
+    state_roots::StateRoots,
 };
 
 pub type StateEntry = Option<Vec<u8>>;
@@ -67,7 +66,7 @@ pub struct StateEntries {
 }
 
 impl StateEntries {
-    pub(super) fn new(
+    pub fn new(
         peers: Arc<Peers<FullPeerState>>, state_roots: Arc<StateRoots>,
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
@@ -110,7 +109,7 @@ impl StateEntries {
     }
 
     #[inline]
-    pub(super) fn receive(
+    pub fn receive(
         &self, entries: impl Iterator<Item = StateEntryWithKey>,
     ) -> Result<(), Error> {
         for StateEntryWithKey { key, entry, proof } in entries {
@@ -125,7 +124,7 @@ impl StateEntries {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
+    pub fn clean_up(&self) {
         let timeout = Duration::from_millis(STATE_ENTRY_REQUEST_TIMEOUT_MS);
         let entries = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(entries.into_iter());
@@ -151,7 +150,7 @@ impl StateEntries {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("state entry sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(

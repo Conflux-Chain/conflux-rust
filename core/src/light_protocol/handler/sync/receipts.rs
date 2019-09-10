@@ -10,8 +10,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, Peers, UniqueId},
         message::{GetReceipts, ReceiptsWithEpoch},
         Error, ErrorKind,
     },
@@ -25,8 +24,8 @@ use crate::{
 };
 
 use super::{
-    future_item::FutureItem, missing_item::KeyOrdered,
-    sync_manager::SyncManager, witnesses::Witnesses,
+    common::{FutureItem, KeyOrdered, SyncManager},
+    witnesses::Witnesses,
 };
 
 #[derive(Debug)]
@@ -54,7 +53,7 @@ pub struct Receipts {
 }
 
 impl Receipts {
-    pub(super) fn new(
+    pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         witnesses: Arc<Witnesses>,
     ) -> Self
@@ -94,7 +93,7 @@ impl Receipts {
     }
 
     #[inline]
-    pub(super) fn receive(
+    pub fn receive(
         &self, receipts: impl Iterator<Item = ReceiptsWithEpoch>,
     ) -> Result<(), Error> {
         for ReceiptsWithEpoch { epoch, receipts } in receipts {
@@ -109,7 +108,7 @@ impl Receipts {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
+    pub fn clean_up(&self) {
         let timeout = Duration::from_millis(RECEIPT_REQUEST_TIMEOUT_MS);
         let receiptss = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(receiptss.into_iter());
@@ -135,7 +134,7 @@ impl Receipts {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("receipt sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(

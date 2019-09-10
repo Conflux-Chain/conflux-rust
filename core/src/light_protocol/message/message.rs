@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::protocol::*;
-use crate::message::{HasRequestId, Message, MsgId, RequestId};
+use crate::message::{Message, MsgId};
 use std::any::Any;
 
 // generate `pub mod msgid`
@@ -58,6 +58,3 @@ build_msg_impl! { GetBlooms, msgid::GET_BLOOMS, "GetBlooms" }
 build_msg_impl! { Blooms, msgid::BLOOMS, "Blooms" }
 build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs" }
 build_msg_impl! { BlockTxs, msgid::BLOCK_TXS, "BlockTxs" }
-
-// generate `impl HasRequestId for _` for each request type
-build_has_request_id_impl! { GetTxs }

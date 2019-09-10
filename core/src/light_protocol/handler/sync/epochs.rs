@@ -16,8 +16,7 @@ use std::{
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{max_of_collection, Peers, UniqueId},
-        handler::FullPeerState,
+        common::{max_of_collection, FullPeerState, Peers, UniqueId},
         message::GetBlockHashesByEpoch,
         Error,
     },
@@ -52,7 +51,7 @@ impl EpochRequest {
     }
 }
 
-pub(super) struct Epochs {
+pub struct Epochs {
     // shared consensus graph
     consensus: Arc<ConsensusGraph>,
 

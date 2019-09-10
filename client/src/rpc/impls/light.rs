@@ -116,15 +116,20 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    pub fn transaction_by_hash(
+    fn transaction_by_hash(
         &self, hash: RpcH256,
     ) -> RpcResult<Option<RpcTransaction>> {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
 
-        let maybe_tx = self.light.get_tx(hash.into());
-        Ok(maybe_tx.map(|tx| RpcTransaction::from_signed(&tx, None)))
+        let tx = self
+            .light
+            .get_tx(hash.into())
+            .map_err(|e| format!("{}", e))
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(Some(RpcTransaction::from_signed(&tx, None)))
     }
 }
 

@@ -17,8 +17,7 @@ use primitives::BlockHeader;
 
 use crate::{
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, Peers, UniqueId},
         message::GetBlockHeaders,
         Error,
     },
@@ -31,7 +30,7 @@ use crate::{
     sync::SynchronizationGraph,
 };
 
-use super::{missing_item::HasKey, sync_manager::SyncManager};
+use super::common::{HasKey, SyncManager};
 
 #[derive(Debug)]
 struct Statistics {
@@ -42,7 +41,7 @@ struct Statistics {
 
 // NOTE: order defines priority: Epoch < Reference < NewHash
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) enum HashSource {
+pub enum HashSource {
     Epoch,      // hash received through an epoch request
     Dependency, // hash referenced by a header we received
     NewHash,    // hash received through a new hashes announcement
@@ -85,7 +84,7 @@ impl HasKey<H256> for MissingHeader {
     fn key(&self) -> H256 { self.hash }
 }
 
-pub(super) struct Headers {
+pub struct Headers {
     // number of headers received multiple times
     duplicate_count: AtomicU64,
 
@@ -243,9 +242,7 @@ impl Headers {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        super::priority_queue::PriorityQueue, HashSource, MissingHeader,
-    };
+    use super::{super::common::PriorityQueue, HashSource, MissingHeader};
     use rand::Rng;
     use std::{
         ops::Sub,
