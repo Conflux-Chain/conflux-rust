@@ -242,9 +242,7 @@ impl Headers {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        super::priority_queue::PriorityQueue, HashSource, MissingHeader,
-    };
+    use super::{super::common::PriorityQueue, HashSource, MissingHeader};
     use rand::Rng;
     use std::{
         ops::Sub,
