@@ -64,6 +64,11 @@ error_chain! {
             display("Invalid state root"),
         }
 
+        InvalidTxInfo {
+            description("Invalid tx info"),
+            display("Invalid tx info"),
+        }
+
         InvalidTxRoot {
             description("Invalid tx root"),
             display("Invalid tx root"),
@@ -177,6 +182,7 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidReceipts
         | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot
+        | ErrorKind::InvalidTxInfo
         | ErrorKind::InvalidTxRoot
         | ErrorKind::InvalidTxSignature
         | ErrorKind::ValidationFailed

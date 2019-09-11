@@ -246,6 +246,7 @@ class RpcClient:
         return self.node.gettransactionreceipt(tx_hash)
 
     def get_transaction_receipt(self, tx_hash: str) -> dict:
+        assert_is_hash_string(tx_hash)
         return self.node.cfx_getTransactionReceipt(tx_hash)
 
     def txpool_status(self) -> (int, int):

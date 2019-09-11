@@ -11,8 +11,9 @@ pub use node_type::NodeType;
 pub use protocol::{
     BlockHashes, BlockHeaders, BlockTxs, BlockTxsWithHash, BloomWithEpoch,
     Blooms, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxs, GetBlooms,
-    GetReceipts, GetStateEntries, GetStateRoots, GetTxs, GetWitnessInfo,
-    NewBlockHashes, Receipts, ReceiptsWithEpoch, SendRawTx, StateEntries,
-    StateEntryWithKey, StateKey, StateRootWithEpoch, StateRoots, StatusPing,
-    StatusPong, Txs, WitnessInfo, WitnessInfoWithHeight,
+    GetReceipts, GetStateEntries, GetStateRoots, GetTxInfos, GetTxs,
+    GetWitnessInfo, NewBlockHashes, Receipts, ReceiptsWithEpoch, SendRawTx,
+    StateEntries, StateEntryWithKey, StateKey, StateRootWithEpoch, StateRoots,
+    StatusPing, StatusPong, TxInfo, TxInfos, Txs, WitnessInfo,
+    WitnessInfoWithHeight,
 };

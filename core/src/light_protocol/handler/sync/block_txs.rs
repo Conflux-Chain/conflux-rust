@@ -107,10 +107,11 @@ impl BlockTxs {
     ) -> Result<(), Error> {
         for BlockTxsWithHash { hash, block_txs } in block_txs {
             info!("Validating block_txs {:?} with hash {}", block_txs, hash);
-            self.validate_block_txs(hash, &block_txs)?;
-
-            // store each transaction by its hash
+            // validate and store each transaction
             self.txs.receive(block_txs.clone().into_iter())?;
+
+            // validate block txs
+            self.validate_block_txs(hash, &block_txs)?;
 
             // store block bodies by block hash
             self.verified.write().insert(hash, block_txs);
@@ -118,6 +119,14 @@ impl BlockTxs {
         }
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn receive_single(
+        &self, hash: H256, block_txs: Vec<SignedTransaction>,
+    ) -> Result<(), Error> {
+        let item = BlockTxsWithHash { hash, block_txs };
+        self.receive(std::iter::once(item))
     }
 
     #[inline]
@@ -165,18 +174,8 @@ impl BlockTxs {
     pub fn validate_block_txs(
         &self, hash: H256, txs: &Vec<SignedTransaction>,
     ) -> Result<(), Error> {
-        // first, validate signatures for each tx
-        for tx in txs {
-            match tx.verify_public(false /* skip */) {
-                Ok(true) => continue,
-                _ => {
-                    warn!("Tx signature verification failed for {:?}", tx);
-                    return Err(ErrorKind::InvalidTxSignature.into());
-                }
-            }
-        }
+        // NOTE: tx signatures have been validated previously
 
-        // then, compute tx root and match against header info
         let local = *self.ledger.header(hash)?.transactions_root();
 
         let txs: Vec<_> = txs.iter().map(|tx| Arc::new(tx.clone())).collect();

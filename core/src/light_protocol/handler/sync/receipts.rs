@@ -114,6 +114,14 @@ impl Receipts {
     }
 
     #[inline]
+    pub fn receive_single(
+        &self, epoch: u64, receipts: Vec<Vec<Receipt>>,
+    ) -> Result<(), Error> {
+        let item = ReceiptsWithEpoch { epoch, receipts };
+        self.receive(std::iter::once(item))
+    }
+
+    #[inline]
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
         let timeout = *RECEIPT_REQUEST_TIMEOUT;
