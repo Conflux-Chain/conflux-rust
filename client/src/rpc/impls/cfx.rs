@@ -16,8 +16,9 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
-    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, PeerInfo, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, consensus_parameters::*,
+    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use network::{
@@ -224,11 +225,37 @@ impl RpcImpl {
                     self.consensus.data_man.block_by_hash(&hash, false);
                 if maybe_block.is_some() {
                     let block = maybe_block.unwrap();
-                    let result_block = RpcBlock::new(&*block, inner, false);
-                    receipt.set_deferred_state_root(
-                        result_block.deferred_state_root,
-                    );
-                    receipt.set_epoch_number(result_block.epoch_number);
+                    let epoch_number = inner
+                        .get_block_epoch_number(&block.block_header.hash())
+                        .map_or(None, |x| match x {
+                            std::u64::MAX => None,
+                            _ => Some(x.into()),
+                        });
+                    receipt.set_epoch_number(epoch_number);
+                }
+                let maybe_block_idx = inner.hash_to_arena_indices.get(&hash);
+                if maybe_block_idx.is_some() {
+                    let block_idx = maybe_block_idx.unwrap();
+                    let pivot_height = inner.arena[*block_idx].height
+                        + DEFERRED_STATE_EPOCH_COUNT as u64;
+                    let pivot_index = match pivot_height {
+                        h if h < inner.get_cur_era_genesis_height() => None,
+                        h => Some(inner.height_to_pivot_index(h)),
+                    };
+                    if pivot_index.is_some() {
+                        let pivot_hash = &inner.arena
+                            [inner.pivot_chain[pivot_index.unwrap()]]
+                        .hash;
+                        let state_root = match self
+                            .consensus
+                            .data_man
+                            .consensus_graph_execution_info_from_db(pivot_hash)
+                        {
+                            Some(info) => info.original_deferred_state_root,
+                            None => Default::default(),
+                        };
+                        receipt.set_state_root(RpcH256::from(state_root));
+                    }
                 }
                 Some(receipt)
             }

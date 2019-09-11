@@ -36,7 +36,7 @@ pub struct Receipt {
     /// Bloom filter for light clients to quickly retrieve related logs.
     pub logs_bloom: Bloom,
     /// state root.
-    pub deferred_state_root: H256,
+    pub state_root: H256,
     /// Transaction outcome.
     pub outcome_status: u8,
 }
@@ -71,13 +71,13 @@ impl Receipt {
             contract_created: address.into(),
             logs: receipt.logs.iter().cloned().map(Log::from).collect(),
             logs_bloom: receipt.log_bloom.into(),
-            deferred_state_root: Default::default(),
+            state_root: Default::default(),
             epoch_number: None,
         }
     }
 
-    pub fn set_deferred_state_root(&mut self, deferred_state_root: H256) {
-        self.deferred_state_root = deferred_state_root.into();
+    pub fn set_state_root(&mut self, deferred_state_root: H256) {
+        self.state_root = deferred_state_root.into();
     }
 
     pub fn set_epoch_number(&mut self, epoch_number: Option<U256>) {
