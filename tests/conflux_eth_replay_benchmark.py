@@ -60,8 +60,6 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     # For eth replay
     EXPECTED_TX_SIZE_PER_SEC = 400000
     INITIALIZE_TXS = 200000 + 400 + 400
-    INITIALIZE_TPS = 4000
-    INITIALIZE_SLEEP = 20
     GENESIS_KEY = decode_hex(
         "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"
     )

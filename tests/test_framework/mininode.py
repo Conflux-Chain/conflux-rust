@@ -50,7 +50,7 @@ class P2PConnection(asyncore.dispatcher):
         self.disconnect = False
         self.had_hello = False
 
-        logger.debug("Connecting to Conflux Node: %s:%d" % (self.dstaddr, self.dstport))
+        logger.info("Connecting to Conflux Node: %s:%d" % (self.dstaddr, self.dstport))
 
         try:
             self.connect((dstaddr, dstport))
@@ -73,10 +73,11 @@ class P2PConnection(asyncore.dispatcher):
 
     def handle_close(self):
         """asyncore callback when a connection is closed."""
-        logger.debug("Closing connection to: %s:%d" % (self.dstaddr, self.dstport))
+        logger.info("Closing connection to: %s:%d" % (self.dstaddr, self.dstport))
         self.state = "closed"
         self.recvbuf = b""
         self.sendbuf = b""
+        assert False
         try:
             self.close()
         except:
@@ -550,9 +551,11 @@ class NetworkThread(threading.Thread):
             for fd, obj in mininode_socket_map.items():
                 if obj.disconnect:
                     disconnected.append(obj)
+                    logger.info("disconnect append" + obj)
             [obj.handle_close() for obj in disconnected]
+
             asyncore.loop(0.1, use_poll=True, map=mininode_socket_map, count=1)
-        logger.debug("Network thread closing")
+        logger.info("Network thread closing")
 
 
 def network_thread_running():

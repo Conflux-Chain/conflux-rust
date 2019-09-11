@@ -1259,7 +1259,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     fn stream_hup(
         &self, io: &IoContext<NetworkIoMessage>, stream: StreamToken,
     ) {
-        trace!("Hup: {}", stream);
+        debug!("Hup: {}", stream);
         match stream {
             FIRST_SESSION..=LAST_SESSION => self.connection_closed(stream, io),
             _ => warn!("Unexpected hup"),
