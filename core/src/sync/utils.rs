@@ -1,5 +1,5 @@
 use crate::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
@@ -120,6 +120,7 @@ pub fn initialize_synchronization_graph(
         DataManagerConfiguration::new(
             false,  /* do not record transaction address */
             250000, /* max cached tx count */
+            DbType::Rocksdb,
         ),
     ));
 

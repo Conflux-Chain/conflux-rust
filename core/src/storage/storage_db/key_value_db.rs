@@ -80,7 +80,7 @@ pub trait KeyValueDbTraitSingleWriterMultiReader:
 {
 }
 
-pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader {
+pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader + Send + Sync {
     /// Return Some(maybe_old_value) or None if the db don't support reading the
     /// old value at deletion.
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>>;

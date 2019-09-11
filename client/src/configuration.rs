@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfxcore::{
-    block_data_manager::DataManagerConfiguration,
+    block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
@@ -108,6 +108,7 @@ build_config! {
         (txgen_account_count, (usize), 10)
         (tx_cache_count, (usize), 250000)
         (max_download_state_peers, (usize), 8)
+        (block_db_type, (String), "rocksdb".to_string())
     }
     {
         (
@@ -334,6 +335,11 @@ impl Configuration {
         DataManagerConfiguration::new(
             self.raw_conf.record_tx_address,
             self.raw_conf.tx_cache_count,
+            match self.raw_conf.block_db_type.as_str() {
+                "rocksdb" => DbType::Rocksdb,
+                "sqlite" => DbType::Sqlite,
+                _ => panic!("Invalid block_db_type parameter!"),
+            },
         )
     }
 }

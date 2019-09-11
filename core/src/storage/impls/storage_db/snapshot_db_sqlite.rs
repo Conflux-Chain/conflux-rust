@@ -15,12 +15,16 @@ pub struct SnapshotDbStatements {
 
 lazy_static! {
     pub static ref SNAPSHOT_DB_STATEMENTS: SnapshotDbStatements = {
-        let kvdb_statements =
-            KvdbSqliteStatements::make_statements(&["value"], &["BLOB"])
-                .unwrap();
+        let kvdb_statements = KvdbSqliteStatements::make_statements(
+            &["value"],
+            &["BLOB"],
+            SnapshotDbSqlite::SNAPSHOT_KV_TABLE_NAME,
+        )
+        .unwrap();
         let mpt_statements = KvdbSqliteStatements::make_statements(
             &["node_rlp", "subtree_kv_rlp_size"],
             &["BLOB", "INTEGER"],
+            SnapshotDbSqlite::SNAPSHOT_MPT_TABLE_NAME,
         )
         .unwrap();
 
@@ -34,9 +38,9 @@ lazy_static! {
 impl SnapshotDbSqlite {
     // TODO(yz): check if WITHOUT ROWID is faster: see https://www.sqlite.org/withoutrowid.html.
     pub const CREATE_TABLE_BLOB_KEY_STATEMENT: &'static str =
-        "CREATE TABLE :table_name ( key BLOB PRIMARY KEY ) WITHOUT ROWID";
+        "CREATE TABLE {} ( key BLOB PRIMARY KEY ) WITHOUT ROWID";
     pub const DELETE_TABLE_KEY_INSERT_STATEMENT: &'static str =
-        "INSERT INTO :table_name VALUES :key";
+        "INSERT INTO {} VALUES :key";
     /// These two tables are temporary table for the merging process, but they
     /// remain to help other nodes to do 1-step syncing.
     pub const DELTA_KV_DELETE_TABLE_NAME: &'static str =
@@ -66,27 +70,18 @@ impl SnapshotDbSqlite {
 impl KvdbSqliteDestructureTrait for SnapshotDbSqlite {
     fn destructure(
         &self,
-    ) -> (Option<&SqliteConnection>, &str, &str, &KvdbSqliteStatements) {
+    ) -> (Option<&SqliteConnection>, &KvdbSqliteStatements) {
         (
             self.maybe_db.as_ref(),
-            Self::SNAPSHOT_KV_TABLE_NAME,
-            Self::SNAPSHOT_KV_TABLE_NAME,
             &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
         )
     }
 
     fn destructure_mut(
         &mut self,
-    ) -> (
-        Option<&mut SqliteConnection>,
-        &str,
-        &str,
-        &KvdbSqliteStatements,
-    ) {
+    ) -> (Option<&mut SqliteConnection>, &KvdbSqliteStatements) {
         (
             self.maybe_db.as_mut(),
-            Self::SNAPSHOT_KV_TABLE_NAME,
-            Self::SNAPSHOT_KV_TABLE_NAME,
             &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
         )
     }
@@ -161,13 +156,13 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
             snapshot_db
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.create_table,
+                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.create_table,
                     &[&&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
             snapshot_db
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.mpt_statements.create_table,
+                    &SNAPSHOT_DB_STATEMENTS.mpt_statements.stmts.create_table,
                     &[&&Self::SNAPSHOT_MPT_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
@@ -265,8 +260,6 @@ impl SnapshotDbSqlite {
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMut::new((
                     self.maybe_db.as_mut(),
-                    Self::SNAPSHOT_MPT_TABLE_NAME,
-                    Self::SNAPSHOT_MPT_TABLE_NAME,
                     &SNAPSHOT_DB_STATEMENTS.mpt_statements,
                 )),
                 Box::new(|x| Self::snapshot_mpt_row_parser(x)),
@@ -311,13 +304,17 @@ impl SnapshotDbSqlite {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
-                Self::CREATE_TABLE_BLOB_KEY_STATEMENT,
-                &[&&Self::DELTA_KV_DELETE_TABLE_NAME as SqlBindableRef],
+                format!(
+                    "CREATE TABLE {} ( key BLOB PRIMARY KEY ) WITHOUT ROWID",
+                    Self::DELTA_KV_DELETE_TABLE_NAME
+                )
+                .as_str(),
+                SQLITE_NO_PARAM,
             )?
             .finish_ignore_rows()?;
         sqlite
             .execute(
-                &SNAPSHOT_DB_STATEMENTS.kvdb_statements.create_table,
+                &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.create_table,
                 &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
@@ -332,7 +329,7 @@ impl SnapshotDbSqlite {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
-                SNAPSHOT_DB_STATEMENTS.kvdb_statements.drop_table,
+                SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.drop_table,
                 &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
@@ -368,7 +365,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .as_mut()
                 .unwrap()
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.put,
+                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.put,
                     &[
                         &&SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME
                             as SqlBindableRef,
@@ -383,12 +380,12 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .as_mut()
                 .unwrap()
                 .execute(
-                    SnapshotDbSqlite::DELETE_TABLE_KEY_INSERT_STATEMENT,
-                    &[
-                        &&SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME
-                            as SqlBindableRef,
-                        &&key,
-                    ],
+                    format!(
+                        "INSERT INTO {} VALUES :key",
+                        SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME
+                    )
+                    .as_str(),
+                    &[&&key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
         }
@@ -422,6 +419,7 @@ use super::{
     snapshot_mpt::SnapshotMpt,
     sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
 };
+use crate::storage::impls::storage_db::sqlite::SQLITE_NO_PARAM;
 use primitives::MerkleHash;
 use sqlite::Statement;
 use std::path::Path;

@@ -9,7 +9,7 @@ pub(self) mod snapshot_manager;
 pub mod state;
 pub mod state_manager;
 #[macro_use]
-pub(self) mod storage_db;
+pub mod storage_db;
 
 pub mod tests;
 
@@ -24,8 +24,13 @@ pub use self::{
         multi_version_merkle_patricia_trie::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
         },
-        storage_db::snapshot_sync::{
-            Chunk, ChunkKey, RangedManifest, RestoreProgress, Restorer,
+        storage_db::{
+            kvdb_rocksdb::KvdbRocksdb,
+            kvdb_sqlite::KvdbSqlite,
+            snapshot_sync::{
+                Chunk, ChunkKey, RangedManifest, RestoreProgress, Restorer,
+            },
+            sqlite::SqliteConnection,
         },
     },
     state::{State as Storage, StateTrait as StorageTrait},
@@ -33,5 +38,6 @@ pub use self::{
         SnapshotAndEpochIdRef, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,
     },
+    storage_db::KeyValueDbTrait,
     tests::new_state_manager_for_testing as new_storage_manager_for_testing,
 };
