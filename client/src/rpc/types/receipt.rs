@@ -76,8 +76,8 @@ impl Receipt {
         }
     }
 
-    pub fn set_state_root(&mut self, deferred_state_root: H256) {
-        self.state_root = deferred_state_root.into();
+    pub fn set_state_root(&mut self, state_root: H256) {
+        self.state_root = state_root.into();
     }
 
     pub fn set_epoch_number(&mut self, epoch_number: Option<u64>) {
