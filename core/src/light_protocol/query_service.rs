@@ -442,7 +442,7 @@ impl QueryService {
                 let mut epochs = BTreeSet::new();
 
                 for hash in &hashes {
-                    match self.consensus.get_epoch_number_from_hash(&hash) {
+                    match self.consensus.get_block_epoch_number(&hash) {
                         Some(epoch) => epochs.insert(epoch),
                         None => {
                             return Err(FilterError::UnknownBlock {
