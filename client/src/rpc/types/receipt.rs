@@ -21,7 +21,7 @@ pub struct Receipt {
     /// Block hash.
     pub block_hash: H256,
     /// epoch number where this transaction was in.
-    pub epoch_number: Option<U256>,
+    pub epoch_number: Option<u64>,
     /// address of the sender.
     pub from: Address,
     /// address of the receiver, null when it's a contract creation
@@ -80,7 +80,7 @@ impl Receipt {
         self.state_root = deferred_state_root.into();
     }
 
-    pub fn set_epoch_number(&mut self, epoch_number: Option<U256>) {
+    pub fn set_epoch_number(&mut self, epoch_number: Option<u64>) {
         self.epoch_number = epoch_number.into();
     }
 }
