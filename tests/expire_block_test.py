@@ -34,12 +34,12 @@ class ExpireBlockTest(ConfluxTestFramework):
     def test_recover_expire_block(self):
         node = self.nodes[1]
 
-        blocks = [node.getbestblockhash()]
+        blocks = [node.best_block_hash()]
         for i in range(400):
             new_hash = node.generatefixedblock(blocks[-1], [], 0, False)
             blocks.append(new_hash)
             self.log.info("generate block={}".format(new_hash))
-        wait_until(lambda: node.getbestblockhash() == new_hash)
+        wait_until(lambda: node.best_block_hash() == new_hash)
         out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51, referee_hashes=[bytes.fromhex(blocks[400][2:])])
         self.send_msg(node, NewBlock(block=out_block))
         time.sleep(3)
@@ -55,20 +55,20 @@ class ExpireBlockTest(ConfluxTestFramework):
             blocks.append(new_block)
         for i in range(1, 6):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[i].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[i].hash_hex())
         for i in range(7, 9):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[5].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[5].hash_hex())
         time.sleep(3)
         node.expireblockgc(2)
         for i in range(7, 9):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[5].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[5].hash_hex())
         self.send_msg(node, NewBlock(block=blocks[6]))
-        wait_until(lambda: node.getbestblockhash() == blocks[8].hash_hex())
+        wait_until(lambda: node.best_block_hash() == blocks[8].hash_hex())
         for i in range(9, 11):
             self.send_msg(node, NewBlock(block=blocks[i]))
-            wait_until(lambda: node.getbestblockhash() == blocks[i].hash_hex())
+            wait_until(lambda: node.best_block_hash() == blocks[i].hash_hex())
 
 if __name__ == "__main__":
     ExpireBlockTest().main()

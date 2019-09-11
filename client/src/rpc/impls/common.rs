@@ -12,7 +12,10 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use parking_lot::{Condvar, Mutex};
 
 use cfx_types::H256;
-use cfxcore::{PeerInfo, SharedConsensusGraph, SharedTransactionPool};
+use cfxcore::{
+    state_exposer::SharedStateExposer, PeerInfo, SharedConsensusGraph,
+    SharedTransactionPool,
+};
 use primitives::{Action, SignedTransaction};
 
 use network::{
@@ -55,12 +58,14 @@ pub struct RpcImpl {
     consensus: SharedConsensusGraph,
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
+    state_exposer: SharedStateExposer,
 }
 
 impl RpcImpl {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
+        state_exposer: SharedStateExposer,
     ) -> Self
     {
         RpcImpl {
@@ -68,6 +73,7 @@ impl RpcImpl {
             consensus,
             network,
             tx_pool,
+            state_exposer,
         }
     }
 }
@@ -76,7 +82,12 @@ impl RpcImpl {
 impl RpcImpl {
     pub fn best_block_hash(&self) -> RpcResult<RpcH256> {
         info!("RPC Request: cfx_getBestBlockHash()");
-        Ok(self.consensus.best_block_hash().into())
+        Ok(self
+            .state_exposer
+            .read()
+            .consensus_graph
+            .best_block_hash
+            .into())
     }
 
     pub fn gas_price(&self) -> RpcResult<RpcU256> {
@@ -261,11 +272,6 @@ impl RpcImpl {
             Ok(_) => Ok(()),
             Err(_) => Err(RpcError::internal_error()),
         }
-    }
-
-    pub fn get_best_block_hash(&self) -> RpcResult<H256> {
-        info!("RPC Request: get_best_block_hash()");
-        Ok(self.consensus.best_block_hash())
     }
 
     pub fn get_block_count(&self) -> RpcResult<u64> {

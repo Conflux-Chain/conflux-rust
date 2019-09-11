@@ -57,6 +57,7 @@ pub mod machine;
 pub mod pow;
 pub(crate) mod snapshot;
 pub mod state;
+pub mod state_exposer;
 pub mod statedb;
 pub mod statistics;
 pub mod storage;

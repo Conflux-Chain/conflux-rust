@@ -16,12 +16,12 @@ class ExampleTest(ConfluxTestFramework):
 
     def run_test(self):
         time.sleep(7)
-        genesis = self.nodes[0].getbestblockhash()
+        genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
         self.nodes[0].generate(1, 0)
         assert (self.nodes[0].getblockcount() == 2)
-        besthash = self.nodes[0].getbestblockhash()
+        besthash = self.nodes[0].best_block_hash()
 
         self.nodes[1].generate(2, 0)
         assert (self.nodes[1].getblockcount() == 3)
