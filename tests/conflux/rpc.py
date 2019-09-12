@@ -245,6 +245,9 @@ class RpcClient:
     def get_receipt(self, tx_hash: str) -> dict:
         return self.node.gettransactionreceipt(tx_hash)
 
+    def get_transaction_receipt(self, tx_hash: str) -> dict:
+        return self.node.cfx_getTransactionReceipt(tx_hash)
+
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
         return (status["deferred"], status["ready"])

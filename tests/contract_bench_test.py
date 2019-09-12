@@ -137,6 +137,7 @@ class HTLCTest(SmartContractBenchBase):
         # deploy contract
         data = contract.constructor().buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
+        tx_hash = receipt['transactionHash']
         contractAddr = Web3.toChecksumAddress(contractAddr)
         self.tx_conf["to"] = contractAddr
         logs = self.rpc.get_logs(self.filter)
@@ -195,6 +196,8 @@ class HTLCTest(SmartContractBenchBase):
         assert_equal(int(res[5], 0), 1)
         assert_equal(int(res[6], 0), 0)
         assert_equal(res[7], self.solution)
+        
+        receipt = self.rpc.get_transaction_receipt(tx_hash)
     
     def testPayContract(self):
         CONTRACT_PATH = "contracts/pay_bytecode.dat"
@@ -233,6 +236,7 @@ class HTLCTest(SmartContractBenchBase):
         bc = self.rpc.get_balance(contractAddr)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(bc, 0)
+
         
 
     def run_test(self):
@@ -250,7 +254,6 @@ class HTLCTest(SmartContractBenchBase):
         self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
         result = self.rpc.get_logs(self.filter)
         assert_equal(result, [])
-
         self.testEventContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testBallotContract()
@@ -269,7 +272,7 @@ class HTLCTest(SmartContractBenchBase):
     def deploy_contract(self, sender, priv_key, data_hex):
         tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc.get_receipt(tx.hash_hex())
+        receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
@@ -277,7 +280,7 @@ class HTLCTest(SmartContractBenchBase):
     def call_contract(self, sender, priv_key, contract, data_hex, value=0):
         tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, value=value)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc.get_receipt(tx.hash_hex())
+        receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         return receipt
 
 if __name__ == "__main__":

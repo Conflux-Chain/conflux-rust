@@ -567,6 +567,28 @@ impl ConsensusGraph {
         }
     }
 
+    pub fn get_state_root_by_pivot_height(
+        &self, pivot_height: u64,
+    ) -> Option<H256> {
+        let inner = self.inner.read();
+        let height = pivot_height + DEFERRED_STATE_EPOCH_COUNT as u64;
+        let pivot_index = match height {
+            h if h < inner.get_cur_era_genesis_height() => return None,
+            h => inner.height_to_pivot_index(h),
+        };
+        if pivot_index < inner.pivot_chain.len() {
+            let pivot_hash = &inner.arena[inner.pivot_chain[pivot_index]].hash;
+            return match self
+                .data_man
+                .consensus_graph_execution_info_from_db(pivot_hash)
+            {
+                Some(info) => Some(info.original_deferred_state_root),
+                None => None,
+            };
+        }
+        None
+    }
+
     pub fn transaction_count(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {

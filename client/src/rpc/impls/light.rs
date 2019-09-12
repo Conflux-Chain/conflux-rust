@@ -141,6 +141,14 @@ impl RpcImpl {
 
         Ok(Some(RpcTransaction::from_signed(&tx, None)))
     }
+
+    fn get_transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> RpcResult<Option<RpcReceipt>> {
+        let hash: H256 = tx_hash.into();
+        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        unimplemented!()
+    }
 }
 
 // macro for reducing boilerplate for unsupported methods
@@ -190,6 +198,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn send_usable_genesis_accounts(& self,raw_addresses:Bytes, raw_secrets:Bytes) ->RpcResult<Bytes>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
+            fn get_transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
     }
 }

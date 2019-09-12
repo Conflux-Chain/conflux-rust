@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{H256, U256};
-use cfx_types::Address;
+use crate::rpc::types::{Log, H256, U256};
+use cfx_types::{Address, Bloom};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::Receipt as PrimitiveReceipt, transaction::Action,
@@ -14,16 +14,31 @@ use serde_derive::Serialize;
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
+    /// Transaction hash.
+    pub transaction_hash: H256,
+    /// Transaction index within the block.
+    pub index: usize,
+    /// Block hash.
+    pub block_hash: H256,
+    /// epoch number where this transaction was in.
+    pub epoch_number: Option<u64>,
+    /// address of the sender.
+    pub from: Address,
+    /// address of the receiver, null when it's a contract creation
+    /// transaction.
+    pub to: Option<Address>,
     /// The total gas used in the block following execution of the transaction.
     pub gas_used: U256,
-    /// Transaction outcome.
-    pub outcome_status: u8,
-    /// Block hash
-    pub block_hash: H256,
-    /// Transaction index within the block
-    pub index: usize,
     /// Address of contracts created during execution of transaction.
     pub contract_created: Option<Address>,
+    /// Array of log objects, which this transaction generated.
+    pub logs: Vec<Log>,
+    /// Bloom filter for light clients to quickly retrieve related logs.
+    pub logs_bloom: Bloom,
+    /// state root.
+    pub state_root: H256,
+    /// Transaction outcome.
+    pub outcome_status: u8,
 }
 
 impl Receipt {
@@ -43,11 +58,29 @@ impl Receipt {
             address = Some(created_address);
         }
         Receipt {
-            gas_used: receipt.gas_used.into(),
-            outcome_status: receipt.outcome_status,
+            transaction_hash: transaction.hash.into(),
+            index: transaction_address.index.into(),
             block_hash: transaction_address.block_hash.into(),
-            index: transaction_address.index,
-            contract_created: address,
+            gas_used: receipt.gas_used.into(),
+            from: transaction.sender.into(),
+            to: match transaction.action {
+                Action::Create => None,
+                Action::Call(ref address) => Some(address.clone().into()),
+            },
+            outcome_status: receipt.outcome_status.into(),
+            contract_created: address.into(),
+            logs: receipt.logs.iter().cloned().map(Log::from).collect(),
+            logs_bloom: receipt.log_bloom.into(),
+            state_root: Default::default(),
+            epoch_number: None,
         }
+    }
+
+    pub fn set_state_root(&mut self, state_root: H256) {
+        self.state_root = state_root.into();
+    }
+
+    pub fn set_epoch_number(&mut self, epoch_number: Option<u64>) {
+        self.epoch_number = epoch_number.into();
     }
 }
