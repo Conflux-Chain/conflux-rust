@@ -588,7 +588,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{io::*, throttling::THROTTLING_SERVICE};
+    use crate::io::*;
     use mio::Ready;
     use std::{
         cmp,
