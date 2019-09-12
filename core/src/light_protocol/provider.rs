@@ -323,7 +323,12 @@ impl Provider {
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND)
-            .filter_map(|h| self.graph.block_header_by_hash(&h))
+            .filter_map(|h| {
+                self.graph
+                    .data_man
+                    .block_header_by_hash(&h)
+                    .map(|header_arc| header_arc.as_ref().clone())
+            })
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetBlockHeadersResponse {
