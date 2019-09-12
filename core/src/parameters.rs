@@ -196,6 +196,9 @@ pub mod light {
     /// there's always plenty of items in flight. This way, we can reduce idle
     /// time when we're waiting to recveive an item.
     pub const LOG_FILTERING_LOOKAHEAD: usize = 100;
+
+    /// Items not accessed for this amount of time are removed from the cache.
+    pub const CACHE_TIMEOUT_SEC: u64 = 5 * 60;
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;
