@@ -162,58 +162,58 @@ impl StratumImpl {
         trace!(target: "stratum", "Subscription request from {:?}", meta.addr());
 
         Ok(match self.dispatcher.initial() {
-			Some(initial) => match jsonrpc_core::Value::from_str(&initial) {
-				Ok(val) => Ok(val),
-				Err(e) => {
-					warn!(target: "stratum", "Invalid payload: '{}' ({:?})", &initial, e);
-					to_value(&[0u8; 0])
-				},
-			},
-			None => to_value(&[0u8; 0]),
-		}.expect("Empty slices are serializable; qed"))
+            Some(initial) => match jsonrpc_core::Value::from_str(&initial) {
+                Ok(val) => Ok(val),
+                Err(e) => {
+                    warn!(target: "stratum", "Invalid payload: '{}' ({:?})", &initial, e);
+                    to_value(&[0u8; 0])
+                },
+            },
+            None => to_value(&[0u8; 0]),
+        }.expect("Empty slices are serializable; qed"))
     }
 
     /// rpc method `mining.authorize`
     fn authorize(&self, params: Params, meta: SocketMetadata) -> RpcResult {
         params.parse::<(String, String)>().map(|(worker_id, secret)|{
-			if let Some(valid_secret) = self.secret {
-				let hash = keccak(secret);
-				if hash != valid_secret {
-					return to_value(&false);
-				}
-			}
-			trace!(target: "stratum", "New worker #{} registered", worker_id);
-			self.workers.write().insert(meta.addr().clone(), worker_id);
-			to_value(true)
-		}).map(|v| v.expect("Only true/false is returned and it's always serializable; qed"))
+            if let Some(valid_secret) = self.secret {
+                let hash = keccak(secret);
+                if hash != valid_secret {
+                    return to_value(&false);
+                }
+            }
+            trace!(target: "stratum", "New worker #{} registered", worker_id);
+            self.workers.write().insert(meta.addr().clone(), worker_id);
+            to_value(true)
+        }).map(|v| v.expect("Only true/false is returned and it's always serializable; qed"))
     }
 
     /// rpc method `mining.submit`
     fn submit(&self, params: Params, meta: SocketMetadata) -> RpcResult {
         Ok(match params {
-			Params::Array(vals) => {
-				// first two elements are service messages (worker_id & job_id)
-				match self.dispatcher.submit(vals.iter().skip(2)
-					.filter_map(|val| match *val {
-						Value::String(ref s) => Some(s.to_owned()),
-						_ => None
-					})
-					.collect::<Vec<String>>()) {
-						Ok(()) => {
-							self.update_peers(&meta.tcp_dispatcher.expect("tcp_dispatcher is always initialized; qed"));
-							to_value(true)
-						},
-						Err(submit_err) => {
-							warn!("Error while submitting share: {:?}", submit_err);
-							to_value(false)
-						}
-					}
-			},
-			_ => {
-				trace!(target: "stratum", "Invalid submit work format {:?}", params);
-				to_value(false)
-			}
-		}.expect("Only true/false is returned and it's always serializable; qed"))
+            Params::Array(vals) => {
+                // first two elements are service messages (worker_id & job_id)
+                match self.dispatcher.submit(vals.iter().skip(2)
+                    .filter_map(|val| match *val {
+                        Value::String(ref s) => Some(s.to_owned()),
+                        _ => None
+                    })
+                    .collect::<Vec<String>>()) {
+                        Ok(()) => {
+                            self.update_peers(&meta.tcp_dispatcher.expect("tcp_dispatcher is always initialized; qed"));
+                            to_value(true)
+                        },
+                        Err(submit_err) => {
+                            warn!("Error while submitting share: {:?}", submit_err);
+                            to_value(false)
+                        }
+                    }
+            },
+            _ => {
+                trace!(target: "stratum", "Invalid submit work format {:?}", params);
+                to_value(false)
+            }
+        }.expect("Only true/false is returned and it's always serializable; qed"))
     }
 
     /// Helper method
@@ -470,9 +470,9 @@ mod tests {
         .expect("There should be no error starting stratum");
 
         let mut auth_request =
-			r#"{"jsonrpc": "2.0", "method": "mining.authorize", "params": ["miner1", ""], "id": 1}"#
-			.as_bytes()
-			.to_vec();
+            r#"{"jsonrpc": "2.0", "method": "mining.authorize", "params": ["miner1", ""], "id": 1}"#
+            .as_bytes()
+            .to_vec();
         auth_request.extend(b"\n");
 
         let auth_response = "{\"jsonrpc\":\"2.0\",\"result\":true,\"id\":1}\n";
@@ -482,35 +482,35 @@ mod tests {
         let read_buf0 = vec![0u8; auth_response.len()];
         let read_buf1 = Vec::with_capacity(2048);
         let stream = TcpStream::connect(&addr)
-			.and_then(move |stream| {
-				io::write_all(stream, auth_request)
-			})
-			.and_then(|(stream, _)| {
-				io::read_exact(stream, read_buf0)
-			})
-			.map_err(|err| panic!("{:?}", err))
-			.and_then(move |(stream, read_buf0)| {
-				assert_eq!(String::from_utf8(read_buf0).unwrap(), auth_response);
-				trace!(target: "stratum", "Received authorization confirmation");
-				Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(100))
-			})
-			.map_err(|err: timeout::Error<()>| panic!("Timeout: {:?}", err))
-			.and_then(move |stream| {
-				trace!(target: "stratum", "Pusing work to peers");
-				stratum.push_work_all(r#"{ "00040008", "100500" }"#.to_owned())
-					.expect("Pushing work should produce no errors");
-				Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(100))
-			})
-			.map_err(|err: timeout::Error<()>| panic!("Timeout: {:?}", err))
-			.and_then(|stream| {
-				trace!(target: "stratum", "Ready to read work from server");
-				stream.shutdown(Shutdown::Write).unwrap();
-				io::read_to_end(stream, read_buf1)
-			})
-			.and_then(|(_, read_buf1)| {
-				trace!(target: "stratum", "Received work from server");
-				future::ok(read_buf1)
-			});
+            .and_then(move |stream| {
+                io::write_all(stream, auth_request)
+            })
+            .and_then(|(stream, _)| {
+                io::read_exact(stream, read_buf0)
+            })
+            .map_err(|err| panic!("{:?}", err))
+            .and_then(move |(stream, read_buf0)| {
+                assert_eq!(String::from_utf8(read_buf0).unwrap(), auth_response);
+                trace!(target: "stratum", "Received authorization confirmation");
+                Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(100))
+            })
+            .map_err(|err: timeout::Error<()>| panic!("Timeout: {:?}", err))
+            .and_then(move |stream| {
+                trace!(target: "stratum", "Pusing work to peers");
+                stratum.push_work_all(r#"{ "00040008", "100500" }"#.to_owned())
+                    .expect("Pushing work should produce no errors");
+                Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(100))
+            })
+            .map_err(|err: timeout::Error<()>| panic!("Timeout: {:?}", err))
+            .and_then(|stream| {
+                trace!(target: "stratum", "Ready to read work from server");
+                stream.shutdown(Shutdown::Write).unwrap();
+                io::read_to_end(stream, read_buf1)
+            })
+            .and_then(|(_, read_buf1)| {
+                trace!(target: "stratum", "Received work from server");
+                future::ok(read_buf1)
+            });
         let response = String::from_utf8(
             runtime
                 .block_on(stream)
@@ -519,7 +519,7 @@ mod tests {
         .expect("Response should be utf-8");
 
         assert_eq!(
-			"{ \"id\": 17, \"method\": \"mining.notify\", \"params\": { \"00040008\", \"100500\" } }\n",
-			response);
+            "{ \"id\": 17, \"method\": \"mining.notify\", \"params\": { \"00040008\", \"100500\" } }\n",
+            response);
     }
 }
