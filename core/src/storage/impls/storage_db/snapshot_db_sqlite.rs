@@ -19,12 +19,14 @@ lazy_static! {
             &["value"],
             &["BLOB"],
             SnapshotDbSqlite::SNAPSHOT_KV_TABLE_NAME,
+            false,
         )
         .unwrap();
         let mpt_statements = KvdbSqliteStatements::make_statements(
             &["node_rlp", "subtree_kv_rlp_size"],
             &["BLOB", "INTEGER"],
             SnapshotDbSqlite::SNAPSHOT_MPT_TABLE_NAME,
+            false,
         )
         .unwrap();
 
@@ -94,15 +96,15 @@ impl KeyValueDbTypes for SnapshotDbSqlite {
 /// Automatically implement KeyValueDbTraitRead with the same code of
 /// KvdbSqlite.
 impl ReadImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentitive = KvdbSqlite<Box<[u8]>>;
+    type FamilyRepresentative = KvdbSqlite<Box<[u8]>>;
 }
 
 impl OwnedReadImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentitive = KvdbSqlite<Box<[u8]>>;
+    type FamilyRepresentative = KvdbSqlite<Box<[u8]>>;
 }
 
 impl SingleWriterImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentitive = KvdbSqlite<Box<[u8]>>;
+    type FamilyRepresentative = KvdbSqlite<Box<[u8]>>;
 }
 
 impl KeyValueDbToOwnedReadTrait for SnapshotDbSqlite {
@@ -156,13 +158,19 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
             snapshot_db
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.create_table,
+                    &SNAPSHOT_DB_STATEMENTS
+                        .kvdb_statements
+                        .stmts_main_table
+                        .create_table,
                     &[&&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
             snapshot_db
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.mpt_statements.stmts.create_table,
+                    &SNAPSHOT_DB_STATEMENTS
+                        .mpt_statements
+                        .stmts_main_table
+                        .create_table,
                     &[&&Self::SNAPSHOT_MPT_TABLE_NAME as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
@@ -314,7 +322,10 @@ impl SnapshotDbSqlite {
             .finish_ignore_rows()?;
         sqlite
             .execute(
-                &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.create_table,
+                &SNAPSHOT_DB_STATEMENTS
+                    .kvdb_statements
+                    .stmts_main_table
+                    .create_table,
                 &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
@@ -329,7 +340,10 @@ impl SnapshotDbSqlite {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
-                SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.drop_table,
+                SNAPSHOT_DB_STATEMENTS
+                    .kvdb_statements
+                    .stmts_main_table
+                    .drop_table,
                 &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
             )?
             .finish_ignore_rows()?;
@@ -365,7 +379,10 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .as_mut()
                 .unwrap()
                 .execute(
-                    &SNAPSHOT_DB_STATEMENTS.kvdb_statements.stmts.put,
+                    &SNAPSHOT_DB_STATEMENTS
+                        .kvdb_statements
+                        .stmts_main_table
+                        .put,
                     &[
                         &&SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME
                             as SqlBindableRef,

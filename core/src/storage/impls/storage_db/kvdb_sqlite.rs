@@ -25,11 +25,13 @@ pub struct KvdbSqliteBorrowMutReadOnly<'db, ValueType> {
 }
 
 pub struct KvdbSqliteStatements {
-    pub stmts: KvdbSqliteStatementsForTable,
-    pub stmts_number_key: KvdbSqliteStatementsForTable,
+    pub stmts_main_table: KvdbSqliteStatementsPerTable,
+    /// When numbered key is turned off, the bytes_key_table is the same as the
+    /// main table.
+    pub stmts_bytes_key_table: KvdbSqliteStatementsPerTable,
 }
 
-pub struct KvdbSqliteStatementsForTable {
+pub struct KvdbSqliteStatementsPerTable {
     pub create_table: String,
     pub drop_table: &'static str,
     pub get: String,
@@ -59,33 +61,47 @@ impl KvdbSqliteStatements {
 
     pub fn make_statements(
         value_column_names: &[&str], value_column_types: &[&str],
-        table_name: &str,
+        main_table_name: &str, with_number_key_table: bool,
     ) -> Result<Self>
     {
-        let number_table_name = table_name.to_string()
-            + KvdbSqliteStatements::BYTES_KEY_TABLE_SUFFIX;
+        let bytes_key_table_name;
+        let bytes_key_table;
+        if with_number_key_table {
+            bytes_key_table = main_table_name.to_string()
+                + KvdbSqliteStatements::BYTES_KEY_TABLE_SUFFIX;
+            bytes_key_table_name = bytes_key_table.as_str();
+        } else {
+            bytes_key_table_name = main_table_name;
+        }
         Ok(Self {
-            stmts: Self::make_table_statements(
-                value_column_names,
-                value_column_types,
-                table_name,
-                Self::CREATE_TABLE_BLOB_KV_STATEMENT_TMPL,
-            )?,
-            stmts_number_key: {
-                Self::make_table_statements(
+            stmts_main_table:
+                KvdbSqliteStatementsPerTable::make_table_statements(
                     value_column_names,
                     value_column_types,
-                    number_table_name.as_str(),
-                    Self::CREATE_TABLE_NUMBER_KV_STATEMENT_TMPL,
+                    main_table_name,
+                    if with_number_key_table {
+                        Self::CREATE_TABLE_NUMBER_KV_STATEMENT_TMPL
+                    } else {
+                        Self::CREATE_TABLE_BLOB_KV_STATEMENT_TMPL
+                    },
+                )?,
+            stmts_bytes_key_table: {
+                KvdbSqliteStatementsPerTable::make_table_statements(
+                    value_column_names,
+                    value_column_types,
+                    bytes_key_table_name,
+                    Self::CREATE_TABLE_BLOB_KV_STATEMENT_TMPL,
                 )?
             },
         })
     }
+}
 
+impl KvdbSqliteStatementsPerTable {
     pub fn make_table_statements(
         value_column_names: &[&str], value_column_types: &[&str],
         table_name: &str, create_table_sql: &str,
-    ) -> Result<KvdbSqliteStatementsForTable>
+    ) -> Result<Self>
     {
         let value_columns_def = value_column_names
             .iter()
@@ -107,7 +123,7 @@ impl KvdbSqliteStatements {
             .insert("value_columns_to_bind".to_string(), value_columns_to_bind);
         strfmt_vars.insert("table_name".to_string(), table_name.to_string());
 
-        Ok(KvdbSqliteStatementsForTable {
+        Ok(Self {
             create_table: strfmt(create_table_sql, &strfmt_vars)?,
             drop_table: KvdbSqliteStatements::DROP_TABLE_STATEMENT,
             get: strfmt(
@@ -130,7 +146,7 @@ impl KvdbSqliteStatements {
 impl<ValueType> KvdbSqlite<ValueType> {
     pub fn new(
         connection: Option<SqliteConnection>, table_name: &str,
-        _with_number_key_table: bool, value_column_names: &[&str],
+        with_number_key_table: bool, value_column_names: &[&str],
         value_column_types: &[&str],
     ) -> Result<Self>
     {
@@ -140,6 +156,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
                 value_column_names,
                 value_column_types,
                 table_name,
+                with_number_key_table,
             )?),
             __marker_value: Default::default(),
         })
@@ -171,21 +188,27 @@ impl<ValueType> KvdbSqlite<ValueType> {
             value_column_names,
             value_column_types,
             table_name,
+            with_number_key_table,
         )?);
 
-        // Table for number key.
+        // Create the extra table for bytes key when the main table has number
+        // key.
         if with_number_key_table {
             connection
                 .execute(
-                    &statements.stmts_number_key.create_table,
+                    &statements.stmts_bytes_key_table.create_table,
                     SQLITE_NO_PARAM,
                 )?
                 .finish_ignore_rows()?;
         }
 
-        // Table for string key.
+        // Main table. When with_number_key_table is true it's the number key
+        // table. Otherwise it's the bytes key table.
         connection
-            .execute(&statements.stmts.create_table, SQLITE_NO_PARAM)?
+            .execute(
+                &statements.stmts_main_table.create_table,
+                SQLITE_NO_PARAM,
+            )?
             .finish_ignore_rows()?;;
 
         Ok(Self {
@@ -449,65 +472,10 @@ impl<
             None => Ok(MaybeRows::default().map(&mut self.1)),
             Some(conn) => Ok(conn
                 .execute(
-                    &statements.stmts.range_excl_select_statement,
+                    &statements.stmts_main_table.range_excl_select_statement,
                     &[&&lower_bound_excl as SqlBindableRef, &&upper_bound_excl],
                 )?
                 .map(&mut self.1)),
-        }
-    }
-}
-
-/// FIXME: These are just ad-hoc fix. Might need to impl this in a better way.
-impl KeyValueDbTrait for KvdbSqlite<Box<[u8]>> {
-    fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>> {
-        let (connection, statements) = self.destructure();
-        match connection {
-            None => Ok(None),
-            Some(conn) => {
-                // TODO try clone connection
-                let mut db = conn.lock_db();
-                let mut statement_cache = conn.lock_statement_cache();
-
-                let statement = SqliteConnection::prepare(
-                    &mut db,
-                    &mut statement_cache,
-                    &statements.stmts.delete,
-                )?;
-                SqliteConnection::execute_locked(
-                    statement,
-                    &[&&key as SqlBindableRef],
-                )?
-                .finish_ignore_rows()?;
-                Ok(None)
-            }
-        }
-    }
-
-    fn put(
-        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
-    ) -> Result<Option<Option<Self::ValueType>>> {
-        let (connection, statements) = self.destructure();
-        match connection {
-            None => Ok(None),
-            Some(conn) => {
-                // TODO try clone connection
-                let mut db = conn.lock_db();
-                let mut statement_cache = conn.lock_statement_cache();
-
-                let statement = SqliteConnection::prepare(
-                    &mut db,
-                    &mut statement_cache,
-                    &statements.stmts.put,
-                )?;
-
-                let mut bind_list = Vec::<SqlBindableBox>::new();
-                bind_list.push(Box::new(&key));
-                let mut value_bind_list = value.make_bind_list();
-                bind_list.append(&mut value_bind_list);
-                SqliteConnection::execute_locked(statement, &bind_list)?
-                    .finish_ignore_rows()?;
-                Ok(None)
-            }
         }
     }
 }
@@ -520,13 +488,11 @@ impl<
 }
 
 impl<
-        T: ReadImplFamily<FamilyRepresentitive = KvdbSqlite<ValueType>>,
+        T: ReadImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
+            + KvdbSqliteDestructureTrait
+            + KeyValueDbTypes<ValueType = ValueType>,
         ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > ReadImplByFamily<KvdbSqlite<ValueType>> for T
-where
-    // FIXME: merge where into +.
-    T: KvdbSqliteDestructureTrait,
-    T: KeyValueDbTypes<ValueType = ValueType>,
 {
     fn get_impl(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         let (connection, statements) = self.destructure();
@@ -540,7 +506,7 @@ where
                 let statement = SqliteConnection::prepare(
                     &mut db,
                     &mut statement_cache,
-                    &statements.stmts.get,
+                    &statements.stmts_bytes_key_table.get,
                 )?;
                 let mut maybe_rows = SqliteConnection::execute_locked(
                     statement,
@@ -565,7 +531,7 @@ where
                 let statement = SqliteConnection::prepare(
                     &mut db,
                     &mut statement_cache,
-                    &statements.stmts_number_key.get,
+                    &statements.stmts_main_table.get,
                 )?;
                 let mut maybe_rows = SqliteConnection::execute_locked(
                     statement,
@@ -579,19 +545,21 @@ where
 }
 
 impl<
-        T: OwnedReadImplFamily<FamilyRepresentitive = KvdbSqlite<ValueType>>,
+        T: OwnedReadImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
+            + KvdbSqliteDestructureTrait
+            + KeyValueDbTypes<ValueType = ValueType>,
         ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > OwnedReadImplByFamily<KvdbSqlite<ValueType>> for T
-where
-    T: KvdbSqliteDestructureTrait,
-    T: KeyValueDbTypes<ValueType = ValueType>,
 {
     fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         let (connection, statements) = self.destructure_mut();
         match connection {
             None => Ok(None),
             Some(conn) => Ok(conn
-                .execute(&statements.stmts.get, &[&&key as SqlBindableRef])?
+                .execute(
+                    &statements.stmts_bytes_key_table.get,
+                    &[&&key as SqlBindableRef],
+                )?
                 .map(|row| KvdbSqlite::<ValueType>::from_row(row))
                 .expect_one_row()?
                 .transpose()?),
@@ -606,7 +574,7 @@ where
             None => Ok(None),
             Some(conn) => Ok(conn
                 .execute(
-                    &statements.stmts_number_key.get,
+                    &statements.stmts_main_table.get,
                     &[&key as SqlBindableRef],
                 )?
                 .map(|row| KvdbSqlite::<ValueType>::from_row(row))
@@ -617,16 +585,15 @@ where
 }
 
 impl<
-        T: SingleWriterImplFamily<FamilyRepresentitive = KvdbSqlite<ValueType>>,
+        T: SingleWriterImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
+            + KvdbSqliteDestructureTrait
+            + KeyValueDbTypes<ValueType = ValueType>,
         ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > SingleWriterImplByFamily<KvdbSqlite<ValueType>> for T
-where
-    T: KvdbSqliteDestructureTrait,
-    T: KeyValueDbTypes<ValueType = ValueType>,
-    ValueType::PutType: SqlBindableValue
+where ValueType::PutType: SqlBindableValue
         + BindValueAppendImpl<
             <ValueType::PutType as SqlBindableValue>::Kind,
-        >,
+        >
 {
     fn delete_impl(
         &mut self, key: &[u8],
@@ -636,7 +603,7 @@ where
             None => Err(Error::from(ErrorKind::DbNotExist)),
             Some(conn) => {
                 conn.execute(
-                    statements.stmts.delete,
+                    statements.stmts_bytes_key_table.delete,
                     &[&&key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;;
@@ -653,7 +620,7 @@ where
             None => Err(Error::from(ErrorKind::DbNotExist)),
             Some(conn) => {
                 conn.execute(
-                    statements.stmts_number_key.delete,
+                    statements.stmts_main_table.delete,
                     &[&key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;;
@@ -674,8 +641,11 @@ where
                 let mut value_bind_list = value.make_bind_list();
                 bind_list.append(&mut value_bind_list);
 
-                conn.execute(&statements.stmts.put, &bind_list)?
-                    .finish_ignore_rows()?;;
+                conn.execute(
+                    &statements.stmts_bytes_key_table.put,
+                    &bind_list,
+                )?
+                .finish_ignore_rows()?;;
                 Ok(None)
             }
         }
@@ -693,8 +663,127 @@ where
                 let mut value_bind_list = value.make_bind_list();
                 bind_list.append(&mut value_bind_list);
 
-                conn.execute(&statements.stmts_number_key.put, &bind_list)?
+                conn.execute(&statements.stmts_main_table.put, &bind_list)?
                     .finish_ignore_rows()?;;
+                Ok(None)
+            }
+        }
+    }
+}
+
+impl<
+        T: DbImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
+            + KvdbSqliteDestructureTrait
+            + KeyValueDbTypes<ValueType = ValueType>,
+        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > DbImplByFamily<KvdbSqlite<ValueType>> for T
+where ValueType::PutType: SqlBindableValue
+        + BindValueAppendImpl<
+            <ValueType::PutType as SqlBindableValue>::Kind,
+        >
+{
+    fn delete_impl(
+        &self, key: &[u8],
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        let (connection, statements) = self.destructure();
+        match connection {
+            None => Ok(None),
+            Some(conn) => {
+                let mut db = conn.lock_db();
+                let mut statement_cache = conn.lock_statement_cache();
+
+                let statement = SqliteConnection::prepare(
+                    &mut db,
+                    &mut statement_cache,
+                    &statements.stmts_bytes_key_table.delete,
+                )?;
+                SqliteConnection::execute_locked(
+                    statement,
+                    &[&&key as SqlBindableRef],
+                )?
+                .finish_ignore_rows()?;
+                Ok(None)
+            }
+        }
+    }
+
+    fn delete_with_number_key_impl(
+        &self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        let (connection, statements) = self.destructure();
+        match connection {
+            None => Ok(None),
+            Some(conn) => {
+                let mut db = conn.lock_db();
+                let mut statement_cache = conn.lock_statement_cache();
+
+                let statement = SqliteConnection::prepare(
+                    &mut db,
+                    &mut statement_cache,
+                    &statements.stmts_main_table.delete,
+                )?;
+                SqliteConnection::execute_locked(
+                    statement,
+                    &[&key as SqlBindableRef],
+                )?
+                .finish_ignore_rows()?;
+                Ok(None)
+            }
+        }
+    }
+
+    fn put_impl(
+        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        let (connection, statements) = self.destructure();
+        match connection {
+            None => Ok(None),
+            Some(conn) => {
+                let mut bind_list = Vec::<SqlBindableBox>::new();
+                bind_list.push(Box::new(&key));
+                let mut value_bind_list = value.make_bind_list();
+                bind_list.append(&mut value_bind_list);
+
+                let mut db = conn.lock_db();
+                let mut statement_cache = conn.lock_statement_cache();
+
+                let statement = SqliteConnection::prepare(
+                    &mut db,
+                    &mut statement_cache,
+                    &statements.stmts_bytes_key_table.put,
+                )?;
+
+                SqliteConnection::execute_locked(statement, &bind_list)?
+                    .finish_ignore_rows()?;
+                Ok(None)
+            }
+        }
+    }
+
+    fn put_with_number_key_impl(
+        &self, key: i64,
+        value: &<<Self as KeyValueDbTypes>::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>>
+    {
+        let (connection, statements) = self.destructure();
+        match connection {
+            None => Ok(None),
+            Some(conn) => {
+                let mut bind_list = Vec::<SqlBindableBox>::new();
+                bind_list.push(Box::new(key));
+                let mut value_bind_list = value.make_bind_list();
+                bind_list.append(&mut value_bind_list);
+
+                let mut db = conn.lock_db();
+                let mut statement_cache = conn.lock_statement_cache();
+
+                let statement = SqliteConnection::prepare(
+                    &mut db,
+                    &mut statement_cache,
+                    &statements.stmts_main_table.put,
+                )?;
+                SqliteConnection::execute_locked(statement, &bind_list)?
+                    .finish_ignore_rows()?;
                 Ok(None)
             }
         }
@@ -704,7 +793,7 @@ where
 // Section for marking automatic implmentation of KeyValueDbTraitOwnedRead, etc.
 
 impl<ValueType> OwnedReadImplFamily for KvdbSqlite<ValueType> {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<
@@ -715,17 +804,17 @@ where ValueType::PutType: SqlBindableValue
             <ValueType::PutType as SqlBindableValue>::Kind,
         >
 {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<ValueType> OwnedReadImplFamily for KvdbSqliteBorrowMut<'_, ValueType> {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<ValueType> OwnedReadImplFamily
     for KvdbSqliteBorrowMutReadOnly<'_, ValueType>
 {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<
@@ -747,11 +836,11 @@ impl<
         F,
     > OwnedReadImplFamily for ConnectionWithRowParser<T, F>
 {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<ValueType> SingleWriterImplFamily for KvdbSqlite<ValueType> {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<
@@ -762,11 +851,11 @@ where ValueType::PutType: SqlBindableValue
             <ValueType::PutType as SqlBindableValue>::Kind,
         >
 {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<ValueType> SingleWriterImplFamily for KvdbSqliteBorrowMut<'_, ValueType> {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<
@@ -777,11 +866,11 @@ impl<
         F,
     > SingleWriterImplFamily for ConnectionWithRowParser<T, F>
 {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<ValueType> ReadImplFamily for KvdbSqlite<ValueType> {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<
@@ -792,15 +881,15 @@ where ValueType::PutType: SqlBindableValue
             <ValueType::PutType as SqlBindableValue>::Kind,
         >
 {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<ValueType> ReadImplFamily for KvdbSqliteBorrowMut<'_, ValueType> {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<ValueType> ReadImplFamily for KvdbSqliteBorrowMutReadOnly<'_, ValueType> {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 impl<
@@ -811,7 +900,26 @@ impl<
         F,
     > ReadImplFamily for ConnectionWithRowParser<T, F>
 {
-    type FamilyRepresentitive = KvdbSqlite<ValueType>;
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
+}
+
+impl<ValueType> DbImplFamily for KvdbSqlite<ValueType> {
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
+}
+
+impl<
+        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > DbImplFamily for KvdbSqliteTransaction<ValueType>
+where ValueType::PutType: SqlBindableValue
+        + BindValueAppendImpl<
+            <ValueType::PutType as SqlBindableValue>::Kind,
+        >
+{
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
+}
+
+impl<ValueType> DbImplFamily for KvdbSqliteBorrowMut<'_, ValueType> {
+    type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
 
 pub trait KvdbSqliteDestructureTrait {

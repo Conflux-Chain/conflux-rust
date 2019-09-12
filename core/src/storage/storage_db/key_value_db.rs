@@ -186,9 +186,9 @@ where for<'a> &'a T: KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>
 /// c) For a db engine which is by default KeyValueDbTraitMultiReader,
 /// KeyValueDbTraitOwnedRead is naturally read without explicit locking.
 impl<
-        T: OwnedReadImplByFamily<<T as OwnedReadImplFamily>::FamilyRepresentitive>,
+        T: OwnedReadImplFamily
+            + OwnedReadImplByFamily<<T as OwnedReadImplFamily>::FamilyRepresentative>,
     > KeyValueDbTraitOwnedRead for T
-where T: OwnedReadImplFamily
 {
     fn get_mut(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         self.get_mut_impl(key)
@@ -202,7 +202,7 @@ where T: OwnedReadImplFamily
 }
 
 pub trait OwnedReadImplFamily {
-    type FamilyRepresentitive: ?Sized;
+    type FamilyRepresentative: ?Sized;
 }
 
 pub trait OwnedReadImplByFamily<FamilyRepresentative: ?Sized>:
@@ -215,14 +215,11 @@ pub trait OwnedReadImplByFamily<FamilyRepresentative: ?Sized>:
 }
 
 impl<
-        T: SingleWriterImplByFamily<
-            <T as SingleWriterImplFamily>::FamilyRepresentitive,
-        >,
+        T: SingleWriterImplFamily
+            + SingleWriterImplByFamily<
+                <T as SingleWriterImplFamily>::FamilyRepresentative,
+            > + KeyValueDbTraitOwnedRead,
     > KeyValueDbTraitSingleWriter for T
-where
-    T: SingleWriterImplFamily,
-    // KeyValueDbTraitSingleWriter must also be KeyValueDbTraitOwnedRead
-    T: KeyValueDbTraitOwnedRead,
 {
     fn delete(
         &mut self, key: &[u8],
@@ -250,7 +247,7 @@ where
 }
 
 pub trait SingleWriterImplFamily {
-    type FamilyRepresentitive: ?Sized;
+    type FamilyRepresentative: ?Sized;
 }
 
 pub trait SingleWriterImplByFamily<FamilyRepresentative: ?Sized>:
@@ -273,9 +270,10 @@ pub trait SingleWriterImplByFamily<FamilyRepresentative: ?Sized>:
     ) -> Result<Option<Option<Self::ValueType>>>;
 }
 
-impl<T: ReadImplByFamily<<T as ReadImplFamily>::FamilyRepresentitive>>
-    KeyValueDbTraitRead for T
-where T: ReadImplFamily
+impl<
+        T: ReadImplFamily
+            + ReadImplByFamily<<T as ReadImplFamily>::FamilyRepresentative>,
+    > KeyValueDbTraitRead for T
 {
     fn get(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
         self.get_impl(key)
@@ -287,7 +285,7 @@ where T: ReadImplFamily
 }
 
 pub trait ReadImplFamily {
-    type FamilyRepresentitive: ?Sized;
+    type FamilyRepresentative: ?Sized;
 }
 
 pub trait ReadImplByFamily<FamilyRepresentative: ?Sized>:
@@ -300,10 +298,65 @@ pub trait ReadImplByFamily<FamilyRepresentative: ?Sized>:
     ) -> Result<Option<Self::ValueType>>;
 }
 
+impl<
+        T: DbImplFamily
+            + DbImplByFamily<<T as DbImplFamily>::FamilyRepresentative>
+            + KeyValueDbTraitMultiReader
+            + Send
+            + Sync,
+    > KeyValueDbTrait for T
+{
+    fn delete(&self, key: &[u8]) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete_impl(key)
+    }
+
+    fn delete_with_number_key(
+        &self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.delete_with_number_key_impl(key)
+    }
+
+    fn put(
+        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.put_impl(key, value)
+    }
+
+    fn put_with_number_key(
+        &self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        self.put_with_number_key_impl(key, value)
+    }
+}
+
+pub trait DbImplFamily {
+    type FamilyRepresentative: ?Sized;
+}
+
+pub trait DbImplByFamily<FamilyRepresentative: ?Sized>:
+    KeyValueDbTypes
+{
+    fn delete_impl(
+        &self, key: &[u8],
+    ) -> Result<Option<Option<Self::ValueType>>>;
+
+    fn delete_with_number_key_impl(
+        &self, key: i64,
+    ) -> Result<Option<Option<Self::ValueType>>>;
+
+    fn put_impl(
+        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>>;
+
+    fn put_with_number_key_impl(
+        &self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+    ) -> Result<Option<Option<Self::ValueType>>>;
+}
+
 impl<ValueType: PutType> OwnedReadImplFamily
     for dyn KeyValueDbTraitMultiReader<ValueType = ValueType>
 {
-    type FamilyRepresentitive =
+    type FamilyRepresentative =
         dyn KeyValueDbTraitMultiReader<ValueType = ValueType>;
 }
 
@@ -340,7 +393,7 @@ macro_rules! mark_kvdb_multi_reader {
         impl KeyValueDbTraitMultiReader for $type {}
         // Family dispatching
         impl OwnedReadImplFamily for &$type {
-            type FamilyRepresentitive = dyn KeyValueDbTraitMultiReader<
+            type FamilyRepresentative = dyn KeyValueDbTraitMultiReader<
                 ValueType = <$type as KeyValueDbTypes>::ValueType,
             >;
         }
