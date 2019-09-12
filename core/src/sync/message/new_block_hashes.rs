@@ -19,12 +19,8 @@ impl Handleable for NewBlockHashes {
         debug!("on_new_block_hashes, msg={:?}", self);
 
         if ctx.manager.catch_up_mode() {
-            if let Ok(info) = ctx.manager.syn.get_peer_info(&ctx.peer) {
-                let mut info = info.write();
-                self.block_hashes.iter().for_each(|h| {
-                    info.latest_block_hashes.insert(*h);
-                });
-            }
+            // If a node is in catch-up mode, we just simple ignore new block
+            // hashes.
             return Ok(());
         }
 
