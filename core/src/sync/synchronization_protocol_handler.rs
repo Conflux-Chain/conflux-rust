@@ -251,6 +251,7 @@ pub struct ProtocolConfiguration {
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
     pub max_download_state_peers: usize,
+    pub test_mode: bool,
 }
 
 impl SynchronizationProtocolHandler {
