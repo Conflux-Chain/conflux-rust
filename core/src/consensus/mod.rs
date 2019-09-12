@@ -13,9 +13,10 @@ use super::consensus::consensus_inner::{
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
 use crate::{
-    block_data_manager::BlockDataManager, bytes::Bytes,pow::ProofOfWorkConfig, state::State,
-    statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
-    verification::VerificationConfig, vm_factory::VmFactory,
+    block_data_manager::BlockDataManager, bytes::Bytes, pow::ProofOfWorkConfig,
+    state::State, statistics::SharedStatistics,
+    transaction_pool::SharedTransactionPool, verification::VerificationConfig,
+    vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;

@@ -152,7 +152,7 @@ impl VerificationConfig {
         let mut block_size = 0;
         let mut block_gas_limit = U256::zero();
         for t in &block.transactions {
-            t.transaction.verify_basic()?;
+            t.transaction.verify_basic(self.eth_compatibility_mode)?;
             block_size += t.rlp_size();
             block_gas_limit += *t.gas_limit();
         }

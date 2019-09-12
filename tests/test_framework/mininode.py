@@ -77,7 +77,7 @@ class P2PConnection(asyncore.dispatcher):
         self.state = "closed"
         self.recvbuf = b""
         self.sendbuf = b""
-        assert False
+        # assert False
         try:
             self.close()
         except:

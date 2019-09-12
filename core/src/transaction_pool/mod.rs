@@ -163,9 +163,9 @@ impl TransactionPool {
 
         if self.verification_config.eth_compatibility_mode && failure.len() != 0
         {
-            for (_, msg) in failure.clone() {
+            for (tx_hash, msg) in failure.clone() {
                 if msg != String::from("Failed imported to deferred pool: Tx with same nonce already inserted, try to replace it with a higher gas price") {
-                    warn!("Failed insert tx due to: {}", msg);
+                    warn!("Failed insert tx {:?} due to: {:?}", tx_hash, msg);
                     // TODO(ypliu): will add a config to control if panic here
                     panic!(msg);
                 }
@@ -225,8 +225,11 @@ impl TransactionPool {
             }
         }
 
-        if let Err(e) = transaction.transaction.verify_basic() {
-            warn!("Transaction {:?} discarded due to not pass basic verification.", transaction.hash());
+        if let Err(e) = transaction
+            .transaction
+            .verify_basic(self.verification_config.eth_compatibility_mode)
+        {
+            debug!("Transaction {:?} discarded due to not pass basic verification.", transaction);
             return Err(format!("{:?}", e));
         }
 

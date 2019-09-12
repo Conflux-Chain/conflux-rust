@@ -412,8 +412,12 @@ impl TransactionWithSignature {
     }
 
     /// Verify basic signature params. Does not attempt sender recovery.
-    pub fn verify_basic(&self) -> Result<(), TransactionError> {
-        self.check_low_s()?;
+    pub fn verify_basic(
+        &self, eth_compatibility_mode: bool,
+    ) -> Result<(), TransactionError> {
+        if !eth_compatibility_mode {
+            self.check_low_s()?;
+        }
 
         // Disallow unsigned transactions
         if self.is_unsigned() {
