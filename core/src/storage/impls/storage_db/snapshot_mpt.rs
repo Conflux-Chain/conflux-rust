@@ -136,6 +136,8 @@ impl<
 where DbType:
         for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
 {
+    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
+
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
         self.db.borrow_mut().delete(&key)?;
