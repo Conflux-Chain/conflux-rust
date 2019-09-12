@@ -32,6 +32,10 @@ public_address="59.66.209.32:32323"
 #
 # mining_author="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
+# `use_stratum` controls whether the mining process goes through the
+# stratum protocol.
+# use_stratum=true
+
 # `jsonrpc_tcp_port` and `jsonrpc_http_port` are the ports for the node to
 # provide rpc service. If not set, the node will not start rpc services. By
 # default, the values are not set. What's provided here is the recommended value

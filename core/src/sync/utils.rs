@@ -130,7 +130,11 @@ pub fn initialize_synchronization_graph(
     let state_exposer = SharedStateExposer::new(StateExposer::new());
 
     let vm = VmFactory::new(1024 * 32);
-    let pow_config = ProofOfWorkConfig::new(true, Some(10));
+    let pow_config = ProofOfWorkConfig::new(
+        true,  /* test_mode */
+        false, /* use_stratum */
+        Some(10),
+    );
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"

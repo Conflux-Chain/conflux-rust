@@ -80,6 +80,7 @@ build_config! {
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
         (mining_author, (Option<String>), None)
+        (use_stratum, (bool), false)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
@@ -263,6 +264,7 @@ impl Configuration {
     pub fn pow_config(&self) -> ProofOfWorkConfig {
         ProofOfWorkConfig::new(
             self.raw_conf.test_mode,
+            self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
         )
     }
