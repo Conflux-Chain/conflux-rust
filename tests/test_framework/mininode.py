@@ -415,7 +415,7 @@ class P2PInterface(P2PConnection):
         if self.remote:
             ip = get_ip_address()
         endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
-        hello = Hello([Capability(self.protocol, self.protocol_version)], endpoint)
+        hello = Hello(1, [Capability(self.protocol, self.protocol_version)], endpoint)
 
         self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
         self.had_hello = True

@@ -309,6 +309,7 @@ impl NetworkService {
 type SharedSession = Arc<RwLock<Session>>;
 
 pub struct HostMetadata {
+    pub network_id: u64,
     /// Our private and public keys.
     pub keys: KeyPair,
     pub capabilities: RwLock<Vec<Capability>>,
@@ -501,6 +502,7 @@ impl NetworkServiceInner {
 
         let mut inner = NetworkServiceInner {
             metadata: HostMetadata {
+                network_id: config.id,
                 keys,
                 capabilities: RwLock::new(Vec::new()),
                 local_address: listen_address,

@@ -104,6 +104,7 @@ class NodeEndpoint(rlp.Serializable):
 
 class Hello(rlp.Serializable):
     fields = [
+        ("network_id", big_endian_int),
         ("capabilities", CountableList(Capability)),
         ("node_endpoint", NodeEndpoint)
     ]
