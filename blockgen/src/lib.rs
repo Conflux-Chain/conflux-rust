@@ -4,7 +4,13 @@
 
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_parameters::*, pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    block_parameters::*,
+    miner::{
+        stratum::{Options as StratumOption, Stratum},
+        work_notify::NotifyWork,
+    },
+    pow::*,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedSynchronizationGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
@@ -33,7 +39,7 @@ enum MiningState {
 
 /// The interface for a conflux block generator
 pub struct BlockGenerator {
-    pow_config: ProofOfWorkConfig,
+    pub pow_config: ProofOfWorkConfig,
     mining_author: Address,
     graph: SharedSynchronizationGraph,
     txpool: SharedTransactionPool,
@@ -42,6 +48,7 @@ pub struct BlockGenerator {
     sync: SharedSynchronizationService,
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
+    pub stratum: RwLock<Option<Stratum>>,
 }
 
 pub struct Worker {
@@ -51,8 +58,9 @@ pub struct Worker {
 
 impl Worker {
     pub fn new(
-        bg: Arc<BlockGenerator>, sender: mpsc::Sender<ProofOfWorkSolution>,
-        receiver: mpsc::Receiver<ProofOfWorkProblem>,
+        bg: Arc<BlockGenerator>,
+        solution_sender: mpsc::Sender<ProofOfWorkSolution>,
+        problem_receiver: mpsc::Receiver<ProofOfWorkProblem>,
     ) -> Self
     {
         let bg_handle = bg.clone();
@@ -70,7 +78,7 @@ impl Worker {
                     }
 
                     // check if there is a new problem
-                    let new_problem = receiver.try_recv();
+                    let new_problem = problem_receiver.try_recv();
                     if new_problem.is_ok() {
                         problem = Some(new_problem.unwrap());
                     }
@@ -93,7 +101,8 @@ impl Worker {
                             let hash = compute(nonce, &block_hash);
                             if hash < boundary {
                                 // problem solved
-                                match sender.send(ProofOfWorkSolution { nonce })
+                                match solution_sender
+                                    .send(ProofOfWorkSolution { nonce })
                                 {
                                     Ok(_) => {}
                                     Err(e) => {
@@ -136,6 +145,7 @@ impl BlockGenerator {
             sync,
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
+            stratum: RwLock::new(None),
         }
     }
 
@@ -150,10 +160,18 @@ impl BlockGenerator {
 
     /// Send new PoW problem to workers
     pub fn send_problem(bg: Arc<BlockGenerator>, problem: ProofOfWorkProblem) {
-        for item in bg.workers.lock().iter() {
-            item.1
-                .send(problem)
-                .expect("Failed to send the PoW problem.")
+        if bg.pow_config.use_stratum {
+            let stratum = bg.stratum.read();
+            stratum
+                .as_ref()
+                .unwrap()
+                .notify(problem.block_hash, problem.boundary);
+        } else {
+            for item in bg.workers.lock().iter() {
+                item.1
+                    .send(problem)
+                    .expect("Failed to send the PoW problem.")
+            }
         }
     }
 
@@ -614,16 +632,36 @@ impl BlockGenerator {
     pub fn start_new_worker(
         num_worker: u32, bg: Arc<BlockGenerator>,
     ) -> mpsc::Receiver<ProofOfWorkSolution> {
-        let (tx, rx) = mpsc::channel();
+        let (solution_sender, solution_receiver) = mpsc::channel();
         let mut workers = bg.workers.lock();
         for _ in 0..num_worker {
-            let (sender_handle, receiver_handle) = mpsc::channel();
+            let (problem_sender, problem_receiver) = mpsc::channel();
             workers.push((
-                Worker::new(bg.clone(), tx.clone(), receiver_handle),
-                sender_handle,
+                Worker::new(
+                    bg.clone(),
+                    solution_sender.clone(),
+                    problem_receiver,
+                ),
+                problem_sender,
             ));
         }
-        rx
+        solution_receiver
+    }
+
+    pub fn start_new_stratum_worker(
+        bg: Arc<BlockGenerator>,
+    ) -> mpsc::Receiver<ProofOfWorkSolution> {
+        let (solution_sender, solution_receiver) = mpsc::channel();
+        let cfg = StratumOption {
+            listen_addr: bg.pow_config.stratum_listen_addr.clone(),
+            port: bg.pow_config.stratum_port,
+            secret: bg.pow_config.stratum_secret,
+        };
+        let stratum = Stratum::start(&cfg, solution_sender)
+            .expect("Failed to start Stratum service.");
+        let mut bg_stratum = bg.stratum.write();
+        *bg_stratum = Some(stratum);
+        solution_receiver
     }
 
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
@@ -633,7 +671,11 @@ impl BlockGenerator {
         let sleep_duration = time::Duration::from_millis(50);
 
         let receiver: mpsc::Receiver<ProofOfWorkSolution> =
-            BlockGenerator::start_new_worker(1, bg.clone());
+            if bg.pow_config.use_stratum {
+                BlockGenerator::start_new_stratum_worker(bg.clone())
+            } else {
+                BlockGenerator::start_new_worker(1, bg.clone())
+            };
 
         loop {
             match *bg.state.read() {

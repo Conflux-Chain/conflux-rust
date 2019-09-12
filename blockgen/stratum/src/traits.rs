@@ -45,12 +45,6 @@ impl From<PushMessageError> for Error {
 
 /// Interface that can provide pow/blockchain-specific responses for the clients
 pub trait JobDispatcher: Send + Sync {
-    // json for initial client handshake
-    fn initial(&self) -> Option<String> { None }
-    // json for difficulty dispatch
-    fn difficulty(&self) -> Option<String> { None }
-    // json for job update given worker_id (payload manager should split job!)
-    fn job(&self) -> Option<String> { None }
     // miner job result
     fn submit(&self, payload: Vec<String>) -> Result<(), Error>;
 }

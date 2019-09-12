@@ -407,6 +407,7 @@ impl ConsensusGraphInner {
                 .unwrap()
                 .height()
         };
+        let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
@@ -439,7 +440,7 @@ impl ConsensusGraphInner {
             adaptive_tree: CaterpillarMinLinkCutTree::new(),
             inclusive_adaptive_tree: CaterpillarMinLinkCutTree::new(),
             pow_config,
-            current_difficulty: pow_config.initial_difficulty.into(),
+            current_difficulty: initial_difficulty.into(),
             data_man: data_man.clone(),
             inner_conf,
             anticone_cache: AnticoneCache::new(),
