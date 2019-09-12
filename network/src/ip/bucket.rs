@@ -7,7 +7,7 @@ use rand::{thread_rng, Rng, ThreadRng};
 use std::time::Duration;
 
 /// NodeBucket is used to manage the nodes that grouped by subnet,
-/// and support to sample any node from bucket.
+/// and support to sample any node from bucket in O(1) time complexity.
 #[derive(Default, Debug)]
 pub struct NodeBucket {
     nodes: SampleHashSet<NodeId>,

@@ -23,36 +23,68 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Peer session over TCP connection, including outgoing and incoming sessions.
+///
+/// When a session created, 2 peers handshake with each other to exchange the
+/// node id based on asymmetric cryptography. After handshake, peers send HELLO
+/// packet to exchange the supported protocols. Then, session is ready to send
+/// and receive protocol packets.
+///
+/// Conflux do not use AES based encrypted connection to send protocol packets.
+/// This is because that Conflux has high TPS, and the encryption/decryption
+/// workloads are very heavy (about 20% CPU time in 3000 TPS).
 pub struct Session {
+    /// Session information
     pub metadata: SessionMetadata,
+    /// Socket address of remote peer
     address: SocketAddr,
+    /// Session state
     state: State,
+    /// Timestamp of when Hello packet sent, which is used to measure timeout.
     sent_hello: Instant,
+    /// Session ready flag that set after successful Hello packet received.
     had_hello: Option<Instant>,
+    /// Session is no longer active flag.
     expired: Option<Instant>,
 
     // statistics for read/write
     last_read: Instant,
-    last_write: (Instant, Option<WriteStatus>), // None for error
+    last_write: (Instant, WriteStatus),
 }
 
+/// Session state.
 enum State {
+    /// Handshake to exchange node id.
+    /// When handshake completed, the underlying TCP connection instance of
+    /// handshake will also be moved to the state `State::Session`.
     Handshake(MovableWrapper<Handshake>),
+    /// Ready to send Hello or protocol packets.
     Session(Connection),
 }
 
+/// Session data represents various of packet read from socket.
 pub enum SessionData {
+    /// No packet read from socket.
     None,
+    /// Session is ready to send or receive protocol packets.
     Ready,
+    /// A protocol packet has been received, and delegate to the corresponding
+    /// protocol handler to handle the packet.
     Message { data: Vec<u8>, protocol: ProtocolId },
+    /// Session has more data to be read.
     Continue,
 }
 
+// id for Hello packet
 const PACKET_HELLO: u8 = 0x80;
+// id for Disconnect packet
 const PACKET_DISCONNECT: u8 = 0x01;
+// id for protocol packet
 pub const PACKET_USER: u8 = 0x10;
 
 impl Session {
+    /// Create a new instance of `Session`, which starts to handshake with
+    /// remote peer.
     pub fn new<Message: Send + Sync + Clone + 'static>(
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
         id: Option<&NodeId>, token: StreamToken, host: &NetworkServiceInner,
@@ -76,7 +108,7 @@ impl Session {
             had_hello: None,
             expired: None,
             last_read: Instant::now(),
-            last_write: (Instant::now(), None),
+            last_write: (Instant::now(), WriteStatus::Complete),
         })
     }
 
@@ -118,6 +150,8 @@ impl Session {
 
     pub fn address(&self) -> SocketAddr { self.address }
 
+    /// Register event loop for the underlying connection.
+    /// If session expired, no effect taken.
     pub fn register_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> Result<(), Error> {
@@ -128,6 +162,7 @@ impl Session {
         Ok(())
     }
 
+    /// Update the event loop for the underlying connection.
     pub fn update_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> Result<(), Error> {
@@ -135,6 +170,7 @@ impl Session {
         Ok(())
     }
 
+    /// Deregister the event loop for the underlying connection.
     pub fn deregister_socket<H: Handler>(
         &self, event_loop: &mut EventLoop<H>,
     ) -> Result<(), Error> {
@@ -142,6 +178,10 @@ impl Session {
         Ok(())
     }
 
+    /// Complete the handshake process:
+    /// 1. For incoming session, check if the remote peer is blacklisted.
+    /// 2. Change the session state to `State::Session`.
+    /// 3. Send Hello packet to remote peer.
     fn complete_handshake<Message>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error>
@@ -170,9 +210,11 @@ impl Session {
         Ok(())
     }
 
+    /// Readable IO handler. Returns packet data if available.
     pub fn readable<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<SessionData, Error> {
+        // update the last read timestamp for statistics
         self.last_read = Instant::now();
 
         if self.expired() {
@@ -204,11 +246,14 @@ impl Session {
         }
     }
 
+    /// Handle the packet from underlying connection.
     fn read_packet(
         &mut self, data: Bytes, host: &NetworkServiceInner,
     ) -> Result<SessionData, Error> {
         let packet = SessionPacket::parse(data)?;
 
+        // For protocol packet, the Hello packet should already been received.
+        // So that dispatch it to the corresponding protocol handler.
         if packet.id != PACKET_HELLO
             && packet.id != PACKET_DISCONNECT
             && self.had_hello.is_none()
@@ -218,8 +263,10 @@ impl Session {
 
         match packet.id {
             PACKET_HELLO => {
+                // For ingress session, update the node id in `SessionManager`
                 self.update_ingress_node_id(host)?;
 
+                // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
                 self.read_hello(&rlp, host)?;
                 Ok(SessionData::Ready)
@@ -249,7 +296,7 @@ impl Session {
         }
     }
 
-    /// Update node Id for ingress session.
+    /// Update node Id in `SessionManager` for ingress session.
     fn update_ingress_node_id(
         &mut self, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
@@ -275,6 +322,12 @@ impl Session {
             })
     }
 
+    /// Read Hello packet to exchange the supported protocols, and set the
+    /// `had_hello` flag to indicates that session is ready to send/receive
+    /// protocol packets.
+    ///
+    /// Besides, the node endpoint of remote peer will be added or updated in
+    /// node database, which is used to establish outgoing connections.
     fn read_hello(
         &mut self, rlp: &Rlp, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
@@ -357,6 +410,9 @@ impl Session {
         Ok(())
     }
 
+    /// Assemble a packet with specified protocol id, packet id and data.
+    /// Return concrete error if session is expired or the protocol id is
+    /// invalid.
     fn prepare_packet(
         &self, protocol: Option<ProtocolId>, packet_id: u8, data: Vec<u8>,
     ) -> Result<Vec<u8>, Error> {
@@ -382,6 +438,7 @@ impl Session {
         Ok(SessionPacket::assemble(packet_id, protocol, data))
     }
 
+    /// Send a packet to remote peer asynchronously.
     pub fn send_packet<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
         packet_id: u8, data: Vec<u8>, priority: SendQueuePriority,
@@ -391,6 +448,7 @@ impl Session {
         self.connection_mut().send(io, packet, priority)
     }
 
+    /// Send a packet to remote peer immediately.
     pub fn send_packet_immediately(
         &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: Vec<u8>,
     ) -> Result<usize, Error> {
@@ -398,12 +456,14 @@ impl Session {
         self.connection_mut().write_raw_data(packet)
     }
 
+    /// Send a Disconnect packet immediately to the remote peer.
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
         let packet = rlp::encode(&reason);
         let _ = self.send_packet_immediately(None, PACKET_DISCONNECT, packet);
         ErrorKind::Disconnect(reason).into()
     }
 
+    /// Send Hello packet to remote peer.
     fn write_hello<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
@@ -421,14 +481,17 @@ impl Session {
         .map(|_| ())
     }
 
+    /// Writable IO handler. Sends pending packets.
     pub fn writable<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<(), Error> {
         let status = self.connection_mut().writable(io)?;
-        self.last_write = (Instant::now(), Some(status));
+        self.last_write = (Instant::now(), status);
         Ok(())
     }
 
+    /// Get the user friendly information of session.
+    /// This is specially for Debug RPC.
     pub fn details(&self) -> SessionDetails {
         SessionDetails {
             originated: self.metadata.originated,
@@ -448,6 +511,14 @@ impl Session {
         }
     }
 
+    /// Check if the session is timeout.
+    /// Once a session is timeout during handshake or exchanging Hello packet,
+    /// the TCP connection should be disconnected timely.
+    ///
+    /// Note, there is no periodical Ping/Pong mechanism to check if the session
+    /// is inactive for a long time. The synchronization protocol handler has
+    /// heartbeat mechanism to exchange peer status. As a result, Inactive
+    /// sessions (e.g. network issue) will be disconnected timely.
     pub fn check_timeout(&self) -> (bool, Option<UpdateNodeOperation>) {
         if let Some(time) = self.expired {
             // should disconnected timely once expired
@@ -472,6 +543,7 @@ impl fmt::Debug for Session {
     }
 }
 
+/// User friendly session information that used for Debug RPC.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDetails {
@@ -485,6 +557,8 @@ pub struct SessionDetails {
     pub last_write_status: String,
 }
 
+/// MovableWrapper is a util to move a value out of a struct.
+/// It is used to move the `Connection` instance when session state changed.
 struct MovableWrapper<T> {
     item: Option<T>,
 }
@@ -515,6 +589,12 @@ impl<T> MovableWrapper<T> {
     }
 }
 
+/// Session packet is composed of packet id, optional protocol id and data.
+/// To avoid memory copy, especially when the data size is very big (e.g. 4MB),
+/// packet id and protocol id are appended in the end of data.
+///
+/// The packet format is:
+///     [data || <protocol_id> || protocol_flag (1|0) || packet_id]
 #[derive(Eq, PartialEq)]
 struct SessionPacket {
     pub id: u8,

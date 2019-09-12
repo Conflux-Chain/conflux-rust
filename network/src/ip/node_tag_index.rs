@@ -13,6 +13,8 @@ use crate::{
 use rand::thread_rng;
 use std::collections::{HashMap, HashSet};
 
+/// Tag based node index, so as to filter nodes by tag in node database.
+/// It support to sample nodes with special tag in O(1) time complexity.
 #[derive(Default)]
 pub struct NodeTagIndex {
     // map<tag_key, map<tag_value, map<subnet, set<node_id>>>>
@@ -23,6 +25,7 @@ pub struct NodeTagIndex {
 }
 
 impl NodeTagIndex {
+    /// Build the node tag based index for the specified node table.
     pub fn new_with_node_table(table: &NodeTable) -> Self {
         let mut result = NodeTagIndex::default();
 
