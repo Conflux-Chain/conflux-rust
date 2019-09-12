@@ -10,7 +10,7 @@ use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Block, SignedTransaction};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     consensus::ConsensusGraph,
@@ -22,8 +22,8 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT_MS,
-        CACHE_TIMEOUT_SEC, MAX_BLOCK_TXS_IN_FLIGHT,
+        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
+        MAX_BLOCK_TXS_IN_FLIGHT,
     },
 };
 
@@ -68,8 +68,7 @@ impl BlockTxs {
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone());
 
-        let timeout = Duration::from_secs(CACHE_TIMEOUT_SEC);
-        let cache = LruCache::with_expiry_duration(timeout);
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));
 
         BlockTxs {
@@ -124,7 +123,7 @@ impl BlockTxs {
     #[inline]
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
-        let timeout = Duration::from_millis(BLOCK_TX_REQUEST_TIMEOUT_MS);
+        let timeout = *BLOCK_TX_REQUEST_TIMEOUT;
         let block_txs = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(block_txs.into_iter());
 

@@ -8,7 +8,7 @@ use cfx_types::H256;
 use io::TimerToken;
 use parking_lot::RwLock;
 use rlp::Rlp;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     consensus::ConsensusGraph,
@@ -29,7 +29,7 @@ use crate::{
     message::{decode_msg, Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler, PeerId},
     parameters::light::{
-        CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD_MS, SYNC_PERIOD_MS,
+        CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
     },
     sync::SynchronizationGraph,
 };
@@ -513,12 +513,10 @@ impl Handler {
 
 impl NetworkProtocolHandler for Handler {
     fn initialize(&self, io: &dyn NetworkContext) {
-        let period = Duration::from_millis(SYNC_PERIOD_MS);
-        io.register_timer(SYNC_TIMER, period)
+        io.register_timer(SYNC_TIMER, *SYNC_PERIOD)
             .expect("Error registering sync timer");
 
-        let period = Duration::from_millis(CLEANUP_PERIOD_MS);
-        io.register_timer(REQUEST_CLEANUP_TIMER, period)
+        io.register_timer(REQUEST_CLEANUP_TIMER, *CLEANUP_PERIOD)
             .expect("Error registering request cleanup timer");
     }
 

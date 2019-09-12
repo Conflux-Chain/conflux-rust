@@ -6,7 +6,7 @@ extern crate futures;
 
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
 use futures::{future, stream, Future, Stream};
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc};
 
 use primitives::{
     filter::{Filter, FilterError},
@@ -19,7 +19,7 @@ use crate::{
     network::{NetworkContext, NetworkService},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME_MS},
+        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
     },
     statedb::StorageKey,
     storage,
@@ -86,7 +86,7 @@ impl QueryService {
         trace!("retrieve_state_root epoch = {}", epoch);
 
         with_timeout(
-            Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+            *MAX_POLL_TIME, /* timeout */
             format!("Timeout while retrieving state root for epoch {}", epoch), /* error */
             self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
         )
@@ -98,7 +98,7 @@ impl QueryService {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
         with_timeout(
-            Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+            *MAX_POLL_TIME, /* timeout */
             format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key), /* error */
             self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone()))
         )
@@ -110,7 +110,7 @@ impl QueryService {
         trace!("retrieve_bloom epoch = {}", epoch);
 
         with_timeout(
-            Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+            *MAX_POLL_TIME, /* timeout */
             format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
             self.handler.blooms.request(epoch),
         )
@@ -122,7 +122,7 @@ impl QueryService {
         trace!("retrieve_receipts epoch = {}", epoch);
 
         with_timeout(
-            Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+            *MAX_POLL_TIME, /* timeout */
             format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
             self.handler.receipts.request(epoch),
         )
@@ -134,7 +134,7 @@ impl QueryService {
         trace!("retrieve_block_txs hash = {:?}", hash);
 
         with_timeout(
-            Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+            *MAX_POLL_TIME, /* timeout */
             format!("Timeout while retrieving block txs for block {}", hash), /* error */
             self.handler.block_txs.request(hash),
         )
@@ -282,7 +282,7 @@ impl QueryService {
             let tx = self.with_io(|io| self.handler.txs.request_now(io, hash));
 
             with_timeout(
-                Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
+                *MAX_POLL_TIME,                                  /* timeout */
                 format!("Timeout while retrieving tx {}", hash), /* error */
                 tx,
             )

@@ -9,7 +9,7 @@ use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::StateRoot;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     light_protocol::{
@@ -20,8 +20,8 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        CACHE_TIMEOUT_SEC, MAX_STATE_ROOTS_IN_FLIGHT,
-        STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT_MS,
+        CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
+        STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT,
     },
 };
 
@@ -61,8 +61,7 @@ impl StateRoots {
     {
         let sync_manager = SyncManager::new(peers.clone());
 
-        let timeout = Duration::from_secs(CACHE_TIMEOUT_SEC);
-        let cache = LruCache::with_expiry_duration(timeout);
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));
 
         StateRoots {
@@ -124,7 +123,7 @@ impl StateRoots {
     #[inline]
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
-        let timeout = Duration::from_millis(STATE_ROOT_REQUEST_TIMEOUT_MS);
+        let timeout = *STATE_ROOT_REQUEST_TIMEOUT;
         let state_roots = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(state_roots.into_iter());
 

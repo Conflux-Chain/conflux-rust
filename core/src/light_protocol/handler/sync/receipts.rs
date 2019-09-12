@@ -8,7 +8,7 @@ extern crate lru_time_cache;
 use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     light_protocol::{
@@ -19,8 +19,8 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        CACHE_TIMEOUT_SEC, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
-        RECEIPT_REQUEST_TIMEOUT_MS,
+        CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
+        RECEIPT_REQUEST_TIMEOUT,
     },
     primitives::{BlockHeaderBuilder, Receipt},
 };
@@ -62,8 +62,7 @@ impl Receipts {
     {
         let sync_manager = SyncManager::new(peers.clone());
 
-        let timeout = Duration::from_secs(CACHE_TIMEOUT_SEC);
-        let cache = LruCache::with_expiry_duration(timeout);
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));
 
         Receipts {
@@ -117,7 +116,7 @@ impl Receipts {
     #[inline]
     pub fn clean_up(&self) {
         // remove timeout in-flight requests
-        let timeout = Duration::from_millis(RECEIPT_REQUEST_TIMEOUT_MS);
+        let timeout = *RECEIPT_REQUEST_TIMEOUT;
         let receiptss = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(receiptss.into_iter());
 
