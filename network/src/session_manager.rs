@@ -23,18 +23,29 @@ use std::{
 };
 
 /// Session manager maintains all ingress and egress TCP connections in thread
-/// safe manner. It supports to limit the connections according to node IP
-/// policy.
+/// safe manner.
+///
+/// It supports to limit the number of connections according to the node IP
+/// policy, including limitations for a single IP address and different types of
+/// subnet (e.g. subnet C, 192.168.1.xxx/24).
+///
+/// The session manager also limits the maximum number of incoming TCP
+/// connections, so as to establish some trusted outgoing connections.
 pub struct SessionManager {
     sessions: RwLock<Slab<Arc<RwLock<Session>>, usize>>,
+
+    // used to limit the ingress sessions.
     max_ingress_sessions: usize,
     cur_ingress_sessions: AtomicUsize,
+
+    // session indices
     node_id_index: RwLock<HashMap<NodeId, usize>>,
     ip_limit: RwLock<Box<dyn SessionIpLimit>>,
     tag_index: RwLock<SessionTagIndex>,
 }
 
 impl SessionManager {
+    /// Create a new instance.
     pub fn new(
         offset: usize, capacity: usize, max_ingress_sessions: usize,
         ip_limit_config: &SessionIpLimitConfig,
@@ -50,26 +61,34 @@ impl SessionManager {
         }
     }
 
+    /// Get the number of sessions in `SessionManager`.
     pub fn count(&self) -> usize { self.sessions.read().count() }
 
+    /// Get the session of specified index.
     pub fn get(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
         self.sessions.read().get(idx).cloned()
     }
 
+    /// Get the session of specified node id.
     pub fn get_by_id(&self, node_id: &NodeId) -> Option<Arc<RwLock<Session>>> {
         let sessions = self.sessions.read();
         let idx = *self.node_id_index.read().get(node_id)?;
         sessions.get(idx).cloned()
     }
 
+    /// Get all the sessions in `SessionManager`.
     pub fn all(&self) -> Vec<Arc<RwLock<Session>>> {
         self.sessions.read().iter().map(|s| s.clone()).collect()
     }
 
+    /// Add tag for the session of specified index, so as to support session
+    /// filtering by tags. E.g. get the number of sessions from archive
+    /// nodes.
     pub fn add_tag(&self, idx: usize, key: String, value: String) {
         self.tag_index.write().add(idx, key, value);
     }
 
+    /// Get the number of sessions with specified tag.
     pub fn count_with_tag(&self, key: &String, value: &String) -> usize {
         self.tag_index.read().count_with_tag(key, value)
     }
@@ -95,10 +114,12 @@ impl SessionManager {
         (handshakes, egress, ingress)
     }
 
+    /// Check the session existence for the specified node id.
     pub fn contains_node(&self, id: &NodeId) -> bool {
         self.node_id_index.read().contains_key(id)
     }
 
+    /// Get the session index by node id.
     pub fn get_index_by_id(&self, id: &NodeId) -> Option<usize> {
         self.node_id_index.read().get(id).cloned()
     }
@@ -192,6 +213,7 @@ impl SessionManager {
         Ok(index)
     }
 
+    /// Remove a session from the `SessionManager`.
     pub fn remove(&self, session: &Session) {
         debug!("SessionManager.remove: enter");
 
@@ -216,6 +238,9 @@ impl SessionManager {
         debug!("SessionManager.remove: leave");
     }
 
+    /// Update the node id index for ingress session.
+    /// Return error if the session index does not exist, or the node id already
+    /// in use by other session.
     pub fn update_ingress_node_id(
         &self, idx: usize, node_id: &NodeId,
     ) -> Result<(), String> {
