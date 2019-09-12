@@ -134,6 +134,9 @@ pub fn initialize_synchronization_graph(
         true,  /* test_mode */
         false, /* use_stratum */
         Some(10),
+        String::from(""), /* stratum_listen_addr */
+        0,                /* stratum_port */
+        None,             /* stratum_secret */
     );
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {

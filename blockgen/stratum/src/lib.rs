@@ -85,8 +85,6 @@ impl Stratum {
     ) -> Result<Arc<Stratum>, Error>
     {
         let implementation = Arc::new(StratumImpl {
-            subscribers: RwLock::default(),
-            job_que: RwLock::default(),
             dispatcher,
             workers: Arc::new(RwLock::default()),
             secret,
@@ -98,8 +96,6 @@ impl Stratum {
         );
         delegate
             .add_method_with_meta("mining.subscribe", StratumImpl::subscribe);
-        delegate
-            .add_method_with_meta("mining.authorize", StratumImpl::authorize);
         delegate.add_method_with_meta("mining.submit", StratumImpl::submit);
         let mut handler = MetaIoHandler::<SocketMetadata>::with_compatibility(
             Compatibility::Both,
@@ -138,10 +134,6 @@ impl Drop for Stratum {
 }
 
 struct StratumImpl {
-    /// Subscribed clients
-    subscribers: RwLock<Vec<SocketAddr>>,
-    /// List of workers supposed to receive job update
-    job_que: RwLock<HashSet<SocketAddr>>,
     /// Payload manager
     dispatcher: Arc<dyn JobDispatcher>,
     /// Authorized workers (socket - worker_id)
@@ -154,27 +146,7 @@ struct StratumImpl {
 
 impl StratumImpl {
     /// rpc method `mining.subscribe`
-    fn subscribe(&self, _params: Params, meta: SocketMetadata) -> RpcResult {
-        use std::str::FromStr;
-
-        self.subscribers.write().push(meta.addr().clone());
-        self.job_que.write().insert(meta.addr().clone());
-        trace!(target: "stratum", "Subscription request from {:?}", meta.addr());
-
-        Ok(match self.dispatcher.initial() {
-            Some(initial) => match jsonrpc_core::Value::from_str(&initial) {
-                Ok(val) => Ok(val),
-                Err(e) => {
-                    warn!(target: "stratum", "Invalid payload: '{}' ({:?})", &initial, e);
-                    to_value(&[0u8; 0])
-                },
-            },
-            None => to_value(&[0u8; 0]),
-        }.expect("Empty slices are serializable; qed"))
-    }
-
-    /// rpc method `mining.authorize`
-    fn authorize(&self, params: Params, meta: SocketMetadata) -> RpcResult {
+    fn subscribe(&self, params: Params, meta: SocketMetadata) -> RpcResult {
         params.parse::<(String, String)>().map(|(worker_id, secret)|{
             if let Some(valid_secret) = self.secret {
                 let hash = keccak(secret);
@@ -189,7 +161,7 @@ impl StratumImpl {
     }
 
     /// rpc method `mining.submit`
-    fn submit(&self, params: Params, meta: SocketMetadata) -> RpcResult {
+    fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
         Ok(match params {
             Params::Array(vals) => {
                 // first two elements are service messages (worker_id & job_id)
@@ -200,7 +172,6 @@ impl StratumImpl {
                     })
                     .collect::<Vec<String>>()) {
                         Ok(()) => {
-                            self.update_peers(&meta.tcp_dispatcher.expect("tcp_dispatcher is always initialized; qed"));
                             to_value(true)
                         },
                         Err(submit_err) => {
@@ -214,15 +185,6 @@ impl StratumImpl {
                 to_value(false)
             }
         }.expect("Only true/false is returned and it's always serializable; qed"))
-    }
-
-    /// Helper method
-    fn update_peers(&self, tcp_dispatcher: &Dispatcher) {
-        if let Some(job) = self.dispatcher.job() {
-            if let Err(e) = self.push_work_all(job, tcp_dispatcher) {
-                warn!("Failed to update some of the peers: {:?}", e);
-            }
-        }
     }
 
     fn push_work_all(

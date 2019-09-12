@@ -204,7 +204,7 @@ impl FullClient {
         let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),
             verification_config,
-            pow_config,
+            pow_config.clone(),
             true,
         ));
 
