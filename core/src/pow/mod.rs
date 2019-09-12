@@ -25,16 +25,20 @@ pub struct ProofOfWorkSolution {
 #[derive(Debug, Copy, Clone)]
 pub struct ProofOfWorkConfig {
     pub test_mode: bool,
+    pub use_stratum: bool,
     pub initial_difficulty: u64,
     pub block_generation_period: u64,
     pub difficulty_adjustment_epoch_period: u64,
 }
 
 impl ProofOfWorkConfig {
-    pub fn new(test_mode: bool, initial_difficulty: Option<u64>) -> Self {
+    pub fn new(
+        test_mode: bool, use_stratum: bool, initial_difficulty: Option<u64>,
+    ) -> Self {
         if test_mode {
             ProofOfWorkConfig {
                 test_mode,
+                use_stratum,
                 initial_difficulty: initial_difficulty.unwrap_or(4),
                 block_generation_period: 1000000,
                 difficulty_adjustment_epoch_period: 20,
@@ -42,6 +46,7 @@ impl ProofOfWorkConfig {
         } else {
             ProofOfWorkConfig {
                 test_mode,
+                use_stratum,
                 initial_difficulty: INITIAL_DIFFICULTY,
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
                 difficulty_adjustment_epoch_period:

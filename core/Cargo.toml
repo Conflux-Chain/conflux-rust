@@ -7,6 +7,7 @@ version = "0.1.1"
 edition = "2018"
 
 [dependencies]
+cfx-stratum = { path = "../blockgen/stratum" }
 keccak-hash = "0.1.2"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
