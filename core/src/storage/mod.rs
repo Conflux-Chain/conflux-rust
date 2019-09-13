@@ -25,11 +25,7 @@ pub use self::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
         },
         storage_db::{
-            kvdb_rocksdb::KvdbRocksdb,
-            kvdb_sqlite::KvdbSqlite,
-            snapshot_sync::{
-                Chunk, ChunkKey, RangedManifest, RestoreProgress, Restorer,
-            },
+            kvdb_rocksdb::KvdbRocksdb, kvdb_sqlite::KvdbSqlite,
             sqlite::SqliteConnection,
         },
     },

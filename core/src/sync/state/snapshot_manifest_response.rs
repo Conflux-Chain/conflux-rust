@@ -4,10 +4,9 @@
 
 use crate::{
     message::{Message, MsgId},
-    storage::RangedManifest,
     sync::{
         message::{msgid, Context, Handleable},
-        state::SnapshotManifestRequest,
+        state::{RangedManifest, SnapshotManifestRequest},
         Error, ErrorKind,
     },
 };

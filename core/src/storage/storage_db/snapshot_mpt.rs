@@ -15,12 +15,6 @@ pub trait SnapshotMptTraitReadOnly {
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>>;
-
-    // FIXME: these methods belong to SnapshotMpt implementation.
-    fn get_manifest(
-        &mut self, start_chunk: &ChunkKey,
-    ) -> Result<Option<RangedManifest>>;
-    fn get_chunk(&self, key: &ChunkKey) -> Result<Option<Chunk>>;
 }
 
 pub trait SnapshotMptTraitSingleWriter: SnapshotMptTraitReadOnly {
@@ -69,7 +63,6 @@ use super::super::{
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{
             trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
         },
-        storage_db::snapshot_sync::{Chunk, ChunkKey, RangedManifest},
     },
     utils::tuple::*,
 };

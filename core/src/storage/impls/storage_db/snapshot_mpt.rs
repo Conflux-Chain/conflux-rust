@@ -117,20 +117,6 @@ where DbType:
                 }),
         ))
     }
-
-    fn get_manifest(
-        &mut self, _start_chunk: &ChunkKey,
-    ) -> Result<Option<RangedManifest>> {
-        let mut slicer = MptSlicer::new_from_key(self, &[])?;
-        // FIXME: there is no chunk size passed, use a hardcoded number as demo.
-        slicer.advance(1048576)?;
-        let _proof = slicer.to_proof();
-        unimplemented!()
-    }
-
-    fn get_chunk(&self, _key: &ChunkKey) -> Result<Option<Chunk>> {
-        unimplemented!()
-    }
 }
 
 impl<
@@ -163,22 +149,18 @@ where DbType:
     }
 }
 
-use super::{
-    super::{
-        super::storage_db::{
-            key_value_db::{
-                KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
-                KeyValueDbTraitSingleWriter,
-            },
-            snapshot_mpt::*,
+use super::super::{
+    super::storage_db::{
+        key_value_db::{
+            KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
+            KeyValueDbTraitSingleWriter,
         },
-        errors::*,
-        multi_version_merkle_patricia_trie::merkle_patricia_trie::{
-            trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
-        },
-        snapshot_sync::chunk::*,
+        snapshot_mpt::*,
     },
-    snapshot_sync::{Chunk, ChunkKey, RangedManifest},
+    errors::*,
+    multi_version_merkle_patricia_trie::merkle_patricia_trie::{
+        trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
+    },
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
