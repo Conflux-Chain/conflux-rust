@@ -16,8 +16,9 @@ pub trait SnapshotMptTraitReadOnly {
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>>;
 
+    // FIXME: these methods belong to SnapshotMpt implementation.
     fn get_manifest(
-        &self, start_chunk: &ChunkKey,
+        &mut self, start_chunk: &ChunkKey,
     ) -> Result<Option<RangedManifest>>;
     fn get_chunk(&self, key: &ChunkKey) -> Result<Option<Chunk>>;
 }

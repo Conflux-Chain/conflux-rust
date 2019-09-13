@@ -4,7 +4,7 @@
 
 pub struct SnapshotMpt<
     DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
-    BorrowType: Borrow<DbType>,
+    BorrowType: BorrowMut<DbType>,
 > {
     pub db: BorrowType,
     pub _marker_db_type: std::marker::PhantomData<DbType>,
@@ -119,8 +119,12 @@ where DbType:
     }
 
     fn get_manifest(
-        &self, _start_chunk: &ChunkKey,
+        &mut self, _start_chunk: &ChunkKey,
     ) -> Result<Option<RangedManifest>> {
+        let mut slicer = MptSlicer::new_from_key(self, &[])?;
+        // FIXME: there is no chunk size passed, use a hardcoded number as demo.
+        slicer.advance(1048576)?;
+        let _proof = slicer.to_proof();
         unimplemented!()
     }
 
@@ -172,13 +176,11 @@ use super::{
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{
             trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
         },
+        snapshot_sync::chunk::*,
     },
     snapshot_sync::{Chunk, ChunkKey, RangedManifest},
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
 use rlp::*;
-use std::{
-    borrow::{Borrow, BorrowMut},
-    convert::TryInto,
-};
+use std::{borrow::BorrowMut, convert::TryInto};

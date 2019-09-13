@@ -365,14 +365,6 @@ impl SizeFieldConverterTrait<u32> for TrieNodeValueSizeFieldConverter {
 impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn get_compressed_path_size(&self) -> u16 { self.path_size }
 
-    pub fn compressed_path_ref(&self) -> CompressedPathRef {
-        let size = self.path_size;
-        CompressedPathRef {
-            path_slice: self.path.get_slice(size as usize),
-            end_mask: self.path_end_mask,
-        }
-    }
-
     pub fn copy_compressed_path(&mut self, new_path: CompressedPathRef) {
         // Remove old path. Not unsafe because the path size is set right later.
         unsafe {
