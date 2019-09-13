@@ -5,6 +5,8 @@
 pub type SnapshotMptValue = (Box<[u8]>, Box<[u8]>, i64);
 
 make_tuple_with_index_ext!(SnapshotMptDbValue(Box<[u8]>: pub, i64: pub));
+// TODO: VanillaTrieNode<(MerkleHash, i64)>. Move the subtree size inside
+// children table to make seeking by rlp size posisition faster.
 make_tuple_with_index_ext!(SnapshotMptNode(VanillaTrieNode<MerkleHash>: pub, i64: pub));
 
 pub trait SnapshotMptTraitReadOnly {
