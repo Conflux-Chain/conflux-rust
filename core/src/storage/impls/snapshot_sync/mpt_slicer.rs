@@ -73,9 +73,11 @@ impl<'a> MptSlicer<'a> {
                     // trie_node.
                     &mut *(current_node
                         as *const BasicPathNode<
-                            &'a mut SnapshotMptTraitReadOnly,
+                            &'a mut dyn SnapshotMptTraitReadOnly,
                         >
-                        as *mut BasicPathNode<&'a mut SnapshotMptTraitReadOnly>)
+                        as *mut BasicPathNode<
+                            &'a mut dyn SnapshotMptTraitReadOnly,
+                        >)
                 }
                 .open_child_index(this_child_index)?
                 // Unwrap is fine because the child is guaranteed to exist.
