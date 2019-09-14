@@ -121,7 +121,7 @@ impl RpcImpl {
 
     #[allow(unused_variables)]
     fn send_usable_genesis_accounts(
-        &self,account_start_index:usize,
+        &self, account_start_index: usize,
     ) -> RpcResult<Bytes> {
         // TODO
         unimplemented!()

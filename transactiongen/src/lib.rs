@@ -75,7 +75,7 @@ pub struct TransactionGenerator {
     txpool: SharedTransactionPool,
     secret_store: SharedSecretStore,
     state: RwLock<TransGenState>,
-    account_start_index:RwLock<Option<usize>>,
+    account_start_index: RwLock<Option<usize>>,
     key_pair: Option<KeyPair>,
 }
 
@@ -94,16 +94,16 @@ impl TransactionGenerator {
             sync,
             secret_store,
             state: RwLock::new(TransGenState::Start),
-            account_start_index:RwLock::new(Option::None),
+            account_start_index: RwLock::new(Option::None),
             key_pair,
         }
     }
 
     pub fn stop(&self) { *self.state.write() = TransGenState::Stop; }
 
-    pub fn set_genesis_accounts_start_index(&self,index: usize) {
+    pub fn set_genesis_accounts_start_index(&self, index: usize) {
         let mut account_start = self.account_start_index.write();
-        *account_start=Some(index);
+        *account_start = Some(index);
     }
 
     pub fn generate_transaction(&self) -> SignedTransaction {
@@ -163,10 +163,9 @@ impl TransactionGenerator {
     ) -> Result<(), Error> {
         loop {
             let account_start = txgen.account_start_index.read();
-            if account_start.is_some(){
-                break
+            if account_start.is_some() {
+                break;
             }
-
         }
         let account_start_index = txgen.account_start_index.read().unwrap();
         let mut nonce_map: HashMap<Address, U256> = HashMap::new();
@@ -195,7 +194,8 @@ impl TransactionGenerator {
         debug!("Setup Usable Genesis Accounts");
         let mut state = txgen.consensus.get_best_state();
         for i in 0..tx_config.account_count {
-            let key_pair= txgen.secret_store.get_keypair(account_start_index+i);
+            let key_pair =
+                txgen.secret_store.get_keypair(account_start_index + i);
             let address = key_pair.address();
             let secret = key_pair.secret().clone();
             addresses.push(address);
