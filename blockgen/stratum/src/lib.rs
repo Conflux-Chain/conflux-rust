@@ -328,7 +328,6 @@ mod tests {
         assert!(stratum.is_ok());
     }
 
-    #[test]
     struct DummyManager {
         initial_payload: String,
     }
