@@ -50,6 +50,11 @@ pub trait KeyValueDbIterableTrait<'db, Item, Error, KeyType: ?Sized> {
     // TODO(yz): has a library?
     type Iterator: FallibleIterator<Item = Item, Error = Error> + 'db;
 
+    fn iter_range(
+        &'db mut self, lower_bound_incl: &KeyType,
+        upper_bound_excl: Option<&KeyType>,
+    ) -> Result<Self::Iterator>;
+
     fn iter_range_excl(
         &'db mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
     ) -> Result<Self::Iterator>;

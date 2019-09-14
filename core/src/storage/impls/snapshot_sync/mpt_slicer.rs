@@ -26,6 +26,23 @@ impl<'a> MptSlicer<'a> {
 
     pub fn to_proof(&self) -> TrieProof { self.cursor.to_proof() }
 
+    pub fn get_range_end_key(&self) -> Option<&[u8]> {
+        // The cursor stops at the key which just exceed,the rlp_size_limit,
+        // or at the root node.
+        let key = self
+            .cursor
+            .get_path_nodes()
+            .last()
+            .unwrap()
+            .get_path_to_node()
+            .path_slice();
+        if key.len() == 0 {
+            None
+        } else {
+            Some(key)
+        }
+    }
+
     pub fn advance(&mut self, mut rlp_size_limit: i64) -> Result<()> {
         let current_node = self.cursor.get_path_nodes().last().unwrap();
         if current_node.1 <= rlp_size_limit {

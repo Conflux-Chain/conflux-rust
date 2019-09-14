@@ -18,9 +18,16 @@ where DbType:
         &mut self, key: &[u8],
     ) -> Result<Option<RangedManifest>> {
         let mut slicer = MptSlicer::new_from_key(self, key)?;
+
         // FIXME: there is no chunk size passed, use a hardcoded number as demo.
         slicer.advance(1048576)?;
-        let _proof = slicer.to_proof();
+        let _proof_0 = slicer.to_proof();
+        let _chunk_end_key_0 = slicer.get_range_end_key();
+
+        // The chunk itself should be obtained from the SnapshotDb, not
+        // SnapshotMPT, with iter_range(key, _chunk_end_key_0).
+
+        slicer.advance(1048576)?;
         unimplemented!()
     }
 }

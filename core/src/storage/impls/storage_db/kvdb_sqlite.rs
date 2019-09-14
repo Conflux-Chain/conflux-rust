@@ -37,6 +37,8 @@ pub struct KvdbSqliteStatementsPerTable {
     pub get: String,
     pub put: String,
     pub delete: &'static str,
+    pub range_select_statement: String,
+    pub range_select_till_end_statement: String,
     pub range_excl_select_statement: String,
 }
 
@@ -58,6 +60,12 @@ impl KvdbSqliteStatements {
     pub const RANGE_EXCL_SELECT_STATEMENT: &'static str =
         "SELECT key, {value_columns} FROM {table_name} \
         WHERE key > :lower_bound_excl AND key < :upper_bound_excl ORDERED BY key ASC";
+    pub const RANGE_SELECT_STATEMENT: &'static str =
+        "SELECT key, {value_columns} FROM {table_name} \
+        WHERE key >= :lower_bound_excl AND key < :upper_bound_excl ORDERED BY key ASC";
+    pub const RANGE_SELECT_STATEMENT_TILL_END: &'static str =
+        "SELECT key, {value_columns} FROM {table_name} \
+         WHERE key >= :lower_bound_excl ORDERED BY key ASC";
 
     pub fn make_statements(
         value_column_names: &[&str], value_column_types: &[&str],
@@ -135,6 +143,14 @@ impl KvdbSqliteStatementsPerTable {
                 &strfmt_vars,
             )?,
             delete: KvdbSqliteStatements::DELETE_STATEMENT,
+            range_select_statement: strfmt(
+                KvdbSqliteStatements::RANGE_SELECT_STATEMENT,
+                &strfmt_vars,
+            )?,
+            range_select_till_end_statement: strfmt(
+                KvdbSqliteStatements::RANGE_SELECT_STATEMENT_TILL_END,
+                &strfmt_vars,
+            )?,
             range_excl_select_statement: strfmt(
                 KvdbSqliteStatements::RANGE_EXCL_SELECT_STATEMENT,
                 &strfmt_vars,
@@ -463,6 +479,34 @@ impl<
     for ConnectionWithRowParser<T, F>
 {
     type Iterator = MappedRows<'db, &'db mut F>;
+
+    fn iter_range(
+        &'db mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
+    ) -> Result<Self::Iterator> {
+        let (connection, statements) = self.0.borrow_mut().destructure_mut();
+        match connection {
+            None => Ok(MaybeRows::default().map(&mut self.1)),
+            Some(conn) => match upper_bound_excl {
+                Some(upper_bound_excl) => Ok(conn
+                    .execute(
+                        &statements.stmts_main_table.range_select_statement,
+                        &[
+                            &&lower_bound_incl as SqlBindableRef,
+                            &&upper_bound_excl,
+                        ],
+                    )?
+                    .map(&mut self.1)),
+                None => Ok(conn
+                    .execute(
+                        &statements
+                            .stmts_main_table
+                            .range_select_till_end_statement,
+                        &[&&lower_bound_incl as SqlBindableRef],
+                    )?
+                    .map(&mut self.1)),
+            },
+        }
+    }
 
     fn iter_range_excl(
         &'db mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
