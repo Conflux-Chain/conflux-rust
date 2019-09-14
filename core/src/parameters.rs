@@ -60,6 +60,9 @@ pub mod sync {
     /// CATCH_UP_EPOCH_LAG_THRESHOLD behind the median of the epoch
     /// numbers of peers.
     pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
+    /// This threshold controlling whether a node should request missing
+    /// terminals from peers when the node is in catch-up mode.
+    pub const REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD: u64 = 8;
 
     pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
     /// The max number of headers that are to be sent for header

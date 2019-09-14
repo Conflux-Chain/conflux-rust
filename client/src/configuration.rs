@@ -350,6 +350,7 @@ impl Configuration {
                 .raw_conf
                 .future_block_buffer_capacity,
             max_download_state_peers: self.raw_conf.max_download_state_peers,
+            test_mode: self.raw_conf.test_mode,
         }
     }
 
