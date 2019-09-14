@@ -3,42 +3,37 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
+    msg_sender::{send_message, NULL},
+    random,
+    request_manager::RequestManager,
+    Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
+    block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
-    message::{HasRequestId, Message, MsgId},
-    sync::message::{
-        handle_rlp_message, msgid, GetBlockHeadersResponse, NewBlock,
-        NewBlockHashes, Status, TransactionDigests,
+    message::{decode_msg, HasRequestId, Message, MsgId},
+    parameters::sync::*,
+    sync::{
+        message::{
+            handle_rlp_message, msgid, Context, DynamicCapability,
+            GetBlockHeadersResponse, NewBlockHashes, Status,
+            TransactionDigests,
+        },
+        state::SnapshotChunkSync,
+        synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
     },
 };
 use cfx_types::H256;
 use io::TimerToken;
+use metrics::{register_meter_with_group, Meter};
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
+use primitives::{Block, BlockHeader, SignedTransaction};
 use rand::Rng;
 use rlp::Rlp;
-//use slab::Slab;
-use super::{
-    msg_sender::{send_message, send_message_with_throttling, NULL},
-    request_manager::RequestManager,
-};
-use crate::{
-    block_data_manager::BlockStatus,
-    message::decode_msg,
-    parameters::sync::*,
-    sync::{
-        message::{Context, DynamicCapability},
-        state::SnapshotChunkSync,
-        synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
-    },
-};
-use metrics::{register_meter_with_group, Meter};
-use primitives::{Block, BlockHeader, SignedTransaction};
 use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -256,6 +251,7 @@ pub struct ProtocolConfiguration {
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
     pub max_download_state_peers: usize,
+    pub test_mode: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -456,6 +452,13 @@ impl SynchronizationProtocolHandler {
 
         if current_phase_type != SyncPhaseType::Normal {
             self.request_epochs(io);
+            let best_peer_epoch = self.syn.best_peer_epoch().unwrap_or(0);
+            let my_best_epoch = self.graph.consensus.best_epoch_number();
+            if my_best_epoch + REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD
+                >= best_peer_epoch
+            {
+                self.request_missing_terminals(io);
+            }
         } else {
             self.request_missing_terminals(io);
         }
@@ -850,28 +853,6 @@ impl SynchronizationProtocolHandler {
             .is_err()
         {
             warn!("Error broadcsting status message");
-        }
-    }
-
-    pub fn announce_new_blocks(
-        &self, io: &dyn NetworkContext, hashes: &[H256],
-    ) {
-        for hash in hashes {
-            let block = self.graph.block_by_hash(hash).unwrap();
-            let msg: Box<dyn Message> = Box::new(NewBlock {
-                block: (*block).clone().into(),
-            });
-            for id in self.syn.peers.read().keys() {
-                send_message_with_throttling(
-                    io,
-                    *id,
-                    msg.as_ref(),
-                    true, /* throttling_disabled */
-                )
-                .unwrap_or_else(|e| {
-                    warn!("Error sending new blocks, err={:?}", e);
-                });
-            }
         }
     }
 
