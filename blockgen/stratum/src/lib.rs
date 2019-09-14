@@ -333,8 +333,6 @@ mod tests {
     }
 
     impl DummyManager {
-        fn new() -> Arc<DummyManager> { Arc::new(Self::build()) }
-
         fn build() -> DummyManager {
             DummyManager {
                 initial_payload: r#"[ "dummy payload" ]"#.to_owned(),
