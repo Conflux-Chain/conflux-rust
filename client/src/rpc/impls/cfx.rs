@@ -159,14 +159,14 @@ impl RpcImpl {
     }
 
     fn send_usable_genesis_accounts(
-        &self, account_start_index:usize
+        &self, account_start_index: usize,
     ) -> RpcResult<Bytes> {
-
         info!(
             "RPC Request: send_usable_genesis_accounts start from {:?}",
             account_start_index
         );
-        self.tx_gen.set_genesis_accounts_start_index(account_start_index);
+        self.tx_gen
+            .set_genesis_accounts_start_index(account_start_index);
         Ok(Bytes::new("1".into()))
     }
 

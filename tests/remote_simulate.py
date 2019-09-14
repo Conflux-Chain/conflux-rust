@@ -280,7 +280,7 @@ class RemoteSimulate(ConfluxTestFramework):
                 client = RpcClient(self.nodes[i])
                 client.send_usable_genesis_accounts(current_index)
                 current_index+=self.options.txgen_account_count
-                self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
+            self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
 
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()

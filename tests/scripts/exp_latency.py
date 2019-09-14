@@ -135,8 +135,7 @@ class LatencyExperiment(ArgumentHolder):
             print("genesis secrets account error, file size should be multiple of 65")
             exit()
 
-        #Always same number of nodes.
-        self.txgen_account_count= (os.path.getsize("./genesis_secrets.txt")/65)//self.slave_count
+        self.txgen_account_count= int((os.path.getsize("./genesis_secrets.txt")/65)//self.slave_count)
 
     def run(self):
         for config in RemoteSimulateConfig.parse(self.batch_config):
