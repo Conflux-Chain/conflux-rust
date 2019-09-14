@@ -396,7 +396,7 @@ mod tests {
         .expect("There should be no error starting stratum");
 
         let mut auth_request =
-            r#"{"jsonrpc": "2.0", "method": "mining.authorize", "params": ["miner1", ""], "id": 1}"#
+            r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", ""], "id": 1}"#
             .as_bytes()
             .to_vec();
         auth_request.extend(b"\n");
