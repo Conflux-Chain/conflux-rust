@@ -328,25 +328,11 @@ mod tests {
         assert!(stratum.is_ok());
     }
 
-    #[test]
-    fn records_subscriber() {
-        let _ = ::env_logger::try_init();
-
-        let addr = "127.0.0.1:19985".parse().unwrap();
-        let stratum =
-            Stratum::start(&addr, Arc::new(VoidManager), None).unwrap();
-        let request = r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": [], "id": 1}"#;
-        dummy_request(&addr, request);
-        assert_eq!(1, stratum.implementation.subscribers.read().len());
-    }
-
     struct DummyManager {
         initial_payload: String,
     }
 
     impl DummyManager {
-        fn new() -> Arc<DummyManager> { Arc::new(Self::build()) }
-
         fn build() -> DummyManager {
             DummyManager {
                 initial_payload: r#"[ "dummy payload" ]"#.to_owned(),
@@ -360,10 +346,6 @@ mod tests {
     }
 
     impl JobDispatcher for DummyManager {
-        fn initial(&self) -> Option<String> {
-            Some(self.initial_payload.clone())
-        }
-
         fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
     }
 
@@ -375,25 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn receives_initial_payload() {
-        let addr = "127.0.0.1:19975".parse().unwrap();
-        let _stratum = Stratum::start(&addr, DummyManager::new(), None)
-            .expect("There should be no error starting stratum");
-        let request = r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": [], "id": 2}"#;
-
-        let response =
-            String::from_utf8(dummy_request(&addr, request)).unwrap();
-
-        assert_eq!(
-            terminated_str(
-                r#"{"jsonrpc":"2.0","result":["dummy payload"],"id":2}"#
-            ),
-            response
-        );
-    }
-
-    #[test]
-    fn can_authorize() {
+    fn can_subscribe() {
         let addr = "127.0.0.1:19970".parse().unwrap();
         let stratum = Stratum::start(
             &addr,
@@ -405,7 +369,7 @@ mod tests {
         )
         .expect("There should be no error starting stratum");
 
-        let request = r#"{"jsonrpc": "2.0", "method": "mining.authorize", "params": ["miner1", ""], "id": 1}"#;
+        let request = r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", ""], "id": 1}"#;
         let response =
             String::from_utf8(dummy_request(&addr, request)).unwrap();
 
@@ -432,7 +396,7 @@ mod tests {
         .expect("There should be no error starting stratum");
 
         let mut auth_request =
-            r#"{"jsonrpc": "2.0", "method": "mining.authorize", "params": ["miner1", ""], "id": 1}"#
+            r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", ""], "id": 1}"#
             .as_bytes()
             .to_vec();
         auth_request.extend(b"\n");
