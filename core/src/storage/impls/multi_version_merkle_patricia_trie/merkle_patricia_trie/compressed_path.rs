@@ -183,8 +183,12 @@ impl CompressedPathRaw {
                     // Create uninitialized vector.
                     let mut value = Vec::with_capacity(size);
                     value.set_len(size);
+                    let mut value_box = value.into_boxed_slice();
 
-                    let ptr = value.as_mut_ptr();
+                    let ptr = value_box.as_mut_ptr();
+                    // Don't free the buffer since it's stored in the return
+                    // value.
+                    Box::into_raw(value_box);
                     path = MaybeInPlaceByteArray { ptr };
                     slice = std::slice::from_raw_parts_mut(ptr, size);
                 } else {
