@@ -13,13 +13,14 @@ use std::{
 };
 
 use crate::{
-    light_protocol::{common::Peers, Error},
+    light_protocol::{
+        common::{FullPeerState, Peers},
+        Error,
+    },
     network::PeerId,
 };
 
-use super::{
-    super::FullPeerState, missing_item::HasKey, priority_queue::PriorityQueue,
-};
+use super::{HasKey, PriorityQueue};
 
 #[derive(Debug)]
 struct InFlightRequest<T> {
@@ -36,7 +37,7 @@ impl<T> InFlightRequest<T> {
     }
 }
 
-pub(super) struct SyncManager<Key, Item> {
+pub struct SyncManager<Key, Item> {
     // headers requested but not received yet
     in_flight: RwLock<HashMap<Key, InFlightRequest<Item>>>,
 
@@ -49,7 +50,7 @@ pub(super) struct SyncManager<Key, Item> {
 
 impl<Key, Item> SyncManager<Key, Item>
 where
-    Key: Copy + Eq + Hash,
+    Key: Clone + Eq + Hash,
     Item: Debug + Clone + HasKey<Key> + Ord,
 {
     pub fn new(peers: Arc<Peers<FullPeerState>>) -> Self {
@@ -186,5 +187,43 @@ where
         }
 
         items
+    }
+
+    #[inline]
+    pub fn request_now<I>(
+        &self, items: I,
+        request: impl Fn(PeerId, Vec<Key>) -> Result<(), Error>,
+    ) where
+        I: Iterator<Item = Item>,
+    {
+        let peer = match self.peers.random_peer() {
+            Some(peer) => peer,
+            None => {
+                warn!("No peers available");
+                self.insert_waiting(items);
+                return;
+            }
+        };
+
+        self.request_now_from_peer(items, peer, request);
+    }
+
+    #[inline]
+    pub fn request_now_from_peer<I>(
+        &self, items: I, peer: PeerId,
+        request: impl Fn(PeerId, Vec<Key>) -> Result<(), Error>,
+    ) where
+        I: Iterator<Item = Item>,
+    {
+        let items: Vec<_> = items.collect();
+        let keys = items.iter().map(|h| h.key()).collect();
+
+        match request(peer, keys) {
+            Ok(_) => self.insert_in_flight(items.into_iter()),
+            Err(e) => {
+                warn!("Failed to request {:?} from {:?}: {:?}", items, peer, e);
+                self.insert_waiting(items.into_iter());
+            }
+        }
     }
 }

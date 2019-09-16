@@ -506,6 +506,12 @@ impl Decodable for BlockHeader {
     }
 }
 
+impl Encodable for &'static BlockHeader {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        self.stream_wire_rlp(stream);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::BlockHeaderBuilder;

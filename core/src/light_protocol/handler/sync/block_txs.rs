@@ -7,16 +7,15 @@ extern crate futures;
 use cfx_types::H256;
 use futures::Future;
 use parking_lot::RwLock;
-use primitives::SignedTransaction;
+use primitives::{Block, SignedTransaction};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{Peers, UniqueId, Validate},
-        handler::FullPeerState,
+        common::{FullPeerState, LedgerInfo, Peers, UniqueId},
         message::{BlockTxsWithHash, GetBlockTxs},
-        Error,
+        Error, ErrorKind,
     },
     message::Message,
     network::{NetworkContext, PeerId},
@@ -27,8 +26,8 @@ use crate::{
 };
 
 use super::{
-    future_item::FutureItem, missing_item::TimeOrdered,
-    sync_manager::SyncManager,
+    common::{FutureItem, SyncManager, TimeOrdered},
+    Txs,
 };
 
 #[derive(Debug)]
@@ -42,33 +41,37 @@ struct Statistics {
 type MissingBlockTxs = TimeOrdered<H256>;
 
 pub struct BlockTxs {
+    // helper API for retrieving ledger information
+    ledger: LedgerInfo,
+
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
     // sync and request manager
     sync_manager: SyncManager<H256, MissingBlockTxs>,
 
-    // helper API for validating ledger and state information
-    validate: Validate,
+    // tx sync manager
+    txs: Arc<Txs>,
 
     // block txs received from full node
     verified: Arc<RwLock<HashMap<H256, Vec<SignedTransaction>>>>,
 }
 
 impl BlockTxs {
-    pub(super) fn new(
+    pub fn new(
         consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
-        request_id_allocator: Arc<UniqueId>,
+        request_id_allocator: Arc<UniqueId>, txs: Arc<Txs>,
     ) -> Self
     {
+        let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone());
-        let validate = Validate::new(consensus.clone());
         let verified = Arc::new(RwLock::new(HashMap::new()));
 
         BlockTxs {
+            ledger,
             request_id_allocator,
             sync_manager,
-            validate,
+            txs,
             verified,
         }
     }
@@ -95,13 +98,17 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub(super) fn receive(
+    pub fn receive(
         &self, block_txs: impl Iterator<Item = BlockTxsWithHash>,
     ) -> Result<(), Error> {
         for BlockTxsWithHash { hash, block_txs } in block_txs {
             info!("Validating block_txs {:?} with hash {}", block_txs, hash);
-            self.validate.block_txs(hash, &block_txs)?;
+            self.validate_block_txs(hash, &block_txs)?;
 
+            // store each transaction by its hash
+            self.txs.receive(block_txs.clone().into_iter())?;
+
+            // store block bodies by block hash
             self.verified.write().insert(hash, block_txs);
             self.sync_manager.remove_in_flight(&hash);
         }
@@ -110,7 +117,7 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
+    pub fn clean_up(&self) {
         let timeout = Duration::from_millis(BLOCK_TX_REQUEST_TIMEOUT_MS);
         let block_txs = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(block_txs.into_iter());
@@ -136,7 +143,7 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("block tx sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
@@ -144,5 +151,37 @@ impl BlockTxs {
             BLOCK_TX_REQUEST_BATCH_SIZE,
             |peer, block_hashes| self.send_request(io, peer, block_hashes),
         );
+    }
+
+    #[inline]
+    pub fn validate_block_txs(
+        &self, hash: H256, txs: &Vec<SignedTransaction>,
+    ) -> Result<(), Error> {
+        // first, validate signatures for each tx
+        for tx in txs {
+            match tx.verify_public(false /* skip */) {
+                Ok(true) => continue,
+                _ => {
+                    warn!("Tx signature verification failed for {:?}", tx);
+                    return Err(ErrorKind::InvalidTxSignature.into());
+                }
+            }
+        }
+
+        // then, compute tx root and match against header info
+        let local = *self.ledger.header(hash)?.transactions_root();
+
+        let txs: Vec<_> = txs.iter().map(|tx| Arc::new(tx.clone())).collect();
+        let received = Block::compute_transaction_root(&txs);
+
+        if received != local {
+            warn!(
+                "Tx root validation failed, received={:?}, local={:?}",
+                received, local
+            );
+            return Err(ErrorKind::InvalidTxRoot.into());
+        }
+
+        Ok(())
     }
 }

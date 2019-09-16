@@ -271,7 +271,8 @@ def initialize_datadir(dirname, n, conf_parameters):
             "enable_discovery": "false",
             "metrics_output_file": "'{}'".format(os.path.join(datadir, "metrics.log")),
             "metrics_enabled": "true",
-        }
+        "block_db_type": "\'sqlite\'"
+                      }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]
         for k in local_conf:
@@ -387,7 +388,7 @@ def get_peer_addr(connection):
     return "{}:{}".format(connection.ip, connection.port)
 
 
-def connect_nodes(nodes, a, node_num):
+def connect_nodes(nodes, a, node_num, timeout=60):
     """
     Let node[a] connect to node[node_num]
     """
@@ -398,7 +399,7 @@ def connect_nodes(nodes, a, node_num):
     from_connection.addnode(key, peer_addr)
     # poll until hello handshake complete to avoid race conditions
     # with transaction relaying
-    wait_until(lambda: check_handshake(from_connection, to_connection.key))
+    wait_until(lambda: check_handshake(from_connection, to_connection.key), timeout=timeout)
 
 
 def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
@@ -411,7 +412,7 @@ def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
     """
     stop_time = time.time() + timeout
     while time.time() <= stop_time:
-        best_hash = [x.getbestblockhash() for x in rpc_connections]
+        best_hash = [x.best_block_hash() for x in rpc_connections]
         block_count = [x.getblockcount() for x in rpc_connections]
         if best_hash.count(best_hash[0]) == len(rpc_connections) and (
             not sync_count or block_count.count(block_count[0]) == len(rpc_connections)

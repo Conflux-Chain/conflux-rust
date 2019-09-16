@@ -14,7 +14,7 @@ use primitives::{SignedTransaction, TransactionWithSignature};
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{LedgerInfo, Peers, Validate},
+        common::{LedgerInfo, LightPeerState, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -22,12 +22,13 @@ use crate::{
             BlockTxs as GetBlockTxsResponse, BlockTxsWithHash, BloomWithEpoch,
             Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
             GetBlockHeaders, GetBlockTxs, GetBlooms, GetReceipts,
-            GetStateEntry, GetStateRoot, GetTxs, GetWitnessInfo,
+            GetStateEntries, GetStateRoots, GetTxs, GetWitnessInfo,
             NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
-            ReceiptsWithEpoch, SendRawTx, StateEntry as GetStateEntryResponse,
-            StateRoot as GetStateRootResponse, StatusPing, StatusPong,
-            Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
-            WitnessInfoWithHeight,
+            ReceiptsWithEpoch, SendRawTx,
+            StateEntries as GetStateEntriesResponse, StateEntryWithKey,
+            StateRootWithEpoch, StateRoots as GetStateRootsResponse,
+            StatusPing, StatusPong, Txs as GetTxsResponse,
+            WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
@@ -42,12 +43,6 @@ use crate::{
     sync::SynchronizationGraph,
     TransactionPool,
 };
-
-#[derive(Default)]
-pub struct LightPeerState {
-    pub handshake_completed: bool,
-    pub protocol_version: u8,
-}
 
 pub struct Provider {
     // shared consensus graph
@@ -68,9 +63,6 @@ pub struct Provider {
 
     // shared transaction pool
     tx_pool: Arc<TransactionPool>,
-
-    // helper API for validating ledger and state information
-    validate: Validate,
 }
 
 impl Provider {
@@ -81,7 +73,6 @@ impl Provider {
     {
         let ledger = LedgerInfo::new(consensus.clone());
         let peers = Peers::new();
-        let validate = Validate::new(consensus.clone());
 
         Provider {
             consensus,
@@ -90,7 +81,6 @@ impl Provider {
             network,
             peers,
             tx_pool,
-            validate,
         }
     }
 
@@ -146,8 +136,8 @@ impl Provider {
 
         match msg_id {
             msgid::STATUS_PING => self.on_status(io, peer, &rlp),
-            msgid::GET_STATE_ROOT => self.on_get_state_root(io, peer, &rlp),
-            msgid::GET_STATE_ENTRY => self.on_get_state_entry(io, peer, &rlp),
+            msgid::GET_STATE_ENTRIES => self.on_get_state_entries(io, peer, &rlp),
+            msgid::GET_STATE_ROOTS => self.on_get_state_roots(io, peer, &rlp),
             msgid::GET_BLOCK_HASHES_BY_EPOCH => self.on_get_block_hashes_by_epoch(io, peer, &rlp),
             msgid::GET_BLOCK_HEADERS => self.on_get_block_headers(io, peer, &rlp),
             msgid::SEND_RAW_TX => self.on_send_raw_tx(io, peer, &rlp),
@@ -211,6 +201,20 @@ impl Provider {
         }
     }
 
+    #[inline]
+    fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
+        match self.consensus.data_man.true_genesis_block.hash() {
+            h if h == genesis => Ok(()),
+            h => {
+                debug!(
+                    "Genesis mismatch (ours: {:?}, theirs: {:?})",
+                    h, genesis
+                );
+                Err(ErrorKind::GenesisMismatch.into())
+            }
+        }
+    }
+
     fn on_status(
         &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
@@ -218,7 +222,7 @@ impl Provider {
         info!("on_status peer={:?} status={:?}", peer, status);
 
         self.validate_peer_type(&status.node_type)?;
-        self.validate.genesis_hash(status.genesis_hash)?;
+        self.validate_genesis_hash(status.genesis_hash)?;
 
         if let Err(e) = self.send_status(io, peer) {
             warn!("Failed to send status to peer={:?}: {:?}", peer, e);
@@ -232,44 +236,52 @@ impl Provider {
         Ok(())
     }
 
-    fn on_get_state_root(
+    fn on_get_state_roots(
         &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let req: GetStateRoot = rlp.as_val()?;
-        info!("on_get_state_root req={:?}", req);
+        let req: GetStateRoots = rlp.as_val()?;
+        info!("on_get_state_roots req={:?}", req);
         let request_id = req.request_id;
 
-        let pivot_hash = self.ledger.pivot_hash_of(req.epoch)?;
-        let state_root = self.ledger.state_root_with_proof_of(req.epoch)?;
+        let state_roots = req
+            .epochs
+            .into_iter()
+            .map(|e| self.ledger.state_root_of(e).map(|root| (e, root)))
+            .filter_map(Result::ok)
+            .map(|(epoch, state_root)| StateRootWithEpoch { epoch, state_root })
+            .collect();
 
-        let msg: Box<dyn Message> = Box::new(GetStateRootResponse {
+        let msg: Box<dyn Message> = Box::new(GetStateRootsResponse {
             request_id,
-            pivot_hash,
-            state_root,
+            state_roots,
         });
 
         msg.send(io, peer)?;
         Ok(())
     }
 
-    fn on_get_state_entry(
+    fn on_get_state_entries(
         &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
-        let req: GetStateEntry = rlp.as_val()?;
-        info!("on_get_state_entry req={:?}", req);
+        let req: GetStateEntries = rlp.as_val()?;
+        info!("on_get_state_entries req={:?}", req);
         let request_id = req.request_id;
 
-        let pivot_hash = self.ledger.pivot_hash_of(req.epoch)?;
-        let state_root = self.ledger.state_root_with_proof_of(req.epoch)?;
-        let (entry, proof) = self.ledger.state_entry_at(req.epoch, &req.key)?;
-        let entry = entry.map(|x| x.to_vec());
+        let entries = req
+            .keys
+            .into_iter()
+            .map(|key| {
+                self.ledger
+                    .state_entry_at(key.epoch, &key.key)
+                    .map(|(entry, proof)| (key, entry, proof))
+            })
+            .filter_map(Result::ok)
+            .map(|(key, entry, proof)| StateEntryWithKey { key, entry, proof })
+            .collect();
 
-        let msg: Box<dyn Message> = Box::new(GetStateEntryResponse {
+        let msg: Box<dyn Message> = Box::new(GetStateEntriesResponse {
             request_id,
-            pivot_hash,
-            state_root,
-            entry,
-            proof,
+            entries,
         });
 
         msg.send(io, peer)?;
@@ -311,7 +323,12 @@ impl Provider {
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND)
-            .filter_map(|h| self.graph.block_header_by_hash(&h))
+            .filter_map(|h| {
+                self.graph
+                    .data_man
+                    .block_header_by_hash(&h)
+                    .map(|header_arc| header_arc.as_ref().clone())
+            })
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetBlockHeadersResponse {

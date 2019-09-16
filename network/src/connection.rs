@@ -35,15 +35,21 @@ lazy_static! {
         register_meter_with_group("network_connection_data", "send_high");
 }
 
+/// Connection write status.
 #[derive(Debug, PartialEq, Eq)]
 pub enum WriteStatus {
+    /// Some data is still pending for current packet.
     Ongoing,
+    /// Give up to write data due to low priority.
     LowPriority,
+    /// All data sent.
     Complete,
 }
 
 const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
 
+/// Global counter for high priority packets.
+/// It is used among connections to send high priority packets.
 static HIGH_PRIORITY_PACKETS: AtomicUsize = AtomicUsize::new(0);
 
 fn incr_high_priority_packets() {
@@ -72,9 +78,16 @@ pub trait GenericSocket: Read + Write {}
 
 impl GenericSocket for TcpStream {}
 
+/// Trait to assemble/load packet with extra information.
+/// E.g. prefix packet with length information
 pub trait PacketAssembler: Send + Sync {
+    /// Check if the specified packet `len` is oversized.
     fn is_oversized(&self, len: usize) -> bool;
+
+    /// Assemble packet with extra information.
     fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error>;
+
+    /// Load packet and remove the extra information from the specified buffer.
     fn load(&self, buf: &mut BytesMut) -> Option<BytesMut>;
 }
 
@@ -82,7 +95,9 @@ pub trait PacketAssembler: Send + Sync {
 /// packets counter.
 #[derive(Default)]
 struct Packet {
+    // data to write to socket
     data: Vec<u8>,
+    // current data position to write to socket.
     sending_pos: usize,
     is_high_priority: bool,
     throttling_size: usize,
@@ -90,9 +105,11 @@ struct Packet {
 
 impl Packet {
     fn new(data: Vec<u8>, priority: SendQueuePriority) -> Result<Self, Error> {
+        // update throttling
         let throttling_size = data.len();
         THROTTLING_SERVICE.write().on_enqueue(throttling_size)?;
 
+        // update high priority packet counter
         let is_high_priority = priority == SendQueuePriority::High;
         if is_high_priority {
             incr_high_priority_packets();
@@ -143,21 +160,36 @@ pub struct SendQueueStatus {
 }
 
 pub struct GenericConnection<Socket: GenericSocket> {
+    /// Connection id (token)
     token: StreamToken,
+    /// Network socket
     socket: Socket,
+    /// Receive buffer
     recv_buf: BytesMut,
-    // Pending packet that is not prefixed with length.
+    /// Packets that waiting for sending out.
     send_queue: PrioritySendQueue<Packet>,
-    // Sending packet that prefixed with length.
+    /// Sending packet.
     sending_packet: Option<Packet>,
+    /// Event flags this connection interested
     interest: Ready,
+    /// Registered flag
     registered: AtomicBool,
+    /// Assemble packet with extra information before sending out.
     assembler: Box<dyn PacketAssembler>,
 }
 
 impl<Socket: GenericSocket> GenericConnection<Socket> {
+    /// Readable IO handler. Called when there is some data to be read.
     pub fn readable(&mut self) -> io::Result<Option<Bytes>> {
         let mut buf: [u8; 1024] = [0; 1024];
+
+        // Read until the socket has no data to read.
+        // This is to avoid accumulating too much data in kernal.
+        //
+        // In this way, N packets may be read at a time, and Readable IO event
+        // will not be triggered again if no more data sent to socket. So, the
+        // caller should guarantee to read all packets in a loop when Readable
+        // IO event triggered.
         loop {
             match self.socket.read(&mut buf) {
                 Ok(size) => {
@@ -195,6 +227,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         Ok(packet.map(|p| p.freeze()))
     }
 
+    /// Send the specified data out immediately
     pub fn write_raw_data(
         &mut self, mut data: Vec<u8>,
     ) -> Result<usize, Error> {
@@ -218,7 +251,10 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         Ok(size)
     }
 
+    /// Continue to send out the uncompleted packet, or pop new packet from
+    /// queue to send out.
     fn write_next_from_queue(&mut self) -> Result<WriteStatus, Error> {
+        // In case of last packet is all sent out.
         if self.sending_packet.is_none() {
             // give up to send low priority packet
             if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
@@ -278,6 +314,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         }
     }
 
+    /// Writable IO handler. Called when the socket is ready to send.
     pub fn writable<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
@@ -292,6 +329,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         Ok(status)
     }
 
+    /// Add a packet to send queue.
     pub fn send<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>, data: Vec<u8>,
         priority: SendQueuePriority,
@@ -348,6 +386,7 @@ impl Connection {
         }
     }
 
+    /// Register this connection with the IO event loop.
     pub fn register_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
@@ -376,6 +415,8 @@ impl Connection {
         Ok(())
     }
 
+    /// Update connection registration. Should be called at the end of the IO
+    /// handler.
     pub fn update_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
@@ -396,6 +437,8 @@ impl Connection {
         }
     }
 
+    /// Delete connection registration. Should be called at the end of the IO
+    /// handler.
     pub fn deregister_socket<H: Handler>(
         &self, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
@@ -438,6 +481,7 @@ impl Connection {
     }
 }
 
+/// User friendly connection information that used by Debug RPC.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionDetails {
@@ -450,6 +494,10 @@ pub struct ConnectionDetails {
     pub registered: bool,
 }
 
+/// Assembler that prefix packet with length information.
+///
+/// To avoid memory copy, the first n-bytes will be swapped into the end, and
+/// use the first n-bytes for packet length information.
 pub struct PacketWithLenAssembler {
     data_len_bytes: usize,
     max_data_len: usize,
@@ -540,7 +588,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{io::*, throttling::THROTTLING_SERVICE};
+    use crate::io::*;
     use mio::Ready;
     use std::{
         cmp,
@@ -691,27 +739,6 @@ mod tests {
             assert!(status.is_ok());
             assert!(status.unwrap().is_none());
         }
-    }
-
-    #[test]
-    fn test_packet_drop() {
-        let cur_queue_size = THROTTLING_SERVICE.write().on_enqueue(0).unwrap();
-        let cur_packets = get_high_priority_packets();
-
-        {
-            let _p = Packet::new(vec![1, 2, 3], SendQueuePriority::High);
-            assert_eq!(
-                THROTTLING_SERVICE.write().on_enqueue(0).unwrap(),
-                cur_queue_size + 3
-            );
-            assert_eq!(get_high_priority_packets(), cur_packets + 1);
-        }
-
-        assert_eq!(
-            THROTTLING_SERVICE.write().on_enqueue(0).unwrap(),
-            cur_queue_size
-        );
-        assert_eq!(get_high_priority_packets(), cur_packets);
     }
 
     #[test]

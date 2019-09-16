@@ -1,5 +1,5 @@
 use crate::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
@@ -7,6 +7,7 @@ use crate::{
         consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
     },
     pow::ProofOfWorkConfig,
+    state_exposer::{SharedStateExposer, StateExposer},
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
     sync::SynchronizationGraph,
@@ -116,7 +117,11 @@ pub fn initialize_synchronization_graph(
         ledger_db.clone(),
         storage_manager,
         worker_thread_pool,
-        DataManagerConfiguration::new(false, true, 250000),
+        DataManagerConfiguration::new(
+            false,  /* do not record transaction address */
+            250000, /* max cached tx count */
+            DbType::Rocksdb,
+        ),
     ));
 
     let verification_config = VerificationConfig::new(
@@ -129,10 +134,17 @@ pub fn initialize_synchronization_graph(
         verification_config,
     ));
     let statistics = Arc::new(Statistics::new());
+    let state_exposer = SharedStateExposer::new(StateExposer::new());
 
     let vm = VmFactory::new(1024 * 32);
-    let pow_config = ProofOfWorkConfig::new(true, Some(10));
-
+    let pow_config = ProofOfWorkConfig::new(
+        true,  /* test_mode */
+        false, /* use_stratum */
+        Some(10),
+        String::from(""), /* stratum_listen_addr */
+        0,                /* stratum_port */
+        None,             /* stratum_secret */
+    );
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
@@ -154,6 +166,7 @@ pub fn initialize_synchronization_graph(
         statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
+        state_exposer.clone(),
         verification_config,
     ));
 

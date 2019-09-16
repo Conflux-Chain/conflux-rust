@@ -2,14 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{LedgerInfo, LedgerProof, Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, LedgerInfo, Peers, UniqueId},
         message::{GetWitnessInfo, WitnessInfoWithHeight},
         Error, ErrorKind,
     },
@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-use super::{missing_item::KeyReverseOrdered, sync_manager::SyncManager};
+use super::common::{KeyReverseOrdered, LedgerProof, SyncManager};
 
 #[derive(Debug)]
 struct Statistics {
@@ -52,10 +52,14 @@ pub struct Witnesses {
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingWitness>,
+
+    // roots received from full node
+    // (state_root_hash, receipts_root_hash, logs_bloom_hash)
+    verified: RwLock<HashMap<u64, (H256, H256, H256)>>,
 }
 
 impl Witnesses {
-    pub(super) fn new(
+    pub fn new(
         consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
@@ -63,6 +67,7 @@ impl Witnesses {
         let latest_verified_header = RwLock::new(0);
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone());
+        let verified = RwLock::new(HashMap::new());
 
         Witnesses {
             consensus,
@@ -70,6 +75,7 @@ impl Witnesses {
             ledger,
             request_id_allocator,
             sync_manager,
+            verified,
         }
     }
 
@@ -84,6 +90,12 @@ impl Witnesses {
         }
     }
 
+    /// Get root hashes for `epoch` from local cache.
+    #[inline]
+    pub fn root_hashes_of(&self, epoch: u64) -> Option<(H256, H256, H256)> {
+        self.verified.read().get(&epoch).cloned()
+    }
+
     #[inline]
     pub fn request<I>(&self, witnesses: I)
     where I: Iterator<Item = u64> {
@@ -91,34 +103,53 @@ impl Witnesses {
         self.sync_manager.insert_waiting(witnesses);
     }
 
+    fn handle_witness_info(
+        &self, item: WitnessInfoWithHeight,
+    ) -> Result<(), Error> {
+        let witness = item.height;
+        let state_roots = item.state_roots;
+        let receipts = item.receipt_hashes;
+        let blooms = item.bloom_hashes;
+
+        // validate hashes
+        let header = self.ledger.pivot_header_of(witness)?;
+        LedgerProof::StateRoot(state_roots.clone()).validate(&header)?;
+        LedgerProof::ReceiptsRoot(receipts.clone()).validate(&header)?;
+        LedgerProof::LogsBloomHash(blooms.clone()).validate(&header)?;
+
+        // the previous validation should not pass if this is not true
+        assert!(state_roots.len() == receipts.len());
+        assert!(receipts.len() == blooms.len());
+
+        // handle valid hashes
+        let mut verified = self.verified.write();
+
+        for ii in 0..state_roots.len() as u64 {
+            // find corresponding epoch
+            let height = witness - ii;
+            let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
+
+            // store receipts root and logs bloom hash
+            verified.insert(
+                epoch,
+                (
+                    state_roots[ii as usize],
+                    receipts[ii as usize],
+                    blooms[ii as usize],
+                ),
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn receive<I>(&self, witnesses: I) -> Result<(), Error>
     where I: Iterator<Item = WitnessInfoWithHeight> {
         for item in witnesses {
             let witness = item.height;
-            let receipts = item.receipt_hashes;
-            let blooms = item.bloom_hashes;
 
-            // validate hashes
-            let header = self.ledger.pivot_header_of(witness)?;
-            LedgerProof::ReceiptsRoot(receipts.clone()).validate(&header)?;
-            LedgerProof::LogsBloomHash(blooms.clone()).validate(&header)?;
-
-            // the previous validation should not pass if this is not true
-            assert!(receipts.len() == blooms.len());
-
-            // handle valid hashes
-            for ii in 0..blooms.len() as u64 {
-                // find corresponding epoch
-                let height = witness - ii;
-                let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
-
-                // store receipts root and logs bloom hash
-                self.consensus.data_man.insert_epoch_execution_commitments(
-                    self.ledger.pivot_hash_of(epoch)?,
-                    receipts[ii as usize],
-                    blooms[ii as usize],
-                );
-            }
+            // validate and store
+            self.handle_witness_info(item)?;
 
             // signal receipt
             self.sync_manager.remove_in_flight(&witness);
@@ -128,7 +159,7 @@ impl Witnesses {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
+    pub fn clean_up(&self) {
         let timeout = Duration::from_millis(WITNESS_REQUEST_TIMEOUT_MS);
         let witnesses = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(witnesses.into_iter());
@@ -154,7 +185,7 @@ impl Witnesses {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("witness sync statistics: {:?}", self.get_statistics());
 
         if let Err(e) = self.verify_pivot_chain() {
@@ -183,16 +214,9 @@ impl Witnesses {
     //     a) it is not blamed (i.e. it is its own witness)
     //     b) we have received and validated the corresponding root
     #[inline]
-    fn is_header_trusted(&self, height: u64) -> Result<bool, Error> {
+    fn is_header_trusted(&self, height: u64) -> bool {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
-        let pivot = self.ledger.pivot_hash_of(epoch)?;
-
-        Ok(!self.is_blamed(height)
-            || self
-                .consensus
-                .data_man
-                .get_epoch_execution_commitments(&pivot)
-                .is_some())
+        !self.is_blamed(height) || self.verified.read().contains_key(&epoch)
     }
 
     fn verify_pivot_chain(&self) -> Result<(), Error> {
@@ -206,7 +230,7 @@ impl Witnesses {
 
         // iterate through all trusted pivot headers
         // TODO(thegaram): consider chain-reorg
-        while height < best && self.is_header_trusted(height)? {
+        while height < best && self.is_header_trusted(height) {
             trace!("header {} is valid", height);
             let header = self.ledger.pivot_header_of(height)?;
             let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
@@ -214,10 +238,13 @@ impl Witnesses {
             // for blamed and blaming blocks, we've stored the correct roots in
             // the `on_witness_info` response handler
             if !self.is_blamed(height) && header.blame() == 0 {
-                self.consensus.data_man.insert_epoch_execution_commitments(
-                    self.ledger.pivot_hash_of(epoch)?,
-                    *header.deferred_receipts_root(),
-                    *header.deferred_logs_bloom_hash(),
+                self.verified.write().insert(
+                    epoch,
+                    (
+                        *header.deferred_state_root(),
+                        *header.deferred_receipts_root(),
+                        *header.deferred_logs_bloom_hash(),
+                    ),
                 );
             }
 

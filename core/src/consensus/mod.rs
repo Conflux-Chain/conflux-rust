@@ -14,7 +14,7 @@ use super::consensus::consensus_inner::{
 };
 use crate::{
     block_data_manager::BlockDataManager, bytes::Bytes, pow::ProofOfWorkConfig,
-    state::State, statistics::SharedStatistics,
+    state::State, state_exposer::SharedStateExposer,statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool, verification::VerificationConfig,
     vm_factory::VmFactory,
 };
@@ -123,6 +123,7 @@ pub struct ConsensusGraph {
     /// We use `Mutex` here because other thread will only modify it once and
     /// after that only current thread will operate this map.
     pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+    state_exposer: SharedStateExposer,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -135,6 +136,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
+        state_exposer: SharedStateExposer,
         eth_compatibility_mode: bool,
     ) -> Self
     {
@@ -169,6 +171,7 @@ impl ConsensusGraph {
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Mutex::new(Default::default()),
+            state_exposer,
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -183,7 +186,8 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, verification_config: VerificationConfig,
+        pow_config: ProofOfWorkConfig, state_exposer: SharedStateExposer,
+        verification_config: VerificationConfig,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -195,6 +199,7 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
+            state_exposer,
             verification_config.eth_compatibility_mode,
         )
     }
@@ -396,6 +401,8 @@ impl ConsensusGraph {
     /// getting inner locks.
     pub fn update_best_info(&self, inner: &ConsensusGraphInner) {
         let mut best_info = self.best_info.write();
+        self.state_exposer.write().consensus_graph.best_block_hash =
+            inner.best_block_hash();
 
         let terminal_hashes = inner.terminal_hashes();
         let (terminal_block_hashes, bounded_terminal_block_hashes) =
@@ -540,10 +547,6 @@ impl ConsensusGraph {
             })
     }
 
-    pub fn get_epoch_number_from_hash(&self, hash: &H256) -> Option<u64> {
-        self.inner.read().get_epoch_number_from_hash(&hash)
-    }
-
     pub fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
@@ -562,6 +565,28 @@ impl ConsensusGraph {
         } else {
             None
         }
+    }
+
+    pub fn get_state_root_by_pivot_height(
+        &self, pivot_height: u64,
+    ) -> Option<H256> {
+        let inner = self.inner.read();
+        let height = pivot_height + DEFERRED_STATE_EPOCH_COUNT as u64;
+        let pivot_index = match height {
+            h if h < inner.get_cur_era_genesis_height() => return None,
+            h => inner.height_to_pivot_index(h),
+        };
+        if pivot_index < inner.pivot_chain.len() {
+            let pivot_hash = &inner.arena[inner.pivot_chain[pivot_index]].hash;
+            return match self
+                .data_man
+                .consensus_graph_execution_info_from_db(pivot_hash)
+            {
+                Some(info) => Some(info.original_deferred_state_root),
+                None => None,
+            };
+        }
+        None
     }
 
     pub fn transaction_count(
@@ -645,7 +670,7 @@ impl ConsensusGraph {
                     let hash = inner.arena[*index].hash;
                     if let Some(block_log_bloom) = self
                         .data_man
-                        .block_results_by_hash_with_epoch(
+                        .block_execution_result_by_hash_with_epoch(
                             &hash,
                             &epoch_hash,
                             false, /* update_cache */

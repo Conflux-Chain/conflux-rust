@@ -19,25 +19,23 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    connection::{Connection, WriteStatus},
-    node_table::NodeId,
-    service::HostMetadata,
-    Error, ErrorKind,
+    connection::Connection, node_table::NodeId, service::HostMetadata, Error,
+    ErrorKind,
 };
-use cfx_bytes::Bytes;
-use cfx_types::{Public, H256, H520};
+use cfx_types::{Public, H256};
 use io::{IoContext, StreamToken};
-use keccak_hash::write_keccak;
-use keylib::{
-    crypto::{ecdh, ecies},
-    recover, sign, Generator, KeyPair, Random, Secret,
-};
+use keylib::{crypto::ecies, Secret};
 use mio::tcp::TcpStream;
 use priority_send_queue::SendQueuePriority;
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
+
+const AUTH_PACKET_SIZE: usize = 209;
+const ACK_OF_AUTH_PACKET_SIZE: usize = 177;
+const ACK_OF_ACK_PACKET_SIZE: usize = 145;
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 // used for test purpose only to bypass the cryptography
 pub static BYPASS_CRYPTOGRAPHY: AtomicBool = AtomicBool::new(false);
@@ -48,13 +46,15 @@ enum HandshakeState {
     New,
     /// Waiting for auth packet
     ReadingAuth,
-    /// Waiting for ack packet
-    ReadingAck,
+    /// Waiting for ack of auth packet
+    ReadingAckofAuth,
+    /// Waiting for ack of ack packet
+    ReadingAckofAck,
     /// Ready to start a session
     StartSession,
 }
 
-/// `RLPx` protocol handshake. See https://github.com/ethereum/devp2p/blob/master/rlpx.md#encrypted-handshake
+/// Three-way handshake to exchange the node Id.
 pub struct Handshake {
     /// Remote node public key
     pub id: NodeId,
@@ -62,60 +62,32 @@ pub struct Handshake {
     pub connection: Connection,
     /// Handshake state
     state: HandshakeState,
-    /// Outgoing or incoming connection
-    pub originated: bool,
-    /// ECDH ephemeral
-    pub ecdhe: KeyPair,
-    /// Connection nonce
-    pub nonce: H256,
-    /// Handshake public key
-    pub remote_ephemeral: Public,
-    /// Remote connection nonce.
-    pub remote_nonce: H256,
-    /// A copy of received encrypted auth packet
-    pub auth_cipher: Bytes,
-    /// A copy of received encrypted ack packet
-    pub ack_cipher: Bytes,
+    /// nonce for verification
+    nonce: H256,
 }
-
-const V4_AUTH_PACKET_SIZE: usize = 307;
-const V4_ACK_PACKET_SIZE: usize = 210;
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl Handshake {
     /// Create a new handshake object
     pub fn new(
-        token: StreamToken, id: Option<&NodeId>, socket: TcpStream, nonce: H256,
-    ) -> Result<Handshake, Error> {
-        Ok(Handshake {
+        token: StreamToken, id: Option<&NodeId>, socket: TcpStream,
+    ) -> Self {
+        Handshake {
             id: id.cloned().unwrap_or_else(|| NodeId::new()),
             connection: Connection::new(token, socket),
-            originated: false,
             state: HandshakeState::New,
-            ecdhe: Random.generate()?,
-            nonce,
-            remote_ephemeral: Public::new(),
-            remote_nonce: H256::new(),
-            auth_cipher: Bytes::new(),
-            ack_cipher: Bytes::new(),
-        })
+            nonce: H256::random(),
+        }
     }
 
     /// Start a handshake
     pub fn start<Message>(
         &mut self, io: &IoContext<Message>, host: &HostMetadata,
-        originated: bool,
     ) -> Result<(), Error>
-    where
-        Message: Send + Clone + Sync + 'static,
-    {
-        self.originated = originated;
+    where Message: Send + Clone + Sync + 'static {
+        io.register_timer(self.connection.token(), HANDSHAKE_TIMEOUT)?;
 
-        io.register_timer(self.connection.token(), HANDSHAKE_TIMEOUT)
-            .ok();
-
-        if originated {
-            self.write_auth(io, host.secret(), host.id())?;
+        if !self.id.is_zero() {
+            self.write_auth(io, host.id())?;
         } else {
             self.state = HandshakeState::ReadingAuth;
         };
@@ -154,13 +126,16 @@ impl Handshake {
                     self.read_auth(io, host.secret(), &data)?;
                 }
             }
-            HandshakeState::ReadingAck => {
-                self.read_ack(host.secret(), &data)?;
+            HandshakeState::ReadingAckofAuth => {
+                self.read_ack_of_auth(io, host.secret(), &data)?;
+            }
+            HandshakeState::ReadingAckofAck => {
+                self.read_ack_of_ack(host.secret(), &data)?;
             }
         }
 
         if self.state == HandshakeState::StartSession {
-            io.clear_timer(self.connection.token()).ok();
+            io.clear_timer(self.connection.token())?;
         }
 
         trace!("handshake readable leave, state = {:?}", self.state);
@@ -168,25 +143,25 @@ impl Handshake {
         Ok(true)
     }
 
-    /// Writable IO handler.
-    pub fn writable<Message>(
-        &mut self, io: &IoContext<Message>,
-    ) -> Result<WriteStatus, Error>
-    where Message: Send + Clone + Sync + 'static {
-        self.connection.writable(io)
-    }
-
-    fn set_auth(
-        &mut self, host_secret: &Secret, sig: &[u8], remote_public: &[u8],
-        remote_nonce: &[u8],
+    /// Sends auth message
+    fn write_auth<Message>(
+        &mut self, io: &IoContext<Message>, public: &Public,
     ) -> Result<(), Error>
-    {
-        self.id.clone_from_slice(remote_public);
-        self.remote_nonce.clone_from_slice(remote_nonce);
-        let shared = *ecdh::agree(host_secret, &self.id)?;
-        let signature = H520::from_slice(sig);
-        self.remote_ephemeral =
-            recover(&signature.into(), &(shared ^ self.remote_nonce))?;
+    where Message: Send + Clone + Sync + 'static {
+        trace!(
+            "Sending handshake auth to {:?}",
+            self.connection.remote_addr_str()
+        );
+
+        let mut data = Vec::with_capacity(public.len() + self.nonce.len());
+        data.extend_from_slice(&public);
+        data.extend_from_slice(&self.nonce);
+
+        let message = ecies::encrypt(&self.id, &[], &data)?;
+
+        self.connection.send(io, message, SendQueuePriority::High)?;
+        self.state = HandshakeState::ReadingAckofAuth;
+
         Ok(())
     }
 
@@ -200,25 +175,42 @@ impl Handshake {
             self.connection.remote_addr_str()
         );
 
-        if data.len() != V4_AUTH_PACKET_SIZE {
+        if data.len() != AUTH_PACKET_SIZE {
             debug!(
-                "failed to read auth, wrong auth packet size {}, expected = {}",
+                "failed to read auth, wrong packet size {}, expected = {}",
                 data.len(),
-                V4_AUTH_PACKET_SIZE
+                AUTH_PACKET_SIZE
             );
             return Err(ErrorKind::BadProtocol.into());
         }
 
-        self.auth_cipher = data.to_vec();
-
         let auth = ecies::decrypt(secret, &[], data)?;
-        let (sig, rest) = auth.split_at(65);
-        let (_, rest) = rest.split_at(32);
-        let (pubk, rest) = rest.split_at(64);
-        let (nonce, _) = rest.split_at(32);
 
-        self.set_auth(secret, sig, pubk, nonce)?;
-        self.write_ack(io)?;
+        let (remote_public, remote_nonce) = auth.split_at(self.id.len());
+        self.id.clone_from_slice(remote_public);
+
+        self.write_ack_of_auth(io, remote_nonce)
+    }
+
+    /// Sends ack of auth message
+    fn write_ack_of_auth<Message>(
+        &mut self, io: &IoContext<Message>, remote_nonce: &[u8],
+    ) -> Result<(), Error>
+    where Message: Send + Clone + Sync + 'static {
+        trace!(
+            "Sending handshake ack of auth to {:?}",
+            self.connection.remote_addr_str()
+        );
+
+        let mut data =
+            Vec::with_capacity(remote_nonce.len() + self.nonce.len());
+        data.extend_from_slice(remote_nonce);
+        data.extend_from_slice(self.nonce.as_ref());
+
+        let message = ecies::encrypt(&self.id, &[], &data)?;
+
+        self.connection.send(io, message, SendQueuePriority::High)?;
+        self.state = HandshakeState::ReadingAckofAck;
 
         Ok(())
     }
@@ -241,97 +233,80 @@ impl Handshake {
         Ok(())
     }
 
-    /// Parse and validate ack message
-    fn read_ack(&mut self, secret: &Secret, data: &[u8]) -> Result<(), Error> {
+    /// Parse and validate ack of auth message
+    fn read_ack_of_auth<Message>(
+        &mut self, io: &IoContext<Message>, secret: &Secret, data: &[u8],
+    ) -> Result<(), Error>
+    where Message: Send + Clone + Sync + 'static {
         trace!(
-            "Received handshake ack from {:?}",
+            "Received handshake ack of auth from {:?}",
             self.connection.remote_addr_str()
         );
 
-        if data.len() != V4_ACK_PACKET_SIZE {
+        if data.len() != ACK_OF_AUTH_PACKET_SIZE {
             debug!(
-                "failed to read ack, wrong ack packet size {}, expected = {}",
+                "failed to read ack of auth, wrong packet size {}, expected = {}",
                 data.len(),
-                V4_ACK_PACKET_SIZE
+                ACK_OF_AUTH_PACKET_SIZE
             );
             return Err(ErrorKind::BadProtocol.into());
         }
 
-        self.ack_cipher = data.to_vec();
-
         let ack = ecies::decrypt(secret, &[], data)?;
-        self.remote_ephemeral.clone_from_slice(&ack[0..64]);
-        self.remote_nonce.clone_from_slice(&ack[64..(64 + 32)]);
 
+        let (self_nonce, remote_nonce) = ack.split_at(self.nonce.len());
+
+        if self_nonce != &self.nonce[..] {
+            debug!("failed to read ack of auth, nonce mismatch");
+            return Err(ErrorKind::BadProtocol.into());
+        }
+
+        self.write_ack_of_ack(io, remote_nonce)
+    }
+
+    fn write_ack_of_ack<Message>(
+        &mut self, io: &IoContext<Message>, remote_nonce: &[u8],
+    ) -> Result<(), Error>
+    where Message: Send + Clone + Sync + 'static {
+        trace!(
+            "Sending handshake ack of ack to {:?}",
+            self.connection.remote_addr_str()
+        );
+
+        let message = ecies::encrypt(&self.id, &[], remote_nonce)?;
+
+        self.connection.send(io, message, SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
 
         Ok(())
     }
 
-    /// Sends auth message
-    fn write_auth<Message>(
-        &mut self, io: &IoContext<Message>, secret: &Secret, public: &Public,
-    ) -> Result<(), Error>
-    where Message: Send + Clone + Sync + 'static {
+    fn read_ack_of_ack(
+        &mut self, secret: &Secret, data: &[u8],
+    ) -> Result<(), Error> {
         trace!(
-            "Sending handshake auth to {:?}",
+            "Received handshake ack of ack from {:?}",
             self.connection.remote_addr_str()
         );
 
-        let mut data = [0u8; /*Signature::SIZE*/ 65 + /*H256::SIZE*/ 32 + /*Public::SIZE*/ 64 + /*H256::SIZE*/ 32 + 1];
-        let len = data.len();
-        {
-            data[len - 1] = 0x0;
-            let (sig, rest) = data.split_at_mut(65);
-            let (hepubk, rest) = rest.split_at_mut(32);
-            let (pubk, rest) = rest.split_at_mut(64);
-            let (nonce, _) = rest.split_at_mut(32);
-
-            // E(remote-pubk, S(ecdhe-random, ecdh-shared-secret^nonce) ||
-            // H(ecdhe-random-pubk) || pubk || nonce || 0x0)
-            let shared = *ecdh::agree(secret, &self.id)?;
-            sig.copy_from_slice(&*sign(
-                self.ecdhe.secret(),
-                &(shared ^ self.nonce),
-            )?);
-            write_keccak(self.ecdhe.public(), hepubk);
-            pubk.copy_from_slice(public.as_ref());
-            nonce.copy_from_slice(self.nonce.as_ref());
+        if data.len() != ACK_OF_ACK_PACKET_SIZE {
+            debug!(
+                "failed to read ack of ack, wrong packet size {}, expected = {}",
+                data.len(),
+                ACK_OF_ACK_PACKET_SIZE
+            );
+            return Err(ErrorKind::BadProtocol.into());
         }
 
-        let message = ecies::encrypt(&self.id, &[], &data)?;
+        let nonce = ecies::decrypt(secret, &[], data)?;
 
-        self.auth_cipher = message.clone();
-        self.connection.send(io, message, SendQueuePriority::High)?;
-        self.state = HandshakeState::ReadingAck;
-
-        Ok(())
-    }
-
-    /// Sends ack message
-    fn write_ack<Message>(
-        &mut self, io: &IoContext<Message>,
-    ) -> Result<(), Error>
-    where Message: Send + Clone + Sync + 'static {
-        trace!(
-            "Sending handshake ack to {:?}",
-            self.connection.remote_addr_str()
-        );
-
-        let mut data = [0u8; 1 + /*Public::SIZE*/ 64 + /*H256::SIZE*/ 32];
-        let len = data.len();
-        {
-            data[len - 1] = 0x0;
-            let (epubk, rest) = data.split_at_mut(64);
-            let (nonce, _) = rest.split_at_mut(32);
-            self.ecdhe.public().copy_to(epubk);
-            self.nonce.copy_to(nonce);
+        if &nonce[..] != &self.nonce[..] {
+            debug!("failed to read ack of ack, nonce mismatch");
+            return Err(ErrorKind::BadProtocol.into());
         }
 
-        let message = ecies::encrypt(&self.id, &[], &data)?;
-        self.ack_cipher = message.clone();
-        self.connection.send(io, message, SendQueuePriority::High)?;
         self.state = HandshakeState::StartSession;
+
         Ok(())
     }
 }

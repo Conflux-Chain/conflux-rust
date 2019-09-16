@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[allow(unused)]
 pub const SQLITE_NO_PARAM: &[SqlBindableRef] = &[];
 pub type SqlBindableRef<'a> = &'a (dyn SqlBindable + 'a);
 pub type SqlBindableBox<'a> = Box<dyn SqlBindable + 'a>;
@@ -310,17 +309,6 @@ pub struct MappedRows<'db, F> {
     f: F,
 }
 
-impl<F> Drop for MappedRows<'_, F> {
-    fn drop(&mut self) {
-        match &mut self.maybe_rows {
-            None => {}
-            Some(stmt) => {
-                stmt.reset().ok();
-            }
-        }
-    }
-}
-
 impl<'db, Item, F: FnMut(&Statement<'db>) -> Item> MappedRows<'db, F> {
     pub fn expect_one_row(&mut self) -> Result<Option<Item>> {
         if self.maybe_rows.is_none() {
@@ -402,6 +390,7 @@ impl ScopedStatement {
     fn bind<'p, Param: Borrow<dyn SqlBindable + 'p>>(
         &mut self, params: &[Param],
     ) -> Result<()> {
+        self.stmt.reset().ok();
         for i in 0..params.len() {
             // Sqlite index starts at 1.
             self.stmt.bind(i + 1, params[i].borrow())?
@@ -419,7 +408,6 @@ impl ScopedStatement {
             Ok(State::Done) => Ok(None),
             Ok(State::Row) => Ok(Some(self.as_mut())),
             Err(e) => {
-                self.stmt.reset().ok();
                 bail!(e);
             }
         }

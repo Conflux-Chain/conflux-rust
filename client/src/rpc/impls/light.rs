@@ -7,7 +7,7 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use cfx_types::{H160, H256};
-use cfxcore::{light_protocol::QueryService, ConsensusGraph, PeerInfo};
+use cfxcore::{light_protocol::QueryService, PeerInfo};
 use primitives::TransactionWithSignature;
 
 use network::{
@@ -28,71 +28,31 @@ use crate::rpc::{
 use super::common::RpcImpl as CommonImpl;
 
 pub struct RpcImpl {
-    consensus: Arc<ConsensusGraph>,
     light: Arc<QueryService>,
 }
 
 impl RpcImpl {
-    pub fn new(
-        consensus: Arc<ConsensusGraph>, light: Arc<QueryService>,
-    ) -> Self {
-        RpcImpl { consensus, light }
-    }
-
-    fn epoch_to_height(&self, epoch: EpochNumber) -> Result<u64, String> {
-        // NOTE: The epoch returned by consensus.best_state_epoch_number() is
-        // not guaranteed to exist, so we use the previous one instead. This
-        // way, the block `best_with_state_root + DEFERRED_STATE_EPOCH_COUNT`
-        // exists and we can safely use its `deferred_state_root` field for
-        // state validation.
-        let best_with_state_root = self.consensus.best_state_epoch_number() - 1;
-
-        match epoch {
-            EpochNumber::Earliest => Ok(0),
-            EpochNumber::LatestMined => Ok(best_with_state_root),
-            EpochNumber::LatestState => Ok(best_with_state_root),
-            EpochNumber::Num(num) => {
-                if num > best_with_state_root {
-                    return Err(format!(
-                        "Epoch number too large. Received: {}. Largest: {}.",
-                        num, best_with_state_root
-                    ));
-                }
-                Ok(num)
-            }
-        }
-    }
-
-    fn code(
-        &self, _addr: RpcH160, _epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
-        unimplemented!()
-    }
+    pub fn new(light: Arc<QueryService>) -> Self { RpcImpl { light } }
 
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         let address: H160 = address.into();
-        let num = num.unwrap_or(EpochNumber::LatestState).into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
-            "RPC Request: cfx_getBalance address={:?} num={:?}",
-            address, num
+            "RPC Request: cfx_getBalance address={:?} epoch={:?}",
+            address, epoch
         );
 
-        let epoch = self
-            .epoch_to_height(num)
-            .map_err(RpcError::invalid_params)?;
-
-        debug!("Epoch number is {}", epoch);
-
-        let balance = self
+        let account = self
             .light
             .get_account(epoch, address)
-            .map(|account| account.balance.into())
-            .unwrap_or_default();
+            .map_err(RpcError::invalid_params)?;
 
-        Ok(balance)
+        Ok(account
+            .map(|account| account.balance.into())
+            .unwrap_or_default())
     }
 
     #[allow(unused_variables)]
@@ -101,6 +61,24 @@ impl RpcImpl {
     ) -> RpcResult<Bytes> {
         // TODO
         unimplemented!()
+    }
+
+    fn code(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        let address: H160 = address.into();
+        let epoch = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getCode address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        self.light
+            .get_code(epoch, address)
+            .map(|code| code.unwrap_or_default())
+            .map(Bytes::new)
+            .map_err(RpcError::invalid_params)
     }
 
     #[allow(unused_variables)]
@@ -149,15 +127,27 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    pub fn transaction_by_hash(
+    fn transaction_by_hash(
         &self, hash: RpcH256,
     ) -> RpcResult<Option<RpcTransaction>> {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
 
-        let maybe_tx = self.light.get_tx(hash.into());
-        Ok(maybe_tx.map(|tx| RpcTransaction::from_signed(&tx, None)))
+        let tx = self
+            .light
+            .get_tx(hash.into())
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(Some(RpcTransaction::from_signed(&tx, None)))
+    }
+
+    fn get_transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> RpcResult<Option<RpcReceipt>> {
+        let hash: H256 = tx_hash.into();
+        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        unimplemented!()
     }
 }
 
@@ -200,14 +190,15 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
-            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn send_usable_genesis_accounts(& self,raw_addresses:Bytes, raw_secrets:Bytes) ->RpcResult<Bytes>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
+            fn get_transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
     }
 }
@@ -231,7 +222,6 @@ impl TestRpc for TestRpcImpl {
             fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
             fn chain(&self) -> RpcResult<Vec<RpcBlock>>;
             fn drop_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
-            fn get_best_block_hash(&self) -> RpcResult<H256>;
             fn get_block_count(&self) -> RpcResult<u64>;
             fn get_goodput(&self) -> RpcResult<String>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;

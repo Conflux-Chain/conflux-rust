@@ -22,30 +22,47 @@ pub struct ProofOfWorkSolution {
     pub nonce: u64,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct ProofOfWorkConfig {
     pub test_mode: bool,
+    pub use_stratum: bool,
     pub initial_difficulty: u64,
     pub block_generation_period: u64,
     pub difficulty_adjustment_epoch_period: u64,
+    pub stratum_listen_addr: String,
+    pub stratum_port: u16,
+    pub stratum_secret: Option<H256>,
 }
 
 impl ProofOfWorkConfig {
-    pub fn new(test_mode: bool, initial_difficulty: Option<u64>) -> Self {
+    pub fn new(
+        test_mode: bool, use_stratum: bool, initial_difficulty: Option<u64>,
+        stratum_listen_addr: String, stratum_port: u16,
+        stratum_secret: Option<H256>,
+    ) -> Self
+    {
         if test_mode {
             ProofOfWorkConfig {
                 test_mode,
+                use_stratum,
                 initial_difficulty: initial_difficulty.unwrap_or(4),
                 block_generation_period: 1000000,
                 difficulty_adjustment_epoch_period: 20,
+                stratum_listen_addr,
+                stratum_port,
+                stratum_secret,
             }
         } else {
             ProofOfWorkConfig {
                 test_mode,
+                use_stratum,
                 initial_difficulty: INITIAL_DIFFICULTY,
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
                 difficulty_adjustment_epoch_period:
                     DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD,
+                stratum_listen_addr,
+                stratum_port,
+                stratum_secret,
             }
         }
     }

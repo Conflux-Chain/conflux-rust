@@ -183,6 +183,8 @@ class LatencyExperiment(ArgumentHolder):
                 "collect metrics",
             )
 
+            execute("cp exp.log {}.exp.log".format(self.tag(config)), 3, "copy exp.log")
+
         print("=========================================================")
         print(
             "archive the experiment results into [{}] ...".format(
@@ -190,7 +192,7 @@ class LatencyExperiment(ArgumentHolder):
             )
         )
         os.system(
-            "tar cvfz {} {} *.csv *.metrics.log *.conflux.svg".format(
+            "tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log *.conflux.svg".format(
                 self.stat_archive_file, self.stat_log_file
             )
         )

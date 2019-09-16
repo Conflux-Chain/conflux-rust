@@ -17,9 +17,6 @@ pub trait TestRpc {
     #[rpc(name = "sayhello")]
     fn say_hello(&self) -> RpcResult<String>;
 
-    #[rpc(name = "getbestblockhash")]
-    fn get_best_block_hash(&self) -> RpcResult<H256>;
-
     #[rpc(name = "getblockcount")]
     fn get_block_count(&self) -> RpcResult<u64>;
 

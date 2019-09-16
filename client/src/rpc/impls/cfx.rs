@@ -208,6 +208,31 @@ impl RpcImpl {
         }
     }
 
+    fn get_transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> RpcResult<Option<RpcReceipt>> {
+        let hash: H256 = tx_hash.into();
+        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        let transaction_info =
+            self.consensus.get_transaction_info_by_hash(&hash);
+        let (tx, receipt, address) = match transaction_info {
+            None => return Ok(None),
+            Some(info) => info,
+        };
+        let hash = address.block_hash.into();
+        let mut receipt = RpcReceipt::new(tx, receipt, address);
+        let epoch_number = self.consensus.get_block_epoch_number(&hash);
+        receipt.set_epoch_number(epoch_number);
+        if let Some(pivot_height) = epoch_number {
+            if let Some(state_root) =
+                self.consensus.get_state_root_by_pivot_height(pivot_height)
+            {
+                receipt.set_state_root(RpcH256::from(state_root));
+            }
+        }
+        Ok(Some(receipt))
+    }
+
     fn generate(
         &self, num_blocks: usize, num_txs: usize,
     ) -> RpcResult<Vec<H256>> {
@@ -461,6 +486,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn send_usable_genesis_accounts(& self,raw_addresses:Bytes, raw_secrets:Bytes) ->RpcResult<Bytes>;
+            fn get_transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
     }
 }
@@ -484,7 +510,6 @@ impl TestRpc for TestRpcImpl {
             fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
             fn chain(&self) -> RpcResult<Vec<RpcBlock>>;
             fn drop_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
-            fn get_best_block_hash(&self) -> RpcResult<H256>;
             fn get_block_count(&self) -> RpcResult<u64>;
             fn get_goodput(&self) -> RpcResult<String>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;

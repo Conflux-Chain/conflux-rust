@@ -15,6 +15,7 @@ from test_framework.util import (
     assert_greater_than,
     assert_greater_than_or_equal,
     assert_is_hash_string,
+    assert_is_hex_string,
     wait_until,
     checktx,
 )
@@ -122,6 +123,12 @@ class RpcClient:
     def get_logs(self, filter: Filter) -> list:
         logs = self.node.cfx_getLogs(filter.__dict__)
         return logs
+
+    def get_code(self, address: str, epoch: str) -> str:
+        assert_is_hash_string(address, length=40)
+        code = self.node.cfx_getCode(address, epoch)
+        assert_is_hex_string(code)
+        return code
 
     def gas_price(self) -> int:
         return int(self.node.cfx_gasPrice(), 0)
@@ -278,6 +285,9 @@ class RpcClient:
 
     def get_receipt(self, tx_hash: str) -> dict:
         return self.node.gettransactionreceipt(tx_hash)
+
+    def get_transaction_receipt(self, tx_hash: str) -> dict:
+        return self.node.cfx_getTransactionReceipt(tx_hash)
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()

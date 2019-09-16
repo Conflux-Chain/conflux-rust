@@ -17,12 +17,38 @@ lazy_static! {
         GaugeUsize::register("network_throttling_queue_size");
 }
 
+/// Throttling service is used to control the egress bandwidth, so as to avoid
+/// too much egress data cached in buffer.
+///
+/// The throttling is achieved by monitoring the message send queue size of all
+/// TCP sockets. Basically, the throttling is used in 2 ways:
+///
+/// 1. When the queue size reached the configured threshold, the synchronization
+/// layer will reduce the number of peers to broadcast messages, e.g. new block
+/// hashes, transaction digests.
+///
+/// 2. On the other hand, synchronization layer will also refuse to respond any
+/// size sensitive message, e.g. blocks.
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Service {
+    /// Maximum queue size.
+    /// When reached, the queue will refuse any new data.
     queue_capacity: usize,
+    /// Minimum queue size for throttling in manner of ratio.
+    /// If queue size is less than `min_throttle_queue_size`, the throttling
+    /// does not work. Once queue size exceeds the `min_throttle_queue_size`,
+    /// the throttling begins to work in manner of linear ratio. Then, the
+    /// synchronization layer will broadcast messages to less peers.
     min_throttle_queue_size: usize,
+    /// Maximum queue size for throttling in manner of ratio.
+    /// If queue size is between `min_throttle_queue_size` and
+    /// `max_throttle_queue_size`, the throttling works in manner of linear
+    /// ratio. Once queue size exceeds the `max_throttle_queue_size`, the
+    /// throttling not only works in ratio manner, but also blocks any
+    /// message size sensitive operations.
     max_throttle_queue_size: usize,
+    /// Current queue size.
     cur_queue_size: usize,
 }
 
@@ -36,6 +62,7 @@ impl Service {
         }
     }
 
+    /// Initialize the throttling service.
     pub fn initialize(
         &mut self, cap_mb: usize, min_throttle_mb: usize,
         max_throttle_mb: usize,
@@ -64,6 +91,8 @@ impl Service {
         );
     }
 
+    /// Mark data enqueued with specified `data_size`, and return the new queue
+    /// size. If exceeds the queue capacity, return error with concrete reason.
     pub(crate) fn on_enqueue(
         &mut self, data_size: usize,
     ) -> Result<usize, Error> {
@@ -88,6 +117,8 @@ impl Service {
         Ok(self.cur_queue_size)
     }
 
+    /// Mark data dequeued with specified `data_size`, and return the updated
+    /// queue size.
     pub(crate) fn on_dequeue(&mut self, data_size: usize) -> usize {
         if data_size > self.cur_queue_size {
             error!("throttling.on_dequeue: dequeue too much data, data size = {}, queue size = {}", data_size, self.cur_queue_size);
@@ -106,6 +137,9 @@ impl Service {
         self.cur_queue_size
     }
 
+    /// Validate the throttling queue size for any data size sensitive
+    /// operations. If the queue size exceeds the `max_throttle_queue_size`,
+    /// return error with concrete reason.
     pub fn check_throttling(&self) -> Result<(), Error> {
         if self.cur_queue_size > self.max_throttle_queue_size {
             debug!("throttling.check_throttling: throttled, queue size = {}, max throttling size = {}", self.cur_queue_size, self.max_throttle_queue_size);
@@ -115,6 +149,17 @@ impl Service {
         Ok(())
     }
 
+    /// Get the throttling ratio according to the current queue size.
+    ///
+    /// If the queue size is smaller than `min_throttle_queue_size`, return 1.0
+    /// as throttling ratio. Then, it allows to broadcast messages to all peers.
+    ///
+    /// If the queue size is larger than `max_throttle_queue_size`, return 0 as
+    /// throttling ratio. Then, it allows to broadcast messages to configured
+    /// minimum peers.
+    ///
+    /// Otherwise, the throttling works in manner of linear ratio (0, 1), in
+    /// which case it allows to broadcast messages to partial peers.
     pub fn get_throttling_ratio(&self) -> f64 {
         if self.cur_queue_size <= self.min_throttle_queue_size {
             return 1.0;

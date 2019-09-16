@@ -204,10 +204,7 @@ impl Block {
             // PrimitiveBlock does not contain this information
             epoch_number: consensus_inner
                 .get_block_epoch_number(&b.block_header.hash())
-                .map_or(None, |x| match x {
-                    std::u64::MAX => None,
-                    _ => Some(x.into()),
-                }),
+                .map(Into::into),
             // fee system
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),

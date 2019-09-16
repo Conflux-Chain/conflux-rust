@@ -1,0 +1,20 @@
+[package]
+description = "Conflux Stratum lib"
+homepage = "http://www.conflux-chain.io"
+name = "cfx-stratum"
+version = "1.12.0"
+license = "GPL-3.0"
+edition = "2018"
+
+[dependencies]
+cfx-types = { path = "../../cfx_types" }
+keccak-hash = "0.1.2"
+jsonrpc-core = "10.0.1"
+jsonrpc-tcp-server = "10.0.1"
+log = "0.4"
+parking_lot = "0.7"
+
+[dev-dependencies]
+env_logger = "0.5"
+tokio = "0.1"
+tokio-io = "0.1"

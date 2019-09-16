@@ -5,7 +5,7 @@ edition = "2018"
 
 [dependencies]
 mio = "0.6.8"
-clap = "2"
+clap = { version = "2", features = ["yaml"] }
 term_size = "0.3"
 textwrap = "0.9"
 toml = "0.4"
