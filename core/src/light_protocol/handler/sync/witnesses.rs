@@ -4,7 +4,7 @@
 
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -20,7 +20,7 @@ use crate::{
         light::{
             BLAME_CHECK_OFFSET, MAX_WITNESSES_IN_FLIGHT,
             NUM_WAITING_WITNESSES_THRESHOLD, WITNESS_REQUEST_BATCH_SIZE,
-            WITNESS_REQUEST_TIMEOUT_MS,
+            WITNESS_REQUEST_TIMEOUT,
         },
     },
 };
@@ -160,7 +160,7 @@ impl Witnesses {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(WITNESS_REQUEST_TIMEOUT_MS);
+        let timeout = *WITNESS_REQUEST_TIMEOUT;
         let witnesses = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(witnesses.into_iter());
     }

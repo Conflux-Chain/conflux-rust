@@ -9,7 +9,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use cfx_types::H256;
@@ -24,7 +24,7 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT_MS,
+        HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT,
         MAX_HEADERS_IN_FLIGHT,
     },
     sync::SynchronizationGraph,
@@ -204,7 +204,7 @@ impl Headers {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(HEADER_REQUEST_TIMEOUT_MS);
+        let timeout = *HEADER_REQUEST_TIMEOUT;
         let headers = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(headers.into_iter());
     }

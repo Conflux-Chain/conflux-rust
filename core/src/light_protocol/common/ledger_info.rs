@@ -166,6 +166,10 @@ impl LedgerInfo {
     /// Returns a vector of receipts for each block in `epoch`.
     #[inline]
     pub fn receipts_of(&self, epoch: u64) -> Result<Vec<Vec<Receipt>>, Error> {
+        if epoch == 0 {
+            return Ok(vec![]);
+        }
+
         let pivot = self.pivot_hash_of(epoch)?;
         let hashes = self.block_hashes_in(epoch)?;
 
@@ -186,6 +190,10 @@ impl LedgerInfo {
     /// Get the aggregated bloom corresponding to the execution of `epoch`.
     #[inline]
     pub fn bloom_of(&self, epoch: u64) -> Result<Bloom, Error> {
+        if epoch == 0 {
+            return Ok(Bloom::zero());
+        }
+
         let pivot = self.pivot_hash_of(epoch)?;
         let hashes = self.block_hashes_in(epoch)?;
 
