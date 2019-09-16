@@ -267,30 +267,29 @@ class ContractBenchTest(SmartContractBenchBase):
           data = contract.functions.wards(Web3.toChecksumAddress(self.pubA)).buildTransaction(self.tx_conf)["data"]
           result = self.rpc.call(contractAddr, data)
           A = int(result, 0)
+          assert(A == x)
           data = contract.functions.wards(self.sender_checksum).buildTransaction(self.tx_conf)["data"]
           result = self.rpc.call(contractAddr, data)
           B = int(result, 0)
+          assert(B == y)
           data = contract.functions.wards(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
           result = self.rpc.call(contractAddr, data)
           C = int(result, 0)
-          assert([A, B, C] == [x, y, z])
+          assert(C == z)
 
         # deny pubA
         check_wards(0, 2, 0)
         data = contract.functions.set1(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
-        logs = self.rpc.get_logs(self.filter)
-        logs = [x['topics'] for x in logs[-4:]]
         check_wards(0, 2, 1)
+        data = contract.functions.set2(Web3.toChecksumAddress(self.pubA)).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
+        check_wards(2, 2, 1)
         data = contract.functions.set0(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
-        logs = self.rpc.get_logs(self.filter)
-        logs = [x['topics'] for x in logs[-4:]]
-        check_wards(0, 2, 0)
-        data = contract.functions.set0(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+        check_wards(2, 2, 0)
+        data = contract.functions.set0(Web3.toChecksumAddress(self.pubA)).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
-        logs = self.rpc.get_logs(self.filter)
-        logs = [x['topics'] for x in logs[-4:]]
         check_wards(0, 2, 0)
 
 
@@ -354,7 +353,6 @@ class ContractBenchTest(SmartContractBenchBase):
         gas_price = 10
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
-        '''
         result = self.rpc.get_logs(self.filter)
         assert_equal(result, [])
         self.testEventContract()
@@ -365,8 +363,7 @@ class ContractBenchTest(SmartContractBenchBase):
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testHTLCContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
-        self.testDaiContract()
-        '''
+        #self.testDaiContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testMappingContract()
         self.log.info("Pass")
