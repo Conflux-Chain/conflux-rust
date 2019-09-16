@@ -149,14 +149,6 @@ impl RpcImpl {
         info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
         unimplemented!()
     }
-
-    fn get_transaction_receipt(
-        &self, tx_hash: RpcH256,
-    ) -> RpcResult<Option<RpcReceipt>> {
-        let hash: H256 = tx_hash.into();
-        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
-        unimplemented!()
-    }
 }
 
 // macro for reducing boilerplate for unsupported methods
