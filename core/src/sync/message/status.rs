@@ -16,7 +16,6 @@ use std::{collections::HashSet, time::Instant};
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct Status {
     pub protocol_version: u8,
-    pub network_id: u8,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub terminal_block_hashes: Vec<H256>,

@@ -296,7 +296,6 @@ impl Handler {
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(StatusPing {
             genesis_hash: self.consensus.data_man.true_genesis_block.hash(),
-            network_id: 0x0,
             node_type: NodeType::Light,
             protocol_version: LIGHT_PROTOCOL_VERSION,
         });
