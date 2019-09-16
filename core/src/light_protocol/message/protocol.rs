@@ -17,7 +17,6 @@ use primitives::{
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StatusPing {
     pub genesis_hash: H256,
-    pub network_id: u8,
     pub node_type: NodeType,
     pub protocol_version: u8,
 }
@@ -26,7 +25,6 @@ pub struct StatusPing {
 pub struct StatusPong {
     pub best_epoch: u64,
     pub genesis_hash: H256,
-    pub network_id: u8,
     pub node_type: NodeType,
     pub protocol_version: u8,
     pub terminals: Vec<H256>,
