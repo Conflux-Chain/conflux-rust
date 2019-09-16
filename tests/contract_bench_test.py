@@ -22,7 +22,7 @@ from conflux.utils import encode_hex, privtoaddr, parse_as_int
 from web3 import Web3
 from easysolc import Solc
 
-class HTLCTest(SmartContractBenchBase):
+class ContractBenchTest(SmartContractBenchBase):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
@@ -164,6 +164,7 @@ class HTLCTest(SmartContractBenchBase):
         contract_id = logs[-1]["topics"][1]
 
         # call getContract
+        cid0 = contract_id
         data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"];
         result = self.rpc.call(contractAddr, data)
         result = result[2:]
@@ -176,13 +177,16 @@ class HTLCTest(SmartContractBenchBase):
         assert_equal(int(res[5], 0), 0)
         assert_equal(int(res[6], 0), 0)
         assert_equal(int(res[7], 0), 0)
-
+        
         # interact with withdraw()
         data = contract.functions.withdraw(contract_id, self.solution).buildTransaction(self.tx_conf)["data"];
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         assert_equal(self.rpc.get_balance(contractAddr), 0)
         assert_equal(self.rpc.get_balance(self.sender), b0 - fee * 2)
+        logs = self.rpc.get_logs(self.filter)
+        assert_equal(len(logs), l + 3)
         
+
         # call getContract
         data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"];
         result = self.rpc.call(contractAddr, data)
@@ -236,22 +240,121 @@ class HTLCTest(SmartContractBenchBase):
         bc = self.rpc.get_balance(contractAddr)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(bc, 0)
+    
+    def testMappingContract(self):
+        CONTRACT_PATH = "contracts/mapping_bytecode.dat"
+        logs = self.rpc.get_logs(self.filter)
+        l = len(logs)
 
+        # construct contract object 
+        solc = Solc()
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        contract = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/mapping_abi.json"),
+            bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
+        )
+
+        # deploy contract
+        data = contract.constructor(1).buildTransaction(self.tx_conf)["data"]
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
+        tx_hash = receipt['transactionHash']
+        contractAddr = Web3.toChecksumAddress(contractAddr)
+        self.tx_conf["to"] = contractAddr
+
+        c = "0x81f3521d71990945b99e1c592750d7157f2b545f"
         
+        def check_wards(x, y, z):
+          data = contract.functions.wards(Web3.toChecksumAddress(self.pubA)).buildTransaction(self.tx_conf)["data"]
+          result = self.rpc.call(contractAddr, data)
+          A = int(result, 0)
+          data = contract.functions.wards(self.sender_checksum).buildTransaction(self.tx_conf)["data"]
+          result = self.rpc.call(contractAddr, data)
+          B = int(result, 0)
+          data = contract.functions.wards(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+          result = self.rpc.call(contractAddr, data)
+          C = int(result, 0)
+          assert([A, B, C] == [x, y, z])
+
+        # deny pubA
+        check_wards(0, 2, 0)
+        data = contract.functions.set1(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
+        logs = self.rpc.get_logs(self.filter)
+        logs = [x['topics'] for x in logs[-4:]]
+        check_wards(0, 2, 1)
+        data = contract.functions.set0(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
+        logs = self.rpc.get_logs(self.filter)
+        logs = [x['topics'] for x in logs[-4:]]
+        check_wards(0, 2, 0)
+        data = contract.functions.set0(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
+        logs = self.rpc.get_logs(self.filter)
+        logs = [x['topics'] for x in logs[-4:]]
+        check_wards(0, 2, 0)
+
+
+    def testDaiContract(self):
+        CONTRACT_PATH = "contracts/mapping_bytecode.dat"
+        logs = self.rpc.get_logs(self.filter)
+        l = len(logs)
+
+        # construct contract object 
+        solc = Solc()
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        contract = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/mapping_abi.json"),
+            bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
+        )
+
+        # deploy contract
+        data = contract.constructor(1).buildTransaction(self.tx_conf)["data"]
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
+        tx_hash = receipt['transactionHash']
+        contractAddr = Web3.toChecksumAddress(contractAddr)
+        self.tx_conf["to"] = contractAddr
+        
+        # mint tokens
+        data = contract.functions.mint(Web3.toChecksumAddress(self.pubA), 100000).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, 0)
+        print(result)
+        logs = self.rpc.get_logs(self.filter)
+        assert(len(logs) == l + 3)
+        
+        # check balance
+        data = contract.functions.balanceOf(Web3.toChecksumAddress(self.pubA)).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(contractAddr, data)
+        assert(int(result, 0) == 100000)
+
+        # approve
+        data = contract.functions.approve(self.sender_checksum, 50000).buildTransaction(self.tx_conf)["data"]
+        result= self.call_contract(self.pubA, self.priA, contractAddr, data)
+        logs = self.rpc.get_logs(self.filter)
+        assert(len(logs) == l + 4)
+        
+        # check allowance
+        data = contract.functions.allowance(Web3.toChecksumAddress(self.pubA), self.sender_checksum).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(contractAddr, data)
+        assert(int(result, 0) == 50000)
+      
 
     def run_test(self):
-        self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944";
-        self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2";
+        self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
+        self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2"
         self.priv_key = default_config["GENESIS_PRI_KEY"]
         self.sender = encode_hex_0x(privtoaddr(self.priv_key))
         self.sender_checksum = Web3.toChecksumAddress(self.sender)
+        self.pubA = "0x81f3521d71990945b99e1c592750d7157f2b544f"
+        self.priA = decode_hex("dd84f341fb45c764a094d35bf484367b8d2797a997142f9c5cd4d488556f0db7")
         self.rpc = RpcClient(self.nodes[0])
+        transaction = self.rpc.new_tx(sender = self.sender, receiver = self.pubA, value = 10000000000, priv_key = self.priv_key)
+        result = self.rpc.send_tx(transaction, True)
         nonce = 0
         gas = 50000000
         gas_price = 10
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
-
         self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
+        '''
         result = self.rpc.get_logs(self.filter)
         assert_equal(result, [])
         self.testEventContract()
@@ -261,6 +364,11 @@ class HTLCTest(SmartContractBenchBase):
         self.testPayContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testHTLCContract()
+        self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
+        self.testDaiContract()
+        '''
+        self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
+        self.testMappingContract()
         self.log.info("Pass")
 
     def address_to_topic(self, address):
@@ -284,4 +392,4 @@ class HTLCTest(SmartContractBenchBase):
         return receipt
 
 if __name__ == "__main__":
-    HTLCTest().main()
+    ContractBenchTest().main()
