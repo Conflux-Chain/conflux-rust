@@ -160,9 +160,9 @@ class LatencyExperiment(ArgumentHolder):
 
             print("Collecting metrics ...")
             tag = self.tag(config)
-            execute("sh copy_file_from_slave.sh metrics.log {} > /dev/null".format(tag), 3, "collect metrics")
+            execute("./copy_file_from_slave.sh metrics.log {} > /dev/null".format(tag), 3, "collect metrics")
             if self.enable_flamegraph:
-                execute("sh copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
+                execute("./copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
 
             execute("cp exp.log {}.exp.log".format(tag), 3, "copy exp.log")
 
@@ -171,7 +171,7 @@ class LatencyExperiment(ArgumentHolder):
         os.system("tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log *.conflux.svg".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
-        execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
+        execute("./copy_logs.sh > /dev/null", 3, "copy logs")
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
