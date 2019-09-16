@@ -100,7 +100,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             self.num_nodes = 1
 
         self.conf_parameters = {
-            "log_level": '"debug"',
+            "log_level": '"warn"',
             # "storage_cache_start_size": "1000000",
             # Do not re-alloc.
             "eth_compatibility_mode": "true",
@@ -114,6 +114,8 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             "egress_queue_capacity": "1024",
             "egress_min_throttle": "100",
             "egress_max_throttle": "1000",
+            "tx_pool_size": "2000000",
+            "block_db_type": '"rocksdb"',
         }
         self.initialize_chain_clean()
 
