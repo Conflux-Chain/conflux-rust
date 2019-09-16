@@ -5,13 +5,13 @@
 use crate::{
     block_data_manager::ConsensusGraphExecutionInfo,
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
-    storage::{Chunk, ChunkKey, RestoreProgress, Restorer},
     sync::{
         message::{Context, DynamicCapability},
         state::{
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
-            snapshot_manifest_response::SnapshotManifestResponse,
+            snapshot_manifest_response::SnapshotManifestResponse, Chunk,
+            ChunkKey, RestoreProgress, Restorer,
         },
         SynchronizationProtocolHandler,
     },

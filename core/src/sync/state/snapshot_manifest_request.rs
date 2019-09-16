@@ -4,13 +4,15 @@
 
 use crate::{
     message::{HasRequestId, Message, MsgId, RequestId},
-    storage::{ChunkKey, RangedManifest},
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
         },
         request_manager::Request,
-        state::snapshot_manifest_response::SnapshotManifestResponse,
+        state::{
+            snapshot_manifest_response::SnapshotManifestResponse, ChunkKey,
+            RangedManifest,
+        },
         Error, ProtocolConfiguration,
     },
 };
