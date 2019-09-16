@@ -2,7 +2,7 @@
 
 import argparse
 import os
-
+import time
 
 def execute(cmd, retry, cmd_description):
     while True:
@@ -13,6 +13,7 @@ def execute(cmd, retry, cmd_description):
         print("Failed to {}, return code = {}, retry = {} ...".format(cmd_description, ret, retry))
         assert retry > 0
         retry -= 1
+        time.sleep(1)
 
 def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
     cmd = 'parallel-ssh -O "StrictHostKeyChecking no" -h {} -p 400 \"{}\" > /dev/null 2>&1'.format(ips_file, remote_cmd)
@@ -158,16 +159,19 @@ class LatencyExperiment(ArgumentHolder):
             self.stat_latency(config)
 
             print("Collecting metrics ...")
-            execute("sh copy_metrics.sh {} > /dev/null".format(self.tag(config)), 3, "collect metrics")
+            tag = self.tag(config)
+            execute("./copy_file_from_slave.sh metrics.log {} > /dev/null".format(tag), 3, "collect metrics")
+            if self.enable_flamegraph:
+                execute("./copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
 
-            execute("cp exp.log {}.exp.log".format(self.tag(config)), 3, "copy exp.log")
+            execute("cp exp.log {}.exp.log".format(tag), 3, "copy exp.log")
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
         os.system("tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log *.conflux.svg".format(self.stat_archive_file, self.stat_log_file))
 
     def copy_remote_logs(self):
-        execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
+        execute("./copy_logs.sh > /dev/null", 3, "copy logs")
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
