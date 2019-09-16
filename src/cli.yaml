@@ -112,6 +112,11 @@ args:
         long: test-mode
         value_name: BOOL
         takes_value: true
+    - eth-compatibility-mode:
+          help: Sets eth compatibility mode to replay Ethereum transactions
+          long: eth-compatibility-mode
+          value_name: BOOL
+          takes_value: true
     - db-compact-profile:
         help: Sets the compaction profile of RocksDB.
         long: db-compact-profile
