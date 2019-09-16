@@ -3,11 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 extern crate futures;
+extern crate lru_time_cache;
 
 use futures::Future;
+use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::StateRoot;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     light_protocol::{
@@ -18,8 +20,8 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        MAX_STATE_ROOTS_IN_FLIGHT, STATE_ROOT_REQUEST_BATCH_SIZE,
-        STATE_ROOT_REQUEST_TIMEOUT_MS,
+        CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
+        STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT,
     },
 };
 
@@ -30,8 +32,8 @@ use super::{
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -45,7 +47,7 @@ pub struct StateRoots {
     sync_manager: SyncManager<u64, MissingStateRoot>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<HashMap<u64, StateRoot>>>,
+    verified: Arc<RwLock<LruCache<u64, StateRoot>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -58,7 +60,9 @@ impl StateRoots {
     ) -> Self
     {
         let sync_manager = SyncManager::new(peers.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
+
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         StateRoots {
             request_id_allocator,
@@ -71,8 +75,8 @@ impl StateRoots {
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -80,7 +84,7 @@ impl StateRoots {
     /// Get state root for `epoch` from local cache.
     #[inline]
     pub fn state_root_of(&self, epoch: u64) -> Option<StateRoot> {
-        self.verified.read().get(&epoch).cloned()
+        self.verified.write().get(&epoch).cloned()
     }
 
     #[inline]
@@ -118,9 +122,13 @@ impl StateRoots {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(STATE_ROOT_REQUEST_TIMEOUT_MS);
+        // remove timeout in-flight requests
+        let timeout = *STATE_ROOT_REQUEST_TIMEOUT;
         let state_roots = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(state_roots.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]

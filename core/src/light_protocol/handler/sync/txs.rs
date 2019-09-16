@@ -3,12 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 extern crate futures;
+extern crate lru_time_cache;
 
 use cfx_types::H256;
 use futures::Future;
+use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::SignedTransaction;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     light_protocol::{
@@ -19,7 +21,8 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        MAX_TXS_IN_FLIGHT, TX_REQUEST_BATCH_SIZE, TX_REQUEST_TIMEOUT_MS,
+        CACHE_TIMEOUT, MAX_TXS_IN_FLIGHT, TX_REQUEST_BATCH_SIZE,
+        TX_REQUEST_TIMEOUT,
     },
 };
 
@@ -27,8 +30,8 @@ use super::common::{FutureItem, SyncManager, TimeOrdered};
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -43,7 +46,7 @@ pub struct Txs {
     sync_manager: SyncManager<H256, MissingTx>,
 
     // txs received from full node
-    verified: Arc<RwLock<HashMap<H256, SignedTransaction>>>,
+    verified: Arc<RwLock<LruCache<H256, SignedTransaction>>>,
 }
 
 impl Txs {
@@ -51,7 +54,9 @@ impl Txs {
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
     ) -> Self {
         let sync_manager = SyncManager::new(peers.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
+
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         Txs {
             request_id_allocator,
@@ -63,8 +68,8 @@ impl Txs {
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -102,9 +107,13 @@ impl Txs {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(TX_REQUEST_TIMEOUT_MS);
+        // remove timeout in-flight requests
+        let timeout = *TX_REQUEST_TIMEOUT;
         let txs = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(txs.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]

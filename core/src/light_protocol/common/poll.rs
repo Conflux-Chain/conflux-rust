@@ -8,7 +8,7 @@ use futures::{Async, Future, Stream};
 
 use crate::{
     light_protocol::{Error, ErrorKind},
-    parameters::light::POLL_PERIOD_MS,
+    parameters::light::POLL_PERIOD,
 };
 
 pub fn poll_future<T: Future>(future: &mut T) -> Result<T::Item, String>
@@ -33,8 +33,7 @@ where
         }
 
         trace!("sleeping...");
-        let d = std::time::Duration::from_millis(POLL_PERIOD_MS);
-        std::thread::sleep(d);
+        std::thread::sleep(*POLL_PERIOD);
     }
 
     unreachable!()
@@ -62,8 +61,7 @@ where
         }
 
         trace!("sleeping...");
-        let d = std::time::Duration::from_millis(POLL_PERIOD_MS);
-        std::thread::sleep(d);
+        std::thread::sleep(*POLL_PERIOD);
     }
 
     unreachable!()

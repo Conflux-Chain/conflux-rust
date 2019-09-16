@@ -119,35 +119,42 @@ pub mod block {
 }
 
 pub mod light {
+    use std::time::Duration;
+
+    lazy_static! {
+        /// Frequency of re-triggering sync.
+        pub static ref SYNC_PERIOD: Duration = Duration::from_secs(1);
+
+        /// Frequency of checking request timeouts.
+        pub static ref CLEANUP_PERIOD: Duration = Duration::from_secs(1);
+
+        /// Request timeouts.
+        pub static ref EPOCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref WITNESS_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref BLOOM_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref RECEIPT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref BLOCK_TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STATE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+
+        /// Maximum time period we wait for a response for an on-demand query.
+        /// After this timeout has been reached, we try another peer or give up.
+        pub static ref MAX_POLL_TIME: Duration = Duration::from_secs(4);
+
+        /// Period of time to sleep between subsequent polls for on-demand queries.
+        pub static ref POLL_PERIOD: Duration = Duration::from_millis(100);
+
+        /// Items not accessed for this amount of time are removed from the cache.
+        pub static ref CACHE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+    }
+
     /// The threshold controlling whether a node is in catch-up mode.
     /// A node is in catch-up mode if its local best epoch number is
     /// `CATCH_UP_EPOCH_LAG_THRESHOLD` behind the median of the epoch
     /// numbers of peers.
     pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
-
-    /// Frequency of checking request timeouts.
-    pub const CLEANUP_PERIOD_MS: u64 = 1000;
-
-    /// Frequency of re-triggering sync.
-    pub const SYNC_PERIOD_MS: u64 = 1000;
-
-    /// Request timeouts.
-    pub const EPOCH_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const HEADER_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const WITNESS_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const BLOOM_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const RECEIPT_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const BLOCK_TX_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const STATE_ROOT_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const STATE_ENTRY_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const TX_REQUEST_TIMEOUT_MS: u64 = 2000;
-
-    /// Maximum time period we wait for a response for an on-demand query.
-    /// After this timeout has been reached, we try another peer or give up.
-    pub const MAX_POLL_TIME_MS: u64 = 4000;
-
-    /// Period of time to sleep between subsequent polls for on-demand queries.
-    pub const POLL_PERIOD_MS: u64 = 100;
 
     /// (Maximum) number of items requested in a single request.
     pub const EPOCH_REQUEST_BATCH_SIZE: usize = 30;

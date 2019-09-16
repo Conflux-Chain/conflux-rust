@@ -3,10 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 extern crate futures;
+extern crate lru_time_cache;
 
 use futures::Future;
+use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     light_protocol::{
@@ -17,8 +19,8 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
-        RECEIPT_REQUEST_TIMEOUT_MS,
+        CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
+        RECEIPT_REQUEST_TIMEOUT,
     },
     primitives::{BlockHeaderBuilder, Receipt},
 };
@@ -30,8 +32,8 @@ use super::{
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -46,7 +48,7 @@ pub struct Receipts {
     sync_manager: SyncManager<u64, MissingReceipts>,
 
     // epoch receipts received from full node
-    verified: Arc<RwLock<HashMap<u64, Vec<Vec<Receipt>>>>>,
+    verified: Arc<RwLock<LruCache<u64, Vec<Vec<Receipt>>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -59,9 +61,9 @@ impl Receipts {
     ) -> Self
     {
         let sync_manager = SyncManager::new(peers.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
 
-        verified.write().insert(0, vec![]);
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         Receipts {
             request_id_allocator,
@@ -74,8 +76,8 @@ impl Receipts {
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -84,6 +86,10 @@ impl Receipts {
     pub fn request(
         &self, epoch: u64,
     ) -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> {
+        if epoch == 0 {
+            self.verified.write().insert(0, vec![]);
+        }
+
         if !self.verified.read().contains_key(&epoch) {
             let missing = MissingReceipts::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
@@ -109,9 +115,13 @@ impl Receipts {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(RECEIPT_REQUEST_TIMEOUT_MS);
+        // remove timeout in-flight requests
+        let timeout = *RECEIPT_REQUEST_TIMEOUT;
         let receiptss = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(receiptss.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]

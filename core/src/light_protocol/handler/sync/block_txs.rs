@@ -3,12 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 extern crate futures;
+extern crate lru_time_cache;
 
 use cfx_types::H256;
 use futures::Future;
+use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Block, SignedTransaction};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     consensus::ConsensusGraph,
@@ -20,7 +22,7 @@ use crate::{
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT_MS,
+        BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOCK_TXS_IN_FLIGHT,
     },
 };
@@ -32,8 +34,8 @@ use super::{
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -54,7 +56,7 @@ pub struct BlockTxs {
     txs: Arc<Txs>,
 
     // block txs received from full node
-    verified: Arc<RwLock<HashMap<H256, Vec<SignedTransaction>>>>,
+    verified: Arc<RwLock<LruCache<H256, Vec<SignedTransaction>>>>,
 }
 
 impl BlockTxs {
@@ -65,7 +67,9 @@ impl BlockTxs {
     {
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
+
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         BlockTxs {
             ledger,
@@ -79,8 +83,8 @@ impl BlockTxs {
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -118,9 +122,13 @@ impl BlockTxs {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(BLOCK_TX_REQUEST_TIMEOUT_MS);
+        // remove timeout in-flight requests
+        let timeout = *BLOCK_TX_REQUEST_TIMEOUT;
         let block_txs = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(block_txs.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]
