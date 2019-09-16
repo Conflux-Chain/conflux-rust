@@ -14,9 +14,9 @@ use super::consensus::consensus_inner::{
 };
 use crate::{
     block_data_manager::BlockDataManager, bytes::Bytes, pow::ProofOfWorkConfig,
-    state::State, state_exposer::SharedStateExposer,statistics::SharedStatistics,
-    transaction_pool::SharedTransactionPool, verification::VerificationConfig,
-    vm_factory::VmFactory,
+    state::State, state_exposer::SharedStateExposer,
+    statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
+    verification::VerificationConfig, vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
 // use fenwick_tree::FenwickTree;
@@ -136,8 +136,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
-        state_exposer: SharedStateExposer,
-        eth_compatibility_mode: bool,
+        state_exposer: SharedStateExposer, eth_compatibility_mode: bool,
     ) -> Self
     {
         let inner =
