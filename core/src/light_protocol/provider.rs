@@ -183,7 +183,6 @@ impl Provider {
         let msg: Box<dyn Message> = Box::new(StatusPong {
             best_epoch: best_info.best_epoch_number,
             genesis_hash,
-            network_id: 0x0,
             node_type: NodeType::Full,
             protocol_version: LIGHT_PROTOCOL_VERSION,
             terminals,

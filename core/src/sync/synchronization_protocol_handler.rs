@@ -829,7 +829,6 @@ impl SynchronizationProtocolHandler {
 
         Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
-            network_id: 0x0,
             genesis_hash: self.graph.data_man.true_genesis_block.hash(),
             best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,

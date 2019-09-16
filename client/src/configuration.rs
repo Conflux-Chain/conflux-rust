@@ -43,6 +43,7 @@ build_config! {
         (genesis_accounts, (Option<String>), None)
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
+        (network_id, (u64), 1)
         (bootnodes, (Option<String>), None)
         (netconf_dir, (Option<String>), Some("./net_config".to_string()))
         (net_key, (Option<String>), None)
@@ -156,6 +157,7 @@ impl Configuration {
             None => NetworkConfiguration::default(),
         };
 
+        network_config.id = self.raw_conf.network_id;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
             .map_err(|e| format!("failed to parse bootnodes: {}", e))?;
