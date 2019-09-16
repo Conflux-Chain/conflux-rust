@@ -3,30 +3,31 @@
 // See http://www.gnu.org/licenses/
 
 extern crate futures;
+extern crate lru_time_cache;
 
 use futures::Future;
+use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, Peers, UniqueId},
         message::{GetStateEntries, StateEntryWithKey, StateKey},
         Error, ErrorKind,
     },
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        MAX_STATE_ENTRIES_IN_FLIGHT, STATE_ENTRY_REQUEST_BATCH_SIZE,
-        STATE_ENTRY_REQUEST_TIMEOUT_MS,
+        CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT,
+        STATE_ENTRY_REQUEST_BATCH_SIZE, STATE_ENTRY_REQUEST_TIMEOUT,
     },
     storage::StateProof,
 };
 
 use super::{
-    future_item::FutureItem, missing_item::TimeOrdered,
-    state_roots::StateRoots, sync_manager::SyncManager,
+    common::{FutureItem, SyncManager, TimeOrdered},
+    state_roots::StateRoots,
 };
 
 pub type StateEntry = Option<Vec<u8>>;
@@ -45,8 +46,8 @@ impl PartialOrd for StateKey {
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -63,17 +64,19 @@ pub struct StateEntries {
     sync_manager: SyncManager<StateKey, MissingStateEntry>,
 
     // state entries received from full node
-    verified: Arc<RwLock<HashMap<StateKey, StateEntry>>>,
+    verified: Arc<RwLock<LruCache<StateKey, StateEntry>>>,
 }
 
 impl StateEntries {
-    pub(super) fn new(
+    pub fn new(
         peers: Arc<Peers<FullPeerState>>, state_roots: Arc<StateRoots>,
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let sync_manager = SyncManager::new(peers.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
+
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         StateEntries {
             request_id_allocator,
@@ -86,8 +89,8 @@ impl StateEntries {
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -110,7 +113,7 @@ impl StateEntries {
     }
 
     #[inline]
-    pub(super) fn receive(
+    pub fn receive(
         &self, entries: impl Iterator<Item = StateEntryWithKey>,
     ) -> Result<(), Error> {
         for StateEntryWithKey { key, entry, proof } in entries {
@@ -125,10 +128,14 @@ impl StateEntries {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
-        let timeout = Duration::from_millis(STATE_ENTRY_REQUEST_TIMEOUT_MS);
+    pub fn clean_up(&self) {
+        // remove timeout in-flight requests
+        let timeout = *STATE_ENTRY_REQUEST_TIMEOUT;
         let entries = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(entries.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]
@@ -151,7 +158,7 @@ impl StateEntries {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("state entry sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(

@@ -13,13 +13,14 @@ use std::{
 };
 
 use crate::{
-    light_protocol::{common::Peers, Error},
+    light_protocol::{
+        common::{FullPeerState, Peers},
+        Error,
+    },
     network::PeerId,
 };
 
-use super::{
-    super::FullPeerState, missing_item::HasKey, priority_queue::PriorityQueue,
-};
+use super::{HasKey, PriorityQueue};
 
 #[derive(Debug)]
 struct InFlightRequest<T> {
@@ -36,7 +37,7 @@ impl<T> InFlightRequest<T> {
     }
 }
 
-pub(super) struct SyncManager<Key, Item> {
+pub struct SyncManager<Key, Item> {
     // headers requested but not received yet
     in_flight: RwLock<HashMap<Key, InFlightRequest<Item>>>,
 

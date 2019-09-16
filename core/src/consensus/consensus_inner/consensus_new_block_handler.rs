@@ -1435,25 +1435,31 @@ impl ConsensusNewBlockHandler {
                 let mut epoch_receipts =
                     Vec::with_capacity(epoch_arena_indices.len());
 
-                let mut receipts_correct = true;
-                for i in epoch_arena_indices {
-                    if let Some(r) =
-                        self.data_man.block_execution_result_by_hash_with_epoch(
-                            &inner.arena[*i].hash,
-                            &pivot_hash,
-                            true, /* update_cache */
-                        )
-                    {
-                        epoch_receipts.push(r.receipts);
-                    } else {
-                        // Constructed pivot chain does not match receipts in
-                        // db, so we have to recompute
-                        // the receipts of this epoch
-                        receipts_correct = false;
-                        break;
+                let mut already_executed = true;
+                if self.data_man.epoch_executed(&pivot_hash) {
+                    for i in epoch_arena_indices {
+                        if let Some(r) = self
+                            .data_man
+                            .block_execution_result_by_hash_with_epoch(
+                                &inner.arena[*i].hash,
+                                &pivot_hash,
+                                true, /* update_cache */
+                            )
+                        {
+                            epoch_receipts.push(r.receipts);
+                        } else {
+                            // Constructed pivot chain does not match receipts
+                            // in db, so we have to
+                            // recompute
+                            // the receipts of this epoch
+                            already_executed = false;
+                            break;
+                        }
                     }
+                } else {
+                    already_executed = false;
                 }
-                if receipts_correct {
+                if already_executed {
                     let pivot_receipts_root =
                         BlockHeaderBuilder::compute_block_receipts_root(
                             &epoch_receipts,

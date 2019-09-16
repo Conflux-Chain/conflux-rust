@@ -2,8 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::H256;
 use cfxcore::{
-    block_data_manager::DataManagerConfiguration,
+    block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
@@ -80,6 +81,9 @@ build_config! {
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
         (mining_author, (Option<String>), None)
+        (use_stratum, (bool), false)
+        (stratum_port, (u16), 32525)
+        (stratum_secret, (Option<String>), None)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
@@ -108,6 +112,7 @@ build_config! {
         (txgen_account_count, (usize), 10)
         (tx_cache_count, (usize), 250000)
         (max_download_state_peers, (usize), 8)
+        (block_db_type, (String), "rocksdb".to_string())
     }
     {
         (
@@ -260,9 +265,27 @@ impl Configuration {
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
+        let stratum_listen_addr =
+            if let Some(listen_addr) = self.raw_conf.public_address.clone() {
+                listen_addr
+            } else {
+                String::from("")
+            };
+
+        let stratum_secret =
+            self.raw_conf
+                .stratum_secret
+                .clone()
+                .map(|hex_str| H256::from_str(hex_str.as_str())
+                    .expect("Stratum secret should be 64-digit hex string without 0x prefix"));
+
         ProofOfWorkConfig::new(
             self.raw_conf.test_mode,
+            self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
+            stratum_listen_addr,
+            self.raw_conf.stratum_port,
+            stratum_secret,
         )
     }
 
@@ -327,6 +350,7 @@ impl Configuration {
                 .raw_conf
                 .future_block_buffer_capacity,
             max_download_state_peers: self.raw_conf.max_download_state_peers,
+            test_mode: self.raw_conf.test_mode,
         }
     }
 
@@ -334,6 +358,11 @@ impl Configuration {
         DataManagerConfiguration::new(
             self.raw_conf.record_tx_address,
             self.raw_conf.tx_cache_count,
+            match self.raw_conf.block_db_type.as_str() {
+                "rocksdb" => DbType::Rocksdb,
+                "sqlite" => DbType::Sqlite,
+                _ => panic!("Invalid block_db_type parameter!"),
+            },
         )
     }
 }

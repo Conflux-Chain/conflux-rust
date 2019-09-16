@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+/// Storage manager manages the lifecycle of SnapshotMPTS and DeltaMPTs.
 pub mod storage_manager;
 mod storage_manager_archive_node;
 mod storage_manager_full_node;

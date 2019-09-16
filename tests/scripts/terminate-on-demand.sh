@@ -20,4 +20,4 @@ if [[ -f slave_image ]]; then
     done
 fi
 
-rm -rf logs exp.log instances* ips* __pycache__ slave_image *.csv *.tgz
+rm -rf logs exp.log instances* ips* __pycache__ slave_image *nodes.csv *.tgz

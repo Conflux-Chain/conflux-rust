@@ -947,9 +947,9 @@ impl ConsensusExecutionHandler {
                             Some(pivot_block.block_header.height() - 1),
                         ),
                     )
-                    .unwrap()
+                    .expect("No db error")
                     // Unwrapping is safe because the state exists.
-                    .unwrap(),
+                    .expect("State exists"),
             ),
             0.into(),
             self.vm.clone(),

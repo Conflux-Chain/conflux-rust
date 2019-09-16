@@ -4,10 +4,9 @@
 
 use crate::{
     message::{Message, MsgId},
-    storage::Chunk,
     sync::{
         message::{msgid, Context, Handleable},
-        state::SnapshotChunkRequest,
+        state::{Chunk, SnapshotChunkRequest},
         Error, ErrorKind,
     },
 };

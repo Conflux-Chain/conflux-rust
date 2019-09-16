@@ -98,6 +98,9 @@ class TestNode:
             "Error: no RPC connection")
         return getattr(self.rpc, name)
 
+    def best_block_hash(self) -> str:
+        return self.cfx_getBestBlockHash()
+
     def start(self, extra_args=None, *, stdout=None, stderr=None, **kwargs):
         # Add a new stdout and stderr file each time conflux is started
         if stderr is None:
@@ -157,7 +160,7 @@ class TestNode:
                     rpc_url(self.index, self.rpchost, self.rpcport),
                     self.index,
                     timeout=self.rpc_timeout)
-                self.rpc.getbestblockhash()
+                self.rpc.cfx_getBestBlockHash()
                 # If the call to get_best_block_hash() succeeds then the RPC connection is up
                 self.rpc_connected = True
                 self.url = self.rpc.url

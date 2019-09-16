@@ -10,14 +10,28 @@ use std::{
     time::Duration,
 };
 
+/// Default maximum duration of last node contact time that used to evict a node
+/// when `NodeBucket` is full.
 const DEFAULT_EVICT_TIMEOUT: Duration = Duration::from_secs(7 * 24 * 3600); // 7 days
 
+/// Validation result before adding a node.
 #[derive(Debug, PartialEq)]
 pub enum ValidateInsertResult {
+    /// Node already exists and IP address not changed
     AlreadyExists,
+    /// Node will be new added, and occupy the IP address used by existing
+    /// node. In this case, the existing node will be evicted before adding
+    /// the new node.
     OccupyIp(NodeId),
+    /// Node is allowed to add or update with new IP address, because the
+    /// corresponding `NodeBucket` has enough quota.
     QuotaEnough,
+    /// Node is allowed to add or update, but need to evict the specified
+    /// existing node first.
     Evict(NodeId),
+    /// Node is not allowed to add or update, because the corresponding
+    /// `NodeBucket` is full, and no node could be evicted. E.g. all nodes in
+    /// the bucket are in connecting status.
     QuotaNotEnough,
 }
 
@@ -39,6 +53,7 @@ pub struct NodeIpLimit {
     // all untrusted nodes grouped by subnet
     untrusted_buckets: SampleHashMap<u32, NodeBucket>,
 
+    // helpful indices
     ip_index: HashMap<IpAddr, NodeId>,
     node_index: HashMap<NodeId, IpAddr>,
 }
@@ -59,6 +74,7 @@ impl NodeIpLimit {
     #[inline]
     pub fn is_enabled(&self) -> bool { self.subnet_quota > 0 }
 
+    /// Get the subnet of specified node `id`.
     pub fn subnet(&self, id: &NodeId) -> Option<u32> {
         let ip = self.node_index.get(id)?;
         Some(self.subnet_type.subnet(ip))
@@ -86,6 +102,7 @@ impl NodeIpLimit {
         true
     }
 
+    /// Remove node from specified buckets.
     fn remove_with_buckets(
         buckets: &mut SampleHashMap<u32, NodeBucket>, subnet: u32, id: &NodeId,
     ) -> bool {
@@ -98,6 +115,7 @@ impl NodeIpLimit {
             return false;
         }
 
+        // remove bucket on empty
         if bucket.count() == 0 {
             buckets.remove(&subnet);
         }
@@ -106,7 +124,8 @@ impl NodeIpLimit {
     }
 
     /// Randomly select `n` trusted nodes. Note, it may return less than `n`
-    /// nodes.
+    /// nodes. Note, the time complexity is O(n), where n is the number of
+    /// sampled nodes.
     pub fn sample_trusted(&self, n: u32) -> HashSet<NodeId> {
         if !self.is_enabled() {
             return HashSet::new();

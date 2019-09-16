@@ -1,0 +1,153 @@
+name: conflux
+about: Conflux client.
+author: The Conflux Team
+
+args:
+    - port:
+        help: Specify the port for P2P connections.
+        short: p
+        long: port
+        value_name: PORT
+        takes_value: true
+    - udp-port:
+        help: Specify the UDP port for peer discovery.
+        long: udp-port
+        value_name: PORT
+        takes_value: true
+    - jsonrpc-tcp-port:
+        help: Specify the port for the TCP JSON-RPC API server.
+        long: jsonrpc-tcp-port
+        value_name: PORT
+        takes_value: true
+    - jsonrpc-http-port:
+        help: Specify the port for the HTTP JSON-RPC API server.
+        long: jsonrpc-http-port
+        value_name: PORT
+        takes_value: true
+    - jsonrpc-cors:
+        help: Specify CORS header for HTTP JSON-RPC API responses.
+        long: jsonrpc-cors
+        value_name: URL
+        takes_value: true
+    - jsonrpc-http-keep-alive:
+        help: Enable HTTP/1.1 keep alive header. Enabling keep alive will re-use the same TCP connection to fire multiple requests.
+        long: jsonrpc-http-keep-alive
+        value_name: BOOL
+        takes_value: true
+    - log-file:
+        help: Specify the filename for the log. Stdout will be used by default if omitted.
+        long: log-file
+        value_name: FILE
+        takes_value: true
+    - log-level:
+        help: Can be error/warn/info/debug/trace. Default is the info level.
+        long: log-level
+        value_name: LEVEL
+        takes_value: true
+    - config:
+        help: Sets a custom config file.
+        short: c
+        long: config
+        value_name: FILE
+        takes_value: true
+    - bootnodes:
+        help: Sets a custom list of bootnodes.
+        long: bootnodes
+        value_name: NODES
+        takes_value: true
+    - netconf-dir:
+        help: Sets a custom directory for network configurations.
+        long: netconf-dir
+        value_name: DIR
+        takes_value: true
+    - public-address:
+        help: Sets a custom public address to be connected by others.
+        long: public-address
+        value_name: IP ADDRESS
+        takes_value: true
+    - net-key:
+        help: Sets a custom secret key to generate unique node ID.
+        long: net-key
+        value_name: KEY
+        takes_value: true
+    - start-mining:
+        help: Start mining if set to true. Ensure that mining-author is set.
+        long: start-mining
+        value_name: BOOL
+        takes_value: true
+    - mining-author:
+        help: Set the address to receive mining rewards.
+        long: mining-author
+        value_name: ADDRESS
+        takes_value: true
+    - ledger-cache-size:
+        help: Sets the ledger cache size.
+        short: lcs
+        long: ledger-cache-size
+        value_name: SIZE
+        takes_value: true
+    - db-cache-size:
+        help: Sets the db cache size.
+        short: dcs
+        long: db-cache-size
+        value_name: SIZE
+        takes_value: true
+    - enable-discovery:
+        help: Enable discovery protocol.
+        long: enable-discovery
+        value_name: BOOL
+        takes_value: true
+    - node-table-timeout:
+        help: How often Conflux updates its peer table (default 300).
+        long: node-table-timeout
+        value_name: SEC
+        takes_value: true
+    - node-table-promotion-timeout:
+        help: How long Conflux waits for promoting a peer to trustworthy (default 3 * 24 * 3600).
+        long: node-table-promotion-timeout
+        value_name: SEC
+        takes_value: true
+    - test-mode:
+        help: Sets test mode for adding latency
+        long: test-mode
+        value_name: BOOL
+        takes_value: true
+    - db-compact-profile:
+        help: Sets the compaction profile of RocksDB.
+        long: db-compact-profile
+        value_name: ENUM
+        takes_value: true
+    - db-dir:
+        help: Sets the root path of db.
+        long: db-dir
+        value_name: DIR
+        takes_value: true
+    - load-test-chain:
+        help: Sets the test chain json file.
+        long: load-test-chain
+        value_name: FILE
+        takes_value: true
+    - egress-queue-capacity:
+        help: Sets egress queue capacity of P2P network.
+        long: egress-queue-capacity
+        value_name: MB
+        takes_value: true
+    - egress-min-throttle:
+        help: Sets minimum throttling queue size of egress.
+        long: egress-min-throttle
+        value_name: MB
+        takes_value: true
+    - egress-max-throttle:
+        help: Sets maximum throttling queue size of egress.
+        long: egress-max-throttle
+        value_name: MB
+        takes_value: true
+    - light:
+        long: light
+    - archive:
+        long: archive
+subcommands:
+    - account:
+        subcommands:
+            - new:
+            - list:

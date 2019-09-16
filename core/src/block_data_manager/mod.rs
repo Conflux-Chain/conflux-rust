@@ -38,7 +38,7 @@ use crate::block_data_manager::{
     db_manager::DBManager, tx_data_manager::TransactionDataManager,
 };
 pub use block_data_types::*;
-use std::hash::Hash;
+use std::{hash::Hash, path::Path};
 
 pub const NULLU64: u64 = !0;
 
@@ -99,6 +99,12 @@ impl BlockDataManager {
         )));
         let tx_data_manager =
             TransactionDataManager::new(config.tx_cache_count, worker_pool);
+        let db_manager = match config.db_type {
+            DbType::Rocksdb => DBManager::new_from_rocksdb(db),
+            DbType::Sqlite => {
+                DBManager::new_from_sqlite(Path::new("./sqlite_db"))
+            }
+        };
 
         let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
@@ -119,7 +125,7 @@ impl BlockDataManager {
             cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
             cur_consensus_era_stable_hash: RwLock::new(genesis_hash),
             tx_data_manager,
-            db_manager: DBManager { db },
+            db_manager,
         };
 
         data_man.initialize_instance_id();
@@ -179,7 +185,7 @@ impl BlockDataManager {
             EpochExecutionContext {
                 start_block_number: 0,
             },
-            true, /* persistent to db */
+            true,
         );
 
         data_man
@@ -535,9 +541,6 @@ impl BlockDataManager {
     {
         let upgradable_read_lock = in_mem.upgradable_read();
         if let Some(value) = upgradable_read_lock.get(key) {
-            if let Some(cache_id) = maybe_cache_id {
-                self.cache_man.lock().note_used(cache_id);
-            }
             return Some(value.clone());
         }
         load_f(key).map(|value| {
@@ -887,16 +890,26 @@ impl BlockDataManager {
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum DbType {
+    Rocksdb,
+    Sqlite,
+}
+
 pub struct DataManagerConfiguration {
     record_tx_address: bool,
     tx_cache_count: usize,
+    db_type: DbType,
 }
 
 impl DataManagerConfiguration {
-    pub fn new(record_tx_address: bool, tx_cache_count: usize) -> Self {
+    pub fn new(
+        record_tx_address: bool, tx_cache_count: usize, db_type: DbType,
+    ) -> Self {
         Self {
             record_tx_address,
             tx_cache_count,
+            db_type,
         }
     }
 }

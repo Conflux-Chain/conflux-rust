@@ -407,6 +407,7 @@ impl ConsensusGraphInner {
                 .unwrap()
                 .height()
         };
+        let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
@@ -439,7 +440,7 @@ impl ConsensusGraphInner {
             adaptive_tree: CaterpillarMinLinkCutTree::new(),
             inclusive_adaptive_tree: CaterpillarMinLinkCutTree::new(),
             pow_config,
-            current_difficulty: pow_config.initial_difficulty.into(),
+            current_difficulty: initial_difficulty.into(),
             data_man: data_man.clone(),
             inner_conf,
             anticone_cache: AnticoneCache::new(),
@@ -1932,15 +1933,6 @@ impl ConsensusGraphInner {
         }
     }
 
-    pub fn get_epoch_number_from_hash(&self, hash: &H256) -> Option<u64> {
-        self.hash_to_arena_indices.get(hash).and_then(|index| {
-            match self.arena[*index].data.epoch_number {
-                NULLU64 => None,
-                epoch => Some(epoch),
-            }
-        })
-    }
-
     pub fn block_hashes_by_epoch(
         &self, epoch_number: u64,
     ) -> Result<Vec<H256>, String> {
@@ -1976,7 +1968,7 @@ impl ConsensusGraphInner {
     }
 
     fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
-        self.get_epoch_number_from_hash(&hash)
+        self.get_block_epoch_number(&hash)
             .and_then(|epoch_number| self.epoch_hash(epoch_number))
     }
 
@@ -2012,14 +2004,9 @@ impl ConsensusGraphInner {
             }
         };
 
-        if let Some(code) = state_db.get_code(&address, &acc.code_hash) {
-            Ok(code)
-        } else {
-            Err(format!(
-                "Account code (address={:?} code_hash={:?} number={:?} hash={:?}) does not exist",
-                address, acc.code_hash, epoch_number, hash
-            )
-                .into())
+        match state_db.get_code(&address, &acc.code_hash) {
+            Some(code) => Ok(code),
+            None => Ok(vec![]),
         }
     }
 
@@ -2056,11 +2043,12 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
-        if let Some(idx) = self.hash_to_arena_indices.get(hash) {
-            Some(self.arena[*idx].data.epoch_number)
-        } else {
-            None
-        }
+        self.hash_to_arena_indices.get(hash).and_then(|index| {
+            match self.arena[*index].data.epoch_number {
+                NULLU64 => None,
+                epoch => Some(epoch),
+            }
+        })
     }
 
     pub fn all_blocks_with_topo_order(&self) -> Vec<H256> {

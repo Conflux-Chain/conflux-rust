@@ -3,37 +3,38 @@
 // See http://www.gnu.org/licenses/
 
 extern crate futures;
+extern crate lru_time_cache;
 
 use cfx_types::Bloom;
 use futures::Future;
+use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use crate::{
     hash::keccak,
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, Peers, UniqueId},
         message::{BloomWithEpoch, GetBlooms},
         Error, ErrorKind,
     },
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT_MS,
+        BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOOMS_IN_FLIGHT,
     },
 };
 
 use super::{
-    future_item::FutureItem, missing_item::KeyOrdered,
-    sync_manager::SyncManager, witnesses::Witnesses,
+    common::{FutureItem, KeyOrdered, SyncManager},
+    witnesses::Witnesses,
 };
 
 #[derive(Debug)]
 struct Statistics {
+    cached: usize,
     in_flight: usize,
-    verified: usize,
     waiting: usize,
 }
 
@@ -46,23 +47,24 @@ pub struct Blooms {
 
     // sync and request manager
     sync_manager: SyncManager<u64, MissingBloom>,
+
     // bloom filters received from full node
-    verified: Arc<RwLock<HashMap<u64, Bloom>>>,
+    verified: Arc<RwLock<LruCache<u64, Bloom>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
 }
 
 impl Blooms {
-    pub(super) fn new(
+    pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         witnesses: Arc<Witnesses>,
     ) -> Self
     {
         let sync_manager = SyncManager::new(peers.clone());
-        let verified = Arc::new(RwLock::new(HashMap::new()));
 
-        verified.write().insert(0, Bloom::zero());
+        let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
+        let verified = Arc::new(RwLock::new(cache));
 
         Blooms {
             request_id_allocator,
@@ -75,8 +77,8 @@ impl Blooms {
     #[inline]
     fn get_statistics(&self) -> Statistics {
         Statistics {
+            cached: self.verified.read().len(),
             in_flight: self.sync_manager.num_in_flight(),
-            verified: self.verified.read().len(),
             waiting: self.sync_manager.num_waiting(),
         }
     }
@@ -85,6 +87,10 @@ impl Blooms {
     pub fn request(
         &self, epoch: u64,
     ) -> impl Future<Item = Bloom, Error = Error> {
+        if epoch == 0 {
+            self.verified.write().insert(0, Bloom::zero());
+        }
+
         if !self.verified.read().contains_key(&epoch) {
             let missing = MissingBloom::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
@@ -94,7 +100,7 @@ impl Blooms {
     }
 
     #[inline]
-    pub(super) fn receive(
+    pub fn receive(
         &self, blooms: impl Iterator<Item = BloomWithEpoch>,
     ) -> Result<(), Error> {
         for BloomWithEpoch { epoch, bloom } in blooms {
@@ -109,10 +115,14 @@ impl Blooms {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
-        let timeout = Duration::from_millis(BLOOM_REQUEST_TIMEOUT_MS);
+    pub fn clean_up(&self) {
+        // remove timeout in-flight requests
+        let timeout = *BLOOM_REQUEST_TIMEOUT;
         let blooms = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(blooms.into_iter());
+
+        // trigger cache cleanup
+        self.verified.write().get(&Default::default());
     }
 
     #[inline]
@@ -135,7 +145,7 @@ impl Blooms {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("bloom sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(

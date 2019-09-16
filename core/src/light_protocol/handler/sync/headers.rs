@@ -9,7 +9,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use cfx_types::H256;
@@ -17,21 +17,20 @@ use primitives::BlockHeader;
 
 use crate::{
     light_protocol::{
-        common::{Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, Peers, UniqueId},
         message::GetBlockHeaders,
         Error,
     },
     message::Message,
     network::{NetworkContext, PeerId},
     parameters::light::{
-        HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT_MS,
+        HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT,
         MAX_HEADERS_IN_FLIGHT,
     },
     sync::SynchronizationGraph,
 };
 
-use super::{missing_item::HasKey, sync_manager::SyncManager};
+use super::common::{HasKey, SyncManager};
 
 #[derive(Debug)]
 struct Statistics {
@@ -42,7 +41,7 @@ struct Statistics {
 
 // NOTE: order defines priority: Epoch < Reference < NewHash
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) enum HashSource {
+pub enum HashSource {
     Epoch,      // hash received through an epoch request
     Dependency, // hash referenced by a header we received
     NewHash,    // hash received through a new hashes announcement
@@ -85,7 +84,7 @@ impl HasKey<H256> for MissingHeader {
     fn key(&self) -> H256 { self.hash }
 }
 
-pub(super) struct Headers {
+pub struct Headers {
     // number of headers received multiple times
     duplicate_count: AtomicU64,
 
@@ -205,7 +204,7 @@ impl Headers {
 
     #[inline]
     pub fn clean_up(&self) {
-        let timeout = Duration::from_millis(HEADER_REQUEST_TIMEOUT_MS);
+        let timeout = *HEADER_REQUEST_TIMEOUT;
         let headers = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(headers.into_iter());
     }
@@ -243,9 +242,7 @@ impl Headers {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        super::priority_queue::PriorityQueue, HashSource, MissingHeader,
-    };
+    use super::{super::common::PriorityQueue, HashSource, MissingHeader};
     use rand::Rng;
     use std::{
         ops::Sub,

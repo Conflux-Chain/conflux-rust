@@ -6,17 +6,23 @@ pub struct KvdbRocksdb {
     /// Currently this is only a wrapper around the old system_db.
     /// This is going to be deprecated.
     pub kvdb: Arc<dyn KeyValueDB>,
+
+    /// The column that this kvdb instance operates on
+    pub col: Option<u32>,
 }
 
 pub struct KvdbRocksDbTransaction {
     pending: DBTransaction,
+
+    /// The column that this kvdb transaction instance operates on
+    col: Option<u32>,
 }
 
 impl KeyValueDbTraitRead for KvdbRocksdb {
     fn get(&self, key: &[u8]) -> Result<Option<Box<[u8]>>> {
         Ok(self
             .kvdb
-            .get(COL_DELTA_TRIE, key)?
+            .get(self.col, key)?
             .map(|elastic_array| elastic_array.into_vec().into_boxed_slice()))
     }
 }
@@ -30,7 +36,7 @@ impl KeyValueDbTypes for KvdbRocksdb {
 impl KeyValueDbTrait for KvdbRocksdb {
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
         let mut transaction = self.kvdb.transaction();
-        transaction.delete(COL_DELTA_TRIE, key);
+        transaction.delete(self.col, key);
         Ok(None)
     }
 
@@ -38,7 +44,7 @@ impl KeyValueDbTrait for KvdbRocksdb {
         &self, key: &[u8], value: &[u8],
     ) -> Result<Option<Option<Box<[u8]>>>> {
         let mut transaction = self.kvdb.transaction();
-        transaction.put(COL_DELTA_TRIE, key, value);
+        transaction.put(self.col, key, value);
         self.kvdb.write(transaction)?;
         Ok(None)
     }
@@ -50,14 +56,14 @@ impl KeyValueDbTypes for KvdbRocksDbTransaction {
 
 impl KeyValueDbTraitSingleWriter for KvdbRocksDbTransaction {
     fn delete(&mut self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
-        self.pending.delete(COL_DELTA_TRIE, key);
+        self.pending.delete(self.col, key);
         Ok(None)
     }
 
     fn put(
         &mut self, key: &[u8], value: &[u8],
     ) -> Result<Option<Option<Box<[u8]>>>> {
-        self.pending.put(COL_DELTA_TRIE, key, value);
+        self.pending.put(self.col, key, value);
         Ok(None)
     }
 }
@@ -118,6 +124,7 @@ impl KeyValueDbTraitTransactional for KvdbRocksdb {
     ) -> Result<Self::TransactionType> {
         Ok(KvdbRocksDbTransaction {
             pending: self.kvdb.transaction(),
+            col: self.col,
         })
     }
 }
@@ -125,10 +132,7 @@ impl KeyValueDbTraitTransactional for KvdbRocksdb {
 impl DeltaDbTrait for KvdbRocksdb {}
 
 use super::super::{
-    super::{
-        super::db::COL_DELTA_TRIE,
-        storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
-    },
+    super::storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
     errors::*,
 };
 use kvdb::{DBTransaction, KeyValueDB};

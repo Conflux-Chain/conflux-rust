@@ -6,20 +6,20 @@ extern crate futures;
 
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
 use futures::{future, stream, Future, Stream};
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc};
 
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, EpochNumber, Receipt, SignedTransaction,
+    Account, EpochNumber, Receipt, SignedTransaction, StateRoot,
 };
 
 use crate::{
     consensus::ConsensusGraph,
-    network::{NetworkContext, NetworkService, PeerId},
+    network::{NetworkContext, NetworkService},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
-        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME_MS},
+        light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
     },
     statedb::StorageKey,
     storage,
@@ -28,10 +28,7 @@ use crate::{
 
 use super::{
     common::{poll_future, poll_stream, with_timeout, LedgerInfo},
-    handler::QueryResult,
-    message::GetTxs,
-    Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
-    LIGHT_PROTOCOL_VERSION,
+    Error, Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
 
 pub struct QueryService {
@@ -83,6 +80,123 @@ impl QueryService {
         res.unwrap()
     }
 
+    fn retrieve_state_root<'a>(
+        &'a self, epoch: u64,
+    ) -> impl Future<Item = StateRoot, Error = Error> + 'a {
+        trace!("retrieve_state_root epoch = {}", epoch);
+
+        with_timeout(
+            *MAX_POLL_TIME, /* timeout */
+            format!("Timeout while retrieving state root for epoch {}", epoch), /* error */
+            self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
+        )
+    }
+
+    fn retrieve_state_entry<'a>(
+        &'a self, epoch: u64, key: Vec<u8>,
+    ) -> impl Future<Item = Option<Vec<u8>>, Error = Error> + 'a {
+        trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
+
+        with_timeout(
+            *MAX_POLL_TIME, /* timeout */
+            format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key), /* error */
+            self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone()))
+        )
+    }
+
+    fn retrieve_bloom<'a>(
+        &'a self, epoch: u64,
+    ) -> impl Future<Item = Bloom, Error = Error> + 'a {
+        trace!("retrieve_bloom epoch = {}", epoch);
+
+        with_timeout(
+            *MAX_POLL_TIME, /* timeout */
+            format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
+            self.handler.blooms.request(epoch),
+        )
+    }
+
+    fn retrieve_receipts<'a>(
+        &'a self, epoch: u64,
+    ) -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> + 'a {
+        trace!("retrieve_receipts epoch = {}", epoch);
+
+        with_timeout(
+            *MAX_POLL_TIME, /* timeout */
+            format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
+            self.handler.receipts.request(epoch),
+        )
+    }
+
+    fn retrieve_block_txs<'a>(
+        &'a self, hash: H256,
+    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> + 'a {
+        trace!("retrieve_block_txs hash = {:?}", hash);
+
+        with_timeout(
+            *MAX_POLL_TIME, /* timeout */
+            format!("Timeout while retrieving block txs for block {}", hash), /* error */
+            self.handler.block_txs.request(hash),
+        )
+    }
+
+    fn account_key(root: &StateRoot, address: H160) -> Vec<u8> {
+        let padding = storage::MultiVersionMerklePatriciaTrie::padding(
+            &root.snapshot_root,
+            &root.intermediate_delta_root,
+        );
+
+        StorageKey::new_account_key(&address, &padding)
+            .as_ref()
+            .to_vec()
+    }
+
+    fn code_key(root: &StateRoot, address: H160, code_hash: H256) -> Vec<u8> {
+        let padding = storage::MultiVersionMerklePatriciaTrie::padding(
+            &root.snapshot_root,
+            &root.intermediate_delta_root,
+        );
+
+        StorageKey::new_code_key(&address, &code_hash, &padding)
+            .as_ref()
+            .to_vec()
+    }
+
+    fn retrieve_account<'a>(
+        &'a self, epoch: u64, address: H160,
+    ) -> impl Future<Item = Option<Account>, Error = String> + 'a {
+        trace!(
+            "retrieve_account epoch = {}, address = {:?}",
+            epoch,
+            address
+        );
+
+        self.retrieve_state_root(epoch)
+            .map(move |root| Self::account_key(&root, address))
+            .and_then(move |key| self.retrieve_state_entry(epoch, key))
+            .and_then(|entry| match entry {
+                Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
+                None => Ok(None),
+            })
+            .map_err(|e| format!("{}", e))
+    }
+
+    fn retrieve_code<'a>(
+        &'a self, epoch: u64, address: H160, code_hash: H256,
+    ) -> impl Future<Item = Option<Vec<u8>>, Error = String> + 'a {
+        trace!(
+            "retrieve_code epoch = {}, address = {:?}, code_hash = {:?}",
+            epoch,
+            address,
+            code_hash
+        );
+
+        self.retrieve_state_root(epoch)
+            .map(move |root| Self::code_key(&root, address, code_hash))
+            .and_then(move |key| self.retrieve_state_entry(epoch, key))
+            .map_err(|e| format!("{}", e))
+    }
+
     pub fn get_account(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Account>, String> {
@@ -93,69 +207,41 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        let mut account = future::ok(epoch)
-            // request state root
-            .and_then(|epoch| {
-                trace!("epoch = {:?}", epoch);
-
-                let root = self.with_io(|io| {
-                    self.handler
-                        .sync
-                        .state_roots
-                        .request_now(io, epoch)
-                });
-
-                with_timeout(
-                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
-                    format!("Timeout while retrieving state root for epoch {}", epoch), /* error */
-                    root
-                )
-            })
-
-            // calculate state trie key for account
-            .map(|root| {
-                trace!("root = {:?}", root);
-
-                let padding = storage::MultiVersionMerklePatriciaTrie::padding(
-                    &root.snapshot_root,
-                    &root.intermediate_delta_root,
-                );
-
-                StorageKey::new_account_key(&address, &padding)
-                    .as_ref()
-                    .to_vec()
-            })
-
-            // request state trie entry
-            .and_then(|key| {
-                trace!("key = {:?}", key);
-
-                let entry = self.with_io(|io| {
-                    self.handler
-                        .sync
-                        .state_entries
-                        .request_now(io, epoch, key.clone())
-                });
-
-                with_timeout(
-                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
-                    format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key), /* error */
-                    entry
-                )
-            })
-
-            // decode account
-            .and_then(|entry| match entry {
-                Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
-                None => Ok(None),
-            });
-
-        // // match fut.wait() {
-        match poll_future(&mut account) {
+        match poll_future(&mut self.retrieve_account(epoch, address)) {
             Ok(account) => Ok(account),
             Err(e) => {
                 warn!("Error while retrieving account: {}", e);
                 Err(format!("{}", e))
+            }
+        }
+    }
+
+    pub fn get_code(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<Vec<u8>>, String> {
+        info!("get_code epoch={:?} address={:?}", epoch, address);
+
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
+        let mut code = self
+            .retrieve_account(epoch, address)
+            .and_then(move |acc| match acc {
+                Some(acc) => Ok(acc.code_hash),
+                None => Err(format!(
+                    "Account {:?} (number={:?}) does not exist",
+                    address, epoch,
+                )),
+            })
+            .and_then(move |hash| self.retrieve_code(epoch, address, hash));
+
+        match poll_future(&mut code) {
+            Ok(code) => Ok(code),
+            Err(e) => {
+                warn!("Error while retrieving code: {}", e);
+                Err(e)
             }
         }
     }
@@ -187,48 +273,28 @@ impl QueryService {
         success
     }
 
-    pub fn query_txs(
-        &self, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<Vec<SignedTransaction>, Error> {
-        info!("query_txs peer={:?} hashes={:?}", peer, hashes);
-
-        let req = GetTxs {
-            request_id: 0,
-            hashes,
-        };
-
-        self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-            match self.handler.query.execute(io, peer, req)? {
-                QueryResult::Txs(txs) => Ok(txs),
-                _ => Err(ErrorKind::UnexpectedResponse.into()),
-            }
-        })
-    }
-
-    pub fn get_tx(&self, hash: H256) -> Option<SignedTransaction> {
+    pub fn get_tx(&self, hash: H256) -> Result<SignedTransaction, String> {
         info!("get_tx hash={:?}", hash);
 
-        // try each peer until we succeed
-        for peer in self.handler.peers.all_peers_shuffled() {
-            match self.query_txs(peer, vec![hash]) {
-                Err(e) => {
-                    warn!("Failed to get txs from peer={:?}: {:?}", peer, e);
-                }
-                Ok(txs) => {
-                    match txs.iter().find(|tx| tx.hash() == hash).cloned() {
-                        Some(tx) => return Some(tx),
-                        None => {
-                            warn!(
-                                "Peer {} returned {:?}, target tx not found!",
-                                peer, txs
-                            );
-                        }
-                    }
-                }
-            };
-        }
+        let mut tx = future::ok(hash).and_then(|hash| {
+            trace!("hash = {:?}", hash);
 
-        None
+            let tx = self.with_io(|io| self.handler.txs.request_now(io, hash));
+
+            with_timeout(
+                *MAX_POLL_TIME,                                  /* timeout */
+                format!("Timeout while retrieving tx {}", hash), /* error */
+                tx,
+            )
+        });
+
+        match poll_future(&mut tx) {
+            Ok(tx) => Ok(tx),
+            Err(e) => {
+                warn!("Error while retrieving tx: {}", e);
+                Err(format!("{}", e))
+            }
+        }
     }
 
     /// Apply filter to all logs within a receipt.
@@ -314,7 +380,7 @@ impl QueryService {
         &self, epoch: EpochNumber,
     ) -> Result<u64, FilterError> {
         // find highest epoch that we are able to verify based on witness info
-        let latest_verified = self.handler.sync.witnesses.latest_verified();
+        let latest_verified = self.handler.witnesses.latest_verified();
 
         let latest_verifiable = match latest_verified {
             n if n >= DEFERRED_STATE_EPOCH_COUNT => {
@@ -376,7 +442,7 @@ impl QueryService {
                 let mut epochs = BTreeSet::new();
 
                 for hash in &hashes {
-                    match self.consensus.get_epoch_number_from_hash(&hash) {
+                    match self.consensus.get_block_epoch_number(&hash) {
                         Some(epoch) => epochs.insert(epoch),
                         None => {
                             return Err(FilterError::UnknownBlock {
@@ -425,15 +491,7 @@ impl QueryService {
             stream::iter_ok::<_, Error>(epochs)
 
             // retrieve blooms
-            .map(|epoch| {
-                debug!("Requesting blooms for {:?}", epoch);
-
-                with_timeout(
-                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
-                    format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
-                    self.handler.sync.blooms.request(epoch)
-                ).map(move |bloom| (epoch, bloom))
-            })
+            .map(|epoch| self.retrieve_bloom(epoch).map(move |bloom| (epoch, bloom)))
 
             // we first request blooms for up to `LOG_FILTERING_LOOKAHEAD`
             // epochs and then wait for them and process them one by one
@@ -454,15 +512,7 @@ impl QueryService {
             )
 
             // retrieve receipts
-            .map(|epoch| {
-                debug!("Requesting receipts for {:?}", epoch);
-
-                with_timeout(
-                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
-                    format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
-                    self.handler.sync.receipts.request(epoch)
-                ).map(move |receipts| (epoch, receipts))
-            })
+            .map(|epoch| self.retrieve_receipts(epoch).map(move |receipts| (epoch, receipts)))
 
             // we first request receipts for up to `LOG_FILTERING_LOOKAHEAD`
             // epochs and then wait for them and process them one by one
@@ -485,15 +535,7 @@ impl QueryService {
             })
 
             // retrieve block txs
-            .map(|log| {
-                debug!("Requesting block txs for {:?}", log.block_hash);
-
-                with_timeout(
-                    Duration::from_millis(MAX_POLL_TIME_MS), /* timeout */
-                    format!("Timeout while retrieving block txs for block {}", log.block_hash), /* error */
-                    self.handler.sync.block_txs.request(log.block_hash)
-                ).map(move |txs| (log, txs))
-            })
+            .map(|log| self.retrieve_block_txs(log.block_hash).map(move |txs| (log, txs)))
 
             // we first request txs for up to `LOG_FILTERING_LOOKAHEAD`
             // blocks and then wait for them and process them one by one

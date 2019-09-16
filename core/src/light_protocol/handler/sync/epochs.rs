@@ -10,21 +10,20 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{max_of_collection, Peers, UniqueId},
-        handler::FullPeerState,
+        common::{max_of_collection, FullPeerState, Peers, UniqueId},
         message::GetBlockHashesByEpoch,
         Error,
     },
     message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
-        EPOCH_REQUEST_BATCH_SIZE, EPOCH_REQUEST_TIMEOUT_MS,
+        EPOCH_REQUEST_BATCH_SIZE, EPOCH_REQUEST_TIMEOUT,
         MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
         NUM_WAITING_HEADERS_THRESHOLD,
     },
@@ -52,7 +51,7 @@ impl EpochRequest {
     }
 }
 
-pub(super) struct Epochs {
+pub struct Epochs {
     // shared consensus graph
     consensus: Arc<ConsensusGraph>,
 
@@ -143,7 +142,7 @@ impl Epochs {
 
     pub fn clean_up(&self) {
         let mut in_flight = self.in_flight.write();
-        let timeout = Duration::from_millis(EPOCH_REQUEST_TIMEOUT_MS);
+        let timeout = *EPOCH_REQUEST_TIMEOUT;
 
         // collect timed-out requests
         let ids: Vec<_> = in_flight

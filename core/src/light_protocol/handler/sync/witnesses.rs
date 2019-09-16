@@ -4,13 +4,12 @@
 
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{LedgerInfo, LedgerProof, Peers, UniqueId},
-        handler::FullPeerState,
+        common::{FullPeerState, LedgerInfo, Peers, UniqueId},
         message::{GetWitnessInfo, WitnessInfoWithHeight},
         Error, ErrorKind,
     },
@@ -21,12 +20,12 @@ use crate::{
         light::{
             BLAME_CHECK_OFFSET, MAX_WITNESSES_IN_FLIGHT,
             NUM_WAITING_WITNESSES_THRESHOLD, WITNESS_REQUEST_BATCH_SIZE,
-            WITNESS_REQUEST_TIMEOUT_MS,
+            WITNESS_REQUEST_TIMEOUT,
         },
     },
 };
 
-use super::{missing_item::KeyReverseOrdered, sync_manager::SyncManager};
+use super::common::{KeyReverseOrdered, LedgerProof, SyncManager};
 
 #[derive(Debug)]
 struct Statistics {
@@ -60,7 +59,7 @@ pub struct Witnesses {
 }
 
 impl Witnesses {
-    pub(super) fn new(
+    pub fn new(
         consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
@@ -160,8 +159,8 @@ impl Witnesses {
     }
 
     #[inline]
-    pub(super) fn clean_up(&self) {
-        let timeout = Duration::from_millis(WITNESS_REQUEST_TIMEOUT_MS);
+    pub fn clean_up(&self) {
+        let timeout = *WITNESS_REQUEST_TIMEOUT;
         let witnesses = self.sync_manager.remove_timeout_requests(timeout);
         self.sync_manager.insert_waiting(witnesses.into_iter());
     }
@@ -186,7 +185,7 @@ impl Witnesses {
     }
 
     #[inline]
-    pub(super) fn sync(&self, io: &dyn NetworkContext) {
+    pub fn sync(&self, io: &dyn NetworkContext) {
         info!("witness sync statistics: {:?}", self.get_statistics());
 
         if let Err(e) = self.verify_pivot_chain() {

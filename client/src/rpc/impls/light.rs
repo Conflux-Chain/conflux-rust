@@ -34,12 +34,6 @@ pub struct RpcImpl {
 impl RpcImpl {
     pub fn new(light: Arc<QueryService>) -> Self { RpcImpl { light } }
 
-    fn code(
-        &self, _addr: RpcH160, _epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
-        unimplemented!()
-    }
-
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
@@ -54,7 +48,6 @@ impl RpcImpl {
         let account = self
             .light
             .get_account(epoch, address)
-            .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)?;
 
         Ok(account
@@ -68,6 +61,24 @@ impl RpcImpl {
     ) -> RpcResult<Bytes> {
         // TODO
         unimplemented!()
+    }
+
+    fn code(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        let address: H160 = address.into();
+        let epoch = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getCode address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        self.light
+            .get_code(epoch, address)
+            .map(|code| code.unwrap_or_default())
+            .map(Bytes::new)
+            .map_err(RpcError::invalid_params)
     }
 
     #[allow(unused_variables)]
@@ -116,15 +127,27 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    pub fn transaction_by_hash(
+    fn transaction_by_hash(
         &self, hash: RpcH256,
     ) -> RpcResult<Option<RpcTransaction>> {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
 
-        let maybe_tx = self.light.get_tx(hash.into());
-        Ok(maybe_tx.map(|tx| RpcTransaction::from_signed(&tx, None)))
+        let tx = self
+            .light
+            .get_tx(hash.into())
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(Some(RpcTransaction::from_signed(&tx, None)))
+    }
+
+    fn get_transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> RpcResult<Option<RpcReceipt>> {
+        let hash: H256 = tx_hash.into();
+        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        unimplemented!()
     }
 
     fn get_transaction_receipt(
@@ -175,9 +198,9 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
-            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
@@ -207,7 +230,6 @@ impl TestRpc for TestRpcImpl {
             fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
             fn chain(&self) -> RpcResult<Vec<RpcBlock>>;
             fn drop_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
-            fn get_best_block_hash(&self) -> RpcResult<H256>;
             fn get_block_count(&self) -> RpcResult<u64>;
             fn get_goodput(&self) -> RpcResult<String>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;

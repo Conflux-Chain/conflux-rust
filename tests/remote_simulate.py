@@ -243,7 +243,7 @@ class RemoteSimulate(ConfluxTestFramework):
         cmd_kill_conflux = "killall -9 conflux || echo already killed"
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
-        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} {} {}&> start_conflux.out".format(
+        cmd_startup = "./remote_start_conflux.sh {} {} {} {} {}&> start_conflux.out".format(
             self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, 
             self.options.bandwidth, str(self.options.flamegraph_enabled).lower()
         )
@@ -332,11 +332,13 @@ class RemoteSimulate(ConfluxTestFramework):
             if i % self.options.block_sync_step == 0:
                 self.log.info("[PROGRESS] %d blocks generated async", i)
 
+            self.progress = i
+
             elapsed = time.time() - start
             if elapsed < wait_sec:
                 self.log.debug("%d generating block %.2f", p, elapsed)
                 time.sleep(wait_sec - elapsed)
-            else:
+            elif elapsed > 0.01:
                 self.log.warn("%d generating block slowly %.2f", p, elapsed)
 
         monitor_thread.join()
@@ -364,7 +366,7 @@ class RemoteSimulate(ConfluxTestFramework):
             for i in range(len(self.nodes)):
                 n = self.nodes[i]
                 block_count_futures.append(executor.submit(n.getblockcount))
-                best_block_futures.append(executor.submit(n.getbestblockhash))
+                best_block_futures.append(executor.submit(n.best_block_hash))
 
             for f in block_count_futures:
                 assert f.exception() is None, "failed to get block count: {}".format(f.exception())
@@ -397,7 +399,8 @@ class RemoteSimulate(ConfluxTestFramework):
             # block count
             block_count = self.nodes[0].getblockcount()
             if block_count != pre_block_count:
-                self.log.info("current blocks: %d", block_count)
+                gap = self.progress + cur_block_count - block_count
+                self.log.info("current blocks: %d (gaps: %d)", block_count, gap)
                 pre_block_count = block_count
                 retry = 0
             else:
@@ -446,7 +449,9 @@ class SimpleGenerateThread(GenerateThread):
         try:
             client = RpcClient(self.nodes[self.i])
             # Do not limit num tx in blocks, only limit it with block size
+            start = time.time()
             h = client.generate_block(10000000, self.tx_n * self.tx_data_len)
+            self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
             self.log.error("Node %d fails to generate block", self.i)

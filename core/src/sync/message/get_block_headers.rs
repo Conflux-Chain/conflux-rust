@@ -57,7 +57,15 @@ impl Handleable for GetBlockHeaders {
             .hashes
             .iter()
             .take(MAX_HEADERS_TO_SEND as usize)
-            .filter_map(|hash| ctx.manager.graph.block_header_by_hash(&hash))
+            .filter_map(|hash| {
+                // We should not use `graph.block_header_by_hash` here because
+                // it only returns headers in memory
+                ctx.manager
+                    .graph
+                    .data_man
+                    .block_header_by_hash(&hash)
+                    .map(|header_arc| header_arc.as_ref().clone())
+            })
             .collect();
 
         let mut block_headers_resp = GetBlockHeadersResponse::default();

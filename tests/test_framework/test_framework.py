@@ -76,6 +76,8 @@ class ConfluxTestFramework:
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
         self.set_test_params()
+        self.predicates = {}
+        self.snapshot = {}
 
         assert hasattr(
             self,
@@ -504,6 +506,25 @@ class ConfluxTestFramework:
         Useful if a test case wants complete control over initialization."""
         for i in range(self.num_nodes):
             initialize_datadir(self.options.tmpdir, i, self.conf_parameters)
+
+    def add_predicate(self, dependency, predicate):
+        assert isinstance(dependency, str)
+        assert callable(predicate)
+        self.predicates[dependency] = predicate
+    
+    def make_snapshot(self):
+        for dependency in self.predicates:
+            self.snapshot[dependency] = []
+            for node in self.nodes:
+                rpc_call = getattr(node, dependency)
+                self.snapshot[dependency].append(rpc_call())
+    
+    def verify(self):
+        for (dependency, predicate) in self.predicates.items():
+            snapshot = self.snapshot[dependency]
+            if not predicate(snapshot):
+                return False
+        return True
 
 
 class SkipTest(Exception):
