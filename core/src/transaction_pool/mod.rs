@@ -31,8 +31,8 @@ use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
 
 lazy_static! {
-    static ref TX_POOL_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "unexecuted_size");
+    static ref TX_POOL_UNPACKED_GAUGE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group("txpool", "unpacked_size");
     static ref TX_POOL_READY_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "ready_size");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
@@ -176,7 +176,7 @@ impl TransactionPool {
             }
         }
 
-        TX_POOL_GAUGE.update(inner.total_unpacked());
+        TX_POOL_UNPACKED_GAUGE.update(inner.total_unpacked());
         TX_POOL_READY_GAUGE.update(inner.total_ready_accounts());
 
         (passed_transactions, failure)
