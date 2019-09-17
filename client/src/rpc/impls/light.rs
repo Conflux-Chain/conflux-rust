@@ -121,7 +121,7 @@ impl RpcImpl {
 
     #[allow(unused_variables)]
     fn send_usable_genesis_accounts(
-        &self, raw_addresses: Bytes, raw_secrets: Bytes,
+        &self, account_start_index: usize,
     ) -> RpcResult<Bytes> {
         // TODO
         unimplemented!()
@@ -196,7 +196,7 @@ impl Cfx for CfxHandler {
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
-            fn send_usable_genesis_accounts(& self,raw_addresses:Bytes, raw_secrets:Bytes) ->RpcResult<Bytes>;
+            fn send_usable_genesis_accounts(& self,account_start_index:usize) ->RpcResult<Bytes>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn get_transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }

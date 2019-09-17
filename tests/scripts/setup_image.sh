@@ -51,5 +51,6 @@ cargo update
 cargo build --release --features "deadlock_detection"
 ./dev-support/dep_pip3.sh
 cd tests/scripts
-cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py genesis_accounts.toml ~
+wget https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt
+cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py genesis_secrets.txt ~
 

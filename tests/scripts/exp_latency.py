@@ -127,10 +127,16 @@ class LatencyExperiment(ArgumentHolder):
         self.metrics_report_interval_ms = 3000
         self.send_tx_period_ms = 1300
         self.txgen_account_count = 1000
+        self.slave_count=10
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
         ArgumentHolder.__init__(self)
+        if os.path.getsize("./genesis_secrets.txt") % 65 != 0:
+            print("genesis secrets account error, file size should be multiple of 65")
+            exit()
+
+        self.txgen_account_count= int((os.path.getsize("./genesis_secrets.txt")/65)//self.slave_count)
 
     def run(self):
         for config in RemoteSimulateConfig.parse(self.batch_config):

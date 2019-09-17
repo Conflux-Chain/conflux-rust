@@ -115,7 +115,7 @@ pub trait Cfx {
 
     #[rpc(name = "cfx_sendUsableGenesisAccounts")]
     fn send_usable_genesis_accounts(
-        &self, raw_addresses: Bytes, raw_secrets: Bytes,
+        &self, account_start_index: usize,
     ) -> RpcResult<Bytes>;
 
     //        /// @alias of `cfx_sendRawTransaction`.

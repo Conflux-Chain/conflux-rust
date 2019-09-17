@@ -17,6 +17,7 @@ from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
 from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 import csv
+import os
 
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
@@ -157,9 +158,9 @@ class RemoteSimulate(ConfluxTestFramework):
             type=int,
         )
         parser.add_argument(
-            "--genesis-accounts",
-            dest="genesis_accounts",
-            default="/home/ubuntu/genesis_accounts.toml",
+            "--genesis-secrets",
+            dest="genesis_secrets",
+            default="/home/ubuntu/genesis_secrets.txt",
             type=str,
         )
         parser.add_argument(
@@ -223,7 +224,7 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
         #genesis accounts
-        self.conf_parameters["genesis_accounts"] = str("\'{}\'".format(self.options.genesis_accounts))
+        self.conf_parameters["genesis_secrets"] = str("\'{}\'".format(self.options.genesis_secrets))
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
@@ -271,25 +272,15 @@ class RemoteSimulate(ConfluxTestFramework):
         num_nodes = len(self.nodes)
 
         if self.tx_propagation_enabled:
-            # Setup balance for each node
-            client = RpcClient(self.nodes[0])
-            with open('./genesis_keypairs.csv') as csv_file:
-                csv_reader = csv.reader(csv_file, delimiter=',')
-                start_time = time.time()
-                for i in range(num_nodes):
-                    counter = 0
-                    addresses= list()
-                    secrets = list()
-                    for row in csv_reader:# this is equivalent to read next()
-                        addresses.append(row[0])
-                        secrets.append(row[1])
-                        counter= counter+1
-                        if counter == self.options.txgen_account_count:
-                            client = RpcClient(self.nodes[i])
-                            client.send_usable_genesis_accounts(addresses,secrets)
-                            break
+            #setup usable accounts
 
-                self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
+            start_time = time.time()
+            current_index=0
+            for i in range(len(self.nodes)):
+                client = RpcClient(self.nodes[i])
+                client.send_usable_genesis_accounts(current_index)
+                current_index+=self.options.txgen_account_count
+            self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
 
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
@@ -342,6 +333,7 @@ class RemoteSimulate(ConfluxTestFramework):
                 self.log.warn("%d generating block slowly %.2f", p, elapsed)
 
         monitor_thread.join()
+        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         self.sync_blocks()
 
         self.log.info("generateoneblock RPC latency: {}".format(Statistics(rpc_times, 3).__dict__))
@@ -386,7 +378,6 @@ class RemoteSimulate(ConfluxTestFramework):
                 break
 
             time.sleep(5)
-        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         executor.shutdown()
 
     def monitor(self, cur_block_count:int, retry_max:int):

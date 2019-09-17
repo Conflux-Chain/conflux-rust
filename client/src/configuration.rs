@@ -41,6 +41,7 @@ build_config! {
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (genesis_accounts, (Option<String>), None)
+        (genesis_secrets, (Option<String>), None)
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
         (network_id, (u64), 1)
