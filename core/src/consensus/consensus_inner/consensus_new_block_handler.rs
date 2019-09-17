@@ -1320,7 +1320,10 @@ impl ConsensusNewBlockHandler {
 
             let (mut state_at, to_state_pos) = if self.conf.no_defer {
                 // For evaluating the performance without deferred execution
-                (fork_at, inner.arena[me].height + 1)
+                (
+                    fork_at,
+                    inner.pivot_index_to_height(inner.pivot_chain.len()),
+                )
             } else {
                 let to_state_pos = if inner
                     .pivot_index_to_height(inner.pivot_chain.len())
