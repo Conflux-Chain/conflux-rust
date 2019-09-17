@@ -1318,30 +1318,41 @@ impl ConsensusNewBlockHandler {
                 inner.last_recycled_era_block = new_pivot_era_block;
             }
 
-            let to_state_pos = if inner
-                .pivot_index_to_height(inner.pivot_chain.len())
-                < DEFERRED_STATE_EPOCH_COUNT
-            {
-                0
+            let (mut state_at, to_state_pos) = if self.conf.no_defer {
+                // For evaluating the performance without deferred execution
+                (
+                    fork_at,
+                    inner.pivot_index_to_height(inner.pivot_chain.len()),
+                )
             } else {
-                inner.pivot_index_to_height(inner.pivot_chain.len())
-                    - DEFERRED_STATE_EPOCH_COUNT
-                    + 1
-            };
-            inner.optimistic_executed_height = if to_state_pos > 0 {
-                Some(to_state_pos)
-            } else {
-                None
-            };
-            let mut state_at = fork_at;
-            if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height {
-                if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
-                    state_at =
-                        old_pivot_chain_height - DEFERRED_STATE_EPOCH_COUNT + 1;
+                let to_state_pos = if inner
+                    .pivot_index_to_height(inner.pivot_chain.len())
+                    < DEFERRED_STATE_EPOCH_COUNT
+                {
+                    0
                 } else {
-                    state_at = 1;
+                    inner.pivot_index_to_height(inner.pivot_chain.len())
+                        - DEFERRED_STATE_EPOCH_COUNT
+                        + 1
+                };
+                inner.optimistic_executed_height = if to_state_pos > 0 {
+                    Some(to_state_pos)
+                } else {
+                    None
+                };
+                let mut state_at = fork_at;
+                if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height
+                {
+                    if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
+                        state_at = old_pivot_chain_height
+                            - DEFERRED_STATE_EPOCH_COUNT
+                            + 1;
+                    } else {
+                        state_at = 1;
+                    }
                 }
-            }
+                (state_at, to_state_pos)
+            };
 
             // Apply transactions in the determined total order
             while state_at < to_state_pos {
@@ -1353,14 +1364,19 @@ impl ConsensusNewBlockHandler {
                         inner,
                         epoch_arena_index,
                     );
-                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                let task = EpochExecutionTask::new(
                     inner.arena[epoch_arena_index].hash,
                     inner.get_epoch_block_hashes(epoch_arena_index),
                     inner.get_epoch_start_block_number(epoch_arena_index),
                     reward_execution_info,
                     true,
                     false,
-                ));
+                );
+                if self.conf.no_defer {
+                    self.executor.compute_epoch(task);
+                } else {
+                    self.executor.enqueue_epoch(task);
+                }
                 state_at += 1;
             }
         }
