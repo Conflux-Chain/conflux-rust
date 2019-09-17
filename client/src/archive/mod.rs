@@ -149,15 +149,18 @@ impl ArchiveClient {
         }
 
         let genesis_accounts = if conf.raw_conf.test_mode {
-            match conf.raw_conf.genesis_accounts {
+            match conf.raw_conf.genesis_secrets {
                 Some(ref file) => {
                     genesis::default(secret_store.as_ref());
-                    genesis::load_file(file)?
+                    genesis::load_secrets_file(file, secret_store.as_ref())?
                 }
                 None => genesis::default(secret_store.as_ref()),
             }
         } else {
-            genesis::default(secret_store.as_ref())
+            match conf.raw_conf.genesis_accounts {
+                Some(ref file) => genesis::load_file(file)?,
+                None => genesis::default(secret_store.as_ref()),
+            }
         };
 
         // FIXME: move genesis block to a dedicated directory near all conflux
@@ -287,12 +290,12 @@ impl ArchiveClient {
         let txgen_handle = if tx_conf.generate_tx {
             let txgen_clone = txgen.clone();
             let t = if conf.raw_conf.test_mode {
-                match conf.raw_conf.genesis_accounts {
+                match conf.raw_conf.genesis_secrets {
                     Some(ref _file) => {
                         thread::Builder::new()
                             .name("txgen".into())
                             .spawn(move || {
-                                TransactionGenerator::generate_transactions_with_mutiple_genesis_accounts(
+                                TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
                                     txgen_clone,
                                     tx_conf,
                                 )

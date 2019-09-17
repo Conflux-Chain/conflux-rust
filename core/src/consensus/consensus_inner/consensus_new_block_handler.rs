@@ -611,12 +611,9 @@ impl ConsensusNewBlockHandler {
 
         let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
 
-        let reward_execution_info =
-            self.executor.get_reward_execution_info_from_index(
-                &self.data_man,
-                inner,
-                reward_index,
-            );
+        let reward_execution_info = self
+            .executor
+            .get_reward_execution_info_from_index(inner, reward_index);
         let task = EpochExecutionTask::new(
             epoch_block_hash,
             epoch_block_hashes.clone(),
@@ -1347,12 +1344,9 @@ impl ConsensusNewBlockHandler {
             while state_at < to_state_pos {
                 let epoch_arena_index =
                     inner.get_pivot_block_arena_index(state_at);
-                let reward_execution_info =
-                    self.executor.get_reward_execution_info(
-                        &self.data_man,
-                        inner,
-                        epoch_arena_index,
-                    );
+                let reward_execution_info = self
+                    .executor
+                    .get_reward_execution_info(inner, epoch_arena_index);
                 self.executor.enqueue_epoch(EpochExecutionTask::new(
                     inner.arena[epoch_arena_index].hash,
                     inner.get_epoch_block_hashes(epoch_arena_index),
@@ -1474,12 +1468,9 @@ impl ConsensusNewBlockHandler {
                         pivot_logs_bloom_hash,
                     );
                 } else {
-                    let reward_execution_info =
-                        self.executor.get_reward_execution_info(
-                            &self.data_man,
-                            inner,
-                            arena_index,
-                        );
+                    let reward_execution_info = self
+                        .executor
+                        .get_reward_execution_info(inner, arena_index);
                     let epoch_block_hashes =
                         inner.get_epoch_block_hashes(arena_index);
                     let start_block_number =

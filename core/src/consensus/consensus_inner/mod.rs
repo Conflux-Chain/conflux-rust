@@ -10,15 +10,11 @@ use crate::{
     block_data_manager::{
         BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
     },
-    bytes::Bytes,
     consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
-    state::State,
-    statedb::StateDb,
-    storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
 };
-use cfx_types::{into_i128, H160, H256, U256, U512};
+use cfx_types::{into_i128, H256, U256, U512};
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::{
     CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
@@ -796,6 +792,9 @@ impl ConsensusGraphInner {
         while let Some((stage, index)) = stack.pop() {
             if stage == 0 {
                 stack.push((1, index));
+                subtree_weight[index] = 0;
+                subtree_inclusive_weight[index] = 0;
+                subtree_stable_weight[index] = 0;
                 for child in &self.arena[index].children {
                     if !anticone_barrier.contains(*child as u32) && *child != me
                     {
@@ -803,13 +802,6 @@ impl ConsensusGraphInner {
                     }
                 }
             } else {
-                for child in &self.arena[index].children {
-                    subtree_weight[index] += subtree_weight[*child];
-                    subtree_inclusive_weight[index] +=
-                        subtree_inclusive_weight[*child];
-                    subtree_stable_weight[index] +=
-                        subtree_stable_weight[*child];
-                }
                 let weight =
                     self.block_weight(index, false /* inclusive */);
                 subtree_weight[index] += weight;
@@ -817,6 +809,14 @@ impl ConsensusGraphInner {
                     self.block_weight(index, true /* inclusive */);
                 if self.arena[index].stable {
                     subtree_stable_weight[index] += weight;
+                }
+                let parent = self.arena[index].parent;
+                if parent != NULL {
+                    subtree_weight[parent] += subtree_weight[index];
+                    subtree_inclusive_weight[parent] +=
+                        subtree_inclusive_weight[index];
+                    subtree_stable_weight[parent] +=
+                        subtree_stable_weight[index];
                 }
             }
         }
@@ -1646,14 +1646,15 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_executable_epoch_blocks(
-        &self, data_man: &BlockDataManager, epoch_arena_index: usize,
+        &self, epoch_arena_index: usize,
     ) -> Vec<Arc<Block>> {
         let mut epoch_blocks = Vec::new();
         for idx in &self.arena[epoch_arena_index]
             .data
             .ordered_executable_epoch_blocks
         {
-            let block = data_man
+            let block = self
+                .data_man
                 .block_by_hash(
                     &self.arena[*idx].hash,
                     false, /* update_cache */
@@ -1886,24 +1887,6 @@ impl ConsensusGraphInner {
         Ok(&self.arena[idx].hash)
     }
 
-    /// Return None if the best state is not executed or the db returned error
-    // TODO check if we can ignore the db error
-    pub fn try_get_best_state<'a>(
-        &self, data_man: &'a BlockDataManager,
-    ) -> Option<State<'a>> {
-        let best_state_hash = self.best_state_block_hash();
-        if let Ok(state) = data_man.storage_manager.get_state_no_commit(
-            SnapshotAndEpochIdRef::new(&best_state_hash, None),
-        ) {
-            state.map(|db| {
-                State::new(StateDb::new(db), 0.into(), Default::default())
-            })
-        } else {
-            warn!("try_get_best_state: Error for hash {}", best_state_hash);
-            None
-        }
-    }
-
     pub fn best_epoch_number(&self) -> u64 {
         self.cur_era_genesis_height + self.pivot_chain.len() as u64 - 1
     }
@@ -1970,69 +1953,6 @@ impl ConsensusGraphInner {
     fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
         self.get_block_epoch_number(&hash)
             .and_then(|epoch_number| self.epoch_hash(epoch_number))
-    }
-
-    pub fn get_code(
-        &self, address: H160, epoch_number: u64,
-    ) -> Result<Bytes, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let maybe_state = self
-            .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
-            .map_err(|e| format!("Error to get state, err={:?}", e))?;
-        let state = match maybe_state {
-            Some(state) => state,
-            None => {
-                return Err(format!(
-                    "State for epoch (number={:?} hash={:?}) does not exist",
-                    epoch_number, hash
-                )
-                .into())
-            }
-        };
-
-        let state_db = StateDb::new(state);
-        let acc = match state_db.get_account(&address) {
-            Ok(Some(acc)) => acc,
-            _ => {
-                return Err(format!(
-                    "Account {:?} (number={:?} hash={:?}) does not exist",
-                    address, epoch_number, hash
-                )
-                .into())
-            }
-        };
-
-        match state_db.get_code(&address, &acc.code_hash) {
-            Some(code) => Ok(code),
-            None => Ok(vec![]),
-        }
-    }
-
-    pub fn get_balance(
-        &self, address: H160, epoch_number: u64,
-    ) -> Result<U256, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let maybe_state = self
-            .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
-            .map_err(|e| format!("Error to get state, err={:?}", e))?;
-        if let Some(state) = maybe_state {
-            let state_db = StateDb::new(state);
-            Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-                maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
-            } else {
-                0.into()
-            })
-        } else {
-            Err(format!(
-                "State for epoch (number={:?} hash={:?}) does not exist",
-                epoch_number, hash
-            )
-            .into())
-        }
     }
 
     pub fn terminal_hashes(&self) -> Vec<H256> {
@@ -2138,23 +2058,6 @@ impl ConsensusGraphInner {
                 .clone(),
             address,
         ))
-    }
-
-    pub fn transaction_count(
-        &self, address: H160, epoch_number: u64,
-    ) -> Result<U256, String> {
-        let hash = self.get_hash_from_epoch_number(epoch_number)?;
-        let state_db = StateDb::new(
-            self.data_man
-                .storage_manager
-                .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
-                .unwrap()
-                .unwrap(),
-        );
-        let state = State::new(state_db, 0.into(), Default::default());
-        state
-            .nonce(&address)
-            .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
     pub fn check_block_pivot_assumption(
@@ -2350,10 +2253,8 @@ impl ConsensusGraphInner {
     }
 
     fn compute_vote_valid_for_pivot_block(
-        &mut self, data_man: &BlockDataManager, me: usize,
-        pivot_arena_index: usize,
-    ) -> bool
-    {
+        &mut self, me: usize, pivot_arena_index: usize,
+    ) -> bool {
         let lca = self.lca(me, pivot_arena_index);
         let lca_height = self.arena[lca].height;
         debug!(
@@ -2366,7 +2267,8 @@ impl ConsensusGraphInner {
             let (stage, index, a) = stack.pop().unwrap();
             if stage == 0 {
                 if self.arena[index].data.exec_info_lca_height != lca_height {
-                    let header = data_man
+                    let header = self
+                        .data_man
                         .block_header_by_hash(&self.arena[index].hash)
                         .unwrap();
                     let blame = header.blame();
