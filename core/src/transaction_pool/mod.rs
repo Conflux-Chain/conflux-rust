@@ -113,26 +113,40 @@ impl TransactionPool {
         let mut passed_transactions = Vec::new();
         let mut failure = HashMap::new();
 
-        // filter out invalid transactions
+        // filter out invalid transactions.
         let mut index = 0;
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction(tx) {
                 Ok(_) => index += 1,
                 Err(e) => {
                     let removed = transactions.swap_remove(index);
-                    debug!(
-                        "failed to validate tx, hash = {:?}, error = {:?}",
-                        removed.hash, e
-                    );
+                    debug!("failed to insert tx into pool (validation failed), hash = {:?}, error = {:?}", removed.hash, e);
                     failure.insert(removed.hash, e);
                 }
             }
         }
 
+        // ensure the pool has enough quota to insert new transactions.
+        let mut inner = self.inner.write();
+        let quota = inner.remaining_quota();
+        if quota < transactions.len() {
+            for tx in transactions.split_off(quota) {
+                trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
+                failure.insert(tx.hash, "txpool is full".into());
+            }
+        }
+
+        if transactions.is_empty() {
+            return (passed_transactions, failure);
+        }
+
+        // Recover public key and insert into pool with readiness check.
+        // Note, the workload of recovering public key is very heavy, especially
+        // in case of high TPS (e.g. > 8000). So, it's better to recover public
+        // key after basic verification.
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
                 let mut account_cache = self.get_best_state_account_cache();
-                let mut inner = self.inner.write();
                 let mut to_prop = self.to_propagate_trans.write();
                 for tx in signed_trans {
                     if let Err(e) = self.add_transaction_with_readiness_check(
