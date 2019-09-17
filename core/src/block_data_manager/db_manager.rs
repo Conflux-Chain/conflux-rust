@@ -1,7 +1,8 @@
 use crate::{
     block_data_manager::{
         BlockExecutionResultWithEpoch, CheckpointHashes,
-        ConsensusGraphExecutionInfo, EpochExecutionContext, LocalBlockInfo,
+        ConsensusGraphExecutionInfo, DBType, EpochExecutionContext,
+        LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
     storage::{storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite},
@@ -12,7 +13,7 @@ use cfx_types::H256;
 use db::SystemDB;
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionAddress};
 use rlp::{Decodable, Encodable, Rlp};
-use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, str::FromStr, sync::Arc};
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
@@ -21,11 +22,25 @@ const EPOCH_EXECUTION_CONTEXT_SUFFIX_BYTE: u8 = 4;
 const EPOCH_CONSENSUS_EXECUTION_INFO_SUFFIX_BYTE: u8 = 5;
 
 #[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
-enum DBTable {
+pub enum DBTable {
     Misc,
     Blocks,
     Transactions,
     EpochNumbers,
+}
+
+impl FromStr for DBTable {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "misc" => Ok(DBTable::Misc),
+            "blocks" => Ok(DBTable::Blocks),
+            "transactions" => Ok(DBTable::Transactions),
+            "epoch_numbers" => Ok(DBTable::EpochNumbers),
+            _ => Err(()),
+        }
+    }
 }
 
 fn rocks_db_col(table: DBTable) -> Option<u32> {
@@ -48,61 +63,72 @@ fn sqlite_db_table(table: DBTable) -> String {
 }
 
 pub struct DBManager {
-    table_db: HashMap<DBTable, Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
+    table_db_map:
+        HashMap<DBTable, Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>>,
 }
 
 impl DBManager {
-    pub fn new_from_rocksdb(db: Arc<SystemDB>) -> Self {
-        let mut table_db = HashMap::new();
-        for table in vec![
-            DBTable::Misc,
-            DBTable::Blocks,
-            DBTable::Transactions,
-            DBTable::EpochNumbers,
-        ] {
-            table_db.insert(
-                table,
-                Box::new(KvdbRocksdb {
-                    kvdb: db.key_value().clone(),
-                    col: rocks_db_col(table),
-                })
-                    as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
-            );
-        }
-        Self { table_db }
-    }
-}
-
-impl DBManager {
-    pub fn new_from_sqlite(db_path: &Path) -> Self {
-        if let Err(e) = fs::create_dir_all(db_path) {
+    /// Use sqlite for block-related data and use rocksdb for
+    /// transaction-related data sqlite has less write amplification for
+    /// large data, but rocksdb is more suitable for small updates.
+    pub fn new(
+        rocksdb: Arc<SystemDB>, sqlite_db_path: &Path,
+        db_types: &HashMap<DBTable, DBType>,
+    ) -> Self
+    {
+        if let Err(e) = fs::create_dir_all(sqlite_db_path) {
             panic!("Error creating database directory: {:?}", e);
         }
-        let mut table_db = HashMap::new();
+        let mut table_db_map = HashMap::new();
+
         for table in vec![
             DBTable::Misc,
             DBTable::Blocks,
-            DBTable::Transactions,
             DBTable::EpochNumbers,
+            DBTable::Transactions,
         ] {
-            let table_str = sqlite_db_table(table);
-            let sqlite_db = KvdbSqlite::create_and_open(
-                &db_path.join(table_str.as_str()), /* Use separate database
-                                                    * for
-                                                    * different table */
-                table_str.as_str(),
-                &[&"value"],
-                &[&"BLOB"],
-                false,
-            )
-            .expect("Open sqlite failure");
-            table_db.insert(
-                table,
-                Box::new(sqlite_db)
-                    as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
-            );
+            let table_db = match db_types.get(&table) {
+                Some(DBType::Rocksdb) => {
+                    Self::new_table_rocksdb(table, rocksdb.clone())
+                }
+                Some(DBType::Sqlite) => {
+                    Self::new_table_sqlite(table, sqlite_db_path)
+                }
+                None => {
+                    // TODO support in_mem db
+                    unimplemented!()
+                }
+            };
+            table_db_map.insert(table, table_db);
         }
-        Self { table_db }
+
+        Self { table_db_map }
+    }
+
+    fn new_table_sqlite(
+        table: DBTable, db_path: &Path,
+    ) -> Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>> {
+        let table_str = sqlite_db_table(table);
+        let sqlite_db = KvdbSqlite::create_and_open(
+            &db_path.join(table_str.as_str()), /* Use separate database
+                                                * for
+                                                * different table */
+            table_str.as_str(),
+            &[&"value"],
+            &[&"BLOB"],
+            false,
+        )
+        .expect("Open sqlite failure");
+        Box::new(sqlite_db) as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>
+    }
+
+    fn new_table_rocksdb(
+        table: DBTable, db: Arc<SystemDB>,
+    ) -> Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>> {
+        Box::new(KvdbRocksdb {
+            kvdb: db.key_value().clone(),
+            col: rocks_db_col(table),
+        }) as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>
     }
 }
 
@@ -303,15 +329,19 @@ impl DBManager {
     /// The functions below are private utils used by the DBManager to access
     /// database
     fn insert_to_db(&self, table: DBTable, db_key: &[u8], value: Vec<u8>) {
-        self.table_db.get(&table).unwrap().put(db_key, &value).ok();
+        self.table_db_map
+            .get(&table)
+            .unwrap()
+            .put(db_key, &value)
+            .ok();
     }
 
     fn remove_from_db(&self, table: DBTable, db_key: &[u8]) {
-        self.table_db.get(&table).unwrap().delete(db_key).ok();
+        self.table_db_map.get(&table).unwrap().delete(db_key).ok();
     }
 
     fn load_from_db(&self, table: DBTable, db_key: &[u8]) -> Option<Box<[u8]>> {
-        self.table_db.get(&table).unwrap().get(db_key).unwrap()
+        self.table_db_map.get(&table).unwrap().get(db_key).unwrap()
     }
 
     fn insert_encodable_val<V>(

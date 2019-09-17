@@ -35,10 +35,12 @@ pub mod block_data_types;
 pub mod db_manager;
 pub mod tx_data_manager;
 use crate::block_data_manager::{
-    db_manager::DBManager, tx_data_manager::TransactionDataManager,
+    db_manager::{DBManager, DBTable},
+    tx_data_manager::TransactionDataManager,
 };
 pub use block_data_types::*;
-use std::{hash::Hash, path::Path};
+use std::{hash::Hash, path::Path, str::FromStr};
+use toml::Value;
 
 pub const NULLU64: u64 = !0;
 
@@ -99,12 +101,8 @@ impl BlockDataManager {
         )));
         let tx_data_manager =
             TransactionDataManager::new(config.tx_cache_count, worker_pool);
-        let db_manager = match config.db_type {
-            DbType::Rocksdb => DBManager::new_from_rocksdb(db),
-            DbType::Sqlite => {
-                DBManager::new_from_sqlite(Path::new("./sqlite_db"))
-            }
-        };
+        let db_manager =
+            DBManager::new(db, Path::new("./sqlite_db"), &config.db_types);
 
         let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
@@ -891,25 +889,70 @@ impl BlockDataManager {
 }
 
 #[derive(Copy, Clone)]
-pub enum DbType {
+pub enum DBType {
     Rocksdb,
     Sqlite,
+}
+
+impl FromStr for DBType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "rocksdb" => Ok(DBType::Rocksdb),
+            "sqlite" => Ok(DBType::Sqlite),
+            _ => return Err(()),
+        }
+    }
 }
 
 pub struct DataManagerConfiguration {
     record_tx_address: bool,
     tx_cache_count: usize,
-    db_type: DbType,
+    db_types: HashMap<DBTable, DBType>,
 }
 
 impl DataManagerConfiguration {
     pub fn new(
-        record_tx_address: bool, tx_cache_count: usize, db_type: DbType,
-    ) -> Self {
+        record_tx_address: bool, tx_cache_count: usize,
+        db_types: Option<String>,
+    ) -> Self
+    {
         Self {
             record_tx_address,
             tx_cache_count,
-            db_type,
+            db_types: db_types
+                .map(|s| Self::parse_db_types(s))
+                .unwrap_or(Self::default_db_types()),
         }
+    }
+
+    fn default_db_types() -> HashMap<DBTable, DBType> {
+        let mut db_types = HashMap::new();
+        for table in vec![DBTable::Misc, DBTable::Blocks, DBTable::EpochNumbers]
+        {
+            db_types.insert(table, DBType::Sqlite);
+        }
+        for table in vec![DBTable::Transactions] {
+            db_types.insert(table, DBType::Rocksdb);
+        }
+        db_types
+    }
+
+    fn parse_db_types(db_types_str: String) -> HashMap<DBTable, DBType> {
+        let mut db_types = HashMap::new();
+        let map = db_types_str.parse::<Value>().unwrap();
+        for (key, value) in
+            map.as_table().expect("db_types should be toml table")
+        {
+            db_types.insert(
+                key.as_str().parse().expect("db_types table name invalid"),
+                value
+                    .as_str()
+                    .and_then(|s| s.parse().ok())
+                    .expect("db_types db name invalid"),
+            );
+        }
+        db_types
     }
 }
