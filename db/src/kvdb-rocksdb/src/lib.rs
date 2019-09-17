@@ -167,6 +167,8 @@ pub struct DatabaseConfig {
 	pub compaction: CompactionProfile,
 	/// Set number of columns
 	pub columns: Option<u32>,
+    /// Disable write-ahead-log
+    pub disable_wal: bool,
 }
 
 impl DatabaseConfig {
@@ -194,6 +196,7 @@ impl Default for DatabaseConfig {
 			memory_budget: None,
 			compaction: CompactionProfile::default(),
 			columns: None,
+			disable_wal: false,
 		}
 	}
 }
@@ -295,7 +298,7 @@ impl OpenHandler<DBAndColumns> for DBAndColumns {
 		}
 
 		let mut write_opts = WriteOptions::default();
-		write_opts.disable_wal(true);
+		write_opts.disable_wal(config.disable_wal);
 		let read_opts = ReadOptions::default();
 		// TODO: add to upstream
 		// read_opts.set_verify_checksums(false);

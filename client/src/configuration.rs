@@ -114,6 +114,7 @@ build_config! {
         (tx_cache_count, (usize), 250000)
         (max_download_state_peers, (usize), 8)
         (block_db_type, (String), "rocksdb".to_string())
+        (rocksdb_disable_wal, (bool), false)
     }
     {
         (
@@ -236,6 +237,7 @@ impl Configuration {
             self.raw_conf.db_cache_size.clone(),
             compact_profile,
             NUM_COLUMNS.clone(),
+            self.raw_conf.rocksdb_disable_wal,
         )
     }
 
