@@ -10,5 +10,4 @@ pub mod kvdb_sqlite;
 pub mod snapshot_db_manager_sqlite;
 pub mod snapshot_db_sqlite;
 pub mod snapshot_mpt;
-pub mod snapshot_sync;
 pub mod sqlite;

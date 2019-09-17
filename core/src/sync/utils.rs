@@ -83,6 +83,7 @@ pub fn initialize_synchronization_graph(
             Some(128),
             db::DatabaseCompactionProfile::default(),
             NUM_COLUMNS,
+            false,
         ),
     )
     .map_err(|e| format!("Failed to open database {:?}", e))

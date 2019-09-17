@@ -5,6 +5,8 @@
 pub type SnapshotMptValue = (Box<[u8]>, Box<[u8]>, i64);
 
 make_tuple_with_index_ext!(SnapshotMptDbValue(Box<[u8]>: pub, i64: pub));
+// TODO: VanillaTrieNode<(MerkleHash, i64)>. Move the subtree size inside
+// children table to make seeking by rlp size posisition faster.
 make_tuple_with_index_ext!(SnapshotMptNode(VanillaTrieNode<MerkleHash>: pub, i64: pub));
 
 pub trait SnapshotMptTraitReadOnly {
@@ -15,11 +17,6 @@ pub trait SnapshotMptTraitReadOnly {
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>>;
-
-    fn get_manifest(
-        &self, start_chunk: &ChunkKey,
-    ) -> Result<Option<RangedManifest>>;
-    fn get_chunk(&self, key: &ChunkKey) -> Result<Option<Chunk>>;
 }
 
 pub trait SnapshotMptTraitSingleWriter: SnapshotMptTraitReadOnly {
@@ -68,7 +65,6 @@ use super::super::{
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{
             trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
         },
-        storage_db::snapshot_sync::{Chunk, ChunkKey, RangedManifest},
     },
     utils::tuple::*,
 };

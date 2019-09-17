@@ -197,7 +197,7 @@ impl ConsensusExecutor {
                         let maybe_optimistic_task = consensus_inner
                             .try_write()
                             .and_then(|mut inner|
-                                executor_thread.get_optimistic_execution_task(data_man.as_ref(), &mut *inner)
+                                executor_thread.get_optimistic_execution_task(&mut *inner)
                             );
                         match maybe_optimistic_task {
                             Some(task) => {
@@ -275,7 +275,7 @@ impl ConsensusExecutor {
     }
 
     fn get_optimistic_execution_task(
-        &self, data_man: &BlockDataManager, inner: &mut ConsensusGraphInner,
+        &self, inner: &mut ConsensusGraphInner,
     ) -> Option<EpochExecutionTask> {
         if !inner.inner_conf.enable_optimistic_execution {
             return None;
@@ -291,7 +291,7 @@ impl ConsensusExecutor {
             inner.arena[epoch_arena_index].hash,
             inner.get_epoch_block_hashes(epoch_arena_index),
             inner.get_epoch_start_block_number(epoch_arena_index),
-            self.get_reward_execution_info(data_man, inner, epoch_arena_index),
+            self.get_reward_execution_info(inner, epoch_arena_index),
             true,
             false,
         );
@@ -307,7 +307,7 @@ impl ConsensusExecutor {
     }
 
     pub fn get_reward_execution_info_from_index(
-        &self, data_man: &BlockDataManager, inner: &mut ConsensusGraphInner,
+        &self, inner: &mut ConsensusGraphInner,
         reward_index: Option<(usize, usize)>,
     ) -> Option<RewardExecutionInfo>
     {
@@ -323,8 +323,8 @@ impl ConsensusExecutor {
                     .unwrap();
                 }
 
-                let epoch_blocks = inner
-                    .get_executable_epoch_blocks(data_man, pivot_arena_index);
+                let epoch_blocks =
+                    inner.get_executable_epoch_blocks(pivot_arena_index);
 
                 let mut epoch_block_no_reward =
                     Vec::with_capacity(epoch_blocks.len());
@@ -363,7 +363,6 @@ impl ConsensusExecutor {
                                 .data
                                 .partial_invalid
                                 || !inner.compute_vote_valid_for_pivot_block(
-                                    data_man,
                                     *index,
                                     pivot_arena_index,
                                 );
@@ -448,12 +447,9 @@ impl ConsensusExecutor {
     }
 
     pub fn get_reward_execution_info(
-        &self, data_man: &BlockDataManager, inner: &mut ConsensusGraphInner,
-        epoch_arena_index: usize,
-    ) -> Option<RewardExecutionInfo>
-    {
+        &self, inner: &mut ConsensusGraphInner, epoch_arena_index: usize,
+    ) -> Option<RewardExecutionInfo> {
         self.get_reward_execution_info_from_index(
-            data_man,
             inner,
             inner.get_pivot_reward_index(epoch_arena_index),
         )
@@ -752,11 +748,8 @@ impl ConsensusExecutor {
             while last_state_height <= fork_height {
                 let epoch_arena_index =
                     inner.get_pivot_block_arena_index(last_state_height);
-                let reward_execution_info = self.get_reward_execution_info(
-                    &self.handler.data_man,
-                    inner,
-                    epoch_arena_index,
-                );
+                let reward_execution_info =
+                    self.get_reward_execution_info(inner, epoch_arena_index);
                 self.enqueue_epoch(EpochExecutionTask::new(
                     inner.arena[epoch_arena_index].hash,
                     inner.get_epoch_block_hashes(epoch_arena_index),
@@ -773,12 +766,8 @@ impl ConsensusExecutor {
             let epoch_arena_index = chain[fork_chain_index];
             let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
 
-            let reward_execution_info = self
-                .get_reward_execution_info_from_index(
-                    &self.handler.data_man,
-                    inner,
-                    reward_index,
-                );
+            let reward_execution_info =
+                self.get_reward_execution_info_from_index(inner, reward_index);
             self.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_arena_index].hash,
                 inner.get_epoch_block_hashes(epoch_arena_index),

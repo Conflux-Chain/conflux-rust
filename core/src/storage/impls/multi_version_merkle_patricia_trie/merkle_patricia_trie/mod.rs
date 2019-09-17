@@ -74,5 +74,6 @@ pub use self::{
     node_ref::{NodeRefDeltaMpt, NodeRefDeltaMptCompact},
     subtrie_visitor::SubTrieVisitor,
     trie_node::{MemOptimizedTrieNode, TrieNodeTrait, VanillaTrieNode},
+    walk::access_mode,
 };
 use std::cell::UnsafeCell;

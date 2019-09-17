@@ -4,7 +4,7 @@
 
 pub struct SnapshotMpt<
     DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
-    BorrowType: Borrow<DbType>,
+    BorrowType: BorrowMut<DbType>,
 > {
     pub db: BorrowType,
     pub _marker_db_type: std::marker::PhantomData<DbType>,
@@ -117,16 +117,6 @@ where DbType:
                 }),
         ))
     }
-
-    fn get_manifest(
-        &self, _start_chunk: &ChunkKey,
-    ) -> Result<Option<RangedManifest>> {
-        unimplemented!()
-    }
-
-    fn get_chunk(&self, _key: &ChunkKey) -> Result<Option<Chunk>> {
-        unimplemented!()
-    }
 }
 
 impl<
@@ -159,26 +149,20 @@ where DbType:
     }
 }
 
-use super::{
-    super::{
-        super::storage_db::{
-            key_value_db::{
-                KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
-                KeyValueDbTraitSingleWriter,
-            },
-            snapshot_mpt::*,
+use super::super::{
+    super::storage_db::{
+        key_value_db::{
+            KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
+            KeyValueDbTraitSingleWriter,
         },
-        errors::*,
-        multi_version_merkle_patricia_trie::merkle_patricia_trie::{
-            trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
-        },
+        snapshot_mpt::*,
     },
-    snapshot_sync::{Chunk, ChunkKey, RangedManifest},
+    errors::*,
+    multi_version_merkle_patricia_trie::merkle_patricia_trie::{
+        trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
+    },
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
 use rlp::*;
-use std::{
-    borrow::{Borrow, BorrowMut},
-    convert::TryInto,
-};
+use std::{borrow::BorrowMut, convert::TryInto};

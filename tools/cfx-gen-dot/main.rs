@@ -27,6 +27,7 @@ fn open_db(db_path: &str) -> std::io::Result<Arc<db::SystemDB>> {
         None,
         db::DatabaseCompactionProfile::default(),
         cfxcore::db::NUM_COLUMNS,
+        false,
     );
 
     db::open_database(db_path, &db_config)

@@ -8,10 +8,52 @@ pub struct MptCursor<Mpt, PathNode> {
     path_nodes: Vec<PathNode>,
 }
 
+impl<Mpt, PathNode> MptCursor<Mpt, PathNode> {
+    pub fn new(mpt: Mpt) -> Self {
+        Self {
+            mpt: Some(mpt),
+            path_nodes: vec![],
+        }
+    }
+
+    pub fn get_path_nodes(&self) -> &Vec<PathNode> { &self.path_nodes }
+
+    /// Never call this method after pop_root.
+    pub fn current_node_mut(&mut self) -> &mut PathNode {
+        self.path_nodes.last_mut().unwrap()
+    }
+}
+
 impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
+    pub fn load_root(&mut self) -> Result<()>
+    where Self: CursorToRootNode<Mpt, PathNode> {
+        let root_node = PathNode::load_root(self)?;
+        self.path_nodes.push(root_node);
+        Ok(())
+    }
+
+    pub fn to_proof(&self) -> TrieProof {
+        let mut trie_nodes = Vec::with_capacity(self.path_nodes.len());
+        for node in &self.path_nodes {
+            trie_nodes.push(TrieProofNode(
+                node.get_basic_path_node().trie_node.0.clone(),
+            ))
+        }
+        TrieProof::new(trie_nodes)
+    }
+
+    pub fn push_node(&mut self, node: PathNode) { self.path_nodes.push(node); }
+
+    /// Don't call this method for root node.
     pub fn pop_one_node(&mut self) -> Result<()> {
         let node = self.path_nodes.pop().unwrap();
-        node.commit(self.path_nodes.last_mut().unwrap())
+        let parent_node = self.path_nodes.last_mut().unwrap();
+        let mpt_taken = node.commit(parent_node)?;
+        let parent_basic_node = parent_node.get_basic_path_node_mut();
+        parent_basic_node.next_child_index += 1;
+        parent_basic_node.mpt = mpt_taken;
+
+        Ok(())
     }
 
     fn pop_nodes(&mut self, target_key_steps: u16) -> Result<()> {
@@ -238,10 +280,7 @@ impl<Mpt> DerefMut for MptCursorRw<Mpt> {
 impl<Mpt: GetRwMpt> MptCursorRw<Mpt> {
     pub fn new(mpt: Mpt) -> Self {
         Self {
-            cursor: MptCursor {
-                mpt: Some(mpt),
-                path_nodes: vec![],
-            },
+            cursor: MptCursor::new(mpt),
             io_error: Cell::new(false),
         }
     }
@@ -251,8 +290,6 @@ impl<Mpt: GetRwMpt> MptCursorRw<Mpt> {
         self.path_nodes.push(root_node);
         Ok(())
     }
-
-    // FIXME: load root node.
 
     pub fn insert(&mut self, key: &[u8], value: Box<[u8]>) -> Result<()> {
         match self.open_path_for_key::<access_mode::Write>(key)? {
@@ -331,6 +368,8 @@ impl<Mpt: GetRwMpt> MptCursorRw<Mpt> {
                     ),
                     parent_node,
                 );
+                // FIXME: the new node has the first child point to
+                // unmatched_child_node. Move into BasicPathNode.
                 fork_node.next_child_index = unmatched_child_index;
 
                 last_node.path_db_key = CompressedPathRaw::concat(
@@ -346,11 +385,13 @@ impl<Mpt: GetRwMpt> MptCursorRw<Mpt> {
                             unmatched_child_index;
                         last_node.commit(&mut fork_node)?;
 
+                        // Move on to the next child: diverted path.
+                        fork_node.next_child_index = child_index;
+
                         fork_node.trie_node.add_new_child_unchecked(
                             child_index,
                             &MERKLE_NULL_NODE,
                         );
-                        fork_node.next_child_index = child_index;
 
                         let value_len = value.len();
                         let value_node = ReadWritePathNode::new(
@@ -466,7 +507,6 @@ impl<Mpt: GetRwMpt> MptCursorRw<Mpt> {
 }
 
 pub trait CursorLoadNodeWrapper<Mpt>: TakeMpt<Mpt> {
-    // FIXME: maybe split it out from set_has_io_error.
     fn load_node_wrapper<'a>(
         &self, mpt: &mut Mpt, path: &CompressedPathRaw,
     ) -> Result<SnapshotMptNode>;
@@ -474,6 +514,18 @@ pub trait CursorLoadNodeWrapper<Mpt>: TakeMpt<Mpt> {
 
 impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt> for BasicPathNode<Mpt> {
     fn load_node_wrapper<'a>(
+        &self, mpt: &mut Mpt, path: &CompressedPathRaw,
+    ) -> Result<SnapshotMptNode> {
+        mpt.get_read_mpt()
+            .load_node(path)?
+            .ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+    }
+}
+
+impl<Mpt: GetReadMpt, PathNode> CursorLoadNodeWrapper<Mpt>
+    for MptCursor<Mpt, PathNode>
+{
+    fn load_node_wrapper(
         &self, mpt: &mut Mpt, path: &CompressedPathRaw,
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
@@ -496,10 +548,40 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
     }
 }
 
-pub struct BasicPathNode<Mpt> {
-    mpt: Option<Mpt>,
+pub trait CursorToRootNode<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> {
+    fn new_root(&self, basic_node: BasicPathNode<Mpt>) -> PathNode;
+}
 
-    trie_node: SnapshotMptNode,
+impl<Mpt: GetReadMpt, Cursor: CursorLoadNodeWrapper<Mpt>>
+    CursorToRootNode<Mpt, BasicPathNode<Mpt>> for Cursor
+{
+    fn new_root(&self, basic_node: BasicPathNode<Mpt>) -> BasicPathNode<Mpt> {
+        basic_node
+    }
+}
+
+impl<Mpt: GetRwMpt> CursorToRootNode<Mpt, ReadWritePathNode<Mpt>>
+    for MptCursorRw<Mpt>
+{
+    fn new_root(
+        &self, basic_node: BasicPathNode<Mpt>,
+    ) -> ReadWritePathNode<Mpt> {
+        ReadWritePathNode {
+            basic_node,
+
+            first_realized_child_index: 0,
+            the_first_child: None,
+            subtree_size_delta: 0,
+            has_io_error: self.io_error(),
+            db_committed: false,
+        }
+    }
+}
+
+pub struct BasicPathNode<Mpt> {
+    pub mpt: Option<Mpt>,
+
+    pub trie_node: SnapshotMptNode,
 
     /// The fields below are necessary for loading the requested key / values.
     // path_start_steps is changed when compressed path changes happen, but it
@@ -513,6 +595,9 @@ pub struct BasicPathNode<Mpt> {
     // The path_db_key changes when breaking a compressed path.
     // The path_db_key must be corrected before writing out the node.
     path_db_key: CompressedPathRaw,
+
+    /// The next child index to look into.
+    pub next_child_index: u8,
 }
 
 impl<Mpt> BasicPathNode<Mpt> {
@@ -537,14 +622,23 @@ impl<Mpt> BasicPathNode<Mpt> {
                 child_index,
                 &CompressedPathRaw::default(),
             ),
+            next_child_index: 0,
         }
     }
+
+    pub fn get_path_to_node(&self) -> &CompressedPathRaw {
+        &self.full_path_to_node
+    }
+}
+
+impl<Mpt> Deref for BasicPathNode<Mpt> {
+    type Target = SnapshotMptNode;
+
+    fn deref(&self) -> &Self::Target { &self.trie_node }
 }
 
 pub struct ReadWritePathNode<Mpt> {
     basic_node: BasicPathNode<Mpt>,
-
-    next_child_index: u8,
 
     first_realized_child_index: u8,
     the_first_child: Option<Box<ReadWritePathNode<Mpt>>>,
@@ -570,23 +664,27 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 {
     fn new_loaded(basic_node: BasicPathNode<Mpt>, parent_node: &Self) -> Self;
 
-    fn new_root<Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>(
-        basic_node: BasicPathNode<Mpt>, cursor: &Cursor,
-    ) -> Self;
-
-    /// A default no-op implementation su supress compiler warnings
+    /// A default no-op implementation to suppress compiler warnings
     /// about "patterns aren't allowed in methods without bodies"
     /// https://github.com/rust-lang/rust/issues/35203
-    fn commit(self, _parent_node: &mut Self) -> Result<()> { Ok(()) }
+    fn commit(mut self, _parent_node: &mut Self) -> Result<Option<Mpt>> {
+        Ok(self.take_mpt())
+    }
 
-    /// The default implementation is given for the same reason as above.
+    /// A default no-op implementation to suppress compiler warnings
+    /// about "patterns aren't allowed in methods without bodies"
+    /// https://github.com/rust-lang/rust/issues/35203
     fn commit_root(self) -> Result<MerkleHash> {
         Ok(self.get_basic_path_node().trie_node.0.get_merkle().clone())
     }
 
     fn get_basic_path_node(&self) -> &BasicPathNode<Mpt>;
 
-    fn load_root<Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>(
+    fn get_basic_path_node_mut(&mut self) -> &mut BasicPathNode<Mpt>;
+
+    fn load_root<
+        Cursor: CursorLoadNodeWrapper<Mpt> + CursorToRootNode<Mpt, Self>,
+    >(
         cursor: &mut Cursor,
     ) -> Result<Self> {
         let mut mpt = cursor.take_mpt();
@@ -604,16 +702,14 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             supposed_merkle_root,
         );
 
-        Ok(Self::new_root(
-            BasicPathNode {
-                mpt,
-                trie_node: root_trie_node,
-                path_start_steps: 0,
-                full_path_to_node: Default::default(),
-                path_db_key: Default::default(),
-            },
-            cursor,
-        ))
+        Ok(cursor.new_root(BasicPathNode {
+            mpt,
+            trie_node: root_trie_node,
+            path_start_steps: 0,
+            full_path_to_node: Default::default(),
+            path_db_key: Default::default(),
+            next_child_index: 0,
+        }))
     }
 
     fn load_into(
@@ -652,6 +748,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                 path_start_steps: parent_path.path_steps() + 1,
                 full_path_to_node,
                 path_db_key,
+                next_child_index: 0,
             },
             parent_node,
         ))
@@ -665,15 +762,13 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
         basic_node
     }
 
-    fn new_root<Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>(
-        basic_node: BasicPathNode<Mpt>, _cursor: &Cursor,
-    ) -> Self {
-        basic_node
-    }
-
     fn get_basic_path_node(&self) -> &BasicPathNode<Mpt> { self }
 
+    fn get_basic_path_node_mut(&mut self) -> &mut BasicPathNode<Mpt> { self }
+
     fn open_child_index(&mut self, child_index: u8) -> Result<Option<Self>> {
+        self.next_child_index = child_index;
+
         match self
             .trie_node
             .get_children_table_ref()
@@ -697,7 +792,6 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
     fn new_loaded(basic_node: BasicPathNode<Mpt>, parent_node: &Self) -> Self {
         Self {
             basic_node,
-            next_child_index: 0,
             first_realized_child_index: 0,
             the_first_child: None,
             subtree_size_delta: 0,
@@ -706,24 +800,13 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
         }
     }
 
-    fn new_root<Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>(
-        basic_node: BasicPathNode<Mpt>, cursor: &Cursor,
-    ) -> Self {
-        Self {
-            basic_node,
-
-            next_child_index: 0,
-            first_realized_child_index: 0,
-            the_first_child: None,
-            subtree_size_delta: 0,
-            has_io_error: cursor.io_error(),
-            db_committed: false,
-        }
-    }
-
     fn get_basic_path_node(&self) -> &BasicPathNode<Mpt> { &self.basic_node }
 
-    fn commit(mut self, parent: &mut Self) -> Result<()> {
+    fn get_basic_path_node_mut(&mut self) -> &mut BasicPathNode<Mpt> {
+        &mut self.basic_node
+    }
+
+    fn commit(mut self, parent: &mut Self) -> Result<Option<Mpt>> {
         self.skip_till_child_index(CHILDREN_COUNT as u8)?;
         if !self.is_node_empty() {
             match self.the_first_child.take() {
@@ -767,7 +850,10 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
         self.skip_till_child_index(CHILDREN_COUNT as u8)?;
         if !self.is_node_empty() {
             // modification
-            Self::write_out_pending_child(&mut self.the_first_child)?;
+            Self::write_out_pending_child(
+                &mut self.basic_node.mpt,
+                &mut self.the_first_child,
+            )?;
         }
 
         let merkle = self.compute_merkle();
@@ -777,7 +863,6 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
     fn open_child_index(&mut self, child_index: u8) -> Result<Option<Self>> {
         self.skip_till_child_index(child_index)?;
-        self.next_child_index = child_index;
 
         match self.basic_node.open_child_index(child_index) {
             Err(e) => Err(e),
@@ -850,7 +935,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         this_node
     }
 
-    fn write_out(mut self) -> Result<()> {
+    fn write_out(mut self) -> Result<Option<Mpt>> {
         // There is nothing to worry about for path_db_key changes in case of
         // path compression changes, because db changes is as simple as
         // data overwriting / deletion / creation.
@@ -863,7 +948,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                     .delete_node(&self.basic_node.path_db_key);
                 if result.is_err() {
                     self.set_has_io_error();
-                    return result;
+                    bail!(result.unwrap_err());
                 }
             }
         } else {
@@ -880,12 +965,12 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                 );
             if result.is_err() {
                 self.set_has_io_error();
-                return result;
+                bail!(result.unwrap_err());
             }
         }
 
         self.db_committed = true;
-        Ok(())
+        Ok(self.take_mpt())
     }
 
     fn skip_till_child_index(&mut self, child_index: u8) -> Result<()> {
@@ -926,6 +1011,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                         // There are more than one child. Path compression is
                         // unnecessary.
                         Self::write_out_pending_child(
+                            &mut self.basic_node.mpt,
                             &mut self.the_first_child,
                         )?;
                         // Save-as mode.
@@ -960,15 +1046,15 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
     }
 
     fn set_concluded_child(
-        &mut self, child_node: ReadWritePathNode<Mpt>,
-    ) -> Result<()> {
+        &mut self, mut child_node: ReadWritePathNode<Mpt>,
+    ) -> Result<Option<Mpt>> {
         self.subtree_size_delta += child_node.subtree_size_delta;
 
         if !child_node.is_node_empty() {
             // The safety is guaranteed by condition.
             unsafe {
                 self.basic_node.trie_node.replace_child_unchecked(
-                    self.next_child_index,
+                    self.basic_node.next_child_index,
                     child_node.trie_node.get_merkle(),
                 )
             };
@@ -978,37 +1064,47 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             // assumption here is that in db and rust string comparison a string
             // that is a prefix of another string is considered smaller.
             if self.trie_node.has_value() {
-                child_node.write_out()?;
+                Ok(child_node.write_out()?)
             } else if self.first_realized_child_index != 0 {
-                Self::write_out_pending_child(&mut self.the_first_child)?;
-                child_node.write_out()?;
+                Self::write_out_pending_child(
+                    &mut self.basic_node.mpt,
+                    &mut self.the_first_child,
+                )?;
+                Ok(child_node.write_out()?)
             } else {
                 // This child is the first realized child.
                 self.first_realized_child_index = self.next_child_index;
+                let mpt_taken = child_node.take_mpt();
                 self.the_first_child = Some(Box::new(child_node));
+                Ok(mpt_taken)
             }
         } else {
-            child_node.write_out()?;
+            let mpt_taken = child_node.write_out()?;
 
             // The safety is guaranteed by condition.
             unsafe {
                 self.basic_node
                     .trie_node
-                    .delete_child_unchecked(self.next_child_index)
+                    .delete_child_unchecked(self.basic_node.next_child_index)
             };
+
+            Ok(mpt_taken)
         }
-        self.next_child_index += 1;
-        Ok(())
     }
 
+    /// This function is written like this because we want rust borrow checker
+    /// to work smart.
     fn write_out_pending_child(
+        mpt: &mut Option<Mpt>,
         the_first_child: &mut Option<Box<ReadWritePathNode<Mpt>>>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         if the_first_child.is_some() {
-            the_first_child.take().unwrap().write_out()
-        } else {
-            Ok(())
+            let mut child = the_first_child.take().unwrap();
+            child.mpt = mpt.take();
+            *mpt = child.write_out()?;
         }
+        Ok(())
     }
 }
 
@@ -1154,6 +1250,7 @@ use super::{
     children_table::*,
     compressed_path::CompressedPathTrait,
     trie_node::{TrieNodeTrait, VanillaTrieNode},
+    trie_proof::*,
     walk::*,
     CompressedPathRaw,
 };

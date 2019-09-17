@@ -48,6 +48,10 @@ public_address="59.66.209.32:32323"
 
 # The following parameters do not need to be changed in normal cases.
 
+# `network_id` is network identifier. By default, the value is 1.
+#
+# network_id=1
+
 # `net_key` is the 256-bit private key to generate a unique node id for this node.
 # The value is a 64-digit hex string without 0x prefix.
 # If not set, the node will try to read from the file "key" under the directory `netconf_dir`.

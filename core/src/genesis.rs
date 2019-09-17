@@ -5,7 +5,11 @@
 use cfx_types::{Address, U256};
 use keylib::KeyPair;
 use secret_store::SecretStore;
-use std::{collections::HashMap, fs::File, io::Read};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader, Read},
+};
 use toml::Value;
 
 pub fn default(secret_store: &SecretStore) -> HashMap<Address, U256> {
@@ -32,6 +36,30 @@ pub fn default(secret_store: &SecretStore) -> HashMap<Address, U256> {
     secret_store.insert(kp2);
 
     accounts
+}
+
+pub fn load_secrets_file(
+    path: &String, secret_store: &SecretStore,
+) -> Result<HashMap<Address, U256>, String> {
+    let file = File::open(path)
+        .map_err(|e| format!("failed to open file: {:?}", e))?;
+    let buffered = BufReader::new(file);
+
+    let mut accounts: HashMap<Address, U256> = HashMap::new();
+    let balance =
+        U256::from_dec_str("10000000000000000000000").map_err(|e| {
+            format!(
+                "failed to parse balance: value = {}, error = {:?}",
+                "10000000000000000000000", e
+            )
+        })?;
+    for line in buffered.lines() {
+        let keypair =
+            KeyPair::from_secret(line.unwrap().parse().unwrap()).unwrap();
+        accounts.insert(keypair.address(), balance.clone());
+        secret_store.insert(keypair);
+    }
+    Ok(accounts)
 }
 
 pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {

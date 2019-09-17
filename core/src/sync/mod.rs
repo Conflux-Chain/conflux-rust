@@ -18,6 +18,7 @@ pub mod utils;
 
 pub use self::{
     error::{Error, ErrorKind},
+    state::RangedManifest,
     synchronization_graph::{
         SharedSynchronizationGraph, SyncGraphStatistics, SynchronizationGraph,
         SynchronizationGraphInner, SynchronizationGraphNode,

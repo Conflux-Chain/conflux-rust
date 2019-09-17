@@ -13,9 +13,15 @@ use super::consensus::consensus_inner::{
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
 use crate::{
-    block_data_manager::BlockDataManager, bytes::Bytes, pow::ProofOfWorkConfig,
-    state::State, state_exposer::SharedStateExposer,
-    statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
+    block_data_manager::BlockDataManager,
+    bytes::Bytes,
+    pow::ProofOfWorkConfig,
+    state::State,
+    state_exposer::SharedStateExposer,
+    statedb::StateDb,
+    statistics::SharedStatistics,
+    storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
+    transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
@@ -343,22 +349,66 @@ impl ConsensusGraph {
         Ok(())
     }
 
+    fn get_state_db_by_epoch_number(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<StateDb, String> {
+        self.validate_stated_epoch(&epoch_number)?;
+        let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
+        let hash =
+            self.inner.read().get_hash_from_epoch_number(epoch_number)?;
+        let maybe_state = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
+            .map_err(|e| format!("Error to get state, err={:?}", e))?;
+
+        let state = match maybe_state {
+            Some(state) => state,
+            None => {
+                return Err(format!(
+                    "State for epoch (number={:?} hash={:?}) does not exist",
+                    epoch_number, hash
+                )
+                .into())
+            }
+        };
+
+        Ok(StateDb::new(state))
+    }
+
     /// Get the code of an address
     pub fn get_code(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<Bytes, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| self.inner.read().get_code(address, height))
+        let state_db =
+            self.get_state_db_by_epoch_number(epoch_number.clone())?;
+        let acc = match state_db.get_account(&address) {
+            Ok(Some(acc)) => acc,
+            _ => {
+                return Err(format!(
+                    "Account {:?} epoch_number={:?} does not exist",
+                    address, epoch_number,
+                )
+                .into())
+            }
+        };
+
+        match state_db.get_code(&address, &acc.code_hash) {
+            Some(code) => Ok(code),
+            None => Ok(vec![]),
+        }
     }
 
     /// Get the current balance of an address
     pub fn get_balance(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| self.inner.read().get_balance(address, height))
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+            maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
+        } else {
+            0.into()
+        })
     }
 
     /// Force the engine to recompute the deferred state root for a particular
@@ -588,20 +638,32 @@ impl ConsensusGraph {
     pub fn transaction_count(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                self.inner.read().transaction_count(address, height)
-            })
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        let state = State::new(state_db, 0.into(), Default::default());
+        state
+            .nonce(&address)
+            .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
-        let inner = self.inner.read();
-        self.executor.wait_for_result(inner.best_state_block_hash());
-        inner
-            .try_get_best_state(&self.data_man)
-            .expect("Best state has been executed")
+        let best_state_hash = {
+            let inner = self.inner.read();
+            let best_state_hash = inner.best_state_block_hash();
+            self.executor.wait_for_result(best_state_hash);
+            best_state_hash
+        };
+        if let Ok(state) = self.data_man.storage_manager.get_state_no_commit(
+            SnapshotAndEpochIdRef::new(&best_state_hash, None),
+        ) {
+            state
+                .map(|db| {
+                    State::new(StateDb::new(db), 0.into(), Default::default())
+                })
+                .expect("Best state has been executed")
+        } else {
+            panic!("get_best_state: Error for hash {}", best_state_hash);
+        }
     }
 
     /// Returns the total number of blocks processed in consensus graph.
