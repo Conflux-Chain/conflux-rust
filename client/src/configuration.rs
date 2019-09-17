@@ -114,6 +114,7 @@ build_config! {
         (tx_cache_count, (usize), 250000)
         (max_download_state_peers, (usize), 8)
         (block_db_type, (String), "rocksdb".to_string())
+        (no_defer, (bool), false)
     }
     {
         (
@@ -262,6 +263,7 @@ impl Configuration {
                     .enable_optimistic_execution,
             },
             bench_mode: false,
+            no_defer: self.raw_conf.no_defer,
         }
     }
 
