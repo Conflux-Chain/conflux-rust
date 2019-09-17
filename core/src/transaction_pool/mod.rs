@@ -176,8 +176,8 @@ impl TransactionPool {
             }
         }
 
-        TX_POOL_GAUGE.update(self.total_unpacked());
-        TX_POOL_READY_GAUGE.update(self.inner.read().total_ready_accounts());
+        TX_POOL_GAUGE.update(inner.total_unpacked());
+        TX_POOL_READY_GAUGE.update(inner.total_ready_accounts());
 
         (passed_transactions, failure)
     }
