@@ -43,6 +43,8 @@ lazy_static! {
         register_meter_with_group("system_metrics", "tx_received_pool_size");
     static ref INFLIGHT_TX_POOL_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "inflight_tx_pool_size");
+    static ref FULL_BLOCK_REQUEST_COUNT: Arc<dyn Meter> =
+        register_meter_with_group("system_metrics", "full_block_count");
 }
 
 #[derive(Debug)]
@@ -466,6 +468,7 @@ impl RequestManager {
             let chosen_peer =
                 peer.or_else(|| self.syn.get_random_peer(&HashSet::new()));
             if ask_full_block {
+                FULL_BLOCK_REQUEST_COUNT.mark(missing_blocks.len());
                 self.request_blocks(
                     io,
                     chosen_peer,
