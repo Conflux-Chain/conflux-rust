@@ -160,6 +160,7 @@ pub fn initialize_synchronization_graph(
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */
+            no_defer: false,
         },
         vm.clone(),
         txpool.clone(),
