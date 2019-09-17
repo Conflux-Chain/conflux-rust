@@ -158,8 +158,8 @@ class RemoteSimulate(ConfluxTestFramework):
             type=int,
         )
         parser.add_argument(
-            "--genesis-accounts",
-            dest="genesis_accounts",
+            "--genesis-secrets",
+            dest="genesis_secrets",
             default="/home/ubuntu/genesis_secrets.txt",
             type=str,
         )
@@ -224,7 +224,7 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
         #genesis accounts
-        self.conf_parameters["genesis_accounts"] = str("\'{}\'".format(self.options.genesis_accounts))
+        self.conf_parameters["genesis_secrets"] = str("\'{}\'".format(self.options.genesis_secrets))
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
