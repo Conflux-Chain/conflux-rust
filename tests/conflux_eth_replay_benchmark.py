@@ -221,7 +221,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     else:
                         should_sleep = (
                                 elapsed_time
-                                * (tx_count - txpool_received + 45000)
+                                * (tx_count - txpool_received - 45000)
                                 / txpool_received
                                 + 1
                         )
