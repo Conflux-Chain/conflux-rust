@@ -131,7 +131,7 @@ impl RpcImpl {
             })
             .and_then(|tx| {
                 let (signed_trans, failed_trans) = self.tx_pool.insert_new_transactions(
-                    &vec![tx],
+                    vec![tx],
                 );
                 if signed_trans.len() + failed_trans.len() > 1 {
                     // This should never happen

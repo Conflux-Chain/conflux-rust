@@ -31,8 +31,8 @@ use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
 
 lazy_static! {
-    static ref TX_POOL_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "unexecuted_size");
+    static ref TX_POOL_UNPACKED_GAUGE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group("txpool", "unpacked_size");
     static ref TX_POOL_READY_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "ready_size");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
@@ -106,25 +106,49 @@ impl TransactionPool {
     /// cannot be inserted to the tx pool, it will be included in the returned
     /// `failure` and will not be propagated.
     pub fn insert_new_transactions(
-        &self, transactions: &Vec<TransactionWithSignature>,
+        &self, mut transactions: Vec<TransactionWithSignature>,
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
+
         let mut passed_transactions = Vec::new();
         let mut failure = HashMap::new();
-        match self.data_man.recover_unsigned_tx(transactions) {
+
+        // filter out invalid transactions.
+        let mut index = 0;
+        while let Some(tx) = transactions.get(index) {
+            match self.verify_transaction(tx) {
+                Ok(_) => index += 1,
+                Err(e) => {
+                    let removed = transactions.swap_remove(index);
+                    debug!("failed to insert tx into pool (validation failed), hash = {:?}, error = {:?}", removed.hash, e);
+                    failure.insert(removed.hash, e);
+                }
+            }
+        }
+
+        // ensure the pool has enough quota to insert new transactions.
+        let mut inner = self.inner.write();
+        let quota = inner.remaining_quota();
+        if quota < transactions.len() {
+            for tx in transactions.split_off(quota) {
+                trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
+                failure.insert(tx.hash, "txpool is full".into());
+            }
+        }
+
+        if transactions.is_empty() {
+            return (passed_transactions, failure);
+        }
+
+        // Recover public key and insert into pool with readiness check.
+        // Note, the workload of recovering public key is very heavy, especially
+        // in case of high TPS (e.g. > 8000). So, it's better to recover public
+        // key after basic verification.
+        match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
                 let mut account_cache = self.get_best_state_account_cache();
-                let mut inner = self.inner.write();
                 let mut to_prop = self.to_propagate_trans.write();
                 for tx in signed_trans {
-                    if let Err(e) = self.verify_transaction(tx.as_ref()) {
-                        debug!(
-                            "tx {:?} fails to pass verification, err={:?}",
-                            &tx.hash, e
-                        );
-                        failure.insert(tx.hash(), e);
-                        continue;
-                    }
                     if let Err(e) = self.add_transaction_with_readiness_check(
                         &mut *inner,
                         &mut account_cache,
@@ -151,28 +175,27 @@ impl TransactionPool {
                 }
             }
         }
-        TX_POOL_GAUGE.update(self.total_unpacked());
-        TX_POOL_READY_GAUGE.update(self.inner.read().total_ready_accounts());
+
+        TX_POOL_UNPACKED_GAUGE.update(inner.total_unpacked());
+        TX_POOL_READY_GAUGE.update(inner.total_ready_accounts());
 
         (passed_transactions, failure)
     }
 
     /// verify transactions based on the rules that have nothing to do with
     /// readiness
-    pub fn verify_transaction(
-        &self, transaction: &SignedTransaction,
+    fn verify_transaction(
+        &self, transaction: &TransactionWithSignature,
     ) -> Result<(), String> {
         // check transaction gas limit
         if transaction.gas > DEFAULT_MAX_TRANSACTION_GAS_LIMIT.into() {
             warn!(
                 "Transaction discarded due to above gas limit: {} > {}",
-                transaction.gas(),
-                DEFAULT_MAX_TRANSACTION_GAS_LIMIT
+                transaction.gas, DEFAULT_MAX_TRANSACTION_GAS_LIMIT
             );
             return Err(format!(
                 "transaction gas {} exceeds the maximum value {}",
-                transaction.gas(),
-                DEFAULT_MAX_TRANSACTION_GAS_LIMIT
+                transaction.gas, DEFAULT_MAX_TRANSACTION_GAS_LIMIT
             ));
         }
 
@@ -202,7 +225,7 @@ impl TransactionPool {
             ));
         }
 
-        if let Err(e) = transaction.transaction.verify_basic() {
+        if let Err(e) = transaction.verify_basic() {
             warn!("Transaction {:?} discarded due to not pass basic verification.", transaction.hash());
             return Err(format!("{:?}", e));
         }

@@ -13,8 +13,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
-pub const TIME_WINDOW: u64 = 100;
+const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+// By default, the capacity of tx pool is 500K, so the maximum TPS is
+// 500K / 50 = 10,000
+const TIME_WINDOW: u64 = 50;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<dyn Meter> =
@@ -287,8 +289,21 @@ impl TransactionPoolInner {
         }
     }
 
+    /// Collect garbage and return the remaining quota of the pool to insert new
+    /// transactions.
+    pub fn remaining_quota(&mut self) -> usize {
+        self.collect_garbage();
+
+        let len = self.garbage_collection_queue.len();
+        if len < self.capacity {
+            self.capacity - len
+        } else {
+            0
+        }
+    }
+
     // the new inserting will fail if tx_pool is full (even if `force` is true)
-    pub fn insert_transaction_without_readiness_check(
+    fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool,
     ) -> InsertResult
