@@ -150,6 +150,7 @@ impl FullClient {
         let genesis_accounts = if conf.raw_conf.test_mode {
             match conf.raw_conf.genesis_secrets {
                 Some(ref file) => {
+                    genesis::default(secret_store.as_ref());
                     genesis::load_secrets_file(file, secret_store.as_ref())?
                 }
                 None => genesis::default(secret_store.as_ref()),
