@@ -65,7 +65,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     )
     TX_FILE = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
-        "../../../convert_eth_from_0_to_4141811_unknown_txs.rlp", )
+        "../../convert_eth_from_0_to_4141811_unknown_txs.rlp", )
 
     TOTAL_TX_NUMBER = 4000000
 
@@ -274,9 +274,9 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
 
 
 class BlockGenThread(threading.Thread):
-    BLOCK_FREQ = 5
-    BLOCK_TX_LIMIT = 60000
-    BLOCK_SIZE_LIMIT = 6000000
+    BLOCK_FREQ = 1
+    BLOCK_TX_LIMIT = 10000
+    BLOCK_SIZE_LIMIT = 600000
     # Seems to be 90bytes + artificial 128b
     # SIMPLE_TX_PER_BLOCK = 700
     SIMPLE_TX_PER_BLOCK = 0
