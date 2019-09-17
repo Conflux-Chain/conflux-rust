@@ -73,7 +73,7 @@ impl Handleable for GetBlockTxnResponse {
                     // FIXME Should check if hash matches
                     let block = Block::new(header, trans);
                     debug!(
-                        "new block inserted into graph: block_header={:?}, tx_count={}, block_size={}",
+                        "new block received: block_header={:?}, tx_count={}, block_size={}",
                         block.block_header,
                         block.transactions.len(),
                         block.size(),
