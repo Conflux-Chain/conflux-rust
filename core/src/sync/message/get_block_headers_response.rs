@@ -36,6 +36,12 @@ impl Handleable for GetBlockHeadersResponse {
         let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
 
         debug!("on_block_headers_response, msg=:{:?}", self);
+        debug!(
+            "new block headers received: block_header={:?}, tx_count={}, block_size={}",
+            &self.headers,
+            0,
+            0,
+        );
 
         if ctx.peer == NULL {
             let requested = self.headers.iter().map(|h| h.hash()).collect();
