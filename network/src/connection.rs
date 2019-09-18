@@ -107,7 +107,7 @@ impl Packet {
     fn new(data: Vec<u8>, priority: SendQueuePriority) -> Result<Self, Error> {
         // update throttling
         let throttling_size = data.len();
-        THROTTLING_SERVICE.write().on_enqueue(throttling_size)?;
+        THROTTLING_SERVICE.write().on_enqueue(throttling_size,priority == SendQueuePriority::High)?;
 
         // update high priority packet counter
         let is_high_priority = priority == SendQueuePriority::High;
@@ -145,7 +145,7 @@ impl Packet {
 
 impl Drop for Packet {
     fn drop(&mut self) {
-        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size);
+        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size,self.is_high_priority);
 
         if self.is_high_priority {
             decr_high_priority_packets();
