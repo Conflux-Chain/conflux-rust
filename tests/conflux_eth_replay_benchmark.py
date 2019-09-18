@@ -174,7 +174,6 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             init_txs.append(init_tx)
 
         self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
-        time.sleep(self.INITIAL_SLEEP)
 
         block_gen_threads = []
         node_id = 0
@@ -186,6 +185,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             block_gen_thread.start()
             node_id += 1
 
+        time.sleep(self.INITIAL_SLEEP)
         self.log.info("Experiment started")
         start_time = datetime.datetime.now()
         last_log_elapsed_time = 0
@@ -328,8 +328,6 @@ class BlockGenThread(threading.Thread):
         #         self.log.info("node %s generated block at test start %s", self.node_id, h)
         # for blocks to propogate.
 
-        time.sleep(ConfluxEthReplayTest.INITIAL_SLEEP)
-
         start_time = datetime.datetime.now()
         total_mining_sec = 0.0
         while not self.stopped:
@@ -375,6 +373,8 @@ class BlockGenThread(threading.Thread):
                 simple_tx_count = math.ceil(
                     BlockGenThread.SIMPLE_TX_PER_BLOCK * generate_factor
                 )
+                if elapsed_sec < ConfluxEthReplayTest.INITIAL_SLEEP:
+                    simple_tx_count = 0
                 erc20_tx_count = math.ceil(
                     BlockGenThread.ERC20_TX_PER_BLOCK * generate_factor
                 )
