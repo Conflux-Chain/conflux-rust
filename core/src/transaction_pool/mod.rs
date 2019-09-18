@@ -33,6 +33,8 @@ use transaction_pool_inner::TransactionPoolInner;
 lazy_static! {
     static ref TX_POOL_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "unexecuted_size");
+    static ref TX_POOL_TOTAL_PACKED_SIZE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group("txpool", "total_packed_size");
     static ref TX_POOL_READY_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "ready_size");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
@@ -159,6 +161,7 @@ impl TransactionPool {
             }
         }
         TX_POOL_GAUGE.update(self.total_unpacked());
+        TX_POOL_TOTAL_PACKED_SIZE.update(self.total_packed());
         TX_POOL_READY_GAUGE.update(self.inner.read().total_ready_accounts());
 
         if self.verification_config.eth_compatibility_mode && failure.len() != 0
@@ -338,6 +341,11 @@ impl TransactionPool {
     pub fn total_unpacked(&self) -> usize {
         let inner = self.inner.read();
         inner.total_unpacked()
+    }
+
+    pub fn total_packed(&self) -> usize {
+        let inner = self.inner.read();
+        inner.total_received() - inner.total_unpacked()
     }
 
     /// stats retrieves the length of ready and deferred pool.
