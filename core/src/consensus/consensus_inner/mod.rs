@@ -1897,7 +1897,13 @@ impl ConsensusGraphInner {
         &self, epoch_number: u64,
     ) -> Result<usize, String> {
         if epoch_number >= self.cur_era_genesis_height {
-            Ok(self.get_pivot_block_arena_index(epoch_number))
+            let pivot_index = (height - self.cur_era_genesis_height) as usize;
+            if pivot_index >= self.pivot_chain.len() {
+                Err("Epoch number larger than the current pivot chain tip"
+                    .into())
+            } else {
+                Ok(self.get_pivot_block_arena_index(epoch_number))
+            }
         } else {
             Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
         }
