@@ -7,17 +7,17 @@ edition = "2018"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 fixed-hash = "0.2"
-keccak-hash = "0.1.2"
-keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
-rlp = "0.3.0"
+keccak-hash = "0.2.0"
+ethkey = { path = "../accounts/ethkey" }
+rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-malloc_size_of = {path = "../util/malloc_size_of"}
-log = "0.3"
+malloc_size_of = { path = "../util/malloc_size_of" }
+log = "0.4"
 lru = "0.1"
 byteorder = "1.2.7"
 rand = "0.5"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 siphasher = "0.3"
 

@@ -116,30 +116,34 @@ impl DBManager {
     }
 
     pub fn insert_block_header_to_db(&self, header: &BlockHeader) {
-        self.insert_encodable_val(DBTable::Blocks, &header.hash(), header);
+        self.insert_encodable_val(
+            DBTable::Blocks,
+            header.hash().as_bytes(),
+            header,
+        );
     }
 
     pub fn block_header_from_db(&self, hash: &H256) -> Option<BlockHeader> {
         let mut block_header =
-            self.load_decodable_val(DBTable::Blocks, hash)?;
+            self.load_decodable_val(DBTable::Blocks, hash.as_bytes())?;
         VerificationConfig::compute_header_pow_quality(&mut block_header);
         Some(block_header)
     }
 
     pub fn remove_block_header_from_db(&self, hash: &H256) {
-        self.remove_from_db(DBTable::Blocks, hash);
+        self.remove_from_db(DBTable::Blocks, hash.as_bytes());
     }
 
     pub fn insert_transaction_address_to_db(
         &self, hash: &H256, value: &TransactionAddress,
     ) {
-        self.insert_encodable_val(DBTable::Transactions, hash, value)
+        self.insert_encodable_val(DBTable::Transactions, hash.as_bytes(), value)
     }
 
     pub fn transaction_address_from_db(
         &self, hash: &H256,
     ) -> Option<TransactionAddress> {
-        self.load_decodable_val(DBTable::Transactions, hash)
+        self.load_decodable_val(DBTable::Transactions, hash.as_bytes())
     }
 
     /// Store block info to db. Block info includes block status and
@@ -344,8 +348,8 @@ impl DBManager {
 }
 
 fn append_suffix(h: &H256, suffix: u8) -> Vec<u8> {
-    let mut key = Vec::with_capacity(h.len() + 1);
-    key.extend_from_slice(&h);
+    let mut key = Vec::with_capacity(H256::len_bytes() + 1);
+    key.extend_from_slice(h.as_bytes());
     key.push(suffix);
     key
 }

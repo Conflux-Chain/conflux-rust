@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::TreapMap;
-use cfx_types::{H256, U256, U512};
+use cfx_types::{Address, Public, H256, U256, U512};
 use keylib::Signature;
 use primitives::{Action, SignedTransaction, Transaction};
 use rand::{prng::XorShiftRng, ChaChaRng, Rng, RngCore, SeedableRng};
@@ -90,20 +90,20 @@ fn next_u512(rng: &mut ChaChaRng) -> U512 {
 fn next_u256(rng: &mut ChaChaRng) -> U256 {
     let mut result = U256::from(0);
     for _ in 0..4 {
-        result = (result << 64) + (U512::from(rng.next_u64()));
+        result = (result << 64) + (U256::from(rng.next_u64()));
     }
     result
 }
 
 fn next_signed_transaction(rng: &mut ChaChaRng) -> SignedTransaction {
     SignedTransaction::new(
-        0.into(),
+        Public::from_low_u64_be(0),
         Transaction {
             nonce: 0.into(),
             gas_price: next_u256(rng),
             gas: next_u256(rng),
             value: next_u256(rng),
-            action: Action::Call(0.into()),
+            action: Action::Call(Address::from_low_u64_be(0)),
             data: vec![],
         }
         .with_signature(Signature::default()),

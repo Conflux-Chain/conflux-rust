@@ -307,7 +307,7 @@ impl FromStr for Node {
                 NodeEndpoint::from_str(&s[139..])?,
             )
         } else {
-            (NodeId::new(), NodeEndpoint::from_str(s)?)
+            (NodeId::default(), NodeEndpoint::from_str(s)?)
         };
 
         Ok(Node {

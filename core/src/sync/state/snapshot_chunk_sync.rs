@@ -90,7 +90,7 @@ impl Inner {
         self.checkpoint = checkpoint;
         self.trusted_blame_block = trusted_blame_block;
         self.status = Status::DownloadingManifest(Instant::now());
-        self.true_state_root_by_blame_info = H256::new();
+        self.true_state_root_by_blame_info = H256::zero();
         self.state_blame_vec.clear();
         self.receipt_blame_vec.clear();
         self.bloom_blame_vec.clear();

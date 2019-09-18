@@ -4,10 +4,10 @@
 
 extern crate cfx_bytes as bytes;
 extern crate keccak_hash as hash;
-extern crate keylib;
 extern crate rlp;
 #[macro_use]
 extern crate rlp_derive;
+extern crate ethkey as keylib;
 extern crate log;
 extern crate unexpected;
 

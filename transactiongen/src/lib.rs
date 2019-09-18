@@ -4,7 +4,7 @@
 
 extern crate cfx_bytes as bytes;
 extern crate core;
-extern crate keylib;
+extern crate ethkey as keylib;
 extern crate network;
 extern crate parking_lot;
 extern crate primitives;
@@ -14,16 +14,17 @@ extern crate secret_store;
 extern crate log;
 
 use crate::bytes::Bytes;
-use cfx_types::{Address, H256, H512, U256, U512};
+use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
 use cfxcore::{
     executive::contract_address, vm::CreateContractAddress,
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
-use hex::*;
+use hex::FromHex;
 use keylib::{public_to_address, Generator, KeyPair, Random, Secret};
 use lazy_static::lazy_static;
 use metrics::{register_meter_with_group, Meter};
 use network::Error;
+use parity_bytes::ToPretty;
 use parking_lot::RwLock;
 use primitives::{
     transaction::Action, Account, SignedTransaction, Transaction,
@@ -34,6 +35,7 @@ use secret_store::{SecretStore, SharedSecretStore};
 use std::{
     cmp::Ordering,
     collections::HashMap,
+    convert::TryFrom,
     sync::Arc,
     thread,
     time::{self, Instant},
@@ -142,9 +144,10 @@ impl TransactionGenerator {
 
         let mut balance_to_transfer: U256 = 0.into();
         if sender_balance > 0.into() {
-            balance_to_transfer = U256::from(
-                U512::from(H512::random()) % U512::from(sender_balance),
-            );
+            balance_to_transfer = U256::try_from(
+                H512::random().into_uint() % U512::from(sender_balance),
+            )
+            .unwrap();
         }
 
         let tx = Transaction {
@@ -559,8 +562,8 @@ impl SpecialTransactionGenerator {
             erc20_address
         );
         assert_eq!(
-            erc20_address.hex(),
-            "0xe2182fba747b5706a516d6cf6bf62d6117ef86ea"
+            erc20_address.to_hex(),
+            "e2182fba747b5706a516d6cf6bf62d6117ef86ea"
         );
 
         SpecialTransactionGenerator {
@@ -603,9 +606,10 @@ impl SpecialTransactionGenerator {
                 continue;
             }
 
-            let balance_to_transfer = U256::from(
-                U512::from(H512::random()) % U512::from(sender_balance),
-            );
+            let balance_to_transfer = U256::try_from(
+                H512::random().into_uint() % U512::from(sender_balance),
+            )
+            .unwrap();
 
             let is_send_to_new_address = (number_of_accounts
                 <= Self::MAX_TOTAL_ACCOUNTS)
@@ -698,10 +702,11 @@ impl SpecialTransactionGenerator {
             let balance_to_transfer = if sender_erc20_balance == 0.into() {
                 continue;
             } else {
-                U256::from(
-                    U512::from(H512::random())
+                U256::try_from(
+                    H512::random().into_uint()
                         % U512::from(sender_erc20_balance),
                 )
+                .unwrap()
             };
 
             let receiver_index = random::<usize>() % number_of_accounts;
@@ -716,8 +721,12 @@ impl SpecialTransactionGenerator {
             let tx_data = Vec::from_hex(
                 String::new()
                     + "a9059cbb000000000000000000000000"
-                    + &receiver_address.hex()[2..]
-                    + &H256::from(balance_to_transfer).hex()[2..],
+                    + &receiver_address.to_hex()[2..]
+                    + {
+                        let h: H256 =
+                            BigEndianHash::from_uint(&balance_to_transfer);
+                        &h.to_hex()[2..]
+                    },
             )
             .unwrap();
 

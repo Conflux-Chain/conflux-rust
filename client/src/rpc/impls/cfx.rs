@@ -136,7 +136,7 @@ impl RpcImpl {
                 if signed_trans.len() + failed_trans.len() > 1 {
                     // This should never happen
                     error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
-                    Ok(H256::new().into())
+                    Ok(H256::zero().into())
                 } else if signed_trans.len() + failed_trans.len() == 0 {
                     // For tx in transactions_pubkey_cache, we simply ignore them
                     debug!("insert_new_transactions ignores inserted transactions");
