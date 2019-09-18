@@ -157,16 +157,6 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         # Start mininode connection
         start_p2p_connection(self.nodes, self.remote, self.local_ip)
 
-        block_gen_threads = []
-        node_id = 0
-        for node in self.nodes:
-            block_gen_thread = BlockGenThread(
-                node_id, node, self.log, random.random(), 1.0 / self.num_nodes
-            )
-            block_gen_threads.append(block_gen_thread)
-            block_gen_thread.start()
-            node_id += 1
-
         tx_file_path = (
             self.TX_FILE
         )
@@ -184,8 +174,19 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
         time.sleep(self.INITIAL_SLEEP)
 
-        start_time = datetime.datetime.now()
+        block_gen_threads = []
+        node_id = 0
+        for node in self.nodes:
+            block_gen_thread = BlockGenThread(
+                node_id, node, self.log, random.random(), 1.0 / self.num_nodes
+            )
+            block_gen_threads.append(block_gen_thread)
+            block_gen_thread.start()
+            node_id += 1
+
         self.log.info("Experiment started")
+        start_time = datetime.datetime.now()
+        last_log_elapsed_time = 0
         tx_batch_size = 1000
         tx_bytes = 0
         tx_received_slowdown = 0
@@ -324,7 +325,8 @@ class BlockGenThread(threading.Thread):
         #         h = self.node.generateoneblock(BlockGenThread.BLOCK_TX_LIMIT, BlockGenThread.BLOCK_SIZE_LIMIT * 10)
         #         self.log.info("node %s generated block at test start %s", self.node_id, h)
         # for blocks to propogate.
-        # time.sleep(ConfluxEthReplayTest.INITIALIZE_SLEEP / 2)
+
+        time.sleep(ConfluxEthReplayTest.INITIAL_SLEEP)
 
         start_time = datetime.datetime.now()
         total_mining_sec = 0.0
