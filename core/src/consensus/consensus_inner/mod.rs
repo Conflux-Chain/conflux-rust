@@ -555,6 +555,8 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    /// The caller should ensure that `height` is within the current
+    /// `self.pivot_chain` range. Otherwise the function may panic.
     pub fn get_pivot_block_arena_index(&self, height: u64) -> usize {
         let pivot_index = (height - self.cur_era_genesis_height) as usize;
         assert!(pivot_index < self.pivot_chain.len());
@@ -1906,7 +1908,12 @@ impl ConsensusGraphInner {
     ) -> Result<H256, String> {
         let height = epoch_number;
         if height >= self.cur_era_genesis_height {
-            Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
+            if height > self.pivot_chain.len() {
+                Err("Epoch number larger than current pivot chain length"
+                    .into())
+            } else {
+                Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
+            }
         } else {
             self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
                 format!("get_hash_from_epoch_number: Epoch hash set not in db, epoch_number={}", epoch_number).into()
