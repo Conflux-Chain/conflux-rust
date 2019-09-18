@@ -15,7 +15,7 @@ use crate::{
 };
 use cfx_types::{Address, H256, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
-use std::{cmp, sync::Arc};
+use std::{cmp, convert::TryFrom, sync::Arc};
 //use crate::storage::{Storage, StorageTrait};
 //use crate::transaction_pool::SharedTransactionPool;
 use crate::{
@@ -1042,7 +1042,7 @@ impl<'a, 'b> Executive<'a, 'b> {
             };
             self.state.sub_balance(
                 &sender,
-                &U256::from(actual_cost),
+                &U256::try_from(actual_cost).unwrap(),
                 &mut substate.to_cleanup_mode(&spec),
             )?;
             return Err(ExecutionError::NotEnoughCash {
@@ -1053,7 +1053,7 @@ impl<'a, 'b> Executive<'a, 'b> {
 
         self.state.sub_balance(
             &sender,
-            &U256::from(gas_cost),
+            &U256::try_from(gas_cost).unwrap(),
             &mut substate.to_cleanup_mode(&spec),
         )?;
 

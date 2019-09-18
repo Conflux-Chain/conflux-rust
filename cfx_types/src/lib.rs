@@ -5,8 +5,8 @@
 extern crate ethereum_types;
 
 pub use ethereum_types::{
-    Address, Bloom, BloomInput, Public, Secret, Signature, H128, H160, H256,
-    H512, H520, H64, U128, U256, U512, U64,
+    Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
+    H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
 use std::{cmp::Ordering, convert, ops};
 

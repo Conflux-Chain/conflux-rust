@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 cfx-stratum = { path = "../blockgen/stratum" }
-keccak-hash = "0.1.2"
+keccak-hash = "0.2"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 primitives = { path = "../primitives" }
@@ -16,10 +16,10 @@ parking_lot = "0.6"
 network = { path = "../network" }
 io = { path = "../util/io" }
 log = "0.4"
-rlp = "0.3.0"
+rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 lazy_static = "1.1.0"
-keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
+ethkey = { path = "../accounts/ethkey" }
 secret-store = { path = "../secret_store" }
 rand = "0.5"
 error-chain = { version = "0.12", default-features = false }
@@ -53,7 +53,8 @@ malloc_size_of = {path = "../util/malloc_size_of"}
 malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
 fallible-iterator = "0.2"
 strfmt = "0.1"
+rustc-hex = "1.0"
+parity-bytes = "0.1"
 
 [dev-dependencies]
-rustc-hex = "1.0"
 criterion = "0.2"

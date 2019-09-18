@@ -21,7 +21,6 @@ extern crate serde_derive;
 extern crate enum_map;
 extern crate igd;
 extern crate keccak_hash as hash;
-extern crate keylib;
 extern crate libc;
 extern crate parity_path;
 extern crate rand;
@@ -30,6 +29,7 @@ extern crate enum_map_derive;
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
+extern crate ethkey as keylib;
 extern crate keccak_hash;
 
 pub const PROTOCOL_ID_SIZE: usize = 3;

@@ -7,6 +7,8 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::ConsensusGraphInner,
     executive::{ExecutionError, Executive},
+    machine::new_machine_with_builtin,
+    parameters::{consensus::*, consensus_internal::*},
     state::{CleanupMode, State},
     statedb::StateDb,
     storage::{
@@ -17,7 +19,13 @@ use crate::{
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_types::{into_u256, H256, KECCAK_EMPTY_BLOOM, U256, U512};
+use cfx_types::{
+    into_u256, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+};
+use core::convert::TryFrom;
+use hash::KECCAK_EMPTY_LIST_RLP;
+use metrics::{register_meter_with_group, Meter, MeterTimer};
+use parity_bytes::ToPretty;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
@@ -29,24 +37,14 @@ use primitives::{
     TransactionAddress,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt::{Debug, Formatter},
     sync::{
+        atomic::{AtomicBool, Ordering::Relaxed},
         mpsc::{channel, RecvError, Sender, TryRecvError},
         Arc,
     },
     thread::{self, JoinHandle},
-};
-
-use crate::{
-    machine::new_machine_with_builtin,
-    parameters::{consensus::*, consensus_internal::*},
-};
-use hash::KECCAK_EMPTY_LIST_RLP;
-use metrics::{register_meter_with_group, Meter, MeterTimer};
-use std::{
-    collections::HashSet,
-    fmt::{Debug, Formatter},
-    sync::atomic::{AtomicBool, Ordering::Relaxed},
 };
 
 lazy_static! {
@@ -1179,7 +1177,7 @@ impl ConsensusExecutionHandler {
                     debug_out.block_rewards.push(BlockHashAuthorValue(
                         block.hash(),
                         block.block_header.author().clone(),
-                        U256::from(reward),
+                        U256::try_from(reward).unwrap(),
                     ));
                 }
 
@@ -1204,7 +1202,7 @@ impl ConsensusExecutionHandler {
                             BlockHashAuthorValue(
                                 block.hash(),
                                 block.block_header.author().clone(),
-                                U256::from(anticone_penalty),
+                                U256::try_from(anticone_penalty).unwrap(),
                             ),
                         );
                         //
@@ -1218,7 +1216,7 @@ impl ConsensusExecutionHandler {
                 }
 
                 debug_assert!(reward <= U512::from(U256::max_value()));
-                epoch_block_total_rewards.push(U256::from(reward));
+                epoch_block_total_rewards.push(U256::try_from(reward).unwrap());
             }
         }
 
@@ -1355,8 +1353,11 @@ impl ConsensusExecutionHandler {
                     .push(AuthorValue(address, reward));
                 debug_out.state_ops.push(StateOp::OpNameKeyMaybeValue {
                     op_name: "add_balance".to_string(),
-                    key: address.hex().as_bytes().to_vec(),
-                    maybe_value: Some(reward.to_hex().as_bytes().to_vec()),
+                    key: address.to_hex().as_bytes().to_vec(),
+                    maybe_value: Some({
+                        let h: H256 = BigEndianHash::from_uint(&reward);
+                        h.to_hex().as_bytes().to_vec()
+                    }),
                 });
             }
         }

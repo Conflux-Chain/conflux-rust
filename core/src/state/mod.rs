@@ -476,7 +476,7 @@ impl<'a> State<'a> {
                         }
                     }
                     Some(Some(AccountEntry { account: None, .. })) => {
-                        return Ok(Some(H256::new()));
+                        return Ok(Some(H256::zero()));
                     }
                     Some(None) => {
                         kind = Some(ReturnKind::OriginalAt);

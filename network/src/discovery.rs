@@ -11,7 +11,7 @@ use crate::{
 };
 use cfx_bytes::Bytes;
 use cfx_types::{H256, H520};
-use keylib::{recover, sign, KeyPair, Secret};
+use ethkey::{recover, sign, KeyPair, Secret};
 use rlp::{Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
@@ -182,7 +182,7 @@ impl Discovery {
     ) -> Result<H256, Error>
     {
         let packet = assemble_packet(packet_id, payload, &self.secret)?;
-        let hash = H256::from(&packet[1..(1 + 32)]);
+        let hash = H256::from_slice(&packet[1..(1 + 32)]);
         self.send_to(uio, packet, address.clone());
         Ok(hash)
     }
@@ -214,7 +214,7 @@ impl Discovery {
         let rlp = Rlp::new(&signed[1..]);
         match packet_id {
             PACKET_PING => {
-                self.on_ping(uio, &rlp, &node_id, &from, &hash_signed)
+                self.on_ping(uio, &rlp, &node_id, &from, hash_signed.as_bytes())
             }
             PACKET_PONG => self.on_pong(uio, &rlp, &node_id, &from),
             PACKET_FIND_NODE => self.on_find_node(uio, &rlp, &node_id, &from),
@@ -628,7 +628,7 @@ fn assemble_packet(
     };
     packet[(1 + 32)..(1 + 32 + 65)].copy_from_slice(&signature[..]);
     let signed_hash = keccak(&packet[(1 + 32)..]);
-    packet[1..(1 + 32)].copy_from_slice(&signed_hash);
+    packet[1..(1 + 32)].copy_from_slice(signed_hash.as_bytes());
     Ok(packet)
 }
 

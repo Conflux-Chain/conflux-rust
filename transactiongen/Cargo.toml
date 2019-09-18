@@ -12,14 +12,14 @@ cfxcore = { path = "../core" }
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 hex = "0.2"
-keccak-hash = "0.1.2"
+keccak-hash = "0.2.0"
 primitives = { path = "../primitives" }
 parking_lot = "0.6"
-rlp = "0.3.0"
+rlp = "0.4.0"
 rand = "0.5"
 secret-store = { path = "../secret_store" }
 network = { path = "../network" }
-keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
+ethkey = { path = "../accounts/ethkey" }
 log = "0.4"
 db = { path = "../db" }
 kvdb-rocksdb = "0.1.3"
@@ -28,3 +28,4 @@ io = { path = "../util/io" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 metrics = { path = "../util/metrics" }
 lazy_static = "1.3"
+parity-bytes = "0.1"
