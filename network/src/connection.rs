@@ -100,6 +100,7 @@ struct Packet {
     // current data position to write to socket.
     sending_pos: usize,
     is_high_priority: bool,
+    original_is_high_priority:bool,
     throttling_size: usize,
 }
 
@@ -119,6 +120,7 @@ impl Packet {
             data,
             sending_pos: 0,
             is_high_priority,
+            original_is_high_priority:is_high_priority,
             throttling_size,
         })
     }
@@ -145,7 +147,7 @@ impl Packet {
 
 impl Drop for Packet {
     fn drop(&mut self) {
-        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size,self.is_high_priority);
+        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size,self.original_is_high_priority);
 
         if self.is_high_priority {
             decr_high_priority_packets();
