@@ -1372,11 +1372,7 @@ impl ConsensusNewBlockHandler {
                     true,
                     false,
                 );
-                if self.conf.no_defer {
-                    self.executor.compute_epoch(task);
-                } else {
-                    self.executor.enqueue_epoch(task);
-                }
+                self.executor.enqueue_epoch(task);
                 state_at += 1;
             }
         }
