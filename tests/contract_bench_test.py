@@ -291,7 +291,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
 
     def testDaiContract(self):
-        CONTRACT_PATH = "contracts/dai_bytecode.dat"
+        CONTRACT_PATH = "contracts/Dai_bytecode.dat"
         logs = self.rpc.get_logs(self.filter)
         l = len(logs)
 
@@ -299,7 +299,7 @@ class ContractBenchTest(SmartContractBenchBase):
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
         contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/dai_abi.json"),
+            abi_file = os.path.join(file_dir, "contracts/Dai_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
 
@@ -405,20 +405,20 @@ class ContractBenchTest(SmartContractBenchBase):
 
     def testDaiJoinContract(self):
         solc = Solc()
-        CONTRACT_PATH = "contracts/dai_bytecode.dat"
+        CONTRACT_PATH = "contracts/Dai_bytecode.dat"
         file_dir = os.path.dirname(os.path.realpath(__file__))
         dai = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/dai_abi.json"),
+            abi_file = os.path.join(file_dir, "contracts/Dai_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         data = dai.constructor(1).buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
         dai_addr = Web3.toChecksumAddress(contractAddr)
 
-        CONTRACT_PATH = "contracts/vat_bytecode.dat"
+        CONTRACT_PATH = "contracts/Vat_bytecode.dat"
         file_dir = os.path.dirname(os.path.realpath(__file__))
         vat = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/vat_abi.json"),
+            abi_file = os.path.join(file_dir, "contracts/Vat_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
         data = vat.constructor().buildTransaction(self.tx_conf)["data"]
