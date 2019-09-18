@@ -58,7 +58,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     # For eth + payments.
     # EXPECTED_TX_SIZE_PER_SEC = 250000
     # For eth replay
-    EXPECTED_TX_SIZE_PER_SEC = 400000
+    EXPECTED_TX_SIZE_PER_SEC = 800000
     INITIALIZE_TXS = 200000 + 400 + 400
     GENESIS_KEY = decode_hex(
         "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"
@@ -100,7 +100,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             self.num_nodes = 1
 
         self.conf_parameters = {
-            "log_level": '"warn"',
+            "log_level": '"debug"',
             # "storage_cache_start_size": "1000000",
             # Do not re-alloc.
             "eth_compatibility_mode": "true",
@@ -116,6 +116,8 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             "egress_max_throttle": "1000",
             "tx_pool_size": "2000000",
             "block_db_type": '"rocksdb"',
+            "no_defer": "false",
+            "enable_optimistic_execution": "false",
         }
         self.initialize_chain_clean()
 
@@ -189,6 +191,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
 
             # peers_to_send = range(0, self.num_nodes)
             peer_to_send = random.choice(range(0, self.num_nodes))
+            peer_to_ask = 0
             txs_rlp = rlp.codec.length_prefix(len(txs), 192) + txs
             self.nodes[peer_to_send].p2p.send_protocol_packet(
                 txs_rlp + int_to_bytes(TRANSACTIONS)
@@ -201,7 +204,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             )
 
             if int(elapsed_time - last_log_elapsed_time) >= 1:
-                txpool_status = self.nodes[peer_to_send].txpool_status()
+                txpool_status = self.nodes[peer_to_ask].txpool_status()
                 txpool_received = txpool_status["received"]
                 last_log_elapsed_time = elapsed_time
 
@@ -228,7 +231,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     final_slow_down = max(final_slow_down, should_sleep)
                     self.log.warning(
                         "Conflux node %s is slow by %s at receiving txs, slow down by %s.",
-                        peer_to_send,
+                        peer_to_ask,
                         tx_count - txpool_received,
                         should_sleep,
                     )
@@ -248,7 +251,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
                     final_slow_down = max(final_slow_down, should_sleep)
                     self.log.warning(
                         "Conflux node %s has too many unpacked txs %s. sleep %s",
-                        peer_to_send,
+                        peer_to_ask,
                         txpool_unpacked,
                         should_sleep,
                     )
@@ -274,9 +277,9 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
 
 
 class BlockGenThread(threading.Thread):
-    BLOCK_FREQ = 1
+    BLOCK_FREQ = 0.25
     BLOCK_TX_LIMIT = 10000
-    BLOCK_SIZE_LIMIT = 600000
+    BLOCK_SIZE_LIMIT = 800000
     # Seems to be 90bytes + artificial 128b
     # SIMPLE_TX_PER_BLOCK = 700
     SIMPLE_TX_PER_BLOCK = 0

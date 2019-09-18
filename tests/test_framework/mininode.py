@@ -75,6 +75,7 @@ class P2PConnection(asyncore.dispatcher):
         """asyncore callback when a connection is closed."""
         logger.info("Closing connection to: %s:%d" % (self.dstaddr, self.dstport))
         self.state = "closed"
+        assert False
         self.recvbuf = b""
         self.sendbuf = b""
         # assert False

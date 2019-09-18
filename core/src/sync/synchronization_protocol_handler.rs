@@ -1396,7 +1396,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.update_total_weight_in_past();
             }
             CHECK_PEER_HEARTBEAT_TIMER => {
-                let timeout = Duration::from_secs(180);
+                let timeout = Duration::from_secs(18000);
                 let timeout_peers =
                     self.syn.get_heartbeat_timeout_peers(timeout);
                 for peer in timeout_peers {
