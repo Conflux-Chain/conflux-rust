@@ -529,7 +529,6 @@ class ContractBenchTest(SmartContractBenchBase):
         gas_price = 10
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
-        '''
         self.testEventContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testBallotContract()
@@ -542,7 +541,6 @@ class ContractBenchTest(SmartContractBenchBase):
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testMappingContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
-        '''
         self.testDaiJoinContract()
         self.log.info("Pass")
 
