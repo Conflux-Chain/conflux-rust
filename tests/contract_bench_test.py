@@ -406,8 +406,107 @@ class ContractBenchTest(SmartContractBenchBase):
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 50000)
 
+    def testDaiJoinContract(self):
+        solc = Solc()
+        CONTRACT_PATH = "contracts/dai_bytecode.dat"
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        dai = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/dai_abi.json"),
+            bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
+        )
+        data = dai.constructor(1).buildTransaction(self.tx_conf)["data"]
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
+        dai_addr = Web3.toChecksumAddress(contractAddr)
+        
+        CONTRACT_PATH = "contracts/vat_bytecode.dat"
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        vat = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/vat_abi.json"),
+            bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
+        )
+        data = vat.constructor().buildTransaction(self.tx_conf)["data"]
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
+        vat_addr = Web3.toChecksumAddress(contractAddr)
 
-      
+        CONTRACT_PATH = "contracts/DaiJoin_bytecode.dat"
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        dai_join = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/DaiJoin_abi.json"),
+            bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
+        )
+        data = dai_join.constructor(vat_addr, dai_addr).buildTransaction(self.tx_conf)["data"]
+        receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data)
+        dai_join_addr = Web3.toChecksumAddress(contractAddr)
+
+        # mint dai tokens & give approval
+        self.tx_conf["to"] = dai_addr
+        data = dai.functions.mint(Web3.toChecksumAddress(self.pub[0]), 100000).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, dai_addr, data, 0)
+        assert(result["outcomeStatus"] == 0)
+        data = dai.functions.approve(dai_join_addr, 100000).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.pub[0], self.pri[0], dai_addr, data, 0)
+        assert(result["outcomeStatus"] == 0)
+        data = dai.functions.allowance(Web3.toChecksumAddress(self.pub[0]), dai_join_addr).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(dai_addr, data)
+        assert_equal(int(result, 0), 100000)
+        data = dai.functions.rely(dai_join_addr).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, dai_addr, data, 0)
+        assert(result["outcomeStatus"] == 0)
+
+
+        # mint dai tokens for join_addr in vat & add approval
+        self.tx_conf["to"] = vat_addr
+        data = vat.functions.mint(dai_join_addr, 100000000000).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.sender, self.priv_key, vat_addr, data, 0)
+        assert(result["outcomeStatus"] == 0)
+        data = vat.functions.hope(dai_join_addr).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.pub[0], self.pri[0], vat_addr, data, 0)
+        assert(result["outcomeStatus"] == 0)
+        data = vat.functions.balanceOf(dai_join_addr).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(vat_addr, data)
+        assert_equal(int(result, 0), 100000000000)
+
+        # join
+        self.tx_conf["to"] = dai_join_addr
+        data = dai_join.functions.join(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.pub[0], self.pri[0], dai_join_addr, data, 0)
+        assert(result["outcomeStatus"] == 0)
+
+        # check
+        self.tx_conf["to"] = dai_addr
+        data = dai.functions.balanceOf(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(dai_addr, data)
+        assert_equal(int(result, 0), 50000)
+        
+        self.tx_conf["to"] = vat_addr
+        data = vat.functions.can(dai_join_addr, Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(vat_addr, data)
+        assert_equal(int(result, 0), 1)
+        
+        data = vat.functions.dai(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(vat_addr, data)
+        assert_equal(int(result, 0), 50000000000000000000000000000000)
+
+        # exit
+        self.tx_conf["to"] = dai_join_addr
+        data = dai_join.functions.exit(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
+        result = self.call_contract(self.pub[0], self.pri[0], dai_join_addr, data, 0)
+        assert(result["outcomeStatus"] == 0)
+        
+        # check
+        self.tx_conf["to"] = dai_addr
+        data = dai.functions.balanceOf(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(dai_addr, data)
+        assert_equal(int(result, 0), 100000)
+        
+        self.tx_conf["to"] = vat_addr
+        data = vat.functions.can(dai_join_addr, Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(vat_addr, data)
+        assert_equal(int(result, 0), 0)
+        
+        data = vat.functions.dai(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        result = self.rpc.call(vat_addr, data)
+        assert_equal(int(result, 0), 0)
 
     def run_test(self):
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
@@ -430,8 +529,7 @@ class ContractBenchTest(SmartContractBenchBase):
         gas_price = 10
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
-        result = self.rpc.get_logs(self.filter)
-        assert_equal(result, [])
+        '''
         self.testEventContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testBallotContract()
@@ -443,6 +541,9 @@ class ContractBenchTest(SmartContractBenchBase):
         self.testDaiContract()
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
         self.testMappingContract()
+        self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price)}
+        '''
+        self.testDaiJoinContract()
         self.log.info("Pass")
 
     def address_to_topic(self, address):
