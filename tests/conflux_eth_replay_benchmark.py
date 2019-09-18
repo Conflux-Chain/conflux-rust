@@ -119,7 +119,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
             "tx_pool_size": "2000000",
             "block_db_type": '"rocksdb"',
             "no_defer": "false",
-            "enable_optimistic_execution": "false",
+            "enable_optimistic_execution": "true",
         }
         self.initialize_chain_clean()
 
@@ -206,6 +206,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
 
             # peers_to_send = range(0, self.num_nodes)
             peer_to_send = random.choice(range(0, self.num_nodes))
+            # peer_to_send = 0
             peer_to_ask = 0
             txs_rlp = rlp.codec.length_prefix(len(txs), 192) + txs
             self.nodes[peer_to_send].p2p.send_protocol_packet(
@@ -233,13 +234,13 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
 
                 final_slow_down = 0
 
-                if txpool_received + 50000 < tx_count:
+                if txpool_received + 300000 < tx_count:
                     if txpool_received == 0:
                         should_sleep = 1
                     else:
                         should_sleep = (
                                 elapsed_time
-                                * (tx_count - txpool_received - 45000)
+                                * (tx_count - txpool_received - 290000)
                                 / txpool_received
                                 + 1
                         )
@@ -295,7 +296,7 @@ class BlockGenThread(threading.Thread):
     BLOCK_FREQ = 0.25
     BLOCK_TX_LIMIT = 10000
     BLOCK_SIZE_LIMIT = 800000
-    SIMPLE_TX_PER_BLOCK = 700
+    SIMPLE_TX_PER_BLOCK = 0
     # Seems to be 90bytes + artificial 128b
     # Seems to be 90 + 64 bytes.
     # ERC20_TX_PER_BLOCK = 50

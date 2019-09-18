@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub mod consensus {
-    pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 2;
+    pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
     pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
 
     pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM: u64 = 2;
