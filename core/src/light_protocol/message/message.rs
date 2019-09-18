@@ -31,6 +31,8 @@ build_msgid! {
     BLOOMS = 0x13
     GET_BLOCK_TXS = 0x014
     BLOCK_TXS = 0x015
+    GET_TX_INFOS = 0x016
+    TX_INFOS = 0x017
 
     INVALID = 0xff
 }
@@ -58,3 +60,5 @@ build_msg_impl! { GetBlooms, msgid::GET_BLOOMS, "GetBlooms" }
 build_msg_impl! { Blooms, msgid::BLOOMS, "Blooms" }
 build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs" }
 build_msg_impl! { BlockTxs, msgid::BLOCK_TXS, "BlockTxs" }
+build_msg_impl! { GetTxInfos, msgid::GET_TX_INFOS, "GetTxInfos" }
+build_msg_impl! { TxInfos, msgid::TX_INFOS, "TxInfos" }

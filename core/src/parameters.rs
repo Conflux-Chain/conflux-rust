@@ -138,6 +138,7 @@ pub mod light {
         pub static ref STATE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
         pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
         pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
         /// Maximum time period we wait for a response for an on-demand query.
         /// After this timeout has been reached, we try another peer or give up.
@@ -166,6 +167,7 @@ pub mod light {
     pub const STATE_ROOT_REQUEST_BATCH_SIZE: usize = 30;
     pub const STATE_ENTRY_REQUEST_BATCH_SIZE: usize = 30;
     pub const TX_REQUEST_BATCH_SIZE: usize = 30;
+    pub const TX_INFO_REQUEST_BATCH_SIZE: usize = 30;
 
     /// Maximum number of in-flight items at any given time.
     /// If we reach this limit, we will not request any more.
@@ -177,6 +179,7 @@ pub mod light {
     pub const MAX_STATE_ROOTS_IN_FLIGHT: usize = 100;
     pub const MAX_STATE_ENTRIES_IN_FLIGHT: usize = 100;
     pub const MAX_TXS_IN_FLIGHT: usize = 100;
+    pub const MAX_TX_INFOS_IN_FLIGHT: usize = 100;
 
     /// Maximum number of in-flight epoch requests at any given time.
     /// Similar to `MAX_HEADERS_IN_FLIGHT`. However, it is hard to match

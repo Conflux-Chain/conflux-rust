@@ -195,7 +195,7 @@ impl RpcImpl {
         }
     }
 
-    fn get_transaction_receipt(
+    fn transaction_receipt(
         &self, tx_hash: RpcH256,
     ) -> RpcResult<Option<RpcReceipt>> {
         let hash: H256 = tx_hash.into();
@@ -471,9 +471,9 @@ impl Cfx for CfxHandler {
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
-            fn send_usable_genesis_accounts(& self,account_start_index:usize) ->RpcResult<Bytes>;
-            fn get_transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
+            fn transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
     }
 }

@@ -7,7 +7,7 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use cfx_types::{H160, H256};
-use cfxcore::{light_protocol::QueryService, PeerInfo};
+use cfxcore::{LightQueryService, PeerInfo};
 use primitives::TransactionWithSignature;
 
 use network::{
@@ -28,11 +28,12 @@ use crate::rpc::{
 use super::common::RpcImpl as CommonImpl;
 
 pub struct RpcImpl {
-    light: Arc<QueryService>,
+    // helper API for retrieving verified information from peers
+    light: Arc<LightQueryService>,
 }
 
 impl RpcImpl {
-    pub fn new(light: Arc<QueryService>) -> Self { RpcImpl { light } }
+    pub fn new(light: Arc<LightQueryService>) -> Self { RpcImpl { light } }
 
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
@@ -142,12 +143,25 @@ impl RpcImpl {
         Ok(Some(RpcTransaction::from_signed(&tx, None)))
     }
 
-    fn get_transaction_receipt(
+    fn transaction_receipt(
         &self, tx_hash: RpcH256,
     ) -> RpcResult<Option<RpcReceipt>> {
         let hash: H256 = tx_hash.into();
         info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
-        unimplemented!()
+
+        let (tx, receipt, address, maybe_epoch, maybe_state_root) = self
+            .light
+            .get_tx_info(hash)
+            .map_err(RpcError::invalid_params)?;
+
+        let mut receipt = RpcReceipt::new(tx, receipt, address);
+        receipt.set_epoch_number(maybe_epoch);
+
+        if let Some(state_root) = maybe_state_root {
+            receipt.set_state_root(state_root.into());
+        }
+
+        Ok(Some(receipt))
     }
 }
 
@@ -198,7 +212,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn send_usable_genesis_accounts(& self,account_start_index:usize) ->RpcResult<Bytes>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
-            fn get_transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
+            fn transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
     }
 }
