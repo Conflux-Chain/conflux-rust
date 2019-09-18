@@ -1908,8 +1908,9 @@ impl ConsensusGraphInner {
     ) -> Result<H256, String> {
         let height = epoch_number;
         if height >= self.cur_era_genesis_height {
-            if height > self.pivot_chain.len() {
-                Err("Epoch number larger than current pivot chain length"
+            let pivot_index = (height - self.cur_era_genesis_height) as usize;
+            if pivot_index >= self.pivot_chain.len() {
+                Err("Epoch number larger than the current pivot chain tip"
                     .into())
             } else {
                 Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
