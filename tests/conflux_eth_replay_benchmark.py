@@ -5,6 +5,7 @@ import math
 import numpy
 from eth_utils import decode_hex
 
+from test_framework.blocktools import create_transaction
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
@@ -60,6 +61,7 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
     # For eth replay
     EXPECTED_TX_SIZE_PER_SEC = 800000
     INITIALIZE_TXS = 200000 + 400 + 400
+    INITIAL_SLEEP = 60
     GENESIS_KEY = decode_hex(
         "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"
     )
@@ -172,8 +174,20 @@ class ConfluxEthReplayTest(ConfluxTestFramework):
         )
         f = open(tx_file_path, "rb")
 
+        init_txs = []
+        for nonce in range(0, self.num_nodes):
+            i = nonce
+            addr = self.nodes[i].addr
+            init_tx = create_transaction(
+                pri_key=ConfluxEthReplayTest.GENESIS_KEY,
+                value=10000000000000000, receiver=addr, nonce=nonce)
+            init_txs.append(init_tx)
+
+        self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=init_txs))
+        time.sleep(self.INITIAL_SLEEP)
+
         start_time = datetime.datetime.now()
-        last_log_elapsed_time = 0
+        self.log.info("Experiment started")
         tx_batch_size = 1000
         tx_bytes = 0
         tx_received_slowdown = 0
@@ -280,9 +294,8 @@ class BlockGenThread(threading.Thread):
     BLOCK_FREQ = 0.25
     BLOCK_TX_LIMIT = 10000
     BLOCK_SIZE_LIMIT = 800000
+    SIMPLE_TX_PER_BLOCK = 700
     # Seems to be 90bytes + artificial 128b
-    # SIMPLE_TX_PER_BLOCK = 700
-    SIMPLE_TX_PER_BLOCK = 0
     # Seems to be 90 + 64 bytes.
     # ERC20_TX_PER_BLOCK = 50
     ERC20_TX_PER_BLOCK = 0

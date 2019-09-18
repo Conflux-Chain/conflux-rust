@@ -646,8 +646,7 @@ impl SpecialTransactionGenerator {
                 action: Action::Call(receiver_address),
                 data: vec![0u8; 128],
             };
-            let signed_transaction =
-                tx.sign(sender_kp.secret(), None /* chain_id */);
+            let signed_transaction = tx.sign(sender_kp.secret(), Some(0));
             let rlp_size = signed_transaction.transaction.rlp_bytes().len();
             if *block_size_limit <= rlp_size {
                 break;
