@@ -243,7 +243,7 @@ impl TransactionGenerator {
                 txgen.txpool.get_state_account_info(&sender_address);
             if nonce.cmp(sender_nonce) != Ordering::Equal {
                 *sender_nonce = nonce.clone();
-                balance_map.insert(sender_address.clone(),balance.clone());
+                balance_map.insert(sender_address.clone(), balance.clone());
             }
             trace!(
                 "receiver={:?} value={:?} nonce={:?}",
