@@ -9,14 +9,9 @@ pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 
 use cfxcore::{
-    genesis,
-    state_exposer::{SharedStateExposer, StateExposer},
-    statistics::Statistics,
-    storage::StorageManager,
-    sync::SyncPhaseType,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory,
-    ConsensusGraph, LightProvider, SynchronizationGraph,
+    genesis, statistics::Statistics, storage::StorageManager,
+    sync::SyncPhaseType, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    vm_factory::VmFactory, ConsensusGraph, LightProvider, SynchronizationGraph,
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 
@@ -189,8 +184,6 @@ impl ArchiveClient {
 
         let statistics = Arc::new(Statistics::new());
 
-        let state_exposer = SharedStateExposer::new(StateExposer::new());
-
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::new(
@@ -200,7 +193,6 @@ impl ArchiveClient {
             statistics.clone(),
             data_man.clone(),
             pow_config.clone(),
-            state_exposer.clone(),
         ));
 
         let protocol_config = conf.protocol_config();
@@ -346,7 +338,6 @@ impl ArchiveClient {
             consensus.clone(),
             network.clone(),
             txpool.clone(),
-            state_exposer.clone(),
         ));
 
         let runtime = Runtime::with_default_thread_count();

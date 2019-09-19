@@ -7,17 +7,18 @@ use delegate::delegate;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        BlameInfo, Block as RpcBlock, Bytes, EpochNumber, Filter as RpcFilter,
-        Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
-        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-        U256 as RpcU256, U64 as RpcU64,
+        BlameInfo, Block as RpcBlock, Bytes, ConsensusGraphStates, EpochNumber,
+        Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
+        Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
-    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, PeerInfo, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
+    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use network::{
@@ -437,6 +438,12 @@ impl RpcImpl {
         self.sync.expire_block_gc(timeout);
         Ok(())
     }
+
+    pub fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates> {
+        let consensus_graph_states =
+            STATE_EXPOSER.consensus_graph.lock().retrieve();
+        Ok(ConsensusGraphStates::new(consensus_graph_states))
+    }
 }
 
 #[allow(dead_code)]
@@ -548,6 +555,7 @@ impl DebugRpc for DebugRpcImpl {
 
         target self.rpc_impl {
             fn current_sync_phase(&self) -> RpcResult<String>;
+            fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
         }
     }
 }

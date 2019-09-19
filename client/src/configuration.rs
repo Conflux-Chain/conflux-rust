@@ -116,6 +116,7 @@ build_config! {
         (max_download_state_peers, (usize), 8)
         (block_db_type, (String), "rocksdb".to_string())
         (rocksdb_disable_wal, (bool), false)
+        (enable_state_expose, (bool), false)
     }
     {
         (
@@ -264,6 +265,7 @@ impl Configuration {
                 enable_optimistic_execution: self
                     .raw_conf
                     .enable_optimistic_execution,
+                enable_state_expose: self.raw_conf.enable_state_expose,
             },
             bench_mode: false,
         }
