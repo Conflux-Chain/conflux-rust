@@ -15,7 +15,7 @@ use cfxcore::{
 };
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Criterion};
-use keylib::{Generator, KeyPair, Random};
+use ethkey::{Generator, KeyPair, Random};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
 use std::sync::Arc;
