@@ -481,7 +481,8 @@ impl CowNodeRef {
     fn compute_children_merkles(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
-        allocator_ref: AllocatorRefRefDeltaMpt, db: &dyn KeyValueDbTraitRead,
+        allocator_ref: AllocatorRefRefDeltaMpt,
+        db: &mut DeltaDbOwnedReadTraitObj,
         children_merkle_map: &mut ChildrenMerkleMap,
         known_merkles: Option<CompactedChildrenTable<MerkleHash>>, depth: u8,
     ) -> Result<MaybeMerkleTable>
