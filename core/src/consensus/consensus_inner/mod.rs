@@ -70,6 +70,9 @@ pub struct ConsensusGraphNodeData {
     num_epoch_blocks_in_2era: usize,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
+    ///
+    /// For cur_era_genesis, this field should NOT be used because they contain
+    /// out-of-era blocks not maintained in the memory.
     pub ordered_executable_epoch_blocks: Vec<usize>,
     /// It indicates whether `blockset_in_own_view_of_epoch` is cleared due to
     /// its size.
@@ -1940,18 +1943,26 @@ impl ConsensusGraphInner {
             self.pivot_chain.len()
         );
         match self.get_arena_index_from_epoch_number(epoch_number) {
-            Ok(pivot_arena_index) => Ok(self.arena[pivot_arena_index]
-                .data
-                .ordered_executable_epoch_blocks
-                .iter()
-                .map(|index| self.arena[*index].hash)
-                .collect()),
+            Ok(pivot_arena_index) => {
+                if pivot_arena_index == self.cur_era_genesis_block_arena_index {
+                    self.data_man
+                        .epoch_set_hashes_from_db(epoch_number)
+                        .ok_or("Fail to load the epoch set for current era genesis in db".into())
+                } else {
+                    Ok(self.arena[pivot_arena_index]
+                        .data
+                        .ordered_executable_epoch_blocks
+                        .iter()
+                        .map(|index| self.arena[*index].hash)
+                        .collect())
+                }
+            }
             Err(e) => {
                 self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
                     format!(
-                    "Epoch hash set not in db epoch_number={}, in mem err={:?}",
-                    epoch_number, e
-                )
+                        "Epoch set not in db epoch_number={}, in mem err={:?}",
+                        epoch_number, e
+                    )
                     .into(),
                 )
             }
