@@ -1897,7 +1897,8 @@ impl ConsensusGraphInner {
         &self, epoch_number: u64,
     ) -> Result<usize, String> {
         if epoch_number >= self.cur_era_genesis_height {
-            let pivot_index = (height - self.cur_era_genesis_height) as usize;
+            let pivot_index =
+                (epoch_number - self.cur_era_genesis_height) as usize;
             if pivot_index >= self.pivot_chain.len() {
                 Err("Epoch number larger than the current pivot chain tip"
                     .into())
