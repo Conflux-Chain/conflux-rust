@@ -14,11 +14,20 @@ lazy_static! {
     pub static ref THROTTLING_SERVICE: RwLock<Service> =
         RwLock::new(Service::new());
     static ref QUEUE_SIZE_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("network","network_throttling_queue_size");
+        GaugeUsize::register_with_group(
+            "network_system_data",
+            "network_throttling_queue_size"
+        );
     static ref HIGH_QUEUE_SIZE_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("network", "high_throttling_queue_size");
+        GaugeUsize::register_with_group(
+            "networknetwork_system_data",
+            "high_throttling_queue_size"
+        );
     static ref LOW_QUEUE_SIZE_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("network", "low_throttling_queue_size");
+        GaugeUsize::register_with_group(
+            "network_system_data",
+            "low_throttling_queue_size"
+        );
 }
 
 /// Throttling service is used to control the egress bandwidth, so as to avoid
@@ -54,8 +63,8 @@ pub struct Service {
     max_throttle_queue_size: usize,
     /// Current queue size.
     cur_queue_size: usize,
-    high_queue_size:usize,
-    low_queue_size:usize,
+    high_queue_size: usize,
+    low_queue_size: usize,
 }
 
 impl Service {
@@ -65,8 +74,8 @@ impl Service {
             min_throttle_queue_size: n_mb_bytes!(10) as usize,
             max_throttle_queue_size: n_mb_bytes!(64) as usize,
             cur_queue_size: 0,
-            high_queue_size:0,
-            low_queue_size:0
+            high_queue_size: 0,
+            low_queue_size: 0,
         }
     }
 
@@ -102,7 +111,7 @@ impl Service {
     /// Mark data enqueued with specified `data_size`, and return the new queue
     /// size. If exceeds the queue capacity, return error with concrete reason.
     pub(crate) fn on_enqueue(
-        &mut self, data_size: usize, is_high_priority:bool
+        &mut self, data_size: usize, is_high_priority: bool,
     ) -> Result<usize, Error> {
         if data_size > self.queue_capacity {
             debug!("throttling.on_enqueue: enqueue too large data, data size = {}, queue capacity = {}", data_size, self.queue_capacity);
@@ -116,9 +125,9 @@ impl Service {
 
         self.cur_queue_size += data_size;
         if is_high_priority {
-            self.high_queue_size+=data_size
-        }else{
-            self.low_queue_size+=data_size
+            self.high_queue_size += data_size
+        } else {
+            self.low_queue_size += data_size
         }
         trace!(
             "throttling.on_enqueue: queue size = {}",
@@ -134,18 +143,20 @@ impl Service {
 
     /// Mark data dequeued with specified `data_size`, and return the updated
     /// queue size.
-    pub(crate) fn on_dequeue(&mut self, data_size: usize, is_high_priority:bool) -> usize {
+    pub(crate) fn on_dequeue(
+        &mut self, data_size: usize, is_high_priority: bool,
+    ) -> usize {
         if data_size > self.cur_queue_size {
             error!("throttling.on_dequeue: dequeue too much data, data size = {}, queue size = {}", data_size, self.cur_queue_size);
             self.cur_queue_size = 0;
-            self.high_queue_size=0;
-            self.low_queue_size=0;
+            self.high_queue_size = 0;
+            self.low_queue_size = 0;
         } else {
             self.cur_queue_size -= data_size;
             if is_high_priority {
-                self.high_queue_size-=data_size
-            }else{
-                self.low_queue_size-=data_size
+                self.high_queue_size -= data_size
+            } else {
+                self.low_queue_size -= data_size
             }
         }
 

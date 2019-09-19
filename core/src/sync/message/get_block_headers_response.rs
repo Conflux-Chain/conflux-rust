@@ -36,7 +36,7 @@ impl Handleable for GetBlockHeadersResponse {
         let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
 
         debug!("on_block_headers_response, msg=:{:?}", self);
-        for header in &self.headers{
+        for header in &self.headers {
             debug!(
                 "new block headers received: block_header={:?}, tx_count={}, block_size={}",
                 header,
