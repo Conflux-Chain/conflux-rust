@@ -31,10 +31,20 @@ use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
 
 lazy_static! {
+    static ref TX_POOL_DEFERRED_GAUGE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group("txpool", "stat_deferred_txs");
     static ref TX_POOL_UNPACKED_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "unpacked_size");
+        GaugeUsize::register_with_group("txpool", "stat_unpacked_txs");
     static ref TX_POOL_READY_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "ready_size");
+        GaugeUsize::register_with_group("txpool", "stat_ready_accounts");
+    static ref INSERT_TPS: Arc<dyn Meter> =
+        register_meter_with_group("txpool", "insert_tps");
+    static ref INSERT_TXS_TPS: Arc<dyn Meter> =
+        register_meter_with_group("txpool", "insert_txs_tps");
+    static ref INSERT_TXS_SUCCESS_TPS: Arc<dyn Meter> =
+        register_meter_with_group("txpool", "insert_txs_success_tps");
+    static ref INSERT_TXS_FAILURE_TPS: Arc<dyn Meter> =
+        register_meter_with_group("txpool", "insert_txs_failure_tps");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
     static ref TX_POOL_RECOVER_TIMER: Arc<dyn Meter> =
@@ -108,6 +118,8 @@ impl TransactionPool {
     pub fn insert_new_transactions(
         &self, mut transactions: Vec<TransactionWithSignature>,
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+        INSERT_TPS.mark(1);
+        INSERT_TXS_TPS.mark(transactions.len());
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
 
         let mut passed_transactions = Vec::new();
@@ -127,8 +139,7 @@ impl TransactionPool {
         }
 
         // ensure the pool has enough quota to insert new transactions.
-        let mut inner = self.inner.write();
-        let quota = inner.remaining_quota();
+        let quota = self.inner.write().remaining_quota();
         if quota < transactions.len() {
             for tx in transactions.split_off(quota) {
                 trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
@@ -137,6 +148,8 @@ impl TransactionPool {
         }
 
         if transactions.is_empty() {
+            INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
+            INSERT_TXS_FAILURE_TPS.mark(failure.len());
             return (passed_transactions, failure);
         }
 
@@ -147,7 +160,9 @@ impl TransactionPool {
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
                 let mut account_cache = self.get_best_state_account_cache();
+                let mut inner = self.inner.write();
                 let mut to_prop = self.to_propagate_trans.write();
+
                 for tx in signed_trans {
                     if let Err(e) = self.add_transaction_with_readiness_check(
                         &mut *inner,
@@ -176,8 +191,12 @@ impl TransactionPool {
             }
         }
 
-        TX_POOL_UNPACKED_GAUGE.update(inner.total_unpacked());
-        TX_POOL_READY_GAUGE.update(inner.total_ready_accounts());
+        TX_POOL_DEFERRED_GAUGE.update(self.total_deferred());
+        TX_POOL_UNPACKED_GAUGE.update(self.total_unpacked());
+        TX_POOL_READY_GAUGE.update(self.total_ready_accounts());
+
+        INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
+        INSERT_TXS_FAILURE_TPS.mark(failure.len());
 
         (passed_transactions, failure)
     }

@@ -222,6 +222,6 @@ impl MeterTimer {
 impl Drop for MeterTimer {
     fn drop(&mut self) {
         self.meter
-            .mark((Instant::now() - self.start).as_micros() as usize)
+            .mark((Instant::now() - self.start).as_nanos() as usize)
     }
 }
