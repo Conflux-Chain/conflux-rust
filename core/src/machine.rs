@@ -50,7 +50,7 @@ impl CommonParams {
             min_gas_limit: 0x1387.into(),
             gas_limit_bound_divisor: 0x0400.into(),
             registrar: Address::from_str(
-                "0xc6d9d2cd449a754c494264e1809c50e34d64562b",
+                "c6d9d2cd449a754c494264e1809c50e34d64562b",
             )
             .unwrap(),
             node_permission_contract: None,

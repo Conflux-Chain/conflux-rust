@@ -555,7 +555,7 @@ impl SpecialTransactionGenerator {
         );
         assert_eq!(
             erc20_address.to_hex(),
-            "0xe2182fba747b5706a516d6cf6bf62d6117ef86ea"
+            "e2182fba747b5706a516d6cf6bf62d6117ef86ea"
         );
 
         SpecialTransactionGenerator {
