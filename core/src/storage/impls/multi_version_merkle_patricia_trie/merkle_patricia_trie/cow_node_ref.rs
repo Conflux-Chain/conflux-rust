@@ -2,6 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+/// Set this flag to true to enable storing children merkles for
+/// possibily faster merkle root computation.
+const ENABLE_CHILDREN_MERKLES: bool = true;
+
 /// Load children merkles only when the number of uncached children nodes is
 /// above this threshold. Note that a small value will result in worse
 /// performance.
@@ -14,7 +18,7 @@ const CHILDREN_MERKLE_UNCACHED_THRESHOLD: u32 = 4;
 /// Depth 5 = 69905 (70k) nodes.
 /// Depth 6 = 1118481 (1.1 million) nodes.
 /// Depth 7 = 17895697 (18 million) nodes.
-const CHILDREN_MERKLE_DEPTH_THRESHOLD: u8 = 3;
+const CHILDREN_MERKLE_DEPTH_THRESHOLD: u8 = 4;
 
 /// CowNodeRef facilities access and modification to trie nodes in multi-version
 /// MPT. It offers read-only access to the original trie node, and creates an
@@ -437,7 +441,7 @@ impl CowNodeRef {
     {
         match trie_node.children_table.get_children_count() {
             0 => Ok(None),
-            _ => {
+            _ if ENABLE_CHILDREN_MERKLES => {
                 let original_db_key = match self.node_ref {
                     NodeRefDeltaMpt::Dirty { index } => {
                         owned_node_set.get_original_db_key(index)
@@ -474,6 +478,16 @@ impl CowNodeRef {
                     depth,
                 )
             }
+            _ => self.compute_children_merkles(
+                trie,
+                owned_node_set,
+                trie_node,
+                allocator_ref,
+                db,
+                children_merkle_map,
+                None,
+                depth,
+            ),
         }
     }
 
