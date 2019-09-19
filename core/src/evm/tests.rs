@@ -299,7 +299,7 @@ fn test_blockhash(factory: super::Factory) {
     };
 
     assert_eq!(gas_left, U256::from(79_974));
-    assert_eq!(ctx.store.get(&H256::new()).unwrap(), &blockhash);
+    assert_eq!(ctx.store.get(&H256::zero()).unwrap(), &blockhash);
 }
 
 evm_test! {test_calldataload: test_calldataload_int}
@@ -1005,8 +1005,8 @@ evm_test! {test_calls: test_calls_int}
 fn test_calls(factory: super::Factory) {
     let code = "600054602d57600160005560006000600060006050610998610100f160006000600060006050610998610100f25b".from_hex().unwrap();
 
-    let address = Address::from(0x155);
-    let code_address = Address::from(0x998);
+    let address = Address::from_low_u64_be(0x155);
+    let code_address = Address::from_low_u64_be(0x998);
     let mut params = ActionParams::default();
     params.gas = U256::from(150_000);
     params.code = Some(Arc::new(code));
@@ -1058,7 +1058,7 @@ evm_test! {test_create_in_staticcall: test_create_in_staticcall_int}
 fn test_create_in_staticcall(factory: super::Factory) {
     let code = "600060006064f000".from_hex().unwrap();
 
-    let address = Address::from(0x155);
+    let address = Address::from_low_u64_be(0x155);
     let mut params = ActionParams::default();
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
@@ -1088,7 +1088,7 @@ fn assert_set_contains<T: Debug + Eq + PartialEq + Hash>(
 
 fn assert_store(ctx: &MockContext, pos: u64, val: &str) {
     assert_eq!(
-        ctx.store.get(&H256::from(pos)).unwrap(),
+        ctx.store.get(&H256::from_low_u64_be(pos)).unwrap(),
         &H256::from_str(val).unwrap()
     );
 }

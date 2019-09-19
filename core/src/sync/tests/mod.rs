@@ -6,7 +6,7 @@ use crate::sync::{
     utils::{create_simple_block_impl, initialize_synchronization_graph},
     SynchronizationGraphNode,
 };
-use cfx_types::{H256, U256};
+use cfx_types::{BigEndianHash, H256, U256};
 use primitives::Block;
 use std::{
     fs,
@@ -83,7 +83,7 @@ fn test_remove_expire_blocks() {
                     if parent[i as usize] == -1 {
                         H256::default()
                     } else if parent[i as usize] >= i {
-                        H256::from(U256::from(100 + i as usize))
+                        BigEndianHash::from_uint(&U256::from(100 + i as usize))
                     } else {
                         blocks[parent[i as usize] as usize].hash()
                     }

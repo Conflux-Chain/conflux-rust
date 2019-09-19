@@ -161,11 +161,13 @@ impl Into<PrimitiveFilter> for Filter {
 #[cfg(test)]
 mod tests {
     use super::{EpochNumber, Filter, VariadicValue};
+    use cfx_types::{Address, H256};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::Filter as PrimitiveFilter,
     };
     use serde_json;
+    use std::str::FromStr;
 
     #[test]
     fn test_serialize_variadic_value() {
@@ -241,18 +243,18 @@ mod tests {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
             block_hashes: Some(vec![
-                "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470".into(),
-                "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".into()
+                H256::from_str("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
+                H256::from_str("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                "0x0000000000000000000000000000000000000000".into(),
-                "0x0000000000000000000000000000000000000001".into()
+                Address::from_str("0x0000000000000000000000000000000000000000").unwrap(),
+                Address::from_str("0x0000000000000000000000000000000000000001").unwrap()
             ])),
             topics: Some(vec![
-                VariadicValue::Single("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into()),
+                VariadicValue::Single(H256::from_str("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
                 VariadicValue::Multiple(vec![
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
-                    "0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5".into(),
+                    H256::from_str("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    H256::from_str("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
             limit: Some(2.into()),

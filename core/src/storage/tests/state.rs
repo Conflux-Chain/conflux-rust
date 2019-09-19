@@ -35,7 +35,7 @@ fn test_empty_genesis_block() {
     let state_manager = new_state_manager_for_testing();
 
     let mut genesis_epoch_id = H256::default();
-    genesis_epoch_id[0] = 1;
+    genesis_epoch_id.as_bytes_mut()[0] = 1;
     {
         let mut genesis_state = state_manager.get_state_for_genesis_write();
         genesis_state.compute_state_root().unwrap();
@@ -79,7 +79,7 @@ fn test_set_get() {
     }
 
     let mut epoch_id = H256::default();
-    epoch_id[0] = 1;
+    epoch_id.as_bytes_mut()[0] = 1;
     state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
 }
@@ -106,7 +106,7 @@ fn test_get_set_at_second_commit() {
     }
 
     let mut epoch_id_0 = H256::default();;
-    epoch_id_0[0] = 1;
+    epoch_id_0.as_bytes_mut()[0] = 1;
     state_0.compute_state_root().unwrap();
     state_0.commit(epoch_id_0).unwrap();
 
@@ -167,7 +167,7 @@ fn test_get_set_at_second_commit() {
     }
 
     let mut epoch_id_1 = H256::default();;
-    epoch_id_1[0] = 2;
+    epoch_id_1.as_bytes_mut()[0] = 2;
     state_1.compute_state_root().unwrap();
     state_1.commit(epoch_id_1).unwrap();
 }
@@ -195,7 +195,7 @@ fn test_set_delete() {
             .expect("Failed to insert key.");
     }
     let mut epoch_id = H256::default();
-    epoch_id[0] = 1;
+    epoch_id.as_bytes_mut()[0] = 1;
     state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
 
@@ -223,7 +223,7 @@ fn test_set_delete() {
     }
 
     let mut epoch_id = H256::default();
-    epoch_id[0] = 2;
+    epoch_id.as_bytes_mut()[0] = 2;
     let state_root = state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
 
@@ -253,7 +253,7 @@ fn test_set_delete_all() {
             .expect("Failed to insert key.");
     }
     let mut epoch_id = H256::default();
-    epoch_id[0] = 1;
+    epoch_id.as_bytes_mut()[0] = 1;
     state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
 
@@ -295,7 +295,7 @@ fn test_set_delete_all() {
     }
 
     let mut epoch_id = H256::default();
-    epoch_id[0] = 2;
+    epoch_id.as_bytes_mut()[0] = 2;
     let state_root = state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
 
@@ -339,7 +339,7 @@ fn test_set_order() {
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
-    epoch_id[0] = 1;
+    epoch_id.as_bytes_mut()[0] = 1;
     state_0.commit(epoch_id).unwrap();
 
     let mut state_1 = state_manager.get_state_for_genesis_write();
@@ -353,7 +353,7 @@ fn test_set_order() {
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
-    epoch_id[0] = 2;
+    epoch_id.as_bytes_mut()[0] = 2;
     state_1.commit(epoch_id).unwrap();
 
     let mut state_2 = state_manager.get_state_for_genesis_write();
@@ -367,7 +367,7 @@ fn test_set_order() {
             .expect("Failed to insert key.");
     }
     let merkle_2 = state_2.compute_state_root().unwrap();
-    epoch_id[0] = 3;
+    epoch_id.as_bytes_mut()[0] = 3;
     state_2.commit(epoch_id).unwrap();
 
     assert_eq!(merkle_1, merkle_2);
@@ -397,7 +397,7 @@ fn test_set_order_concurrent() {
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
-    epoch_id[0] = 1;
+    epoch_id.as_bytes_mut()[0] = 1;
     state_0.commit(epoch_id).unwrap();
 
     let parent_epoch_0 = epoch_id;
@@ -419,7 +419,7 @@ fn test_set_order_concurrent() {
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
-    epoch_id[0] = 2;
+    epoch_id.as_bytes_mut()[0] = 2;
     state_1.commit(epoch_id).unwrap();
 
     let thread_count = if cfg!(debug_assertions) {
@@ -458,8 +458,8 @@ fn test_set_order_concurrent() {
                     .expect("Failed to insert key.");
             }
             let merkle_2 = state_2.compute_state_root().unwrap();
-            epoch_id[0] = ((3 + thread_id) % 256) as u8;
-            epoch_id[1] = ((3 + thread_id) / 256) as u8;
+            epoch_id.as_bytes_mut()[0] = ((3 + thread_id) % 256) as u8;
+            epoch_id.as_bytes_mut()[1] = ((3 + thread_id) / 256) as u8;
             state_2.commit(epoch_id).unwrap();
 
             assert_eq!(merkle_1, merkle_2);
@@ -494,7 +494,7 @@ fn test_proofs() {
     }
 
     let mut epoch_id = H256::default();
-    epoch_id[0] = 1;
+    epoch_id.as_bytes_mut()[0] = 1;
     let root = state.compute_state_root().unwrap().state_root;
     state.commit(epoch_id).unwrap();
 
@@ -512,7 +512,7 @@ fn test_proofs() {
 
         // invalid state root
         let mut invalid_root = root.delta_root.clone();
-        invalid_root[0] = 0x00;
+        invalid_root.as_bytes_mut()[0] = 0x00;
 
         assert!(!proof.is_valid_kv(
             key,
@@ -531,7 +531,7 @@ fn test_proofs() {
         let mut invalid_proof = proof.clone();
         if let Some(delta_proof) = &mut invalid_proof.delta_proof {
             let mut wrong_merkle = delta_proof.nodes[0].get_merkle().clone();
-            wrong_merkle[0] = 0x00;
+            wrong_merkle.as_bytes_mut()[0] = 0x00;
             delta_proof.nodes[0].set_merkle(&wrong_merkle);
         }
 
