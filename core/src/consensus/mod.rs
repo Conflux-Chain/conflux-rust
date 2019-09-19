@@ -5,6 +5,7 @@
 mod anticone_cache;
 pub mod consensus_inner;
 mod debug;
+mod pastset_cache;
 
 use super::consensus::consensus_inner::{
     confirmation_meter::ConfirmationMeter,
@@ -12,8 +13,15 @@ use super::consensus::consensus_inner::{
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
 use crate::{
-    block_data_manager::BlockDataManager, pow::ProofOfWorkConfig, state::State,
-    statistics::SharedStatistics, transaction_pool::SharedTransactionPool,
+    block_data_manager::BlockDataManager,
+    bytes::Bytes,
+    pow::ProofOfWorkConfig,
+    state::State,
+    state_exposer::SharedStateExposer,
+    statedb::StateDb,
+    statistics::SharedStatistics,
+    storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
+    transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
@@ -25,7 +33,7 @@ use crate::parameters::{
     block::REFEREE_BOUND, consensus::*, consensus_internal::*,
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -34,7 +42,10 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
+    cmp::Reverse,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    thread::sleep,
     time::Duration,
 };
 
@@ -109,6 +120,16 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
+    /// This is the hash of latest block inserted into consensus graph.
+    /// Since the critical section is very short, a `Mutex` is enough.
+    pub latest_inserted_block: Mutex<H256>,
+    /// This HashMap stores whether the state in header is correct or not for
+    /// pivot blocks from current era genesis to first trusted blame block
+    /// after current era stable genesis.
+    /// We use `Mutex` here because other thread will only modify it once and
+    /// after that only current thread will operate this map.
+    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+    state_exposer: SharedStateExposer,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -121,6 +142,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
+        state_exposer: SharedStateExposer,
     ) -> Self
     {
         let inner =
@@ -129,6 +151,7 @@ impl ConsensusGraph {
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
+                None,
             )));
         let executor = ConsensusExecutor::start(
             txpool.clone(),
@@ -150,6 +173,9 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
+            latest_inserted_block: Mutex::new(*era_genesis_block_hash),
+            pivot_block_state_valid_map: Mutex::new(Default::default()),
+            state_exposer,
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -164,7 +190,7 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig,
+        pow_config: ProofOfWorkConfig, state_exposer: SharedStateExposer,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -176,6 +202,7 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
+            state_exposer,
         )
     }
 
@@ -275,7 +302,10 @@ impl ConsensusGraph {
             last_epoch_number -= 1;
 
             for hash in hashes {
-                let block = self.data_man.block_by_hash(&hash, false).unwrap();
+                let block = self
+                    .data_man
+                    .block_by_hash(&hash, false /* update_cache */)
+                    .unwrap();
                 for tx in block.transactions.iter() {
                     if tx_hashes.insert(tx.hash()) {
                         prices.push(tx.gas_price().clone());
@@ -319,13 +349,66 @@ impl ConsensusGraph {
         Ok(())
     }
 
+    fn get_state_db_by_epoch_number(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<StateDb, String> {
+        self.validate_stated_epoch(&epoch_number)?;
+        let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
+        let hash =
+            self.inner.read().get_hash_from_epoch_number(epoch_number)?;
+        let maybe_state = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
+            .map_err(|e| format!("Error to get state, err={:?}", e))?;
+
+        let state = match maybe_state {
+            Some(state) => state,
+            None => {
+                return Err(format!(
+                    "State for epoch (number={:?} hash={:?}) does not exist",
+                    epoch_number, hash
+                )
+                .into())
+            }
+        };
+
+        Ok(StateDb::new(state))
+    }
+
+    /// Get the code of an address
+    pub fn get_code(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<Bytes, String> {
+        let state_db =
+            self.get_state_db_by_epoch_number(epoch_number.clone())?;
+        let acc = match state_db.get_account(&address) {
+            Ok(Some(acc)) => acc,
+            _ => {
+                return Err(format!(
+                    "Account {:?} epoch_number={:?} does not exist",
+                    address, epoch_number,
+                )
+                .into())
+            }
+        };
+
+        match state_db.get_code(&address, &acc.code_hash) {
+            Some(code) => Ok(code),
+            None => Ok(vec![]),
+        }
+    }
+
     /// Get the current balance of an address
     pub fn get_balance(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| self.inner.read().get_balance(address, height))
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+            maybe_acc.map_or(U256::zero(), |acc| acc.balance).into()
+        } else {
+            0.into()
+        })
     }
 
     /// Force the engine to recompute the deferred state root for a particular
@@ -364,6 +447,8 @@ impl ConsensusGraph {
     /// getting inner locks.
     pub fn update_best_info(&self, inner: &ConsensusGraphInner) {
         let mut best_info = self.best_info.write();
+        self.state_exposer.write().consensus_graph.best_block_hash =
+            inner.best_block_hash();
 
         let terminal_hashes = inner.terminal_hashes();
         let (terminal_block_hashes, bounded_terminal_block_hashes) =
@@ -400,17 +485,28 @@ impl ConsensusGraph {
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
 
-        if !ignore_body {
-            let block = self.data_man.block_by_hash(hash, true).unwrap();
-            debug!(
-                "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-                block.block_header,
-                block.transactions.len(),
-                block.size(),
-            );
+        let block_opt = if ignore_body {
+            None
+        } else {
+            self.data_man.block_by_hash(hash, true /* update_cache */)
+        };
 
-            {
-                let inner = &mut *self.inner.write();
+        let header_opt = if ignore_body {
+            self.data_man.block_header_by_hash(hash)
+        } else {
+            None
+        };
+
+        {
+            let inner = &mut *self.inner.write();
+            if !ignore_body {
+                let block = block_opt.unwrap();
+                debug!(
+                    "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
+                    block.block_header,
+                    block.transactions.len(),
+                    block.size(),
+                );
                 self.new_block_handler.on_new_block(
                     inner,
                     &self.confirmation_meter,
@@ -418,20 +514,16 @@ impl ConsensusGraph {
                     &block.block_header,
                     Some(&block.transactions),
                 );
-                self.update_best_info(inner);
-            }
-            self.txpool
-                .notify_new_best_info(self.best_info.read().clone());
-        } else {
-            // This `ignore_body` case will only be used during recovery from
-            // checkpoint, either from db or from remote peers
-            let header = self.data_man.block_header_by_hash(hash).unwrap();
-            debug!(
-                "insert new block_header into consensus: block_header={:?}",
-                header
-            );
-            {
-                let inner = &mut *self.inner.write();
+            } else {
+                // This `ignore_body` case will only be used when
+                // 1. archive node is in `CatchUpRecoverBlockFromDB` phase
+                // 2. full node is in `CatchUpRecoverBlockHeaderFromDB`,
+                // `CatchUpSyncBlockHeader` or `CatchUpRecoverBlockFromDB` phase
+                let header = header_opt.unwrap();
+                debug!(
+                    "insert new block_header into consensus: block_header={:?}",
+                    header
+                );
                 self.new_block_handler.on_new_block(
                     inner,
                     &self.confirmation_meter,
@@ -439,29 +531,37 @@ impl ConsensusGraph {
                     header.as_ref(),
                     None,
                 );
-                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
-                {
-                    if let Some(exe_info) = self
-                        .data_man
-                        .consensus_graph_execution_info_from_db(hash)
-                    {
-                        inner
-                            .execution_info_cache
-                            .insert(*arena_index, exe_info);
-                    }
-                }
-
-                // If we have recovered all blocks in the past of stable block,
-                // we should reset the pivot chain. And later
-                // processed blocks may not be pending.
-                if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
-                    inner.set_pivot_to_stable(hash);
-                }
-                self.update_best_info(inner);
             }
-            self.txpool
-                .notify_new_best_info(self.best_info.read().clone());
+
+            // for full node, we should recover state_valid for pivot block
+            let mut pivot_block_state_valid_map =
+                self.pivot_block_state_valid_map.lock();
+            if !pivot_block_state_valid_map.is_empty()
+                && pivot_block_state_valid_map.contains_key(&hash)
+            {
+                let arena_index =
+                    *inner.hash_to_arena_indices.get(&hash).unwrap();
+                inner.arena[arena_index].data.state_valid =
+                    pivot_block_state_valid_map.remove(&hash).unwrap();
+            }
+
+            // we should recover exec_info from db
+            if let Some(arena_index) = inner.hash_to_arena_indices.get(hash) {
+                if let Some(exe_info) =
+                    self.data_man.consensus_graph_execution_info_from_db(hash)
+                {
+                    inner.execution_info_cache.insert(*arena_index, exe_info);
+                }
+            }
+
+            self.update_best_info(inner);
+            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
+                inner.set_pivot_to_stable(hash);
+            }
         }
+        self.txpool
+            .notify_new_best_info(self.best_info.read().clone());
+        *self.latest_inserted_block.lock() = *hash;
     }
 
     pub fn best_block_hash(&self) -> H256 {
@@ -502,8 +602,10 @@ impl ConsensusGraph {
         if let Some((receipt, address)) =
             inner.get_transaction_receipt_with_address(hash)
         {
-            let block =
-                self.data_man.block_by_hash(&address.block_hash, false)?;
+            let block = self.data_man.block_by_hash(
+                &address.block_hash,
+                false, /* update_cache */
+            )?;
             let transaction = (*block.transactions[address.index]).clone();
             Some((transaction, receipt, address))
         } else {
@@ -511,23 +613,57 @@ impl ConsensusGraph {
         }
     }
 
+    pub fn get_state_root_by_pivot_height(
+        &self, pivot_height: u64,
+    ) -> Option<H256> {
+        let inner = self.inner.read();
+        let height = pivot_height + DEFERRED_STATE_EPOCH_COUNT as u64;
+        let pivot_index = match height {
+            h if h < inner.get_cur_era_genesis_height() => return None,
+            h => inner.height_to_pivot_index(h),
+        };
+        if pivot_index < inner.pivot_chain.len() {
+            let pivot_hash = &inner.arena[inner.pivot_chain[pivot_index]].hash;
+            return match self
+                .data_man
+                .consensus_graph_execution_info_from_db(pivot_hash)
+            {
+                Some(info) => Some(info.original_deferred_state_root),
+                None => None,
+            };
+        }
+        None
+    }
+
     pub fn transaction_count(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
-        self.validate_stated_epoch(&epoch_number)?;
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                self.inner.read().transaction_count(address, height)
-            })
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        let state = State::new(state_db, 0.into(), Default::default());
+        state
+            .nonce(&address)
+            .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
-        let inner = self.inner.read();
-        self.executor.wait_for_result(inner.best_state_block_hash());
-        inner
-            .try_get_best_state(&self.data_man)
-            .expect("Best state has been executed")
+        let best_state_hash = {
+            let inner = self.inner.read();
+            let best_state_hash = inner.best_state_block_hash();
+            self.executor.wait_for_result(best_state_hash);
+            best_state_hash
+        };
+        if let Ok(state) = self.data_man.storage_manager.get_state_no_commit(
+            SnapshotAndEpochIdRef::new(&best_state_hash, None),
+        ) {
+            state
+                .map(|db| {
+                    State::new(StateDb::new(db), 0.into(), Default::default())
+                })
+                .expect("Best state has been executed")
+        } else {
+            panic!("get_best_state: Error for hash {}", best_state_hash);
+        }
     }
 
     /// Returns the total number of blocks processed in consensus graph.
@@ -592,10 +728,10 @@ impl ConsensusGraph {
                     let hash = inner.arena[*index].hash;
                     if let Some(block_log_bloom) = self
                         .data_man
-                        .block_results_by_hash_with_epoch(
+                        .block_execution_result_by_hash_with_epoch(
                             &hash,
                             &epoch_hash,
-                            false,
+                            false, /* update_cache */
                         )
                         .map(|r| r.bloom)
                     {
@@ -637,9 +773,9 @@ impl ConsensusGraph {
             .flat_map(move |blocks_chunk| {
                 blocks_chunk.into_par_iter()
                     .filter_map(|hash|
-                        self.inner.read().block_receipts_by_hash(&hash, false).map(|r| (hash, (*r).clone()))
+                        self.inner.read().block_receipts_by_hash(&hash, false /* update_cache */).map(|r| (hash, (*r).clone()))
                     )
-                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false).map(|b| (hash, receipts, b.transaction_hashes())))
+                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, receipts, b.transaction_hashes())))
                     .flat_map(|(hash, mut receipts, mut hashes)| {
                         if receipts.len() != hashes.len() {
                             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", hash, receipts.len(), hashes.len());
@@ -730,38 +866,29 @@ impl ConsensusGraph {
     /// This function returns the set of blocks that are two eras farther from
     /// current era. They can be safely garbage collected.
     pub fn retrieve_old_era_blocks(&self) -> Option<H256> {
-        let inner = &mut *self.inner.write();
-        if inner.old_era_block_sets.len() < 3 {
-            return None;
-        }
-        if inner.old_era_block_sets.front().unwrap().is_empty() {
-            inner.old_era_block_sets.pop_front();
-            // we simply return None here since next call of this function will
-            // handle other cases
-            return None;
-        }
-        inner.old_era_block_sets.front_mut().unwrap().pop()
+        self.inner.read().old_era_block_set.lock().pop_front()
     }
 
-    pub fn get_trusted_blame_block(&self) -> Option<H256> {
+    /// Find a trusted blame block for checkpoint
+    pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
         let inner = self.inner.read();
-        inner
-            .find_first_index_with_correct_state_of(0)
-            .and_then(|index| Some(inner.arena[inner.pivot_chain[index]].hash))
+        inner.get_trusted_blame_block(stable_hash)
     }
 
-    pub fn first_epoch_with_correct_state_of(&self, epoch: u64) -> Option<u64> {
+    pub fn first_trusted_header_starting_from(
+        &self, height: u64,
+    ) -> Option<u64> {
         // TODO(thegaram): change logic to work with arbitrary height, not just
         // the ones from the current era (i.e. use epoch instead of pivot index)
         let inner = self.inner.read();
 
         // for now, make sure to avoid underflow
-        let pivot_index = match epoch {
+        let pivot_index = match height {
             h if h < inner.get_cur_era_genesis_height() => return None,
             h => inner.height_to_pivot_index(h),
         };
 
-        let trusted = inner.find_first_index_with_correct_state_of(pivot_index);
+        let trusted = inner.find_first_trusted_starting_from(pivot_index);
         trusted.map(|index| inner.pivot_index_to_height(index))
     }
 

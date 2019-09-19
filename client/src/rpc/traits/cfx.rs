@@ -3,9 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Block, Bytes, EpochNumber, Filter as RpcFilter, Log as RpcLog, Transaction,
-    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-    U256 as RpcU256, U64 as RpcU64,
+    Block, Bytes, EpochNumber, Filter as RpcFilter, Log as RpcLog,
+    Receipt as RpcReceipt, Transaction, Transaction as RpcTransaction,
+    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
@@ -48,6 +48,12 @@ pub trait Cfx {
     fn balance(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<RpcU256>;
+
+    /// Returns the code at given address at given time (epoch number).
+    #[rpc(name = "cfx_getCode")]
+    fn code(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<Bytes>;
 
     //        /// Returns content of the storage at given address.
     //        #[rpc(name = "cfx_getStorageAt")]
@@ -103,14 +109,14 @@ pub trait Cfx {
     //        fn block_uncles_count_by_number(&self, BlockNumber) ->
     // BoxFuture<Option<RpcU256>>;
 
-    //        /// Returns the code at given address at given time (block
-    // number).        #[rpc(name = "cfx_getCode")]
-    //        fn code_at(&self, RpcH160, Option<BlockNumber>) ->
-    // BoxFuture<Bytes>;
-
     /// Sends signed transaction, returning its hash.
     #[rpc(name = "cfx_sendRawTransaction")]
     fn send_raw_transaction(&self, raw_tx: Bytes) -> RpcResult<RpcH256>;
+
+    #[rpc(name = "cfx_sendUsableGenesisAccounts")]
+    fn send_usable_genesis_accounts(
+        &self, account_start_index: usize,
+    ) -> RpcResult<Bytes>;
 
     //        /// @alias of `cfx_sendRawTransaction`.
     //        #[rpc(name = "cfx_submitTransaction")]
@@ -144,6 +150,11 @@ pub trait Cfx {
     fn blocks_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> RpcResult<Vec<RpcH256>>;
+
+    #[rpc(name = "cfx_getTransactionReceipt")]
+    fn transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> RpcResult<Option<RpcReceipt>>;
 
     //        #[rpc(name = "cfx_getAccount")]
     //        fn account(&self, RpcH160, bool, RpcU64, Option<EpochNumber>) ->

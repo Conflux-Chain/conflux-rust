@@ -30,7 +30,6 @@ extern crate lazy_static;
 extern crate bit_set;
 extern crate bn;
 extern crate byteorder;
-extern crate heapsize;
 extern crate memory_cache;
 extern crate num;
 extern crate parity_crypto;
@@ -52,11 +51,14 @@ pub mod genesis;
 mod parameters;
 #[macro_use]
 pub mod message;
+pub mod client;
 pub mod light_protocol;
 pub mod machine;
+pub mod miner;
 pub mod pow;
 pub(crate) mod snapshot;
 pub mod state;
+pub mod state_exposer;
 pub mod statedb;
 pub mod statistics;
 pub mod storage;
@@ -70,7 +72,9 @@ pub mod test_helpers;
 
 pub use crate::{
     consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
-    light_protocol::{QueryProvider, QueryService},
+    light_protocol::{
+        Provider as LightProvider, QueryService as LightQueryService,
+    },
     sync::{
         SharedSynchronizationGraph, SharedSynchronizationService,
         SynchronizationGraph, SynchronizationService,

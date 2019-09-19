@@ -4,7 +4,7 @@
 `P2PConnection: A low-level connection object to a node's P2P interface
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
-from eth_utils import big_endian_to_int
+from eth_utils import big_endian_to_int, encode_hex
 
 from conflux import utils
 from conflux.messages import *
@@ -21,7 +21,7 @@ import threading
 
 from conflux.transactions import Transaction
 from conflux.utils import hash32, hash20, sha3, int_to_bytes, sha3_256, ecrecover_to_pub, ec_random_keys, ecsign, \
-    bytes_to_int, encode_int32, int_to_hex, zpad, rzpad
+    bytes_to_int, encode_int32, int_to_hex, int_to_32bytearray, zpad, rzpad
 from test_framework.blocktools import make_genesis
 from test_framework.util import wait_until, get_ip_address
 
@@ -109,6 +109,50 @@ class P2PConnection(asyncore.dispatcher):
             self.recvbuf += buf
             self._on_data()
 
+    def read_connection_packet(self):
+        if len(self.recvbuf) < 3:
+            return None
+
+        packet_size = struct.unpack("<L", rzpad(self.recvbuf[:3], 4))[0]
+        if len(self.recvbuf) < 3 + packet_size:
+            return
+
+        self.recvbuf = self.recvbuf[3:]
+        packet = self.recvbuf[:packet_size]
+        self.recvbuf = self.recvbuf[packet_size:]
+
+        if len(packet) > 3:
+            packet = packet[-3:] + packet[:-3]
+
+        return packet
+
+    def assemble_connection_packet(self, data):
+        data_len = struct.pack("<L", len(data))[:3]
+
+        if len(data) > 3:
+            return data_len + data[3:] + data[:3]
+        else:
+            return data_len + data
+
+    def read_session_packet(self, packet):
+        if packet[-2] == 0:
+            return (packet[-1], None, packet[:-2])
+        else:
+            return (packet[-1], packet[-5:-2], packet[:-5])
+
+    def assemble_session_packet(self, packet_id, protocol, payload):
+        packet_id = struct.pack("<B", packet_id)
+        if protocol is None:
+            return payload + b'\x00' + packet_id
+        else:
+            return payload + protocol + b'\x01' + packet_id
+
+    def read_protocol_msg(self, msg):
+        return (msg[-1], msg[:-1])
+
+    def assemble_protocol_msg(self, msg):
+        return rlp.encode(msg) + int_to_bytes(get_msg_id(msg))
+
     def _on_data(self):
         """Try to read P2P messages from the recv buffer.
 
@@ -117,34 +161,33 @@ class P2PConnection(asyncore.dispatcher):
         the on_message callback for processing."""
         try:
             while True:
-                if len(self.recvbuf) < 3:
+                packet = self.read_connection_packet()
+                if packet is None:
                     return
-                packet_size = struct.unpack("<L", rzpad(self.recvbuf[:3], 4))[0]
-                if len(self.recvbuf) < 3 + packet_size:
-                    return
-                packet_id = self.recvbuf[3]
+
+                if self.on_handshake(packet):
+                    continue
+
+                packet_id, protocol, payload = self.read_session_packet(packet)
+                self._log_message("receive", packet_id)
+
                 if packet_id != PACKET_HELLO and packet_id != PACKET_DISCONNECT and (not self.had_hello):
                     raise ValueError("bad protocol")
-                payload = self.recvbuf[4:3 + packet_size]
-                self.recvbuf = self.recvbuf[3 + packet_size:]
-                self._log_message("receive", packet_id)
+
                 if packet_id == PACKET_HELLO:
                     self.on_hello(payload)
                 elif packet_id == PACKET_DISCONNECT:
                     disconnect = rlp.decode(payload, Disconnect)
                     self.on_disconnect(disconnect)
-                elif packet_id == PACKET_PING:
-                    self.on_ping()
-                elif packet_id == PACKET_PONG:
-                    self.on_pong()
-                elif packet_id == PACKET_PONG:
-                    pass
                 else:
                     assert packet_id == PACKET_PROTOCOL
-                    self.on_protocol_packet(payload)
+                    self.on_protocol_packet(protocol, payload)
         except Exception as e:
             logger.exception('Error reading message: ' + repr(e))
             raise
+
+    def on_handshake(self, payload) -> bool:
+        return False
 
     def on_hello(self, payload):
         self.had_hello = True
@@ -152,14 +195,7 @@ class P2PConnection(asyncore.dispatcher):
     def on_disconnect(self, disconnect):
         self.on_close()
 
-    def on_ping(self):
-        self.send_packet(PACKET_PONG, b"")
-        pass
-
-    def on_pong(self):
-        pass
-
-    def on_protocol_packet(self, payload):
+    def on_protocol_packet(self, protocol, payload):
         """Callback for processing a protocol-specific P2P payload. Must be overridden by derived class."""
         raise NotImplementedError
 
@@ -195,12 +231,17 @@ class P2PConnection(asyncore.dispatcher):
 
         This method takes a P2P payload, builds the P2P header and adds
         the message to the send buffer to be sent over the socket."""
+        self._log_message("send", packet_id)
+        buf = self.assemble_session_packet(packet_id, None, payload)
+
+        self.send_data(buf)
+
+
+    def send_data(self, data, pushbuf=False):
         if self.state != "connected" and not pushbuf:
             raise IOError('Not connected, no pushbuf')
-        self._log_message("send", packet_id)
-        buf = struct.pack("<L", len(payload) + 1)[:3]
-        buf += struct.pack("<B", packet_id)
-        buf += payload
+
+        buf = self.assemble_connection_packet(data)
 
         with mininode_lock:
             if (len(self.sendbuf) == 0 and not pushbuf):
@@ -214,12 +255,13 @@ class P2PConnection(asyncore.dispatcher):
 
     def send_protocol_packet(self, payload):
         """Send packet of protocols"""
-        self.send_packet(PACKET_PROTOCOL, self.protocol + payload)
+        buf = self.assemble_session_packet(PACKET_PROTOCOL, self.protocol, payload)
+        self.send_data(buf)
 
     def send_protocol_msg(self, msg):
         """Send packet of protocols"""
-        self.send_protocol_packet(int_to_bytes(
-            get_msg_id(msg)) + rlp.encode(msg))
+        payload = self.assemble_protocol_msg(msg)
+        self.send_protocol_packet(payload)
 
     # Class utility methods
 
@@ -265,7 +307,7 @@ class P2PInterface(P2PConnection):
         self.peer_pubkey = None
         self.priv_key, self.pub_key = ec_random_keys()
         x, y = self.pub_key
-        self.key = "0x"+int_to_hex(x)[2:]+int_to_hex(y)[2:]
+        self.key = "0x" + encode_hex(bytes(int_to_32bytearray(x)))[2:] + encode_hex(bytes(int_to_32bytearray(y)))[2:]
         self.had_status = False
         self.on_packet_func = {}
         self.remote = remote
@@ -285,21 +327,18 @@ class P2PInterface(P2PConnection):
     # Message receiving methods
 
     def send_status(self):
-        status = Status(self.protocol_version, 0,
-                        self.genesis.block_header.hash, 0, [self.best_block_hash])
+        status = Status(self.protocol_version, self.genesis.block_header.hash, 0, [self.best_block_hash])
         self.send_protocol_msg(status)
 
-    def on_protocol_packet(self, payload):
+    def on_protocol_packet(self, protocol, payload):
         """Receive message and dispatch message to appropriate callback.
 
         We keep a count of how many of each message type has been received
         and the most recent message of each type."""
         with mininode_lock:
             try:
-                protocol = payload[0:3]
                 assert(protocol == self.protocol)  # Possible to be false?
-                packet_type = payload[3]
-                payload = payload[4:]
+                packet_type, payload = self.read_protocol_msg(payload)
                 self.protocol_message_count[packet_type] += 1
                 msg = None
                 msg_class = get_msg_class(packet_type)
@@ -364,23 +403,7 @@ class P2PInterface(P2PConnection):
                 raise
 
     def on_hello(self, payload):
-        h = payload[:32]
-        hash_signed = sha3_256(payload[32:])
-        if h != hash_signed:
-            return
-        signature = payload[32:32+65]
-        r = big_endian_to_int(signature[:32])
-        s = big_endian_to_int(signature[32:64])
-        v = big_endian_to_int(signature[64:]) + 27
-        signed = payload[32+65:]
-        h_signed = sha3_256(signed)
-        node_id = ecrecover_to_pub(h_signed, v, r, s)
-        # if node_id == encode_int32(self.pub_key[0])+encode_int32(self.pub_key[1]):
-        #     print("Match")
-        # else:
-        #     print(node_id, encode_int32(self.pub_key[0])+encode_int32(self.pub_key[1]))
-        self.peer_pubkey = node_id
-        hello = rlp.decode(signed, Hello)
+        hello = rlp.decode(payload, Hello)
 
         capabilities = []
         for c in hello.capabilities:
@@ -391,24 +414,29 @@ class P2PInterface(P2PConnection):
         if self.remote:
             ip = get_ip_address()
         endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
-        hello = Hello([Capability(self.protocol, self.protocol_version)], endpoint)
-        to_sign = rlp.encode(hello, Hello)
-        sig = ecsign(sha3_256(to_sign), self.priv_key)
-        v = (sig[0] - 27).to_bytes(1, "big")
-        r = sig[1].to_bytes(32, "big")
-        s = sig[2].to_bytes(32, "big")
-        to_hash = r + s + v + to_sign
-        hash_signed = sha3_256(to_hash)
-        self.send_packet(PACKET_HELLO, hash_signed + to_hash)
+        hello = Hello(1, [Capability(self.protocol, self.protocol_version)], endpoint)
+
+        self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
         self.had_hello = True
         self.send_status()
 
     # Callback methods. Can be overridden by subclasses in individual test
     # cases to provide custom message handling behaviour.
 
-    def on_open(self): pass
+    def on_open(self):
+        self.handshake = Handshake(self)
+        self.handshake.write_auth()
 
     def on_close(self): pass
+
+    def on_handshake(self, payload) -> bool:
+        if self.handshake.state == "ReadingAck":
+            self.handshake.read_ack(payload)
+            return True
+
+        assert self.handshake.state == "StartSession"
+
+        return False
 
     def on_get_blocks(self, msg):
         resp = Blocks(reqid=msg.reqid, blocks=[])
@@ -501,3 +529,18 @@ def start_p2p_connection(nodes, remote=False):
         p2p.wait_for_status()
 
     return p2p_connections
+
+class Handshake:
+    def __init__(self, peer: P2PInterface):
+        self.peer = peer
+        self.state = "New"
+
+    def write_auth(self):
+        node_id = utils.decode_hex(self.peer.key)
+        self.peer.send_data(node_id)
+        self.state = "ReadingAck"
+
+    def read_ack(self, remote_node_id: bytes):
+        assert len(remote_node_id) == 64, "invalid node id length {}".format(len(remote_node_id))
+        self.peer.peer_key = utils.encode_hex(remote_node_id)
+        self.state = "StartSession"

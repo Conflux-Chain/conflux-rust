@@ -3,41 +3,37 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    random, Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
+    msg_sender::{send_message, NULL},
+    random,
+    request_manager::RequestManager,
+    Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
-    light_protocol::QueryProvider,
-    message::{HasRequestId, Message, MsgId},
-    sync::message::{
-        handle_rlp_message, msgid, GetBlockHeadersResponse, NewBlock,
-        NewBlockHashes, Status, TransactionDigests,
+    block_data_manager::BlockStatus,
+    light_protocol::Provider as LightProvider,
+    message::{decode_msg, HasRequestId, Message, MsgId},
+    parameters::sync::*,
+    sync::{
+        message::{
+            handle_rlp_message, msgid, Context, DynamicCapability,
+            GetBlockHeadersResponse, NewBlockHashes, Status,
+            TransactionDigests,
+        },
+        state::SnapshotChunkSync,
+        synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
     },
 };
 use cfx_types::H256;
 use io::TimerToken;
+use metrics::{register_meter_with_group, Meter};
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
+use primitives::{Block, BlockHeader, SignedTransaction};
 use rand::Rng;
 use rlp::Rlp;
-//use slab::Slab;
-use super::{
-    msg_sender::{send_message, send_message_with_throttling, NULL},
-    request_manager::RequestManager,
-};
-use crate::{
-    block_data_manager::{BlockStatus, NULLU64},
-    parameters::sync::*,
-    sync::{
-        message::{Context, DynamicCapability},
-        state::SnapshotChunkSync,
-        synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
-    },
-};
-use metrics::{register_meter_with_group, Meter};
-use primitives::{Block, BlockHeader, SignedTransaction};
 use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
@@ -235,7 +231,7 @@ pub struct SynchronizationProtocolHandler {
     pub state_sync: Arc<SnapshotChunkSync>,
 
     // provider for serving light protocol queries
-    light_provider: Arc<QueryProvider>,
+    light_provider: Arc<LightProvider>,
 }
 
 #[derive(Clone)]
@@ -255,6 +251,7 @@ pub struct ProtocolConfiguration {
     pub max_peers_propagation: usize,
     pub future_block_buffer_capacity: usize,
     pub max_download_state_peers: usize,
+    pub test_mode: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -262,7 +259,7 @@ impl SynchronizationProtocolHandler {
         is_full_node: bool, protocol_config: ProtocolConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
-        light_provider: Arc<QueryProvider>,
+        light_provider: Arc<LightProvider>,
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(is_full_node));
@@ -367,7 +364,11 @@ impl SynchronizationProtocolHandler {
 
         if !handle_rlp_message(msg_id, &ctx, &rlp)? {
             warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
-            io.disconnect_peer(peer, Some(UpdateNodeOperation::Remove), None);
+            io.disconnect_peer(
+                peer,
+                Some(UpdateNodeOperation::Remove),
+                None, /* reason */
+            );
         }
 
         Ok(())
@@ -436,7 +437,7 @@ impl SynchronizationProtocolHandler {
         }
 
         if disconnect {
-            io.disconnect_peer(peer, op, None);
+            io.disconnect_peer(peer, op, None /* reason */);
         }
     }
 
@@ -451,6 +452,13 @@ impl SynchronizationProtocolHandler {
 
         if current_phase_type != SyncPhaseType::Normal {
             self.request_epochs(io);
+            let best_peer_epoch = self.syn.best_peer_epoch().unwrap_or(0);
+            let my_best_epoch = self.graph.consensus.best_epoch_number();
+            if my_best_epoch + REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD
+                >= best_peer_epoch
+            {
+                self.request_missing_terminals(io);
+            }
         } else {
             self.request_missing_terminals(io);
         }
@@ -640,9 +648,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id()
-                || info.get_instance_id() == NULLU64
-            {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
                 // This block header has already entered consensus
                 // graph in this run.
                 return true;
@@ -716,8 +722,11 @@ impl SynchronizationProtocolHandler {
                 }
             }
 
-            let (success, to_relay) =
-                self.graph.insert_block(block, true, true, false);
+            let (success, to_relay) = self.graph.insert_block(
+                block, true,  /* need_to_verify */
+                true,  /* persistent */
+                false, /* recover_from_db */
+            );
             if success {
                 // The requested block is correctly received
                 received_blocks.insert(hash);
@@ -771,7 +780,11 @@ impl SynchronizationProtocolHandler {
         assert!(!self.graph.contains_block(&hash));
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
-        self.graph.insert_block(block, false, true, false);
+        self.graph.insert_block(
+            block, false, /* need_to_verify */
+            true,  /* persistent */
+            false, /* recover_from_db */
+        );
         to_relay
     }
 
@@ -816,7 +829,6 @@ impl SynchronizationProtocolHandler {
 
         Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
-            network_id: 0x0,
             genesis_hash: self.graph.data_man.true_genesis_block.hash(),
             best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,
@@ -840,23 +852,6 @@ impl SynchronizationProtocolHandler {
             .is_err()
         {
             warn!("Error broadcsting status message");
-        }
-    }
-
-    pub fn announce_new_blocks(
-        &self, io: &dyn NetworkContext, hashes: &[H256],
-    ) {
-        for hash in hashes {
-            let block = self.graph.block_by_hash(hash).unwrap();
-            let msg: Box<dyn Message> = Box::new(NewBlock {
-                block: (*block).clone().into(),
-            });
-            for id in self.syn.peers.read().keys() {
-                send_message_with_throttling(io, *id, msg.as_ref(), true)
-                    .unwrap_or_else(|e| {
-                        warn!("Error sending new blocks, err={:?}", e);
-                    });
-            }
         }
     }
 
@@ -1204,9 +1199,7 @@ impl SynchronizationProtocolHandler {
                 return true;
             }
 
-            if info.get_instance_id() == self.graph.data_man.get_instance_id()
-                || info.get_instance_id() == NULLU64
-            {
+            if info.get_instance_id() == self.graph.data_man.get_instance_id() {
                 // This block has already entered consensus graph
                 // in this run.
                 return true;
@@ -1215,7 +1208,11 @@ impl SynchronizationProtocolHandler {
 
         // FIXME: If there is no block info in db, whether we need to fetch
         // block from db?
-        if let Some(block) = self.graph.data_man.block_by_hash(hash, false) {
+        if let Some(block) = self
+            .graph
+            .data_man
+            .block_by_hash(hash, false /* update_cache */)
+        {
             debug!("Recovered block {:?} from db", hash);
             // Process blocks from db
             // The parameter `failed_peer` is only used when there exist some
@@ -1262,8 +1259,10 @@ impl SynchronizationProtocolHandler {
     pub fn expire_block_gc(
         &self, io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
-        let need_to_relay =
-            self.graph.remove_expire_blocks(timeout, true, None);
+        let need_to_relay = self
+            .graph
+            .resolve_outside_dependencies(false /* recover_from_db */);
+        self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }
 }
@@ -1310,17 +1309,18 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
-        if raw.len() < 2 {
-            return self.handle_error(
-                io,
-                peer,
-                msgid::INVALID,
-                ErrorKind::InvalidMessageFormat.into(),
-            );
-        }
+        let (msg_id, rlp) = match decode_msg(raw) {
+            Some(msg) => msg,
+            None => {
+                return self.handle_error(
+                    io,
+                    peer,
+                    msgid::INVALID,
+                    ErrorKind::InvalidMessageFormat.into(),
+                )
+            }
+        };
 
-        let msg_id = raw[0];
-        let rlp = Rlp::new(&raw[1..]);
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
         self.dispatch_message(io, peer, msg_id.into(), rlp)
@@ -1347,7 +1347,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
-            io.disconnect_peer(peer, Some(UpdateNodeOperation::Failure), None);
+            io.disconnect_peer(
+                peer,
+                Some(UpdateNodeOperation::Failure),
+                None, /* reason */
+            );
         } else {
             self.syn
                 .handshaking_peers
@@ -1398,7 +1402,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                     io.disconnect_peer(
                         peer,
                         Some(UpdateNodeOperation::Failure),
-                        None,
+                        None, /* reason */
                     );
                 }
             }

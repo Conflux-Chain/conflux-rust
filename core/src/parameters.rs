@@ -16,6 +16,9 @@ pub mod consensus {
     pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
     // FIXME: We should use finality to determine the checkpoint moment instead.
     pub const ERA_DEFAULT_CHECKPOINT_GAP: u64 = 50000;
+
+    pub const NULL: usize = !0;
+    pub const NULLU64: u64 = !0;
 }
 
 pub mod consensus_internal {
@@ -39,10 +42,9 @@ pub mod consensus_internal {
     // Here is the delay for us to recycle those orphaned blocks in the boundary
     // of eras.
     pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
-    /// This is the bound for `min/max_epoch_in_other_views`. If we have more
-    /// than this number, we will use the brute_force O(n) algorithm to collect
-    /// blockset instead.
-    pub const EPOCH_IN_OTHER_VIEWS_GAP_BOUND: u64 = 1000;
+    // This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
+    // have more than this number, we will not store it in memory
+    pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 
     // FIXME Use another method to prevent DDoS attacks if attackers control the
     // pivot chain A block can blame up to BLAME_BOUND ancestors that their
@@ -58,6 +60,9 @@ pub mod sync {
     /// CATCH_UP_EPOCH_LAG_THRESHOLD behind the median of the epoch
     /// numbers of peers.
     pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
+    /// This threshold controlling whether a node should request missing
+    /// terminals from peers when the node is in catch-up mode.
+    pub const REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD: u64 = 8;
 
     pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
     /// The max number of headers that are to be sent for header
@@ -114,36 +119,67 @@ pub mod block {
 }
 
 pub mod light {
+    use std::time::Duration;
+
+    lazy_static! {
+        /// Frequency of re-triggering sync.
+        pub static ref SYNC_PERIOD: Duration = Duration::from_secs(1);
+
+        /// Frequency of checking request timeouts.
+        pub static ref CLEANUP_PERIOD: Duration = Duration::from_secs(1);
+
+        /// Request timeouts.
+        pub static ref EPOCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref HEADER_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref WITNESS_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref BLOOM_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref RECEIPT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref BLOCK_TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STATE_ROOT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref STATE_ENTRY_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref TX_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+        pub static ref TX_INFO_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+
+        /// Maximum time period we wait for a response for an on-demand query.
+        /// After this timeout has been reached, we try another peer or give up.
+        pub static ref MAX_POLL_TIME: Duration = Duration::from_secs(4);
+
+        /// Period of time to sleep between subsequent polls for on-demand queries.
+        pub static ref POLL_PERIOD: Duration = Duration::from_millis(100);
+
+        /// Items not accessed for this amount of time are removed from the cache.
+        pub static ref CACHE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+    }
+
     /// The threshold controlling whether a node is in catch-up mode.
     /// A node is in catch-up mode if its local best epoch number is
     /// `CATCH_UP_EPOCH_LAG_THRESHOLD` behind the median of the epoch
     /// numbers of peers.
     pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
 
-    /// Frequency of checking request timeouts.
-    pub const CLEANUP_PERIOD_MS: u64 = 1000;
-
-    /// Frequency of re-triggering sync.
-    pub const SYNC_PERIOD_MS: u64 = 5000;
-
-    /// Timeout for `GetBlockHashesByEpoch` and `GetBlockHeaders` requests.
-    pub const EPOCH_REQUEST_TIMEOUT_MS: u64 = 2000;
-    pub const HEADER_REQUEST_TIMEOUT_MS: u64 = 2000;
-
-    /// Maximum time period we wait for a response for an on-demand query.
-    /// After this timeout has been reached, we try another peer or give up.
-    pub const MAX_POLL_TIME_MS: u64 = 1000;
-
-    /// Period of time to sleep between subsequent polls for on-demand queries.
-    pub const POLL_PERIOD_MS: u64 = 100;
-
-    /// (Maximum) number of epochs/headers requested in a single request.
+    /// (Maximum) number of items requested in a single request.
     pub const EPOCH_REQUEST_BATCH_SIZE: usize = 30;
     pub const HEADER_REQUEST_BATCH_SIZE: usize = 30;
+    pub const BLOOM_REQUEST_BATCH_SIZE: usize = 30;
+    pub const WITNESS_REQUEST_BATCH_SIZE: usize = 10;
+    pub const RECEIPT_REQUEST_BATCH_SIZE: usize = 30;
+    pub const BLOCK_TX_REQUEST_BATCH_SIZE: usize = 30;
+    pub const STATE_ROOT_REQUEST_BATCH_SIZE: usize = 30;
+    pub const STATE_ENTRY_REQUEST_BATCH_SIZE: usize = 30;
+    pub const TX_REQUEST_BATCH_SIZE: usize = 30;
+    pub const TX_INFO_REQUEST_BATCH_SIZE: usize = 30;
 
-    /// Maximum number of in-flight headers at any given time.
-    /// If we reach this limit, we will not request any more headers.
+    /// Maximum number of in-flight items at any given time.
+    /// If we reach this limit, we will not request any more.
     pub const MAX_HEADERS_IN_FLIGHT: usize = 500;
+    pub const MAX_WITNESSES_IN_FLIGHT: usize = 30;
+    pub const MAX_BLOOMS_IN_FLIGHT: usize = 500;
+    pub const MAX_RECEIPTS_IN_FLIGHT: usize = 100;
+    pub const MAX_BLOCK_TXS_IN_FLIGHT: usize = 100;
+    pub const MAX_STATE_ROOTS_IN_FLIGHT: usize = 100;
+    pub const MAX_STATE_ENTRIES_IN_FLIGHT: usize = 100;
+    pub const MAX_TXS_IN_FLIGHT: usize = 100;
+    pub const MAX_TX_INFOS_IN_FLIGHT: usize = 100;
 
     /// Maximum number of in-flight epoch requests at any given time.
     /// Similar to `MAX_HEADERS_IN_FLIGHT`. However, it is hard to match
@@ -153,14 +189,26 @@ pub mod light {
     /// Number of epochs to request in one round (in possibly multiple batches).
     pub const NUM_EPOCHS_TO_REQUEST: usize = 200;
 
-    /// Minimum number of missing headers during catch-up mode.
-    /// If we have fewer, we will try to request some more using a
-    /// `GetBlockHashesByEpoch` request.
+    /// Minimum number of missing items in the sync pipeline.
+    /// If we have fewer, we will try to request some more.
     pub const NUM_WAITING_HEADERS_THRESHOLD: usize = 1000;
+    pub const NUM_WAITING_WITNESSES_THRESHOLD: usize = 30;
 
-    /// Maximum number of epochs/headers to send to a light peer in a response.
+    /// Max number of epochs/headers/txs to send to a light peer in a response.
     pub const MAX_EPOCHS_TO_SEND: usize = 128;
     pub const MAX_HEADERS_TO_SEND: usize = 512;
+    pub const MAX_TXS_TO_SEND: usize = 1024;
+
+    /// During syncing, we might transiently have enough malicious blaming
+    /// blocks to consider a correct header incorrect. For this reason, we
+    /// first wait for enough header to accumulate before checking blaming.
+    pub const BLAME_CHECK_OFFSET: u64 = 20;
+
+    /// During log filtering, we stream a set of items (blooms, receipts, txs)
+    /// to match against. To make the process faster, we need to make sure that
+    /// there's always plenty of items in flight. This way, we can reduce idle
+    /// time when we're waiting to recveive an item.
+    pub const LOG_FILTERING_LOOKAHEAD: usize = 100;
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;

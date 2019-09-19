@@ -7,6 +7,7 @@ version = "0.1.1"
 edition = "2018"
 
 [dependencies]
+cfx-stratum = { path = "../blockgen/stratum" }
 keccak-hash = "0.1.2"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
@@ -23,7 +24,7 @@ secret-store = { path = "../secret_store" }
 rand = "0.5"
 error-chain = { version = "0.12", default-features = false }
 slab = "0.4"
-kvdb = "0.1"
+kvdb = {git="https://github.com/paritytech/parity-common.git", branch="ao-upstream-rocksdb", version = "0.2"}
 db = { path = "../db" }
 bit-set = "0.4"
 heapsize = "0.4"
@@ -35,9 +36,11 @@ num = "0.2"
 parity-crypto = "0.3.0"
 bn = { git = "https://github.com/paritytech/bn", default-features = false }
 lru = "0.1.11"
+lru_time_cache = "0.9.0"
 threadpool = "1.0"
 rayon = "1.0"
-rusqlite = "0.19"
+sqlite = "0.25"
+sqlite3-sys = "0.12"
 link-cut-tree = { path = "../util/link-cut-tree" }
 fenwick-tree = { path = "../util/fenwick-tree" }
 priority-send-queue = { path = "../util/priority-send-queue" }
@@ -46,6 +49,10 @@ metrics = { path = "../util/metrics" }
 hibitset = { path = "../util/hibitset" }
 futures = "0.1"
 memoffset = "0.5.1"
+malloc_size_of = {path = "../util/malloc_size_of"}
+malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
+fallible-iterator = "0.2"
+strfmt = "0.1"
 
 [dev-dependencies]
 rustc-hex = "1.0"

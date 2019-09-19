@@ -10,5 +10,5 @@ pub fn is_enabled() -> bool { ENABLED.load(ORDER) }
 pub fn enable() { ENABLED.store(true, ORDER); }
 
 pub trait Metric: Send + Sync + Reportable {
-    fn get_type(&self) -> &'static str;
+    fn get_type(&self) -> &str;
 }

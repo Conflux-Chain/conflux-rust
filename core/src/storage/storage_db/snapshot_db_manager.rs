@@ -12,14 +12,14 @@ pub trait SnapshotDbManagerTrait {
 
     fn new_snapshot_by_merging(
         &self, old_snapshot_root: &MerkleHash, snapshot_epoch_id: EpochId,
-        height: u64, delta_mpt: DeltaMptInserter,
-    ) -> Result<Arc<Self::SnapshotDb>>;
+        height: i64, delta_mpt: DeltaMptInserter,
+    ) -> Result<Self::SnapshotDb>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId,
-    ) -> Result<Option<Arc<Self::SnapshotDb>>>;
+    ) -> Result<Option<Self::SnapshotDb>>;
     fn get_snapshot(
         &self, snapshot_root: &MerkleHash,
-    ) -> Result<Option<Arc<Self::SnapshotDb>>>;
+    ) -> Result<Option<Self::SnapshotDb>>;
     fn destroy_snapshot(&self, snapshot_root: &MerkleHash) -> Result<()>;
 }
 
@@ -30,4 +30,3 @@ use super::{
     snapshot_db::*,
 };
 use primitives::{EpochId, MerkleHash};
-use std::sync::Arc;

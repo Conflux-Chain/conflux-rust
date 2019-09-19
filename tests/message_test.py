@@ -48,7 +48,7 @@ class MessageTest(ConfluxTestFramework):
         # wait_until(lambda: default_node.msg_count >= 3)
         self.log.info("Send GetBlocks message")
         handler = WaitHandler(default_node, GET_BLOCKS_RESPONSE)
-        self.send_msg(GetBlocks(with_public=0, hashes=[blocks[0]]))
+        self.send_msg(GetBlocks(with_public=False, hashes=[blocks[0]]))
         handler.wait()
         self.log.info("Received GetBlock response")
 
@@ -79,37 +79,20 @@ class MessageTest(ConfluxTestFramework):
     def test_socket_msg(self, node):
         self.log.info("testing invalid socket message ...")
 
-        # buf = struct.pack("<L", len(payload) + 1)[:3]
-        # buf += struct.pack("<B", packet_id)
-        # buf += payload
-
         # empty packet
         buf = struct.pack("<L", 0)[:3]
         assert node.p2p.state == "connected"
         node.p2p.send(buf)
         # node should disconnect this p2p connection
-        wait_until(lambda: node.p2p.state != "connected")
-
-        # empty payload
-        p2p = start_p2p_connection([self.nodes[0]])[0]
-        p2p.send_packet(PACKET_HELLO, b'')
-        wait_until(lambda: p2p.state != "connected")
+        wait_until(lambda: node.p2p.state != "connected", timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
         p2p.send_packet(PACKET_DISCONNECT, b'')
-        wait_until(lambda: p2p.state != "connected")
+        wait_until(lambda: p2p.state != "connected", timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
         p2p.send_packet(PACKET_PROTOCOL, b'')
-        wait_until(lambda: p2p.state != "connected")
-
-        # legel payload
-        p2p = start_p2p_connection([self.nodes[0]])[0]
-        p2p.send_packet(PACKET_PING, b'')
-        p2p.send_packet(PACKET_PONG, b'')
-        time.sleep(1)  # Give node 1s to disconnect if needed
-        assert p2p.state == "connected"
-
+        wait_until(lambda: p2p.state != "connected", timeout=3)
 
 if __name__ == "__main__":
     MessageTest().main()

@@ -5,9 +5,9 @@
 use crate::{
     io::{IoContext, StreamToken},
     throttling::THROTTLING_SERVICE,
-    Error,
+    Error, ErrorKind,
 };
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
 use metrics::{register_meter_with_group, Meter};
 use mio::{deprecated::*, tcp::*, *};
@@ -15,7 +15,7 @@ use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
-    marker::PhantomData,
+    net::SocketAddr,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
         Arc,
@@ -35,15 +35,21 @@ lazy_static! {
         register_meter_with_group("network_connection_data", "send_high");
 }
 
+/// Connection write status.
 #[derive(Debug, PartialEq, Eq)]
 pub enum WriteStatus {
+    /// Some data is still pending for current packet.
     Ongoing,
+    /// Give up to write data due to low priority.
     LowPriority,
+    /// All data sent.
     Complete,
 }
 
-pub const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
+const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
 
+/// Global counter for high priority packets.
+/// It is used among connections to send high priority packets.
 static HIGH_PRIORITY_PACKETS: AtomicUsize = AtomicUsize::new(0);
 
 fn incr_high_priority_packets() {
@@ -72,8 +78,79 @@ pub trait GenericSocket: Read + Write {}
 
 impl GenericSocket for TcpStream {}
 
-pub trait PacketSizer {
-    fn packet_size(_: &Bytes) -> usize;
+/// Trait to assemble/load packet with extra information.
+/// E.g. prefix packet with length information
+pub trait PacketAssembler: Send + Sync {
+    /// Check if the specified packet `len` is oversized.
+    fn is_oversized(&self, len: usize) -> bool;
+
+    /// Assemble packet with extra information.
+    fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error>;
+
+    /// Load packet and remove the extra information from the specified buffer.
+    fn load(&self, buf: &mut BytesMut) -> Option<BytesMut>;
+}
+
+/// Packet with guard to automatically update throttling and high priority
+/// packets counter.
+#[derive(Default)]
+struct Packet {
+    // data to write to socket
+    data: Vec<u8>,
+    // current data position to write to socket.
+    sending_pos: usize,
+    is_high_priority: bool,
+    throttling_size: usize,
+}
+
+impl Packet {
+    fn new(data: Vec<u8>, priority: SendQueuePriority) -> Result<Self, Error> {
+        // update throttling
+        let throttling_size = data.len();
+        THROTTLING_SERVICE.write().on_enqueue(throttling_size)?;
+
+        // update high priority packet counter
+        let is_high_priority = priority == SendQueuePriority::High;
+        if is_high_priority {
+            incr_high_priority_packets();
+        }
+
+        Ok(Packet {
+            data,
+            sending_pos: 0,
+            is_high_priority,
+            throttling_size,
+        })
+    }
+
+    fn set_high_priority(&mut self) {
+        if !self.is_high_priority {
+            incr_high_priority_packets();
+            self.is_high_priority = true;
+        }
+    }
+
+    fn write(&mut self, writer: &mut dyn Write) -> Result<usize, Error> {
+        if self.is_send_completed() {
+            return Ok(0);
+        }
+
+        let size = writer.write(&self.data[self.sending_pos..])?;
+        self.sending_pos += size;
+        Ok(size)
+    }
+
+    fn is_send_completed(&self) -> bool { self.sending_pos >= self.data.len() }
+}
+
+impl Drop for Packet {
+    fn drop(&mut self) {
+        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size);
+
+        if self.is_high_priority {
+            decr_high_priority_packets();
+        }
+    }
 }
 
 /// This information is to measure the congestion situation of network.
@@ -82,38 +159,37 @@ pub struct SendQueueStatus {
     queue_length: usize,
 }
 
-pub struct GenericConnection<Socket: GenericSocket, Sizer: PacketSizer> {
+pub struct GenericConnection<Socket: GenericSocket> {
+    /// Connection id (token)
     token: StreamToken,
+    /// Network socket
     socket: Socket,
-    recv_buf: Bytes,
-    send_queue: PrioritySendQueue<(Vec<u8>, usize)>,
+    /// Receive buffer
+    recv_buf: BytesMut,
+    /// Packets that waiting for sending out.
+    send_queue: PrioritySendQueue<Packet>,
+    /// Sending packet.
+    sending_packet: Option<Packet>,
+    /// Event flags this connection interested
     interest: Ready,
+    /// Registered flag
     registered: AtomicBool,
-    phantom: PhantomData<Sizer>,
+    /// Assemble packet with extra information before sending out.
+    assembler: Box<dyn PacketAssembler>,
 }
 
-impl<Socket: GenericSocket, Sizer: PacketSizer> Drop
-    for GenericConnection<Socket, Sizer>
-{
-    fn drop(&mut self) {
-        let mut service = THROTTLING_SERVICE.write();
-        while let Some(((packet, pos), priority)) = self.send_queue.pop_front()
-        {
-            if pos < packet.len() {
-                service.on_dequeue(packet.len() - pos);
-                if priority == SendQueuePriority::High {
-                    decr_high_priority_packets();
-                }
-            }
-        }
-    }
-}
-
-impl<Socket: GenericSocket, Sizer: PacketSizer>
-    GenericConnection<Socket, Sizer>
-{
+impl<Socket: GenericSocket> GenericConnection<Socket> {
+    /// Readable IO handler. Called when there is some data to be read.
     pub fn readable(&mut self) -> io::Result<Option<Bytes>> {
         let mut buf: [u8; 1024] = [0; 1024];
+
+        // Read until the socket has no data to read.
+        // This is to avoid accumulating too much data in kernal.
+        //
+        // In this way, N packets may be read at a time, and Readable IO event
+        // will not be triggered again if no more data sent to socket. So, the
+        // caller should guarantee to read all packets in a loop when Readable
+        // IO event triggered.
         loop {
             match self.socket.read(&mut buf) {
                 Ok(size) => {
@@ -138,125 +214,141 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
             }
         }
 
-        let size = Sizer::packet_size(&self.recv_buf);
-        if size == 0 {
-            Ok(None)
-        } else {
-            trace!("Packet received, token = {}, size = {}", self.token, size);
-            Ok(Some(self.recv_buf.split_to(size)))
+        let packet = self.assembler.load(&mut self.recv_buf);
+
+        if let Some(ref p) = packet {
+            trace!(
+                "Packet received, token = {}, size = {}",
+                self.token,
+                p.len()
+            );
         }
+
+        Ok(packet.map(|p| p.freeze()))
     }
 
-    pub fn write_raw_data(&mut self, data: &[u8]) -> Result<usize, Error> {
+    /// Send the specified data out immediately
+    pub fn write_raw_data(
+        &mut self, mut data: Vec<u8>,
+    ) -> Result<usize, Error> {
         trace!(
-            "Sending raw buffer, token = {}, data = {:?}",
+            "Sending raw buffer, token = {} data_len = {}, data = {:?}",
             self.token,
+            data.len(),
             data
         );
 
-        let size = self.socket.write(data)?;
-
-        trace!(
-            "Succeed to send socket data, token = {}, size = {}",
-            self.token,
-            size,
-        );
-
-        WRITE_METER.mark(size);
-        Ok(size)
-    }
-
-    fn write_next_from_queue(&mut self) -> Result<WriteStatus, Error> {
-        if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
-            && has_high_priority_packets()
-        {
-            trace!(
-                "Give up to send socket data due to low priority, token = {}",
-                self.token
-            );
-            return Ok(WriteStatus::LowPriority);
-        }
-
-        let buf = match self.send_queue.front_mut() {
-            Some((buf, promoted)) => {
-                if promoted {
-                    trace!("Low priority packet promoted to high priority, token = {}", self.token);
-                    incr_high_priority_packets();
-                }
-                buf
-            }
-            None => return Ok(WriteStatus::Complete),
-        };
-        let len = buf.0.len();
-        let pos = buf.1;
-        if pos >= len {
-            error!(
-                "Unexpected connection data, token = {}, len = {}, pos = {}",
-                self.token, len, pos
-            );
-            return Ok(WriteStatus::Complete);
-        }
-
-        let size = self.socket.write(&buf.0[pos..])?;
+        self.assembler.assemble(&mut data)?;
+        let size = self.socket.write(&data)?;
 
         trace!(
             "Succeed to send socket data, token = {}, size = {}",
             self.token,
             size
         );
-        THROTTLING_SERVICE.write().on_dequeue(size);
+
+        WRITE_METER.mark(size);
+        Ok(size)
+    }
+
+    /// Continue to send out the uncompleted packet, or pop new packet from
+    /// queue to send out.
+    fn write_next_from_queue(&mut self) -> Result<WriteStatus, Error> {
+        // In case of last packet is all sent out.
+        if self.sending_packet.is_none() {
+            // give up to send low priority packet
+            if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
+                && has_high_priority_packets()
+            {
+                trace!("Give up to send socket data due to low priority, token = {}", self.token);
+                return Ok(WriteStatus::LowPriority);
+            }
+
+            // get packet from queue to send
+            let (mut packet, priority) = match self.send_queue.pop_front() {
+                Some(item) => item,
+                None => return Ok(WriteStatus::Complete),
+            };
+
+            if priority != SendQueuePriority::High {
+                trace!(
+                    "Low priority packet promoted to high priority, token = {}",
+                    self.token
+                );
+                packet.set_high_priority();
+            }
+
+            // assemble packet to send, e.g. prefix length to packet
+            self.assembler.assemble(&mut packet.data)?;
+
+            trace!(
+                "Packet ready for sent, token = {}, size = {}",
+                self.token,
+                packet.data.len()
+            );
+
+            self.sending_packet = Some(packet);
+        }
+
+        let packet = self
+            .sending_packet
+            .as_mut()
+            .expect("should pop packet from send queue");
+
+        let size = packet.write(&mut self.socket)?;
+
+        trace!(
+            "Succeed to send socket data, token = {}, size = {}",
+            self.token,
+            size
+        );
+
         WRITE_METER.mark(size);
 
-        // NOTE: the line below does not work due the error:
-        // `cannot borrow `*self` as mutable more than once at a time`
-        // let size = self.write_raw_data(&buf.0)?;
-
-        if pos + size < len {
-            buf.1 += size;
-            Ok(WriteStatus::Ongoing)
-        } else {
-            trace!("Packet sent, token = {}, size = {}", self.token, len);
-            decr_high_priority_packets();
+        if packet.is_send_completed() {
+            trace!("Packet sent, token = {}", self.token);
+            self.sending_packet = None;
             Ok(WriteStatus::Complete)
+        } else {
+            Ok(WriteStatus::Ongoing)
         }
     }
 
+    /// Writable IO handler. Called when the socket is ready to send.
     pub fn writable<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>,
     ) -> Result<WriteStatus, Error> {
-        let status = self.write_next_from_queue();
+        let status = self.write_next_from_queue()?;
 
-        if let Ok(WriteStatus::Complete) = status {
-            self.send_queue.pop_front();
-        }
-
-        if self.send_queue.is_empty() {
+        if self.sending_packet.is_none() && self.send_queue.is_empty() {
             self.interest.remove(Ready::writable());
         }
 
         io.update_registration(self.token)?;
 
-        status
+        Ok(status)
     }
 
+    /// Add a packet to send queue.
     pub fn send<Message: Sync + Send + Clone + 'static>(
-        &mut self, io: &IoContext<Message>, data: &[u8],
+        &mut self, io: &IoContext<Message>, data: Vec<u8>,
         priority: SendQueuePriority,
     ) -> Result<SendQueueStatus, Error>
     {
         if !data.is_empty() {
             let size = data.len();
+            if self.assembler.is_oversized(size) {
+                return Err(ErrorKind::OversizedPacket.into());
+            }
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
 
-            SEND_METER.mark(size);
-            THROTTLING_SERVICE.write().on_enqueue(size)?;
-            let message = data.to_vec();
-            self.send_queue.push_back((message, 0), priority);
+            let packet = Packet::new(data, priority)?;
+            self.send_queue.push_back(packet, priority);
 
+            SEND_METER.mark(size);
             match priority {
                 SendQueuePriority::High => {
-                    incr_high_priority_packets();
                     SEND_HIGH_PRIORITY_METER.mark(size);
                 }
                 SendQueuePriority::Normal => {
@@ -278,21 +370,23 @@ impl<Socket: GenericSocket, Sizer: PacketSizer>
     pub fn is_sending(&self) -> bool { self.interest.is_writable() }
 }
 
-pub type Connection<Sizer> = GenericConnection<TcpStream, Sizer>;
+pub type Connection = GenericConnection<TcpStream>;
 
-impl<Sizer: PacketSizer> Connection<Sizer> {
+impl Connection {
     pub fn new(token: StreamToken, socket: TcpStream) -> Self {
         Connection {
             token,
             socket,
-            recv_buf: Bytes::new(),
+            recv_buf: BytesMut::new(),
             send_queue: PrioritySendQueue::new(),
+            sending_packet: None,
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
-            phantom: PhantomData,
+            assembler: Box::new(PacketWithLenAssembler::default()),
         }
     }
 
+    /// Register this connection with the IO event loop.
     pub fn register_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
@@ -321,6 +415,8 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
         Ok(())
     }
 
+    /// Update connection registration. Should be called at the end of the IO
+    /// handler.
     pub fn update_socket<H: Handler>(
         &self, reg: Token, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
@@ -341,6 +437,8 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
         }
     }
 
+    /// Delete connection registration. Should be called at the end of the IO
+    /// handler.
     pub fn deregister_socket<H: Handler>(
         &self, event_loop: &mut EventLoop<H>,
     ) -> io::Result<()> {
@@ -351,10 +449,26 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
 
     pub fn token(&self) -> StreamToken { self.token }
 
+    /// Get remote peer address
+    pub fn remote_addr(&self) -> io::Result<SocketAddr> {
+        self.socket.peer_addr()
+    }
+
+    /// Get remote peer address string
+    pub fn remote_addr_str(&self) -> String {
+        self.remote_addr()
+            .map(|a| a.to_string())
+            .unwrap_or_else(|_| "Unknown".to_owned())
+    }
+
     pub fn details(&self) -> ConnectionDetails {
         ConnectionDetails {
             token: self.token,
             recv_buf: self.recv_buf.len(),
+            sending_buf: self
+                .sending_packet
+                .as_ref()
+                .map_or(0, |p| p.data.len() - p.sending_pos),
             priority_queue_normal: self
                 .send_queue
                 .len_by_priority(SendQueuePriority::Normal),
@@ -367,28 +481,119 @@ impl<Sizer: PacketSizer> Connection<Sizer> {
     }
 }
 
+/// User friendly connection information that used by Debug RPC.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionDetails {
     pub token: StreamToken,
     pub recv_buf: usize,
+    pub sending_buf: usize,
     pub priority_queue_normal: usize,
     pub priority_queue_high: usize,
     pub interest: String,
     pub registered: bool,
 }
 
+/// Assembler that prefix packet with length information.
+///
+/// To avoid memory copy, the first n-bytes will be swapped into the end, and
+/// use the first n-bytes for packet length information.
+pub struct PacketWithLenAssembler {
+    data_len_bytes: usize,
+    max_data_len: usize,
+}
+
+impl PacketWithLenAssembler {
+    fn new(data_len_bytes: usize, max_packet_len: Option<usize>) -> Self {
+        assert!(data_len_bytes > 0 && data_len_bytes <= 3);
+
+        let max = usize::max_value() >> (64 - 8 * data_len_bytes);
+        let max_packet_len = max_packet_len.unwrap_or(max);
+        assert!(max_packet_len > data_len_bytes && max_packet_len <= max);
+
+        PacketWithLenAssembler {
+            data_len_bytes,
+            max_data_len: max_packet_len - data_len_bytes,
+        }
+    }
+}
+
+impl Default for PacketWithLenAssembler {
+    fn default() -> Self {
+        PacketWithLenAssembler::new(3, Some(MAX_PAYLOAD_SIZE))
+    }
+}
+
+impl PacketAssembler for PacketWithLenAssembler {
+    #[inline]
+    fn is_oversized(&self, len: usize) -> bool { len > self.max_data_len }
+
+    fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error> {
+        if self.is_oversized(data.len()) {
+            return Err(ErrorKind::OversizedPacket.into());
+        }
+
+        // first n-bytes swapped to the end
+        let swapped: Vec<u8> =
+            data.iter().take(self.data_len_bytes).cloned().collect();
+
+        // extend n-bytes
+        let data_len = data.len();
+        data.resize(data_len + self.data_len_bytes, 0);
+
+        // fill first n-bytes with LE data_len
+        data[..self.data_len_bytes]
+            .copy_from_slice(&data_len.to_le_bytes()[..self.data_len_bytes]);
+
+        // fill the last n-bytes with swapped values
+        let start = data.len() - swapped.len();
+        data[start..].copy_from_slice(&swapped);
+
+        Ok(())
+    }
+
+    fn load(&self, buf: &mut BytesMut) -> Option<BytesMut> {
+        if buf.len() < self.data_len_bytes {
+            return None;
+        }
+
+        // parse data length from first n-bytes
+        let mut le_bytes = [0u8; 8];
+        le_bytes
+            .split_at_mut(self.data_len_bytes)
+            .0
+            .copy_from_slice(&buf[..self.data_len_bytes]);
+        let data_size = usize::from_le_bytes(le_bytes);
+
+        // some data not received yet
+        if buf.len() < self.data_len_bytes + data_size {
+            return None;
+        }
+
+        let mut packet = buf.split_to(self.data_len_bytes + data_size);
+
+        if data_size >= self.data_len_bytes {
+            // last n-bytes are swapped
+            let swapped = packet.split_off(data_size);
+            packet[..self.data_len_bytes].copy_from_slice(&swapped);
+        } else {
+            // just ignore the first n-bytes of msg length
+            packet.split_to(self.data_len_bytes);
+        };
+
+        Some(packet)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::io::*;
+    use mio::Ready;
     use std::{
         cmp,
         io::{Read, Result, Write},
     };
-
-    use super::*;
-    use crate::io::*;
-    use bytes::{Buf, Bytes, IntoBuf};
-    use mio::Ready;
 
     struct TestSocket {
         read_buf: Vec<u8>,
@@ -455,25 +660,7 @@ mod tests {
 
     impl GenericSocket for TestSocket {}
 
-    struct TestPacketSizer;
-
-    impl PacketSizer for TestPacketSizer {
-        fn packet_size(raw_packet: &Bytes) -> usize {
-            let buf = &raw_packet.into_buf() as &dyn Buf;
-            if buf.remaining() >= 1 {
-                let size = buf.bytes()[0] as usize;
-                if buf.remaining() >= size {
-                    size
-                } else {
-                    0
-                }
-            } else {
-                0
-            }
-        }
-    }
-
-    type TestConnection = GenericConnection<TestSocket, TestPacketSizer>;
+    type TestConnection = GenericConnection<TestSocket>;
 
     impl TestConnection {
         fn new() -> Self {
@@ -481,10 +668,11 @@ mod tests {
                 token: 1234567890usize,
                 socket: TestSocket::new(),
                 send_queue: PrioritySendQueue::new(),
-                recv_buf: Bytes::new(),
+                sending_packet: None,
+                recv_buf: BytesMut::new(),
                 interest: Ready::hup() | Ready::readable(),
                 registered: AtomicBool::new(false),
-                phantom: PhantomData,
+                assembler: Box::new(PacketWithLenAssembler::new(1, None)),
             }
         }
     }
@@ -508,35 +696,42 @@ mod tests {
     #[test]
     fn connection_write_is_buffered() {
         let mut connection = TestConnection::new();
-        connection.socket = TestSocket::with_buf(1024);
-        let data = (vec![0; 10240], 0);
+        connection.socket = TestSocket::with_buf(10);
+        let packet =
+            Packet::new(vec![0; 60].into(), SendQueuePriority::High).unwrap();
         connection
             .send_queue
-            .push_back(data, SendQueuePriority::High);
-        incr_high_priority_packets();
+            .push_back(packet, SendQueuePriority::High);
 
         let status = connection.writable(&test_io());
 
         assert!(status.is_ok());
-        assert_eq!(1, connection.send_queue.len());
+        assert_eq!(0, connection.send_queue.len());
+
+        let sending_packet = connection.sending_packet.unwrap();
+        assert_eq!(sending_packet.data.len(), 61);
+        assert_eq!(sending_packet.sending_pos, 10);
     }
 
     #[test]
     fn connection_read() {
         let mut connection = TestConnection::new();
 
-        connection.socket.read_buf = vec![3, 0];
+        let mut data = vec![1, 3, 5, 7];
+        connection.assembler.assemble(&mut data).unwrap();
+
+        connection.socket.read_buf = data[..2].to_vec();
         {
             let status = connection.readable();
             assert!(status.is_ok());
             assert!(status.unwrap().is_none());
         }
 
-        connection.socket.read_buf.extend_from_slice(&[0u8]);
+        connection.socket.read_buf.extend_from_slice(&data[2..]);
         {
             let status = connection.readable();
             assert!(status.is_ok());
-            assert_eq!(status.unwrap().unwrap().len(), 3);
+            assert_eq!(&status.unwrap().unwrap()[..], &[1, 3, 5, 7]);
         }
 
         {
@@ -544,5 +739,58 @@ mod tests {
             assert!(status.is_ok());
             assert!(status.unwrap().is_none());
         }
+    }
+
+    #[test]
+    fn test_assembler_oversized() {
+        let assembler = PacketWithLenAssembler::default();
+        assert_eq!(assembler.is_oversized(MAX_PAYLOAD_SIZE - 4), false);
+        assert_eq!(assembler.is_oversized(MAX_PAYLOAD_SIZE - 3), false);
+        assert_eq!(assembler.is_oversized(MAX_PAYLOAD_SIZE - 2), true);
+    }
+
+    #[test]
+    fn test_assembler_assemble() {
+        let assembler = PacketWithLenAssembler::default();
+
+        // data length > 3
+        let mut data = vec![1, 2, 3, 4, 5];
+        assembler.assemble(&mut data).unwrap();
+        assert_eq!(data, vec![5, 0, 0, 4, 5, 1, 2, 3]);
+
+        // data length == 3
+        let mut data = vec![1, 2, 3];
+        assembler.assemble(&mut data).unwrap();
+        assert_eq!(data, vec![3, 0, 0, 1, 2, 3]);
+
+        // data length < 3
+        let mut data = vec![1, 2];
+        assembler.assemble(&mut data).unwrap();
+        assert_eq!(data, vec![2, 0, 0, 1, 2]);
+    }
+
+    #[test]
+    fn test_assembler_load() {
+        let assembler = PacketWithLenAssembler::default();
+
+        // packet not ready
+        assert_eq!(assembler.load(&mut vec![5].into()), None);
+        assert_eq!(assembler.load(&mut vec![5, 0, 0].into()), None);
+        assert_eq!(assembler.load(&mut vec![5, 0, 0, 4, 5, 1, 2].into()), None);
+
+        // packet ready and length > 3
+        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3].into();
+        assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
+        assert_eq!(buf.is_empty(), true);
+
+        // packet ready and length < 3
+        let mut buf = vec![2, 0, 0, 1, 2].into();
+        assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2]);
+        assert_eq!(buf.is_empty(), true);
+
+        // packet ready with some data of the next packet
+        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3, 6, 7].into();
+        assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
+        assert_eq!(&buf[..], &[6, 7]);
     }
 }

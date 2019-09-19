@@ -32,13 +32,15 @@ extern crate strum;
 extern crate strum_macros;
 extern crate keccak_hash;
 
-pub type ProtocolId = [u8; 3];
+pub const PROTOCOL_ID_SIZE: usize = 3;
+pub type ProtocolId = [u8; PROTOCOL_ID_SIZE];
 pub type HandlerWorkType = u8;
 pub type PeerId = usize;
 
 mod connection;
 mod discovery;
 mod error;
+mod handshake;
 mod ip;
 mod ip_utils;
 mod node_database;
@@ -71,6 +73,7 @@ use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde_derive::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -84,6 +87,8 @@ pub const NODE_TAG_ARCHIVE: &str = "archive";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkConfiguration {
+    /// Network identifier
+    pub id: u64,
     /// Directory path to store general network configuration. None means
     /// nothing will be saved
     pub config_path: Option<String>,
@@ -139,6 +144,7 @@ impl Default for NetworkConfiguration {
 impl NetworkConfiguration {
     pub fn new() -> Self {
         NetworkConfiguration {
+            id: 1,
             config_path: Some("./net_config".to_string()),
             listen_address: None,
             public_address: None,
@@ -230,6 +236,7 @@ pub trait NetworkProtocolHandler: Sync + Send {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum UpdateNodeOperation {
     Failure,
     Demotion,

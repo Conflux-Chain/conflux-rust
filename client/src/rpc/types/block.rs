@@ -6,7 +6,11 @@ use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
 use cfxcore::consensus::ConsensusGraphInner;
 use jsonrpc_core::Error as RpcError;
 use primitives::{
-    receipt::{TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS},
+    receipt::{
+        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_SUCCESS,
+    },
     Block as PrimitiveBlock, BlockHeaderBuilder, StateRootWithAuxInfo,
     TransactionAddress,
 };
@@ -24,32 +28,6 @@ pub enum BlockTransactions {
     /// Full transactions
     Full(Vec<Transaction>),
 }
-
-//impl BlockTransactions {
-//    pub fn new(
-//        transactions: &Vec<Arc<SignedTransaction>>, include_txs: bool,
-//        consensus_inner: &mut ConsensusGraphInner,
-//    ) -> Self
-//    {
-//        match include_txs {
-//            false => BlockTransactions::Hashes(
-//                transactions.iter().map(|x| H256::from(x.hash())).collect(),
-//            ),
-//            true => BlockTransactions::Full(
-//                transactions
-//                    .iter()
-//                    .map(|x| {
-//                        Transaction::from_signed(
-//                            x,
-//                            consensus_inner
-//                                .transaction_address_by_hash(&x.hash, false),
-//                        )
-//                    })
-//                    .collect(),
-//            ),
-//        }
-//    }
-//}
 
 impl Serialize for BlockTransactions {
     fn serialize<S: Serializer>(
@@ -160,7 +138,7 @@ impl Block {
             ),
             true => {
                 let tx_vec = match consensus_inner
-                    .block_receipts_by_hash(&b.hash(), false)
+                    .block_receipts_by_hash(&b.hash(), false /* update_cache */)
                 {
                     Some(receipts) => b
                         .transactions
@@ -169,7 +147,8 @@ impl Block {
                         .map(|(idx, tx)| {
                             let receipt = receipts.get(idx).unwrap();
                             match receipt.outcome_status {
-                                TRANSACTION_OUTCOME_SUCCESS => {
+                                TRANSACTION_OUTCOME_SUCCESS
+                                | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
                                     Transaction::from_signed(
                                         tx,
                                         Some(Receipt::new(
@@ -182,7 +161,7 @@ impl Block {
                                         )),
                                     )
                                 }
-                                TRANSACTION_OUTCOME_EXCEPTION => {
+                                TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
                                     Transaction::from_signed(tx, None)
                                 }
                                 _ => {
@@ -225,10 +204,7 @@ impl Block {
             // PrimitiveBlock does not contain this information
             epoch_number: consensus_inner
                 .get_block_epoch_number(&b.block_header.hash())
-                .map_or(None, |x| match x {
-                    std::u64::MAX => None,
-                    _ => Some(x.into()),
-                }),
+                .map(Into::into),
             // fee system
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
@@ -355,7 +331,7 @@ mod tests {
     fn test_serialize_block_transactions() {
         let t = BlockTransactions::Full(vec![Transaction::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","v":"0x0","r":"0x0","s":"0x0"}]"#);
+        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
 
         let t = BlockTransactions::Hashes(vec![H256::default().into()]);
         let serialized = serde_json::to_string(&t).unwrap();
@@ -375,7 +351,7 @@ mod tests {
 
         let result_block_transactions =
             BlockTransactions::Full(vec![Transaction::default()]);
-        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","v":"0x0","r":"0x0","s":"0x0"}]"#;
+        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);

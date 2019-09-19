@@ -2,7 +2,7 @@
 
 import argparse
 import os
-
+import time
 
 def execute(cmd, retry, cmd_description):
     while True:
@@ -13,6 +13,7 @@ def execute(cmd, retry, cmd_description):
         print("Failed to {}, return code = {}, retry = {} ...".format(cmd_description, ret, retry))
         assert retry > 0
         retry -= 1
+        time.sleep(1)
 
 def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
     cmd = 'parallel-ssh -O "StrictHostKeyChecking no" -h {} -p 400 \"{}\" > /dev/null 2>&1'.format(ips_file, remote_cmd)
@@ -23,7 +24,7 @@ def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
     execute(cmd, retry, cmd_description)
 
 def kill_remote_conflux(ips_file:str):
-    pssh(ips_file, "killall -9 conflux || echo already killed", 3, "kill remote conflux")
+    pssh(ips_file, "killall conflux || echo already killed", 3, "kill remote conflux")
 
 def cleanup_remote_logs(ips_file:str):
     pssh(ips_file, "rm -f *.tgz *.out; rm -rf /tmp/conflux_test_*")
@@ -106,6 +107,7 @@ class LatencyExperiment(ArgumentHolder):
         self.simulate_log_file = "exp.log"
         self.stat_log_file = "exp_stat_latency.log"
         self.stat_archive_file = "exp_stat_latency.tgz"
+        self.enable_flamegraph = False
 
         self.exp_name = "latency_latest"
         self.nodes_per_host = 1
@@ -125,10 +127,16 @@ class LatencyExperiment(ArgumentHolder):
         self.metrics_report_interval_ms = 3000
         self.send_tx_period_ms = 1300
         self.txgen_account_count = 1000
+        self.slave_count=10
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
         ArgumentHolder.__init__(self)
+        if os.path.getsize("./genesis_secrets.txt") % 65 != 0:
+            print("genesis secrets account error, file size should be multiple of 65")
+            exit()
+
+        self.txgen_account_count= int((os.path.getsize("./genesis_secrets.txt")/65)//self.slave_count)
 
     def run(self):
         for config in RemoteSimulateConfig.parse(self.batch_config):
@@ -157,14 +165,25 @@ class LatencyExperiment(ArgumentHolder):
             self.stat_latency(config)
 
             print("Collecting metrics ...")
-            execute("sh copy_metrics.sh {} > /dev/null".format(self.tag(config)), 3, "collect metrics")
+            tag = self.tag(config)
+            execute("./copy_file_from_slave.sh metrics.log {} > /dev/null".format(tag), 3, "collect metrics")
+            if self.enable_flamegraph:
+                try:
+                    execute("./copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
+                except:
+                    print("Failed to copy flamegraph file conflux.svg, please try again via copy_file_from_slave.sh in manual")
+
+            execute("cp exp.log {}.exp.log".format(tag), 3, "copy exp.log")
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
-        os.system("tar cvfz {} {} *.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file))
+        cmd = "tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file)
+        if self.enable_flamegraph:
+            cmd = cmd + " *.conflux.svg"
+        os.system(cmd)
 
     def copy_remote_logs(self):
-        execute("sh copy_logs.sh > /dev/null", 3, "copy logs")
+        execute("./copy_logs.sh > /dev/null", 3, "copy logs")
         os.system("echo `ls logs/logs_tmp | wc -l` logs copied.")
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
@@ -196,6 +215,9 @@ class LatencyExperiment(ArgumentHolder):
 
         if self.enable_tx_propagation:
             cmd.extend(["--enable-tx-propagation"])
+
+        if self.enable_flamegraph:
+            cmd.extend(["--enable-flamegraph"])
 
         cmd.extend([">", self.simulate_log_file])
         cmd = " ".join(cmd)

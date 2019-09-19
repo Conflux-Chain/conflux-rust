@@ -26,7 +26,7 @@ use jsonrpc_pubsub::{typed, SubscriptionId};
 use crate::rpc::types::pubsub;
 
 /// Cfx PUB-SUB rpc interface.
-#[rpc]
+#[rpc(server)]
 pub trait PubSub {
     type Metadata;
 
@@ -34,7 +34,7 @@ pub trait PubSub {
     #[pubsub(
         subscription = "cfx_subscription",
         subscribe,
-        name = "cfx_subscription"
+        name = "cfx_subscribe"
     )]
     fn subscribe(
         &self, _: Self::Metadata, _: typed::Subscriber<pubsub::Result>,

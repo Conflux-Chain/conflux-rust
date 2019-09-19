@@ -5,3 +5,4 @@
 pub mod cfx;
 pub mod common;
 pub mod light;
+pub mod pubsub;

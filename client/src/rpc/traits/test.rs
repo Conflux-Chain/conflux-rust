@@ -17,14 +17,11 @@ pub trait TestRpc {
     #[rpc(name = "sayhello")]
     fn say_hello(&self) -> RpcResult<String>;
 
-    #[rpc(name = "getbestblockhash")]
-    fn get_best_block_hash(&self) -> RpcResult<H256>;
-
     #[rpc(name = "getblockcount")]
     fn get_block_count(&self) -> RpcResult<u64>;
 
     #[rpc(name = "getgoodput")]
-    fn get_goodput(&self) -> RpcResult<isize>;
+    fn get_goodput(&self) -> RpcResult<String>;
 
     #[rpc(name = "generate")]
     fn generate(

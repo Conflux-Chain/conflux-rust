@@ -21,8 +21,5 @@ log = "0.4"
 [workspace]
 # Note: try to list it in the top level workspace and to exclude it from cfxcore.
 
-[patch.crates-io]
-heapsize = { git = "https://github.com/cheme/heapsize.git", branch = "ec-macfix" }
-
 [profile.release]
 debug = false

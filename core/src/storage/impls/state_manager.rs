@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub use super::super::super::db::COL_DELTA_TRIE;
-
 // TODO: Set the parameter large enough because we haven't implement background
 // snapshotting.
 /// The rule should be somewhat friendly to new miners so that they know which
@@ -16,7 +14,7 @@ pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
 
 // TODO: remove option on intermediate tree.
 pub type StateTrees = (
-    Arc<SnapshotDb>,
+    SnapshotDb,
     Option<Arc<DeltaMpt>>,
     Option<NodeRefDeltaMpt>,
     Arc<DeltaMpt>,
@@ -53,9 +51,8 @@ impl StateManager {
     pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Self {
         debug!("Storage conf {:?}", conf);
 
-        let storage_manager = Arc::new(StorageManager::new(
-            DeltaDbManagerRocksdb::new(db.clone()),
-        ));
+        let storage_manager =
+            Arc::new(StorageManager::new(DeltaDbManager::new(db.clone())));
 
         // FIXME: move the commit_lock into delta_mpt, along with the row_number
         // FIXME: reading into the new_delta_mpt method.

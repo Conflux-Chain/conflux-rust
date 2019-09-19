@@ -22,11 +22,10 @@ use cfxcore::{
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use network::{
     node_table::{Node, NodeId},
-    throttling, SessionDetails,
+    throttling, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{
-    filter::FilterError, Action, SignedTransaction, Transaction,
-    TransactionWithSignature,
+    Action, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
@@ -38,12 +37,15 @@ pub struct RpcImpl {
     sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
+    tx_gen: Arc<TransactionGenerator>,
 }
+use txgen::TransactionGenerator;
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
+        tx_gen: Arc<TransactionGenerator>,
     ) -> Self
     {
         RpcImpl {
@@ -51,7 +53,24 @@ impl RpcImpl {
             sync,
             block_gen,
             tx_pool,
+            tx_gen,
         }
+    }
+
+    fn code(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        let epoch_number = epoch_number.unwrap_or(EpochNumber::LatestState);
+        let address: H160 = addr.into();
+        info!(
+            "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
+            address, epoch_number
+        );
+
+        self.consensus
+            .get_code(address, epoch_number.into())
+            .map(Bytes::new)
+            .map_err(|err| RpcError::invalid_params(err))
     }
 
     fn balance(
@@ -112,7 +131,7 @@ impl RpcImpl {
             })
             .and_then(|tx| {
                 let (signed_trans, failed_trans) = self.tx_pool.insert_new_transactions(
-                    &vec![tx],
+                    vec![tx],
                 );
                 if signed_trans.len() + failed_trans.len() > 1 {
                     // This should never happen
@@ -137,6 +156,68 @@ impl RpcImpl {
                     }
                 }
             })
+    }
+
+    fn send_usable_genesis_accounts(
+        &self, account_start_index: usize,
+    ) -> RpcResult<Bytes> {
+        info!(
+            "RPC Request: send_usable_genesis_accounts start from {:?}",
+            account_start_index
+        );
+        self.tx_gen
+            .set_genesis_accounts_start_index(account_start_index);
+        Ok(Bytes::new("1".into()))
+    }
+
+    pub fn transaction_by_hash(
+        &self, hash: RpcH256,
+    ) -> RpcResult<Option<RpcTransaction>> {
+        let hash: H256 = hash.into();
+        info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
+
+        if let Some((transaction, receipt, tx_address)) =
+            self.consensus.get_transaction_info_by_hash(&hash)
+        {
+            Ok(Some(RpcTransaction::from_signed(
+                &transaction,
+                Some(RpcReceipt::new(transaction.clone(), receipt, tx_address)),
+            )))
+        } else {
+            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
+                return Ok(Some(RpcTransaction::from_signed(
+                    &transaction,
+                    None,
+                )));
+            }
+
+            Ok(None)
+        }
+    }
+
+    fn transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> RpcResult<Option<RpcReceipt>> {
+        let hash: H256 = tx_hash.into();
+        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        let transaction_info =
+            self.consensus.get_transaction_info_by_hash(&hash);
+        let (tx, receipt, address) = match transaction_info {
+            None => return Ok(None),
+            Some(info) => info,
+        };
+        let hash = address.block_hash.into();
+        let mut receipt = RpcReceipt::new(tx, receipt, address);
+        let epoch_number = self.consensus.get_block_epoch_number(&hash);
+        receipt.set_epoch_number(epoch_number);
+        if let Some(pivot_height) = epoch_number {
+            if let Some(state_root) =
+                self.consensus.get_state_root_by_pivot_height(pivot_height)
+            {
+                receipt.set_state_root(RpcH256::from(state_root));
+            }
+        }
+        Ok(Some(receipt))
     }
 
     fn generate(
@@ -317,11 +398,8 @@ impl RpcImpl {
         info!("RPC Request: cfx_getLogs({:?})", filter);
         self.consensus
             .logs(filter.into())
-            .map_err(|e| match e {
-                FilterError::InvalidEpochNumber { .. } => {
-                    RpcError::invalid_params(format!("{}", e))
-                }
-            })
+            .map_err(|e| format!("{}", e))
+            .map_err(RpcError::invalid_params)
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
     }
 
@@ -383,16 +461,19 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
-            fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn transaction_count(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         }
 
         target self.rpc_impl {
+            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
+            fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
+            fn transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
     }
 }
@@ -416,9 +497,8 @@ impl TestRpc for TestRpcImpl {
             fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
             fn chain(&self) -> RpcResult<Vec<RpcBlock>>;
             fn drop_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
-            fn get_best_block_hash(&self) -> RpcResult<H256>;
             fn get_block_count(&self) -> RpcResult<u64>;
-            fn get_goodput(&self) -> RpcResult<isize>;
+            fn get_goodput(&self) -> RpcResult<String>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>>;
             fn get_status(&self) -> RpcResult<RpcStatus>;
@@ -457,6 +537,7 @@ impl DebugRpc for DebugRpcImpl {
             fn clear_tx_pool(&self) -> RpcResult<()>;
             fn net_high_priority_packets(&self) -> RpcResult<usize>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
+            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
             fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>>;

@@ -2,10 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[macro_use]
+pub mod utils;
+
 pub(self) mod snapshot_manager;
 pub mod state;
 pub mod state_manager;
-pub(self) mod storage_db;
+#[macro_use]
+pub mod storage_db;
 
 pub mod tests;
 
@@ -20,11 +24,16 @@ pub use self::{
         multi_version_merkle_patricia_trie::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
         },
+        storage_db::{
+            kvdb_rocksdb::KvdbRocksdb, kvdb_sqlite::KvdbSqlite,
+            sqlite::SqliteConnection,
+        },
     },
     state::{State as Storage, StateTrait as StorageTrait},
     state_manager::{
         SnapshotAndEpochIdRef, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,
     },
+    storage_db::KeyValueDbTrait,
     tests::new_state_manager_for_testing as new_storage_manager_for_testing,
 };

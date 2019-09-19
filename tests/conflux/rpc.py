@@ -11,9 +11,10 @@ import sys
 sys.path.append("..")
 
 from test_framework.util import (
-    assert_greater_than, 
-    assert_greater_than_or_equal, 
-    assert_is_hash_string, 
+    assert_greater_than,
+    assert_greater_than_or_equal,
+    assert_is_hash_string,
+    assert_is_hex_string,
     wait_until, checktx
 )
 
@@ -25,6 +26,11 @@ class RpcClient:
         self.EPOCH_EARLIEST = "earliest"
         self.EPOCH_LATEST_MINED = "latest_mined"
         self.EPOCH_LATEST_STATE = "latest_state"
+
+        # update node operations
+        self.UPDATE_NODE_OP_FAILURE = "Failure"
+        self.UPDATE_NODE_OP_DEMOTE = "Demotion"
+        self.UPDATE_NODE_OP_REMOVE = "Remove"
 
         # hash/address definitions
         self.GENESIS_ADDR = eth_utils.encode_hex(privtoaddr(default_config["GENESIS_PRI_KEY"]))
@@ -103,6 +109,12 @@ class RpcClient:
         logs = self.node.cfx_getLogs(filter.__dict__)
         return logs
 
+    def get_code(self, address: str, epoch: str) -> str:
+        assert_is_hash_string(address, length=40)
+        code = self.node.cfx_getCode(address, epoch)
+        assert_is_hex_string(code)
+        return code
+
     def gas_price(self) -> int:
         return int(self.node.cfx_gasPrice(), 0)
 
@@ -141,6 +153,9 @@ class RpcClient:
             self.wait_for_receipt(tx_hash)
         
         return tx_hash
+
+    def send_usable_genesis_accounts(self, account_start_index:int):
+        self.node.cfx_sendUsableGenesisAccounts(account_start_index)
 
     def wait_for_receipt(self, tx_hash: str, num_txs=1, timeout=10, state_before_wait=True):
         if state_before_wait:
@@ -208,11 +223,31 @@ class RpcClient:
     def get_peers(self) -> list:
         return self.node.getpeerinfo()
 
+    def get_peer(self, node_id: str):
+        for p in self.get_peers():
+            if p["nodeid"] == node_id:
+                return p
+
+        return None
+
+    def get_node(self, node_id: str):
+        return self.node.net_node(node_id)
+
+    def add_node(self, node_id: str, ip: str, port: int):
+        self.node.addnode(node_id, "{}:{}".format(ip, port))
+
+    def disconnect_peer(self, node_id: str, node_op:str=None) -> int:
+        return self.node.net_disconnect_node(node_id, node_op)
+
     def chain(self) -> list:
         return self.node.cfx_getChain()
 
     def get_receipt(self, tx_hash: str) -> dict:
         return self.node.gettransactionreceipt(tx_hash)
+
+    def get_transaction_receipt(self, tx_hash: str) -> dict:
+        assert_is_hash_string(tx_hash)
+        return self.node.cfx_getTransactionReceipt(tx_hash)
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()

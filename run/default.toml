@@ -32,6 +32,10 @@ public_address="59.66.209.32:32323"
 #
 # mining_author="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
+# `use_stratum` controls whether the mining process goes through the
+# stratum protocol.
+# use_stratum=true
+
 # `jsonrpc_tcp_port` and `jsonrpc_http_port` are the ports for the node to
 # provide rpc service. If not set, the node will not start rpc services. By
 # default, the values are not set. What's provided here is the recommended value
@@ -43,6 +47,10 @@ public_address="59.66.209.32:32323"
 
 
 # The following parameters do not need to be changed in normal cases.
+
+# `network_id` is network identifier. By default, the value is 1.
+#
+# network_id=1
 
 # `net_key` is the 256-bit private key to generate a unique node id for this node.
 # The value is a 64-digit hex string without 0x prefix.
@@ -127,7 +135,7 @@ log_conf="log.yaml"
 # `session_ip_limits` limits the number of TCP connections per IP address or subnet for security consideration.
 # Its format is "n1,n2,n3,n4", where n1 is the quota of TCP connections for a single IP address, and n2/n3/n4 
 # are the quotas for subnet a/b/c. The default value is "1,8,4,2", which means:
-#   1) Onely 1 TCP connection allowed for a single IP address.
+#   1) Only 1 TCP connection allowed for a single IP address.
 #   2) 8 TCP connections allowd for subnet a, e.g. 192.xxx.xxx.xxx/8
 #   3) 4 TCP connections allowd for subnet b, e.g. 192.168.xxx.xxx/16
 #   4) 2 TCP connections allowd for subnet c, e.g. 192.169.0.xxx/24

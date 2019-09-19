@@ -30,8 +30,6 @@ logger = logging.getLogger("TestFramework.mininode")
 
 PACKET_HELLO = 0x80
 PACKET_DISCONNECT = 0x01
-PACKET_PING = 0x02
-PACKET_PONG = 0x03
 PACKET_PROTOCOL = 0x10
 
 STATUS = 0x00
@@ -58,6 +56,37 @@ GET_BLOCK_TXN_RESPONSE = 0x12
 GET_BLOCK_HASHES_BY_EPOCH = 0x17
 GET_BLOCK_HEADER_CHAIN = 0x18
 
+from rlp.exceptions import (
+    DeserializationError,
+    SerializationError,
+)
+
+# Copied from rlp.sedes.Boolean, but encode False to 0x00, not empty.
+class Boolean:
+    """A sedes for booleans
+    """
+    def serialize(self, obj):
+        if not isinstance(obj, bool):
+            raise SerializationError('Can only serialize bool', obj)
+
+        if obj is False:
+            return b'\x00'
+        elif obj is True:
+            return b'\x01'
+        else:
+            raise Exception("Invariant: no other options for boolean values")
+
+    def deserialize(self, serial):
+        if serial == b'\x00':
+            return False
+        elif serial == b'\x01':
+            return True
+        else:
+            raise DeserializationError(
+                'Invalid serialized boolean.  Must be either 0x01 or 0x00',
+                serial
+            )
+
 class Capability(rlp.Serializable):
     fields = [
         ("protocol", binary),
@@ -75,21 +104,25 @@ class NodeEndpoint(rlp.Serializable):
 
 class Hello(rlp.Serializable):
     fields = [
+        ("network_id", big_endian_int),
         ("capabilities", CountableList(Capability)),
         ("node_endpoint", NodeEndpoint)
     ]
 
 
 class Disconnect(rlp.Serializable):
-    fields = [
-        ("reason", big_endian_int)
-    ]
+    def __init__(self, code:int, msg:str=None):
+        self.code = code
+        self.msg = msg
+
+    @classmethod
+    def deserialize(cls, serial):
+        return cls(int(serial[0]), str(serial[1:]))
 
 
 class Status(rlp.Serializable):
     fields = [
         ("protocol_version", big_endian_int),
-        ("network_id", big_endian_int),
         ("genesis_hash", hash32),
         ("best_epoch", big_endian_int),
         ("terminal_block_hashes", CountableList(hash32)),
@@ -349,11 +382,11 @@ class GetTerminalBlockHashes(rlp.Serializable):
 class GetBlocks(rlp.Serializable):
     fields = [
         ("reqid", big_endian_int),
-        ("with_public", big_endian_int),
+        ("with_public", Boolean()),
         ("hashes", CountableList(hash32)),
     ]
 
-    def __init__(self, reqid=0, with_public=0, hashes=[]):
+    def __init__(self, reqid=0, with_public=False, hashes=[]):
         super().__init__(
             reqid=reqid,
             with_public=with_public,

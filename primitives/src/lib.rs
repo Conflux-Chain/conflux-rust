@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 extern crate cfx_bytes as bytes;
-extern crate heapsize;
 extern crate keccak_hash as hash;
 extern crate keylib;
 extern crate rlp;
@@ -29,6 +28,7 @@ pub use crate::{
     block_header::{BlockHeader, BlockHeaderBuilder},
     epoch::{EpochId, EpochNumber},
     log_entry::LogEntry,
+    receipt::Receipt,
     state_root::*,
     transaction::{
         Action, SignedTransaction, Transaction, TransactionWithSignature,

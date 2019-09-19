@@ -9,7 +9,7 @@ use crate::{
     receipt::Receipt,
 };
 use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
-use heapsize::HeapSizeOf;
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     mem,
@@ -97,9 +97,9 @@ impl DerefMut for BlockHeader {
     fn deref_mut(&mut self) -> &mut BlockHeaderRlpPart { &mut self.rlp_part }
 }
 
-impl HeapSizeOf for BlockHeader {
-    fn heap_size_of_children(&self) -> usize {
-        mem::size_of::<Self>() + self.referee_hashes.heap_size_of_children()
+impl MallocSizeOf for BlockHeader {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.referee_hashes.size_of(ops)
     }
 }
 
@@ -421,7 +421,9 @@ impl BlockHeaderBuilder {
 
         block_header.approximated_rlp_size =
             mem::size_of::<BlockHeaderRlpPart>()
-                + block_header.referee_hashes.heap_size_of_children();
+                + block_header
+                    .referee_hashes
+                    .size_of(&mut new_malloc_size_ops());
 
         block_header
     }
@@ -449,6 +451,13 @@ impl BlockHeaderBuilder {
         );
 
         keccak(bloom)
+    }
+
+    pub fn compute_aggregated_bloom(blooms: Vec<Bloom>) -> Bloom {
+        blooms.into_iter().fold(Bloom::zero(), |mut res, bloom| {
+            res.accrue_bloom(&bloom);
+            res
+        })
     }
 
     pub fn compute_blame_state_root_vec_root(roots: Vec<H256>) -> H256 {
@@ -494,6 +503,12 @@ impl Decodable for BlockHeader {
         header.compute_hash();
 
         Ok(header)
+    }
+}
+
+impl Encodable for &'static BlockHeader {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        self.stream_wire_rlp(stream);
     }
 }
 

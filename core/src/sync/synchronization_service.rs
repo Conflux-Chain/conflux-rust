@@ -6,7 +6,7 @@ use super::{
     Error, SharedSynchronizationGraph, SynchronizationProtocolHandler,
 };
 use crate::{
-    light_protocol::QueryProvider,
+    light_protocol::Provider as LightProvider,
     parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
     sync::{
         synchronization_phases::SyncPhaseType,
@@ -30,7 +30,7 @@ impl SynchronizationService {
         is_full_node: bool, network: Arc<NetworkService>,
         sync_graph: SharedSynchronizationGraph,
         protocol_config: ProtocolConfiguration,
-        initial_sync_phase: SyncPhaseType, light_provider: Arc<QueryProvider>,
+        initial_sync_phase: SyncPhaseType, light_provider: Arc<LightProvider>,
     ) -> Self
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(

@@ -4,11 +4,12 @@
 
 use crate::log_entry::LogEntry;
 use cfx_types::{Bloom, U256};
-use heapsize::HeapSizeOf;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
-pub const TRANSACTION_OUTCOME_EXCEPTION: u8 = 1;
+pub const TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING: u8 = 1; // gas fee charged
+pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas fee charged
 
 /// Information describing execution of a transaction.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,8 +63,8 @@ impl Decodable for Receipt {
     }
 }
 
-impl HeapSizeOf for Receipt {
-    fn heap_size_of_children(&self) -> usize {
-        self.logs.heap_size_of_children()
+impl MallocSizeOf for Receipt {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.logs.size_of(ops)
     }
 }

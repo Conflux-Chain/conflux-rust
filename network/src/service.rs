@@ -5,6 +5,7 @@
 use super::DisconnectReason;
 use crate::{
     discovery::{Discovery, DISCOVER_NODES_COUNT},
+    handshake::BYPASS_CRYPTOGRAPHY,
     io::*,
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
@@ -31,7 +32,7 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{atomic::Ordering as AtomicOrdering, Arc},
     time::{Duration, Instant},
 };
 
@@ -150,6 +151,10 @@ impl NetworkService {
         self.io_service = Some(raw_io_service);
 
         if self.inner.is_none() {
+            if self.config.test_mode {
+                BYPASS_CRYPTOGRAPHY.store(true, AtomicOrdering::Relaxed);
+            }
+
             let inner = Arc::new(match self.config.test_mode {
                 true => NetworkServiceInner::new_with_latency(&self.config)?,
                 false => NetworkServiceInner::new(&self.config)?,
@@ -283,12 +288,28 @@ impl NetworkService {
             }
         }
     }
+
+    pub fn disconnect_node(
+        &self, id: &NodeId, op: Option<UpdateNodeOperation>,
+    ) -> Option<usize> {
+        let inner = self.inner.as_ref()?;
+        let peer = inner.sessions.get_index_by_id(id)?;
+        let io = IoContext::new(self.io_service.as_ref()?.channel(), 0);
+        inner.kill_connection(
+            peer,
+            &io,
+            true,
+            op,
+            Some(DisconnectReason::DisconnectRequested),
+        );
+        Some(peer)
+    }
 }
 
 type SharedSession = Arc<RwLock<Session>>;
 
 pub struct HostMetadata {
-    #[allow(unused)]
+    pub network_id: u64,
     /// Our private and public keys.
     pub keys: KeyPair,
     pub capabilities: RwLock<Vec<Capability>>,
@@ -300,6 +321,8 @@ pub struct HostMetadata {
 }
 
 impl HostMetadata {
+    pub(crate) fn secret(&self) -> &Secret { self.keys.secret() }
+
     pub(crate) fn id(&self) -> &NodeId { self.keys.public() }
 }
 
@@ -352,7 +375,7 @@ impl DelayedQueue {
             &context.io,
             Some(context.protocol),
             session::PACKET_USER,
-            &context.msg,
+            context.msg,
             context.priority,
         ) {
             Ok(_) => {}
@@ -479,6 +502,7 @@ impl NetworkServiceInner {
 
         let mut inner = NetworkServiceInner {
             metadata: HostMetadata {
+                network_id: config.id,
                 keys,
                 capabilities: RwLock::new(Vec::new()),
                 local_address: listen_address,
@@ -778,13 +802,22 @@ impl NetworkServiceInner {
                     return;
                 }
             };
+
+            if !self.sessions.is_ip_allowed(&address.ip()) {
+                debug!("cannot create outgoing connection to node, id = {:?}, address = {:?}", id, address);
+                return;
+            }
+
             match TcpStream::connect(&address) {
                 Ok(socket) => {
                     trace!("{}: connecting to {:?}", id, address);
                     (socket, address)
                 }
                 Err(e) => {
-                    self.node_db.write().note_failure(id, true, true);
+                    self.node_db.write().note_failure(
+                        id, true, /* by_connection */
+                        true, /* trusted_only */
+                    );
                     debug!(
                         "{}: can't connect o address {:?} {:?}",
                         id, address, e
@@ -795,7 +828,10 @@ impl NetworkServiceInner {
         };
 
         if let Err(e) = self.create_connection(socket, address, Some(id), io) {
-            self.node_db.write().note_failure(id, true, true);
+            self.node_db.write().note_failure(
+                id, true, /* by_connection */
+                true, /* trusted_only */
+            );
             debug!("Can't create connection: {:?}", e);
         }
     }
@@ -917,8 +953,8 @@ impl NetworkServiceInner {
                             Some(_) => messages.push((protocol, data)),
                         }
                     }
-                    Ok(SessionData::Continue) => (),
                     Ok(SessionData::None) => break,
+                    Ok(SessionData::Continue) => {}
                     Err(Error(kind, _)) => {
                         debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
                         kill = true;
@@ -1006,7 +1042,7 @@ impl NetworkServiceInner {
     fn kill_connection(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
         remote: bool, op: Option<UpdateNodeOperation>,
-        msg: Option<&'static str>,
+        reason: Option<DisconnectReason>,
     )
     {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
@@ -1022,12 +1058,8 @@ impl NetworkServiceInner {
                             if sess.have_capability(*p) {
                                 to_disconnect.push(*p);
 
-                                if let Some(msg) = msg {
-                                    sess.send_disconnect(
-                                        DisconnectReason::Custom(
-                                            msg.to_owned(),
-                                        ),
-                                    );
+                                if let Some(ref reason) = reason {
+                                    sess.send_disconnect(reason.clone());
                                 };
                             }
                         }
@@ -1037,8 +1069,8 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, session = {:?}",
-                    deregister, *sess
+                    "kill connection, deregister = {}, resson = {:?}, session = {:?}",
+                    deregister, reason, *sess
                 );
             }
         }
@@ -1048,11 +1080,17 @@ impl NetworkServiceInner {
                 if let Some(op) = op {
                     match op {
                         UpdateNodeOperation::Failure => {
-                            self.node_db.write().note_failure(&id, true, false);
+                            self.node_db.write().note_failure(
+                                &id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
                         }
                         UpdateNodeOperation::Demotion => {
                             self.node_db.write().demote(&id);
-                            self.node_db.write().note_failure(&id, true, false);
+                            self.node_db.write().note_failure(
+                                &id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
                         }
                         UpdateNodeOperation::Remove => {
                             self.node_db.write().set_blacklisted(&id);
@@ -1243,6 +1281,16 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
 
     fn timeout(&self, io: &IoContext<NetworkIoMessage>, token: TimerToken) {
         match token {
+            FIRST_SESSION..=LAST_SESSION => {
+                debug!("Connection timeout: {}", token);
+                self.kill_connection(
+                    token,
+                    io,
+                    true,
+                    Some(UpdateNodeOperation::Demotion),
+                    Some(DisconnectReason::Custom("session timeout".into())),
+                );
+            }
             HOUSEKEEPING => self.on_housekeeping(io),
             DISCOVERY_REFRESH => {
                 // Run the _slow_ discovery if enough peers are connected
@@ -1444,9 +1492,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                         sess.deregister_socket(event_loop)
                             .expect("Error deregistering socket");
                         if let Some(node_id) = sess.id() {
-                            self.node_db
-                                .write()
-                                .note_failure(node_id, true, false);
+                            self.node_db.write().note_failure(
+                                node_id, true,  /* by_connection */
+                                false, /* trusted_only */
+                            );
                         }
                         self.sessions.remove(&*sess);
                         debug!("Removed session: {:?}", *sess);
@@ -1629,7 +1678,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         self.io,
                         Some(self.protocol),
                         session::PACKET_USER,
-                        &msg,
+                        msg,
                         priority,
                     )?;
                 }
@@ -1644,6 +1693,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         reason: Option<&'static str>,
     )
     {
+        let reason = reason.map(|r| DisconnectReason::Custom(r.into()));
         self.network_service
             .kill_connection(peer, self.io, true, op, reason);
     }

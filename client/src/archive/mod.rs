@@ -9,15 +9,22 @@ pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 
 use cfxcore::{
-    genesis, light_protocol::QueryProvider, statistics::Statistics,
-    storage::StorageManager, sync::SyncPhaseType,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
-    ConsensusGraph, SynchronizationGraph, SynchronizationService,
-    TransactionPool, WORKER_COMPUTATION_PARALLELISM,
+    genesis,
+    state_exposer::{SharedStateExposer, StateExposer},
+    statistics::Statistics,
+    storage::StorageManager,
+    sync::SyncPhaseType,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    vm_factory::VmFactory,
+    ConsensusGraph, LightProvider, SynchronizationGraph,
+    SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 
 use crate::rpc::{
-    impls::{cfx::RpcImpl, common::RpcImpl as CommonImpl},
+    extractor::RpcExtractor,
+    impls::{
+        cfx::RpcImpl, common::RpcImpl as CommonImpl, pubsub::PubSubClient,
+    },
     setup_debug_rpc_apis, setup_public_rpc_apis,
 };
 use cfx_types::{Address, U256};
@@ -27,6 +34,7 @@ use db::SystemDB;
 use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
+use runtime::Runtime;
 use secret_store::SecretStore;
 use std::{
     any::Any,
@@ -53,6 +61,7 @@ pub struct ArchiveClientHandle {
     pub blockgen: Arc<BlockGenerator>,
     pub secret_store: Arc<SecretStore>,
     pub ledger_db: Weak<SystemDB>,
+    pub runtime: Runtime,
 }
 
 impl ArchiveClientHandle {
@@ -140,12 +149,18 @@ impl ArchiveClient {
         }
 
         let genesis_accounts = if conf.raw_conf.test_mode {
+            match conf.raw_conf.genesis_secrets {
+                Some(ref file) => {
+                    genesis::default(secret_store.as_ref());
+                    genesis::load_secrets_file(file, secret_store.as_ref())?
+                }
+                None => genesis::default(secret_store.as_ref()),
+            }
+        } else {
             match conf.raw_conf.genesis_accounts {
                 Some(ref file) => genesis::load_file(file)?,
                 None => genesis::default(secret_store.as_ref()),
             }
-        } else {
-            genesis::default(secret_store.as_ref())
         };
 
         // FIXME: move genesis block to a dedicated directory near all conflux
@@ -174,6 +189,8 @@ impl ArchiveClient {
 
         let statistics = Arc::new(Statistics::new());
 
+        let state_exposer = SharedStateExposer::new(StateExposer::new());
+
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::new(
@@ -183,6 +200,7 @@ impl ArchiveClient {
             statistics.clone(),
             data_man.clone(),
             pow_config.clone(),
+            state_exposer.clone(),
         ));
 
         let protocol_config = conf.protocol_config();
@@ -191,7 +209,7 @@ impl ArchiveClient {
         let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),
             verification_config,
-            pow_config,
+            pow_config.clone(),
             false,
         ));
 
@@ -201,7 +219,7 @@ impl ArchiveClient {
             Arc::new(network)
         };
 
-        let light_provider = Arc::new(QueryProvider::new(
+        let light_provider = Arc::new(LightProvider::new(
             consensus.clone(),
             sync_graph.clone(),
             Arc::downgrade(&network),
@@ -271,7 +289,34 @@ impl ArchiveClient {
         let tx_conf = conf.tx_gen_config();
         let txgen_handle = if tx_conf.generate_tx {
             let txgen_clone = txgen.clone();
-            Some(
+            let t = if conf.raw_conf.test_mode {
+                match conf.raw_conf.genesis_secrets {
+                    Some(ref _file) => {
+                        thread::Builder::new()
+                            .name("txgen".into())
+                            .spawn(move || {
+                                TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
+                                    txgen_clone,
+                                    tx_conf,
+                                )
+                                    .unwrap();
+                            })
+                            .expect("should succeed")
+                    }
+                    None =>{
+                        thread::Builder::new()
+                            .name("txgen".into())
+                            .spawn(move || {
+                                TransactionGenerator::generate_transactions(
+                                    txgen_clone,
+                                    tx_conf,
+                                )
+                                    .unwrap();
+                            })
+                            .expect("should succeed")
+                    }
+                }
+            } else {
                 thread::Builder::new()
                     .name("txgen".into())
                     .spawn(move || {
@@ -281,8 +326,9 @@ impl ArchiveClient {
                         )
                         .unwrap();
                     })
-                    .expect("should succeed"),
-            )
+                    .expect("should succeed")
+            };
+            Some(t)
         } else {
             None
         };
@@ -292,6 +338,7 @@ impl ArchiveClient {
             sync.clone(),
             blockgen.clone(),
             txpool.clone(),
+            txgen.clone(),
         ));
 
         let common_impl = Arc::new(CommonImpl::new(
@@ -299,31 +346,44 @@ impl ArchiveClient {
             consensus.clone(),
             network.clone(),
             txpool.clone(),
+            state_exposer.clone(),
         ));
 
-        let debug_rpc_http_server = super::rpc::new_http(
+        let runtime = Runtime::with_default_thread_count();
+        let pubsub = PubSubClient::new(runtime.executor());
+
+        let debug_rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 Some((127, 0, 0, 1)),
                 conf.raw_conf.jsonrpc_local_http_port,
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone()),
+            setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone(), None),
         )?;
 
-        let rpc_tcp_server = super::rpc::new_tcp(
+        let rpc_tcp_server = super::rpc::start_tcp(
             super::rpc::TcpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_tcp_port,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_debug_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub),
+                )
             } else {
-                setup_public_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_public_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub),
+                )
             },
+            RpcExtractor,
         )?;
 
-        let rpc_http_server = super::rpc::new_http(
+        let rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_http_port,
@@ -331,9 +391,17 @@ impl ArchiveClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_debug_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    None,
+                )
             } else {
-                setup_public_rpc_apis(common_impl.clone(), rpc_impl.clone())
+                setup_public_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    None,
+                )
             },
         )?;
 
@@ -349,6 +417,7 @@ impl ArchiveClient {
             consensus,
             secret_store,
             sync,
+            runtime,
         })
     }
 

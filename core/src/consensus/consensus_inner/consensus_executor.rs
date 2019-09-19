@@ -7,7 +7,6 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::ConsensusGraphInner,
     executive::{ExecutionError, Executive},
-    machine::new_machine,
     state::{CleanupMode, State},
     statedb::StateDb,
     storage::{
@@ -22,7 +21,9 @@ use cfx_types::{into_u256, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION, TRANSACTION_OUTCOME_SUCCESS,
+        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_SUCCESS,
     },
     Block, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
     TransactionAddress,
@@ -36,12 +37,16 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::parameters::{consensus::*, consensus_internal::*};
+use crate::{
+    machine::new_machine_with_builtin,
+    parameters::{consensus::*, consensus_internal::*},
+};
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
+    sync::atomic::{AtomicBool, Ordering::Relaxed},
 };
 
 lazy_static! {
@@ -85,6 +90,8 @@ impl Debug for RewardExecutionInfo {
 enum ExecutionTask {
     ExecuteEpoch(EpochExecutionTask),
     GetResult(GetExecutionResultTask),
+
+    /// Stop task is used to stop the execution thread
     Stop,
 }
 
@@ -138,6 +145,9 @@ pub struct ConsensusExecutor {
     /// The sender to send tasks to be executed by `self.thread`
     sender: Mutex<Sender<ExecutionTask>>,
 
+    /// The state indicating whether the thread should be stopped
+    stopped: AtomicBool,
+
     /// The handler to provide functions to handle `ExecutionTask` and execute
     /// transactions It is used both asynchronously by `self.thread` and
     /// synchronously by the executor itself
@@ -163,6 +173,7 @@ impl ConsensusExecutor {
         let executor_raw = ConsensusExecutor {
             thread: Mutex::new(None),
             sender: Mutex::new(sender),
+            stopped: AtomicBool::new(false),
             handler: handler.clone(),
             bench_mode,
         };
@@ -172,6 +183,10 @@ impl ConsensusExecutor {
         let handle = thread::Builder::new()
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
+                if executor_thread.stopped.load(Relaxed) {
+                    // The thread should be stopped. The rest tasks in the queue will be discarded.
+                    break;
+                }
                 let maybe_task = receiver.try_recv();
                 match maybe_task {
                     Err(TryRecvError::Empty) => {
@@ -182,7 +197,7 @@ impl ConsensusExecutor {
                         let maybe_optimistic_task = consensus_inner
                             .try_write()
                             .and_then(|mut inner|
-                                executor_thread.get_optimistic_execution_task(data_man.as_ref(), &mut *inner)
+                                executor_thread.get_optimistic_execution_task(&mut *inner)
                             );
                         match maybe_optimistic_task {
                             Some(task) => {
@@ -238,6 +253,14 @@ impl ConsensusExecutor {
                 KECCAK_EMPTY_BLOOM,
             )
         } else {
+            if self.handler.data_man.epoch_executed(&epoch_hash) {
+                // The epoch already executed, so we do not need wait for the
+                // queue to be empty
+                return self
+                    .handler
+                    .get_execution_result(&epoch_hash)
+                    .expect("it should success");
+            }
             let (sender, receiver) = channel();
             debug!("Wait for execution result of epoch {:?}", epoch_hash);
             self.sender
@@ -252,7 +275,7 @@ impl ConsensusExecutor {
     }
 
     fn get_optimistic_execution_task(
-        &self, data_man: &BlockDataManager, inner: &mut ConsensusGraphInner,
+        &self, inner: &mut ConsensusGraphInner,
     ) -> Option<EpochExecutionTask> {
         if !inner.inner_conf.enable_optimistic_execution {
             return None;
@@ -268,7 +291,7 @@ impl ConsensusExecutor {
             inner.arena[epoch_arena_index].hash,
             inner.get_epoch_block_hashes(epoch_arena_index),
             inner.get_epoch_start_block_number(epoch_arena_index),
-            self.get_reward_execution_info(data_man, inner, epoch_arena_index),
+            self.get_reward_execution_info(inner, epoch_arena_index),
             true,
             false,
         );
@@ -284,7 +307,7 @@ impl ConsensusExecutor {
     }
 
     pub fn get_reward_execution_info_from_index(
-        &self, data_man: &BlockDataManager, inner: &mut ConsensusGraphInner,
+        &self, inner: &mut ConsensusGraphInner,
         reward_index: Option<(usize, usize)>,
     ) -> Option<RewardExecutionInfo>
     {
@@ -300,8 +323,8 @@ impl ConsensusExecutor {
                     .unwrap();
                 }
 
-                let epoch_blocks = inner
-                    .get_executable_epoch_blocks(data_man, pivot_arena_index);
+                let epoch_blocks =
+                    inner.get_executable_epoch_blocks(pivot_arena_index);
 
                 let mut epoch_block_no_reward =
                     Vec::with_capacity(epoch_blocks.len());
@@ -332,17 +355,14 @@ impl ConsensusExecutor {
                         if *index == pivot_arena_index {
                             no_reward =
                                 block_consensus_node.data.partial_invalid
-                                    || !inner
-                                        .execution_info_cache
-                                        .get(&pivot_arena_index)
-                                        .unwrap()
+                                    || !inner.arena[pivot_arena_index]
+                                        .data
                                         .state_valid;
                         } else {
                             no_reward = block_consensus_node
                                 .data
                                 .partial_invalid
                                 || !inner.compute_vote_valid_for_pivot_block(
-                                    data_man,
                                     *index,
                                     pivot_arena_index,
                                 );
@@ -395,9 +415,10 @@ impl ConsensusExecutor {
                             for a_index in anticone_set {
                                 // TODO: Maybe consider to use base difficulty
                                 // Check with the spec!
-                                anticone_difficulty += U512::from(into_u256(
-                                    inner.block_weight(a_index, false),
-                                ));
+                                anticone_difficulty +=
+                                    U512::from(into_u256(inner.block_weight(
+                                        a_index, false, /* inclusive */
+                                    )));
                             }
                         };
 
@@ -426,12 +447,9 @@ impl ConsensusExecutor {
     }
 
     pub fn get_reward_execution_info(
-        &self, data_man: &BlockDataManager, inner: &mut ConsensusGraphInner,
-        epoch_arena_index: usize,
-    ) -> Option<RewardExecutionInfo>
-    {
+        &self, inner: &mut ConsensusGraphInner, epoch_arena_index: usize,
+    ) -> Option<RewardExecutionInfo> {
         self.get_reward_execution_info_from_index(
-            data_man,
             inner,
             inner.get_pivot_reward_index(epoch_arena_index),
         )
@@ -600,10 +618,18 @@ impl ConsensusExecutor {
     }
 
     pub fn stop(&self) {
+        // `stopped` is used to allow the execution thread to stopped even the
+        // queue is not empty and `ExecutionTask::Stop` has not been
+        // processed.
+        self.stopped.store(true, Relaxed);
+
+        // We still need this task because otherwise if the execution queue is
+        // empty the execution thread will block on `recv` forever and
+        // unable to check `stopped`
         self.sender
             .lock()
             .send(ExecutionTask::Stop)
-            .expect("Receiver exists");
+            .expect("execution receiver exists");
         if let Some(thread) = self.thread.lock().take() {
             thread.join().ok();
         }
@@ -722,11 +748,8 @@ impl ConsensusExecutor {
             while last_state_height <= fork_height {
                 let epoch_arena_index =
                     inner.get_pivot_block_arena_index(last_state_height);
-                let reward_execution_info = self.get_reward_execution_info(
-                    &self.handler.data_man,
-                    inner,
-                    epoch_arena_index,
-                );
+                let reward_execution_info =
+                    self.get_reward_execution_info(inner, epoch_arena_index);
                 self.enqueue_epoch(EpochExecutionTask::new(
                     inner.arena[epoch_arena_index].hash,
                     inner.get_epoch_block_hashes(epoch_arena_index),
@@ -743,12 +766,8 @@ impl ConsensusExecutor {
             let epoch_arena_index = chain[fork_chain_index];
             let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
 
-            let reward_execution_info = self
-                .get_reward_execution_info_from_index(
-                    &self.handler.data_man,
-                    inner,
-                    reward_index,
-                );
+            let reward_execution_info =
+                self.get_reward_execution_info_from_index(inner, reward_index);
             self.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_arena_index].hash,
                 inner.get_epoch_block_hashes(epoch_arena_index),
@@ -796,10 +815,6 @@ impl ConsensusExecutionHandler {
         &self, maybe_task: Result<ExecutionTask, RecvError>,
     ) -> bool {
         match maybe_task {
-            Ok(ExecutionTask::Stop) => {
-                debug!("Consensus Executor stopped by receiving STOP task");
-                false
-            }
             Ok(task) => self.handle_execution_work(task),
             Err(e) => {
                 warn!("Consensus Executor stopped by Err={:?}", e);
@@ -816,7 +831,7 @@ impl ConsensusExecutionHandler {
                 self.handle_epoch_execution(task)
             }
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
-            _ => {}
+            ExecutionTask::Stop => return false,
         }
         true
     }
@@ -834,32 +849,33 @@ impl ConsensusExecutionHandler {
     }
 
     fn handle_get_result_task(&self, task: GetExecutionResultTask) {
+        task.sender
+            .send(
+                self.get_execution_result(&task.epoch_hash).expect(
+                    "The caller of wait_for_result ensures the existence",
+                ),
+            )
+            .expect("Consensus Worker fails");
+    }
+
+    fn get_execution_result(
+        &self, epoch_hash: &H256,
+    ) -> Option<(StateRootWithAuxInfo, H256, H256)> {
         let state_root = self
             .data_man
             .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(
-                &task.epoch_hash,
-                None,
-            ))
-            .unwrap()
-            // Unwrapping is safe because the state is assumed to exist.
-            .unwrap()
+            .get_state_no_commit(SnapshotAndEpochIdRef::new(epoch_hash, None))
+            .expect("No DB Error")?
             .get_state_root()
-            .unwrap()
-            .unwrap();
+            .expect("No DB Error")?;
 
-        let epoch_execution_commitments = self
-            .data_man
-            .get_epoch_execution_commitments(&task.epoch_hash)
-            .unwrap();
-
-        task.sender
-            .send((
-                state_root,
-                epoch_execution_commitments.receipts_root,
-                epoch_execution_commitments.logs_bloom_hash,
-            ))
-            .expect("Consensus Worker fails");
+        let epoch_execution_commitments =
+            self.data_man.get_epoch_execution_commitments(epoch_hash)?;
+        Some((
+            state_root,
+            epoch_execution_commitments.receipts_root,
+            epoch_execution_commitments.logs_bloom_hash,
+        ))
     }
 
     /// Compute the epoch `epoch_hash`, and skip it if already computed.
@@ -896,7 +912,10 @@ impl ConsensusExecutionHandler {
         // Get blocks in this epoch after skip checking
         let epoch_blocks = self
             .data_man
-            .blocks_by_hash_list(epoch_block_hashes, true)
+            .blocks_by_hash_list(
+                epoch_block_hashes,
+                true, /* update_cache */
+            )
             .expect("blocks exist");
         let pivot_block = epoch_blocks.last().expect("Not empty");
 
@@ -917,9 +936,9 @@ impl ConsensusExecutionHandler {
                             Some(pivot_block.block_header.height() - 1),
                         ),
                     )
-                    .unwrap()
+                    .expect("No db error")
                     // Unwrapping is safe because the state exists.
-                    .unwrap(),
+                    .expect("State exists"),
             ),
             0.into(),
             self.vm.clone(),
@@ -966,7 +985,7 @@ impl ConsensusExecutionHandler {
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
-        let machine = new_machine();
+        let machine = new_machine_with_builtin();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
@@ -993,12 +1012,14 @@ impl ConsensusExecutionHandler {
             let mut n_other = 0;
             let mut cumulative_gas_used = U256::zero();
             for (idx, transaction) in block.transactions.iter().enumerate() {
-                let mut tx_outcome_status = TRANSACTION_OUTCOME_EXCEPTION;
+                let mut tx_outcome_status =
+                    TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                 let mut transaction_logs = Vec::new();
+                let mut nonce_increased = false;
 
                 let r = {
                     Executive::new(state, &env, &machine, &spec)
-                        .transact(transaction)
+                        .transact(transaction, &mut nonce_increased)
                 };
                 // TODO Store fine-grained output status in receipts.
                 // Note now NotEnoughCash has
@@ -1017,6 +1038,7 @@ impl ConsensusExecutionHandler {
                         );
                     }
                     Err(ExecutionError::InvalidNonce { expected, got }) => {
+                        // not inc nonce
                         n_invalid_nonce += 1;
                         trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
                         // Add future transactions back to pool if we are
@@ -1029,21 +1051,36 @@ impl ConsensusExecutionHandler {
                             to_pending.push(transaction.clone());
                         }
                     }
-                    Ok(executed) => {
-                        env.gas_used = executed.cumulative_gas_used;
-                        cumulative_gas_used = executed.cumulative_gas_used;
-                        n_ok += 1;
-                        GOOD_TPS_METER.mark(1);
-                        trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
-                        accumulated_fee += executed.fee;
-                        transaction_logs = executed.logs;
-                        tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                    Ok(ref executed) => {
+                        if executed.exception.is_some() {
+                            warn!(
+                                "tx execution error: transaction={:?}, err={:?}",
+                                transaction, r
+                            );
+                        } else {
+                            env.gas_used = executed.cumulative_gas_used;
+                            cumulative_gas_used = executed.cumulative_gas_used;
+                            n_ok += 1;
+                            GOOD_TPS_METER.mark(1);
+                            trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                            accumulated_fee += executed.fee;
+                            transaction_logs = executed.logs.clone();
+                            tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                        }
                     }
                     _ => {
                         n_other += 1;
                         trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
                     }
                 }
+
+                if nonce_increased
+                    && tx_outcome_status != TRANSACTION_OUTCOME_SUCCESS
+                {
+                    tx_outcome_status =
+                        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
+                }
+
                 let receipt = Receipt::new(
                     tx_outcome_status,
                     cumulative_gas_used,
@@ -1057,7 +1094,9 @@ impl ConsensusExecutionHandler {
                         block_hash: block.hash(),
                         index: idx,
                     };
-                    if tx_outcome_status == TRANSACTION_OUTCOME_SUCCESS {
+                    if tx_outcome_status
+                        != TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
+                    {
                         self.data_man
                             .insert_transaction_address(&hash, &tx_addr);
                     }
@@ -1192,11 +1231,13 @@ impl ConsensusExecutionHandler {
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
             let block_hash = block.hash();
             // TODO: better redesign to avoid recomputation.
-            let receipts = match self.data_man.block_results_by_hash_with_epoch(
-                &block_hash,
-                &reward_epoch_hash,
-                true,
-            ) {
+            let receipts = match self
+                .data_man
+                .block_execution_result_by_hash_with_epoch(
+                    &block_hash,
+                    &reward_epoch_hash,
+                    true, /* update_cache */
+                ) {
                 Some(receipts) => receipts.receipts,
                 None => {
                     let ctx = self
@@ -1362,7 +1403,7 @@ impl ConsensusExecutionHandler {
         &self, tx: &SignedTransaction, epoch_id: &H256,
     ) -> Result<(Vec<u8>, U256), String> {
         let spec = Spec::new_spec();
-        let machine = new_machine();
+        let machine = new_machine_with_builtin();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
@@ -1377,17 +1418,24 @@ impl ConsensusExecutionHandler {
             0.into(),
             self.vm.clone(),
         );
+        let best_block_header = self.data_man.block_header_by_hash(epoch_id);
+        trace!("best_block_header: {:?}", best_block_header);
+        let time_stamp = match best_block_header {
+            Some(header) => header.timestamp(),
+            None => Default::default(),
+        };
         let env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number
             author: Default::default(),
-            timestamp: Default::default(),
+            timestamp: time_stamp,
             difficulty: Default::default(),
             gas_used: U256::zero(),
             last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
         };
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let r = ex.transact(tx);
+        let mut nonce_increased = false;
+        let r = ex.transact(tx, &mut nonce_increased);
         trace!("Execution result {:?}", r);
         r.map(|r| (r.output, r.gas_used))
             .map_err(|e| format!("execution error: {:?}", e))

@@ -276,6 +276,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "enable_discovery": "false",
                         "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
                         "metrics_enabled": "true",
+                        "block_db_type": "\'sqlite\'"
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]
@@ -357,10 +358,14 @@ def disconnect_nodes(nodes, from_connection, node_num):
     wait_until(lambda: [peer for peer in nodes[node_num].getpeerinfo() if peer["nodeid"] == nodes[from_connection].key] == [], timeout=5)
 
 
-def check_handshake(from_connection, target_addr):
+def check_handshake(from_connection, target_node_id):
+    """
+    Check whether node 'from_connection' has already
+    added node 'target_node_id' into its peer set.
+    """
     peers = from_connection.getpeerinfo()
     for peer in peers:
-        if (peer['addr'].split(":")[0] == target_addr.split(":")[0]) and (peer['caps'] != None):
+        if peer["nodeid"] == target_node_id and len(peer['caps']) > 0:
             return True
     return False
 
@@ -369,7 +374,10 @@ def get_peer_addr(connection):
     return "{}:{}".format(connection.ip, connection.port)
 
 
-def connect_nodes(nodes, a, node_num):
+def connect_nodes(nodes, a, node_num, timeout=60):
+    """
+    Let node[a] connect to node[node_num]
+    """
     from_connection = nodes[a]
     to_connection = nodes[node_num]
     key = nodes[node_num].key
@@ -377,7 +385,7 @@ def connect_nodes(nodes, a, node_num):
     from_connection.addnode(key, peer_addr)
     # poll until hello handshake complete to avoid race conditions
     # with transaction relaying
-    wait_until(lambda: check_handshake(from_connection, peer_addr))
+    wait_until(lambda: check_handshake(from_connection, to_connection.key), timeout=timeout)
 
 
 def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
@@ -390,7 +398,7 @@ def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
     """
     stop_time = time.time() + timeout
     while time.time() <= stop_time:
-        best_hash = [x.getbestblockhash() for x in rpc_connections]
+        best_hash = [x.best_block_hash() for x in rpc_connections]
         block_count = [x.getblockcount() for x in rpc_connections]
         if best_hash.count(best_hash[0]) == len(rpc_connections) and (not sync_count or block_count.count(block_count[0]) == len(rpc_connections)):
             return
@@ -518,6 +526,11 @@ def checktx(node, tx_hash):
 
 
 def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
+    """
+    Establish connections among nodes with each node having 'sample' outgoing peers.
+    It first lets all the nodes link as a loop, then randomly pick 'sample-1'
+    outgoing peers for each node.    
+    """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
     threads = []

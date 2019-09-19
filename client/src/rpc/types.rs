@@ -12,6 +12,7 @@ mod filter;
 mod hash;
 mod index;
 mod log;
+mod provenance;
 mod receipt;
 mod status;
 mod transaction;
@@ -30,6 +31,7 @@ pub use self::{
     hash::{H160, H2048, H256, H512, H64},
     index::Index,
     log::Log,
+    provenance::Origin,
     receipt::Receipt,
     status::Status,
     transaction::Transaction,

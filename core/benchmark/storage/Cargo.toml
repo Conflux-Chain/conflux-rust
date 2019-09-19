@@ -10,7 +10,7 @@ edition = "2018"
 clap = "2.32"
 cfxcore = { path = "../../../core" }
 db = { path = "../../../db" }
-kvdb = "0.1"
+kvdb = {git="https://github.com/paritytech/parity-common.git", branch="ao-upstream-rocksdb", version = "0.2"}
 env_logger = "0.6"
 error-chain = "0.12"
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }

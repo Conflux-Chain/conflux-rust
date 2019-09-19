@@ -23,3 +23,5 @@ network = { path = "../network" }
 kvdb-rocksdb = "0.1.3"
 secret-store = { path = "../secret_store" }
 toml = "0.4"
+metrics = { path = "../util/metrics" }
+lazy_static = "1.2.0"

@@ -12,20 +12,23 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use parking_lot::{Condvar, Mutex};
 
 use cfx_types::H256;
-use cfxcore::{PeerInfo, SharedConsensusGraph, SharedTransactionPool};
+use cfxcore::{
+    state_exposer::SharedStateExposer, PeerInfo, SharedConsensusGraph,
+    SharedTransactionPool,
+};
 use primitives::{Action, SignedTransaction};
 
 use network::{
     get_high_priority_packets,
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
-    NetworkService, SessionDetails,
+    NetworkService, SessionDetails, UpdateNodeOperation,
 };
 
 use crate::rpc::types::{
-    Block as RpcBlock, EpochNumber, Receipt as RpcReceipt, Receipt,
-    Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
-    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Block as RpcBlock, EpochNumber, Receipt as RpcReceipt, Status as RpcStatus,
+    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+    U256 as RpcU256, U64 as RpcU64,
 };
 
 fn grouped_txs<T, F>(
@@ -55,12 +58,14 @@ pub struct RpcImpl {
     consensus: SharedConsensusGraph,
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
+    state_exposer: SharedStateExposer,
 }
 
 impl RpcImpl {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
+        state_exposer: SharedStateExposer,
     ) -> Self
     {
         RpcImpl {
@@ -68,6 +73,7 @@ impl RpcImpl {
             consensus,
             network,
             tx_pool,
+            state_exposer,
         }
     }
 }
@@ -76,7 +82,12 @@ impl RpcImpl {
 impl RpcImpl {
     pub fn best_block_hash(&self) -> RpcResult<RpcH256> {
         info!("RPC Request: cfx_getBestBlockHash()");
-        Ok(self.consensus.best_block_hash().into())
+        Ok(self
+            .state_exposer
+            .read()
+            .consensus_graph
+            .best_block_hash
+            .into())
     }
 
     pub fn gas_price(&self) -> RpcResult<RpcU256> {
@@ -114,7 +125,7 @@ impl RpcImpl {
                 let block = self
                     .consensus
                     .data_man
-                    .block_by_hash(&hash, false)
+                    .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
                 Ok(RpcBlock::new(&*block, inner, include_txs))
             })
@@ -130,7 +141,10 @@ impl RpcImpl {
         );
         let inner = &*self.consensus.inner.read();
 
-        if let Some(block) = self.consensus.data_man.block_by_hash(&hash, false)
+        if let Some(block) = self
+            .consensus
+            .data_man
+            .block_by_hash(&hash, false /* update_cache */)
         {
             let result_block = Some(RpcBlock::new(&*block, inner, include_txs));
             Ok(result_block)
@@ -156,8 +170,10 @@ impl RpcImpl {
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|_| {
-                if let Some(block) =
-                    self.consensus.data_man.block_by_hash(&block_hash, false)
+                if let Some(block) = self
+                    .consensus
+                    .data_man
+                    .block_by_hash(&block_hash, false /* update_cache */)
                 {
                     debug!("Build RpcBlock {}", block.hash());
                     let result_block = RpcBlock::new(&*block, inner, true);
@@ -168,31 +184,6 @@ impl RpcImpl {
                     ))
                 }
             })
-    }
-
-    pub fn transaction_by_hash(
-        &self, hash: RpcH256,
-    ) -> RpcResult<Option<RpcTransaction>> {
-        let hash: H256 = hash.into();
-        info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
-
-        if let Some((transaction, receipt, tx_address)) =
-            self.consensus.get_transaction_info_by_hash(&hash)
-        {
-            Ok(Some(RpcTransaction::from_signed(
-                &transaction,
-                Some(Receipt::new(transaction.clone(), receipt, tx_address)),
-            )))
-        } else {
-            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
-                return Ok(Some(RpcTransaction::from_signed(
-                    &transaction,
-                    None,
-                )));
-            }
-
-            Ok(None)
-        }
     }
 
     pub fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>> {
@@ -256,7 +247,7 @@ impl RpcImpl {
                 RpcBlock::new(
                     self.consensus
                         .data_man
-                        .block_by_hash(x, false)
+                        .block_by_hash(x, false /* update_cache */)
                         .expect("Error to get block by hash")
                         .as_ref(),
                     inner,
@@ -283,11 +274,6 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_best_block_hash(&self) -> RpcResult<H256> {
-        info!("RPC Request: get_best_block_hash()");
-        Ok(self.consensus.best_block_hash())
-    }
-
     pub fn get_block_count(&self) -> RpcResult<u64> {
         info!("RPC Request: get_block_count()");
         let count = self.consensus.block_count();
@@ -295,14 +281,16 @@ impl RpcImpl {
         Ok(count)
     }
 
-    pub fn get_goodput(&self) -> RpcResult<isize> {
+    pub fn get_goodput(&self) -> RpcResult<String> {
         info!("RPC Request: get_goodput");
         let mut set = HashSet::new();
         let mut min = std::u64::MAX;
         let mut max: u64 = 0;
         for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
-            if let Some(block) =
-                self.consensus.data_man.block_by_hash(key, false)
+            if let Some(block) = self
+                .consensus
+                .data_man
+                .block_by_hash(key, false /* update_cache */)
             {
                 let timestamp = block.block_header.timestamp();
                 if timestamp < min && timestamp > 0 {
@@ -317,9 +305,40 @@ impl RpcImpl {
             }
         }
         if max != min {
-            Ok(set.len() as isize / (max - min) as isize)
+            //get goodput for the range (30%, 80%)
+            let lower_bound = min + ((max - min) as f64 * 0.3) as u64;
+            let upper_bound = min + ((max - min) as f64 * 0.8) as u64;
+            let mut ranged_set = HashSet::new();
+            for key in self.consensus.inner.read().hash_to_arena_indices.keys()
+            {
+                if let Some(block) = self
+                    .consensus
+                    .data_man
+                    .block_by_hash(key, false /* update_cache */)
+                {
+                    let timestamp = block.block_header.timestamp();
+                    if timestamp > lower_bound && timestamp < upper_bound {
+                        for transaction in &block.transactions {
+                            ranged_set.insert(transaction.hash());
+                        }
+                    }
+                }
+            }
+            if upper_bound != lower_bound {
+                Ok(format!(
+                    "full: {}, ranged: {}",
+                    set.len() as isize / (max - min) as isize,
+                    ranged_set.len() as isize
+                        / (upper_bound - lower_bound) as isize
+                ))
+            } else {
+                Ok(format!(
+                    "full: {}",
+                    set.len() as isize / (max - min) as isize
+                ))
+            }
         } else {
-            Ok(-1)
+            Ok("-1".to_string())
         }
     }
 
@@ -401,6 +420,12 @@ impl RpcImpl {
                 }
             }
         }
+    }
+
+    pub fn net_disconnect_node(
+        &self, id: NodeId, op: Option<UpdateNodeOperation>,
+    ) -> RpcResult<Option<usize>> {
+        Ok(self.network.disconnect_node(&id, op))
     }
 
     pub fn net_sessions(

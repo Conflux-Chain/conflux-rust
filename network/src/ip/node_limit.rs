@@ -10,14 +10,28 @@ use std::{
     time::Duration,
 };
 
+/// Default maximum duration of last node contact time that used to evict a node
+/// when `NodeBucket` is full.
 const DEFAULT_EVICT_TIMEOUT: Duration = Duration::from_secs(7 * 24 * 3600); // 7 days
 
+/// Validation result before adding a node.
 #[derive(Debug, PartialEq)]
 pub enum ValidateInsertResult {
+    /// Node already exists and IP address not changed
     AlreadyExists,
+    /// Node will be new added, and occupy the IP address used by existing
+    /// node. In this case, the existing node will be evicted before adding
+    /// the new node.
     OccupyIp(NodeId),
+    /// Node is allowed to add or update with new IP address, because the
+    /// corresponding `NodeBucket` has enough quota.
     QuotaEnough,
+    /// Node is allowed to add or update, but need to evict the specified
+    /// existing node first.
     Evict(NodeId),
+    /// Node is not allowed to add or update, because the corresponding
+    /// `NodeBucket` is full, and no node could be evicted. E.g. all nodes in
+    /// the bucket are in connecting status.
     QuotaNotEnough,
 }
 
@@ -33,7 +47,13 @@ pub struct NodeIpLimit {
     subnet_type: SubnetType,
     subnet_quota: usize,     // quota for a subnet
     evict_timeout: Duration, // used to evict out-of-date node
-    buckets: SampleHashMap<u32, NodeBucket>, // one bucket for each subnet
+
+    // all trusted nodes grouped by subnet
+    trusted_buckets: SampleHashMap<u32, NodeBucket>,
+    // all untrusted nodes grouped by subnet
+    untrusted_buckets: SampleHashMap<u32, NodeBucket>,
+
+    // helpful indices
     ip_index: HashMap<IpAddr, NodeId>,
     node_index: HashMap<NodeId, IpAddr>,
 }
@@ -44,7 +64,8 @@ impl NodeIpLimit {
             subnet_type: SubnetType::C,
             subnet_quota,
             evict_timeout: DEFAULT_EVICT_TIMEOUT,
-            buckets: Default::default(),
+            trusted_buckets: Default::default(),
+            untrusted_buckets: Default::default(),
             ip_index: HashMap::new(),
             node_index: HashMap::new(),
         }
@@ -53,6 +74,7 @@ impl NodeIpLimit {
     #[inline]
     pub fn is_enabled(&self) -> bool { self.subnet_quota > 0 }
 
+    /// Get the subnet of specified node `id`.
     pub fn subnet(&self, id: &NodeId) -> Option<u32> {
         let ip = self.node_index.get(id)?;
         Some(self.subnet_type.subnet(ip))
@@ -73,36 +95,52 @@ impl NodeIpLimit {
         self.ip_index.remove(&ip);
 
         let subnet = self.subnet_type.subnet(&ip);
-        let bucket = self
-            .buckets
-            .get_mut(&subnet)
-            .expect("node bucket should exist");
-        bucket.remove(id);
+        if !Self::remove_with_buckets(&mut self.trusted_buckets, subnet, id) {
+            Self::remove_with_buckets(&mut self.untrusted_buckets, subnet, id);
+        }
 
+        true
+    }
+
+    /// Remove node from specified buckets.
+    fn remove_with_buckets(
+        buckets: &mut SampleHashMap<u32, NodeBucket>, subnet: u32, id: &NodeId,
+    ) -> bool {
+        let bucket = match buckets.get_mut(&subnet) {
+            Some(bucket) => bucket,
+            None => return false,
+        };
+
+        if !bucket.remove(id) {
+            return false;
+        }
+
+        // remove bucket on empty
         if bucket.count() == 0 {
-            self.buckets.remove(&subnet);
+            buckets.remove(&subnet);
         }
 
         true
     }
 
     /// Randomly select `n` trusted nodes. Note, it may return less than `n`
-    /// nodes.
+    /// nodes. Note, the time complexity is O(n), where n is the number of
+    /// sampled nodes.
     pub fn sample_trusted(&self, n: u32) -> HashSet<NodeId> {
         if !self.is_enabled() {
             return HashSet::new();
         }
 
         let mut sampled = HashSet::new();
-        if self.buckets.is_empty() {
+        if self.trusted_buckets.is_empty() {
             return sampled;
         }
 
         let mut rng = thread_rng();
 
         for _ in 0..n {
-            if let Some(bucket) = self.buckets.sample(&mut rng) {
-                if let Some(id) = bucket.sample_trusted(&mut rng) {
+            if let Some(bucket) = self.trusted_buckets.sample(&mut rng) {
+                if let Some(id) = bucket.sample(&mut rng) {
                     sampled.insert(id);
                 }
             }
@@ -198,28 +236,47 @@ impl NodeIpLimit {
         self.ip_index.insert(ip, id.clone());
 
         let subnet = self.subnet_type.subnet(&ip);
-        let bucket = self
-            .buckets
-            .get_mut_or_insert_with(subnet, || NodeBucket::default());
-        assert!(bucket.count() < self.subnet_quota);
-        bucket.add(id, trusted);
+        if trusted {
+            self.trusted_buckets
+                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .add(id);
+        } else {
+            self.untrusted_buckets
+                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .add(id);
+        }
     }
 
     /// Check whether the subnet quota is enough for the specified IP address .
     fn is_quota_allowed(&self, ip: &IpAddr) -> bool {
         let subnet = self.subnet_type.subnet(ip);
 
-        match self.buckets.get(&subnet) {
-            Some(bucket) => bucket.count() < self.subnet_quota,
-            None => return true,
-        }
+        let num_trusted = self
+            .trusted_buckets
+            .get(&subnet)
+            .map_or(0, |bucket| bucket.count());
+
+        let num_untrusted = self
+            .untrusted_buckets
+            .get(&subnet)
+            .map_or(0, |bucket| bucket.count());
+
+        num_trusted + num_untrusted < self.subnet_quota
     }
 
     /// Select a node to evict.
     fn select_evictee(&self, ip: &IpAddr, db: &NodeDatabase) -> Option<NodeId> {
         let subnet = self.subnet_type.subnet(&ip);
-        let bucket = self.buckets.get(&subnet)?;
-        bucket.select_evictee(db, self.evict_timeout)
+
+        // evict untrusted node prior to trusted node
+        self.untrusted_buckets
+            .get(&subnet)
+            .and_then(|bucket| bucket.select_evictee(db, self.evict_timeout))
+            .or_else(|| {
+                self.trusted_buckets.get(&subnet).and_then(|bucket| {
+                    bucket.select_evictee(db, self.evict_timeout)
+                })
+            })
     }
 }
 
@@ -247,13 +304,13 @@ mod tests {
         assert_eq!(limit.insert(n2.clone(), ip2, true, None), true);
 
         // remove those 2 nodes
-        validate_node(&limit, &n1, &ip1, true);
+        validate_node(&limit, &n1, &ip1, true /* exists */);
         assert_eq!(limit.remove(&n1), true);
-        validate_node(&limit, &n1, &ip1, false);
+        validate_node(&limit, &n1, &ip1, false /* exists */);
 
-        validate_node(&limit, &n2, &ip2, true);
+        validate_node(&limit, &n2, &ip2, true /* exists */);
         assert_eq!(limit.remove(&n2), true);
-        validate_node(&limit, &n2, &ip2, false);
+        validate_node(&limit, &n2, &ip2, false /* exists */);
     }
 
     #[test]
@@ -302,7 +359,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n.clone(), ip, true, None), true);
-        validate_node(&limit, &n, &ip, true);
+        validate_node(&limit, &n, &ip, true /* exists */);
 
         // cannot insert with same id and ip as trusted or untrusted
         assert_eq!(
@@ -311,7 +368,7 @@ mod tests {
         );
         assert_eq!(limit.insert(n.clone(), ip, true, None), false);
         assert_eq!(limit.insert(n.clone(), ip, false, None), false);
-        validate_node(&limit, &n, &ip, true);
+        validate_node(&limit, &n, &ip, true /* exists */);
     }
 
     #[test]
@@ -327,7 +384,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n1.clone(), ip, true, None), true);
-        validate_node(&limit, &n1, &ip, true);
+        validate_node(&limit, &n1, &ip, true /* exists */);
 
         // add n2 with existing ip which need to evict the n1
         let n2 = NodeId::random();
@@ -338,13 +395,13 @@ mod tests {
 
         // add n2 without evicting n1
         assert_eq!(limit.insert(n2.clone(), ip, true, None), false);
-        validate_node(&limit, &n1, &ip, true); // n1 not evicted
-        validate_node(&limit, &n2, &ip, false); // n2 not inserted
+        validate_node(&limit, &n1, &ip, true /* exists */); // n1 not evicted
+        validate_node(&limit, &n2, &ip, false /* exists */); // n2 not inserted
 
         // add n2 with evicting n1
         assert_eq!(limit.insert(n2.clone(), ip, true, Some(n1.clone())), true);
-        validate_node(&limit, &n1, &ip, false); // n1 evicted
-        validate_node(&limit, &n2, &ip, true); // n2 inserted
+        validate_node(&limit, &n1, &ip, false /* exists */); // n1 evicted
+        validate_node(&limit, &n2, &ip, true /* exists */); // n2 inserted
     }
 
     #[test]
@@ -360,7 +417,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n1.clone(), ip1, true, None), true);
-        validate_node(&limit, &n1, &ip1, true);
+        validate_node(&limit, &n1, &ip1, true /* exists */);
 
         let n2 = NodeId::random();
         let ip2 = new_ip("127.0.0.2");
@@ -369,7 +426,7 @@ mod tests {
             ValidateInsertResult::QuotaEnough
         );
         assert_eq!(limit.insert(n2.clone(), ip2, true, None), true);
-        validate_node(&limit, &n2, &ip2, true);
+        validate_node(&limit, &n2, &ip2, true /* exists */);
 
         // change n2's ip from ip2 to ip1
         assert_eq!(
@@ -379,13 +436,13 @@ mod tests {
 
         // update n2 without evicting n1
         assert_eq!(limit.insert(n2.clone(), ip1, true, None), false);
-        validate_node(&limit, &n1, &ip1, true); // n1 not evicted
-        validate_node(&limit, &n2, &ip2, true); // n2 not updated
+        validate_node(&limit, &n1, &ip1, true /* exists */); // n1 not evicted
+        validate_node(&limit, &n2, &ip2, true /* exists */); // n2 not updated
 
         // update n2 with evicting n1
         assert_eq!(limit.insert(n2.clone(), ip1, true, Some(n1.clone())), true);
-        validate_node(&limit, &n1, &ip1, false); // n1 evicted
-        validate_node(&limit, &n2, &ip1, true); // n2 updated
+        validate_node(&limit, &n1, &ip1, false /* exists */); // n1 evicted
+        validate_node(&limit, &n2, &ip1, true /* exists */); // n2 updated
     }
 
     #[test]

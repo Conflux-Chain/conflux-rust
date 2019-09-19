@@ -22,9 +22,7 @@ macro_rules! construct_counter {
         }
 
         impl $name {
-            pub fn register(
-                name: &'static str,
-            ) -> Arc<dyn Counter<$data_type>> {
+            pub fn register(name: &str) -> Arc<dyn Counter<$data_type>> {
                 if !is_enabled() {
                     return Arc::new(NoopCounter);
                 }
@@ -38,7 +36,7 @@ macro_rules! construct_counter {
             }
 
             pub fn register_with_group(
-                group: &'static str, name: &'static str,
+                group: &str, name: &str,
             ) -> Arc<dyn Counter<$data_type>> {
                 if !is_enabled() {
                     return Arc::new(NoopCounter);
@@ -68,7 +66,7 @@ macro_rules! construct_counter {
         }
 
         impl Metric for $name {
-            fn get_type(&self) -> &'static str { "Counter" }
+            fn get_type(&self) -> &str { "Counter" }
         }
     };
 }

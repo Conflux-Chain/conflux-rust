@@ -22,30 +22,47 @@ pub struct ProofOfWorkSolution {
     pub nonce: u64,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct ProofOfWorkConfig {
     pub test_mode: bool,
+    pub use_stratum: bool,
     pub initial_difficulty: u64,
     pub block_generation_period: u64,
     pub difficulty_adjustment_epoch_period: u64,
+    pub stratum_listen_addr: String,
+    pub stratum_port: u16,
+    pub stratum_secret: Option<H256>,
 }
 
 impl ProofOfWorkConfig {
-    pub fn new(test_mode: bool, initial_difficulty: Option<u64>) -> Self {
+    pub fn new(
+        test_mode: bool, use_stratum: bool, initial_difficulty: Option<u64>,
+        stratum_listen_addr: String, stratum_port: u16,
+        stratum_secret: Option<H256>,
+    ) -> Self
+    {
         if test_mode {
             ProofOfWorkConfig {
                 test_mode,
+                use_stratum,
                 initial_difficulty: initial_difficulty.unwrap_or(4),
                 block_generation_period: 1000000,
                 difficulty_adjustment_epoch_period: 20,
+                stratum_listen_addr,
+                stratum_port,
+                stratum_secret,
             }
         } else {
             ProofOfWorkConfig {
                 test_mode,
+                use_stratum,
                 initial_difficulty: INITIAL_DIFFICULTY,
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
                 difficulty_adjustment_epoch_period:
                     DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD,
+                stratum_listen_addr,
+                stratum_port,
+                stratum_secret,
             }
         }
     }
@@ -125,8 +142,12 @@ pub fn validate(
     hash < problem.boundary
 }
 
-// The input `cur_hash` must have been inserted to BlockDataManager,
-// otherwise it'll panic.
+/// This function computes the target difficulty of the next period
+/// based on the current period. `cur_hash` should be the hash of
+/// the block at the current period upper boundary and it must have been
+/// inserted to BlockDataManager, otherwise the function will panic.
+/// `num_blocks_in_epoch` is a function that returns the epoch size
+/// under the epoch view of a given block.
 pub fn target_difficulty<F>(
     data_man: &BlockDataManager, pow_config: &ProofOfWorkConfig,
     cur_hash: &H256, num_blocks_in_epoch: F,
@@ -136,6 +157,7 @@ where
 {
     if let Some(target_diff) = data_man.target_difficulty_manager.get(cur_hash)
     {
+        // The target difficulty of this period is already computed and cached.
         return target_diff;
     }
 
@@ -155,6 +177,8 @@ where
     let mut block_count = 0 as u64;
     let max_time = cur_header.timestamp();
     let mut min_time = 0;
+
+    // Collect the total block count and the timespan in the current period
     for _ in 0..pow_config.difficulty_adjustment_epoch_period {
         block_count += num_blocks_in_epoch(&cur) as u64 + 1;
         cur = cur_header.parent_hash().clone();
@@ -179,6 +203,7 @@ where
         target_diff = lower;
     }
 
+    // Caching the computed target difficulty of this period.
     data_man
         .target_difficulty_manager
         .set(*cur_hash, target_diff);
@@ -222,6 +247,9 @@ impl TargetDifficultyCache {
 }
 
 //FIXME: Add logic for persisting entries
+/// This is a data structure to cache the computed target difficulty
+/// of a adjustment period. Each element is indexed by the hash of
+/// the upper boundary block of the period.
 pub struct TargetDifficultyManager {
     cache: TargetDifficultyCache,
 }

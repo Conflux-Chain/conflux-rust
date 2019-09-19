@@ -16,7 +16,6 @@ use std::{collections::HashSet, time::Instant};
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct Status {
     pub protocol_version: u8,
-    pub network_id: u8,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub terminal_block_hashes: Vec<H256>,
@@ -46,13 +45,19 @@ impl Handleable for Status {
                     return Err(ErrorKind::Invalid.into());
                 }
                 peer_info.heartbeat = Instant::now();
-                if self.best_epoch > peer_info.best_epoch {
+
+                let updated = self.best_epoch != peer_info.best_epoch
+                    || latest != peer_info.latest_block_hashes;
+
+                // NOTE: we need to update best_epoch even if it's smaller than
+                // the previous value, otherwise sync will get stuck in tests
+                // with large chain reorg (decreasing best epoch value)
+                if updated {
                     peer_info.best_epoch = self.best_epoch;
                     peer_info.latest_block_hashes = latest;
-                    true
-                } else {
-                    false
                 }
+
+                updated
             };
 
             if latest_updated {

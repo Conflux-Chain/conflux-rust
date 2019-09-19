@@ -2,8 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::H256;
 use cfxcore::{
-    block_data_manager::DataManagerConfiguration,
+    block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
@@ -40,8 +41,10 @@ build_config! {
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (genesis_accounts, (Option<String>), None)
+        (genesis_secrets, (Option<String>), None)
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
+        (network_id, (u64), 1)
         (bootnodes, (Option<String>), None)
         (netconf_dir, (Option<String>), Some("./net_config".to_string()))
         (net_key, (Option<String>), None)
@@ -80,6 +83,9 @@ build_config! {
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
         (mining_author, (Option<String>), None)
+        (use_stratum, (bool), false)
+        (stratum_port, (u16), 32525)
+        (stratum_secret, (Option<String>), None)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
@@ -90,7 +96,7 @@ build_config! {
         (data_propagate_size, (usize), 1000)
         (record_tx_address, (bool), true)
         // TODO Set default to true when we have new tx pool implementation
-        (enable_optimistic_execution, (bool), false)
+        (enable_optimistic_execution, (bool), true)
         (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
         (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
@@ -106,9 +112,10 @@ build_config! {
         (max_peers_propagation, (usize), 128)
         (future_block_buffer_capacity, (usize), 32768)
         (txgen_account_count, (usize), 10)
-        (persist_header, (bool), true)
         (tx_cache_count, (usize), 250000)
         (max_download_state_peers, (usize), 8)
+        (block_db_type, (String), "rocksdb".to_string())
+        (rocksdb_disable_wal, (bool), false)
     }
     {
         (
@@ -152,6 +159,7 @@ impl Configuration {
             None => NetworkConfiguration::default(),
         };
 
+        network_config.id = self.raw_conf.network_id;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
             .map_err(|e| format!("failed to parse bootnodes: {}", e))?;
@@ -230,6 +238,7 @@ impl Configuration {
             self.raw_conf.db_cache_size.clone(),
             compact_profile,
             NUM_COLUMNS.clone(),
+            self.raw_conf.rocksdb_disable_wal,
         )
     }
 
@@ -261,9 +270,27 @@ impl Configuration {
     }
 
     pub fn pow_config(&self) -> ProofOfWorkConfig {
+        let stratum_listen_addr =
+            if let Some(listen_addr) = self.raw_conf.public_address.clone() {
+                listen_addr
+            } else {
+                String::from("")
+            };
+
+        let stratum_secret =
+            self.raw_conf
+                .stratum_secret
+                .clone()
+                .map(|hex_str| H256::from_str(hex_str.as_str())
+                    .expect("Stratum secret should be 64-digit hex string without 0x prefix"));
+
         ProofOfWorkConfig::new(
             self.raw_conf.test_mode,
+            self.raw_conf.use_stratum,
             self.raw_conf.initial_difficulty,
+            stratum_listen_addr,
+            self.raw_conf.stratum_port,
+            stratum_secret,
         )
     }
 
@@ -328,14 +355,19 @@ impl Configuration {
                 .raw_conf
                 .future_block_buffer_capacity,
             max_download_state_peers: self.raw_conf.max_download_state_peers,
+            test_mode: self.raw_conf.test_mode,
         }
     }
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
         DataManagerConfiguration::new(
             self.raw_conf.record_tx_address,
-            self.raw_conf.persist_header,
             self.raw_conf.tx_cache_count,
+            match self.raw_conf.block_db_type.as_str() {
+                "rocksdb" => DbType::Rocksdb,
+                "sqlite" => DbType::Sqlite,
+                _ => panic!("Invalid block_db_type parameter!"),
+            },
         )
     }
 }

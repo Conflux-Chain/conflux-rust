@@ -2,8 +2,8 @@
 
 from argparse import ArgumentParser
 from collections import Counter
-from eth_utils import decode_hex
-from rlp.sedes import Binary, BigEndianInt
+import eth_utils
+import rlp
 import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,6 +16,8 @@ from test_framework.mininode import *
 from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
 from scripts.exp_latency import pscp, pssh, kill_remote_conflux
+import csv
+import os
 
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
@@ -152,8 +154,19 @@ class RemoteSimulate(ConfluxTestFramework):
         parser.add_argument(
             "--tx-pool-size",
             dest="tx_pool_size",
-            default=500000,
+            default=1000000,
             type=int,
+        )
+        parser.add_argument(
+            "--genesis-secrets",
+            dest="genesis_secrets",
+            default="/home/ubuntu/genesis_secrets.txt",
+            type=str,
+        )
+        parser.add_argument(
+            "--enable-flamegraph",
+            dest="flamegraph_enabled",
+            action="store_true"
         )
 
     def after_options_parsed(self):
@@ -210,6 +223,9 @@ class RemoteSimulate(ConfluxTestFramework):
         self.conf_parameters["max_peers_propagation"] = str(self.options.max_peers_propagation)
         self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
 
+        #genesis accounts
+        self.conf_parameters["genesis_secrets"] = str("\'{}\'".format(self.options.genesis_secrets))
+
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
 
@@ -228,8 +244,9 @@ class RemoteSimulate(ConfluxTestFramework):
         cmd_kill_conflux = "killall -9 conflux || echo already killed"
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
-        cmd_startup = "sh ./remote_start_conflux.sh {} {} {} {} &> start_conflux.out".format(
-            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, self.options.bandwidth,
+        cmd_startup = "./remote_start_conflux.sh {} {} {} {} {}&> start_conflux.out".format(
+            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, 
+            self.options.bandwidth, str(self.options.flamegraph_enabled).lower()
         )
         cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
@@ -255,14 +272,15 @@ class RemoteSimulate(ConfluxTestFramework):
         num_nodes = len(self.nodes)
 
         if self.tx_propagation_enabled:
-            # Setup balance for each node
-            client = RpcClient(self.nodes[0])
-            for i in range(num_nodes):
-                pub_key = self.nodes[i].key
-                addr = self.nodes[i].addr
-                self.log.info("%d has addr=%s pubkey=%s", i, encode_hex(addr), pub_key)
-                tx = client.new_tx(value=int(default_config["TOTAL_COIN"]/(num_nodes + 1)) - 21000, receiver=encode_hex(addr), nonce=i)
-                client.send_tx(tx)
+            #setup usable accounts
+
+            start_time = time.time()
+            current_index=0
+            for i in range(len(self.nodes)):
+                client = RpcClient(self.nodes[i])
+                client.send_usable_genesis_accounts(current_index)
+                current_index+=self.options.txgen_account_count
+            self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
 
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
@@ -305,20 +323,26 @@ class RemoteSimulate(ConfluxTestFramework):
             if i % self.options.block_sync_step == 0:
                 self.log.info("[PROGRESS] %d blocks generated async", i)
 
+            self.progress = i
+
             elapsed = time.time() - start
             if elapsed < wait_sec:
                 self.log.debug("%d generating block %.2f", p, elapsed)
                 time.sleep(wait_sec - elapsed)
-            else:
+            elif elapsed > 0.01:
                 self.log.warn("%d generating block slowly %.2f", p, elapsed)
 
         monitor_thread.join()
+        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         self.sync_blocks()
 
         self.log.info("generateoneblock RPC latency: {}".format(Statistics(rpc_times, 3).__dict__))
         self.log.info("Best block: {}".format(RpcClient(self.nodes[0]).best_block_hash()))
 
     def sync_blocks(self):
+        """
+        Wait for all nodes to reach same block count and best block
+        """
         self.log.info("wait for all nodes to sync blocks ...")
 
         executor = ThreadPoolExecutor()
@@ -334,7 +358,7 @@ class RemoteSimulate(ConfluxTestFramework):
             for i in range(len(self.nodes)):
                 n = self.nodes[i]
                 block_count_futures.append(executor.submit(n.getblockcount))
-                best_block_futures.append(executor.submit(n.getbestblockhash))
+                best_block_futures.append(executor.submit(n.best_block_hash))
 
             for f in block_count_futures:
                 assert f.exception() is None, "failed to get block count: {}".format(f.exception())
@@ -354,7 +378,6 @@ class RemoteSimulate(ConfluxTestFramework):
                 break
 
             time.sleep(5)
-        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         executor.shutdown()
 
     def monitor(self, cur_block_count:int, retry_max:int):
@@ -367,7 +390,8 @@ class RemoteSimulate(ConfluxTestFramework):
             # block count
             block_count = self.nodes[0].getblockcount()
             if block_count != pre_block_count:
-                self.log.info("current blocks: %d", block_count)
+                gap = self.progress + cur_block_count - block_count
+                self.log.info("current blocks: %d (gaps: %d)", block_count, gap)
                 pre_block_count = block_count
                 retry = 0
             else:
@@ -416,7 +440,9 @@ class SimpleGenerateThread(GenerateThread):
         try:
             client = RpcClient(self.nodes[self.i])
             # Do not limit num tx in blocks, only limit it with block size
+            start = time.time()
             h = client.generate_block(10000000, self.tx_n * self.tx_data_len)
+            self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
             self.log.error("Node %d fails to generate block", self.i)

@@ -4,7 +4,9 @@ use super::{
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use cfx_types::{Address, H256, H512, U256, U512};
-use metrics::{register_meter_with_group, Meter, MeterTimer};
+use metrics::{
+    register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
+};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use rlp::*;
 use std::{
@@ -13,18 +15,24 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
-pub const TIME_WINDOW: u64 = 100;
+const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+// By default, the capacity of tx pool is 500K, so the maximum TPS is
+// 500K / 100 = 5K
+const TIME_WINDOW: u64 = 100;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::recalculate");
     static ref TX_POOL_INNER_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::inner_insert");
-    static ref TX_POOL_INNER_FAILED_GARBAGE_COLLECTED: Arc<dyn Meter> =
-        register_meter_with_group("txpool", "failed_garbage_collected");
     static ref DEFERRED_POOL_INNER_INSERT: Arc<dyn Meter> =
         register_meter_with_group("timer", "deferred_pool::inner_insert");
+    static ref GC_UNEXECUTED_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register_with_group("txpool", "gc_unexecuted");
+    static ref GC_READY_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register_with_group("txpool", "gc_ready");
+    static ref GC_METER: Arc<dyn Meter> =
+        register_meter_with_group("txpool", "gc_txs_tps");
 }
 
 struct DeferredPool {
@@ -136,6 +144,9 @@ impl ReadyAccountPool {
         &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
     ) -> Option<Arc<SignedTransaction>> {
         let replaced = if let Some(tx) = tx {
+            if tx.hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in ready pool", tx.hash);
+            }
             self.insert(tx)
         } else {
             self.remove(address)
@@ -230,6 +241,7 @@ impl TransactionPoolInner {
     }
 
     fn collect_garbage(&mut self) {
+        let count_before_gc = self.garbage_collection_queue.len();
         while self.is_full() {
             let (addr, timestamp) =
                 self.garbage_collection_queue.front().unwrap().clone();
@@ -249,6 +261,7 @@ impl TransactionPoolInner {
                 *self.deferred_pool.get_lowest_nonce(&addr).unwrap();
 
             if lowest_nonce >= ready_nonce {
+                GC_UNEXECUTED_COUNTER.inc(1);
                 warn!("an unexecuted tx is garbage-collected.");
             }
 
@@ -270,6 +283,7 @@ impl TransactionPoolInner {
             if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
                 if ready_tx.hash() == removed_tx.hash() {
                     warn!("a ready tx is garbage-collected");
+                    GC_READY_COUNTER.inc(1);
                     self.ready_account_pool.remove(&addr);
                 }
             }
@@ -282,10 +296,25 @@ impl TransactionPoolInner {
             // maintain txs
             self.txs.remove(&removed_tx.hash());
         }
+
+        GC_METER.mark(count_before_gc - self.garbage_collection_queue.len());
+    }
+
+    /// Collect garbage and return the remaining quota of the pool to insert new
+    /// transactions.
+    pub fn remaining_quota(&mut self) -> usize {
+        self.collect_garbage();
+
+        let len = self.garbage_collection_queue.len();
+        if len < self.capacity {
+            self.capacity - len
+        } else {
+            0
+        }
     }
 
     // the new inserting will fail if tx_pool is full (even if `force` is true)
-    pub fn insert_transaction_without_readiness_check(
+    fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool,
     ) -> InsertResult
@@ -555,6 +584,12 @@ impl TransactionPoolInner {
             account_cache,
         );
 
+        if transaction.hash[0] & 254 == 0 {
+            debug!(
+                "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
+                transaction.hash, transaction.sender, transaction.nonce, state_nonce
+            );
+        }
         if transaction.nonce
             >= state_nonce
                 + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
@@ -643,14 +678,24 @@ mod test_transaction_pool_inner {
         let bob = Random.generate().unwrap();
         let eva = Random.generate().unwrap();
 
-        let alice_tx1 = new_test_tx_with_read_info(&alice, 5, 10, 100, false);
-        let alice_tx2 = new_test_tx_with_read_info(&alice, 6, 10, 100, false);
-        let bob_tx1 = new_test_tx_with_read_info(&bob, 1, 10, 100, false);
-        let bob_tx2 = new_test_tx_with_read_info(&bob, 2, 10, 100, false);
-        let bob_tx2_new = new_test_tx_with_read_info(&bob, 2, 11, 100, false);
+        let alice_tx1 = new_test_tx_with_read_info(
+            &alice, 5, 10, 100, false, /* packed */
+        );
+        let alice_tx2 = new_test_tx_with_read_info(
+            &alice, 6, 10, 100, false, /* packed */
+        );
+        let bob_tx1 = new_test_tx_with_read_info(
+            &bob, 1, 10, 100, false, /* packed */
+        );
+        let bob_tx2 = new_test_tx_with_read_info(
+            &bob, 2, 10, 100, false, /* packed */
+        );
+        let bob_tx2_new = new_test_tx_with_read_info(
+            &bob, 2, 11, 100, false, /* packed */
+        );
 
         assert_eq!(
-            deferred_pool.insert(alice_tx1.clone(), false),
+            deferred_pool.insert(alice_tx1.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
@@ -663,31 +708,31 @@ mod test_transaction_pool_inner {
         assert_eq!(deferred_pool.contain_address(&bob.address()), false);
 
         assert_eq!(
-            deferred_pool.insert(alice_tx2.clone(), false),
+            deferred_pool.insert(alice_tx2.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
         assert_eq!(deferred_pool.remove_lowest_nonce(&bob.address()), None);
 
         assert_eq!(
-            deferred_pool.insert(bob_tx1.clone(), false),
+            deferred_pool.insert(bob_tx1.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
         assert_eq!(deferred_pool.contain_address(&bob.address()), true);
 
         assert_eq!(
-            deferred_pool.insert(bob_tx2.clone(), false),
+            deferred_pool.insert(bob_tx2.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
         assert_eq!(
-            deferred_pool.insert(bob_tx2_new.clone(), false),
+            deferred_pool.insert(bob_tx2_new.clone(), false /* force */),
             InsertResult::Updated(bob_tx2.clone())
         );
 
         assert_eq!(
-            deferred_pool.insert(bob_tx2.clone(), false),
+            deferred_pool.insert(bob_tx2.clone(), false /* force */),
             InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
         );
 
@@ -725,17 +770,27 @@ mod test_transaction_pool_inner {
         let alice = Random.generate().unwrap();
 
         let gas = 50000;
-        let tx1 = new_test_tx_with_read_info(&alice, 5, 10, 10000, true);
-        let tx2 = new_test_tx_with_read_info(&alice, 6, 10, 10000, true);
-        let tx3 = new_test_tx_with_read_info(&alice, 7, 10, 10000, true);
-        let tx4 = new_test_tx_with_read_info(&alice, 8, 10, 10000, false);
-        let tx5 = new_test_tx_with_read_info(&alice, 9, 10, 10000, false);
+        let tx1 = new_test_tx_with_read_info(
+            &alice, 5, 10, 10000, true, /* packed */
+        );
+        let tx2 = new_test_tx_with_read_info(
+            &alice, 6, 10, 10000, true, /* packed */
+        );
+        let tx3 = new_test_tx_with_read_info(
+            &alice, 7, 10, 10000, true, /* packed */
+        );
+        let tx4 = new_test_tx_with_read_info(
+            &alice, 8, 10, 10000, false, /* packed */
+        );
+        let tx5 = new_test_tx_with_read_info(
+            &alice, 9, 10, 10000, false, /* packed */
+        );
         let exact_cost = 4 * (gas * 10 + 10000);
 
-        deferred_pool.insert(tx1.clone(), false);
-        deferred_pool.insert(tx2.clone(), false);
-        deferred_pool.insert(tx4.clone(), false);
-        deferred_pool.insert(tx5.clone(), false);
+        deferred_pool.insert(tx1.clone(), false /* force */);
+        deferred_pool.insert(tx2.clone(), false /* force */);
+        deferred_pool.insert(tx4.clone(), false /* force */);
+        deferred_pool.insert(tx5.clone(), false /* force */);
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
@@ -764,7 +819,7 @@ mod test_transaction_pool_inner {
             Some(tx4.transaction.clone())
         );
 
-        deferred_pool.insert(tx3.clone(), false);
+        deferred_pool.insert(tx3.clone(), false /* force */);
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice.address(),

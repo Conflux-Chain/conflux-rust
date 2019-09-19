@@ -18,16 +18,21 @@ use secret_store::SecretStore;
 use threadpool::ThreadPool;
 
 use cfxcore::{
-    block_data_manager::BlockDataManager, genesis,
-    light_protocol::QueryService, statistics::Statistics,
-    storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, SynchronizationGraph,
-    TransactionPool, WORKER_COMPUTATION_PARALLELISM,
+    block_data_manager::BlockDataManager,
+    genesis,
+    state_exposer::{SharedStateExposer, StateExposer},
+    statistics::Statistics,
+    storage::StorageManager,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    vm_factory::VmFactory,
+    ConsensusGraph, LightQueryService, SynchronizationGraph, TransactionPool,
+    WORKER_COMPUTATION_PARALLELISM,
 };
 
 use crate::{
     configuration::Configuration,
     rpc::{
+        extractor::RpcExtractor,
         impls::{common::RpcImpl as CommonImpl, light::RpcImpl},
         setup_debug_rpc_apis_light, setup_public_rpc_apis_light,
     },
@@ -41,7 +46,7 @@ pub struct LightClientHandle {
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
     pub ledger_db: Weak<SystemDB>,
-    pub light: Arc<QueryService>,
+    pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub secret_store: Arc<SecretStore>,
@@ -127,12 +132,18 @@ impl LightClient {
         }
 
         let genesis_accounts = if conf.raw_conf.test_mode {
+            match conf.raw_conf.genesis_secrets {
+                Some(ref file) => {
+                    genesis::default(secret_store.as_ref());
+                    genesis::load_secrets_file(file, secret_store.as_ref())?
+                }
+                None => genesis::default(secret_store.as_ref()),
+            }
+        } else {
             match conf.raw_conf.genesis_accounts {
                 Some(ref file) => genesis::load_file(file)?,
                 None => genesis::default(secret_store.as_ref()),
             }
-        } else {
-            genesis::default(secret_store.as_ref())
         };
 
         // FIXME: move genesis block to a dedicated directory near all conflux
@@ -160,6 +171,7 @@ impl LightClient {
         ));
 
         let statistics = Arc::new(Statistics::new());
+        let state_exposer = SharedStateExposer::new(StateExposer::new());
 
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
@@ -170,6 +182,7 @@ impl LightClient {
             statistics.clone(),
             data_man.clone(),
             pow_config.clone(),
+            state_exposer.clone(),
         ));
 
         let _protocol_config = conf.protocol_config();
@@ -188,23 +201,24 @@ impl LightClient {
             Arc::new(network)
         };
 
-        let light = Arc::new(QueryService::new(
+        let light = Arc::new(LightQueryService::new(
             consensus.clone(),
             sync_graph.clone(),
             network.clone(),
         ));
         light.register().unwrap();
 
-        let rpc_impl = Arc::new(RpcImpl::new(consensus.clone(), light.clone()));
+        let rpc_impl = Arc::new(RpcImpl::new(light.clone()));
 
         let common_impl = Arc::new(CommonImpl::new(
             exit,
             consensus.clone(),
             network.clone(),
             txpool.clone(),
+            state_exposer.clone(),
         ));
 
-        let debug_rpc_http_server = super::rpc::new_http(
+        let debug_rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 Some((127, 0, 0, 1)),
                 conf.raw_conf.jsonrpc_local_http_port,
@@ -214,7 +228,7 @@ impl LightClient {
             setup_debug_rpc_apis_light(common_impl.clone(), rpc_impl.clone()),
         )?;
 
-        let rpc_tcp_server = super::rpc::new_tcp(
+        let rpc_tcp_server = super::rpc::start_tcp(
             super::rpc::TcpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_tcp_port,
@@ -230,9 +244,10 @@ impl LightClient {
                     rpc_impl.clone(),
                 )
             },
+            RpcExtractor,
         )?;
 
-        let rpc_http_server = super::rpc::new_http(
+        let rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 None,
                 conf.raw_conf.jsonrpc_http_port,

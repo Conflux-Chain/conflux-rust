@@ -9,8 +9,8 @@ macro_rules! make_parallel_field_maybe_in_place_byte_array_memory_manager {
         $manager_field:ident,
         $byte_array_field:ident,
         $size_field:ident :
-        $size_type:tt,
-        $size_getter_setter_type:tt,
+        $size_type:ty,
+        $size_getter_setter_type:ty,
     ) => {
         #[derive(Default, Clone)]
         pub struct $accessor_type$($(<$($constrain_item: $constrain)*>)?)? (

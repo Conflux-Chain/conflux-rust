@@ -154,16 +154,17 @@ impl<'a> CallCreateExecutive<'a> {
             if !builtin.is_active(env.number) {
                 panic!("Consensus failure: engine implementation prematurely enabled built-in at {}", params.code_address);
             }
-
+            trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(params)
         } else {
             if params.code.is_some() {
+                trace!("ExecCall");
                 CallCreateExecutiveKind::ExecCall(params, Substate::new())
             } else {
+                trace!("Transfer");
                 CallCreateExecutiveKind::Transfer(params)
             }
         };
-
         Self {
             env,
             machine,
@@ -968,8 +969,9 @@ impl<'a, 'b> Executive<'a, 'b> {
     }
 
     pub fn transact(
-        &mut self, tx: &SignedTransaction,
+        &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
     ) -> ExecutionResult<Executed> {
+        *nonce_increased = false;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
 
@@ -1024,6 +1026,7 @@ impl<'a, 'b> Executive<'a, 'b> {
         // Increase nonce even sender does not have enough balance
         if !spec.keep_unsigned_nonce || !tx.is_unsigned() {
             self.state.inc_nonce(&sender)?;
+            *nonce_increased = true;
         }
 
         let mut substate = Substate::new();
@@ -1245,7 +1248,7 @@ mod tests {
     use std::str::FromStr;
 
     fn make_byzantium_machine(max_depth: usize) -> Machine {
-        let mut machine = crate::machine::new_machine();
+        let mut machine = crate::machine::new_machine_with_builtin();
         machine.set_spec_creation_rules(Box::new(move |s, _| {
             s.max_depth = max_depth
         }));
@@ -1487,7 +1490,7 @@ mod tests {
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::zero());
         let env = Env::default();
-        let machine = crate::machine::new_machine();
+        let machine = crate::machine::new_machine_with_builtin();
         let spec = machine.spec(env.number);
         let mut substate = Substate::new();
 
@@ -1595,7 +1598,8 @@ mod tests {
 
         let res = {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.transact(&t)
+            let mut nonce_increased = false;
+            ex.transact(&t, &mut nonce_increased)
         };
 
         match res {

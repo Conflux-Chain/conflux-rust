@@ -7,7 +7,7 @@ pub type ChildrenMerkleMap =
 
 pub struct State<'a> {
     manager: &'a StateManager,
-    snapshot_db: Arc<SnapshotDb>,
+    snapshot_db: SnapshotDb,
     intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     delta_trie: Arc<DeltaMpt>,
@@ -52,7 +52,7 @@ impl<'a> State<'a> {
                     mpt,
                     root_node.clone(),
                     &mut empty_owned_node_set,
-                )
+                )?
                 .get(access_key)?;
 
                 let maybe_proof = match with_proof {
@@ -62,7 +62,7 @@ impl<'a> State<'a> {
                             mpt,
                             root_node,
                             &mut empty_owned_node_set,
-                        )
+                        )?
                         .get_proof(access_key)?,
                     ),
                 };
@@ -75,7 +75,7 @@ impl<'a> State<'a> {
     pub fn get_from_snapshot(
         &self, access_key: &[u8],
     ) -> Result<Option<Box<[u8]>>> {
-        SnapshotDbTrait::get(&*self.snapshot_db, access_key)
+        self.snapshot_db.get(access_key)
     }
 
     fn get_from_all_tries(
@@ -149,7 +149,7 @@ impl<'a> StateTrait for State<'a> {
                 &self.delta_trie,
                 root_node,
                 &mut empty_owned_node_set,
-            )
+            )?
             .get_merkle_hash_wo_compressed_path(access_key),
         }
     }
@@ -173,7 +173,7 @@ impl<'a> StateTrait for State<'a> {
             &self.delta_trie,
             root_node,
             &mut self.owned_node_set,
-        )
+        )?
         .set(access_key, value)?
         .into();
 
@@ -190,7 +190,7 @@ impl<'a> StateTrait for State<'a> {
                     &self.delta_trie,
                     old_root_node,
                     &mut self.owned_node_set,
-                )
+                )?
                 .delete(access_key)?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
@@ -211,7 +211,7 @@ impl<'a> StateTrait for State<'a> {
                     &self.delta_trie,
                     old_root_node,
                     &mut self.owned_node_set,
-                )
+                )?
                 .delete_all(access_key_prefix, access_key_prefix)?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
@@ -324,7 +324,7 @@ impl<'a> State<'a> {
                     &self.delta_trie,
                     self.owned_node_set.as_mut().unwrap(),
                     &allocator,
-                    self.delta_trie.db_read_only(),
+                    &mut *self.delta_trie.db_owned_read()?,
                     &mut self.children_merkle_map,
                     0,
                 )?;

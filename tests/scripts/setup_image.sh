@@ -27,6 +27,11 @@ apt_wait
 sudo apt install -y iotop clang git jq pssh libsqlite3-dev xutils-dev
 pip3 install prettytable
 
+sudo apt install -y linux-tools-common
+sudo apt install -y linux-tools-`uname -r`
+cargo install flamegraph
+echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
 if [[ ! -d conflux-rust ]]; then
   git clone https://github.com/Conflux-Chain/conflux-rust
 fi
@@ -46,5 +51,6 @@ cargo update
 cargo build --release --features "deadlock_detection"
 ./dev-support/dep_pip3.sh
 cd tests/scripts
-cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py ~
+wget https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt
+cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py genesis_secrets.txt ~
 
