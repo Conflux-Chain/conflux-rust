@@ -239,11 +239,11 @@ class NodeLogMapper:
 
     def parse_log_line(self, line:str):
         if "new block headers received" in line:
-            block = Block.receive(line, BlockLatencyType.header_received)
+            block = Block.receive(line, BlockLatencyType.Header_received)
             Block.add_or_merge(self.blocks, block)
 
         if "new block received" in line:
-            block = Block.receive(line, BlockLatencyType.receive)
+            block = Block.receive(line, BlockLatencyType.Receive)
             Block.add_or_merge(self.blocks, block)
 
         if "new block inserted into graph" in line:
