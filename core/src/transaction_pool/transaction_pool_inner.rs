@@ -4,7 +4,9 @@ use super::{
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use cfx_types::{Address, H256, H512, U256, U512};
-use metrics::{register_meter_with_group, Meter, MeterTimer};
+use metrics::{
+    register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
+};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use rlp::*;
 use std::{
@@ -15,18 +17,22 @@ use std::{
 
 const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
 // By default, the capacity of tx pool is 500K, so the maximum TPS is
-// 500K / 50 = 10,000
-const TIME_WINDOW: u64 = 50;
+// 500K / 100 = 5K
+const TIME_WINDOW: u64 = 100;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::recalculate");
     static ref TX_POOL_INNER_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::inner_insert");
-    static ref TX_POOL_INNER_FAILED_GARBAGE_COLLECTED: Arc<dyn Meter> =
-        register_meter_with_group("txpool", "failed_garbage_collected");
     static ref DEFERRED_POOL_INNER_INSERT: Arc<dyn Meter> =
         register_meter_with_group("timer", "deferred_pool::inner_insert");
+    static ref GC_UNEXECUTED_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register_with_group("txpool", "gc_unexecuted");
+    static ref GC_READY_COUNTER: Arc<dyn Counter<usize>> =
+        CounterUsize::register_with_group("txpool", "gc_ready");
+    static ref GC_METER: Arc<dyn Meter> =
+        register_meter_with_group("txpool", "gc_txs_tps");
 }
 
 struct DeferredPool {
@@ -235,6 +241,7 @@ impl TransactionPoolInner {
     }
 
     fn collect_garbage(&mut self) {
+        let count_before_gc = self.garbage_collection_queue.len();
         while self.is_full() {
             let (addr, timestamp) =
                 self.garbage_collection_queue.front().unwrap().clone();
@@ -254,6 +261,7 @@ impl TransactionPoolInner {
                 *self.deferred_pool.get_lowest_nonce(&addr).unwrap();
 
             if lowest_nonce >= ready_nonce {
+                GC_UNEXECUTED_COUNTER.inc(1);
                 warn!("an unexecuted tx is garbage-collected.");
             }
 
@@ -275,6 +283,7 @@ impl TransactionPoolInner {
             if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
                 if ready_tx.hash() == removed_tx.hash() {
                     warn!("a ready tx is garbage-collected");
+                    GC_READY_COUNTER.inc(1);
                     self.ready_account_pool.remove(&addr);
                 }
             }
@@ -287,6 +296,8 @@ impl TransactionPoolInner {
             // maintain txs
             self.txs.remove(&removed_tx.hash());
         }
+
+        GC_METER.mark(count_before_gc - self.garbage_collection_queue.len());
     }
 
     /// Collect garbage and return the remaining quota of the pool to insert new
