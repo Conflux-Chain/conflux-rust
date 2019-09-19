@@ -1,5 +1,7 @@
 import random
 import threading
+import json
+import enum
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
@@ -18,9 +20,83 @@ class Timer(threading.Timer):
                 break
 
 
+class BlockStatus(enum.Enum):
+    Valid = 0
+    Invalid = 1
+    PartialInvalid = 2
+    Pending = 3
+
+
+class ConsensusBlockStatus(object):
+    def __init__(self, json_data):
+        self.hash = json_data['blockHash']
+        self.best_block_hash = json_data['bestBlockHash']
+        self.block_status = BlockStatus(json_data['blockStatus'])
+        self.past_era_weight = json_data['pastEraWeight']
+        self.era_block = json_data['eraBlock']
+        self.stable = json_data['stable']
+        self.adaptive = json_data['adaptive']
+
+
+class ConsensusExecutionStatus(object):
+    def __init__(self, json_data):
+        self.hash = json_data['blockHash']
+        self.deferred_state_root = json_data['deferredStateRoot']
+        self.deferred_receipt_root = json_data['deferredReceiptRoot']
+        self.deferred_logs_bloom_hash = json_data['deferredLogsBloomHash']
+        self.state_valid = json_data['stateValid']
+
+
+class ConsensusSnapshot(object):
+    def __init__(self):
+        self.block_status_verified = {}
+        self.block_status_unverified = {}
+        self.exec_status_verified = {}
+        self.exec_status_unverified = {}
+
+    def add_block(self, block):
+        if block.hash in self.block_status_verified:
+            verified_block = self.block_status_verified[block.hash]
+            if block.block_status != BlockStatus.Pending:
+                assert block.block_status == verified_block.block_status
+                assert block.stable == verified_block.stable
+                assert block.adaptive == verified_block.adaptive
+                assert block.era_block == verified_block.era_block
+                assert block.past_era_weight == verified_block.past_era_weight
+        elif block.hash in self.block_status_unverified:
+            unverified_block = self.block_status_unverified[block.hash]
+            if unverified_block.block_status == BlockStatus.Pending:
+                self.block_status_unverified[block.hash] = block
+            else:
+                if block.block_status != BlockStatus.Pending:
+                    assert block.block_status == unverified_block.block_status
+                    assert block.stable == unverified_block.stable
+                    assert block.adaptive == unverified_block.adaptive
+                    assert block.era_block == unverified_block.era_block
+                    assert block.past_era_weight == unverified_block.past_era_weight
+        else:
+            self.block_status_unverified[block.hash] = block
+
+    def add_exec(self, exec):
+        if exec.hash in self.exec_status_verified:
+            verified_exec = self.exec_status_verified[exec.hash]
+            assert exec.deferred_state_root == verified_exec.deferred_state_root
+            assert exec.deferred_receipt_root == verified_exec.deferred_receipt_root
+            assert exec.deferred_logs_bloom_hash == verified_exec.deferred_logs_bloom_hash
+            assert exec.state_valid == verified_exec.state_valid
+        elif exec.hash in self.exec_status_unverified:
+            unverified_exec = self.exec_status_unverified[exec.hash]
+            assert exec.deferred_state_root == unverified_exec.deferred_state_root
+            assert exec.deferred_receipt_root == unverified_exec.deferred_receipt_root
+            assert exec.deferred_logs_bloom_hash == unverified_exec.deferred_logs_bloom_hash
+            assert exec.state_valid == unverified_exec.state_valid
+        else:
+            self.exec_status_unverified[exec.hash] = exec
+
+
 class Snapshot(object):
     def __init__(self):
-        self.consensus = None
+        self.consensus = ConsensusSnapshot()
         self.sync_graph = None
         self.network = None
 
@@ -28,7 +104,12 @@ class Snapshot(object):
         """
             incremental evaluation on delta data
         """
-        pass
+        # print("add blockStateVec: {}, blockExecutionStateVec: {}".format(
+        #     len(delta['blockStateVec']), len(delta['blockExecutionStateVec'])))
+        for block_status in delta['blockStateVec']:
+            self.consensus.add_block(ConsensusBlockStatus(block_status))
+        for exec_status in delta['blockExecutionStateVec']:
+            self.consensus.add_exec(ConsensusExecutionStatus(exec_status))
 
 
 class ConfluxTracing(ConfluxTestFramework):
@@ -96,9 +177,14 @@ class ConfluxTracing(ConfluxTestFramework):
         self._peer_lock.release()
 
     def _retrieve_snapshot(self):
-        for (snapshot, node) in zip(self._snapshots, self.nodes):
-            # TODO: retrieve incremental update from peer
-            snapshot.update(None)
+        self._peer_lock.acquire()
+        for (snapshot, (i, node)) in zip(self._snapshots, enumerate(self.nodes)):
+            # skip stopped nodes
+            if i in self._stopped_peers:
+                continue
+            delta = node.consensus_graph_state()
+            snapshot.update(delta)
+        self._peer_lock.release()
         self._lock.acquire()
         for predicate in self._predicates:
             predicate(self._snapshots)
@@ -107,9 +193,12 @@ class ConfluxTracing(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 8
-        self.conf_parameters = {"log_level": "\"debug\""}
-        self.conf_parameters["generate_tx"] = "true"
-        self.conf_parameters["generate_tx_period_us"] = "100000"
+        self.conf_parameters = {
+            "log_level": "\"debug\"",
+            "generate_tx": "true",
+            "generate_tx_period_us": "100000",
+            "enable_state_expose": "true"
+        }
 
     def setup_network(self):
         self.log.info("setup nodes ...")
@@ -155,13 +244,7 @@ class ConfluxTracing(ConfluxTestFramework):
         snapshot_timer.cancel()
 
         # wait for timer exit
-        self.log.info("max timeout {}".format(
-            max(self._crash_timeout, self._blockgen_timeout, self._snapshot_timeout)))
-        time.sleep(max(self._crash_timeout, self._blockgen_timeout,
-                       self._snapshot_timeout) * 2)
-
-        for node in self.nodes:
-            node.wait_for_recovery(["NormalSyncPhase"], 120)
+        time.sleep(10)
 
     def add_predicate(self, predicate):
         assert callable(predicate)
