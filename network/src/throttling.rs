@@ -20,7 +20,7 @@ lazy_static! {
         );
     static ref HIGH_QUEUE_SIZE_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group(
-            "networknetwork_system_data",
+            "network_system_data",
             "high_throttling_queue_size"
         );
     static ref LOW_QUEUE_SIZE_GAUGE: Arc<dyn Gauge<usize>> =

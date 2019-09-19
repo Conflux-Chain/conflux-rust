@@ -18,8 +18,8 @@ def parse_log_timestamp(log_line:str):
     return round(dateutil.parser.parse(log_time).timestamp(), 2)
 
 class BlockLatencyType(enum.Enum):
-    header_received=0
-    receive =1
+    Header_received= 0
+    Receive = 1
     Sync = 2
     Cons = 3
 
