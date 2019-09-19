@@ -9,7 +9,9 @@ use crate::{
 };
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
-use metrics::{register_meter_with_group, Meter};
+use metrics::{
+    register_meter_with_group, Gauge, GaugeUsize, Histogram, Meter, Sample,
+};
 use mio::{deprecated::*, tcp::*, *};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde_derive::Serialize;
@@ -20,19 +22,54 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
         Arc,
     },
+    time::Instant,
 };
 
 lazy_static! {
     static ref READ_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "read");
+        register_meter_with_group("network_system_data", "read");
     static ref WRITE_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "write");
+        register_meter_with_group("network_system_data", "write");
     static ref SEND_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "send");
+        register_meter_with_group("network_system_data", "send");
     static ref SEND_LOW_PRIORITY_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "send_low");
+        register_meter_with_group("network_system_data", "send_low");
     static ref SEND_HIGH_PRIORITY_METER: Arc<dyn Meter> =
-        register_meter_with_group("network_connection_data", "send_high");
+        register_meter_with_group("network_system_data", "send_high");
+    static ref HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "network_system_data",
+            "high_packet_wait_time",
+            1024
+        );
+    static ref LOW_PACKET_SEND_TO_WRITE_ELAPSED_TIME: Arc<dyn Histogram> =
+        Sample::ExpDecay(0.015).register_with_group(
+            "network_system_data",
+            "low_packet_wait_time",
+            1024
+        );
+    static ref WRITABLE_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group("network_system_data", "writable_counter");
+    static ref WRITABLE_YIELD_SEND_RIGHT_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "network_system_data",
+            "writable_yield_send_right_counter"
+        );
+    static ref WRITABLE_ZERO_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "network_system_data",
+            "writable_zero_counter"
+        );
+    static ref WRITABLE_PACKET_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "network_system_data",
+            "writable_packet_counter"
+        );
+    static ref NETWORK_SEND_QUEUE_SIZE: Arc<dyn Gauge<usize>> =
+        GaugeUsize::register_with_group(
+            "network_system_data",
+            "send_queue_size"
+        );
 }
 
 /// Connection write status.
@@ -93,21 +130,25 @@ pub trait PacketAssembler: Send + Sync {
 
 /// Packet with guard to automatically update throttling and high priority
 /// packets counter.
-#[derive(Default)]
+
 struct Packet {
     // data to write to socket
     data: Vec<u8>,
     // current data position to write to socket.
     sending_pos: usize,
     is_high_priority: bool,
+    original_is_high_priority: bool,
     throttling_size: usize,
+    creation_time: Instant,
 }
 
 impl Packet {
     fn new(data: Vec<u8>, priority: SendQueuePriority) -> Result<Self, Error> {
         // update throttling
         let throttling_size = data.len();
-        THROTTLING_SERVICE.write().on_enqueue(throttling_size)?;
+        THROTTLING_SERVICE
+            .write()
+            .on_enqueue(throttling_size, priority == SendQueuePriority::High)?;
 
         // update high priority packet counter
         let is_high_priority = priority == SendQueuePriority::High;
@@ -119,7 +160,9 @@ impl Packet {
             data,
             sending_pos: 0,
             is_high_priority,
+            original_is_high_priority: is_high_priority,
             throttling_size,
+            creation_time: Instant::now(),
         })
     }
 
@@ -145,10 +188,19 @@ impl Packet {
 
 impl Drop for Packet {
     fn drop(&mut self) {
-        THROTTLING_SERVICE.write().on_dequeue(self.throttling_size);
+        THROTTLING_SERVICE
+            .write()
+            .on_dequeue(self.throttling_size, self.original_is_high_priority);
 
         if self.is_high_priority {
             decr_high_priority_packets();
+        }
+        if self.original_is_high_priority {
+            HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME
+                .update_since(self.creation_time);
+        } else {
+            LOW_PACKET_SEND_TO_WRITE_ELAPSED_TIME
+                .update_since(self.creation_time)
         }
     }
 }
@@ -261,6 +313,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
                 && has_high_priority_packets()
             {
                 trace!("Give up to send socket data due to low priority, token = {}", self.token);
+                WRITABLE_YIELD_SEND_RIGHT_COUNTER.mark(1);
                 return Ok(WriteStatus::LowPriority);
             }
 
@@ -296,6 +349,9 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
             .expect("should pop packet from send queue");
 
         let size = packet.write(&mut self.socket)?;
+        if size == 0 {
+            WRITABLE_ZERO_COUNTER.mark(1);
+        }
 
         trace!(
             "Succeed to send socket data, token = {}, size = {}",
@@ -304,10 +360,13 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         );
 
         WRITE_METER.mark(size);
-
+        WRITABLE_COUNTER.mark(1);
         if packet.is_send_completed() {
             trace!("Packet sent, token = {}", self.token);
             self.sending_packet = None;
+
+            WRITABLE_PACKET_COUNTER.mark(1);
+
             Ok(WriteStatus::Complete)
         } else {
             Ok(WriteStatus::Ongoing)
@@ -323,9 +382,8 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         if self.sending_packet.is_none() && self.send_queue.is_empty() {
             self.interest.remove(Ready::writable());
         }
-
+        NETWORK_SEND_QUEUE_SIZE.update(self.send_queue.len());
         io.update_registration(self.token)?;
-
         Ok(status)
     }
 

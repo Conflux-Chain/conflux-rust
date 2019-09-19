@@ -37,6 +37,16 @@ impl Handleable for GetBlocksResponse {
                 .map(|b| b.block_header.hash())
                 .collect::<Vec<H256>>()
         );
+
+        for block in &self.blocks {
+            debug!(
+                "new block received: block_header={:?}, tx_count={}, block_size={}",
+                block.block_header,
+                block.transactions.len(),
+                block.size(),
+            );
+        }
+
         let req = ctx.match_request(self.request_id)?;
         let requested_blocks: HashSet<H256> = req
             .downcast_ref::<GetBlocks>(
