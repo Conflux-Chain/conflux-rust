@@ -555,6 +555,8 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    /// The caller should ensure that `height` is within the current
+    /// `self.pivot_chain` range. Otherwise the function may panic.
     pub fn get_pivot_block_arena_index(&self, height: u64) -> usize {
         let pivot_index = (height - self.cur_era_genesis_height) as usize;
         assert!(pivot_index < self.pivot_chain.len());
@@ -1895,7 +1897,14 @@ impl ConsensusGraphInner {
         &self, epoch_number: u64,
     ) -> Result<usize, String> {
         if epoch_number >= self.cur_era_genesis_height {
-            Ok(self.get_pivot_block_arena_index(epoch_number))
+            let pivot_index =
+                (epoch_number - self.cur_era_genesis_height) as usize;
+            if pivot_index >= self.pivot_chain.len() {
+                Err("Epoch number larger than the current pivot chain tip"
+                    .into())
+            } else {
+                Ok(self.get_pivot_block_arena_index(epoch_number))
+            }
         } else {
             Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
         }
@@ -1906,7 +1915,13 @@ impl ConsensusGraphInner {
     ) -> Result<H256, String> {
         let height = epoch_number;
         if height >= self.cur_era_genesis_height {
-            Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
+            let pivot_index = (height - self.cur_era_genesis_height) as usize;
+            if pivot_index >= self.pivot_chain.len() {
+                Err("Epoch number larger than the current pivot chain tip"
+                    .into())
+            } else {
+                Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
+            }
         } else {
             self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
                 format!("get_hash_from_epoch_number: Epoch hash set not in db, epoch_number={}", epoch_number).into()
