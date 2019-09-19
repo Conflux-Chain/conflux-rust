@@ -9,7 +9,7 @@ use crate::{
 };
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
-use metrics::{register_meter_with_group, Meter};
+use metrics::{register_meter_with_group, Meter,Histogram,Sample};
 use mio::{deprecated::*, tcp::*, *};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde_derive::Serialize;
@@ -20,6 +20,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
         Arc,
     },
+    time::Instant
 };
 
 lazy_static! {
@@ -33,6 +34,12 @@ lazy_static! {
         register_meter_with_group("network_connection_data", "send_low");
     static ref SEND_HIGH_PRIORITY_METER: Arc<dyn Meter> =
         register_meter_with_group("network_connection_data", "send_high");
+    static ref HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME: Arc<dyn Histogram>= Sample::ExpDecay(0.015)
+                .register_with_group("network_connection_data", "high_packet_send_to_write_elapsed_time", 1024);
+    static ref LOW_PACKET_SEND_TO_WRITE_ELAPSED_TIME: Arc<dyn Histogram>= Sample::ExpDecay(0.015)
+                .register_with_group("network_connection_data", "low_packet_send_to_write_elapsed_time", 1024);
+    static ref WRITABLE_COUNTER: Arc<dyn Meter> =
+        register_meter_with_group("network_connection_data", "writable_counter");
 }
 
 /// Connection write status.
@@ -93,7 +100,7 @@ pub trait PacketAssembler: Send + Sync {
 
 /// Packet with guard to automatically update throttling and high priority
 /// packets counter.
-#[derive(Default)]
+
 struct Packet {
     // data to write to socket
     data: Vec<u8>,
@@ -102,6 +109,7 @@ struct Packet {
     is_high_priority: bool,
     original_is_high_priority:bool,
     throttling_size: usize,
+    creation_time:Instant,
 }
 
 impl Packet {
@@ -122,6 +130,7 @@ impl Packet {
             is_high_priority,
             original_is_high_priority:is_high_priority,
             throttling_size,
+            creation_time:Instant::now(),
         })
     }
 
@@ -151,6 +160,11 @@ impl Drop for Packet {
 
         if self.is_high_priority {
             decr_high_priority_packets();
+        }
+        if self.original_is_high_priority{
+            HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME.update_since(self.creation_time);
+        }else{
+            LOW_PACKET_SEND_TO_WRITE_ELAPSED_TIME.update_since(self.creation_time)
         }
     }
 }
@@ -327,7 +341,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         }
 
         io.update_registration(self.token)?;
-
+        WRITABLE_COUNTER.mark(1);
         Ok(status)
     }
 
