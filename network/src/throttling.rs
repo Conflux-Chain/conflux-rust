@@ -220,36 +220,38 @@ mod tests {
     #[test]
     fn test_enqueue() {
         let mut service = super::Service::new();
-        assert_eq!(service.on_enqueue(10).unwrap(), 10);
-        assert_eq!(service.on_enqueue(20).unwrap(), 30);
+        assert_eq!(service.on_enqueue(10, false).unwrap(), 10);
+        assert_eq!(service.on_enqueue(20, false).unwrap(), 30);
 
         // enqueue data size is 0.
-        assert_eq!(service.on_enqueue(0).unwrap(), 30);
+        assert_eq!(service.on_enqueue(0, false).unwrap(), 30);
     }
 
     #[test]
     fn test_enqueue_too_large_data() {
         let mut service = super::Service::new();
         assert!(service.queue_capacity < std::usize::MAX);
-        assert!(service.on_enqueue(service.queue_capacity + 1).is_err());
+        assert!(service
+            .on_enqueue(service.queue_capacity + 1, false)
+            .is_err());
     }
 
     #[test]
     fn test_enqueue_full() {
         let mut service = super::Service::new();
-        assert!(service.on_enqueue(service.queue_capacity).is_ok());
-        assert!(service.on_enqueue(1).is_err());
+        assert!(service.on_enqueue(service.queue_capacity, false).is_ok());
+        assert!(service.on_enqueue(1, false).is_err());
     }
 
     #[test]
     fn test_dequeue() {
         let mut service = super::Service::new();
-        assert_eq!(service.on_enqueue(10).unwrap(), 10);
-        assert_eq!(service.on_dequeue(6), 4);
-        assert_eq!(service.on_dequeue(3), 1);
+        assert_eq!(service.on_enqueue(10, false).unwrap(), 10);
+        assert_eq!(service.on_dequeue(6, false), 4);
+        assert_eq!(service.on_dequeue(3, false), 1);
 
         // queue size not enough.
-        assert_eq!(service.on_dequeue(2), 0);
+        assert_eq!(service.on_dequeue(2, false), 0);
     }
 
     #[test]
@@ -261,11 +263,11 @@ mod tests {
 
         // throttled once more than max_throttle_queue_size data queued.
         let max = service.max_throttle_queue_size;
-        assert_eq!(service.on_enqueue(max + 1).unwrap(), max + 1);
+        assert_eq!(service.on_enqueue(max + 1, false).unwrap(), max + 1);
         assert!(service.check_throttling().is_err());
 
         // not throttled after some data dequeued.
-        assert_eq!(service.on_dequeue(1), max);
+        assert_eq!(service.on_dequeue(1, false), max);
         assert!(service.check_throttling().is_ok());
     }
 
@@ -278,22 +280,22 @@ mod tests {
 
         // no more than min_throttle_queue_size queued.
         let min = service.min_throttle_queue_size;
-        assert_eq!(service.on_enqueue(min - 1).unwrap(), min - 1);
+        assert_eq!(service.on_enqueue(min - 1, false).unwrap(), min - 1);
         assert_throttling_ratio(&service, 100);
-        assert_eq!(service.on_enqueue(1).unwrap(), min);
+        assert_eq!(service.on_enqueue(1, false).unwrap(), min);
         assert_throttling_ratio(&service, 100);
 
         // more than max_throttle_queue_size queued.
-        assert_eq!(service.on_dequeue(min), 0);
+        assert_eq!(service.on_dequeue(min, false), 0);
         let max = service.max_throttle_queue_size;
-        assert_eq!(service.on_enqueue(max).unwrap(), max);
+        assert_eq!(service.on_enqueue(max, false).unwrap(), max);
         assert_throttling_ratio(&service, 0);
-        assert_eq!(service.on_enqueue(1).unwrap(), max + 1);
+        assert_eq!(service.on_enqueue(1, false).unwrap(), max + 1);
         assert_throttling_ratio(&service, 0);
 
         // partial throttled
-        assert_eq!(service.on_dequeue(max + 1), 0);
-        assert!(service.on_enqueue(min + (max - min) / 2).is_ok());
+        assert_eq!(service.on_dequeue(max + 1, false), 0);
+        assert!(service.on_enqueue(min + (max - min) / 2, false).is_ok());
         assert_throttling_ratio(&service, 50);
     }
 
