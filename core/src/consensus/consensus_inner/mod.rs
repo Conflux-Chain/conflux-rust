@@ -679,23 +679,24 @@ impl ConsensusGraphInner {
     }
 
     pub fn find_first_index_with_correct_state_of(
-        &self, pivot_index: usize,
+        &self, pivot_index: usize, blame_bound: Option<u32>,
     ) -> Option<usize> {
         // this is the earliest block we need to consider; blocks before `from`
         // cannot have any information about the state root of `pivot_index`
         let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
 
-        self.find_first_trusted_starting_from(from)
+        self.find_first_trusted_starting_from(from, blame_bound)
     }
 
     pub fn find_first_trusted_starting_from(
-        &self, from: usize,
+        &self, from: usize, blame_bound: Option<u32>,
     ) -> Option<usize> {
-        let mut trusted_index =
-            match self.find_first_with_trusted_blame_starting_from(from) {
-                None => return None,
-                Some(index) => index,
-            };
+        let mut trusted_index = match self
+            .find_first_with_trusted_blame_starting_from(from, blame_bound)
+        {
+            None => return None,
+            Some(index) => index,
+        };
 
         // iteratively search for the smallest trusted index greater than
         // or equal to `from`
@@ -714,12 +715,13 @@ impl ConsensusGraphInner {
     }
 
     fn find_first_with_trusted_blame_starting_from(
-        &self, pivot_index: usize,
+        &self, pivot_index: usize, blame_bound: Option<u32>,
     ) -> Option<usize> {
         let mut cur_pivot_index = pivot_index;
         while cur_pivot_index < self.pivot_chain.len() {
             let arena_index = self.pivot_chain[cur_pivot_index];
-            let blame_ratio = self.compute_blame_ratio(arena_index);
+            let blame_ratio =
+                self.compute_blame_ratio(arena_index, blame_bound);
             if blame_ratio < MAX_BLAME_RATIO_FOR_TRUST {
                 return Some(cur_pivot_index);
             }
@@ -730,7 +732,14 @@ impl ConsensusGraphInner {
     }
 
     // Compute the ratio of blames that the block gets
-    fn compute_blame_ratio(&self, arena_index: usize) -> f64 {
+    fn compute_blame_ratio(
+        &self, arena_index: usize, blame_bound: Option<u32>,
+    ) -> f64 {
+        let blame_bound = if let Some(bound) = blame_bound {
+            bound
+        } else {
+            u32::max_value()
+        };
         let mut total_blame_count = 0 as u64;
         let mut queue = VecDeque::new();
         let mut votes = HashMap::new();
@@ -757,6 +766,10 @@ impl ConsensusGraphInner {
                     }
                     my_blame -= 1;
                 }
+            }
+
+            if step == blame_bound {
+                continue;
             }
 
             let next_step = step + 1;
@@ -2480,7 +2493,10 @@ impl ConsensusGraphInner {
         {
             return None;
         }
-        self.find_first_index_with_correct_state_of(pivot_index)
-            .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
+        self.find_first_index_with_correct_state_of(
+            pivot_index,
+            None, /* blame_bound */
+        )
+        .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
 }
