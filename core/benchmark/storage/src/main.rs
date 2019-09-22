@@ -1589,7 +1589,15 @@ impl Drop for TxReplayer {
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
 
-    pub fn new(db_dir: &str) -> TxReplayer {
+    pub fn new(db_dir: &str, reset_db: bool) -> TxReplayer {
+        if reset_db {
+            match fs::remove_dir_all(db_dir) {
+                Ok(_) => {},
+                Err(ref e) if e.kind() == io::ErrorKind::NotFound => {},
+                e @ Err(_) => e.unwrap(),
+            }
+        }
+
         let db_config = db::db_config(
             Path::new(db_dir),
             None,
@@ -1738,8 +1746,10 @@ fn hexstr_to_h256(hex_str: &str) -> H256 {
 }
 
 fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
-    let tx_replayer =
-        TxReplayer::new(matches.value_of("storage_db_dir").unwrap());
+    let tx_replayer = TxReplayer::new(
+        matches.value_of("storage_db_dir").unwrap(),
+        matches.occurrences_of("reset_db") > 0,
+    );
 
     let txs_to_process = match matches.value_of("txs_to_process") {
         None => None,
@@ -1754,14 +1764,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let mut latest_state;
     let mut last_state_root;
 
-    if tx_replayer
-        .storage_manager
-        .start_commit()
-        .info
-        .row_number
-        .value
-        == 0
-    {
+    if matches.occurrences_of("reset_db") > 0 {
         last_state_root = H256::default();
         latest_state = StateDb::new(
             tx_replayer.storage_manager.get_state_for_genesis_write(),
@@ -1967,6 +1970,13 @@ fn main() -> errors::Result<()> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("reset_db")
+                .value_name("reset database")
+                .help("reset database and start from genesis")
+                .short("R")
+                .takes_value(false),
+        )
+        .arg(
             Arg::with_name("last_state_root")
                 .value_name("last state root")
                 .help("last state root from previous tx replay")
@@ -2061,7 +2071,7 @@ use std::{
     cell::Cell,
     collections::{vec_deque::VecDeque, BTreeMap},
     fmt::Debug,
-    fs::File,
+    fs::{self, File},
     io::{self, Read, Write},
     marker::{Send, Sync},
     mem,

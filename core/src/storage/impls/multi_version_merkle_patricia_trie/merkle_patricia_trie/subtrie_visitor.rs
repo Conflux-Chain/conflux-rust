@@ -774,7 +774,7 @@ use super::{
     super::{
         super::{
             super::storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
-            errors::*, state::OwnedNodeSet,
+            errors::*, owned_node_set::OwnedNodeSet,
         },
         guarded_value::GuardedValue,
         node_memory_manager::*,

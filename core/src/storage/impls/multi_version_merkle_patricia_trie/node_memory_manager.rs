@@ -115,6 +115,7 @@ pub struct NodeMemoryManager<
     uncached_leaf_load_times: AtomicUsize,
     uncached_leaf_db_loads: AtomicUsize,
     pub compute_merkle_db_loads: AtomicUsize,
+    children_merkle_db_loads: AtomicUsize,
 }
 
 #[allow(unused)]
@@ -182,6 +183,7 @@ impl<
             uncached_leaf_db_loads: Default::default(),
             uncached_leaf_load_times: Default::default(),
             compute_merkle_db_loads: Default::default(),
+            children_merkle_db_loads: Default::default(),
         }
     }
 
@@ -287,6 +289,23 @@ impl<
         }
 
         Ok(GuardedValue::new(cache_manager_locked, trie_cell_ref))
+    }
+
+    pub fn load_children_merkles_from_db(
+        &self, db: &mut DeltaDbOwnedReadTraitObj, db_key: DeltaMptDbKey,
+    ) -> Result<Option<CompactedChildrenTable<MerkleHash>>> {
+        self.children_merkle_db_loads
+            .fetch_add(1, Ordering::Relaxed);
+        // cm stands for children merkles, abbreviated to save space
+        let rlp_bytes = match db.get_mut(format!("cm{}", db_key).as_bytes())? {
+            None => return Ok(None),
+            Some(rlp_bytes) => rlp_bytes,
+        };
+        let rlp = Rlp::new(rlp_bytes.as_ref());
+        let table = CompactedChildrenTable::from(
+            ChildrenTable::<MerkleHash>::decode(&rlp)?,
+        );
+        Ok(Some(table))
     }
 
     /// This method is currently unused but kept for future use and for the sake
@@ -676,7 +695,11 @@ impl<
         debug!(
             "number of db loads for merkle computation {}",
             self.compute_merkle_db_loads.load(Ordering::Relaxed)
-        )
+        );
+        debug!(
+            "number of db loads for children merkles {}",
+            self.children_merkle_db_loads.load(Ordering::Relaxed)
+        );
     }
 }
 
@@ -783,6 +806,10 @@ impl<
         node_memory_manager.call_cache_algorithm_access(self, db_key);
         Ok(())
     }
+
+    pub fn query(&self, db_key: DeltaMptDbKey) -> bool {
+        self.node_ref_map.get(db_key).is_some()
+    }
 }
 
 use super::{
@@ -795,12 +822,13 @@ use super::{
         CacheIndexTrait, CacheStoreUtil,
     },
     guarded_value::*,
-    merkle_patricia_trie::*,
+    merkle_patricia_trie::{children_table::*, *},
     node_ref_map::*,
     slab::Slab,
     UnsafeCellExtension,
 };
 use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
+use primitives::MerkleHash;
 use rlp::*;
 use std::{
     cell::UnsafeCell,

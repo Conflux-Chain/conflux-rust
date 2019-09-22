@@ -6,7 +6,7 @@ pub mod cache;
 pub mod guarded_value;
 pub(in super::super) mod merkle_patricia_trie;
 pub(in super::super) mod node_memory_manager;
-pub(self) mod node_ref_map;
+pub(super) mod node_ref_map;
 pub(super) mod return_after_use;
 pub(super) mod row_number;
 

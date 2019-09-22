@@ -2,7 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub type OwnedNodeSet = BTreeSet<NodeRefDeltaMpt>;
+pub type ChildrenMerkleMap =
+    BTreeMap<ActualSlabIndex, VanillaChildrenTable<MerkleHash>>;
 
 pub struct State<'a> {
     manager: &'a StateManager,
@@ -13,6 +14,10 @@ pub struct State<'a> {
     delta_trie_root: Option<NodeRefDeltaMpt>,
     owned_node_set: Option<OwnedNodeSet>,
     dirty: bool,
+
+    /// Children merkle hashes. Only used for committing and computing
+    /// merkle root. It will be cleared after being committed.
+    children_merkle_map: ChildrenMerkleMap,
 }
 
 impl<'a> State<'a> {
@@ -26,6 +31,7 @@ impl<'a> State<'a> {
             delta_trie_root: state_trees.4,
             owned_node_set: Some(Default::default()),
             dirty: false,
+            children_merkle_map: ChildrenMerkleMap::new(),
         }
     }
 
@@ -299,6 +305,8 @@ impl<'a> State<'a> {
     }
 
     fn compute_merkle_root(&mut self) -> Result<MerkleHash> {
+        assert!(self.children_merkle_map.len() == 0);
+
         match &self.delta_trie_root {
             None => {
                 // Don't commit empty state. Empty state shouldn't exists since
@@ -317,6 +325,8 @@ impl<'a> State<'a> {
                     self.owned_node_set.as_mut().unwrap(),
                     &allocator,
                     &mut *self.delta_trie.db_owned_read()?,
+                    &mut self.children_merkle_map,
+                    0,
                 )?;
                 cow_root.into_child();
 
@@ -374,7 +384,9 @@ impl<'a> State<'a> {
                             .get_cache_manager()
                             .lock(),
                         &allocator,
+                        &mut self.children_merkle_map,
                     );
+                    self.children_merkle_map.clear();
                     self.delta_trie_root =
                         cow_root.into_child().map(|r| r.into());
                     result?;
@@ -452,8 +464,11 @@ use super::{
     super::{state::*, state_manager::*, storage_db::*},
     errors::*,
     multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::*, DeltaMpt, TrieProof,
+        merkle_patricia_trie::{children_table::VanillaChildrenTable, *},
+        node_memory_manager::ActualSlabIndex,
+        DeltaMpt, TrieProof,
     },
+    owned_node_set::OwnedNodeSet,
     state_manager::*,
     state_proof::StateProof,
 };
@@ -463,7 +478,7 @@ use primitives::{
 };
 use std::{
     cell::UnsafeCell,
-    collections::BTreeSet,
+    collections::BTreeMap,
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };
