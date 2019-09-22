@@ -1,5 +1,5 @@
 [package]
-description = "Parity Ethereum Keys Generator"
+description = "Conflux Keys Generator"
 name = "ethkey"
 version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
