@@ -598,7 +598,11 @@ impl BlockDataManager {
     pub fn epoch_set_hashes_from_db(
         &self, epoch_number: u64,
     ) -> Option<Vec<H256>> {
-        self.db_manager.epoch_set_hashes_from_db(epoch_number)
+        if epoch_number != 0 {
+            self.db_manager.epoch_set_hashes_from_db(epoch_number)
+        } else {
+            Some(vec![self.true_genesis_block.hash()])
+        }
     }
 
     /// Return `false` if there is no executed results for given `block_hash`

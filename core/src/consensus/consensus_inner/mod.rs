@@ -70,6 +70,9 @@ pub struct ConsensusGraphNodeData {
     num_epoch_blocks_in_2era: usize,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
+    ///
+    /// For cur_era_genesis, this field should NOT be used because they contain
+    /// out-of-era blocks not maintained in the memory.
     pub ordered_executable_epoch_blocks: Vec<usize>,
     /// It indicates whether `blockset_in_own_view_of_epoch` is cleared due to
     /// its size.
@@ -555,6 +558,8 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    /// The caller should ensure that `height` is within the current
+    /// `self.pivot_chain` range. Otherwise the function may panic.
     pub fn get_pivot_block_arena_index(&self, height: u64) -> usize {
         let pivot_index = (height - self.cur_era_genesis_height) as usize;
         assert!(pivot_index < self.pivot_chain.len());
@@ -674,23 +679,24 @@ impl ConsensusGraphInner {
     }
 
     pub fn find_first_index_with_correct_state_of(
-        &self, pivot_index: usize,
+        &self, pivot_index: usize, blame_bound: Option<u32>,
     ) -> Option<usize> {
         // this is the earliest block we need to consider; blocks before `from`
         // cannot have any information about the state root of `pivot_index`
         let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
 
-        self.find_first_trusted_starting_from(from)
+        self.find_first_trusted_starting_from(from, blame_bound)
     }
 
     pub fn find_first_trusted_starting_from(
-        &self, from: usize,
+        &self, from: usize, blame_bound: Option<u32>,
     ) -> Option<usize> {
-        let mut trusted_index =
-            match self.find_first_with_trusted_blame_starting_from(from) {
-                None => return None,
-                Some(index) => index,
-            };
+        let mut trusted_index = match self
+            .find_first_with_trusted_blame_starting_from(from, blame_bound)
+        {
+            None => return None,
+            Some(index) => index,
+        };
 
         // iteratively search for the smallest trusted index greater than
         // or equal to `from`
@@ -709,12 +715,13 @@ impl ConsensusGraphInner {
     }
 
     fn find_first_with_trusted_blame_starting_from(
-        &self, pivot_index: usize,
+        &self, pivot_index: usize, blame_bound: Option<u32>,
     ) -> Option<usize> {
         let mut cur_pivot_index = pivot_index;
         while cur_pivot_index < self.pivot_chain.len() {
             let arena_index = self.pivot_chain[cur_pivot_index];
-            let blame_ratio = self.compute_blame_ratio(arena_index);
+            let blame_ratio =
+                self.compute_blame_ratio(arena_index, blame_bound);
             if blame_ratio < MAX_BLAME_RATIO_FOR_TRUST {
                 return Some(cur_pivot_index);
             }
@@ -725,7 +732,14 @@ impl ConsensusGraphInner {
     }
 
     // Compute the ratio of blames that the block gets
-    fn compute_blame_ratio(&self, arena_index: usize) -> f64 {
+    fn compute_blame_ratio(
+        &self, arena_index: usize, blame_bound: Option<u32>,
+    ) -> f64 {
+        let blame_bound = if let Some(bound) = blame_bound {
+            bound
+        } else {
+            u32::max_value()
+        };
         let mut total_blame_count = 0 as u64;
         let mut queue = VecDeque::new();
         let mut votes = HashMap::new();
@@ -752,6 +766,10 @@ impl ConsensusGraphInner {
                     }
                     my_blame -= 1;
                 }
+            }
+
+            if step == blame_bound {
+                continue;
             }
 
             let next_step = step + 1;
@@ -1895,7 +1913,14 @@ impl ConsensusGraphInner {
         &self, epoch_number: u64,
     ) -> Result<usize, String> {
         if epoch_number >= self.cur_era_genesis_height {
-            Ok(self.get_pivot_block_arena_index(epoch_number))
+            let pivot_index =
+                (epoch_number - self.cur_era_genesis_height) as usize;
+            if pivot_index >= self.pivot_chain.len() {
+                Err("Epoch number larger than the current pivot chain tip"
+                    .into())
+            } else {
+                Ok(self.get_pivot_block_arena_index(epoch_number))
+            }
         } else {
             Err("Invalid params: epoch number is too old and not maintained by consensus graph".to_owned())
         }
@@ -1906,7 +1931,13 @@ impl ConsensusGraphInner {
     ) -> Result<H256, String> {
         let height = epoch_number;
         if height >= self.cur_era_genesis_height {
-            Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
+            let pivot_index = (height - self.cur_era_genesis_height) as usize;
+            if pivot_index >= self.pivot_chain.len() {
+                Err("Epoch number larger than the current pivot chain tip"
+                    .into())
+            } else {
+                Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
+            }
         } else {
             self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
                 format!("get_hash_from_epoch_number: Epoch hash set not in db, epoch_number={}", epoch_number).into()
@@ -1925,18 +1956,26 @@ impl ConsensusGraphInner {
             self.pivot_chain.len()
         );
         match self.get_arena_index_from_epoch_number(epoch_number) {
-            Ok(pivot_arena_index) => Ok(self.arena[pivot_arena_index]
-                .data
-                .ordered_executable_epoch_blocks
-                .iter()
-                .map(|index| self.arena[*index].hash)
-                .collect()),
+            Ok(pivot_arena_index) => {
+                if pivot_arena_index == self.cur_era_genesis_block_arena_index {
+                    self.data_man
+                        .epoch_set_hashes_from_db(epoch_number)
+                        .ok_or("Fail to load the epoch set for current era genesis in db".into())
+                } else {
+                    Ok(self.arena[pivot_arena_index]
+                        .data
+                        .ordered_executable_epoch_blocks
+                        .iter()
+                        .map(|index| self.arena[*index].hash)
+                        .collect())
+                }
+            }
             Err(e) => {
                 self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
                     format!(
-                    "Epoch hash set not in db epoch_number={}, in mem err={:?}",
-                    epoch_number, e
-                )
+                        "Epoch set not in db epoch_number={}, in mem err={:?}",
+                        epoch_number, e
+                    )
                     .into(),
                 )
             }
@@ -2454,7 +2493,10 @@ impl ConsensusGraphInner {
         {
             return None;
         }
-        self.find_first_index_with_correct_state_of(pivot_index)
-            .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
+        self.find_first_index_with_correct_state_of(
+            pivot_index,
+            None, /* blame_bound */
+        )
+        .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
 }

@@ -152,7 +152,7 @@ pub trait Cfx {
     ) -> RpcResult<Vec<RpcH256>>;
 
     #[rpc(name = "cfx_getTransactionReceipt")]
-    fn get_transaction_receipt(
+    fn transaction_receipt(
         &self, tx_hash: RpcH256,
     ) -> RpcResult<Option<RpcReceipt>>;
 

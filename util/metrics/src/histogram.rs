@@ -22,6 +22,9 @@ pub trait Histogram: Send + Sync {
     fn sum(&self) -> u64 { 0 }
     fn update(&self, _v: u64) {}
     fn variance(&self) -> f64 { 0.0 }
+    fn update_since(&self, start_time: Instant) {
+        self.update(start_time.elapsed().as_nanos() as u64);
+    }
 }
 
 pub enum Sample {

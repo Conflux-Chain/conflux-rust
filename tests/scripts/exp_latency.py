@@ -168,13 +168,19 @@ class LatencyExperiment(ArgumentHolder):
             tag = self.tag(config)
             execute("./copy_file_from_slave.sh metrics.log {} > /dev/null".format(tag), 3, "collect metrics")
             if self.enable_flamegraph:
-                execute("./copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
+                try:
+                    execute("./copy_file_from_slave.sh conflux.svg {} > /dev/null".format(tag), 10, "collect flamegraph")
+                except:
+                    print("Failed to copy flamegraph file conflux.svg, please try again via copy_file_from_slave.sh in manual")
 
             execute("cp exp.log {}.exp.log".format(tag), 3, "copy exp.log")
 
         print("=========================================================")
         print("archive the experiment results into [{}] ...".format(self.stat_archive_file))
-        os.system("tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log *.conflux.svg".format(self.stat_archive_file, self.stat_log_file))
+        cmd = "tar cvfz {} {} *.exp.log *nodes.csv *.metrics.log".format(self.stat_archive_file, self.stat_log_file)
+        if self.enable_flamegraph:
+            cmd = cmd + " *.conflux.svg"
+        os.system(cmd)
 
     def copy_remote_logs(self):
         execute("./copy_logs.sh > /dev/null", 3, "copy logs")

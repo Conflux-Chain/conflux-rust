@@ -12,6 +12,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, EpochNumber, Receipt, SignedTransaction, StateRoot,
+    TransactionAddress,
 };
 
 use crate::{
@@ -30,6 +31,14 @@ use super::{
     common::{poll_future, poll_stream, with_timeout, LedgerInfo},
     Error, Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
+
+type TxInfo = (
+    SignedTransaction,
+    Receipt,
+    TransactionAddress,
+    Option<u64>,  /* maybe_epoch */
+    Option<H256>, /* maybe_state_root */
+);
 
 pub struct QueryService {
     // shared consensus graph
@@ -140,6 +149,21 @@ impl QueryService {
         )
     }
 
+    fn retrieve_tx_info<'a>(
+        &'a self, hash: H256,
+    ) -> impl Future<
+        Item = (SignedTransaction, Receipt, TransactionAddress),
+        Error = Error,
+    > + 'a {
+        trace!("retrieve_tx_info hash = {:?}", hash);
+
+        with_timeout(
+            *MAX_POLL_TIME, /* timeout */
+            format!("Timeout while retrieving tx info for tx {}", hash), /* error */
+            self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
+        )
+    }
+
     fn account_key(root: &StateRoot, address: H160) -> Vec<u8> {
         let padding = storage::MultiVersionMerklePatriciaTrie::padding(
             &root.snapshot_root,
@@ -242,6 +266,31 @@ impl QueryService {
             Err(e) => {
                 warn!("Error while retrieving code: {}", e);
                 Err(e)
+            }
+        }
+    }
+
+    pub fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
+        info!("get_tx_info hash={:?}", hash);
+
+        let mut info = self.retrieve_tx_info(hash).map(|info| {
+            let (tx, receipt, address) = info;
+
+            let hash = address.block_hash;
+            let epoch = self.consensus.get_block_epoch_number(&hash);
+
+            let root = epoch
+                .and_then(|e| self.handler.witnesses.root_hashes_of(e))
+                .map(|(state_root, _, _)| state_root);
+
+            (tx, receipt, address, epoch, root)
+        });
+
+        match poll_future(&mut info) {
+            Ok(info) => Ok(info),
+            Err(e) => {
+                warn!("Error while retrieving tx info: {}", e);
+                Err(format!("{}", e))
             }
         }
     }

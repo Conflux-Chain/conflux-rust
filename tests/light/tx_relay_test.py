@@ -90,16 +90,8 @@ class TxRelayTest(ConfluxTestFramework):
         self.log.info(f"Retrieving txs through light node...")
 
         for (hash, _, _) in txs:
-            node0_tx = self.rpc[FULLNODE0].get_tx(hash)
-            light_tx = self.rpc[LIGHTNODE].get_tx(hash)
-
-            # NOTE: the current light rpc implementation only retrieves the tx, does
-            # not retrieve receipts or tx addresses. this will be implemented later
-            node0_tx["blockHash"] = None
-            node0_tx["transactionIndex"] = None
-            node0_tx["status"] = None
-
-            assert_equal(light_tx, node0_tx)
+            self.check_tx(hash)      # cfx_getTransactionByHash
+            self.check_receipt(hash) # cfx_getTransactionReceipt
             self.log.info(f"tx {hash} correct")
 
         self.log.info(f"Pass 2 - all txs retrieved\n")
@@ -150,6 +142,23 @@ class TxRelayTest(ConfluxTestFramework):
             self.log.info(f"account {receiver} correct")
 
         self.log.info(f"Pass 4 - balances retrieved correctly\n")
+
+    def check_tx(self, hash):
+        node0_tx = self.rpc[FULLNODE0].get_tx(hash)
+        light_tx = self.rpc[LIGHTNODE].get_tx(hash)
+
+        # NOTE: the current light rpc implementation only retrieves the tx, does
+        # not retrieve receipts or tx addresses. this will be implemented later
+        node0_tx["blockHash"] = None
+        node0_tx["transactionIndex"] = None
+        node0_tx["status"] = None
+
+        assert_equal(light_tx, node0_tx)
+
+    def check_receipt(self, hash):
+        node0_receipt = self.rpc[FULLNODE0].get_transaction_receipt(hash)
+        light_receipt = self.rpc[LIGHTNODE].get_transaction_receipt(hash)
+        assert_equal(node0_receipt, light_receipt)
 
 
 if __name__ == "__main__":

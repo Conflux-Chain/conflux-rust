@@ -22,13 +22,14 @@ use crate::{
             BlockTxs as GetBlockTxsResponse, BlockTxsWithHash, BloomWithEpoch,
             Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
             GetBlockHeaders, GetBlockTxs, GetBlooms, GetReceipts,
-            GetStateEntries, GetStateRoots, GetTxs, GetWitnessInfo,
+            GetStateEntries, GetStateRoots, GetTxInfos, GetTxs, GetWitnessInfo,
             NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
             ReceiptsWithEpoch, SendRawTx,
             StateEntries as GetStateEntriesResponse, StateEntryWithKey,
             StateRootWithEpoch, StateRoots as GetStateRootsResponse,
-            StatusPing, StatusPong, Txs as GetTxsResponse,
-            WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
+            StatusPing, StatusPong, TxInfo, TxInfos as GetTxInfosResponse,
+            Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
+            WitnessInfoWithHeight,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
@@ -146,6 +147,7 @@ impl Provider {
             msgid::GET_WITNESS_INFO => self.on_get_witness_info(io, peer, &rlp),
             msgid::GET_BLOOMS => self.on_get_blooms(io, peer, &rlp),
             msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, &rlp),
+            msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, &rlp),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -167,6 +169,59 @@ impl Provider {
         };
 
         None
+    }
+
+    #[inline]
+    fn tx_info_by_hash(&self, hash: H256) -> Option<TxInfo> {
+        let addr = match self.consensus.get_transaction_info_by_hash(&hash) {
+            Some(info) => info.2,
+            None => {
+                warn!("Unable to get tx info for {:?}", hash);
+                return None;
+            }
+        };
+
+        let block_hash = addr.block_hash;
+        let index = addr.index;
+
+        let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
+            Some(epoch) => epoch,
+            None => {
+                warn!("Unable to get epoch number for block {:?}", block_hash);
+                return None;
+            }
+        };
+
+        let epoch_receipts = match self.ledger.receipts_of(epoch) {
+            Ok(rs) => rs,
+            Err(e) => {
+                warn!("Unable to retrieve receipts for {}: {}", epoch, e);
+                return None;
+            }
+        };
+
+        let block = match self.ledger.block(block_hash) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("Unable to retrieve block {:?}: {}", block_hash, e);
+                return None;
+            }
+        };
+
+        let block_txs = block
+            .transactions
+            .clone()
+            .into_iter()
+            .map(|arc_tx| (*arc_tx).clone())
+            .collect();
+
+        Some(TxInfo {
+            epoch,
+            block_hash,
+            index,
+            epoch_receipts,
+            block_txs,
+        })
     }
 
     fn send_status(
@@ -491,6 +546,27 @@ impl Provider {
             request_id,
             block_txs,
         });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_tx_infos(
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let req: GetTxInfos = rlp.as_val()?;
+        info!("on_get_tx_infos req={:?}", req);
+        let request_id = req.request_id;
+
+        // TODO(thegaram): consider merging overlapping tx infos
+        let infos = req
+            .hashes
+            .into_iter()
+            .filter_map(|h| self.tx_info_by_hash(h))
+            .collect();
+
+        let msg: Box<dyn Message> =
+            Box::new(GetTxInfosResponse { request_id, infos });
 
         msg.send(io, peer)?;
         Ok(())
