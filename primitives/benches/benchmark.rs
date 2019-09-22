@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use keccak_hash::keccak;
 use ethkey::{recover, sign, verify_public, KeyPair};
+use keccak_hash::keccak;
 
 fn recover_benchmark(c: &mut Criterion) {
     let secret =
