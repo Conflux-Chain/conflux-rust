@@ -1750,7 +1750,7 @@ fn save_key(path: &Path, key: &Secret) {
     if let Err(e) = restrict_permissions_owner(path, true, false) {
         warn!("Failed to modify permissions of the file ({})", e);
     }
-    if let Err(e) = file.write(&key.to_hex().into_bytes()[2..]) {
+    if let Err(e) = file.write(&key.to_hex().into_bytes()) {
         warn!("Error writing key file: {:?}", e);
     }
 }
