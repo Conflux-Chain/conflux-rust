@@ -243,6 +243,11 @@ impl Configuration {
     }
 
     pub fn consensus_config(&self) -> ConsensusConfig {
+        let enable_optimistic_execution = if DEFERRED_STATE_EPOCH_COUNT <= 1 {
+            false
+        } else {
+            self.raw_conf.enable_optimistic_execution
+        };
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: self
                 .raw_conf
@@ -261,9 +266,7 @@ impl Configuration {
                     .heavy_block_difficulty_ratio,
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
-                enable_optimistic_execution: self
-                    .raw_conf
-                    .enable_optimistic_execution,
+                enable_optimistic_execution,
             },
             bench_mode: false,
         }
