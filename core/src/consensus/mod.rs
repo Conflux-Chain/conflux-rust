@@ -876,7 +876,7 @@ impl ConsensusGraph {
     }
 
     pub fn first_trusted_header_starting_from(
-        &self, height: u64,
+        &self, height: u64, blame_bound: Option<u32>,
     ) -> Option<u64> {
         // TODO(thegaram): change logic to work with arbitrary height, not just
         // the ones from the current era (i.e. use epoch instead of pivot index)
@@ -888,7 +888,8 @@ impl ConsensusGraph {
             h => inner.height_to_pivot_index(h),
         };
 
-        let trusted = inner.find_first_trusted_starting_from(pivot_index);
+        let trusted =
+            inner.find_first_trusted_starting_from(pivot_index, blame_bound);
         trusted.map(|index| inner.pivot_index_to_height(index))
     }
 
