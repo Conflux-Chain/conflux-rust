@@ -2,7 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::hash::keccak;
+use super::EpochId;
+use crate::hash::{keccak, KECCAK_EMPTY};
+use cfx_types::H256;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde_derive::{Deserialize, Serialize};
 
 pub type MerkleHash = H256;
 
@@ -20,9 +24,9 @@ pub struct StateRoot {
 impl StateRoot {
     pub fn compute_state_root_hash(&self) -> H256 {
         let mut rlp_stream = RlpStream::new_list(3);
-        rlp_stream.append_list(&self.snapshot_root);
-        rlp_stream.append_list(&self.intermediate_delta_root);
-        rlp_stream.append_list(&self.delta_root);
+        rlp_stream.append_list(self.snapshot_root.as_bytes());
+        rlp_stream.append_list(self.intermediate_delta_root.as_bytes());
+        rlp_stream.append_list(self.delta_root.as_bytes());
         keccak(rlp_stream.out())
     }
 }
@@ -118,9 +122,3 @@ impl Decodable for StateRootWithAuxInfo {
         })
     }
 }
-
-use super::EpochId;
-use crate::hash::KECCAK_EMPTY;
-use cfx_types::H256;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use serde_derive::{Deserialize, Serialize};

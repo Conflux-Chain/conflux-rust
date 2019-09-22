@@ -16,7 +16,8 @@ use crate::{
     vm_factory::VmFactory,
     ConsensusGraph, TransactionPool,
 };
-use cfx_types::{H256, U256};
+use cfx_types::{Address, H256, U256};
+use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc};
@@ -101,14 +102,14 @@ pub fn initialize_synchronization_graph(
 
     let mut genesis_accounts = HashMap::new();
     genesis_accounts.insert(
-        "0000000000000000000000000000000000000008".into(),
+        Address::from_str("0000000000000000000000000000000000000008").unwrap(),
         U256::from(0),
     );
 
     let genesis_block = Arc::new(storage_manager.initialize(
         genesis_accounts,
         DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
-        "0000000000000000000000000000000000000008".into(),
+        Address::from_str("0000000000000000000000000000000000000008").unwrap(),
         U256::from(10),
     ));
 

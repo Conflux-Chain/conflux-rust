@@ -5,10 +5,10 @@
 use crate::{
     block_data_manager::BlockDataManager, hash::keccak, parameters::pow::*,
 };
-use cfx_types::{H256, U256, U512};
+use cfx_types::{BigEndianHash, H256, U256, U512};
 use parking_lot::RwLock;
 use rlp::RlpStream;
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct ProofOfWorkProblem {
@@ -84,7 +84,7 @@ impl ProofOfWorkConfig {
         if target > U256::max_value().into() {
             return U256::max_value();
         }
-        U256::from(target)
+        U256::try_from(target).unwrap()
     }
 
     pub fn get_adjustment_bound(&self, diff: U256) -> (U256, U256) {
@@ -108,13 +108,13 @@ impl ProofOfWorkConfig {
 /// Convert boundary to its original difficulty. Basically just `f(x) = 2^256 /
 /// x`.
 pub fn boundary_to_difficulty(boundary: &H256) -> U256 {
-    difficulty_to_boundary_aux(&**boundary)
+    difficulty_to_boundary_aux(boundary.into_uint())
 }
 
 /// Convert difficulty to the target boundary. Basically just `f(x) = 2^256 /
 /// x`.
 pub fn difficulty_to_boundary(difficulty: &U256) -> H256 {
-    difficulty_to_boundary_aux(difficulty).into()
+    BigEndianHash::from_uint(&difficulty_to_boundary_aux(difficulty))
 }
 
 pub fn difficulty_to_boundary_aux<T: Into<U512>>(difficulty: T) -> U256 {
@@ -124,7 +124,7 @@ pub fn difficulty_to_boundary_aux<T: Into<U512>>(difficulty: T) -> U256 {
         U256::max_value()
     } else {
         // difficulty > 1, so result should never overflow 256 bits
-        U256::from((U512::one() << 256) / difficulty)
+        U256::try_from((U512::one() << 256) / difficulty).unwrap()
     }
 }
 

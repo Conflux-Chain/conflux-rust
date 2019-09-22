@@ -262,7 +262,7 @@ mod tests {
         // wrong hash
         let mut leaf2_wrong = leaf2.clone();
         let mut wrong_merkle = leaf2_wrong.get_merkle().clone();
-        wrong_merkle[0] = 0x00;
+        wrong_merkle.as_bytes_mut()[0] = 0x00;
         leaf2_wrong.set_merkle(&wrong_merkle);
 
         let proof = TrieProof::new(vec![

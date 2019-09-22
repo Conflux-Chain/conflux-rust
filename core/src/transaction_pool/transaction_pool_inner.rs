@@ -3,7 +3,7 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
-use cfx_types::{Address, H256, H512, U256, U512};
+use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
@@ -167,7 +167,7 @@ impl ReadyAccountPool {
         }
 
         let sum_gas_price = self.treap.sum_weight();
-        let mut rand_value = U512::from(H512::random());
+        let mut rand_value = BigEndianHash::into_uint(&H512::random());
         rand_value = rand_value % sum_gas_price;
 
         let tx = self

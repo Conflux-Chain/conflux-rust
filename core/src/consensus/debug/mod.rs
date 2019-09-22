@@ -1,3 +1,9 @@
+use cfx_types::{Address, H256, U256};
+use parity_bytes::ToPretty;
+use primitives::{SignedTransaction, StateRootWithAuxInfo};
+use rlp::*;
+use std::{fmt::Display, sync::Arc, vec::Vec};
+
 #[derive(Debug)]
 pub struct BlockHashAuthorValue<ValueType>(
     pub H256,
@@ -76,8 +82,8 @@ impl<ValueType: Display> Encodable for BlockHashAuthorValue<ValueType> {
     fn rlp_append(&self, s: &mut RlpStream) {
         // FIXME: U256 to dec string?
         s.begin_list(3)
-            .append(&(String::from("block_hash: ") + &self.0.hex()))
-            .append(&(String::from("author: ") + &self.1.hex()))
+            .append(&(String::from("block_hash: ") + &self.0.to_hex()))
+            .append(&(String::from("author: ") + &self.1.to_hex()))
             .append(&self.2.to_string());
     }
 }
@@ -93,7 +99,7 @@ impl<ValueType: Display> Encodable for BlockHashAuthorValue<ValueType> {
 impl<ValueType: Display> Encodable for AuthorValue<ValueType> {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(2)
-            .append(&(String::from("author: ") + &self.0.hex()))
+            .append(&(String::from("author: ") + &self.0.to_hex()))
             .append(&self.1.to_string());
     }
 }
@@ -139,8 +145,3 @@ impl Encodable for ComputeEpochDebugRecord {
         s.complete_unbounded_list();
     }
 }
-
-use cfx_types::{Address, H256, U256};
-use primitives::{SignedTransaction, StateRootWithAuxInfo};
-use rlp::*;
-use std::{fmt::Display, sync::Arc, vec::Vec};

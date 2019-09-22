@@ -24,6 +24,7 @@ use mio::{deprecated::EventLoop, tcp::*, udp::*, *};
 use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
 use priority_send_queue::SendQueuePriority;
+use rustc_hex::ToHex;
 use std::{
     cmp::{min, Ordering},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -1749,7 +1750,7 @@ fn save_key(path: &Path, key: &Secret) {
     if let Err(e) = restrict_permissions_owner(path, true, false) {
         warn!("Failed to modify permissions of the file ({})", e);
     }
-    if let Err(e) = file.write(&key.hex().into_bytes()[2..]) {
+    if let Err(e) = file.write(&key.to_hex().into_bytes()) {
         warn!("Error writing key file: {:?}", e);
     }
 }

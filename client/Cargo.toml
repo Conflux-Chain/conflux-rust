@@ -9,13 +9,13 @@ clap = "2"
 term_size = "0.3"
 textwrap = "0.9"
 toml = "0.4"
-serde = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_derive = "1.0"
 parking_lot = "0.6"
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 io = { path = "../util/io" }
-keylib = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", package = "ethkey" }
+ethkey = { path = "../accounts/ethkey" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 jsonrpc-core = "12.0.0"
 jsonrpc-tcp-server = "=12.0.0"
@@ -37,8 +37,8 @@ txgen = { path = "../transactiongen" }
 secret-store = { path = "../secret_store" }
 primitives = { path = "../primitives" }
 log4rs = "0.8.1"
-rlp = "0.3.0"
-keccak-hash = "0.1.2"
+rlp = "0.4.0"
+keccak-hash = "0.2.0"
 rand = "0.5"
 kvdb-rocksdb = "0.1.3"
 tempdir = "0.3"

@@ -7,7 +7,7 @@ use crate::{
     hash::{keccak, KECCAK_EMPTY},
     statedb::{Result as DbResult, StateDb},
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, BigEndianHash, H256, U256};
 use primitives::Account;
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
@@ -264,9 +264,10 @@ impl OverlayAccount {
 
             match v.is_zero() {
                 true => db.delete(&address_key)?,
-                false => {
-                    db.set::<H256>(&address_key, &H256::from(U256::from(v)))?
-                }
+                false => db.set::<H256>(
+                    &address_key,
+                    &BigEndianHash::from_uint(&v.into_uint()),
+                )?,
             }
             self.storage_cache.borrow_mut().insert(k, v);
         }

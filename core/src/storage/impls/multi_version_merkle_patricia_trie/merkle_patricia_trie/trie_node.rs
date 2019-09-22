@@ -2,6 +2,28 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::{
+    super::{
+        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
+        slab::*,
+    },
+    children_table::*,
+    compressed_path::*,
+    maybe_in_place_byte_array::*,
+    merkle::{compute_merkle, MaybeMerkleTableRef},
+    mpt_value::MptValue,
+    walk::*,
+    WrappedCreateFrom,
+};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use rlp::*;
+use std::{
+    fmt::{Debug, Formatter},
+    hint::unreachable_unchecked,
+    marker::{Send, Sync},
+    vec::Vec,
+};
+
 /// Methods that a trie node type should implement in general.
 /// Note that merkle hash isn't necessarily stored together with
 /// a trie node because the merkle hash is mainly used when
@@ -763,7 +785,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Decodable
         };
 
         Ok(MemOptimizedTrieNode::new(
-            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            MerkleHash::from_slice(rlp.val_at::<Vec<u8>>(0)?.as_slice()),
             rlp.val_at::<ChildrenTableManagedDeltaMpt>(1)?.into(),
             rlp.val_at::<Option<Vec<u8>>>(2)?
                 .map(|v| v.into_boxed_slice()),
@@ -802,7 +824,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
         }
 
         Ok(VanillaTrieNode::new(
-            rlp.val_at::<Vec<u8>>(0)?.as_slice().into(),
+            MerkleHash::from_slice(rlp.val_at::<Vec<u8>>(0)?.as_slice()),
             rlp.val_at::<VanillaChildrenTable<NodeRefT>>(1)?,
             rlp.val_at::<Option<Vec<u8>>>(2)?
                 .map(|v| v.into_boxed_slice()),
@@ -832,25 +854,3 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> Debug
                &self.children_table, self.compressed_path_ref())
     }
 }
-
-use super::{
-    super::{
-        super::errors::*, cache::algorithm::CacheAlgoDataTrait, node_ref::*,
-        slab::*,
-    },
-    children_table::*,
-    compressed_path::*,
-    maybe_in_place_byte_array::*,
-    merkle::{compute_merkle, MaybeMerkleTableRef},
-    mpt_value::MptValue,
-    walk::*,
-    WrappedCreateFrom,
-};
-use primitives::{MerkleHash, MERKLE_NULL_NODE};
-use rlp::*;
-use std::{
-    fmt::{Debug, Formatter},
-    hint::unreachable_unchecked,
-    marker::{Send, Sync},
-    vec::Vec,
-};

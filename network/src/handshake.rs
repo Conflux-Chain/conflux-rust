@@ -72,7 +72,7 @@ impl Handshake {
         token: StreamToken, id: Option<&NodeId>, socket: TcpStream,
     ) -> Self {
         Handshake {
-            id: id.cloned().unwrap_or_else(|| NodeId::new()),
+            id: id.cloned().unwrap_or_else(|| NodeId::default()),
             connection: Connection::new(token, socket),
             state: HandshakeState::New,
             nonce: H256::random(),
@@ -153,9 +153,10 @@ impl Handshake {
             self.connection.remote_addr_str()
         );
 
-        let mut data = Vec::with_capacity(public.len() + self.nonce.len());
-        data.extend_from_slice(&public);
-        data.extend_from_slice(&self.nonce);
+        let mut data =
+            Vec::with_capacity(Public::len_bytes() + H256::len_bytes());
+        data.extend_from_slice(public.as_bytes());
+        data.extend_from_slice(self.nonce.as_bytes());
 
         let message = ecies::encrypt(&self.id, &[], &data)?;
 
@@ -186,8 +187,8 @@ impl Handshake {
 
         let auth = ecies::decrypt(secret, &[], data)?;
 
-        let (remote_public, remote_nonce) = auth.split_at(self.id.len());
-        self.id.clone_from_slice(remote_public);
+        let (remote_public, remote_nonce) = auth.split_at(NodeId::len_bytes());
+        self.id.assign_from_slice(remote_public);
 
         self.write_ack_of_auth(io, remote_nonce)
     }
@@ -203,7 +204,7 @@ impl Handshake {
         );
 
         let mut data =
-            Vec::with_capacity(remote_nonce.len() + self.nonce.len());
+            Vec::with_capacity(remote_nonce.len() + H256::len_bytes());
         data.extend_from_slice(remote_nonce);
         data.extend_from_slice(self.nonce.as_ref());
 
@@ -226,9 +227,12 @@ impl Handshake {
             data.len()
         );
         assert_eq!(data.len(), 64);
-        self.id.clone_from_slice(data);
-        self.connection
-            .send(io, public.to_vec(), SendQueuePriority::High)?;
+        self.id.assign_from_slice(data);
+        self.connection.send(
+            io,
+            public.as_bytes().into(),
+            SendQueuePriority::High,
+        )?;
         self.state = HandshakeState::StartSession;
         Ok(())
     }
@@ -254,7 +258,7 @@ impl Handshake {
 
         let ack = ecies::decrypt(secret, &[], data)?;
 
-        let (self_nonce, remote_nonce) = ack.split_at(self.nonce.len());
+        let (self_nonce, remote_nonce) = ack.split_at(H256::len_bytes());
 
         if self_nonce != &self.nonce[..] {
             debug!("failed to read ack of auth, nonce mismatch");
