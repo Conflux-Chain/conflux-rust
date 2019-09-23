@@ -2,6 +2,7 @@ import random
 import threading
 import json
 import enum
+import copy
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
@@ -9,6 +10,8 @@ from test_framework.blocktools import create_block
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
+
+DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
 
 class Timer(threading.Timer):
@@ -33,9 +36,40 @@ class ConsensusBlockStatus(object):
         self.best_block_hash = json_data['bestBlockHash']
         self.block_status = BlockStatus(json_data['blockStatus'])
         self.past_era_weight = json_data['pastEraWeight']
-        self.era_block = json_data['eraBlock']
+        self.era_block_hash = json_data['eraBlockHash']
         self.stable = json_data['stable']
         self.adaptive = json_data['adaptive']
+
+    def __eq__(self, other):
+        if self.block_status == BlockStatus.Pending or \
+                other.block_status == BlockStatus.Pending:
+            return True
+        if self.era_block_hash != DEFAULT_HASH and \
+                other.era_block_hash != DEFAULT_HASH and \
+                self.era_block_hash != other.era_block_hash:
+            return False
+        return self.hash == other.hash and \
+            self.past_era_weight == other.past_era_weight and \
+            self.block_status == other.block_status and \
+            self.adaptive == other.adaptive and \
+            self.stable == other.stable
+
+    def __str__(self):
+        return "ConsensusBlockStatus(\
+                hash={}, \
+                best_block_hash={}, \
+                block_status={}, \
+                past_era_weight={}, \
+                era_block={}, \
+                stable={}, \
+                adaptive={})".format(
+            self.hash,
+            self.best_block_hash,
+            self.block_status,
+            self.past_era_weight,
+            self.era_block,
+            self.stable,
+            self.adaptive)
 
 
 class ConsensusExecutionStatus(object):
@@ -45,6 +79,13 @@ class ConsensusExecutionStatus(object):
         self.deferred_receipt_root = json_data['deferredReceiptRoot']
         self.deferred_logs_bloom_hash = json_data['deferredLogsBloomHash']
         self.state_valid = json_data['stateValid']
+
+    def __eq__(self, other):
+        return self.hash == other.hash and \
+            self.deferred_state_root == other.deferred_state_root and \
+            self.deferred_receipt_root == other.deferred_receipt_root and \
+            self.deferred_logs_bloom_hash == other.deferred_logs_bloom_hash and \
+            self.state_valid == other.state_valid
 
 
 class ConsensusSnapshot(object):
@@ -61,7 +102,8 @@ class ConsensusSnapshot(object):
                 assert block.block_status == verified_block.block_status
                 assert block.stable == verified_block.stable
                 assert block.adaptive == verified_block.adaptive
-                assert block.era_block == verified_block.era_block
+                assert block.era_block_hash == verified_block.era_block_hash or \
+                    block.era_block_hash == DEFAULT_HASH
                 assert block.past_era_weight == verified_block.past_era_weight
         elif block.hash in self.block_status_unverified:
             unverified_block = self.block_status_unverified[block.hash]
@@ -72,7 +114,9 @@ class ConsensusSnapshot(object):
                     assert block.block_status == unverified_block.block_status
                     assert block.stable == unverified_block.stable
                     assert block.adaptive == unverified_block.adaptive
-                    assert block.era_block == unverified_block.era_block
+                    assert block.era_block_hash == unverified_block.era_block_hash or \
+                        block.era_block_hash == DEFAULT_HASH or \
+                        unverified_block.era_block_hash == DEFAULT_HASH
                     assert block.past_era_weight == unverified_block.past_era_weight
         else:
             self.block_status_unverified[block.hash] = block
@@ -95,7 +139,8 @@ class ConsensusSnapshot(object):
 
 
 class Snapshot(object):
-    def __init__(self):
+    def __init__(self, peer_id):
+        self.peer_id = peer_id
         self.consensus = ConsensusSnapshot()
         self.sync_graph = None
         self.network = None
@@ -110,6 +155,11 @@ class Snapshot(object):
             self.consensus.add_block(ConsensusBlockStatus(block_status))
         for exec_status in delta['blockExecutionStateVec']:
             self.consensus.add_exec(ConsensusExecutionStatus(exec_status))
+
+
+class Predicate(object):
+    def __call__(self, snapshots, stopped_peers):
+        raise NotImplementedError()
 
 
 class ConfluxTracing(ConfluxTestFramework):
@@ -148,10 +198,10 @@ class ConfluxTracing(ConfluxTestFramework):
     def _random_crash(self):
         self._peer_lock.acquire()
         alive_peer_indices = self._retrieve_alive_peers(
-            ["NormalSyncPhase", "alive_peer_indices"])
+            ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
         normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
-        catch_up_peers = alive_peer_indices.get('alive_peer_indices', [])
-        if len(normal_peers) * 2 < len(self.nodes):
+        catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
+        if (len(normal_peers) - 1) * 2 <= len(self.nodes):
             self._peer_lock.release()
             return
         alive_peer_indices = normal_peers + catch_up_peers
@@ -186,8 +236,14 @@ class ConfluxTracing(ConfluxTestFramework):
             snapshot.update(delta)
         self._peer_lock.release()
         self._lock.acquire()
-        for predicate in self._predicates:
-            predicate(self._snapshots)
+
+        try:
+            for predicate in self._predicates:
+                predicate(self._snapshots, self._stopped_peers)
+        except Exception as e:
+            self.log.error("Found error with exception {}".format(repr(e)))
+            self._lock.release()
+            raise e
         self._lock.release()
 
     def set_test_params(self):
@@ -197,7 +253,9 @@ class ConfluxTracing(ConfluxTestFramework):
             "log_level": "\"debug\"",
             "generate_tx": "true",
             "generate_tx_period_us": "100000",
-            "enable_state_expose": "true"
+            "enable_state_expose": "true",
+            "era_epoch_count": 50,
+            "era_checkpoint_gap": 150
         }
 
     def setup_network(self):
@@ -218,7 +276,7 @@ class ConfluxTracing(ConfluxTestFramework):
             self.log.info("%d has addr=%s pubkey=%s",
                           i, encode_hex(addr), pub_key)
             tx = client.new_tx(value=int(
-                default_config["TOTAL_COIN"]/self.num_nodes) - 21000, receiver=encode_hex(addr), nonce=i)
+                default_config["TOTAL_COIN"] / self.num_nodes) - 21000, receiver=encode_hex(addr), nonce=i)
             client.send_tx(tx)
 
     def run_test(self):
@@ -227,7 +285,7 @@ class ConfluxTracing(ConfluxTestFramework):
         blockgen_timer = Timer(self._blockgen_timeout, self._generate_block)
         snapshot_timer = Timer(self._snapshot_timeout, self._retrieve_snapshot)
 
-        self._snapshots = [Snapshot() for _ in self.nodes]
+        self._snapshots = [Snapshot(i) for i in range(len(self.nodes))]
         self.setup_balance()
 
         crash_timer.start()
@@ -236,7 +294,7 @@ class ConfluxTracing(ConfluxTestFramework):
         snapshot_timer.start()
 
         # TODO: we may make it run forever
-        time.sleep(200)
+        time.sleep(2000)
 
         crash_timer.cancel()
         start_timer.cancel()
@@ -244,10 +302,119 @@ class ConfluxTracing(ConfluxTestFramework):
         snapshot_timer.cancel()
 
         # wait for timer exit
-        time.sleep(10)
+        time.sleep(20)
 
     def add_predicate(self, predicate):
-        assert callable(predicate)
+        assert isinstance(predicate, Predicate)
         self._lock.acquire()
         self._predicates.append(predicate)
         self._lock.release()
+
+
+class BlockStatusPredicate(Predicate):
+    def __init__(self):
+        super().__init__()
+
+    def verify_blocks(self, blocks):
+        for i in range(1, len(blocks)):
+            assert blocks[i] == blocks[0]
+
+    def verify_snapshots(self, snapshots, hashes):
+        for h in hashes:
+            blocks = [snapshot.consensus.block_status_unverified[h] for snapshot in snapshots]
+            self.verify_blocks(blocks)
+            for (snapshot, block) in zip(snapshots, blocks):
+                if block.block_status != BlockStatus.Pending:
+                    snapshot.consensus.block_status_verified[h] = block
+                    del snapshot.consensus.block_status_unverified[h]
+
+    def __call__(self, snapshots, stopped_peers):
+        verified = {}
+        for snapshot in snapshots:
+            for (k, v) in snapshot.consensus.block_status_verified.items():
+                if k in verified:
+                    assert verified[k] == v
+                else:
+                    verified[k] = v
+        verified_hashes = set(verified.keys())
+        verifiable_hashes = None
+        verifiable_hashes_with_stopped = None
+        alive_snapshots = []
+        for (i, snapshot) in enumerate(snapshots):
+            unverified_hashes = set(snapshot.consensus.block_status_unverified.keys())
+            for h in unverified_hashes.intersection(verified_hashes):
+                assert verified[h] == snapshot.consensus.block_status_unverified[h]
+                snapshot.consensus.block_status_verified[h] = verified[h]
+                del snapshot.consensus.block_status_unverified[h]
+            if verifiable_hashes_with_stopped is None:
+                verifiable_hashes_with_stopped = copy.deepcopy(unverified_hashes)
+            else:
+                verifiable_hashes_with_stopped &= unverified_hashes
+            if i not in stopped_peers:
+                if verifiable_hashes is None:
+                    verifiable_hashes = copy.deepcopy(unverified_hashes)
+                else:
+                    verifiable_hashes &= unverified_hashes
+                alive_snapshots.append(snapshot)
+
+        self.verify_snapshots(snapshots, verifiable_hashes_with_stopped)
+        verifiable_hashes -= verifiable_hashes_with_stopped
+        self.verify_snapshots(alive_snapshots, verifiable_hashes)
+
+
+class ExecutionStatusPredicate(Predicate):
+    def __init__(self):
+        super().__init__()
+
+    def verify_blocks(self, blocks):
+        for i in range(1, len(blocks)):
+            assert blocks[i] == blocks[0]
+
+    def verify_snapshots(self, snapshots, hashes):
+        for h in hashes:
+            blocks = [snapshot.consensus.exec_status_unverified[h] for snapshot in snapshots]
+            self.verify_blocks(blocks)
+            for (snapshot, block) in zip(snapshots, blocks):
+                snapshot.consensus.exec_status_verified[h] = block
+                del snapshot.consensus.exec_status_unverified[h]
+
+    def __call__(self, snapshots, stopped_peers):
+        verified = {}
+        for snapshot in snapshots:
+            for (k, v) in snapshot.consensus.exec_status_verified.items():
+                if k in verified:
+                    assert verified[k] == v
+                else:
+                    verified[k] = v
+        verified_hashes = set(verified.keys())
+        verifiable_hashes = None
+        verifiable_hashes_with_stopped = None
+        alive_snapshots = []
+        for (i, snapshot) in enumerate(snapshots):
+            unverified_hashes = set(snapshot.consensus.exec_status_unverified.keys())
+            for h in unverified_hashes.intersection(verified_hashes):
+                assert verified[h] == snapshot.consensus.exec_status_unverified[h]
+                snapshot.consensus.exec_status_verified[h] = verified[h]
+                del snapshot.consensus.exec_status_unverified[h]
+            if verifiable_hashes_with_stopped is None:
+                verifiable_hashes_with_stopped = copy.deepcopy(unverified_hashes)
+            else:
+                verifiable_hashes_with_stopped &= unverified_hashes
+            if i not in stopped_peers:
+                if verifiable_hashes is None:
+                    verifiable_hashes = copy.deepcopy(unverified_hashes)
+                else:
+                    verifiable_hashes &= unverified_hashes
+                alive_snapshots.append(snapshot)
+
+        self.verify_snapshots(snapshots, verifiable_hashes_with_stopped)
+        verifiable_hashes -= verifiable_hashes_with_stopped
+        self.verify_snapshots(alive_snapshots, verifiable_hashes)
+
+
+if __name__ == "__main__":
+    conflux_tracing = ConfluxTracing(
+        crash_timeout=10, start_timeout=13, blockgen_timeout=0.25, snapshot_timeout=2)
+    conflux_tracing.add_predicate(BlockStatusPredicate())
+    conflux_tracing.add_predicate(ExecutionStatusPredicate())
+    conflux_tracing.main()
