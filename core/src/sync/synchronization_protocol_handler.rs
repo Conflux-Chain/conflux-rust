@@ -1080,7 +1080,7 @@ impl SynchronizationProtocolHandler {
         self.broadcast_status(io);
     }
 
-    fn block_cache_gc(&self) { self.graph.data_man.gc_cache() }
+    fn cache_gc(&self) { self.graph.data_man.cache_gc() }
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
@@ -1383,7 +1383,8 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.send_heartbeat(io);
             }
             BLOCK_CACHE_GC_TIMER => {
-                self.block_cache_gc();
+                self.cache_gc();
+                self.graph.try_remove_old_era_blocks_from_disk();
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_sync_phase(io);
