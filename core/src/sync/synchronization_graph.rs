@@ -979,7 +979,7 @@ impl SynchronizationGraph {
             .set_to_be_propagated_transactions(transactions);
     }
 
-    fn try_remove_old_era_blocks_from_disk(&self) {
+    pub fn try_remove_old_era_blocks_from_disk(&self) {
         let mut num_of_blocks_to_remove = 2;
         while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
             // only full node should remove blocks in old eras
@@ -1416,7 +1416,6 @@ impl SynchronizationGraph {
         }
 
         inner.try_clear_old_era_blocks();
-        self.try_remove_old_era_blocks_from_disk();
 
         (true, need_to_relay)
     }

@@ -845,7 +845,7 @@ impl BlockDataManager {
         exeuction_contexts.shrink_to_fit();
     }
 
-    pub fn gc_cache(&self) {
+    pub fn cache_gc(&self) {
         self.block_cache_gc();
         self.tx_data_manager.tx_cache_gc();
     }
