@@ -18,10 +18,9 @@ def parse_log_timestamp(log_line:str):
     return round(dateutil.parser.parse(log_time).timestamp(), 2)
 
 class BlockLatencyType(enum.Enum):
-    Header_received= 0
-    Receive = 1
-    Sync = 2
-    Cons = 3
+    Receive = 0
+    Sync = 1
+    Cons = 2
 
 
 
@@ -238,9 +237,6 @@ class NodeLogMapper:
                     self.parse_log_line(line)
 
     def parse_log_line(self, line:str):
-        if "new block headers received" in line:
-            block = Block.receive(line, BlockLatencyType.Header_received)
-            Block.add_or_merge(self.blocks, block)
 
         if "new block received" in line:
             block = Block.receive(line, BlockLatencyType.Receive)
