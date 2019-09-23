@@ -556,6 +556,12 @@ impl ConsensusGraph {
                         .data_man
                         .local_block_info_from_db(hash)
                         .expect("local block info must exist in db");
+                    let era_block = inner.arena[*arena_index].era_block();
+                    let era_block_hash = if era_block != NULL {
+                        inner.arena[era_block].hash
+                    } else {
+                        Default::default()
+                    };
                     STATE_EXPOSER.consensus_graph.lock().block_state_vec.push(
                         ConsensusGraphBlockState {
                             block_hash: *hash,
@@ -563,7 +569,7 @@ impl ConsensusGraph {
                             block_status: local_info.get_status(),
                             past_era_weight: inner.arena[*arena_index]
                                 .past_era_weight(),
-                            era_block: inner.arena[*arena_index].era_block(),
+                            era_block_hash,
                             stable: inner.arena[*arena_index].stable(),
                             adaptive: inner.arena[*arena_index].adaptive(),
                         },
