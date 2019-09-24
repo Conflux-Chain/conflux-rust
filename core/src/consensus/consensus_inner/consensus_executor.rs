@@ -19,9 +19,7 @@ use crate::{
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_types::{
-    into_u256, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512,
-};
+use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -38,6 +36,7 @@ use primitives::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    convert::From,
     fmt::{Debug, Formatter},
     sync::{
         atomic::{AtomicBool, Ordering::Relaxed},
@@ -376,7 +375,7 @@ impl ConsensusExecutor {
                         if block_consensus_node_anticone_opt.is_none()
                             || anticone_cutoff_epoch_anticone_set_opt.is_none()
                         {
-                            anticone_difficulty = U512::from(into_u256(
+                            anticone_difficulty = U512::from(U256::from(
                                 inner.recompute_anticone_weight(
                                     *index,
                                     anticone_penalty_cutoff_epoch_arena_index,
@@ -414,7 +413,7 @@ impl ConsensusExecutor {
                                 // TODO: Maybe consider to use base difficulty
                                 // Check with the spec!
                                 anticone_difficulty +=
-                                    U512::from(into_u256(inner.block_weight(
+                                    U512::from(U256::from(inner.block_weight(
                                         a_index, false, /* inclusive */
                                     )));
                             }

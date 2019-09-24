@@ -12,9 +12,13 @@ use super::consensus::consensus_inner::{
     consensus_executor::ConsensusExecutor,
     consensus_new_block_handler::ConsensusNewBlockHandler,
 };
+pub use crate::consensus::consensus_inner::{
+    ConsensusGraphInner, ConsensusInnerConfig,
+};
 use crate::{
     block_data_manager::BlockDataManager,
     bytes::Bytes,
+    parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     state::State,
     state_exposer::SharedStateExposer,
@@ -25,13 +29,6 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Bloom, H160, H256, U256};
-// use fenwick_tree::FenwickTree;
-pub use crate::consensus::consensus_inner::{
-    ConsensusGraphInner, ConsensusInnerConfig,
-};
-use crate::parameters::{
-    block::REFEREE_BOUND, consensus::*, consensus_internal::*,
-};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
