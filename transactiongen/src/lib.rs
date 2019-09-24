@@ -196,7 +196,7 @@ impl TransactionGenerator {
         }
 
         debug!("Setup Usable Genesis Accounts");
-        let mut state = txgen.consensus.get_best_state();
+        let state = txgen.consensus.get_best_state();
         for i in 0..tx_config.account_count {
             let key_pair =
                 txgen.secret_store.get_keypair(account_start_index + i);
@@ -205,12 +205,8 @@ impl TransactionGenerator {
             addresses.push(address);
             nonce_map.insert(address.clone(), 0.into());
 
-            let mut balance = state.balance(&address).ok();
-            while balance.is_none() || balance.clone().unwrap() == 0.into() {
-                thread::sleep(Duration::from_millis(1));
-                state = txgen.consensus.get_best_state();
-                balance = state.balance(&address).ok();
-            }
+            let balance = state.balance(&address).ok();
+
             balance_map.insert(address.clone(), balance.unwrap());
             address_secret_pair.insert(address, secret);
         }

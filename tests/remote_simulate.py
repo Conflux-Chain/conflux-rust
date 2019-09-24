@@ -275,7 +275,7 @@ class RemoteSimulate(ConfluxTestFramework):
             #setup usable accounts
 
             start_time = time.time()
-            current_index=0
+            current_index=1
             for i in range(len(self.nodes)):
                 client = RpcClient(self.nodes[i])
                 client.send_usable_genesis_accounts(current_index)
