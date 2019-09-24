@@ -358,16 +358,19 @@ impl NoncePool {
 
     pub fn is_empty(&self) -> bool { self.root.is_none() }
 
+    /// return the number of transactions whose nonce < `nonce`
+    pub fn count_less(&self, nonce: &U256) -> usize {
+        if *nonce == U256::from(0) {
+            0
+        } else {
+            NoncePoolNode::rank(&self.root, &(nonce - 1)).0 as usize
+        }
+    }
+
     /// return the number of transactions whose nonce >= `nonce`
     #[allow(dead_code)]
     pub fn count_from(&self, nonce: &U256) -> usize {
-        if *nonce == U256::from(0) {
-            NoncePoolNode::size(&self.root).0 as usize
-        } else {
-            (NoncePoolNode::size(&self.root).0
-                - NoncePoolNode::rank(&self.root, &(nonce - 1)).0)
-                as usize
-        }
+        NoncePoolNode::size(&self.root).0 as usize - self.count_less(nonce)
     }
 
     pub fn check_nonce_exists(&self, nonce: &U256) -> bool {
