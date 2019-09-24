@@ -8,7 +8,6 @@ pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
-use std::{cmp::Ordering, convert, ops};
 
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)
 pub const KECCAK_EMPTY_BLOOM: H256 = H256([
