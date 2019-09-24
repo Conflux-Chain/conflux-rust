@@ -39,7 +39,7 @@ mod worker;
 
 use mio::{
     deprecated::{EventLoop, NotifyError},
-    Token,
+    Poll, Token,
 };
 use std::{cell::Cell, error, fmt};
 
@@ -109,25 +109,16 @@ where Message: Send + Sync + 'static
     fn stream_writable(&self, _io: &IoContext<Message>, _stream: StreamToken) {}
     /// Register a new stream with the event loop
     fn register_stream(
-        &self, _stream: StreamToken, _reg: Token,
-        _event_loop: &mut EventLoop<IoManager<Message>>,
-    )
-    {
+        &self, _stream: StreamToken, _reg: Token, _event_loop: &Poll,
+    ) {
     }
     /// Re-register a stream with the event loop
     fn update_stream(
-        &self, _stream: StreamToken, _reg: Token,
-        _event_loop: &mut EventLoop<IoManager<Message>>,
-    )
-    {
+        &self, _stream: StreamToken, _reg: Token, _event_loop: &Poll,
+    ) {
     }
     /// Deregister a stream. Called whenstream is removed from event loop
-    fn deregister_stream(
-        &self, _stream: StreamToken,
-        _event_loop: &mut EventLoop<IoManager<Message>>,
-    )
-    {
-    }
+    fn deregister_stream(&self, _stream: StreamToken, _event_loop: &Poll) {}
 }
 
 pub use crate::service_mio::{

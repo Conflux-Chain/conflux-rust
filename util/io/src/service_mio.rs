@@ -240,6 +240,7 @@ where Message: Send + Sync
     worker_channel: chase_lev::Worker<Work<Message>>,
     work_ready: Arc<SCondvar>,
     socket_workers: Vec<(AsyncSender<Work<Message>>, SocketWorker)>,
+    network_poll: Arc<Poll>,
 }
 
 impl<Message> IoManager<Message>
@@ -249,6 +250,7 @@ where Message: Send + Sync + 'static
     pub fn start(
         event_loop: &mut EventLoop<IoManager<Message>>,
         handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
+        network_poll: Arc<Poll>,
     ) -> Result<(), IoError>
     {
         let (worker, stealer) = chase_lev::deque();
@@ -295,6 +297,7 @@ where Message: Send + Sync + 'static
             workers,
             work_ready,
             socket_workers,
+            network_poll,
         };
         event_loop.run(&mut io)?;
         Ok(())
@@ -392,6 +395,7 @@ where Message: Send + Sync + 'static
                     handler_id <= MAX_HANDLERS,
                     "Too many handlers registered"
                 );
+                trace!("add handler {}", handler_id);
                 handler.initialize(&IoContext::new(
                     IoChannel::new(
                         event_loop.channel(),
@@ -447,17 +451,20 @@ where Message: Send + Sync + 'static
                 }
             }
             IoMessage::RegisterStream { handler_id, token } => {
+                trace!("register stream {} {}", handler_id, token);
                 if let Some(handler) = self.handlers.read().get(handler_id) {
+                    trace!("do register stream {} {}", handler_id, token);
                     handler.register_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        event_loop,
+                        self.network_poll.as_ref(),
                     );
                 }
             }
             IoMessage::DeregisterStream { handler_id, token } => {
                 if let Some(handler) = self.handlers.read().get(handler_id) {
-                    handler.deregister_stream(token, event_loop);
+                    handler
+                        .deregister_stream(token, self.network_poll.as_ref());
                     // unregister a timer associated with the token (if any)
                     let timer_id = token + handler_id * TOKENS_PER_HANDLER;
                     if let Some(timer) = self.timers.write().remove(&timer_id) {
@@ -470,7 +477,7 @@ where Message: Send + Sync + 'static
                     handler.update_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        event_loop,
+                        self.network_poll.as_ref(),
                     );
                 }
             }
@@ -622,17 +629,20 @@ impl<Message> IoService<Message>
 where Message: Send + Sync + 'static
 {
     /// Starts IO event loop
-    pub fn start() -> Result<IoService<Message>, IoError> {
+    pub fn start(
+        network_poll: Arc<Poll>,
+    ) -> Result<IoService<Message>, IoError> {
         let mut config = EventLoopBuilder::new();
         config.messages_per_tick(1024);
         let mut event_loop = config.build().expect("Error creating event loop");
         let channel = event_loop.channel();
         let handlers = Arc::new(RwLock::new(Slab::with_capacity(MAX_HANDLERS)));
         let h = handlers.clone();
+
         let thread = thread::Builder::new()
             .name("io_service".into())
             .spawn(move || {
-                IoManager::<Message>::start(&mut event_loop, h)
+                IoManager::<Message>::start(&mut event_loop, h, network_poll)
                     .expect("Error starting IO service");
             })
             .expect("only one io_service thread, so it should not fail");

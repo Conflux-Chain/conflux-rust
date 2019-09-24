@@ -12,7 +12,7 @@ use crate::{
 };
 use bytes::Bytes;
 use io::*;
-use mio::{deprecated::*, tcp::*, *};
+use mio::{tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
 use serde_derive::Serialize;
@@ -152,8 +152,8 @@ impl Session {
 
     /// Register event loop for the underlying connection.
     /// If session expired, no effect taken.
-    pub fn register_socket<H: Handler>(
-        &self, reg: Token, event_loop: &mut EventLoop<H>,
+    pub fn register_socket(
+        &self, reg: Token, event_loop: &Poll,
     ) -> Result<(), Error> {
         if !self.expired() {
             self.connection().register_socket(reg, event_loop)?;
@@ -163,17 +163,15 @@ impl Session {
     }
 
     /// Update the event loop for the underlying connection.
-    pub fn update_socket<H: Handler>(
-        &self, reg: Token, event_loop: &mut EventLoop<H>,
+    pub fn update_socket(
+        &self, reg: Token, event_loop: &Poll,
     ) -> Result<(), Error> {
         self.connection().update_socket(reg, event_loop)?;
         Ok(())
     }
 
     /// Deregister the event loop for the underlying connection.
-    pub fn deregister_socket<H: Handler>(
-        &self, event_loop: &mut EventLoop<H>,
-    ) -> Result<(), Error> {
+    pub fn deregister_socket(&self, event_loop: &Poll) -> Result<(), Error> {
         self.connection().deregister_socket(event_loop)?;
         Ok(())
     }
