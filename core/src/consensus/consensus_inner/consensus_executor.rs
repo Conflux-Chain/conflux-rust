@@ -452,56 +452,13 @@ impl ConsensusExecutor {
         )
     }
 
-    fn collect_blocks_missing_execution_info(
-        &self, me: usize, inner: &ConsensusGraphInner,
-    ) -> Result<Vec<(H256, H256)>, String> {
-        let mut cur = me;
-        let mut waiting_blocks = Vec::new();
-        while !inner.execution_info_cache.contains_key(&cur) {
-            let cur_hash = inner.arena[cur].hash.clone();
-            let state_hash = inner
-                .get_state_block_with_delay(
-                    &cur_hash,
-                    DEFERRED_STATE_EPOCH_COUNT as usize,
-                )?
-                .clone();
-            waiting_blocks.push((cur_hash, state_hash));
-            if cur == inner.cur_era_genesis_block_arena_index {
-                break;
-            }
-            cur = inner.arena[cur].parent;
-        }
-        waiting_blocks.reverse();
-        Ok(waiting_blocks)
-    }
-
-    fn compute_execution_info_for_blocks(
-        &self, waiting_result: Vec<(H256, (StateRootWithAuxInfo, H256, H256))>,
-        inner: &mut ConsensusGraphInner,
-    ) -> Result<(), String>
-    {
-        for (cur_hash, result) in waiting_result {
-            let index_opt = inner.hash_to_arena_indices.get(&cur_hash);
-            if index_opt.is_none() {
-                return Err("Too old parent/subtree to prepare for generation"
-                    .to_owned());
-            }
-            let index = *index_opt.unwrap();
-            inner.compute_execution_info_with_result(index, result)?;
-        }
-        Ok(())
-    }
-
     fn wait_and_compute_execution_info(
         &self, me: usize, inner_lock: &RwLock<ConsensusGraphInner>,
     ) -> Result<(), String> {
-        let waiting_blocks;
-        {
-            let inner = &*inner_lock.read();
-            // We go up and find all states whose execution_infos are missing
-            waiting_blocks =
-                self.collect_blocks_missing_execution_info(me, inner)?;
-        }
+        // We go up and find all states whose execution_infos are missing
+        let waiting_blocks = inner_lock
+            .read()
+            .collect_blocks_missing_execution_info(me)?;
         // Now we wait without holding the inner lock
         // Note that we must use hash instead of index because once we release
         // the lock, there might be a checkpoint coming in to break
@@ -515,20 +472,17 @@ impl ConsensusExecutor {
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        {
-            let inner = &mut *inner_lock.write();
-            self.compute_execution_info_for_blocks(waiting_result, inner)?;
-            Ok(())
-        }
+        inner_lock
+            .write()
+            .compute_execution_info_for_blocks(waiting_result)?;
+        Ok(())
     }
 
     fn wait_and_compute_execution_info_locked(
         &self, me: usize, inner: &mut ConsensusGraphInner,
     ) -> Result<(), String> {
-        let waiting_blocks;
         // We go up and find all states whose execution_infos are missing
-        waiting_blocks =
-            self.collect_blocks_missing_execution_info(me, inner)?;
+        let waiting_blocks = inner.collect_blocks_missing_execution_info(me)?;
         trace!(
             "wait_and_compute_execution_info_locked: waiting_blocks={:?}",
             waiting_blocks
@@ -544,7 +498,7 @@ impl ConsensusExecutor {
         );
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        self.compute_execution_info_for_blocks(waiting_result, inner)?;
+        inner.compute_execution_info_for_blocks(waiting_result)?;
         Ok(())
     }
 

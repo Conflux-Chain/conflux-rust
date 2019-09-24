@@ -644,12 +644,8 @@ impl ConsensusGraph {
 
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
-        let best_state_hash = {
-            let inner = self.inner.read();
-            let best_state_hash = inner.best_state_block_hash();
-            self.executor.wait_for_result(best_state_hash);
-            best_state_hash
-        };
+        let best_state_hash = self.inner.read().best_state_block_hash();
+        self.executor.wait_for_result(best_state_hash);
         if let Ok(state) = self.data_man.storage_manager.get_state_no_commit(
             SnapshotAndEpochIdRef::new(&best_state_hash, None),
         ) {

@@ -2523,4 +2523,44 @@ impl ConsensusGraphInner {
         )
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
+
+    fn collect_blocks_missing_execution_info(
+        &self, me: usize,
+    ) -> Result<Vec<(H256, H256)>, String> {
+        let mut cur = me;
+        let mut waiting_blocks = Vec::new();
+        while !self.execution_info_cache.contains_key(&cur) {
+            let cur_hash = self.arena[cur].hash.clone();
+            let state_hash = self
+                .get_state_block_with_delay(
+                    &cur_hash,
+                    DEFERRED_STATE_EPOCH_COUNT as usize,
+                )?
+                .clone();
+            waiting_blocks.push((cur_hash, state_hash));
+            if cur == self.cur_era_genesis_block_arena_index {
+                break;
+            }
+            cur = self.arena[cur].parent;
+        }
+        waiting_blocks.reverse();
+        Ok(waiting_blocks)
+    }
+
+    fn compute_execution_info_for_blocks(
+        &mut self,
+        waiting_result: Vec<(H256, (StateRootWithAuxInfo, H256, H256))>,
+    ) -> Result<(), String>
+    {
+        for (cur_hash, result) in waiting_result {
+            let index_opt = self.hash_to_arena_indices.get(&cur_hash);
+            if index_opt.is_none() {
+                return Err("Too old parent/subtree to prepare for generation"
+                    .to_owned());
+            }
+            let index = *index_opt.unwrap();
+            self.compute_execution_info_with_result(index, result)?;
+        }
+        Ok(())
+    }
 }
