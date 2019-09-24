@@ -6,9 +6,9 @@ use crate::consensus::{
     consensus_inner::{NULL, NULLU64},
     ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
 };
-use cfx_types::{into_i128, H256};
+use cfx_types::H256;
 use parking_lot::RwLock;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, convert::TryFrom};
 
 pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
 pub const MAX_NUM_MAINTAINED_RISK: usize = 10;
@@ -153,7 +153,7 @@ impl ConfirmationMeter {
         let w_3 = g_inner.arena[idx].past_weight;
 
         // Compute d
-        let d = into_i128(&g_inner.current_difficulty);
+        let d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
 
         // Compute n
         let w_2_4 = w_2 + w_4;

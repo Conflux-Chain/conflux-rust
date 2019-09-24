@@ -14,7 +14,7 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
 };
-use cfx_types::{into_i128, H256, U256, U512};
+use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike};
 use link_cut_tree::{
     CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
@@ -28,6 +28,7 @@ use slab::Slab;
 use std::{
     cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    convert::TryFrom,
     sync::Arc,
 };
 
@@ -465,21 +466,42 @@ impl ConsensusGraphInner {
             .make_tree(inner.cur_era_genesis_block_arena_index);
         inner.weight_tree.path_apply(
             inner.cur_era_genesis_block_arena_index,
-            into_i128(data_man.genesis_block().block_header.difficulty()),
+            i128::try_from(
+                data_man
+                    .genesis_block()
+                    .block_header
+                    .difficulty()
+                    .low_u128(),
+            )
+            .unwrap(),
         );
         inner
             .inclusive_weight_tree
             .make_tree(inner.cur_era_genesis_block_arena_index);
         inner.inclusive_weight_tree.path_apply(
             inner.cur_era_genesis_block_arena_index,
-            into_i128(data_man.genesis_block().block_header.difficulty()),
+            i128::try_from(
+                data_man
+                    .genesis_block()
+                    .block_header
+                    .difficulty()
+                    .low_u128(),
+            )
+            .unwrap(),
         );
         inner
             .stable_weight_tree
             .make_tree(inner.cur_era_genesis_block_arena_index);
         inner.stable_weight_tree.path_apply(
             inner.cur_era_genesis_block_arena_index,
-            into_i128(data_man.genesis_block().block_header.difficulty()),
+            i128::try_from(
+                data_man
+                    .genesis_block()
+                    .block_header
+                    .difficulty()
+                    .low_u128(),
+            )
+            .unwrap(),
         );
         inner
             .stable_tree
@@ -790,7 +812,7 @@ impl ConsensusGraphInner {
             parent_arena_index,
             &BitSet::new(),
             None,
-            into_i128(&difficulty),
+            i128::try_from(difficulty.low_u128()).unwrap(),
         );
         adaptive
     }
@@ -1163,7 +1185,8 @@ impl ConsensusGraphInner {
         let parent = self.arena[me].parent;
         assert!(parent != NULL);
 
-        let difficulty = into_i128(&self.arena[me].difficulty);
+        let difficulty =
+            i128::try_from(self.arena[me].difficulty.low_u128()).unwrap();
 
         self.adaptive_weight_impl(
             parent,
@@ -2124,12 +2147,13 @@ impl ConsensusGraphInner {
         if is_adaptive {
             if is_heavy {
                 self.inner_conf.heavy_block_difficulty_ratio as i128
-                    * into_i128(&self.arena[me].difficulty)
+                    * i128::try_from(self.arena[me].difficulty.low_u128())
+                        .unwrap()
             } else {
                 0 as i128
             }
         } else {
-            into_i128(&self.arena[me].difficulty)
+            i128::try_from(self.arena[me].difficulty.low_u128()).unwrap()
         }
     }
 

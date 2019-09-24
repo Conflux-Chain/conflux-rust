@@ -42,7 +42,6 @@ rayon = "1.0"
 sqlite = "0.25"
 sqlite3-sys = "0.12"
 link-cut-tree = { path = "../util/link-cut-tree" }
-fenwick-tree = { path = "../util/fenwick-tree" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 toml = "0.4"
 metrics = { path = "../util/metrics" }
