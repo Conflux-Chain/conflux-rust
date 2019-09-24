@@ -270,7 +270,7 @@ class HostLogReducer:
 
         self.blocks = {}
         self.txs = {}
-        self.sync_cons_gap = []
+        self.sync_cons_gap_stats = []
         self.by_block_ratio = []
 
     def reduce(self):

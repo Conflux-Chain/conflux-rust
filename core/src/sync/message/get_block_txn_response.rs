@@ -74,7 +74,7 @@ impl Handleable for GetBlockTxnResponse {
                     let block = Block::new(header, trans);
                     debug!(
                         "transaction received by block: ratio={:?}",
-                        &self.block_txn.len() as f64
+                        self.block_txn.len() as f64
                             / block.transactions.len() as f64
                     );
                     debug!(
