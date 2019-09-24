@@ -914,10 +914,8 @@ pub struct DataManagerConfiguration {
 
 impl DataManagerConfiguration {
     pub fn new(
-        record_tx_address: bool, tx_cache_count: usize,
-        db_types: Option<String>,
-    ) -> Self
-    {
+        record_tx_address: bool, tx_cache_count: usize, db_types: Option<Value>,
+    ) -> Self {
         Self {
             record_tx_address,
             tx_cache_count,
@@ -939,11 +937,11 @@ impl DataManagerConfiguration {
         db_types
     }
 
-    fn parse_db_types(db_types_str: String) -> HashMap<DBTable, DBType> {
+    fn parse_db_types(db_types_table: Value) -> HashMap<DBTable, DBType> {
         let mut db_types = HashMap::new();
-        let map = db_types_str.parse::<Value>().unwrap();
-        for (key, value) in
-            map.as_table().expect("db_types should be toml table")
+        for (key, value) in db_types_table
+            .as_table()
+            .expect("db_types should be toml table")
         {
             db_types.insert(
                 key.as_str().parse().expect("db_types table name invalid"),

@@ -84,8 +84,8 @@ macro_rules! build_config{
                         if let Some(value) = config_value.get(stringify!($name)) {
                             config.$name = if_option!(
                                 $($type)+,
-                                THEN{ Some(value.clone().try_into().map_err(|_| concat!("Invalid ", stringify!($name)).to_owned())?) }
-                                ELSE{ value.clone().try_into().map_err(|_| concat!("Invalid ", stringify!($name)).to_owned())? }
+                                THEN{ Some(value.clone().try_into().map_err(|e| format!("Invalid toml: key={:?} err={:?}", stringify!($name), e).to_owned())?) }
+                                ELSE{ value.clone().try_into().map_err(|e| format!("Invalid toml: key={:?} err={:?}", stringify!($name), e).to_owned())? }
                             );
                         }
                     )*

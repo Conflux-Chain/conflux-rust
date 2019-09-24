@@ -11,6 +11,7 @@ use cfxcore::{
     sync::ProtocolConfiguration,
 };
 use std::convert::TryInto;
+use toml::Value;
 use txgen::TransactionGeneratorConfig;
 
 // usage:
@@ -114,7 +115,7 @@ build_config! {
         (txgen_account_count, (usize), 10)
         (tx_cache_count, (usize), 250000)
         (max_download_state_peers, (usize), 8)
-        (db_types, (Option<String>), None)
+        (db_types, (Option<Value>), None)
         (rocksdb_disable_wal, (bool), false)
     }
     {
