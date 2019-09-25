@@ -39,6 +39,7 @@ impl Handleable for GetBlocksResponse {
         );
 
         for block in &self.blocks {
+            debug!("transaction received by block: ratio=1");
             debug!(
                 "new block received: block_header={:?}, tx_count={}, block_size={}",
                 block.block_header,

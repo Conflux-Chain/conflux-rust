@@ -111,6 +111,7 @@ impl Handleable for GetCompactBlocksResponse {
                     .map(|tx| tx.unwrap())
                     .collect();
                 let block = Block::new(header, trans);
+                debug!("transaction received by block: ratio=0");
                 debug!(
                     "new block received: block_header={:?}, tx_count={}, block_size={}",
                     block.block_header,

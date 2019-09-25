@@ -223,6 +223,7 @@ class NodeLogMapper:
 
         self.blocks = {}
         self.txs = {}
+        self.by_block_ratio=[]
         self.sync_cons_gaps = []
 
     @staticmethod
@@ -237,6 +238,8 @@ class NodeLogMapper:
                     self.parse_log_line(line)
 
     def parse_log_line(self, line:str):
+        if "transaction received by block" in line:
+            self.by_block_ratio.append(float(parse_value(line, "ratio=", None)))
 
         if "new block received" in line:
             block = Block.receive(line, BlockLatencyType.Receive)
@@ -268,10 +271,12 @@ class HostLogReducer:
         self.blocks = {}
         self.txs = {}
         self.sync_cons_gap_stats = []
+        self.by_block_ratio = []
 
     def reduce(self):
         for mapper in self.node_mappers:
             self.sync_cons_gap_stats.append(Statistics(mapper.sync_cons_gaps))
+            self.by_block_ratio.extend(mapper.by_block_ratio)
 
             for b in mapper.blocks.values():
                 Block.add_or_merge(self.blocks, b)
@@ -284,6 +289,7 @@ class HostLogReducer:
             "blocks": self.blocks,
             "sync_cons_gap_stats": self.sync_cons_gap_stats,
             "txs": self.txs,
+            "by_block_ratio": self.by_block_ratio,
         }
 
         with open(output_file, "w") as fp:
@@ -292,8 +298,9 @@ class HostLogReducer:
     def dumps(self):
         data = {
             "blocks": self.blocks,
-            "sync_cons_gap_stats": self.sync_cons_gap_stats,
+            "sync_cons_gap": self.sync_cons_gap,
             "txs": self.txs,
+            "by_block_ratio": self.by_block_ratio,
         }
 
         return json.dumps(data, default=lambda o: o.__dict__)
@@ -301,6 +308,9 @@ class HostLogReducer:
     @staticmethod
     def load(data:dict):
         reducer = HostLogReducer(None)
+
+        for by_block_ratio in data["by_block_ratio"]:
+            reducer.by_block_ratio.append(by_block_ratio)
 
         for stat_dict in data["sync_cons_gap_stats"]:
             stat = Statistics([1])
@@ -368,17 +378,16 @@ class LogAggregator:
     def add_host(self, host_log:HostLogReducer):
         self.sync_cons_gap_stats.extend(host_log.sync_cons_gap_stats)
 
+
         for b in host_log.blocks.values():
             Block.add_or_merge(self.blocks, b)
         by_block_cnt = 0
 
         for tx in host_log.txs.values():
             Transaction.add_or_merge(self.txs, tx)
-            if tx.by_block:
-                by_block_cnt += 1
 
         # following data only work for one node per host
-        self.host_by_block_ratio.append(by_block_cnt / len(host_log.txs))
+        self.host_by_block_ratio.extend(host_log.by_block_ratio)
 
         for tx in host_log.txs.values():
             if tx.packed_timestamps[0] is not None:
