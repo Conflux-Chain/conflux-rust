@@ -61,7 +61,7 @@ impl TrieProof {
     pub fn is_valid_kv(
         &self, key: &[u8], value: Option<&[u8]>, root: MerkleHash,
     ) -> bool {
-        self.is_valid(key, root, |node| match node {
+        self.is_valid(key, &root, |node| match node {
             None => value == None,
             Some(node) => value == node.value_as_slice().into_option(),
         })
@@ -73,19 +73,24 @@ impl TrieProof {
     pub fn is_valid_path_to(
         &self, path: &[u8], hash: MerkleHash, root: MerkleHash,
     ) -> bool {
-        self.is_valid(path, root, |node| match node {
+        self.is_valid(path, &root, |node| match node {
             None => hash == MERKLE_NULL_NODE,
             Some(node) => hash == *node.get_merkle(),
         })
     }
 
+    /// Verify that the trie `root` has a node under `key`.
+    pub fn is_valid_key(&self, key: &[u8], root: &MerkleHash) -> bool {
+        self.is_valid(key, root, |node| node.is_some())
+    }
+
     fn is_valid(
-        &self, path: &[u8], root: MerkleHash,
+        &self, path: &[u8], root: &MerkleHash,
         pred: impl FnOnce(Option<&TrieProofNode>) -> bool,
     ) -> bool
     {
         // empty trie
-        if root == MERKLE_NULL_NODE {
+        if root == &MERKLE_NULL_NODE {
             return pred(None);
         }
 
@@ -101,7 +106,7 @@ impl TrieProof {
 
         // traverse the trie along `path`
         let mut key = path;
-        let mut hash = &root;
+        let mut hash = root;
 
         loop {
             let node = match nodes.get(hash) {

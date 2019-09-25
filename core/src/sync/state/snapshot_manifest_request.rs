@@ -33,11 +33,13 @@ build_has_request_id_impl! { SnapshotManifestRequest }
 
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let manifest =
-            match RangedManifest::load(&self.checkpoint, &self.start_chunk) {
-                Ok(Some(m)) => m,
-                _ => RangedManifest::default(),
-            };
+        let manifest = match RangedManifest::load(
+            &self.checkpoint,
+            self.start_chunk.clone(),
+        ) {
+            Ok(Some(m)) => m,
+            _ => RangedManifest::default(),
+        };
 
         let (state_blame_vec, receipt_blame_vec, bloom_blame_vec) =
             self.get_blame_states(ctx).unwrap_or_default();

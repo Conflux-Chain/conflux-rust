@@ -399,6 +399,12 @@ impl SynchronizationProtocolHandler {
             ErrorKind::UnexpectedResponse => disconnect = true,
             ErrorKind::RequestNotFound => disconnect = false,
             ErrorKind::TooManyTrans => {}
+            ErrorKind::InvalidTimestamp => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::InvalidSnapshot(_) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
             ErrorKind::Network(kind) => match kind {
                 network::ErrorKind::AddressParse => disconnect = false,
@@ -427,12 +433,10 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Failure)
                 }
             },
+            ErrorKind::Storage(_) => {}
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
-            }
-            ErrorKind::InvalidTimestamp => {
-                op = Some(UpdateNodeOperation::Demotion)
             }
         }
 

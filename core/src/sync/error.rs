@@ -2,12 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::storage;
 use network;
 use rlp::DecoderError;
 
 error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
+        Storage(storage::Error, storage::ErrorKind);
     }
 
     foreign_links {
@@ -49,6 +51,11 @@ error_chain! {
         InvalidTimestamp {
             description("Peer timestamp drifts too much"),
             display("Drift too much"),
+        }
+
+        InvalidSnapshot(reason: String) {
+            description("invalid snapshot"),
+            display("invalid snapshot: {:?}", reason),
         }
     }
 }

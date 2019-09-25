@@ -276,7 +276,7 @@ impl SnapshotDbSqlite {
         })
     }
 
-    fn open_snapshot_mpt_read_only(
+    pub fn open_snapshot_mpt_read_only(
         &mut self,
     ) -> Result<
         SnapshotMpt<
