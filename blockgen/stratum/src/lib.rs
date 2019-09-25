@@ -206,7 +206,7 @@ impl StratumImpl {
             let workers_msg = format!("{{ \"id\": {}, \"method\": \"mining.notify\", \"params\": {} }}", next_request_id, payload);
             trace!(target: "stratum", "pushing work for {} workers (payload: '{}')", workers.len(), &workers_msg);
             for (ref addr, _) in workers.iter() {
-                trace!(target: "stratum", "pusing work to {}", addr);
+                trace!(target: "stratum", "pushing work to {}", addr);
                 match tcp_dispatcher.push_message(addr, workers_msg.clone()) {
                     Err(PushMessageError::NoSuchPeer) => {
                         trace!(target: "stratum", "Worker no longer connected: {}", &addr);
@@ -281,6 +281,7 @@ mod tests {
     use std::{
         net::{Shutdown, SocketAddr},
         sync::Arc,
+        thread, time,
     };
 
     use jsonrpc_core::futures::{future, Future};
@@ -430,6 +431,7 @@ mod tests {
             .map_err(|err: timeout::Error<()>| panic!("Timeout: {:?}", err))
             .and_then(|stream| {
                 trace!(target: "stratum", "Ready to read work from server");
+                thread::sleep(time::Duration::from_millis(100));
                 stream.shutdown(Shutdown::Write).unwrap();
                 io::read_to_end(stream, read_buf1)
             })
