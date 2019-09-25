@@ -975,6 +975,10 @@ impl ConsensusGraphInner {
         let mut stable_weight_delta = HashMap::new();
 
         for index in anticone_barrier.iter() {
+            // ignore legacy blocks
+            if self.arena[index as usize].era_block == NULL {
+                continue;
+            }
             weight_delta
                 .insert(index as usize, self.weight_tree.get(index as usize));
             inclusive_weight_delta.insert(
@@ -2562,5 +2566,17 @@ impl ConsensusGraphInner {
             self.compute_execution_info_with_result(index, result)?;
         }
         Ok(())
+    }
+
+    pub fn split_root(&mut self, me: usize) {
+        let parent = self.arena[me].parent;
+        assert!(parent != NULL);
+        self.weight_tree.split_root(parent, me);
+        self.inclusive_weight_tree.split_root(parent, me);
+        self.stable_weight_tree.split_root(parent, me);
+        self.stable_tree.split_root(parent, me);
+        self.adaptive_tree.split_root(parent, me);
+        self.inclusive_adaptive_tree.split_root(parent, me);
+        self.arena[me].parent = NULL;
     }
 }
