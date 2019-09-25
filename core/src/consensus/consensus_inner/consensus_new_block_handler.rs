@@ -185,6 +185,16 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
+        // This is the arena indices for legacy blocks
+        let mut new_era_legacy_block_arena_index_set =
+            new_era_block_arena_index_set.clone();
+        queue.push_back(new_era_block_arena_index);
+        while let Some(x) = queue.pop_front() {
+            new_era_legacy_block_arena_index_set.remove(&x);
+            for child in &inner.arena[x].children {
+                queue.push_back(*child);
+            }
+        }
 
         ConsensusNewBlockHandler::recompute_stable_past_weight(
             inner,
@@ -200,7 +210,6 @@ impl ConsensusNewBlockHandler {
         }
         // Next we are going to recompute all referee and referrer information
         // in arena
-        let era_parent = inner.arena[new_era_block_arena_index].parent;
         let new_era_pivot_index = inner.height_to_pivot_index(new_era_height);
         for v in new_era_block_arena_index_set.iter() {
             let me = *v;
@@ -210,12 +219,6 @@ impl ConsensusNewBlockHandler {
             inner.arena[me]
                 .referrers
                 .retain(|v| new_era_block_arena_index_set.contains(v));
-            // reassign the parent for outside era blocks
-            if !new_era_block_arena_index_set.contains(&inner.arena[me].parent)
-                && inner.arena[me].era_block == NULL
-            {
-                inner.arena[me].parent = new_era_block_arena_index;
-            }
             // We no longer need to consider blocks outside our era when
             // computing blockset_in_epoch
             inner.arena[me]
@@ -223,22 +226,35 @@ impl ConsensusNewBlockHandler {
                 .blockset_in_own_view_of_epoch
                 .retain(|v| new_era_block_arena_index_set.contains(v));
         }
+        // reassign the parent for outside era blocks
+        for me in new_era_legacy_block_arena_index_set {
+            let mut parent = inner.arena[me].parent;
+            if inner.arena[me].era_block != NULL {
+                inner.split_root(me);
+            }
+            if !new_era_block_arena_index_set.contains(&parent) {
+                parent = new_era_block_arena_index;
+            }
+            inner.arena[me].parent = parent;
+            inner.arena[me].era_block = NULL;
+        }
         // Now we are ready to cleanup outside blocks in inner data structures
-        let mut old_era_block_set = inner.old_era_block_set.lock();
-        inner.arena[new_era_block_arena_index].parent = NULL;
-        inner
-            .pastset_cache
-            .intersect_update(&outside_block_arena_indices);
-        for index in outside_block_arena_indices {
-            let hash = inner.arena[index].hash;
-            old_era_block_set.push_back(hash);
-            inner.hash_to_arena_indices.remove(&hash);
-            inner.terminal_hashes.remove(&hash);
-            inner.arena.remove(index);
-            inner.execution_info_cache.remove(&index);
-            // remove useless data in BlockDataManager
-            inner.data_man.remove_epoch_execution_commitments(&hash);
-            inner.data_man.remove_epoch_execution_context(&hash);
+        {
+            let mut old_era_block_set = inner.old_era_block_set.lock();
+            inner
+                .pastset_cache
+                .intersect_update(&outside_block_arena_indices);
+            for index in outside_block_arena_indices {
+                let hash = inner.arena[index].hash;
+                old_era_block_set.push_back(hash);
+                inner.hash_to_arena_indices.remove(&hash);
+                inner.terminal_hashes.remove(&hash);
+                inner.arena.remove(index);
+                inner.execution_info_cache.remove(&index);
+                // remove useless data in BlockDataManager
+                inner.data_man.remove_epoch_execution_commitments(&hash);
+                inner.data_man.remove_epoch_execution_context(&hash);
+            }
         }
         assert!(new_era_pivot_index < inner.pivot_chain.len());
         inner.pivot_chain = inner.pivot_chain.split_off(new_era_pivot_index);
@@ -253,24 +269,7 @@ impl ConsensusNewBlockHandler {
             .intersect_update(&new_era_block_arena_index_set);
 
         // Chop off all link-cut-trees in the inner data structure
-        inner
-            .weight_tree
-            .split_root(era_parent, new_era_block_arena_index);
-        inner
-            .inclusive_weight_tree
-            .split_root(era_parent, new_era_block_arena_index);
-        inner
-            .stable_weight_tree
-            .split_root(era_parent, new_era_block_arena_index);
-        inner
-            .stable_tree
-            .split_root(era_parent, new_era_block_arena_index);
-        inner
-            .adaptive_tree
-            .split_root(era_parent, new_era_block_arena_index);
-        inner
-            .inclusive_adaptive_tree
-            .split_root(era_parent, new_era_block_arena_index);
+        inner.split_root(new_era_block_arena_index);
 
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
