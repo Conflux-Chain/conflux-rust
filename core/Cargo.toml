@@ -56,6 +56,7 @@ fallible-iterator = "0.2"
 strfmt = "0.1"
 rustc-hex = "1.0"
 parity-bytes = "0.1"
+siphasher = "0.3"
 zip = "0.5.3"
 clap = "2"
 throttling = { path = "../util/throttling" }
