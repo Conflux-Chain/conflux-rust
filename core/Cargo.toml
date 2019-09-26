@@ -12,7 +12,7 @@ keccak-hash = "0.2"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 primitives = { path = "../primitives" }
-parking_lot = "0.6"
+parking_lot = "0.8"
 network = { path = "../network" }
 io = { path = "../util/io" }
 log = "0.4"
