@@ -37,10 +37,7 @@ extern crate timer;
 mod service_mio;
 mod worker;
 
-use mio::{
-    deprecated::{EventLoop, NotifyError},
-    Poll, Token,
-};
+use mio::{deprecated::NotifyError, Poll, Token};
 use std::{cell::Cell, error, fmt};
 
 thread_local! {

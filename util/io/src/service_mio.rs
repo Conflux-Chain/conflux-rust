@@ -91,6 +91,11 @@ where Message: Send + Sized
     },
     /// Broadcast a message across all protocol handlers.
     UserMessage(Arc<Message>),
+    RemoteMessage {
+        peer: StreamToken,
+        handler_id: HandlerId,
+        msg: Arc<Message>,
+    },
 }
 
 /// IO access point. This is passed to all IO handlers and provides an interface
@@ -204,6 +209,16 @@ where Message: Send + Sync + 'static
         Ok(())
     }
 
+    pub fn handle(
+        &self, peer: usize, handler_id: HandlerId, msg: Message,
+    ) -> Result<(), IoError> {
+        self.channel.send_io(IoMessage::RemoteMessage {
+            peer,
+            handler_id,
+            msg: Arc::new(msg),
+        })
+    }
+
     /// Get message channel
     pub fn channel(&self) -> IoChannel<Message> { self.channel.clone() }
 
@@ -310,51 +325,9 @@ where Message: Send + Sync + 'static
     type Message = IoMessage<Message>;
     type Timeout = Token;
 
-    fn ready(
-        &mut self, _event_loop: &mut EventLoop<Self>, token: Token,
-        events: Ready,
-    )
-    {
-        let handler_index = token.0 / TOKENS_PER_HANDLER;
-        let token_id = token.0 % TOKENS_PER_HANDLER;
-        if let Some(handler) = self.handlers.read().get(handler_index) {
-            let worker_id = token_id % 4;
-            if events.is_hup() {
-                self.socket_workers[worker_id]
-                    .0
-                    .send(Work {
-                        work_type: WorkType::Hup,
-                        token: token_id,
-                        handler: handler.clone(),
-                        handler_id: handler_index,
-                    })
-                    .unwrap();
-            } else {
-                if events.is_readable() {
-                    self.socket_workers[worker_id]
-                        .0
-                        .send(Work {
-                            work_type: WorkType::Readable,
-                            token: token_id,
-                            handler: handler.clone(),
-                            handler_id: handler_index,
-                        })
-                        .unwrap();
-                }
-                if events.is_writable() {
-                    self.socket_workers[worker_id]
-                        .0
-                        .send(Work {
-                            work_type: WorkType::Writable,
-                            token: token_id,
-                            handler: handler.clone(),
-                            handler_id: handler_index,
-                        })
-                        .unwrap();
-                }
-            }
-        }
-    }
+    // All network reading and writing is now handled by the network_poll, so
+    // this event loop will not have any ready event.
+    //    fn ready(...
 
     fn timeout(&mut self, event_loop: &mut EventLoop<Self>, token: Token) {
         let handler_index = token.0 / TOKENS_PER_HANDLER;
@@ -495,6 +468,24 @@ where Message: Send + Sync + 'static
                     }
                 }
                 self.work_ready.notify_all();
+            }
+            IoMessage::RemoteMessage {
+                peer,
+                handler_id,
+                msg,
+            } => {
+                let worker_id = peer % 4;
+                if let Some(handler) = self.handlers.read().get(handler_id) {
+                    self.socket_workers[worker_id]
+                        .0
+                        .send(Work {
+                            work_type: WorkType::Message(msg),
+                            token: peer,
+                            handler: handler.clone(),
+                            handler_id,
+                        })
+                        .expect("fail to send message to socket_worker");
+                }
             }
         }
     }

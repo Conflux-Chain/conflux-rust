@@ -181,13 +181,14 @@ impl NetworkService {
                     network_poll.poll(&mut events, None).ok();
                     for event in &events {
                         let handler_id = 0;
+                        let token_id = event.token().0 % TOKENS_PER_HANDLER;
                         if event.readiness().is_readable() {
                             handler.stream_readable(
                                 &IoContext::new(
                                     main_event_loop_channel.clone(),
                                     handler_id,
                                 ),
-                                event.token().0,
+                                token_id,
                             );
                         }
                         if event.readiness().is_writable() {
@@ -196,7 +197,7 @@ impl NetworkService {
                                     main_event_loop_channel.clone(),
                                     handler_id,
                                 ),
-                                event.token().0,
+                                token_id,
                             );
                         }
                         if event.readiness().is_hup() {
@@ -205,7 +206,7 @@ impl NetworkService {
                                     main_event_loop_channel.clone(),
                                     handler_id,
                                 ),
-                                event.token().0,
+                                token_id,
                             );
                         }
                     }
@@ -1034,13 +1035,17 @@ impl NetworkServiceInner {
             }
         }
         for (protocol, data) in messages {
-            if let Some(handler) = handlers.get(&protocol).clone() {
-                handler.on_message(
-                    &NetworkContext::new(io, protocol, self),
-                    stream,
-                    &data,
-                );
-            }
+            io.handle(
+                stream,
+                0, /* We only have one handler for the execution event_loop,
+                    * so the handler_id is always 0 */
+                NetworkIoMessage::HandleNetworkWork {
+                    protocol,
+                    peer: stream,
+                    data,
+                },
+            )
+            .expect("Fail to send NetworkIoMessage::HandleNetworkWork");
         }
     }
 
@@ -1483,6 +1488,21 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     );
                 } else {
                     warn!("Work is dispatched to unknown handler");
+                }
+            }
+            NetworkIoMessage::HandleNetworkWork {
+                ref protocol,
+                ref peer,
+                ref data,
+            } => {
+                if let Some(handler) = self.handlers.read().get(protocol) {
+                    handler.on_message(
+                        &NetworkContext::new(io, *protocol, self),
+                        *peer,
+                        data,
+                    );
+                } else {
+                    warn!("Work is handled by unknown handler");
                 }
             }
         }
