@@ -3,8 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::Address;
-use std::{cmp::Ordering, collections::HashMap, mem, ptr};
+use std::{cmp::Ordering, collections::HashMap, ptr};
 
+/// Store the address of sender and number of transactions which can be
+/// garbage collected
 pub type GCType = (Address, usize);
 
 #[derive(Default)]
@@ -24,24 +26,19 @@ impl GarbageCollector {
     }
 
     #[allow(dead_code)]
-    pub fn top(&self) -> Option<&GCType> {
-        if !self.is_empty() {
-            Some(&self.data[0])
-        } else {
-            None
-        }
-    }
+    pub fn top(&self) -> Option<&GCType> { self.data.get(0) }
 
     pub fn pop(&mut self) -> Option<GCType> {
-        self.data.pop().map(|mut item| {
-            if !self.is_empty() {
-                mem::swap(&mut item, &mut self.data[0]);
-                self.sift_down(0);
-            }
-            self.gc_size -= item.1;
-            self.mapping.remove(&item.0);
-            item
-        })
+        if self.is_empty() {
+            return None;
+        }
+        let item = self.data.swap_remove(0);
+        if !self.is_empty() {
+            self.sift_down(0);
+        }
+        self.gc_size -= item.1;
+        self.mapping.remove(&item.0);
+        Some(item)
     }
 
     pub fn clear(&mut self) {
@@ -69,7 +66,8 @@ impl GarbageCollector {
             Ordering::Greater => self.sift_up(index),
             _ => {}
         }
-        self.gc_size += count - origin_count;
+        self.gc_size -= origin_count;
+        self.gc_size += count;
     }
 
     fn append(&mut self, sender: &Address, count: usize) {
