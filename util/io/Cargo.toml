@@ -10,7 +10,7 @@ edition = "2018"
 fnv = "1.0"
 mio = { version = "0.6.8" }
 crossbeam = "0.3"
-parking_lot = "0.6"
+parking_lot = "0.8"
 log = "0.4"
 slab = "0.4"
 num_cpus = "1.8"
