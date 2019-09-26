@@ -21,6 +21,8 @@ use rlp_derive::{
     RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
 };
 use std::{collections::HashSet, time::Duration};
+use siphasher::sip::SipHasher24;
+use std::hash::Hasher;
 
 #[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct Transactions {
@@ -80,31 +82,35 @@ impl Handleable for Transactions {
 #[derive(Debug, PartialEq)]
 pub struct TransactionDigests {
     pub window_index: usize,
-    pub random_position: u8,
+    pub key1: u64,
+    pub key2: u64,
     trans_short_ids: Vec<u8>,
 }
 
 impl Handleable for TransactionDigests {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
-
-        let mut peer_info = peer_info.write();
-        if peer_info
-            .notified_capabilities
-            .contains(DynamicCapability::TxRelay(false))
         {
-            peer_info.received_transaction_count += self.trans_short_ids.len();
-            if peer_info.received_transaction_count
-                > ctx
+            let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+
+
+            let mut peer_info = peer_info.write();
+            if peer_info
+                .notified_capabilities
+                .contains(DynamicCapability::TxRelay(false))
+            {
+                peer_info.received_transaction_count += self.trans_short_ids.len();
+                if peer_info.received_transaction_count
+                    > ctx
                     .manager
                     .protocol_config
                     .max_trans_count_received_in_catch_up
                     as usize
-            {
-                bail!(ErrorKind::TooManyTrans);
-            }
-            if self.trans_short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES != 0 {
-                bail!(ErrorKind::InvalidMessageFormat);
+                {
+                    bail!(ErrorKind::TooManyTrans);
+                }
+                if self.trans_short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES != 0 {
+                    bail!(ErrorKind::InvalidMessageFormat);
+                }
             }
         }
 
@@ -119,20 +125,21 @@ impl Handleable for TransactionDigests {
 impl Encodable for TransactionDigests {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
-            .begin_list(3)
+            .begin_list(4)
             .append(&self.window_index)
-            .append(&self.random_position)
+            .append(&self.key1)
+            .append(&self.key2)
             .append_list(&self.trans_short_ids);
     }
 }
 
 impl Decodable for TransactionDigests {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 3 {
+        if rlp.item_count()? != 4 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let trans_short_ids = rlp.list_at(2)?;
+        let trans_short_ids = rlp.list_at(3)?;
         if trans_short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
             != 0
         {
@@ -142,7 +149,8 @@ impl Decodable for TransactionDigests {
         }
         Ok(TransactionDigests {
             window_index: rlp.val_at(0)?,
-            random_position: rlp.val_at(1)?,
+            key1: rlp.val_at(1)?,
+            key2: rlp.val_at(2)?,
             trans_short_ids,
         })
     }
@@ -152,11 +160,12 @@ impl TransactionDigests {
     const SHORT_ID_SIZE_IN_BYTES: usize = 4;
 
     pub fn new(
-        window_index: usize, random_position: u8, trans_short_ids: Vec<u8>,
+        window_index: usize, key1: u64, key2:u64, trans_short_ids: Vec<u8>,
     ) -> TransactionDigests {
         TransactionDigests {
             window_index,
-            random_position,
+            key1,
+            key2,
             trans_short_ids,
         }
     }
@@ -188,12 +197,19 @@ impl TransactionDigests {
     }
 
     pub fn append_to_message(
-        message: &mut Vec<u8>, random_position: usize, transaction_id: &H256,
+        message: &mut Vec<u8>, key1:u64, key2:u64, transaction_id: &H256,
     ) {
-        message.push(transaction_id[random_position]);
+
+        message.push(TransactionDigests::get_random_byte(transaction_id, key1, key2));
         message.push(transaction_id[29]);
         message.push(transaction_id[30]);
         message.push(transaction_id[31]);
+    }
+
+    pub fn get_random_byte(transaction_id: &H256,key1:u64, key2:u64)->u8{
+        let mut hasher = SipHasher24::new_with_keys(key1, key2);
+        hasher.write(transaction_id.as_ref());
+        (hasher.finish() & 0xff) as u8
     }
 }
 

@@ -61,7 +61,7 @@ impl ReceivedTransactionContainer {
     }
 
     pub fn contains_txid(
-        &self, fixed_bytes: TxPropagateId, random_byte: u8, random_position: u8,
+        &self, fixed_bytes: TxPropagateId, random_byte: u8, key1: u64, key2: u64
     ) -> bool {
         let inner = &self.inner;
         TX_FOR_COMPARE_METER.mark(1);
@@ -69,10 +69,11 @@ impl ReceivedTransactionContainer {
             TX_FIRST_MISS_METER.mark(1);
             if let Some(vector) = inner.txid_container.get(&fixed_bytes) {
                 for value in vector {
-                    if value[random_position as usize] == random_byte {
+                    if TransactionDigests::get_random_byte(value, key1,key2) == random_byte{
                         TX_RANDOM_BYTE_METER.mark(1);
                         return true;
                     }
+
                 }
             }
         }

@@ -24,7 +24,7 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
-use metrics::{register_meter_with_group, Meter};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
@@ -45,6 +45,8 @@ lazy_static! {
         register_meter_with_group("system_metrics", "tx_propagate_set_size");
     static ref BLOCK_RECOVER_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync:recover_block");
+    static ref PROPAGATE_TX_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "sync:propagate_tx_timer");
 }
 
 const TX_TIMER: TimerToken = 0;
@@ -925,6 +927,7 @@ impl SynchronizationProtocolHandler {
     fn propagate_transactions_to_peers(
         &self, io: &dyn NetworkContext, peers: Vec<PeerId>,
     ) {
+        let _timer = MeterTimer::time_func(PROPAGATE_TX_TIMER.as_ref());
         let lucky_peers = {
             peers
                 .into_iter()
@@ -951,8 +954,8 @@ impl SynchronizationProtocolHandler {
         }
 
         // 29 since the remaining bytes is 29.
-        let mut ordered_positions: Vec<usize> =
-            (0..lucky_peers.len()).map(|val| val % 29).collect();
+        let mut nonces: Vec<(u64,u64)> =
+            (0..lucky_peers.len()).map(|_| (rand::thread_rng().gen(), rand::thread_rng().gen())).collect();
 
         let mut messages: Vec<Vec<u8>> = vec![vec![]; lucky_peers.len()];
 
@@ -977,7 +980,8 @@ impl SynchronizationProtocolHandler {
                     // bytes]
                     TransactionDigests::append_to_message(
                         &mut messages[i],
-                        ordered_positions[i],
+                        nonces[i].0,
+                        nonces[i].1,
                         h,
                     );
                 }
@@ -1011,9 +1015,11 @@ impl SynchronizationProtocolHandler {
 
         for i in 0..lucky_peers.len() {
             let peer_id = lucky_peers[i];
+            let (key1,key2) = nonces.pop().unwrap();
             let tx_msg = TransactionDigests::new(
                 window_index,
-                ordered_positions.pop().unwrap() as u8,
+                key1,
+                key2,
                 messages.pop().unwrap(),
             );
             match tx_msg.send(io, peer_id) {

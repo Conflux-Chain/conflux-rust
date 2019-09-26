@@ -216,7 +216,8 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
 
         let window_index: usize = transaction_digests.window_index;
-        let random_position: u8 = transaction_digests.random_position;
+        let key1 = transaction_digests.key1;
+        let key2 = transaction_digests.key2;
         let (random_byte_vector, fixed_bytes_vector) =
             transaction_digests.get_decomposed_short_ids();
 
@@ -239,7 +240,8 @@ impl RequestManager {
                 if received_transactions.contains_txid(
                     fixed_bytes_vector[i],
                     random_byte_vector[i],
-                    random_position,
+                    key1,
+                    key2,
                 ) {
                     // Already received
                     continue;
