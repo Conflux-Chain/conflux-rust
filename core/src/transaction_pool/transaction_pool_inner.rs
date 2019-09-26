@@ -17,9 +17,6 @@ use std::{
 };
 
 const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
-// By default, the capacity of tx pool is 500K, so the maximum TPS is
-// 500K / 100 = 5K
-const TIME_WINDOW: u64 = 100;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<dyn Meter> =
