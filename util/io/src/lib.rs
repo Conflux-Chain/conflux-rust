@@ -154,8 +154,9 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicBool::new(false)));
+        let poll = Arc::new(Poll::new().unwrap());
 
-        let service = IoService::<MyMessage>::start()
+        let service = IoService::<MyMessage>::start(poll)
             .expect("Error creating network service");
         service.register_handler(handler.clone()).unwrap();
 
@@ -187,8 +188,9 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicBool::new(false)));
+        let poll = Arc::new(Poll::new().unwrap());
 
-        let service = IoService::<MyMessage>::start()
+        let service = IoService::<MyMessage>::start(poll)
             .expect("Error creating network service");
         service.register_handler(handler.clone()).unwrap();
 
@@ -217,8 +219,9 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicUsize::new(0)));
+        let poll = Arc::new(Poll::new().unwrap());
 
-        let service = IoService::<MyMessage>::start()
+        let service = IoService::<MyMessage>::start(poll)
             .expect("Error creating network service");
         service.register_handler(handler.clone()).unwrap();
 

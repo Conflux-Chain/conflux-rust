@@ -84,8 +84,6 @@ fn main() -> Result<(), String> {
                 "txgen",
                 "client",
                 "primitives",
-                "io",
-                "util",
             ]
             .iter()
             {
