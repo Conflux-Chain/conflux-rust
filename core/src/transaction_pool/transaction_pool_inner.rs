@@ -586,12 +586,6 @@ impl TransactionPoolInner {
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
     {
-        /*
-        if self.capacity <= inner.len() {
-            warn!("Transaction discarded due to insufficient txpool capacity: {:?}", transaction.hash());
-            return Err(format!("Transaction discarded due to insufficient txpool capacity: {:?}", transaction.hash()));
-        }
-        */
         let (state_nonce, _) = self.get_nonce_and_balance_from_storage(
             &transaction.sender,
             account_cache,
@@ -615,8 +609,7 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
             ));
-        } else if transaction.nonce < self.get_lowest_nonce(&transaction.sender)
-        {
+        } else if transaction.nonce < state_nonce {
             debug!(
                 "Transaction {:?} is discarded due to a too stale nonce",
                 transaction.hash()
