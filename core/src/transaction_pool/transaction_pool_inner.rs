@@ -293,8 +293,11 @@ impl TransactionPoolInner {
             if !self.deferred_pool.contain_address(&addr) {
                 self.ready_nonces_and_balances.remove(&addr);
             } else {
-                assert!(count >= 1);
-                self.garbage_collector.insert(&addr, count - 1);
+                if count > 0 {
+                    self.garbage_collector.insert(&addr, count - 1);
+                } else {
+                    self.garbage_collector.insert(&addr, 0);
+                }
             }
 
             // maintain txs
