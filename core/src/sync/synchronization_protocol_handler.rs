@@ -954,8 +954,9 @@ impl SynchronizationProtocolHandler {
         }
 
         // 29 since the remaining bytes is 29.
-        let mut nonces: Vec<(u64,u64)> =
-            (0..lucky_peers.len()).map(|_| (rand::thread_rng().gen(), rand::thread_rng().gen())).collect();
+        let mut nonces: Vec<(u64, u64)> = (0..lucky_peers.len())
+            .map(|_| (rand::thread_rng().gen(), rand::thread_rng().gen()))
+            .collect();
 
         let mut messages: Vec<Vec<u8>> = vec![vec![]; lucky_peers.len()];
 
@@ -1015,7 +1016,7 @@ impl SynchronizationProtocolHandler {
 
         for i in 0..lucky_peers.len() {
             let peer_id = lucky_peers[i];
-            let (key1,key2) = nonces.pop().unwrap();
+            let (key1, key2) = nonces.pop().unwrap();
             let tx_msg = TransactionDigests::new(
                 window_index,
                 key1,
