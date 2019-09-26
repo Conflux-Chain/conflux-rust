@@ -40,6 +40,12 @@ use crate::block_data_manager::{
 pub use block_data_types::*;
 use std::{hash::Hash, path::Path};
 
+use metrics::{register_meter_with_group, Meter, MeterTimer};
+lazy_static! {
+    static ref TX_POOL_RECOVER_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "tx_pool::recover_public");
+}
+
 pub const NULLU64: u64 = !0;
 
 pub struct BlockDataManager {
@@ -873,6 +879,7 @@ impl BlockDataManager {
     pub fn recover_unsigned_tx(
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
+        let _timer = MeterTimer::time_func(TX_POOL_RECOVER_TIMER.as_ref());
         self.tx_data_manager.recover_unsigned_tx(transactions)
     }
 
