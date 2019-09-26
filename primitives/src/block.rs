@@ -275,7 +275,7 @@ pub fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
 pub fn from_tx_hash(hash: &H256, k0: u64, k1: u64) -> TxShortId {
     let mut hasher = SipHasher24::new_with_keys(k0, k1);
     hasher.write(hash.as_ref());
-    hasher.finish() & 0x00ffffff_ffffffff
+    hasher.finish() & 0xffff_ffffffff
 }
 
 impl Encodable for CompactBlock {
