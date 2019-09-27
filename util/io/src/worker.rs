@@ -37,9 +37,6 @@ use std::sync::{Condvar as SCondvar, Mutex as SMutex};
 const STACK_SIZE: usize = 16 * 1024 * 1024;
 
 pub enum WorkType<Message> {
-    Readable,
-    Writable,
-    Hup,
     Timeout,
     Message(Arc<Message>),
 }
@@ -105,22 +102,10 @@ impl SocketWorker {
     fn do_work<Message>(work: Work<Message>, channel: IoChannel<Message>)
     where Message: Send + Sync + 'static {
         match work.work_type {
-            WorkType::Readable => {
-                work.handler.stream_readable(
+            WorkType::Message(message) => {
+                work.handler.message(
                     &IoContext::new(channel, work.handler_id),
-                    work.token,
-                );
-            }
-            WorkType::Writable => {
-                work.handler.stream_writable(
-                    &IoContext::new(channel, work.handler_id),
-                    work.token,
-                );
-            }
-            WorkType::Hup => {
-                work.handler.stream_hup(
-                    &IoContext::new(channel, work.handler_id),
-                    work.token,
+                    &*message,
                 );
             }
             _ => warn!(target: "SocketWorker::do_work", "Unexpected WorkType"),
@@ -226,7 +211,6 @@ impl Worker {
                     &*message,
                 );
             }
-            _ => warn!(target: "Worker::do_work", "Unexpected WorkType"),
         }
     }
 }

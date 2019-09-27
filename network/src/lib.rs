@@ -215,6 +215,11 @@ pub enum NetworkIoMessage {
         /// Work type.
         work_type: HandlerWorkType,
     },
+    HandleProtocolMessage {
+        protocol: ProtocolId,
+        peer: PeerId,
+        data: Vec<u8>,
+    },
 }
 
 pub trait NetworkProtocolHandler: Sync + Send {

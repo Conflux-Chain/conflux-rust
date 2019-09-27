@@ -12,7 +12,7 @@ use lazy_static::lazy_static;
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Histogram, Meter, Sample,
 };
-use mio::{deprecated::*, tcp::*, *};
+use mio::{tcp::*, *};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde_derive::Serialize;
 use std::{
@@ -445,8 +445,8 @@ impl Connection {
     }
 
     /// Register this connection with the IO event loop.
-    pub fn register_socket<H: Handler>(
-        &self, reg: Token, event_loop: &mut EventLoop<H>,
+    pub fn register_socket(
+        &self, reg: Token, event_loop: &Poll,
     ) -> io::Result<()> {
         if self.registered.load(AtomicOrdering::SeqCst) {
             return Ok(());
@@ -475,8 +475,8 @@ impl Connection {
 
     /// Update connection registration. Should be called at the end of the IO
     /// handler.
-    pub fn update_socket<H: Handler>(
-        &self, reg: Token, event_loop: &mut EventLoop<H>,
+    pub fn update_socket(
+        &self, reg: Token, event_loop: &Poll,
     ) -> io::Result<()> {
         trace!(
             "Connection reregister, token = {}, reg = {:?}",
@@ -497,9 +497,7 @@ impl Connection {
 
     /// Delete connection registration. Should be called at the end of the IO
     /// handler.
-    pub fn deregister_socket<H: Handler>(
-        &self, event_loop: &mut EventLoop<H>,
-    ) -> io::Result<()> {
+    pub fn deregister_socket(&self, event_loop: &Poll) -> io::Result<()> {
         trace!("Connection deregister, token = {}", self.token);
         event_loop.deregister(&self.socket).ok();
         Ok(())
