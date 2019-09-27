@@ -12,7 +12,9 @@ use crate::{
     verification::*,
 };
 use cfx_types::{H256, U256};
-use metrics::{register_meter_with_group, Meter, MeterTimer};
+use metrics::{
+    register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
+};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
@@ -36,6 +38,8 @@ lazy_static! {
         register_meter_with_group("timer", "sync::insert_block_header");
     static ref SYNC_INSERT_BLOCK: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync::insert_block");
+    static ref CONSENSUS_WORKER_QUEUE: Arc<dyn Queue> =
+        register_queue("consensus_worker_queue");
 }
 
 const NULL: usize = !0;
@@ -944,6 +948,7 @@ impl SynchronizationGraph {
             .spawn(move || loop {
                 match consensus_receiver.recv() {
                     Ok((hash, ignore_body)) => {
+                        CONSENSUS_WORKER_QUEUE.dequeue(1);
                         consensus.on_new_block(&hash, ignore_body)
                     }
                     Err(_) => break,
@@ -1268,6 +1273,7 @@ impl SynchronizationGraph {
                                 true,
                             ))
                             .expect("Receiver not dropped");
+                        CONSENSUS_WORKER_QUEUE.enqueue(1);
                     }
 
                     // Passed verification on header_arc.
@@ -1461,6 +1467,7 @@ impl SynchronizationGraph {
                 .lock()
                 .send((h, false /* ignore_body */))
                 .expect("Cannot fail");
+            CONSENSUS_WORKER_QUEUE.enqueue(1);
         } else {
             self.consensus.on_new_block(&h, true /* ignore_body */);
         }

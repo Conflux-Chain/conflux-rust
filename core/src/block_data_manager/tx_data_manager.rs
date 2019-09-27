@@ -1,5 +1,6 @@
 use crate::{cache_manager::CacheManager, WORKER_COMPUTATION_PARALLELISM};
 use cfx_types::H256;
+use metrics::{register_queue, Queue};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     block::{from_tx_hash, get_shortid_key, CompactBlock},
@@ -11,6 +12,11 @@ use std::{
     sync::{mpsc::channel, Arc},
 };
 use threadpool::ThreadPool;
+
+lazy_static! {
+    static ref RECOVER_PUB_KEY_QUEUE: Arc<dyn Queue> =
+        register_queue("recover_public_key_queue");
+}
 
 pub struct TransactionDataManager {
     tx_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
@@ -193,6 +199,7 @@ impl TransactionDataManager {
             let (sender, receiver) = channel();
             let n_thread = unsigned_trans.len();
             for unsigned_txes in unsigned_trans {
+                RECOVER_PUB_KEY_QUEUE.enqueue(unsigned_txes.len());
                 let sender = sender.clone();
                 self.worker_pool.lock().execute(move || {
                     let mut signed_txes = Vec::new();
@@ -216,6 +223,7 @@ impl TransactionDataManager {
 
             let mut total_recovered_num = 0 as usize;
             for tx_publics in receiver.iter().take(n_thread) {
+                RECOVER_PUB_KEY_QUEUE.dequeue(tx_publics.len());
                 total_recovered_num += tx_publics.len();
                 for (idx, tx) in tx_publics {
                     recovered_trans.push((idx, tx));
