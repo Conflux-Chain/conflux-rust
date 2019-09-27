@@ -1,5 +1,6 @@
 use super::{
     account_cache::AccountCache,
+    garbage_collector::GarbageCollector,
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
@@ -10,7 +11,7 @@ use metrics::{
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use rlp::*;
 use std::{
-    collections::{hash_map::HashMap, VecDeque},
+    collections::HashMap,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -66,6 +67,14 @@ impl DeferredPool {
             bucket.check_nonce_exists(nonce)
         } else {
             false
+        }
+    }
+
+    fn count_less(&self, sender: &Address, nonce: &U256) -> usize {
+        if let Some(bucket) = self.buckets.get(sender) {
+            bucket.count_less(nonce)
+        } else {
+            0
         }
     }
 
@@ -188,7 +197,7 @@ pub struct TransactionPoolInner {
     deferred_pool: DeferredPool,
     ready_account_pool: ReadyAccountPool,
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
-    garbage_collection_queue: VecDeque<(Address, u64)>,
+    garbage_collector: GarbageCollector,
     txs: HashMap<H256, Arc<SignedTransaction>>,
 }
 
@@ -201,7 +210,7 @@ impl TransactionPoolInner {
             deferred_pool: DeferredPool::new(),
             ready_account_pool: ReadyAccountPool::new(),
             ready_nonces_and_balances: HashMap::new(),
-            garbage_collection_queue: VecDeque::new(),
+            garbage_collector: GarbageCollector::default(),
             txs: HashMap::new(),
         }
     }
@@ -210,7 +219,7 @@ impl TransactionPoolInner {
         self.deferred_pool.clear();
         self.ready_account_pool.clear();
         self.ready_nonces_and_balances.clear();
-        self.garbage_collection_queue.clear();
+        self.garbage_collector.clear();
         self.txs.clear();
         self.total_received_count = 0;
         self.unpacked_transaction_count = 0;
@@ -231,7 +240,7 @@ impl TransactionPoolInner {
     }
 
     pub fn is_full(&self) -> bool {
-        return self.garbage_collection_queue.len() >= self.capacity;
+        return self.total_deferred() >= self.capacity;
     }
 
     pub fn get_current_timestamp(&self) -> u64 {
@@ -240,19 +249,30 @@ impl TransactionPoolInner {
         since_the_epoch.as_secs()
     }
 
+    /// A sender has a transaction which is garbage collectable if
+    ///    1. there is at least a transaction whose nonce is less than
+    /// `ready_nonce`
+    ///    2. the nonce of all transactions are greater than or equal to
+    /// `ready_nonce` and it is not garbage collected during the last
+    /// `TIME_WINDOW` seconds
+    ///
+    /// We will pick a sender who has maximum number of transactions which are
+    /// garbage collectable. And if there is a tie, the one who has minimum
+    /// timestamp will be picked.
     fn collect_garbage(&mut self) {
-        let count_before_gc = self.garbage_collection_queue.len();
-        while self.is_full() {
-            let (addr, timestamp) =
-                self.garbage_collection_queue.front().unwrap().clone();
+        let count_before_gc = self.total_deferred();
+        while self.is_full() && !self.garbage_collector.is_empty() {
+            let victim = self.garbage_collector.top().unwrap().clone();
+            let current_timestamp = self.get_current_timestamp();
+            let addr = victim.sender;
 
-            if timestamp + TIME_WINDOW >= self.get_current_timestamp() {
+            // All transactions are not garbage collectable.
+            if victim.count == 0
+                && victim.timestamp + TIME_WINDOW >= current_timestamp
+            {
                 break;
             }
 
-            self.garbage_collection_queue.pop_front();
-
-            // abort if a tx'nonce >= ready nonce
             let (ready_nonce, _) = self
                 .get_local_nonce_and_balance(&addr)
                 .unwrap_or((0.into(), 0.into()));
@@ -260,7 +280,10 @@ impl TransactionPoolInner {
             let lowest_nonce =
                 *self.deferred_pool.get_lowest_nonce(&addr).unwrap();
 
+            // We have to garbage collect an unexecuted transaction.
+            // TODO: Implement more heuristic strategies
             if lowest_nonce >= ready_nonce {
+                assert_eq!(victim.count, 0);
                 GC_UNEXECUTED_COUNTER.inc(1);
                 warn!("an unexecuted tx is garbage-collected.");
             }
@@ -291,32 +314,43 @@ impl TransactionPoolInner {
             // maintain ready info
             if !self.deferred_pool.contain_address(&addr) {
                 self.ready_nonces_and_balances.remove(&addr);
+                // The picked sender has no transactions now, we pop it from
+                // `garbage_collector`.
+                self.garbage_collector.pop();
+            } else {
+                if victim.count > 0 {
+                    self.garbage_collector.insert(
+                        &addr,
+                        victim.count - 1,
+                        current_timestamp,
+                    );
+                } else {
+                    self.garbage_collector.insert(&addr, 0, current_timestamp);
+                }
             }
 
             // maintain txs
             self.txs.remove(&removed_tx.hash());
         }
 
-        GC_METER.mark(count_before_gc - self.garbage_collection_queue.len());
+        GC_METER.mark(count_before_gc - self.total_deferred());
     }
 
     /// Collect garbage and return the remaining quota of the pool to insert new
     /// transactions.
     pub fn remaining_quota(&mut self) -> usize {
-        self.collect_garbage();
-
-        let len = self.garbage_collection_queue.len();
+        let len = self.total_deferred();
         if len < self.capacity {
             self.capacity - len
         } else {
-            0
+            self.garbage_collector.gc_size()
         }
     }
 
     // the new inserting will fail if tx_pool is full (even if `force` is true)
     fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
-        force: bool,
+        force: bool, state_nonce_and_balance: Option<(U256, U256)>,
     ) -> InsertResult
     {
         if !self.deferred_pool.check_sender_and_nonce_exists(
@@ -342,10 +376,28 @@ impl TransactionPoolInner {
 
         match &result {
             InsertResult::NewAdded => {
-                self.garbage_collection_queue.push_back((
-                    transaction.sender(),
-                    self.get_current_timestamp(),
-                ));
+                // This will only happen when called by
+                // `insert_transaction_with_readiness_check`, so
+                // state_nonce_and_balance will never be `None`.
+                let (state_nonce, state_balance) =
+                    state_nonce_and_balance.unwrap();
+                self.update_nonce_and_balance(
+                    &transaction.sender(),
+                    state_nonce,
+                    state_balance,
+                );
+                let count = self
+                    .deferred_pool
+                    .count_less(&transaction.sender(), &state_nonce);
+                let timestamp = self
+                    .garbage_collector
+                    .get_timestamp(&transaction.sender())
+                    .unwrap_or(self.get_current_timestamp());
+                self.garbage_collector.insert(
+                    &transaction.sender(),
+                    count,
+                    timestamp,
+                );
                 self.txs.insert(transaction.hash(), transaction.clone());
                 if !packed {
                     self.unpacked_transaction_count += 1;
@@ -367,11 +419,6 @@ impl TransactionPoolInner {
         result
     }
 
-    #[allow(dead_code)]
-    fn get_local_nonce(&self, address: &Address) -> Option<&U256> {
-        self.ready_nonces_and_balances.get(address).map(|(x, _)| x)
-    }
-
     pub fn get_local_nonce_and_balance(
         &self, address: &Address,
     ) -> Option<(U256, U256)> {
@@ -381,6 +428,12 @@ impl TransactionPoolInner {
     fn update_nonce_and_balance(
         &mut self, address: &Address, nonce: U256, balance: U256,
     ) {
+        let count = self.deferred_pool.count_less(address, &nonce);
+        let timestamp = self
+            .garbage_collector
+            .get_timestamp(address)
+            .unwrap_or(self.get_current_timestamp());
+        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), (nonce, balance));
     }
@@ -401,6 +454,12 @@ impl TransactionPoolInner {
             Some(account) => (account.nonce.clone(), account.balance.clone()),
             None => (0.into(), 0.into()),
         };
+        let count = self.deferred_pool.count_less(address, &ret.0);
+        let timestamp = self
+            .garbage_collector
+            .get_timestamp(address)
+            .unwrap_or(self.get_current_timestamp());
+        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), ret);
         ret
@@ -497,8 +556,9 @@ impl TransactionPoolInner {
             packed_transactions.push(tx.clone());
             self.insert_transaction_without_readiness_check(
                 tx.clone(),
-                true,
-                true,
+                true, /* packed */
+                true, /* force */
+                None, /* state_nonce_and_balance */
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
 
@@ -516,8 +576,9 @@ impl TransactionPoolInner {
         for tx in packed_transactions.iter().rev() {
             self.insert_transaction_without_readiness_check(
                 tx.clone(),
-                false,
-                true,
+                false, /* packed */
+                true,  /* force */
+                None,  /* state_nonce_and_balance */
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
@@ -573,16 +634,11 @@ impl TransactionPoolInner {
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
     {
-        /*
-        if self.capacity <= inner.len() {
-            warn!("Transaction discarded due to insufficient txpool capacity: {:?}", transaction.hash());
-            return Err(format!("Transaction discarded due to insufficient txpool capacity: {:?}", transaction.hash()));
-        }
-        */
-        let (state_nonce, _) = self.get_nonce_and_balance_from_storage(
-            &transaction.sender,
-            account_cache,
-        );
+        let (state_nonce, state_balance) = self
+            .get_nonce_and_balance_from_storage(
+                &transaction.sender,
+                account_cache,
+            );
 
         if transaction.hash[0] & 254 == 0 {
             debug!(
@@ -602,8 +658,7 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
             ));
-        } else if transaction.nonce < self.get_lowest_nonce(&transaction.sender)
-        {
+        } else if transaction.nonce < state_nonce {
             debug!(
                 "Transaction {:?} is discarded due to a too stale nonce",
                 transaction.hash()
@@ -619,6 +674,7 @@ impl TransactionPoolInner {
             transaction.clone(),
             packed,
             force,
+            Some((state_nonce, state_balance)),
         );
         if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));

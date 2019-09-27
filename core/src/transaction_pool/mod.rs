@@ -8,6 +8,7 @@ mod impls;
 mod test_treap;
 
 mod account_cache;
+mod garbage_collector;
 mod nonce_pool;
 mod transaction_pool_inner;
 
