@@ -275,7 +275,6 @@ impl DebugRpc for DebugRpcImpl {
     delegate! {
         target self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
-            fn net_high_priority_packets(&self) -> RpcResult<usize>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
