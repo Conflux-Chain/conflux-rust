@@ -556,9 +556,9 @@ impl TransactionPoolInner {
             packed_transactions.push(tx.clone());
             self.insert_transaction_without_readiness_check(
                 tx.clone(),
-                true,
-                true,
-                None,
+                true, /* packed */
+                true, /* force */
+                None, /* state_nonce_and_balance */
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
 
@@ -576,9 +576,9 @@ impl TransactionPoolInner {
         for tx in packed_transactions.iter().rev() {
             self.insert_transaction_without_readiness_check(
                 tx.clone(),
-                false,
-                true,
-                None,
+                false, /* packed */
+                true,  /* force */
+                None,  /* state_nonce_and_balance */
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
