@@ -16,7 +16,6 @@ use cfxcore::{PeerInfo, SharedConsensusGraph, SharedTransactionPool};
 use primitives::{Action, SignedTransaction};
 
 use network::{
-    get_high_priority_packets,
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
@@ -392,10 +391,6 @@ impl RpcImpl {
     pub fn clear_tx_pool(&self) -> RpcResult<()> {
         self.tx_pool.clear_tx_pool();
         Ok(())
-    }
-
-    pub fn net_high_priority_packets(&self) -> RpcResult<usize> {
-        Ok(get_high_priority_packets())
     }
 
     pub fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>> {

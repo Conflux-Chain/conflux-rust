@@ -57,9 +57,6 @@ pub trait DebugRpc {
         &self, node_id: Option<NodeId>,
     ) -> RpcResult<Vec<SessionDetails>>;
 
-    #[rpc(name = "net_high_priority_packets")]
-    fn net_high_priority_packets(&self) -> RpcResult<usize>;
-
     #[rpc(name = "current_sync_phase")]
     fn current_sync_phase(&self) -> RpcResult<String>;
 

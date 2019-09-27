@@ -19,7 +19,7 @@ use std::{
     io::{self, Read, Write},
     net::SocketAddr,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering},
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
         Arc,
     },
     time::Instant,
@@ -77,39 +77,11 @@ lazy_static! {
 pub enum WriteStatus {
     /// Some data is still pending for current packet.
     Ongoing,
-    /// Give up to write data due to low priority.
-    LowPriority,
     /// All data sent.
     Complete,
 }
 
 const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
-
-/// Global counter for high priority packets.
-/// It is used among connections to send high priority packets.
-static HIGH_PRIORITY_PACKETS: AtomicUsize = AtomicUsize::new(0);
-
-fn incr_high_priority_packets() {
-    assert_ne!(
-        HIGH_PRIORITY_PACKETS.fetch_add(1, AtomicOrdering::SeqCst),
-        std::usize::MAX
-    );
-}
-
-fn decr_high_priority_packets() {
-    assert_ne!(
-        HIGH_PRIORITY_PACKETS.fetch_sub(1, AtomicOrdering::SeqCst),
-        0
-    );
-}
-
-fn has_high_priority_packets() -> bool {
-    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst) > 0
-}
-
-pub fn get_high_priority_packets() -> usize {
-    HIGH_PRIORITY_PACKETS.load(AtomicOrdering::SeqCst)
-}
 
 pub trait GenericSocket: Read + Write {}
 
@@ -136,7 +108,6 @@ struct Packet {
     data: Vec<u8>,
     // current data position to write to socket.
     sending_pos: usize,
-    is_high_priority: bool,
     original_is_high_priority: bool,
     throttling_size: usize,
     creation_time: Instant,
@@ -150,27 +121,15 @@ impl Packet {
             .write()
             .on_enqueue(throttling_size, priority == SendQueuePriority::High)?;
 
-        // update high priority packet counter
         let is_high_priority = priority == SendQueuePriority::High;
-        if is_high_priority {
-            incr_high_priority_packets();
-        }
 
         Ok(Packet {
             data,
             sending_pos: 0,
-            is_high_priority,
             original_is_high_priority: is_high_priority,
             throttling_size,
             creation_time: Instant::now(),
         })
-    }
-
-    fn set_high_priority(&mut self) {
-        if !self.is_high_priority {
-            incr_high_priority_packets();
-            self.is_high_priority = true;
-        }
     }
 
     fn write(&mut self, writer: &mut dyn Write) -> Result<usize, Error> {
@@ -192,9 +151,6 @@ impl Drop for Packet {
             .write()
             .on_dequeue(self.throttling_size, self.original_is_high_priority);
 
-        if self.is_high_priority {
-            decr_high_priority_packets();
-        }
         if self.original_is_high_priority {
             HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME
                 .update_since(self.creation_time);
@@ -308,28 +264,11 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
     fn write_next_from_queue(&mut self) -> Result<WriteStatus, Error> {
         // In case of last packet is all sent out.
         if self.sending_packet.is_none() {
-            // give up to send low priority packet
-            if self.send_queue.is_send_queue_empty(SendQueuePriority::High)
-                && has_high_priority_packets()
-            {
-                trace!("Give up to send socket data due to low priority, token = {}", self.token);
-                WRITABLE_YIELD_SEND_RIGHT_COUNTER.mark(1);
-                return Ok(WriteStatus::LowPriority);
-            }
-
             // get packet from queue to send
-            let (mut packet, priority) = match self.send_queue.pop_front() {
+            let (mut packet, _) = match self.send_queue.pop_front() {
                 Some(item) => item,
                 None => return Ok(WriteStatus::Complete),
             };
-
-            if priority != SendQueuePriority::High {
-                trace!(
-                    "Low priority packet promoted to high priority, token = {}",
-                    self.token
-                );
-                packet.set_high_priority();
-            }
 
             // assemble packet to send, e.g. prefix length to packet
             self.assembler.assemble(&mut packet.data)?;
@@ -743,10 +682,7 @@ mod tests {
         let status = connection.writable(&test_io());
         assert!(status.is_ok());
         let status = status.unwrap();
-        assert!(
-            WriteStatus::Complete == status
-                || WriteStatus::LowPriority == status
-        );
+        assert!(WriteStatus::Complete == status);
     }
 
     #[test]

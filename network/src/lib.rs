@@ -51,7 +51,6 @@ mod session_manager;
 pub mod throttling;
 
 pub use crate::{
-    connection::get_high_priority_packets,
     error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
     ip::SessionIpLimitConfig,
     node_table::Node,
