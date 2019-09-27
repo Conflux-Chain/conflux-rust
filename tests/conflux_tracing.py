@@ -187,75 +187,65 @@ class ConfluxTracing(ConfluxTestFramework):
 
     def _random_start(self):
         if len(self._stopped_peers):
-            self._peer_lock.acquire()
-            chosen_peer = self._stopped_peers[random.randint(
-                0, len(self._stopped_peers) - 1)]
-            self._stopped_peers.remove(chosen_peer)
-            self.log.info("start {}".format(chosen_peer))
-            self.start_node(chosen_peer, phase_to_wait=None)
-            self._peer_lock.release()
+            with self._peer_lock:
+                chosen_peer = self._stopped_peers[random.randint(
+                    0, len(self._stopped_peers) - 1)]
+                self._stopped_peers.remove(chosen_peer)
+                self.log.info("starting {}".format(chosen_peer))
+                self.start_node(chosen_peer, phase_to_wait=None)
+                self.log.info("started {}".format(chosen_peer))
 
     def _random_crash(self):
-        self._peer_lock.acquire()
-        alive_peer_indices = self._retrieve_alive_peers(
-            ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
-        normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
-        catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
-        if (len(normal_peers) - 1) * 2 <= len(self.nodes):
-            self._peer_lock.release()
-            return
-        alive_peer_indices = normal_peers + catch_up_peers
-        chosen_peer = alive_peer_indices[random.randint(
-            0, len(alive_peer_indices) - 1)]
-        self.log.info("stop {}".format(chosen_peer))
-        self.stop_node(chosen_peer)
-        self._stopped_peers.append(chosen_peer)
-        self._peer_lock.release()
+        with self._peer_lock:
+            alive_peer_indices = self._retrieve_alive_peers(
+                ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
+            normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
+            catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
+            if (len(normal_peers) - 1) * 2 <= len(self.nodes):
+                return
+            alive_peer_indices = normal_peers + catch_up_peers
+            chosen_peer = alive_peer_indices[random.randint(
+                0, len(alive_peer_indices) - 1)]
+            self.log.info("stopping {}".format(chosen_peer))
+            self.stop_node(chosen_peer)
+            self._stopped_peers.append(chosen_peer)
+            self.log.info("stopped {}".format(chosen_peer))
 
     def _generate_block(self):
         """
             random select an alive peer and generate a block
         """
-        self._peer_lock.acquire()
-        alive_peer_indices = self._retrieve_alive_peers(["NormalSyncPhase"])
-        alive_peer_indices = alive_peer_indices.get('NormalSyncPhase', [])
-        assert len(alive_peer_indices) * 2 > len(self.nodes)
-        chosen_peer = alive_peer_indices[random.randint(
-            0, len(alive_peer_indices) - 1)]
-        block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
-        self.log.info("%d generate block %s", chosen_peer, block_hash)
-        self._peer_lock.release()
+        with self._peer_lock:
+            alive_peer_indices = self._retrieve_alive_peers(["NormalSyncPhase"])
+            alive_peer_indices = alive_peer_indices.get('NormalSyncPhase', [])
+            assert len(alive_peer_indices) * 2 > len(self.nodes)
+            chosen_peer = alive_peer_indices[random.randint(
+                0, len(alive_peer_indices) - 1)]
+            block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
+            self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
 
     def _retrieve_snapshot(self):
-        self._peer_lock.acquire()
-        for (snapshot, (i, node)) in zip(self._snapshots, enumerate(self.nodes)):
-            # skip stopped nodes
-            if i in self._stopped_peers:
-                continue
-            delta = node.consensus_graph_state()
-            snapshot.update(delta)
-        self._peer_lock.release()
-        self._lock.acquire()
-
-        try:
+        with self._peer_lock:
+            for (snapshot, (i, node)) in zip(self._snapshots, enumerate(self.nodes)):
+                # skip stopped nodes
+                if i in self._stopped_peers:
+                    continue
+                delta = node.consensus_graph_state()
+                snapshot.update(delta)
+        with self._lock:
             for predicate in self._predicates:
                 predicate(self._snapshots, self._stopped_peers)
-        except Exception as e:
-            self.log.error("Found error with exception {}".format(repr(e)))
-            self._lock.release()
-            raise e
-        self._lock.release()
 
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 8
+        self.num_nodes = 11
         self.conf_parameters = {
             "log_level": "\"debug\"",
             "generate_tx": "true",
             "generate_tx_period_us": "100000",
             "enable_state_expose": "true",
-            "era_epoch_count": 50,
-            "era_checkpoint_gap": 150
+            "era_epoch_count": 5000,
+            "era_checkpoint_gap": 5000
         }
 
     def setup_network(self):
@@ -294,7 +284,7 @@ class ConfluxTracing(ConfluxTestFramework):
         snapshot_timer.start()
 
         # TODO: we may make it run forever
-        time.sleep(2000)
+        time.sleep(200000)
 
         crash_timer.cancel()
         start_timer.cancel()
@@ -306,9 +296,8 @@ class ConfluxTracing(ConfluxTestFramework):
 
     def add_predicate(self, predicate):
         assert isinstance(predicate, Predicate)
-        self._lock.acquire()
-        self._predicates.append(predicate)
-        self._lock.release()
+        with self._lock:
+            self._predicates.append(predicate)
 
 
 class BlockStatusPredicate(Predicate):
@@ -414,7 +403,7 @@ class ExecutionStatusPredicate(Predicate):
 
 if __name__ == "__main__":
     conflux_tracing = ConfluxTracing(
-        crash_timeout=10, start_timeout=13, blockgen_timeout=0.25, snapshot_timeout=2)
+        crash_timeout=50, start_timeout=75, blockgen_timeout=0.25, snapshot_timeout=2)
     conflux_tracing.add_predicate(BlockStatusPredicate())
     conflux_tracing.add_predicate(ExecutionStatusPredicate())
     conflux_tracing.main()
