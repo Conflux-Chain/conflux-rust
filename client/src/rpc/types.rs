@@ -6,6 +6,7 @@ mod account;
 mod blame_info;
 mod block;
 mod bytes;
+mod consensus_graph_states;
 mod epoch_number;
 mod filter;
 mod hash;
@@ -24,6 +25,7 @@ pub use self::{
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
+    consensus_graph_states::ConsensusGraphStates,
     epoch_number::EpochNumber,
     filter::Filter,
     hash::{H160, H2048, H256, H512, H64},

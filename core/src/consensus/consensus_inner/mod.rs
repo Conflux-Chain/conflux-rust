@@ -13,6 +13,7 @@ use crate::{
     consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
+    state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
 };
 use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike};
@@ -56,6 +57,7 @@ pub struct ConsensusInnerConfig {
     // execution and the block packaging and verification.
     // optimistic_executed_height is the number of step to go ahead
     pub enable_optimistic_execution: bool,
+    pub enable_state_expose: bool,
 }
 
 pub struct ConsensusGraphNodeData {
@@ -374,6 +376,20 @@ pub struct ConsensusGraphNode {
     referrers: Vec<usize>,
     referees: Vec<usize>,
     pub data: ConsensusGraphNodeData,
+}
+
+impl ConsensusGraphNode {
+    pub fn past_era_weight(&self) -> i128 { self.past_era_weight }
+
+    pub fn stable(&self) -> bool { self.stable }
+
+    pub fn adaptive(&self) -> bool { self.adaptive }
+
+    pub fn pending(&self) -> bool { self.data.pending }
+
+    pub fn partial_invalid(&self) -> bool { self.data.partial_invalid }
+
+    pub fn era_block(&self) -> usize { self.era_block }
 }
 
 impl ConsensusGraphInner {
@@ -2315,6 +2331,19 @@ impl ConsensusGraphInner {
             &exec_info,
         );
         self.execution_info_cache.insert(me, exec_info);
+        if self.inner_conf.enable_state_expose {
+            STATE_EXPOSER
+                .consensus_graph
+                .lock()
+                .block_execution_state_vec
+                .push(ConsensusGraphBlockExecutionState {
+                    block_hash: self.arena[me].hash,
+                    deferred_state_root: original_deferred_state_root,
+                    deferred_receipt_root: original_deferred_receipt_root,
+                    deferred_logs_bloom_hash: original_deferred_logs_bloom_hash,
+                    state_valid: self.arena[me].data.state_valid,
+                })
+        }
 
         Ok(())
     }

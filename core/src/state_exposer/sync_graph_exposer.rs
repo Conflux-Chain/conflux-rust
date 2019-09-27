@@ -3,4 +3,5 @@
 // See http://www.gnu.org/licenses/
 
 /// This struct maintains some inner state of synchronization graph.
+#[derive(Default)]
 pub struct SyncGraphExposer {}

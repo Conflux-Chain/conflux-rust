@@ -21,7 +21,7 @@ use crate::{
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     state::State,
-    state_exposer::SharedStateExposer,
+    state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
@@ -126,7 +126,6 @@ pub struct ConsensusGraph {
     /// We use `Mutex` here because other thread will only modify it once and
     /// after that only current thread will operate this map.
     pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
-    state_exposer: SharedStateExposer,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -139,7 +138,6 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
-        state_exposer: SharedStateExposer,
     ) -> Self
     {
         let inner =
@@ -172,7 +170,6 @@ impl ConsensusGraph {
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Mutex::new(Default::default()),
-            state_exposer,
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -187,7 +184,7 @@ impl ConsensusGraph {
     pub fn new(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
-        pow_config: ProofOfWorkConfig, state_exposer: SharedStateExposer,
+        pow_config: ProofOfWorkConfig,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -199,7 +196,6 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
-            state_exposer,
         )
     }
 
@@ -444,8 +440,6 @@ impl ConsensusGraph {
     /// getting inner locks.
     pub fn update_best_info(&self, inner: &ConsensusGraphInner) {
         let mut best_info = self.best_info.write();
-        self.state_exposer.write().consensus_graph.best_block_hash =
-            inner.best_block_hash();
 
         let terminal_hashes = inner.terminal_hashes();
         let (terminal_block_hashes, bounded_terminal_block_hashes) =
@@ -554,6 +548,33 @@ impl ConsensusGraph {
             self.update_best_info(inner);
             if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
                 inner.set_pivot_to_stable(hash);
+            }
+            if inner.inner_conf.enable_state_expose {
+                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
+                {
+                    let local_info = self
+                        .data_man
+                        .local_block_info_from_db(hash)
+                        .expect("local block info must exist in db");
+                    let era_block = inner.arena[*arena_index].era_block();
+                    let era_block_hash = if era_block != NULL {
+                        inner.arena[era_block].hash
+                    } else {
+                        Default::default()
+                    };
+                    STATE_EXPOSER.consensus_graph.lock().block_state_vec.push(
+                        ConsensusGraphBlockState {
+                            block_hash: *hash,
+                            best_block_hash: inner.best_block_hash(),
+                            block_status: local_info.get_status(),
+                            past_era_weight: inner.arena[*arena_index]
+                                .past_era_weight(),
+                            era_block_hash,
+                            stable: inner.arena[*arena_index].stable(),
+                            adaptive: inner.arena[*arena_index].adaptive(),
+                        },
+                    )
+                }
             }
         }
         self.txpool

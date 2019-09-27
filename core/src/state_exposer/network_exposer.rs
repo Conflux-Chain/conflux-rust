@@ -3,4 +3,5 @@
 // See http://www.gnu.org/licenses/
 
 /// This struct maintains some inner state of network layer.
+#[derive(Default)]
 pub struct NetworkExposer {}
