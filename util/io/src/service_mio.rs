@@ -23,6 +23,8 @@ use crate::{
     IoError, IoHandler,
 };
 use crossbeam::sync::chase_lev;
+use lazy_static::lazy_static;
+use metrics::{register_meter_with_group, Meter, MeterTimer};
 use mio::{
     deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
     timer::Timeout,
@@ -50,6 +52,11 @@ pub type HandlerId = usize;
 /// Maximum number of tokens a handler can use
 pub const TOKENS_PER_HANDLER: usize = 16384;
 const MAX_HANDLERS: usize = 8;
+
+lazy_static! {
+    static ref NET_POLL_THREAD_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "service_mio::network_poll_thread");
+}
 
 /// Messages used to communicate with the event loop from other threads.
 #[derive(Clone)]
@@ -675,6 +682,8 @@ where Message: Send + Sync + 'static
                     network_poll
                         .poll(&mut events, None)
                         .expect("Network poll failure");
+                    let _timer =
+                        MeterTimer::time_func(NET_POLL_THREAD_TIMER.as_ref());
                     for event in &events {
                         let handler_id = 0;
                         let token_id = event.token().0 % TOKENS_PER_HANDLER;
