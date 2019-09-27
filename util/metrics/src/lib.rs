@@ -6,6 +6,7 @@ mod counter;
 mod ewma;
 mod gauge;
 mod histogram;
+mod lock;
 mod meter;
 mod metrics;
 mod queue;
@@ -17,6 +18,7 @@ pub use self::{
     counter::{Counter, CounterUsize},
     gauge::{Gauge, GaugeUsize},
     histogram::{Histogram, Sample},
+    lock::{Lock, MutexExtensions, RwLockExtensions},
     meter::{register_meter, register_meter_with_group, Meter, MeterTimer},
     metrics::enable,
     queue::{register_queue, register_queue_with_group, Queue},
