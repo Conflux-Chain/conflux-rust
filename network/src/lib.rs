@@ -215,7 +215,7 @@ pub enum NetworkIoMessage {
         /// Work type.
         work_type: HandlerWorkType,
     },
-    HandleNetworkWork {
+    HandleProtocolMessage {
         protocol: ProtocolId,
         peer: PeerId,
         data: Vec<u8>,

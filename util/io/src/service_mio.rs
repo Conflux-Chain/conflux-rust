@@ -91,6 +91,7 @@ where Message: Send + Sized
     },
     /// Broadcast a message across all protocol handlers.
     UserMessage(Arc<Message>),
+    /// Handle a message received from a peer by a specified protocol handler
     RemoteMessage {
         peer: StreamToken,
         handler_id: HandlerId,
@@ -659,6 +660,55 @@ where Message: Send + Sync + 'static
             });
         }
         trace!(target: "shutdown", "[IoService] Closed.");
+    }
+
+    pub fn start_network_poll(
+        network_poll: Arc<Poll>, handler: Arc<dyn IoHandler<Message>>,
+        main_event_loop_channel: IoChannel<Message>, max_sessions: usize,
+    )
+    {
+        thread::Builder::new()
+            .name("network_eventloop".into())
+            .spawn(move || {
+                let mut events = Events::with_capacity(max_sessions);
+                loop {
+                    network_poll
+                        .poll(&mut events, None)
+                        .expect("Network poll failure");
+                    for event in &events {
+                        let handler_id = 0;
+                        let token_id = event.token().0 % TOKENS_PER_HANDLER;
+                        if event.readiness().is_readable() {
+                            handler.stream_readable(
+                                &IoContext::new(
+                                    main_event_loop_channel.clone(),
+                                    handler_id,
+                                ),
+                                token_id,
+                            );
+                        }
+                        if event.readiness().is_writable() {
+                            handler.stream_writable(
+                                &IoContext::new(
+                                    main_event_loop_channel.clone(),
+                                    handler_id,
+                                ),
+                                token_id,
+                            );
+                        }
+                        if event.readiness().is_hup() {
+                            handler.stream_hup(
+                                &IoContext::new(
+                                    main_event_loop_channel.clone(),
+                                    handler_id,
+                                ),
+                                token_id,
+                            );
+                        }
+                    }
+                }
+            })
+            .expect("only one io_service thread, so it should not fail");
     }
 
     /// Regiter an IO handler with the event loop.

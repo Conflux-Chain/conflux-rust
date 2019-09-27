@@ -34,7 +34,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::{atomic::Ordering as AtomicOrdering, Arc},
-    thread,
     time::{Duration, Instant},
 };
 
@@ -173,47 +172,12 @@ impl NetworkService {
         let handler = self.inner.as_ref().unwrap().clone();
         let main_event_loop_channel =
             self.io_service.as_ref().unwrap().channel();
-        let _thread = thread::Builder::new()
-            .name("network_eventloop".into())
-            .spawn(move || {
-                let mut events = Events::with_capacity(128);
-                loop {
-                    network_poll.poll(&mut events, None).ok();
-                    for event in &events {
-                        let handler_id = 0;
-                        let token_id = event.token().0 % TOKENS_PER_HANDLER;
-                        if event.readiness().is_readable() {
-                            handler.stream_readable(
-                                &IoContext::new(
-                                    main_event_loop_channel.clone(),
-                                    handler_id,
-                                ),
-                                token_id,
-                            );
-                        }
-                        if event.readiness().is_writable() {
-                            handler.stream_writable(
-                                &IoContext::new(
-                                    main_event_loop_channel.clone(),
-                                    handler_id,
-                                ),
-                                token_id,
-                            );
-                        }
-                        if event.readiness().is_hup() {
-                            handler.stream_hup(
-                                &IoContext::new(
-                                    main_event_loop_channel.clone(),
-                                    handler_id,
-                                ),
-                                token_id,
-                            );
-                        }
-                    }
-                }
-            })
-            .expect("only one io_service thread, so it should not fail");
-
+        IoService::start_network_poll(
+            network_poll,
+            handler,
+            main_event_loop_channel,
+            MAX_SESSIONS,
+        );
         Ok(())
     }
 
@@ -1039,7 +1003,7 @@ impl NetworkServiceInner {
                 stream,
                 0, /* We only have one handler for the execution event_loop,
                     * so the handler_id is always 0 */
-                NetworkIoMessage::HandleNetworkWork {
+                NetworkIoMessage::HandleProtocolMessage {
                     protocol,
                     peer: stream,
                     data,
@@ -1490,7 +1454,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     warn!("Work is dispatched to unknown handler");
                 }
             }
-            NetworkIoMessage::HandleNetworkWork {
+            NetworkIoMessage::HandleProtocolMessage {
                 ref protocol,
                 ref peer,
                 ref data,
