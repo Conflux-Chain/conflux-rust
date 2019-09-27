@@ -22,7 +22,8 @@ use crate::{
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
 use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
+    register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
+    RwLockExtensions,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -48,6 +49,10 @@ lazy_static! {
         register_meter_with_group("txpool", "insert_txs_failure_tps");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
+    static ref INSERT_TXS_QUOTA_LOCK: Lock =
+        Lock::register("txpool_insert_txs_quota_lock");
+    static ref INSERT_TXS_ENQUEUE_LOCK: Lock =
+        Lock::register("txpool_insert_txs_enqueue_lock");
 }
 
 pub const DEFAULT_MIN_TRANSACTION_GAS_PRICE: u64 = 1;
@@ -138,7 +143,10 @@ impl TransactionPool {
         }
 
         // ensure the pool has enough quota to insert new transactions.
-        let quota = self.inner.write().remaining_quota();
+        let quota = self
+            .inner
+            .write_with_metric(&INSERT_TXS_QUOTA_LOCK)
+            .remaining_quota();
         if quota < transactions.len() {
             for tx in transactions.split_off(quota) {
                 trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
@@ -159,7 +167,8 @@ impl TransactionPool {
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
                 let mut account_cache = self.get_best_state_account_cache();
-                let mut inner = self.inner.write();
+                let mut inner =
+                    self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
                 let mut to_prop = self.to_propagate_trans.write();
 
                 for tx in signed_trans {
