@@ -682,10 +682,7 @@ mod tests {
         let status = connection.writable(&test_io());
         assert!(status.is_ok());
         let status = status.unwrap();
-        assert!(
-            WriteStatus::Complete == status
-                || WriteStatus::LowPriority == status
-        );
+        assert!(WriteStatus::Complete == status);
     }
 
     #[test]
