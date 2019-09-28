@@ -338,7 +338,7 @@ impl OpenHandler<DBAndColumns> for DBAndColumns {
 						// TODO: fix upstream to take cf_descriptors as refs
 						let cf_descriptors: Vec<_> = cfnames.iter()
 							.zip(cf_options)
-							.map(|(name, option)| ColumnFamilyDescriptor::new(name.clone(), option))
+							.map(|(name, option)| ColumnFamilyDescriptor::new(*name, option))
 							.collect();
 						let db = DB::open_cf_descriptors(&opts, path, cf_descriptors).map_err(other_io_err)?;
 						db
