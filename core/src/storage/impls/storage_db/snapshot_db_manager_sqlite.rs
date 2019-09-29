@@ -13,6 +13,12 @@ pub struct SnapshotDbManagerSqlite {
     force_cow: bool,
 }
 
+// TODO: used to sync checkpoint state
+// Note, the sync state context only has instance of type StateManager.
+impl Default for SnapshotDbManagerSqlite {
+    fn default() -> Self { unimplemented!() }
+}
+
 impl SnapshotDbManagerSqlite {
     pub fn new(snapshot_path: String) -> Self {
         Self {

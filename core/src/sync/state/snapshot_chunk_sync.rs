@@ -226,10 +226,11 @@ impl SnapshotChunkSync {
             }
         }
 
-        inner.pending_chunks.extend(response.manifest.chunks());
+        let next_chunk = response.manifest.next_chunk();
+        inner.pending_chunks.extend(response.manifest.into_chunks());
 
         // continue to request remaining manifest if any
-        if let Some(next_chunk) = response.manifest.next_chunk() {
+        if let Some(next_chunk) = next_chunk {
             let request = SnapshotManifestRequest::new_with_start_chunk(
                 inner.checkpoint.clone(),
                 next_chunk,

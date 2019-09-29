@@ -24,8 +24,10 @@ pub use self::{
         multi_version_merkle_patricia_trie::{
             guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
         },
+        snapshot_sync::MptSlicer,
         storage_db::{
             kvdb_rocksdb::KvdbRocksdb, kvdb_sqlite::KvdbSqlite,
+            snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
             sqlite::SqliteConnection,
         },
     },
