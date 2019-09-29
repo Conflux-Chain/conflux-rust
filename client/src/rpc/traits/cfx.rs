@@ -122,7 +122,7 @@ pub trait Cfx {
     //        #[rpc(name = "cfx_submitTransaction")]
     //        fn submit_transaction(&self, Bytes) -> RpcResult<RpcH256>;
 
-    /// Call contract, returning hte output data.
+    /// Call contract, returning the output data.
     #[rpc(name = "cfx_call")]
     fn call(
         &self, tx: RpcTransaction, epoch_number: Option<EpochNumber>,
