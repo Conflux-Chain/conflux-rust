@@ -1266,6 +1266,7 @@ impl SynchronizationGraph {
                         );
                     }
                     if insert_to_consensus {
+                        CONSENSUS_WORKER_QUEUE.enqueue(1);
                         self.consensus_sender
                             .lock()
                             .send((
@@ -1273,7 +1274,6 @@ impl SynchronizationGraph {
                                 true,
                             ))
                             .expect("Receiver not dropped");
-                        CONSENSUS_WORKER_QUEUE.enqueue(1);
                     }
 
                     // Passed verification on header_arc.
@@ -1463,11 +1463,11 @@ impl SynchronizationGraph {
         // recovered from db, we can simply ignore body.
         *self.latest_graph_ready_block.lock() = h;
         if !recover_from_db {
+            CONSENSUS_WORKER_QUEUE.enqueue(1);
             self.consensus_sender
                 .lock()
                 .send((h, false /* ignore_body */))
                 .expect("Cannot fail");
-            CONSENSUS_WORKER_QUEUE.enqueue(1);
         } else {
             self.consensus.on_new_block(&h, true /* ignore_body */);
         }

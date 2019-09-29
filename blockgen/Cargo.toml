@@ -20,7 +20,6 @@ txgen = { path = "../transactiongen" }
 log = "0.4"
 db = { path = "../db" }
 network = { path = "../network" }
-kvdb-rocksdb = "0.1.3"
 secret-store = { path = "../secret_store" }
 toml = "0.4"
 metrics = { path = "../util/metrics" }
