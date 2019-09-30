@@ -9,12 +9,15 @@ fn main() -> Result<(), String> {
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    let opts = match matches.subcommand().1 {
-        Some(opts) => opts,
+    let mut opts = &matches;
+    while let Some(m) = opts.subcommand().1 {
+        opts = m;
+    }
+
+    let rpc_method = match opts.value_of("rpc-method") {
+        Some(method) => method,
         None => {
-            App::from_yaml(yaml)
-                .print_help()
-                .map_err(|e| format!("failed to print help: {:?}", e))?;
+            println!("{}", opts.usage());
             return Ok(());
         }
     };
@@ -22,9 +25,6 @@ fn main() -> Result<(), String> {
     let rpc_server = opts
         .value_of("url")
         .ok_or(String::from("RPC URL not specified"))?;
-    let rpc_method = opts
-        .value_of("rpc-method")
-        .ok_or(String::from("RPC method not specified"))?;
     let rpc_args = match opts.values_of("rpc-args") {
         Some(args) => args,
         None => {
