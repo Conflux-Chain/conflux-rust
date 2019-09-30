@@ -716,14 +716,12 @@ impl ConsensusGraph {
         let block_hashes = if filter.block_hashes.is_none() {
             let inner = self.inner.read();
             // at most best_epoch
-            let from_epoch = self
-                .get_height_from_epoch_number(filter.from_epoch.clone())
-                .map_err(FilterError::Custom)?;
+            let from_epoch =
+                self.get_height_from_epoch_number(filter.from_epoch.clone())?;
 
             // at most best_epoch
-            let to_epoch = self
-                .get_height_from_epoch_number(filter.to_epoch.clone())
-                .map_err(FilterError::Custom)?;
+            let to_epoch =
+                self.get_height_from_epoch_number(filter.to_epoch.clone())?;
 
             if from_epoch > to_epoch {
                 return Err(FilterError::InvalidEpochNumber {
