@@ -155,7 +155,7 @@ class RpcClient:
         return tx_hash
 
     def send_usable_genesis_accounts(self, account_start_index:int):
-        self.node.cfx_sendUsableGenesisAccounts(account_start_index)
+        self.node.test_sendUsableGenesisAccounts(account_start_index)
 
     def wait_for_receipt(self, tx_hash: str, num_txs=1, timeout=10, state_before_wait=True):
         if state_before_wait:

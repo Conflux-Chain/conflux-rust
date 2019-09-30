@@ -478,7 +478,6 @@ impl Cfx for CfxHandler {
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
-            fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
@@ -523,6 +522,7 @@ impl TestRpc for TestRpcImpl {
             fn generate_one_block_special(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
             fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
             fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
+            fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
         }
     }
 }
