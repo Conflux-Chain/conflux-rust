@@ -243,7 +243,9 @@ impl ConsensusGraph {
         &self, epoch_number: EpochNumber,
     ) -> Result<u64, String> {
         Ok(match epoch_number {
-            EpochNumber::Earliest => 0,
+            EpochNumber::Earliest => {
+                self.inner.read_recursive().get_cur_era_genesis_height()
+            }
             EpochNumber::LatestMined => self.best_epoch_number(),
             EpochNumber::LatestState => self.executed_best_state_epoch_number(),
             EpochNumber::Number(num) => {

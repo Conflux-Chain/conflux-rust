@@ -11,7 +11,7 @@ pub type EpochId = H256;
 pub enum EpochNumber {
     /// Epoch number within canon blockchain.
     Number(u64),
-    /// Earliest block (genesis).
+    /// Earliest block (checkpoint).
     Earliest,
     /// Latest mined block.
     LatestMined,
