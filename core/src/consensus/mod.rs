@@ -714,6 +714,7 @@ impl ConsensusGraph {
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         let block_hashes = if filter.block_hashes.is_none() {
+            let inner = self.inner.read();
             // at most best_epoch
             let from_epoch = self
                 .get_height_from_epoch_number(filter.from_epoch.clone())
@@ -737,8 +738,6 @@ impl ConsensusGraph {
                     .iter()
                     .any(|bloom| block_log_bloom.contains_bloom(bloom))
             };
-
-            let inner = self.inner.read();
 
             let mut blocks = vec![];
             for epoch_number in from_epoch..(to_epoch + 1) {
