@@ -10,13 +10,6 @@ fn main() -> Result<(), String> {
     let matches = App::from_yaml(yaml).get_matches();
 
     let mut opts = &matches;
-    if opts.subcommand_name().is_none() {
-        App::from_yaml(yaml)
-            .print_help()
-            .map_err(|e| format!("failed to print clap help: {:?}", e))?;
-        return Ok(());
-    }
-
     while let Some(m) = opts.subcommand().1 {
         opts = m;
     }

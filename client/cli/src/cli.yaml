@@ -2,6 +2,8 @@ name: conflux-cli
 about: Conflux CLI.
 author: The Conflux Team
 
+setting: SubcommandRequiredElseHelp
+
 args:
   - url:
       help: URL of RPC server
@@ -237,9 +239,11 @@ subcommands:
             takes_value: true
   - debug:
       about: Debug subcommands (requires jsonrpc_local_http_port configured)
+      setting: SubcommandRequiredElseHelp
       subcommands:
         - txpool:
             about: Transaction pool subcommands
+            setting: SubcommandRequiredElseHelp
             subcommands:
               - status:
                   about: Get the number of transactions for different status
@@ -283,6 +287,7 @@ subcommands:
                         hidden: true
         - net:
             about: Network subcommands
+            setting: SubcommandRequiredElseHelp
             subcommands:
               - throttling:
                   about: Get the current throttling information
@@ -356,6 +361,7 @@ subcommands:
                   hidden: true
         - test:
             about: Test subcommands (used for test purpose only)
+            setting: SubcommandRequiredElseHelp
             subcommands:
               - block-count:
                   about: Get the total block count
