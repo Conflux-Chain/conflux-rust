@@ -130,9 +130,12 @@ class RpcClient:
         else:
             return int(self.node.cfx_getBalance(addr, epoch), 0)
 
-    def get_nonce(self, addr: str, epoch: str = None) -> int:
-        if epoch is None:
+    ''' Ignore block_hash if epoch is not None '''
+    def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
+        if epoch is None and block_hash is None:
             return int(self.node.cfx_getTransactionCount(addr), 0)
+        elif epoch is None:
+            return int(self.node.cfx_getTransactionCount(addr, "hash:"+block_hash), 0)
         else:
             return int(self.node.cfx_getTransactionCount(addr, epoch), 0)
 

@@ -22,9 +22,9 @@ use network::{
 };
 
 use crate::rpc::types::{
-    Block as RpcBlock, EpochNumber, Receipt as RpcReceipt, Status as RpcStatus,
-    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-    U256 as RpcU256, U64 as RpcU64,
+    Block as RpcBlock, BlockHashOrEpochNumber, EpochNumber,
+    Receipt as RpcReceipt, Status as RpcStatus, Transaction as RpcTransaction,
+    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 
 fn grouped_txs<T, F>(
@@ -184,9 +184,11 @@ impl RpcImpl {
     }
 
     pub fn transaction_count(
-        &self, address: RpcH160, num: Option<EpochNumber>,
+        &self, address: RpcH160, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<RpcU256> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
+        let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
+            EpochNumber::LatestState,
+        ));
         info!(
             "RPC Request: cfx_getTransactionCount address={:?} epoch_num={:?}",
             address, num

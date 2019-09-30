@@ -7,10 +7,11 @@ use delegate::delegate;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        BlameInfo, Block as RpcBlock, Bytes, ConsensusGraphStates, EpochNumber,
-        Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+        BlameInfo, Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
+        ConsensusGraphStates, EpochNumber, Filter as RpcFilter, Log as RpcLog,
+        Receipt as RpcReceipt, Status as RpcStatus,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -468,7 +469,7 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
-            fn transaction_count(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn transaction_count(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
         }
 
         target self.rpc_impl {

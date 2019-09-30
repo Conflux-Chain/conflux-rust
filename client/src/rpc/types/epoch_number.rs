@@ -2,12 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use primitives::EpochNumber as PrimitiveEpochNumber;
+use cfx_types::H256;
+use primitives::{
+    BlockHashOrEpochNumber as PrimitiveBlockHashOrEpochNumber,
+    EpochNumber as PrimitiveEpochNumber,
+};
 use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 /// Represents rpc api epoch number param.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -64,6 +68,22 @@ impl EpochNumber {
     }
 }
 
+impl FromStr for EpochNumber {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "latest_mined" => Ok(EpochNumber::LatestMined),
+            "latest_state" => Ok(EpochNumber::LatestState),
+            "earliest" => Ok(EpochNumber::Earliest),
+            _ if s.starts_with("0x") => u64::from_str_radix(&s[2..], 16)
+                .map(EpochNumber::Num)
+                .map_err(|e| format!("Invalid epoch number: {}", e).into()),
+            _ => Err(format!("Invalid epoch number: missing 0x prefix").into()),
+        }
+    }
+}
+
 impl Into<PrimitiveEpochNumber> for EpochNumber {
     fn into(self) -> PrimitiveEpochNumber { self.into_primitive() }
 }
@@ -80,26 +100,91 @@ impl<'a> Visitor<'a> for EpochNumberVisitor {
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(
             formatter,
-            "a epoch number or 'latest', 'earliest' or 'pending'"
+            "an epoch number or 'latest_mined', 'latest_state', or 'earliest'"
         )
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where E: Error {
-        match value {
-            "latest_mined" => Ok(EpochNumber::LatestMined),
-            "latest_state" => Ok(EpochNumber::LatestState),
-            "earliest" => Ok(EpochNumber::Earliest),
-            _ if value.starts_with("0x") => {
-                u64::from_str_radix(&value[2..], 16)
-                    .map(EpochNumber::Num)
-                    .map_err(|e| {
-                        Error::custom(format!("Invalid epoch number: {}", e))
-                    })
+        value.parse().map_err(Error::custom)
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+    where E: Error {
+        self.visit_str(value.as_ref())
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+pub enum BlockHashOrEpochNumber {
+    BlockHash(H256),
+    EpochNumber(EpochNumber),
+}
+
+impl BlockHashOrEpochNumber {
+    pub fn into_primitive(self) -> PrimitiveBlockHashOrEpochNumber {
+        match self {
+            BlockHashOrEpochNumber::BlockHash(hash) => {
+                PrimitiveBlockHashOrEpochNumber::BlockHash(hash)
             }
-            _ => Err(Error::custom(format!(
-                "Invalid epoch number: missing 0x prefix"
-            ))),
+            BlockHashOrEpochNumber::EpochNumber(epoch_number) => {
+                PrimitiveBlockHashOrEpochNumber::EpochNumber(
+                    epoch_number.into(),
+                )
+            }
+        }
+    }
+}
+
+impl Into<PrimitiveBlockHashOrEpochNumber> for BlockHashOrEpochNumber {
+    fn into(self) -> PrimitiveBlockHashOrEpochNumber { self.into_primitive() }
+}
+
+impl<'a> Deserialize<'a> for BlockHashOrEpochNumber {
+    fn deserialize<D>(
+        deserializer: D,
+    ) -> Result<BlockHashOrEpochNumber, D::Error>
+    where D: Deserializer<'a> {
+        deserializer.deserialize_any(BlockHashOrEpochNumberVisitor)
+    }
+}
+
+impl Serialize for BlockHashOrEpochNumber {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        match self {
+            BlockHashOrEpochNumber::EpochNumber(epoch_number) => {
+                epoch_number.serialize(serializer)
+            }
+            BlockHashOrEpochNumber::BlockHash(block_hash) => {
+                serializer.serialize_str(&format!("hash:{:#x}", block_hash))
+            }
+        }
+    }
+}
+
+struct BlockHashOrEpochNumberVisitor;
+
+impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
+    type Value = BlockHashOrEpochNumber;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            formatter,
+            "an epoch number or 'latest_mined', 'latest_state', or 'earliest', or 'hash:<BLOCK_HASH>'"
+        )
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where E: Error {
+        if value.starts_with("hash:0x") {
+            Ok(BlockHashOrEpochNumber::BlockHash(
+                value[7..].parse().map_err(Error::custom)?,
+            ))
+        } else {
+            value.parse().map_err(Error::custom).map(|epoch_number| {
+                BlockHashOrEpochNumber::EpochNumber(epoch_number)
+            })
         }
     }
 

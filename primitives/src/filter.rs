@@ -175,3 +175,7 @@ impl Filter {
                 })
     }
 }
+
+impl From<String> for FilterError {
+    fn from(s: String) -> Self { FilterError::Custom(s) }
+}

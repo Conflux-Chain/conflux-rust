@@ -32,6 +32,7 @@ use cfx_types::{Bloom, H160, H256, U256};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    epoch::BlockHashOrEpochNumber,
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
@@ -242,7 +243,9 @@ impl ConsensusGraph {
         &self, epoch_number: EpochNumber,
     ) -> Result<u64, String> {
         Ok(match epoch_number {
-            EpochNumber::Earliest => 0,
+            EpochNumber::Earliest => {
+                self.inner.read_recursive().get_cur_era_genesis_height()
+            }
             EpochNumber::LatestMined => self.best_epoch_number(),
             EpochNumber::LatestState => self.executed_best_state_epoch_number(),
             EpochNumber::Number(num) => {
@@ -654,8 +657,19 @@ impl ConsensusGraph {
     }
 
     pub fn transaction_count(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
+        &self, address: H160,
+        block_hash_or_epoch_number: BlockHashOrEpochNumber,
+    ) -> Result<U256, String>
+    {
+        let epoch_number = match block_hash_or_epoch_number {
+            BlockHashOrEpochNumber::BlockHash(hash) => EpochNumber::Number(
+                self.inner
+                    .read()
+                    .get_block_epoch_number(&hash)
+                    .ok_or("block epoch number is NULL")?,
+            ),
+            BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
+        };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
         let state = State::new(state_db, 0.into(), Default::default());
         state
@@ -700,18 +714,14 @@ impl ConsensusGraph {
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         let block_hashes = if filter.block_hashes.is_none() {
+            let inner = self.inner.read();
             // at most best_epoch
-            let from_epoch = match self
-                .get_height_from_epoch_number(filter.from_epoch.clone())
-            {
-                Ok(num) => num,
-                Err(_) => return Ok(vec![]),
-            };
+            let from_epoch =
+                self.get_height_from_epoch_number(filter.from_epoch.clone())?;
 
             // at most best_epoch
-            let to_epoch = self
-                .get_height_from_epoch_number(filter.to_epoch.clone())
-                .unwrap_or(self.best_epoch_number());
+            let to_epoch =
+                self.get_height_from_epoch_number(filter.to_epoch.clone())?;
 
             if from_epoch > to_epoch {
                 return Err(FilterError::InvalidEpochNumber {
@@ -726,8 +736,6 @@ impl ConsensusGraph {
                     .iter()
                     .any(|bloom| block_log_bloom.contains_bloom(bloom))
             };
-
-            let inner = self.inner.read();
 
             let mut blocks = vec![];
             for epoch_number in from_epoch..(to_epoch + 1) {
