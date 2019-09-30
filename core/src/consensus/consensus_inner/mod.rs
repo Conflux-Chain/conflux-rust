@@ -8,7 +8,8 @@ pub mod consensus_new_block_handler;
 
 use crate::{
     block_data_manager::{
-        BlockDataManager, ConsensusGraphExecutionInfo, EpochExecutionContext,
+        BlockDataManager, BlockExecutionResultWithEpoch,
+        ConsensusGraphExecutionInfo, EpochExecutionContext,
     },
     consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
     parameters::{consensus::*, consensus_internal::*},
@@ -2068,31 +2069,30 @@ impl ConsensusGraphInner {
         hashes
     }
 
-    /// Return the block receipts in the current pivot view.
+    /// Return the block receipts in the current pivot view and the epoch block
+    /// hash.
     ///
     /// If `hash` is not maintained in the memory, we just return the receipts
     /// in the db without checking the pivot assumption.
     /// TODO Check if its receipts matches our current pivot view for this
     /// not-in-memory case.
-    pub fn block_receipts_by_hash(
+    pub fn block_execution_results_by_hash(
         &self, hash: &H256, update_cache: bool,
-    ) -> Option<Arc<Vec<Receipt>>> {
+    ) -> Option<BlockExecutionResultWithEpoch> {
         match self.get_epoch_hash_for_block(hash) {
             Some(epoch) => {
                 trace!("Block {} is in epoch {}", hash, epoch);
-                self.data_man
-                    .block_execution_result_by_hash_with_epoch(
+                let execution_result =
+                    self.data_man.block_execution_result_by_hash_with_epoch(
                         hash,
                         &epoch,
                         update_cache,
-                    )
-                    .map(|r| r.receipts)
+                    )?;
+                Some(BlockExecutionResultWithEpoch(epoch, execution_result))
             }
             None => {
                 debug!("Block {:?} not in mem, try to read from db", hash);
-                self.data_man
-                    .block_execution_result_by_hash_from_db(hash)
-                    .map(|r| r.1.receipts)
+                self.data_man.block_execution_result_by_hash_from_db(hash)
             }
         }
     }
@@ -2129,10 +2129,13 @@ impl ConsensusGraphInner {
             tx_hash, false, /* update_cache */
         )?;
         // receipts should never be None if address is not None because
-        let receipts = self.block_receipts_by_hash(
-            &address.block_hash,
-            false, /* update_cache */
-        )?;
+        let receipts = self
+            .block_execution_results_by_hash(
+                &address.block_hash,
+                false, /* update_cache */
+            )?
+            .1
+            .receipts;
         Some((
             receipts
                 .get(address.index)

@@ -2,11 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Log, H256, U256};
+use crate::rpc::types::{H256, U256};
 use cfx_types::{Address, Bloom};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
-    receipt::Receipt as PrimitiveReceipt, transaction::Action,
+    receipt::Receipt as PrimitiveReceipt, transaction::Action, LogEntry,
     SignedTransaction as PrimitiveTransaction, TransactionAddress,
 };
 use serde_derive::Serialize;
@@ -32,7 +32,7 @@ pub struct Receipt {
     /// Address of contracts created during execution of transaction.
     pub contract_created: Option<Address>,
     /// Array of log objects, which this transaction generated.
-    pub logs: Vec<Log>,
+    pub logs: Vec<LogEntry>,
     /// Bloom filter for light clients to quickly retrieve related logs.
     pub logs_bloom: Bloom,
     /// state root.
@@ -69,7 +69,7 @@ impl Receipt {
             },
             outcome_status: receipt.outcome_status.into(),
             contract_created: address.into(),
-            logs: receipt.logs.iter().cloned().map(Log::from).collect(),
+            logs: receipt.logs,
             logs_bloom: receipt.log_bloom.into(),
             state_root: Default::default(),
             epoch_number: None,

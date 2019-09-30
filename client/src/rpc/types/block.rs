@@ -138,14 +138,14 @@ impl Block {
             ),
             true => {
                 let tx_vec = match consensus_inner
-                    .block_receipts_by_hash(&b.hash(), false /* update_cache */)
+                    .block_execution_results_by_hash(&b.hash(), false /* update_cache */)
                 {
                     Some(receipts) => b
                         .transactions
                         .iter()
                         .enumerate()
                         .map(|(idx, tx)| {
-                            let receipt = receipts.get(idx).unwrap();
+                            let receipt = receipts.1.receipts.get(idx).unwrap();
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS
                                 | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
