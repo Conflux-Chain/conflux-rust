@@ -299,10 +299,11 @@ class ConfluxTestFramework:
             binary = [self.options.conflux] * num_nodes
         assert_equal(len(binary), num_nodes)
         for i in range(num_nodes):
+            node_index = len(self.nodes)
             self.nodes.append(
                 TestNode(
-                    i,
-                    get_datadir_path(self.options.tmpdir, i),
+                    node_index,
+                    get_datadir_path(self.options.tmpdir, node_index),
                     rpchost=rpchost,
                     rpc_timeout=self.rpc_timewait,
                     confluxd=binary[i],

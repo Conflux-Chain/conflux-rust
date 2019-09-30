@@ -713,17 +713,14 @@ impl ConsensusGraph {
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         let block_hashes = if filter.block_hashes.is_none() {
             // at most best_epoch
-            let from_epoch = match self
+            let from_epoch = self
                 .get_height_from_epoch_number(filter.from_epoch.clone())
-            {
-                Ok(num) => num,
-                Err(_) => return Ok(vec![]),
-            };
+                .map_err(FilterError::Custom)?;
 
             // at most best_epoch
             let to_epoch = self
                 .get_height_from_epoch_number(filter.to_epoch.clone())
-                .unwrap_or(self.best_epoch_number());
+                .map_err(FilterError::Custom)?;
 
             if from_epoch > to_epoch {
                 return Err(FilterError::InvalidEpochNumber {
