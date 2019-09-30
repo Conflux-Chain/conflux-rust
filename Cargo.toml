@@ -20,6 +20,7 @@ ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 jsonrpc-core = "=12.0.0"
 jsonrpc-tcp-server = "=12.0.0"
 jsonrpc-http-server = "=12.0.0"
+jsonrpc-core-client = { version = "=12.0.0", features = ["http"] }
 error-chain = { version = "0.12" }
 log = "0.4"
 ethereum-types = "0.6"
@@ -39,6 +40,7 @@ kvdb-rocksdb = "=0.1.4"
 client = { path = "client" }
 cfx-types = { path = "cfx_types" }
 threadpool = "1.7"
+futures = "0.1.29"
 
 [[bin]]
 name = "consensus_bench"
@@ -47,6 +49,10 @@ path = "core/benchmark/consensus/src/main.rs"
 [[bin]]
 name = "cfx-gen-dot"
 path = "tools/cfx-gen-dot/main.rs"
+
+[[bin]]
+name = "conflux-cli"
+path = "client/cli/src/main.rs"
 
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]

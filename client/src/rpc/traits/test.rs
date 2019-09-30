@@ -93,4 +93,9 @@ pub trait TestRpc {
 
     #[rpc(name = "expireblockgc")]
     fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
+
+    #[rpc(name = "test_sendUsableGenesisAccounts")]
+    fn send_usable_genesis_accounts(
+        &self, account_start_index: usize,
+    ) -> RpcResult<Bytes>;
 }

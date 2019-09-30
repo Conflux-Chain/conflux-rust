@@ -1,0 +1,11 @@
+[package]
+name = "conflux-cli"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+clap = { version = "2", features = ["yaml"] }
+jsonrpc-core-client = { version = "=12.0.0", features = ["http"] }
+jsonrpc-core = "=12.0.0"
+jsonrpc-http-server = "=12.0.0"
+futures = "0.1.29"
