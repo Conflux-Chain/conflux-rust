@@ -7,6 +7,7 @@ use super::super::types::{
     Receipt as RpcReceipt, Transaction, Transaction as RpcTransaction,
     H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
+use crate::rpc::types::BlockHashOrEpochNumber;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 
@@ -86,7 +87,7 @@ pub trait Cfx {
     /// (epoch number).
     #[rpc(name = "cfx_getTransactionCount")]
     fn transaction_count(
-        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcH160, epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<RpcU256>;
 
     //        /// Returns the number of transactions in a block with given hash.

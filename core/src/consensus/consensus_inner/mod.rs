@@ -1901,8 +1901,7 @@ impl ConsensusGraphInner {
     /// The state may not exist, so the caller should wait for the result if its
     /// state will be used.
     pub fn best_state_epoch_number(&self) -> u64 {
-        let pivot_height =
-            self.pivot_index_to_height(self.pivot_chain.len()) - 1;
+        let pivot_height = self.pivot_index_to_height(self.pivot_chain.len());
         if pivot_height < DEFERRED_STATE_EPOCH_COUNT {
             0
         } else {
@@ -2081,16 +2080,6 @@ impl ConsensusGraphInner {
         match self.get_epoch_hash_for_block(hash) {
             Some(epoch) => {
                 trace!("Block {} is in epoch {}", hash, epoch);
-                let epoch_arena_index = *self.hash_to_arena_indices.get(&epoch).expect("Inner lock is not released, so epoch block should be still in memory");
-                if self.arena[epoch_arena_index].height
-                    + DEFERRED_STATE_EPOCH_COUNT
-                    < self.pivot_index_to_height(self.pivot_chain.len())
-                {
-                    // The epoch is not executed in the pivot_chain view, so
-                    // return None to ensure consistency
-                    // with `LatestState` in rpc calls.
-                    return None;
-                }
                 self.data_man
                     .block_execution_result_by_hash_with_epoch(
                         hash,

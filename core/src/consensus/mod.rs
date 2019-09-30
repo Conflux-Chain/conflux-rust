@@ -32,6 +32,7 @@ use cfx_types::{Bloom, H160, H256, U256};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    epoch::BlockHashOrEpochNumber,
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
@@ -244,7 +245,7 @@ impl ConsensusGraph {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.best_state_epoch_number(),
+            EpochNumber::LatestState => self.executed_best_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.best_epoch_number() {
@@ -654,8 +655,19 @@ impl ConsensusGraph {
     }
 
     pub fn transaction_count(
-        &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
+        &self, address: H160,
+        block_hash_or_epoch_number: BlockHashOrEpochNumber,
+    ) -> Result<U256, String>
+    {
+        let epoch_number = match block_hash_or_epoch_number {
+            BlockHashOrEpochNumber::BlockHash(hash) => EpochNumber::Number(
+                self.inner
+                    .read()
+                    .get_block_epoch_number(&hash)
+                    .ok_or("block epoch number is NULL")?,
+            ),
+            BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
+        };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
         let state = State::new(state_db, 0.into(), Default::default());
         state

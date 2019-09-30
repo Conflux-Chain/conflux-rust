@@ -26,7 +26,7 @@ pub use self::{
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
     consensus_graph_states::ConsensusGraphStates,
-    epoch_number::EpochNumber,
+    epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     filter::Filter,
     hash::{H160, H2048, H256, H512, H64},
     index::Index,
