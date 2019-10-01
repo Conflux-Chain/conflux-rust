@@ -41,6 +41,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     tx_gen: Arc<TransactionGenerator>,
 }
+use cfxcore::block_data_manager::BlockExecutionResultWithEpoch;
 use txgen::TransactionGenerator;
 
 impl RpcImpl {
@@ -205,19 +206,21 @@ impl RpcImpl {
         // Get a consistent view from ConsensusInner
         let maybe_results =
             self.consensus.get_transaction_receipt_and_block_info(&hash);
-        let (results, address, state_root) = match maybe_results {
+        let (
+            BlockExecutionResultWithEpoch(epoch_hash, execution_result),
+            address,
+            state_root,
+        ) = match maybe_results {
             None => return Ok(None),
             Some(result_tuple) => result_tuple,
         };
 
         // Operations below will not involve the status of ConsensusInner
-        let receipt = results
-            .1
+        let receipt = execution_result
             .receipts
             .get(address.index)
             .ok_or(RpcError::internal_error())?
             .clone();
-        let epoch_hash = results.0;
         let block = self
             .consensus
             .data_man

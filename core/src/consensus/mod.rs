@@ -637,16 +637,20 @@ impl ConsensusGraph {
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
     ) -> Option<(BlockExecutionResultWithEpoch, TransactionAddress, H256)> {
-        let (results, address) = {
+        let (results_with_epoch, address) = {
             let inner = self.inner.read();
             let address = self.data_man.transaction_address_by_hash(
                 tx_hash, false, /* update_cache */
             )?;
-            let results = inner
-                .block_execution_results_by_hash(&address.block_hash, true)?;
-            (results, address)
+            (
+                inner.block_execution_results_by_hash(
+                    &address.block_hash,
+                    true,
+                )?,
+                address,
+            )
         };
-        let epoch_hash = results.0;
+        let epoch_hash = results_with_epoch.0;
         // FIXME handle state_root in snapshot
         // We already has transaction address with epoch_hash executed, so we
         // can always get the state_root with `wait_for_result`
@@ -656,7 +660,7 @@ impl ConsensusGraph {
             .0
             .state_root
             .compute_state_root_hash();
-        Some((results, address, state_root))
+        Some((results_with_epoch, address, state_root))
     }
 
     pub fn get_state_root_by_pivot_height(
