@@ -41,6 +41,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     tx_gen: Arc<TransactionGenerator>,
 }
+use cfxcore::block_data_manager::BlockExecutionResultWithEpoch;
 use txgen::TransactionGenerator;
 
 impl RpcImpl {
@@ -202,24 +203,36 @@ impl RpcImpl {
     ) -> RpcResult<Option<RpcReceipt>> {
         let hash: H256 = tx_hash.into();
         info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
-        let transaction_info =
-            self.consensus.get_transaction_info_by_hash(&hash);
-        let (tx, receipt, address) = match transaction_info {
+        // Get a consistent view from ConsensusInner
+        let maybe_results =
+            self.consensus.get_transaction_receipt_and_block_info(&hash);
+        let (
+            BlockExecutionResultWithEpoch(epoch_hash, execution_result),
+            address,
+            state_root,
+        ) = match maybe_results {
             None => return Ok(None),
-            Some(info) => info,
+            Some(result_tuple) => result_tuple,
         };
-        let hash = address.block_hash.into();
-        let mut receipt = RpcReceipt::new(tx, receipt, address);
-        let epoch_number = self.consensus.get_block_epoch_number(&hash);
-        receipt.set_epoch_number(epoch_number);
-        if let Some(pivot_height) = epoch_number {
-            if let Some(state_root) =
-                self.consensus.get_state_root_by_pivot_height(pivot_height)
-            {
-                receipt.set_state_root(RpcH256::from(state_root));
-            }
-        }
-        Ok(Some(receipt))
+
+        // Operations below will not involve the status of ConsensusInner
+        let receipt = execution_result
+            .receipts
+            .get(address.index)
+            .ok_or(RpcError::internal_error())?
+            .clone();
+        let block = self
+            .consensus
+            .data_man
+            .block_by_hash(&epoch_hash, true)
+            .ok_or(RpcError::internal_error())?;
+        let transaction = block.transactions[address.index].clone();
+        let mut rpc_receipt =
+            RpcReceipt::new(transaction.as_ref().clone(), receipt, address);
+        let epoch_number = block.block_header.height();
+        rpc_receipt.set_epoch_number(Some(epoch_number));
+        rpc_receipt.set_state_root(state_root.into());
+        Ok(Some(rpc_receipt))
     }
 
     fn generate(

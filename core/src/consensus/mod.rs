@@ -16,7 +16,7 @@ pub use crate::consensus::consensus_inner::{
     ConsensusGraphInner, ConsensusInnerConfig,
 };
 use crate::{
-    block_data_manager::BlockDataManager,
+    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
@@ -634,6 +634,35 @@ impl ConsensusGraph {
         }
     }
 
+    pub fn get_transaction_receipt_and_block_info(
+        &self, tx_hash: &H256,
+    ) -> Option<(BlockExecutionResultWithEpoch, TransactionAddress, H256)> {
+        let (results_with_epoch, address) = {
+            let inner = self.inner.read();
+            let address = self.data_man.transaction_address_by_hash(
+                tx_hash, false, /* update_cache */
+            )?;
+            (
+                inner.block_execution_results_by_hash(
+                    &address.block_hash,
+                    true,
+                )?,
+                address,
+            )
+        };
+        let epoch_hash = results_with_epoch.0;
+        // FIXME handle state_root in snapshot
+        // We already has transaction address with epoch_hash executed, so we
+        // can always get the state_root with `wait_for_result`
+        let state_root = self
+            .executor
+            .wait_for_result(epoch_hash)
+            .0
+            .state_root
+            .compute_state_root_hash();
+        Some((results_with_epoch, address, state_root))
+    }
+
     pub fn get_state_root_by_pivot_height(
         &self, pivot_height: u64,
     ) -> Option<H256> {
@@ -795,7 +824,7 @@ impl ConsensusGraph {
             .flat_map(move |blocks_chunk| {
                 blocks_chunk.into_par_iter()
                     .filter_map(|hash|
-                        self.inner.read().block_receipts_by_hash(&hash, false /* update_cache */).map(|r| (hash, (*r).clone()))
+                        self.inner.read().block_execution_results_by_hash(&hash, false /* update_cache */).map(|r| (hash, (*r.1.receipts).clone()))
                     )
                     .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, receipts, b.transaction_hashes())))
                     .flat_map(|(hash, mut receipts, mut hashes)| {

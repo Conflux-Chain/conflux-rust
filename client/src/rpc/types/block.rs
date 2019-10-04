@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
-use cfxcore::consensus::ConsensusGraphInner;
+use cfxcore::{
+    block_data_manager::BlockExecutionResultWithEpoch,
+    consensus::ConsensusGraphInner,
+};
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     receipt::{
@@ -138,14 +141,14 @@ impl Block {
             ),
             true => {
                 let tx_vec = match consensus_inner
-                    .block_receipts_by_hash(&b.hash(), false /* update_cache */)
+                    .block_execution_results_by_hash(&b.hash(), false /* update_cache */)
                 {
-                    Some(receipts) => b
+                    Some(BlockExecutionResultWithEpoch(_, execution_result)) => b
                         .transactions
                         .iter()
                         .enumerate()
                         .map(|(idx, tx)| {
-                            let receipt = receipts.get(idx).unwrap();
+                            let receipt = execution_result.receipts.get(idx).unwrap();
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS
                                 | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
