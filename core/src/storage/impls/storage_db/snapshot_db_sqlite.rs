@@ -237,6 +237,32 @@ impl SnapshotDbSqlite {
         })
     }
 
+    fn snapshot_kv_row_parser<'db>(
+        row: &Statement<'db>,
+    ) -> Result<(Vec<u8>, Vec<u8>)> {
+        let key = row.read::<Vec<u8>>(0)?;
+        let value = row.read::<Vec<u8>>(1)?;
+
+        Ok((key, value))
+    }
+
+    // TODO(bo): remove the allow unused below.
+    #[allow(unused)]
+    pub fn snapshot_kv_iterator(
+        &mut self,
+    ) -> ConnectionWithRowParser<
+        KvdbSqliteBorrowMut<SnapshotMptDbValue>,
+        SnapshotKVParserSqlite,
+    > {
+        ConnectionWithRowParser(
+            KvdbSqliteBorrowMut::new((
+                self.maybe_db.as_mut(),
+                &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
+            )),
+            Box::new(|x| Self::snapshot_kv_row_parser(x)),
+        )
+    }
+
     fn snapshot_mpt_row_parser<'db>(
         row: &Statement<'db>,
     ) -> Result<SnapshotMptValue> {
@@ -411,6 +437,8 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     }
 }
 
+pub type SnapshotKVParserSqlite =
+    Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<(Vec<u8>, Vec<u8>)>>;
 pub type SnapshotMptValueParserSqlite =
     Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<SnapshotMptValue>>;
 
