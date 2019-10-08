@@ -14,8 +14,10 @@ use crate::{
 use cfx_types::H256;
 use fallible_iterator::FallibleIterator;
 use keccak_hash::keccak;
-use primitives::{MerkleHash, StateRoot};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use primitives::MerkleHash;
+use rlp_derive::{
+    RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
+};
 
 const DEFAULT_CHUNK_SIZE: i64 = 4 * 1024 * 1024;
 
@@ -192,7 +194,7 @@ struct ChunkItem {
     value: Vec<u8>,
 }
 
-#[derive(Default, RlpEncodable, RlpDecodable)]
+#[derive(Default, RlpEncodableWrapper, RlpDecodableWrapper)]
 pub struct Chunk {
     items: Vec<ChunkItem>,
 }
