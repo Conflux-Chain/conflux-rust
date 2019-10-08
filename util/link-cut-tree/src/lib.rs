@@ -332,8 +332,7 @@ mod tests {
             p = parent[p];
         }
         for i in 0..parent.len() {
-            if (parent[i] != NULL || i == root)
-                && (mark[i] || i == root || mark[parent[i]])
+            if (parent[i] != NULL || i == root) && (mark[i] || mark[parent[i]])
             {
                 value[i] += v;
             }
