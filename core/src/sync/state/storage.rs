@@ -4,12 +4,16 @@
 
 use crate::{
     storage::{
-        storage_db::SnapshotDbManagerTrait, MptSlicer, SnapshotDbManagerSqlite,
-        TrieProof,
+        storage_db::{
+            key_value_db::KeyValueDbIterableTrait, SnapshotDbManagerTrait,
+        },
+        MptSlicer, SnapshotDbManagerSqlite, TrieProof,
     },
     sync::{Error, ErrorKind},
 };
 use cfx_types::H256;
+use fallible_iterator::FallibleIterator;
+use keccak_hash::keccak;
 use primitives::{MerkleHash, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -42,9 +46,10 @@ impl RangedManifest {
     ) -> Result<(), Error> {
         // chunks in manifest should not be empty
         if self.chunks.is_empty() {
-            return Err(
-                ErrorKind::InvalidSnapshot("empty chunks".into()).into()
-            );
+            return Err(ErrorKind::InvalidSnapshotManifest(
+                "empty chunks".into(),
+            )
+            .into());
         }
 
         // the first chunk should match with the requested start chunk key
@@ -53,7 +58,7 @@ impl RangedManifest {
             .and_then(|chunk| chunk.lower_bound_incl.as_ref());
         let actual_start_key = self.chunks[0].key.lower_bound_incl.as_ref();
         if actual_start_key != expected_start_key {
-            return Err(ErrorKind::InvalidSnapshot(
+            return Err(ErrorKind::InvalidSnapshotManifest(
                 "start chunk key mismatch".into(),
             )
             .into());
@@ -66,7 +71,7 @@ impl RangedManifest {
             let next_lower_bound =
                 self.chunks[i + 1].key.lower_bound_incl.as_ref();
             if cur_upper_bound != next_lower_bound {
-                return Err(ErrorKind::InvalidSnapshot(format!(
+                return Err(ErrorKind::InvalidSnapshotManifest(format!(
                     "chunks are not continuous at {}",
                     i
                 ))
@@ -81,7 +86,7 @@ impl RangedManifest {
             .upper_bound_excl
             .as_ref();
         if last_chunk_upper_bound != self.next.as_ref() {
-            return Err(ErrorKind::InvalidSnapshot(
+            return Err(ErrorKind::InvalidSnapshotManifest(
                 "end chunk key mismatch".into(),
             )
             .into());
@@ -91,7 +96,7 @@ impl RangedManifest {
         for chunk in self.chunks.iter() {
             if let Some(ref key) = chunk.key.upper_bound_excl {
                 if !chunk.proof.is_valid_key(key, snapshot_root) {
-                    return Err(ErrorKind::InvalidSnapshot(
+                    return Err(ErrorKind::InvalidSnapshotManifest(
                         "invalid proof".into(),
                     )
                     .into());
@@ -181,19 +186,90 @@ impl RangedManifest {
     }
 }
 
+#[derive(RlpEncodable, RlpDecodable)]
+struct ChunkItem {
+    key: Vec<u8>,
+    value: Vec<u8>,
+}
+
 #[derive(Default, RlpEncodable, RlpDecodable)]
-pub struct Chunk {}
+pub struct Chunk {
+    items: Vec<ChunkItem>,
+}
 
 impl Chunk {
-    /// Validate the chunk with specified key and snapshot merkle root.
-    pub fn validate(
-        &self, _key: &ChunkKey, _snapshot_root: &MerkleHash,
-    ) -> Result<(), Error> {
-        unimplemented!()
+    /// Validate the chunk with specified key.
+    pub fn validate(&self, key: &ChunkKey) -> Result<(), Error> {
+        // chunk should not be empty
+        if self.items.is_empty() {
+            return Err(
+                ErrorKind::InvalidSnapshotChunk("empty chunk".into()).into()
+            );
+        }
+
+        // the key of first item in chunk should match with the requested key
+        if let Some(ref start_key) = key.lower_bound_incl {
+            if start_key != &self.items[0].key {
+                return Err(ErrorKind::InvalidSnapshotChunk(
+                    "key mismatch".into(),
+                )
+                .into());
+            }
+        }
+
+        // keccak(value) == key
+        for item in self.items.iter() {
+            if keccak(&item.value).as_ref() != item.key.as_slice() {
+                return Err(ErrorKind::InvalidSnapshotChunk(
+                    "value hash mismatch with key".into(),
+                )
+                .into());
+            }
+        }
+
+        Ok(())
     }
 
-    pub fn load(_chunk_key: &ChunkKey) -> Result<Option<Chunk>, Error> {
-        unimplemented!()
+    pub fn load(
+        checkpoint: &H256, chunk_key: &ChunkKey,
+    ) -> Result<Option<Chunk>, Error> {
+        debug!(
+            "begin to load chunk, checkpoint = {:?}, key = {:?}",
+            checkpoint, chunk_key
+        );
+
+        let snapshot_db_manager = SnapshotDbManagerSqlite::default();
+        let mut snapshot_db =
+            match snapshot_db_manager.get_snapshot_by_epoch_id(checkpoint)? {
+                Some(db) => db,
+                None => {
+                    debug!(
+                    "failed to load chunk, cannot find snapshot by checkpoint"
+                );
+                    return Ok(None);
+                }
+            };
+
+        let mut kv_iterator = snapshot_db.snapshot_kv_iterator();
+        let lower_bound_incl =
+            chunk_key.lower_bound_incl.clone().unwrap_or_default();
+        let upper_bound_excl =
+            chunk_key.upper_bound_excl.as_ref().map(|k| k.as_slice());
+        let mut kvs = kv_iterator
+            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
+
+        let mut items = Vec::new();
+        while let Some((key, value)) = kvs.next()? {
+            items.push(ChunkItem { key, value });
+        }
+
+        debug!(
+            "complete to load chunk, items = {}, chunk_key = {:?}",
+            items.len(),
+            chunk_key
+        );
+
+        Ok(Some(Chunk { items }))
     }
 }
 

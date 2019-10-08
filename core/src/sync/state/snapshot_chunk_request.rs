@@ -41,7 +41,7 @@ build_has_request_id_impl! { SnapshotChunkRequest }
 
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let chunk = match Chunk::load(&self.chunk_key) {
+        let chunk = match Chunk::load(&self.checkpoint, &self.chunk_key) {
             Ok(Some(chunk)) => chunk,
             _ => Chunk::default(),
         };

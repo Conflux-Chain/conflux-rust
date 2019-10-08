@@ -246,8 +246,6 @@ impl SnapshotDbSqlite {
         Ok((key, value))
     }
 
-    // TODO(bo): remove the allow unused below.
-    #[allow(unused)]
     pub fn snapshot_kv_iterator(
         &mut self,
     ) -> ConnectionWithRowParser<
