@@ -31,10 +31,10 @@ use std::{
     cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
+    mem,
     sync::Arc,
 };
 
-#[allow(dead_code)]
 const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
 
 #[derive(Copy, Clone)]
@@ -704,6 +704,11 @@ impl ConsensusGraphInner {
         return self.arena[parent].past_num_blocks + 1;
     }
 
+    #[inline]
+    fn is_legacy_block(&self, index: usize) -> bool {
+        self.arena[index].era_block == NULL
+    }
+
     fn get_blame(&self, arena_index: usize) -> u32 {
         let block_header = self
             .data_man
@@ -992,10 +997,7 @@ impl ConsensusGraphInner {
         let mut stable_weight_delta = HashMap::new();
 
         for index in anticone_barrier.iter() {
-            // ignore legacy blocks
-            if self.arena[index as usize].era_block == NULL {
-                continue;
-            }
+            assert!(!self.is_legacy_block(index as usize));
             weight_delta
                 .insert(index as usize, self.weight_tree.get(index as usize));
             inclusive_weight_delta.insert(
@@ -1015,6 +1017,7 @@ impl ConsensusGraphInner {
                 -delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
             );
             let parent = self.arena[*index].parent;
+            assert!(parent != NULL);
             self.adaptive_tree.caterpillar_apply(
                 parent,
                 delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
@@ -1022,6 +1025,7 @@ impl ConsensusGraphInner {
         }
         for (index, delta) in &inclusive_weight_delta {
             let parent = self.arena[*index].parent;
+            assert!(parent != NULL);
             self.inclusive_weight_tree.path_apply(*index, -delta);
             self.inclusive_adaptive_tree.caterpillar_apply(
                 parent,
@@ -2522,14 +2526,17 @@ impl ConsensusGraphInner {
             if self.arena[*index].data.blockset_cleared {
                 self.collect_blockset_in_own_view_of_epoch(*index);
             }
+            self.set_epoch_number_in_epoch(*index, self.arena[*index].height);
         }
         debug!(
             "set_pivot_to_stable: stable={:?}, chain_len={}",
             stable,
             self.pivot_chain.len()
         );
-        // TODO Double check if this is needed
         self.recompute_metadata(self.cur_era_genesis_height, to_update);
+        // We should clear anticone cache since the anticone is not computed
+        // correctly before stable.
+        self.anticone_cache = AnticoneCache::new();
     }
 
     pub fn total_processed_block_count(&self) -> u64 {
@@ -2610,5 +2617,31 @@ impl ConsensusGraphInner {
         self.adaptive_tree.split_root(parent, me);
         self.inclusive_adaptive_tree.split_root(parent, me);
         self.arena[me].parent = NULL;
+    }
+
+    pub fn reset_epoch_number_in_epoch(&mut self, pivot_arena_index: usize) {
+        self.set_epoch_number_in_epoch(pivot_arena_index, NULLU64);
+    }
+
+    pub fn set_epoch_number_in_epoch(
+        &mut self, pivot_arena_index: usize, epoch_number: u64,
+    ) {
+        assert!(!self.arena[pivot_arena_index].data.blockset_cleared);
+        let block_set = mem::replace(
+            &mut self.arena[pivot_arena_index]
+                .data
+                .blockset_in_own_view_of_epoch,
+            Default::default(),
+        );
+        for idx in &block_set {
+            self.arena[*idx].data.epoch_number = epoch_number
+        }
+        self.arena[pivot_arena_index].data.epoch_number = epoch_number;
+        mem::replace(
+            &mut self.arena[pivot_arena_index]
+                .data
+                .blockset_in_own_view_of_epoch,
+            block_set,
+        );
     }
 }
