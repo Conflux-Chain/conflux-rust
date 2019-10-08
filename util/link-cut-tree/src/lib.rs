@@ -325,12 +325,15 @@ mod tests {
         let mut mark: Vec<bool> = Vec::new();
         mark.resize(parent.len(), false);
         let mut p = u;
+        let mut root = u;
         while p != NULL {
             mark[p] = true;
+            root = p;
             p = parent[p];
         }
         for i in 0..parent.len() {
-            if mark[i] || i == 0 || mark[parent[i]] {
+            if (parent[i] != NULL || i == root) && (mark[i] || mark[parent[i]])
+            {
                 value[i] += v;
             }
         }
@@ -379,6 +382,15 @@ mod tests {
             NULL
         } else {
             path[at]
+        }
+    }
+
+    fn get_root(dsu: &mut Vec<usize>, x: usize) -> usize {
+        if dsu[x] != NULL {
+            dsu[x] = get_root(dsu, dsu[x]);
+            return dsu[x];
+        } else {
+            return x;
         }
     }
 
@@ -552,7 +564,7 @@ mod tests {
         }
         assert_eq!(tree.size(), n);
         for _ in 0..80000 {
-            let op: u32 = rand::thread_rng().gen_range(0, 8);
+            let op: u32 = rand::thread_rng().gen_range(0, 9);
             if op == 0 {
                 // path apply
                 let u: usize = rand::thread_rng().gen_range(0, n) as usize;
@@ -573,11 +585,6 @@ mod tests {
                     tree.path_aggregate(u) as i64
                 );
             } else if op == 3 {
-                // lca
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: usize = rand::thread_rng().gen_range(0, n) as usize;
-                assert_eq!(lca_brutal(&parent, u, v), tree.lca(u, v));
-            } else if op == 4 {
                 // query chop
                 let u: usize = rand::thread_rng().gen_range(0, n) as usize;
                 let mut p = u;
@@ -589,23 +596,57 @@ mod tests {
                     v = std::cmp::min(v, value[p]);
                     p = parent[p];
                 }
-            } else if op == 5 {
+            } else if op == 4 {
                 // set
                 let u: usize = rand::thread_rng().gen_range(0, n) as usize;
                 let v: i64 = rand::thread_rng().gen_range(-bound, bound);
                 tree.set(u, v as i128);
                 value[u] = v;
-            } else if op == 6 {
+            } else if op == 5 {
                 // get
                 let u: usize = rand::thread_rng().gen_range(0, n) as usize;
                 assert_eq!(value[u], tree.get(u) as i64);
-            } else if op == 7 {
+            } else if op == 6 {
+                // make tree
                 let p: usize = rand::thread_rng().gen_range(0, n) as usize;
                 parent.push(p);
                 value.push(0);
                 tree.make_tree(n);
                 tree.link(p, n);
                 n += 1;
+            } else if op == 7 {
+                // split root
+                let i: usize = rand::thread_rng().gen_range(0, n) as usize;
+                if parent[i] != NULL {
+                    tree.split_root(parent[i], i);
+                    parent[i] = NULL;
+                }
+            } else if op == 8 {
+                // link
+                let mut dsu = parent.clone();
+                let mut null_vec = Vec::new();
+                for i in 0..n {
+                    if get_root(&mut dsu, i) == i {
+                        null_vec.push(i);
+                    }
+                }
+                if null_vec.len() != 1 {
+                    let i: usize = rand::thread_rng()
+                        .gen_range(0, null_vec.len())
+                        as usize;
+                    let i = null_vec[i];
+                    let mut can = Vec::new();
+                    for v in 0..n {
+                        if get_root(&mut dsu, v) != i {
+                            can.push(v);
+                        }
+                    }
+                    let p: usize =
+                        rand::thread_rng().gen_range(0, can.len()) as usize;
+                    let p = can[p];
+                    tree.link(p, i);
+                    parent[i] = p;
+                }
             }
         }
     }

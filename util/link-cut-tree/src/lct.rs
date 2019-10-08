@@ -171,6 +171,7 @@ macro_rules! construct_link_cut_tree {
             /// 2. gp -> p -> o the same direction: zig-zig
             /// 3. gp -> p -> o not the same direction: zig-zag
             fn splay(&mut self, o: usize) {
+                assert!(o != NULL);
                 // apply `delta` and `caterpillar_delta` along the path
                 // from `o` to the root of the Auxiliary Tree
                 let mut path = Vec::new();
@@ -201,6 +202,7 @@ macro_rules! construct_link_cut_tree {
             /// make the path from node `o` to the root become a preferred path
             /// return
             fn access(&mut self, o: usize) -> usize {
+                assert!(o != NULL);
                 let mut last = NULL;
                 let mut now = o;
                 while now != NULL {

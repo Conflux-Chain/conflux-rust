@@ -8,7 +8,7 @@ use crate::{
         consensus_inner::{
             confirmation_meter::ConfirmationMeter,
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
-            ConsensusGraphInner, NULL, NULLU64,
+            ConsensusGraphInner, NULL,
         },
         debug::ComputeEpochDebugRecord,
         ConsensusConfig,
@@ -32,7 +32,6 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
-    mem,
     sync::Arc,
 };
 
@@ -186,15 +185,18 @@ impl ConsensusNewBlockHandler {
             }
         }
         // This is the arena indices for legacy blocks
-        let mut new_era_legacy_block_arena_index_set =
-            new_era_block_arena_index_set.clone();
+        let mut new_era_genesis_subtree = HashSet::new();
         queue.push_back(new_era_block_arena_index);
         while let Some(x) = queue.pop_front() {
-            new_era_legacy_block_arena_index_set.remove(&x);
+            new_era_genesis_subtree.insert(x);
             for child in &inner.arena[x].children {
                 queue.push_back(*child);
             }
         }
+        let new_era_legacy_block_arena_index_set: HashSet<_> =
+            new_era_block_arena_index_set
+                .difference(&new_era_genesis_subtree)
+                .collect();
 
         ConsensusNewBlockHandler::recompute_stable_past_weight(
             inner,
@@ -227,7 +229,8 @@ impl ConsensusNewBlockHandler {
                 .retain(|v| new_era_block_arena_index_set.contains(v));
         }
         // reassign the parent for outside era blocks
-        for me in new_era_legacy_block_arena_index_set {
+        for v in new_era_legacy_block_arena_index_set {
+            let me = *v;
             let mut parent = inner.arena[me].parent;
             if inner.arena[me].era_block != NULL {
                 inner.split_root(me);
@@ -237,6 +240,7 @@ impl ConsensusNewBlockHandler {
             }
             inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
+            inner.terminal_hashes.remove(&inner.arena[me].hash);
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         {
@@ -266,7 +270,7 @@ impl ConsensusNewBlockHandler {
         }
         inner
             .anticone_cache
-            .intersect_update(&new_era_block_arena_index_set);
+            .intersect_update(&new_era_genesis_subtree);
 
         // Chop off all link-cut-trees in the inner data structure
         inner.split_root(new_era_block_arena_index);
@@ -399,6 +403,13 @@ impl ConsensusNewBlockHandler {
                 }
             }
             for index in my_past.drain() {
+                anticone.remove(index);
+            }
+        }
+
+        // We only consider non-lagacy blocks when computing anticone.
+        for index in anticone.clone().iter() {
+            if inner.arena[index as usize].era_block == NULL {
                 anticone.remove(index);
             }
         }
@@ -547,40 +558,6 @@ impl ConsensusNewBlockHandler {
         }
 
         valid
-    }
-
-    fn reset_epoch_number_in_epoch(
-        inner: &mut ConsensusGraphInner, pivot_arena_index: usize,
-    ) {
-        ConsensusNewBlockHandler::set_epoch_number_in_epoch(
-            inner,
-            pivot_arena_index,
-            NULLU64,
-        );
-    }
-
-    fn set_epoch_number_in_epoch(
-        inner: &mut ConsensusGraphInner, pivot_arena_index: usize,
-        epoch_number: u64,
-    )
-    {
-        assert!(!inner.arena[pivot_arena_index].data.blockset_cleared);
-        let block_set = mem::replace(
-            &mut inner.arena[pivot_arena_index]
-                .data
-                .blockset_in_own_view_of_epoch,
-            Default::default(),
-        );
-        for idx in &block_set {
-            inner.arena[*idx].data.epoch_number = epoch_number
-        }
-        inner.arena[pivot_arena_index].data.epoch_number = epoch_number;
-        mem::replace(
-            &mut inner.arena[pivot_arena_index]
-                .data
-                .blockset_in_own_view_of_epoch,
-            block_set,
-        );
     }
 
     #[allow(dead_code)]
@@ -1108,8 +1085,7 @@ impl ConsensusNewBlockHandler {
             let last = inner.pivot_chain.last().cloned().unwrap();
             if inner.arena[me].parent == last {
                 inner.pivot_chain.push(me);
-                ConsensusNewBlockHandler::set_epoch_number_in_epoch(
-                    inner,
+                inner.set_epoch_number_in_epoch(
                     me,
                     inner.pivot_index_to_height(inner.pivot_chain.len()) - 1,
                 );
@@ -1139,10 +1115,7 @@ impl ConsensusNewBlockHandler {
                             .split_off(inner.height_to_pivot_index(fork_at))
                         {
                             // Reset the epoch_number of the discarded fork
-                            ConsensusNewBlockHandler::reset_epoch_number_in_epoch(
-                                inner,
-                                discarded_idx,
-                            );
+                            inner.reset_epoch_number_in_epoch(discarded_idx);
                             ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, discarded_idx);
                         }
                         let mut u = new;
@@ -1151,8 +1124,7 @@ impl ConsensusNewBlockHandler {
                                 inner.collect_blockset_in_own_view_of_epoch(u);
                             }
                             inner.pivot_chain.push(u);
-                            ConsensusNewBlockHandler::set_epoch_number_in_epoch(
-                                inner,
+                            inner.set_epoch_number_in_epoch(
                                 u,
                                 inner.pivot_index_to_height(
                                     inner.pivot_chain.len(),
