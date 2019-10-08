@@ -10,7 +10,8 @@ use crate::{
         },
         request_manager::Request,
         state::{
-            snapshot_chunk_response::SnapshotChunkResponse, Chunk, ChunkKey,
+            snapshot_chunk_response::SnapshotChunkResponse,
+            storage::{Chunk, ChunkKey},
         },
         Error, ProtocolConfiguration,
     },

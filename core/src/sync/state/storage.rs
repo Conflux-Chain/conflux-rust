@@ -273,34 +273,4 @@ impl Chunk {
     }
 }
 
-#[derive(Default)]
-pub struct Restorer {}
-
-#[allow(unused)]
-impl Restorer {
-    /// Append a chunk for restoration.
-    pub fn append(&self, _chunk_key: &ChunkKey, _chunk: Chunk) {
-        unimplemented!()
-    }
-
-    /// Start to restore chunks asynchronously.
-    pub fn start_to_restore(&self) { unimplemented!() }
-
-    /// Check if the restored snapshot match with the specified snapshot root.
-    pub fn is_valid(&self, _snapshot_root: &MerkleHash) -> bool {
-        unimplemented!()
-    }
-
-    pub fn progress(&self) -> RestoreProgress { unimplemented!() }
-
-    pub fn restored_state_root(&self) -> StateRoot { unimplemented!() }
-}
-
-#[derive(Default, Debug)]
-pub struct RestoreProgress {}
-
-impl RestoreProgress {
-    pub fn is_completed(&self) -> bool { unimplemented!() }
-}
-
 // todo add necessary unit tests when code is stable

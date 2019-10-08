@@ -8,10 +8,11 @@ use crate::{
     sync::{
         message::{Context, DynamicCapability},
         state::{
+            restore::{RestoreProgress, Restorer},
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
-            snapshot_manifest_response::SnapshotManifestResponse, Chunk,
-            ChunkKey, RestoreProgress, Restorer,
+            snapshot_manifest_response::SnapshotManifestResponse,
+            storage::{Chunk, ChunkKey},
         },
         SynchronizationProtocolHandler,
     },
