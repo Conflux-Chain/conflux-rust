@@ -8,10 +8,11 @@ use crate::{
     sync::{
         message::{Context, DynamicCapability},
         state::{
+            restore::Restorer,
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
-            snapshot_manifest_response::SnapshotManifestResponse, Chunk,
-            ChunkKey, RestoreProgress, Restorer,
+            snapshot_manifest_response::SnapshotManifestResponse,
+            storage::{Chunk, ChunkKey},
         },
         SynchronizationProtocolHandler,
     },
@@ -82,7 +83,6 @@ struct Inner {
 
     // restore
     restorer: Restorer,
-    restore_progress: RestoreProgress,
 }
 
 impl Inner {
@@ -98,7 +98,6 @@ impl Inner {
         self.downloading_chunks.clear();
         self.num_downloaded = 0;
         self.restorer = Restorer::default();
-        self.restore_progress = RestoreProgress::default();
     }
 }
 
@@ -111,7 +110,7 @@ impl Debug for Inner {
             self.pending_chunks.len(),
             self.downloading_chunks.len(),
             self.num_downloaded,
-            self.restore_progress,
+            self.restorer.progress(),
         )
     }
 }
@@ -334,7 +333,7 @@ impl SnapshotChunkSync {
         }
 
         inner.num_downloaded += 1;
-        inner.restorer.append(&chunk_key, chunk);
+        inner.restorer.append(chunk_key, chunk);
 
         // continue to request remaining chunks
         self.request_chunk(ctx, &mut inner, ctx.peer);
@@ -363,12 +362,9 @@ impl SnapshotChunkSync {
             _ => return,
         };
 
-        inner.restore_progress = inner.restorer.progress();
-        trace!(
-            "Snapshot chunk restoration progress: {:?}",
-            inner.restore_progress
-        );
-        if !inner.restore_progress.is_completed() {
+        let progress = inner.restorer.progress();
+        trace!("Snapshot chunk restoration progress: {:?}", progress);
+        if !progress.is_completed() {
             return;
         }
 

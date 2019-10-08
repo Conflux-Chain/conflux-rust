@@ -6,7 +6,7 @@ use crate::{
     message::{Message, MsgId},
     sync::{
         message::{msgid, Context, Handleable},
-        state::{Chunk, SnapshotChunkRequest},
+        state::{storage::Chunk, SnapshotChunkRequest},
         Error, ErrorKind,
     },
 };
