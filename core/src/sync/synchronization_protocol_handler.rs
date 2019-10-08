@@ -402,7 +402,10 @@ impl SynchronizationProtocolHandler {
             ErrorKind::InvalidTimestamp => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::InvalidSnapshot(_) => {
+            ErrorKind::InvalidSnapshotManifest(_) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::InvalidSnapshotChunk(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),

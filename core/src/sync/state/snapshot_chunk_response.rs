@@ -31,11 +31,7 @@ impl Handleable for SnapshotChunkResponse {
             true,
         )?;
 
-        let root = ctx.must_get_state_root(&request.checkpoint);
-
-        if let Err(e) =
-            self.chunk.validate(&request.chunk_key, &root.snapshot_root)
-        {
+        if let Err(e) = self.chunk.validate(&request.chunk_key) {
             debug!("failed to validate the snapshot chunk, error = {:?}", e);
             ctx.manager
                 .request_manager

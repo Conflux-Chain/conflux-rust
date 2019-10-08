@@ -53,9 +53,14 @@ error_chain! {
             display("Drift too much"),
         }
 
-        InvalidSnapshot(reason: String) {
-            description("invalid snapshot"),
-            display("invalid snapshot: {:?}", reason),
+        InvalidSnapshotManifest(reason: String) {
+            description("invalid snapshot manifest"),
+            display("invalid snapshot manifest: {:?}", reason),
+        }
+
+        InvalidSnapshotChunk(reason: String) {
+            description("invalid snapshot chunk"),
+            display("invalid snapshot chunk: {:?}", reason),
         }
     }
 }
