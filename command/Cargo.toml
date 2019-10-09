@@ -1,0 +1,16 @@
+[package]
+description = "Conflux Command Line Tool library"
+homepage = "http://www.conflux-chain.io"
+license = "GPL-3.0"
+name = "command"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
+dir = { path = "../util/dir" }
+ethcore-accounts = { path = "../accounts" }
+ethkey = { path = "../accounts/ethkey" }
+ethstore = { path = "../accounts/ethstore" }
+home = "0.5.0"
+rpassword = "4.0.1"
