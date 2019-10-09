@@ -38,6 +38,7 @@ keccak-hash = "0.2.0"
 rand = "0.5"
 kvdb-rocksdb = "=0.1.4"
 client = { path = "client" }
+command = { path = "command" }
 cfx-types = { path = "cfx_types" }
 threadpool = "1.7"
 futures = "0.1.29"

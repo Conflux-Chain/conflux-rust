@@ -14,182 +14,204 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt;
-use std::io::{Read, Write};
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use serde::de::{Error, Visitor, MapAccess, DeserializeOwned};
+use super::{Crypto, Uuid, Version, H160};
+use serde::{
+    de::{DeserializeOwned, Error, MapAccess, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 use serde_json;
-use super::{Uuid, Version, Crypto, H160};
+use std::{
+    fmt,
+    io::{Read, Write},
+};
 
 /// Public opaque type representing serializable `KeyFile`.
 #[derive(Debug, PartialEq)]
 pub struct OpaqueKeyFile {
-	key_file: KeyFile
+    key_file: KeyFile,
 }
 
 impl Serialize for OpaqueKeyFile {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
-		S: Serializer,
-	{
-		self.key_file.serialize(serializer)
-	}
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        self.key_file.serialize(serializer)
+    }
 }
 
-impl<T> From<T> for OpaqueKeyFile where T: Into<KeyFile> {
-	fn from(val: T) -> Self {
-		OpaqueKeyFile { key_file: val.into() }
-	}
+impl<T> From<T> for OpaqueKeyFile
+where T: Into<KeyFile>
+{
+    fn from(val: T) -> Self {
+        OpaqueKeyFile {
+            key_file: val.into(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct KeyFile {
-	pub id: Uuid,
-	pub version: Version,
-	pub crypto: Crypto,
-	pub address: Option<H160>,
-	pub name: Option<String>,
-	pub meta: Option<String>,
+    pub id: Uuid,
+    pub version: Version,
+    pub crypto: Crypto,
+    pub address: Option<H160>,
+    pub name: Option<String>,
+    pub meta: Option<String>,
 }
 
 enum KeyFileField {
-	Id,
-	Version,
-	Crypto,
-	Address,
-	Name,
-	Meta,
+    Id,
+    Version,
+    Crypto,
+    Address,
+    Name,
+    Meta,
 }
 
 impl<'a> Deserialize<'a> for KeyFileField {
-	fn deserialize<D>(deserializer: D) -> Result<KeyFileField, D::Error>
-		where D: Deserializer<'a>
-	{
-		deserializer.deserialize_any(KeyFileFieldVisitor)
-	}
+    fn deserialize<D>(deserializer: D) -> Result<KeyFileField, D::Error>
+    where D: Deserializer<'a> {
+        deserializer.deserialize_any(KeyFileFieldVisitor)
+    }
 }
 
 struct KeyFileFieldVisitor;
 
 impl<'a> Visitor<'a> for KeyFileFieldVisitor {
-	type Value = KeyFileField;
+    type Value = KeyFileField;
 
-	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-		write!(formatter, "a valid key file field")
-	}
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a valid key file field")
+    }
 
-	fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-		where E: Error
-	{
-		match value {
-			"id" => Ok(KeyFileField::Id),
-			"version" => Ok(KeyFileField::Version),
-			"crypto" => Ok(KeyFileField::Crypto),
-			"Crypto" => Ok(KeyFileField::Crypto),
-			"address" => Ok(KeyFileField::Address),
-			"name" => Ok(KeyFileField::Name),
-			"meta" => Ok(KeyFileField::Meta),
-			_ => Err(Error::custom(format!("Unknown field: '{}'", value))),
-		}
-	}
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where E: Error {
+        match value {
+            "id" => Ok(KeyFileField::Id),
+            "version" => Ok(KeyFileField::Version),
+            "crypto" => Ok(KeyFileField::Crypto),
+            "Crypto" => Ok(KeyFileField::Crypto),
+            "address" => Ok(KeyFileField::Address),
+            "name" => Ok(KeyFileField::Name),
+            "meta" => Ok(KeyFileField::Meta),
+            _ => Err(Error::custom(format!("Unknown field: '{}'", value))),
+        }
+    }
 }
 
 impl<'a> Deserialize<'a> for KeyFile {
-	fn deserialize<D>(deserializer: D) -> Result<KeyFile, D::Error>
-		where D: Deserializer<'a>
-	{
-		static FIELDS: &'static [&'static str] = &["id", "version", "crypto", "Crypto", "address"];
-		deserializer.deserialize_struct("KeyFile", FIELDS, KeyFileVisitor)
-	}
+    fn deserialize<D>(deserializer: D) -> Result<KeyFile, D::Error>
+    where D: Deserializer<'a> {
+        static FIELDS: &'static [&'static str] =
+            &["id", "version", "crypto", "Crypto", "address"];
+        deserializer.deserialize_struct("KeyFile", FIELDS, KeyFileVisitor)
+    }
 }
 
-fn none_if_empty<'a, T>(v: Option<serde_json::Value>) -> Option<T> where
-	T: DeserializeOwned
-{
-	v.and_then(|v| if v.is_null() {
-		None
-	} else {
-		serde_json::from_value(v).ok()
-	})
-
+fn none_if_empty<'a, T>(v: Option<serde_json::Value>) -> Option<T>
+where T: DeserializeOwned {
+    v.and_then(|v| {
+        if v.is_null() {
+            None
+        } else {
+            serde_json::from_value(v).ok()
+        }
+    })
 }
 
 struct KeyFileVisitor;
 impl<'a> Visitor<'a> for KeyFileVisitor {
-	type Value = KeyFile;
+    type Value = KeyFile;
 
-	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-		write!(formatter, "a valid key object")
-	}
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a valid key object")
+    }
 
-	fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-		where V: MapAccess<'a>
-	{
-		let mut id = None;
-		let mut version = None;
-		let mut crypto = None;
-		let mut address = None;
-		let mut name = None;
-		let mut meta = None;
+    fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
+    where V: MapAccess<'a> {
+        let mut id = None;
+        let mut version = None;
+        let mut crypto = None;
+        let mut address = None;
+        let mut name = None;
+        let mut meta = None;
 
-		loop {
-			match visitor.next_key()? {
-				Some(KeyFileField::Id) => { id = Some(visitor.next_value()?); }
-				Some(KeyFileField::Version) => { version = Some(visitor.next_value()?); }
-				Some(KeyFileField::Crypto) => { crypto = Some(visitor.next_value()?); }
-				Some(KeyFileField::Address) => { address = Some(visitor.next_value()?); }
-				Some(KeyFileField::Name) => { name = none_if_empty(visitor.next_value().ok()) }
-				Some(KeyFileField::Meta) => { meta = none_if_empty(visitor.next_value().ok()) }
-				None => { break; }
-			}
-		}
+        loop {
+            match visitor.next_key()? {
+                Some(KeyFileField::Id) => {
+                    id = Some(visitor.next_value()?);
+                }
+                Some(KeyFileField::Version) => {
+                    version = Some(visitor.next_value()?);
+                }
+                Some(KeyFileField::Crypto) => {
+                    crypto = Some(visitor.next_value()?);
+                }
+                Some(KeyFileField::Address) => {
+                    address = Some(visitor.next_value()?);
+                }
+                Some(KeyFileField::Name) => {
+                    name = none_if_empty(visitor.next_value().ok())
+                }
+                Some(KeyFileField::Meta) => {
+                    meta = none_if_empty(visitor.next_value().ok())
+                }
+                None => {
+                    break;
+                }
+            }
+        }
 
-		let id = match id {
-			Some(id) => id,
-			None => return Err(V::Error::missing_field("id")),
-		};
+        let id = match id {
+            Some(id) => id,
+            None => return Err(V::Error::missing_field("id")),
+        };
 
-		let version = match version {
-			Some(version) => version,
-			None => return Err(V::Error::missing_field("version")),
-		};
+        let version = match version {
+            Some(version) => version,
+            None => return Err(V::Error::missing_field("version")),
+        };
 
-		let crypto = match crypto {
-			Some(crypto) => crypto,
-			None => return Err(V::Error::missing_field("crypto")),
-		};
+        let crypto = match crypto {
+            Some(crypto) => crypto,
+            None => return Err(V::Error::missing_field("crypto")),
+        };
 
-		let result = KeyFile {
-			id: id,
-			version: version,
-			crypto: crypto,
-			address: address,
-			name: name,
-			meta: meta,
-		};
+        let result = KeyFile {
+            id,
+            version,
+            crypto,
+            address,
+            name,
+            meta,
+        };
 
-		Ok(result)
-	}
+        Ok(result)
+    }
 }
 
 impl KeyFile {
-	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error> where R: Read {
-		serde_json::from_reader(reader)
-	}
+    pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
+    where R: Read {
+        serde_json::from_reader(reader)
+    }
 
-	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error> where W: Write {
-		serde_json::to_writer(writer, self)
-	}
+    pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error>
+    where W: Write {
+        serde_json::to_writer(writer, self)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use std::str::FromStr;
-	use serde_json;
-	use json::{KeyFile, Uuid, Version, Crypto, Cipher, Aes128Ctr, Kdf, Scrypt};
+    use json::{
+        Aes128Ctr, Cipher, Crypto, Kdf, KeyFile, Scrypt, Uuid, Version,
+    };
+    use serde_json;
+    use std::str::FromStr;
 
-	#[test]
-	fn basic_keyfile() {
-		let json = r#"
+    #[test]
+    fn basic_keyfile() {
+        let json = r#"
 		{
 			"address": "6edddfc6349aff20bc6467ccf276c5b52487f7a8",
 			"crypto": {
@@ -214,7 +236,7 @@ mod tests {
 			"meta": "{}"
 		}"#;
 
-		let expected = KeyFile {
+        let expected = KeyFile {
 			id: Uuid::from_str("8777d9f6-7860-4b9b-88b7-0b57ee6b3a73").unwrap(),
 			version: Version::V3,
 			address: Some("6edddfc6349aff20bc6467ccf276c5b52487f7a8".into()),
@@ -236,13 +258,13 @@ mod tests {
 			meta: Some("{}".to_owned()),
 		};
 
-		let keyfile: KeyFile = serde_json::from_str(json).unwrap();
-		assert_eq!(keyfile, expected);
-	}
+        let keyfile: KeyFile = serde_json::from_str(json).unwrap();
+        assert_eq!(keyfile, expected);
+    }
 
-	#[test]
-	fn capital_crypto_keyfile() {
-		let json = r#"
+    #[test]
+    fn capital_crypto_keyfile() {
+        let json = r#"
 		{
 			"address": "6edddfc6349aff20bc6467ccf276c5b52487f7a8",
 			"Crypto": {
@@ -265,7 +287,7 @@ mod tests {
 			"version": 3
 		}"#;
 
-		let expected = KeyFile {
+        let expected = KeyFile {
 			id: "8777d9f6-7860-4b9b-88b7-0b57ee6b3a73".into(),
 			version: Version::V3,
 			address: Some("6edddfc6349aff20bc6467ccf276c5b52487f7a8".into()),
@@ -287,13 +309,13 @@ mod tests {
 			meta: None,
 		};
 
-		let keyfile: KeyFile = serde_json::from_str(json).unwrap();
-		assert_eq!(keyfile, expected);
-	}
+        let keyfile: KeyFile = serde_json::from_str(json).unwrap();
+        assert_eq!(keyfile, expected);
+    }
 
-	#[test]
-	fn to_and_from_json() {
-		let file = KeyFile {
+    #[test]
+    fn to_and_from_json() {
+        let file = KeyFile {
 			id: "8777d9f6-7860-4b9b-88b7-0b57ee6b3a73".into(),
 			version: Version::V3,
 			address: Some("6edddfc6349aff20bc6467ccf276c5b52487f7a8".into()),
@@ -315,10 +337,10 @@ mod tests {
 			meta: None,
 		};
 
-		let serialized = serde_json::to_string(&file).unwrap();
-		println!("{}", serialized);
-		let deserialized = serde_json::from_str(&serialized).unwrap();
+        let serialized = serde_json::to_string(&file).unwrap();
+        println!("{}", serialized);
+        let deserialized = serde_json::from_str(&serialized).unwrap();
 
-		assert_eq!(file, deserialized);
-	}
+        assert_eq!(file, deserialized);
+    }
 }

@@ -14,37 +14,39 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io::{Read, Write};
-use serde_json;
 use super::Crypto;
+use serde_json;
+use std::io::{Read, Write};
 
 /// Vault meta file
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct VaultFile {
-	/// Vault password, encrypted with vault password
-	pub crypto: Crypto,
-	/// Vault metadata string
-	pub meta: Option<String>,
+    /// Vault password, encrypted with vault password
+    pub crypto: Crypto,
+    /// Vault metadata string
+    pub meta: Option<String>,
 }
 
 impl VaultFile {
-	pub fn load<R>(reader: R) -> Result<Self, serde_json::Error> where R: Read {
-		serde_json::from_reader(reader)
-	}
+    pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
+    where R: Read {
+        serde_json::from_reader(reader)
+    }
 
-	pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error> where W: Write {
-		serde_json::to_writer(writer, self)
-	}
+    pub fn write<W>(&self, writer: &mut W) -> Result<(), serde_json::Error>
+    where W: Write {
+        serde_json::to_writer(writer, self)
+    }
 }
 
 #[cfg(test)]
 mod test {
-	use serde_json;
-	use json::{VaultFile, Crypto, Cipher, Aes128Ctr, Kdf, Pbkdf2, Prf};
+    use json::{Aes128Ctr, Cipher, Crypto, Kdf, Pbkdf2, Prf, VaultFile};
+    use serde_json;
 
-	#[test]
-	fn to_and_from_json() {
-		let file = VaultFile {
+    #[test]
+    fn to_and_from_json() {
+        let file = VaultFile {
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
 					iv: "0155e3690be19fbfbecabcd440aa284b".into(),
@@ -61,15 +63,15 @@ mod test {
 			meta: Some("{}".into()),
 		};
 
-		let serialized = serde_json::to_string(&file).unwrap();
-		let deserialized = serde_json::from_str(&serialized).unwrap();
+        let serialized = serde_json::to_string(&file).unwrap();
+        let deserialized = serde_json::from_str(&serialized).unwrap();
 
-		assert_eq!(file, deserialized);
-	}
+        assert_eq!(file, deserialized);
+    }
 
-	#[test]
-	fn to_and_from_json_no_meta() {
-		let file = VaultFile {
+    #[test]
+    fn to_and_from_json_no_meta() {
+        let file = VaultFile {
 			crypto: Crypto {
 				cipher: Cipher::Aes128Ctr(Aes128Ctr {
 					iv: "0155e3690be19fbfbecabcd440aa284b".into(),
@@ -86,9 +88,9 @@ mod test {
 			meta: None,
 		};
 
-		let serialized = serde_json::to_string(&file).unwrap();
-		let deserialized = serde_json::from_str(&serialized).unwrap();
+        let serialized = serde_json::to_string(&file).unwrap();
+        let deserialized = serde_json::from_str(&serialized).unwrap();
 
-		assert_eq!(file, deserialized);
-	}
+        assert_eq!(file, deserialized);
+    }
 }
