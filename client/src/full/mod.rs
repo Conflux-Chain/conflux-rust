@@ -89,16 +89,7 @@ impl FullClient {
     ) -> Result<FullClientHandle, String> {
         info!("Working directory: {:?}", std::env::current_dir());
 
-        if conf.raw_conf.metrics_enabled {
-            metrics::enable();
-            let reporter = metrics::FileReporter::new(
-                conf.raw_conf.metrics_output_file.clone(),
-            );
-            metrics::report_async(
-                reporter,
-                Duration::from_millis(conf.raw_conf.metrics_report_interval_ms),
-            );
-        }
+        metrics::initialize(conf.metrics_config());
 
         let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
             "Tx Recover".into(),
