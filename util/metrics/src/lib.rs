@@ -12,6 +12,7 @@ mod metrics;
 mod queue;
 mod registry;
 mod report;
+mod report_influxdb;
 mod timer;
 
 pub use self::{
@@ -20,8 +21,7 @@ pub use self::{
     histogram::{Histogram, Sample},
     lock::{Lock, MutexExtensions, RwLockExtensions},
     meter::{register_meter, register_meter_with_group, Meter, MeterTimer},
-    metrics::enable,
+    metrics::{initialize, MetricsConfiguration},
     queue::{register_queue, register_queue_with_group, Queue},
-    report::{report_async, FileReporter},
     timer::{register_timer, register_timer_with_group, Timer},
 };
