@@ -56,14 +56,14 @@ mod tests {
     #[test]
     fn call_request_deserialize() {
         let s = r#"{
-			"from":"0x0000000000000000000000000000000000000001",
-			"to":"0x0000000000000000000000000000000000000002",
-			"gasPrice":"0x1",
-			"gas":"0x2",
-			"value":"0x3",
-			"data":"0x123456",
-			"nonce":"0x4"
-		}"#;
+            "from":"0x0000000000000000000000000000000000000001",
+            "to":"0x0000000000000000000000000000000000000002",
+            "gasPrice":"0x1",
+            "gas":"0x2",
+            "value":"0x3",
+            "data":"0x123456",
+            "nonce":"0x4"
+        }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 
         assert_eq!(
@@ -83,13 +83,13 @@ mod tests {
     #[test]
     fn call_request_deserialize2() {
         let s = r#"{
-			"from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155",
-			"to": "0xd46e8dd67c5d32be8058bb8eb970870f07244567",
-			"gas": "0x76c0",
-			"gasPrice": "0x9184e72a000",
-			"value": "0x9184e72a",
-			"data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
-		}"#;
+            "from": "0xb60e8dd61c5d32be8058bb8eb970870f07233155",
+            "to": "0xd46e8dd67c5d32be8058bb8eb970870f07244567",
+            "gas": "0x76c0",
+            "gasPrice": "0x9184e72a000",
+            "value": "0x9184e72a",
+            "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
+        }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 
         assert_eq!(deserialized, CallRequest {
