@@ -108,7 +108,7 @@ build_config! {
         (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
         (metrics_report_interval_ms, (u64), 3000)
-        (metrics_output_file, (Option<String>), Some("metrics.log".to_string()))
+        (metrics_output_file, (Option<String>), None)
         (metrics_influxdb_host, (Option<String>), None)
         (metrics_influxdb_db, (String), "conflux".into())
         (metrics_influxdb_username, (Option<String>), None)
