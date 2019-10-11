@@ -7,9 +7,9 @@ use delegate::delegate;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        BlameInfo, Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
-        ConsensusGraphStates, EpochNumber, Filter as RpcFilter, Log as RpcLog,
-        Receipt as RpcReceipt, Status as RpcStatus,
+        sign_call, BlameInfo, Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
+        CallRequest, ConsensusGraphStates, EpochNumber, Filter as RpcFilter,
+        Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         U256 as RpcU256, U64 as RpcU64,
     },
@@ -382,26 +382,14 @@ impl RpcImpl {
     }
 
     fn call(
-        &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
-        let tx = Transaction {
-            nonce: rpc_tx.nonce.into(),
-            gas: rpc_tx.gas.into(),
-            gas_price: rpc_tx.gas_price.into(),
-            value: rpc_tx.value.into(),
-            action: match rpc_tx.to {
-                Some(to) => Action::Call(to.into()),
-                None => Action::Create,
-            },
-            data: rpc_tx.data.into(),
-        };
         debug!("RPC Request: cfx_call");
-        let mut signed_tx = SignedTransaction::new_unsigned(
-            TransactionWithSignature::new_unsigned(tx),
-        );
-        signed_tx.sender = rpc_tx.from.into();
+        let signed_tx = sign_call(request).map_err(|err| {
+            RpcError::invalid_params(format!("Sign tx error: {:?}", err))
+        })?;
         trace!("call tx {:?}", signed_tx);
         self.consensus
             .call_virtual(&signed_tx, epoch.into())
@@ -488,7 +476,7 @@ impl Cfx for CfxHandler {
         target self.rpc_impl {
             fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;

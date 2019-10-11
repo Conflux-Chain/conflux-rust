@@ -1388,8 +1388,7 @@ impl ConsensusExecutionHandler {
             gas_limit: tx.gas.clone(),
         };
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let mut nonce_increased = false;
-        let r = ex.transact(tx, &mut nonce_increased);
+        let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
         r.map(|r| (r.output, r.gas_used))
             .map_err(|e| format!("execution error: {:?}", e))

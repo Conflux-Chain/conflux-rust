@@ -968,6 +968,25 @@ impl<'a, 'b> Executive<'a, 'b> {
         self.call_with_stack_depth(params, substate, 0)
     }
 
+    pub fn transact_virtual(
+        &mut self, tx: &SignedTransaction,
+    ) -> ExecutionResult<Executed> {
+        let sender = tx.sender();
+        let balance = self.state.balance(&sender)?;
+        let needed_balance =
+            tx.value.saturating_add(tx.gas.saturating_mul(tx.gas_price));
+        if balance < needed_balance {
+            // give the sender a sufficient balance
+            self.state.add_balance(
+                &sender,
+                &(needed_balance - balance),
+                CleanupMode::NoEmpty,
+            )?;
+        }
+        let mut nonce_increased = false;
+        self.transact(tx, &mut nonce_increased)
+    }
+
     pub fn transact(
         &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
     ) -> ExecutionResult<Executed> {

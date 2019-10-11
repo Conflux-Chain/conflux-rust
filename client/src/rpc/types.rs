@@ -6,6 +6,7 @@ mod account;
 mod blame_info;
 mod block;
 mod bytes;
+mod call_request;
 mod consensus_graph_states;
 mod epoch_number;
 mod filter;
@@ -25,6 +26,7 @@ pub use self::{
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
+    call_request::{sign_call, CallRequest},
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     filter::Filter,
