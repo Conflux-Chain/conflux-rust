@@ -190,6 +190,24 @@ impl Transaction {
         SignedTransaction::new(public, tx_with_sig)
     }
 
+    /// Specify the sender; this won't survive the serialize/deserialize
+    /// process, but can be cloned.
+    pub fn fake_sign(self, from: Address) -> SignedTransaction {
+        SignedTransaction {
+            transaction: TransactionWithSignature {
+                unsigned: self,
+                r: U256::one(),
+                s: U256::one(),
+                v: 0,
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+            .compute_hash(),
+            sender: from,
+            public: None,
+        }
+    }
+
     /// Signs the transaction with signature.
     pub fn with_signature(self, sig: Signature) -> TransactionWithSignature {
         TransactionWithSignature {

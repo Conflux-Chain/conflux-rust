@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Block, Bytes, EpochNumber, Filter as RpcFilter, Log as RpcLog,
+    Block, Bytes, CallRequest, EpochNumber, Filter as RpcFilter, Log as RpcLog,
     Receipt as RpcReceipt, Transaction, Transaction as RpcTransaction,
     H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
@@ -121,7 +121,7 @@ pub trait Cfx {
     /// Call contract, returning the output data.
     #[rpc(name = "cfx_call")]
     fn call(
-        &self, tx: RpcTransaction, epoch_number: Option<EpochNumber>,
+        &self, tx: CallRequest, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<Bytes>;
 
     /// Returns logs matching the filter provided.

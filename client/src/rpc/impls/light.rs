@@ -19,8 +19,8 @@ use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
         BlameInfo, Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
-        ConsensusGraphStates, EpochNumber, Filter as RpcFilter, Log as RpcLog,
-        Receipt as RpcReceipt, Status as RpcStatus,
+        CallRequest, ConsensusGraphStates, EpochNumber, Filter as RpcFilter,
+        Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         U256 as RpcU256, U64 as RpcU64,
     },
@@ -59,7 +59,7 @@ impl RpcImpl {
 
     #[allow(unused_variables)]
     fn call(
-        &self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>,
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         // TODO
         unimplemented!()
@@ -198,7 +198,7 @@ impl Cfx for CfxHandler {
 
         target self.rpc_impl {
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn call(&self, rpc_tx: RpcTransaction, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
