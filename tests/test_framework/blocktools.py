@@ -35,6 +35,41 @@ def create_block(parent_hash=default_config["GENESIS_PREVHASH"], height=0, times
     return block
 
 
+def create_block_with_nonce(
+        parent_hash=default_config["GENESIS_PREVHASH"],
+        height=0,
+        timestamp=None,
+        difficulty=TEST_DIFFICULTY,
+        transactions=[],
+        gas_limit=3000000000,
+        referee_hashes=[],
+        author=default_config["GENESIS_COINBASE"],
+        deferred_state_root=default_config["GENESIS_STATE_ROOT"],
+        deferred_receipts_root=default_config["GENESIS_RECEIPTS_ROOT"],
+        deferred_logs_bloom_hash=default_config["GENESIS_LOGS_BLOOM_HASH"],
+        adaptive=0,
+        nonce=0):
+    if timestamp is None:
+        timestamp = int(time.time())
+    tx_root = utils.sha3(rlp.encode(Transactions(transactions)))
+    header = BlockHeader(
+        parent_hash=parent_hash,
+        height=height,
+        difficulty=difficulty,
+        timestamp=timestamp,
+        author=author,
+        transactions_root=tx_root,
+        gas_limit=gas_limit,
+        referee_hashes=referee_hashes,
+        nonce=nonce,
+        deferred_state_root=deferred_state_root,
+        deferred_receipts_root=deferred_receipts_root,
+        deferred_logs_bloom_hash=deferred_logs_bloom_hash,
+        adaptive=adaptive)
+    block = Block(block_header=header, transactions=transactions)
+    return block
+
+
 def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=default_config['GENESIS_COINBASE'],
                        data=b'', v=0, r=0, s=0, pri_key=default_config["GENESIS_PRI_KEY"]):
     transaction = Transaction(nonce, gas_price, gas, receiver, value, data, v, r, s)

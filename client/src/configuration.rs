@@ -8,7 +8,7 @@ use cfxcore::{
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
     storage::{self, state_manager::StorageConfiguration},
-    sync::ProtocolConfiguration,
+    sync::{ProtocolConfiguration, SyncGraphConfig},
 };
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
@@ -374,6 +374,12 @@ impl Configuration {
                 _ => panic!("Invalid block_db_type parameter!"),
             },
         )
+    }
+
+    pub fn sync_graph_config(&self) -> SyncGraphConfig {
+        SyncGraphConfig {
+            enable_state_expose: self.raw_conf.enable_state_expose,
+        }
     }
 }
 

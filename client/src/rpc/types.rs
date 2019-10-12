@@ -16,6 +16,7 @@ mod log;
 mod provenance;
 mod receipt;
 mod status;
+mod sync_graph_states;
 mod transaction;
 mod uint;
 
@@ -36,6 +37,7 @@ pub use self::{
     provenance::Origin,
     receipt::Receipt,
     status::Status,
+    sync_graph_states::SyncGraphStates,
     transaction::Transaction,
     uint::{U128, U256, U64},
 };
