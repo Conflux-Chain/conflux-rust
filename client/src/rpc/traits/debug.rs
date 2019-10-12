@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    ConsensusGraphStates, Transaction as RpcTransaction, H256 as RpcH256,
+    ConsensusGraphStates, SyncGraphStates, Transaction as RpcTransaction,
+    H256 as RpcH256,
 };
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
@@ -62,4 +63,7 @@ pub trait DebugRpc {
 
     #[rpc(name = "consensus_graph_state")]
     fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
+
+    #[rpc(name = "sync_graph_state")]
+    fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
 }

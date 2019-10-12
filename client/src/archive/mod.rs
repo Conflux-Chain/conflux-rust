@@ -196,11 +196,13 @@ impl ArchiveClient {
 
         let protocol_config = conf.protocol_config();
         let verification_config = conf.verification_config();
+        let sync_config = conf.sync_graph_config();
 
         let sync_graph = Arc::new(SynchronizationGraph::new(
             consensus.clone(),
             verification_config,
             pow_config.clone(),
+            sync_config,
             false,
         ));
 

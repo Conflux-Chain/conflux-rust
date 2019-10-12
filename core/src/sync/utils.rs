@@ -9,7 +9,7 @@ use crate::{
     pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{state_manager::StorageConfiguration, StorageManager},
-    sync::SynchronizationGraph,
+    sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
@@ -138,6 +138,9 @@ pub fn initialize_synchronization_graph(
         0,                /* stratum_port */
         None,             /* stratum_secret */
     );
+    let sync_config = SyncGraphConfig {
+        enable_state_expose: false,
+    };
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
@@ -167,6 +170,7 @@ pub fn initialize_synchronization_graph(
         consensus.clone(),
         verification_config,
         pow_config,
+        sync_config,
         false,
     ));
 

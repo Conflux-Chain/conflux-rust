@@ -591,6 +591,53 @@ impl BlockGenerator {
         Ok(self.generate_block_impl(block))
     }
 
+    pub fn generate_block_with_nonce_and_timestamp(
+        &self, parent_hash: H256, referee: Vec<H256>,
+        transactions: Vec<Arc<SignedTransaction>>, nonce: u64, timestamp: u64,
+    ) -> Result<H256, String>
+    {
+        let (
+            blame,
+            state_root_with_aux,
+            state_root,
+            receipts_root,
+            logs_bloom_hash,
+        ) = self
+            .graph
+            .consensus
+            .force_compute_blame_and_deferred_state_for_generation(
+                &parent_hash,
+            )?;
+
+        let mut block = self.assemble_new_block_impl(
+            parent_hash,
+            referee,
+            blame,
+            state_root_with_aux,
+            state_root,
+            receipts_root,
+            logs_bloom_hash,
+            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+            transactions,
+            0,
+            None,
+        );
+        block.block_header.set_nonce(nonce);
+        block.block_header.set_timestamp(timestamp);
+
+        let hash = block.block_header.compute_hash();
+        info!(
+            "generate_block with block header:{:?} tx_number:{}, block_size:{}",
+            block.block_header,
+            block.transactions.len(),
+            block.size(),
+        );
+        self.on_mined_block(block);
+
+        self.graph.consensus.wait_for_generation(&hash);
+        Ok(hash)
+    }
+
     fn generate_block_impl(&self, block_init: Block) -> H256 {
         let mut block = block_init;
         let difficulty = block.block_header.difficulty();

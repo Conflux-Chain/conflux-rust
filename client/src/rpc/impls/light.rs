@@ -21,8 +21,8 @@ use crate::rpc::{
         BlameInfo, Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
         CallRequest, ConsensusGraphStates, EpochNumber, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
-        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-        U256 as RpcU256, U64 as RpcU64,
+        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
     },
 };
 
@@ -246,6 +246,7 @@ impl TestRpc for TestRpcImpl {
         fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
         fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
         fn generate_one_block_special(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
+        fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64) -> RpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
         fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
         fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
@@ -282,5 +283,6 @@ impl DebugRpc for DebugRpcImpl {
     not_supported! {
         fn current_sync_phase(&self) -> RpcResult<String>;
         fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
+        fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
     }
 }

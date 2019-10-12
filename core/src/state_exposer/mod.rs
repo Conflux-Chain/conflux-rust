@@ -12,7 +12,7 @@ pub use self::{
         ConsensusGraphStates,
     },
     network_exposer::NetworkExposer,
-    sync_graph_exposer::SyncGraphExposer,
+    sync_graph_exposer::{SyncGraphBlockState, SyncGraphStates},
 };
 
 use parking_lot::Mutex;
@@ -22,7 +22,7 @@ pub type SharedStateExposer = Arc<StateExposer>;
 
 pub struct StateExposer {
     pub consensus_graph: Mutex<ConsensusGraphStates>,
-    pub sync_graph: Mutex<SyncGraphExposer>,
+    pub sync_graph: Mutex<SyncGraphStates>,
     pub network: Mutex<NetworkExposer>,
 }
 

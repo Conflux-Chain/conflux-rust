@@ -3,15 +3,19 @@ import threading
 import json
 import enum
 import copy
+import argparse
+import eth_utils
+import rlp
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.blocktools import create_block
+from test_framework.blocktools import create_block_with_nonce
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
 DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
+NUM_TX_PER_BLOCK = 10
 
 
 class Timer(threading.Timer):
@@ -28,6 +32,88 @@ class BlockStatus(enum.Enum):
     Invalid = 1
     PartialInvalid = 2
     Pending = 3
+
+
+class EventBase(object):
+    def __init__(self):
+        pass
+
+    def execute(self, node):
+        raise NotImplementedError()
+
+    def name(self):
+        raise NotImplementedError()
+
+    def to_json(self):
+        raise NotImplementedError()
+
+
+class StopEvent(EventBase):
+    def __init__(self):
+        super().__init__()
+        self._name = 'stop'
+
+    def execute(self, node):
+        node.stop_node()
+
+    def name(self):
+        return self._name
+
+    def to_json(self):
+        return {'name': self.name()}
+
+
+class StartEvent(EventBase):
+    def __init__(self):
+        super().__init__()
+        self._name = 'start'
+
+    def execute(self, node):
+        node.start()
+        node.wait_for_rpc_connection()
+        node.wait_for_nodeid()
+        node.wait_for_recovery(["NormalSyncPhase", "CatchUpSyncBlockPhase"], wait_time=100000)
+
+    def name(self):
+        return self._name
+
+    def to_json(self):
+        return {'name': self.name()}
+
+
+class NewBlockEvent(EventBase):
+    def __init__(self, hash, parent, referees, nonce, timestamp, txs=None):
+        super().__init__()
+        self._name = 'new_block'
+        self._hash = hash
+        self._parent = parent
+        self._referees = referees
+        self._nonce = nonce
+        self._txs = txs
+        self._timestamp = timestamp
+
+    def execute(self, node):
+        assert self._txs is not None
+        block_hash = node.test_generate_block_with_nonce_and_timestamp(
+            self._parent,
+            self._referees,
+            self._txs,
+            self._nonce,
+            self._timestamp)
+        assert block_hash == self._hash
+
+    def name(self):
+        return self._name
+
+    def to_json(self):
+        return {
+            'name': self.name(),
+            'hash': self._hash,
+            'parent': self._parent,
+            'referees': self._referees,
+            'nonce': self._nonce,
+            'timestamp': self._timestamp,
+        }
 
 
 class ConsensusBlockStatus(object):
@@ -139,22 +225,43 @@ class ConsensusSnapshot(object):
 
 
 class Snapshot(object):
-    def __init__(self, peer_id):
+    def __init__(self, peer_id, genesis):
+        self.genesis = genesis
         self.peer_id = peer_id
         self.consensus = ConsensusSnapshot()
         self.sync_graph = None
         self.network = None
+        self.event_list = []
 
     def update(self, delta):
         """
             incremental evaluation on delta data
         """
-        # print("add blockStateVec: {}, blockExecutionStateVec: {}".format(
-        #     len(delta['blockStateVec']), len(delta['blockExecutionStateVec'])))
         for block_status in delta['blockStateVec']:
             self.consensus.add_block(ConsensusBlockStatus(block_status))
         for exec_status in delta['blockExecutionStateVec']:
             self.consensus.add_exec(ConsensusExecutionStatus(exec_status))
+
+    def stop(self):
+        self.event_list.append(StopEvent())
+
+    def start(self):
+        self.event_list.append(StartEvent())
+
+    def new_blocks(self, blocks):
+        for block in blocks:
+            self.event_list.append(NewBlockEvent(
+                block['blockHash'],
+                block['parent'],
+                block['referees'],
+                block['nonce'],
+                block['timestamp']))
+
+    def to_json(self):
+        return {
+            'genesis': self.genesis,
+            'events': [e.to_json() for e in self.event_list]
+        }
 
 
 class Predicate(object):
@@ -163,7 +270,16 @@ class Predicate(object):
 
 
 class ConfluxTracing(ConfluxTestFramework):
-    def __init__(self, crash_timeout=10, start_timeout=10, blockgen_timeout=0.25, snapshot_timeout=5.0):
+    def __init__(
+            self,
+            nodes=11,
+            crash_timeout=10,
+            start_timeout=10,
+            blockgen_timeout=0.25,
+            snapshot_timeout=5.0,
+            replay=False,
+            snapshot_file=None,
+            txs_file=None):
         super().__init__()
         self._lock = threading.Lock()
         self._peer_lock = threading.Lock()
@@ -171,10 +287,18 @@ class ConfluxTracing(ConfluxTestFramework):
         self._start_timeout = start_timeout
         self._blockgen_timeout = blockgen_timeout
         self._snapshot_timeout = snapshot_timeout
+        self.num_nodes = nodes
+        self._replay = replay
+        self._snapshot_file = snapshot_file
 
         self._snapshots = []
         self._predicates = []
         self._stopped_peers = []
+        self._peer_nonce = []
+        if txs_file is None:
+            self._block_txs = {}
+        else:
+            self._block_txs = json.load(open(txs_file, 'r'))
 
     def _retrieve_alive_peers(self, phase):
         alive_peer_indices = {}
@@ -186,55 +310,92 @@ class ConfluxTracing(ConfluxTestFramework):
         return alive_peer_indices
 
     def _random_start(self):
-        if len(self._stopped_peers):
-            with self._peer_lock:
-                chosen_peer = self._stopped_peers[random.randint(
-                    0, len(self._stopped_peers) - 1)]
-                self._stopped_peers.remove(chosen_peer)
-                self.log.info("starting {}".format(chosen_peer))
-                self.start_node(chosen_peer, phase_to_wait=None)
-                self.log.info("started {}".format(chosen_peer))
+        try:
+            if len(self._stopped_peers):
+                with self._peer_lock:
+                    chosen_peer = self._stopped_peers[random.randint(
+                        0, len(self._stopped_peers) - 1)]
+                    self._stopped_peers.remove(chosen_peer)
+                    self.log.info("starting {}".format(chosen_peer))
+                    self.start_node(chosen_peer, phase_to_wait=None)
+                    self._snapshots[chosen_peer].start()
+                    self.log.info("started {}".format(chosen_peer))
+        except Exception as e:
+            self.persist_snapshot()
+            raise e
 
     def _random_crash(self):
-        with self._peer_lock:
-            alive_peer_indices = self._retrieve_alive_peers(
-                ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
-            normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
-            catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
-            if (len(normal_peers) - 1) * 2 <= len(self.nodes):
-                return
-            alive_peer_indices = normal_peers + catch_up_peers
-            chosen_peer = alive_peer_indices[random.randint(
-                0, len(alive_peer_indices) - 1)]
-            self.log.info("stopping {}".format(chosen_peer))
-            self.stop_node(chosen_peer)
-            self._stopped_peers.append(chosen_peer)
-            self.log.info("stopped {}".format(chosen_peer))
+        try:
+            with self._peer_lock:
+                alive_peer_indices = self._retrieve_alive_peers(
+                    ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
+                normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
+                catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
+                if (len(normal_peers) - 1) * 2 <= len(self.nodes):
+                    return
+                alive_peer_indices = normal_peers + catch_up_peers
+                chosen_peer = alive_peer_indices[random.randint(
+                    0, len(alive_peer_indices) - 1)]
+                self.log.info("stopping {}".format(chosen_peer))
+                # retrieve new ready blocks before stopping it
+                new_blocks = self.nodes[chosen_peer].sync_graph_state()
+                self._snapshots[chosen_peer].new_blocks(new_blocks['readyBlockVec'])
+                self.stop_node(chosen_peer)
+                self._stopped_peers.append(chosen_peer)
+                self._snapshots[chosen_peer].stop()
+                self.log.info("stopped {}".format(chosen_peer))
+        except Exception as e:
+            self.persist_snapshot()
+            raise e
+
+    def _generate_txs(self, peer, num):
+        client = RpcClient(self.nodes[peer])
+        txs = []
+        for _ in range(num):
+            addr = client.rand_addr()
+            tx_gas = client.DEFAULT_TX_GAS
+            nonce = self._peer_nonce[peer]
+            self._peer_nonce[peer] = nonce + 1
+            tx = client.new_tx(receiver=addr, nonce=nonce, value=0, gas=tx_gas, data=b'')
+            txs.append(tx)
+        return txs
 
     def _generate_block(self):
         """
             random select an alive peer and generate a block
         """
-        with self._peer_lock:
-            alive_peer_indices = self._retrieve_alive_peers(["NormalSyncPhase"])
-            alive_peer_indices = alive_peer_indices.get('NormalSyncPhase', [])
-            assert len(alive_peer_indices) * 2 > len(self.nodes)
-            chosen_peer = alive_peer_indices[random.randint(
-                0, len(alive_peer_indices) - 1)]
-            block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
-            self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
+        try:
+            with self._peer_lock:
+                alive_peer_indices = self._retrieve_alive_peers(["NormalSyncPhase"])
+                alive_peer_indices = alive_peer_indices.get('NormalSyncPhase', [])
+                assert len(alive_peer_indices) * 2 > len(self.nodes)
+                chosen_peer = alive_peer_indices[random.randint(
+                    0, len(alive_peer_indices) - 1)]
+                txs = self._generate_txs(chosen_peer, NUM_TX_PER_BLOCK)
+                block_hash = RpcClient(self.nodes[chosen_peer]).generate_block_with_fake_txs(txs)
+                self._block_txs[block_hash] = eth_utils.encode_hex(rlp.encode(txs))
+                self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
+        except Exception as e:
+            self.persist_snapshot()
+            raise e
 
     def _retrieve_snapshot(self):
-        with self._peer_lock:
-            for (snapshot, (i, node)) in zip(self._snapshots, enumerate(self.nodes)):
-                # skip stopped nodes
-                if i in self._stopped_peers:
-                    continue
-                delta = node.consensus_graph_state()
-                snapshot.update(delta)
-        with self._lock:
-            for predicate in self._predicates:
-                predicate(self._snapshots, self._stopped_peers)
+        try:
+            with self._peer_lock:
+                for (snapshot, (i, node)) in zip(self._snapshots, enumerate(self.nodes)):
+                    # skip stopped nodes
+                    if i in self._stopped_peers:
+                        continue
+                    delta = node.consensus_graph_state()
+                    new_blocks = node.sync_graph_state()
+                    snapshot.update(delta)
+                    snapshot.new_blocks(new_blocks['readyBlockVec'])
+            with self._lock:
+                for predicate in self._predicates:
+                    predicate(self._snapshots, self._stopped_peers)
+        except Exception as e:
+            self.persist_snapshot()
+            raise e
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -269,13 +430,29 @@ class ConfluxTracing(ConfluxTestFramework):
                 default_config["TOTAL_COIN"] / self.num_nodes) - 21000, receiver=encode_hex(addr), nonce=i)
             client.send_tx(tx)
 
+    def persist_snapshot(self):
+        self.log.info("saving txs to txs.json")
+        with open('txs.json', 'w') as fp:
+            fp.write(json.dumps(self._block_txs))
+        self.log.info("txs saved to txs.json")
+        for (index, snapshot) in enumerate(self._snapshots):
+            self.log.info('saving snapshot {} to snapshot_{}.json'.format(index, index))
+            with open('snapshot_{}.json'.format(index), 'w') as fp:
+                fp.write(json.dumps(snapshot.to_json()))
+            self.log.info('snapshot {} saved to snapshot_{}.json'.format(index, index))
+
     def run_test(self):
+        if self._replay:
+            self.replay(self._snapshot_file)
+            return
+        genesis_hash = self.nodes[0].best_block_hash()
         crash_timer = Timer(self._crash_timeout, self._random_crash)
         start_timer = Timer(self._start_timeout, self._random_start)
         blockgen_timer = Timer(self._blockgen_timeout, self._generate_block)
         snapshot_timer = Timer(self._snapshot_timeout, self._retrieve_snapshot)
 
-        self._snapshots = [Snapshot(i) for i in range(len(self.nodes))]
+        self._snapshots = [Snapshot(i, genesis_hash) for i in range(len(self.nodes))]
+        self._peer_nonce = [0] * len(self.nodes)
         self.setup_balance()
 
         crash_timer.start()
@@ -293,11 +470,93 @@ class ConfluxTracing(ConfluxTestFramework):
 
         # wait for timer exit
         time.sleep(20)
+        self.persist_snapshot()
 
     def add_predicate(self, predicate):
         assert isinstance(predicate, Predicate)
         with self._lock:
             self._predicates.append(predicate)
+
+    def add_options(self, parser):
+        subparsers = parser.add_subparsers(dest='cmd')
+        run_parser = subparsers.add_parser('run')
+        run_parser.add_argument(
+            '-n',
+            '--nodes',
+            dest='nodes',
+            type=int,
+            default=11,
+            help='number of nodes to run')
+        run_parser.add_argument(
+            '-ct',
+            '--crash-timeout',
+            dest='crash_timeout',
+            type=float,
+            default=50,
+            help='random crash interval')
+        run_parser.add_argument(
+            '-st',
+            '--start-timeout',
+            dest='start_timeout',
+            type=float,
+            default=75,
+            help='random start interval')
+        run_parser.add_argument(
+            '-bt',
+            '--blockgen-timeout',
+            dest='blockgen_timeout',
+            type=float,
+            default=0.25,
+            help='generate block interval')
+        run_parser.add_argument(
+            '-snt',
+            '--snapshot-timeout',
+            dest='snapshot_timeout',
+            type=float,
+            default=2,
+            help='snapshot retrieve interval')
+
+        replay_parser = subparsers.add_parser('replay')
+        replay_parser.add_argument(
+            '-snapshot_file',
+            '--snapshot_file',
+            dest='snapshot_file',
+            required=True,
+            help="path of snapshot")
+        replay_parser.add_argument(
+            '-txs_file',
+            '--txs_file',
+            dest='txs_file',
+            required=True,
+            help="path of txs file")
+
+    def replay(self, file_path):
+        snapshot = json.load(open(file_path, 'r'))
+        genesis_hash = snapshot['genesis']
+        events = snapshot['events']
+        self.setup_balance()
+
+        node = self.nodes[0]
+        self._genesis_hash = node.best_block_hash()
+        assert genesis_hash == self._genesis_hash
+        for event in events:
+            if event['name'] == StartEvent().name():
+                self.log.info("stop")
+                StartEvent().execute(node)
+            elif event['name'] == StopEvent().name():
+                self.log.info("start")
+                StopEvent().execute(node)
+            else:
+                self.log.info("new block[{}]".format(event['hash']))
+                txs = self._block_txs[event['hash']]
+                NewBlockEvent(
+                    hash=event['hash'],
+                    parent=event['parent'],
+                    referees=event['referees'],
+                    nonce=event['nonce'],
+                    timestamp=event['timestamp'],
+                    txs=txs
+                ).execute(node)
 
 
 class BlockStatusPredicate(Predicate):
@@ -401,9 +660,28 @@ class ExecutionStatusPredicate(Predicate):
         self.verify_snapshots(alive_snapshots, verifiable_hashes)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    ConfluxTracing().add_options(parser)
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    conflux_tracing = ConfluxTracing(
-        crash_timeout=50, start_timeout=75, blockgen_timeout=0.25, snapshot_timeout=2)
-    conflux_tracing.add_predicate(BlockStatusPredicate())
-    conflux_tracing.add_predicate(ExecutionStatusPredicate())
-    conflux_tracing.main()
+    args = parse_args()
+    if args.cmd == 'run':
+        conflux_tracing = ConfluxTracing(
+            nodes=args.nodes,
+            crash_timeout=args.crash_timeout,
+            start_timeout=args.start_timeout,
+            blockgen_timeout=args.blockgen_timeout,
+            snapshot_timeout=args.snapshot_timeout)
+        conflux_tracing.add_predicate(BlockStatusPredicate())
+        conflux_tracing.add_predicate(ExecutionStatusPredicate())
+        conflux_tracing.main()
+    elif args.cmd == 'replay':
+        conflux_tracing = ConfluxTracing(
+            nodes=2,
+            replay=True,
+            snapshot_file=args.snapshot_file,
+            txs_file=args.txs_file)
+        conflux_tracing.main()

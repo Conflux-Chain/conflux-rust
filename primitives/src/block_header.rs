@@ -164,6 +164,11 @@ impl BlockHeader {
     /// Set the nonce field of the header.
     pub fn set_nonce(&mut self, nonce: u64) { self.nonce = nonce; }
 
+    /// Set the timestamp filed of the header.
+    pub fn set_timestamp(&mut self, timestamp: u64) {
+        self.timestamp = timestamp;
+    }
+
     /// Compute the hash of the block.
     pub fn compute_hash(&mut self) -> H256 {
         let hash = self.hash();

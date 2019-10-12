@@ -494,6 +494,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     .block_header_by_hash(&cur_era_genesis_hash)
                     .expect("era genesis exists"),
                 old_sync_inner.pow_config.clone(),
+                old_sync_inner.config.clone(),
                 old_sync_inner.data_man.clone(),
             );
             *old_sync_inner = new_sync_inner;

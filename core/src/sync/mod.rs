@@ -20,8 +20,9 @@ pub use self::{
     error::{Error, ErrorKind},
     state::RangedManifest,
     synchronization_graph::{
-        SharedSynchronizationGraph, SyncGraphStatistics, SynchronizationGraph,
-        SynchronizationGraphInner, SynchronizationGraphNode,
+        SharedSynchronizationGraph, SyncGraphConfig, SyncGraphStatistics,
+        SynchronizationGraph, SynchronizationGraphInner,
+        SynchronizationGraphNode,
     },
     synchronization_phases::{
         CatchUpCheckpointPhase, CatchUpRecoverBlockFromDbPhase,
