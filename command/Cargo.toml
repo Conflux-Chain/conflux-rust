@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
-dir = { path = "../util/dir" }
+dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 ethcore-accounts = { path = "../accounts" }
 ethkey = { path = "../accounts/ethkey" }
 ethstore = { path = "../accounts/ethstore" }

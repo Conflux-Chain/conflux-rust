@@ -19,7 +19,7 @@ itertools = "0.5"
 parking_lot = "0.8"
 parity-crypto = "0.4.0"
 ethereum-types = "0.6"
-dir = { path = "../../util/dir" }
+dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 smallvec = "0.6"
 parity-wordlist = "1.0"
 tempdir = "0.3"
