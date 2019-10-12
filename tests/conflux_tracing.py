@@ -514,7 +514,7 @@ class ConfluxTracing(ConfluxTestFramework):
             dest='snapshot_timeout',
             type=float,
             default=2,
-            help='take snapshot interval')
+            help='snapshot retrieve interval')
 
         replay_parser = subparsers.add_parser('replay')
         replay_parser.add_argument(
