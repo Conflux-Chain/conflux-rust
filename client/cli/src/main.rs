@@ -1,8 +1,13 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use clap::{load_yaml, App, ArgMatches};
 use futures::future::Future;
 use jsonrpc_core::{Params, Value};
 use jsonrpc_core_client::{transports::http::connect, RawClient};
 use jsonrpc_http_server::hyper::rt;
+use serde_json::Map;
 use std::{str::FromStr, sync::mpsc::channel};
 
 fn main() -> Result<(), String> {
@@ -35,7 +40,7 @@ fn main() -> Result<(), String> {
 
     let mut params = Vec::new();
     for arg in rpc_args {
-        match parse_arg(arg, opts)? {
+        match ArgSchema::parse(arg).value(opts)? {
             Some(val) => params.push(val),
             None => break,
         }
@@ -68,31 +73,70 @@ fn call_rpc(url: String, method: String, params: Params) {
     }
 }
 
-fn parse_arg(arg: &str, opts: &ArgMatches) -> Result<Option<Value>, String> {
-    let arg: Vec<&str> = arg.split(":").collect();
-    let arg_name = arg[0];
+struct ArgSchema<'a> {
+    arg_name: &'a str,
+    arg_type: &'a str,
+}
 
-    if arg.len() == 1 {
-        return match opts.value_of(arg_name) {
-            Some(val) => Ok(Some(Value::String(val.into()))),
-            None => Ok(None),
-        };
+impl<'a> ArgSchema<'a> {
+    fn parse(arg: &'a str) -> Self {
+        let schema: Vec<&str> = arg.splitn(2, ":").collect();
+        ArgSchema {
+            arg_name: schema[0],
+            arg_type: schema.get(1).cloned().unwrap_or("string"),
+        }
     }
 
-    match arg[1] {
-        "bool" => Ok(Some(Value::Bool(opts.is_present(arg[0])))),
-        "u64" => {
-            let val = match opts.value_of(arg_name) {
-                Some(val) => val,
-                None => return Ok(None),
-            };
+    fn value(&self, opts: &ArgMatches) -> Result<Option<Value>, String> {
+        match self.arg_type {
+            "string" => match opts.value_of(self.arg_name) {
+                Some(val) => Ok(Some(Value::String(val.into()))),
+                None => Ok(None),
+            },
+            "bool" => Ok(Some(Value::Bool(opts.is_present(self.arg_name)))),
+            "u64" => self.u64(opts),
+            _ => {
+                if self.arg_type.starts_with("map(")
+                    && self.arg_type.ends_with(")")
+                {
+                    return Ok(Some(self.object(opts)?));
+                }
 
-            let val = u64::from_str(val).map_err(|e| {
-                format!("failed to parse argument [--{}]: {:?}", arg_name, e)
-            })?;
-
-            Ok(Some(Value::String(format!("{:#x}", val))))
+                panic!("unsupported RPC argument type: {}", self.arg_type);
+            }
         }
-        _ => panic!("unsupported RPC argument type: {}", arg[1]),
+    }
+
+    fn u64(&self, opts: &ArgMatches) -> Result<Option<Value>, String> {
+        let val = match opts.value_of(self.arg_name) {
+            Some(val) => val,
+            None => return Ok(None),
+        };
+
+        let val = u64::from_str(val).map_err(|e| {
+            format!("failed to parse argument [--{}]: {:?}", self.arg_name, e)
+        })?;
+
+        Ok(Some(Value::String(format!("{:#x}", val))))
+    }
+
+    fn object(&self, opts: &ArgMatches) -> Result<Value, String> {
+        let fields: Vec<&str> = self
+            .arg_type
+            .trim_start_matches("map(")
+            .trim_end_matches(")")
+            .split(";")
+            .collect();
+
+        let mut object = Map::new();
+
+        for field in fields {
+            let schema = ArgSchema::parse(field);
+            if let Some(val) = schema.value(opts)? {
+                object.insert(schema.arg_name.into(), val);
+            }
+        }
+
+        Ok(Value::Object(object))
     }
 }
