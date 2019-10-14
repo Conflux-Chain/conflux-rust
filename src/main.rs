@@ -2,10 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod command;
+
 use clap::{load_yaml, App};
 use client::{
     archive::ArchiveClient, configuration::Configuration, light::LightClient,
 };
+use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -104,15 +107,22 @@ fn main() -> Result<(), String> {
 
     match matches.subcommand() {
         ("account", Some(account_matches)) => {
-            match account_matches.subcommand() {
-                ("new", _) => {
-                    println!("new account");
+            let account_cmd = match account_matches.subcommand() {
+                ("new", Some(new_acc_matches)) => {
+                    AccountCmd::New(NewAccount::new(new_acc_matches))
                 }
-                ("list", _) => {
-                    println!("list accounts");
+                ("list", Some(list_acc_matches)) => {
+                    AccountCmd::List(ListAccounts::new(list_acc_matches))
                 }
-                _ => {}
-            }
+                ("import", Some(import_acc_matches)) => {
+                    AccountCmd::Import(ImportAccounts::new(import_acc_matches))
+                }
+                _ => {
+                    unreachable!();
+                }
+            };
+            let execute_output = command::account::execute(account_cmd)?;
+            println!("{}", execute_output);
         }
         _ => {
             THROTTLING_SERVICE.write().initialize(

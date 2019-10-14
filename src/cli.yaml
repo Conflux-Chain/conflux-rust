@@ -148,6 +148,31 @@ args:
         long: archive
 subcommands:
     - account:
+        about: Manage accounts
         subcommands:
             - new:
+                about: Create a new account (and its associated key) for the given --chain (default conflux).
+                args:
+                    - keys-iterations:
+                        help: Specify the number of iterations to use when deriving key from the password (bigger is more secure).
+                        long: keys-iterations
+                        value_name: NUM
+                        default_value: "10240"
+                        takes_value: true
+                    - password:
+                        help: Provide a file containing a password for unlocking an account. Leading and trailing whitespace is trimmed.
+                        long: password
+                        value_name: FILE
+                        takes_value: true
             - list:
+                about: List existing accounts of the given --chain (default conflux).
+            - import:
+                about: Import accounts from JSON UTC keystore files to the specified --chain (default conflux)
+                args:
+                    - import-path: 
+                        help: A list of file paths to import.
+                        long: import-path
+                        multiple: true
+                        value_name: PATH
+                        takes_value: true
+                        required: true
