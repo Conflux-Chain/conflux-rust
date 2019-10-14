@@ -20,10 +20,8 @@
 
 extern crate ethcore_accounts;
 
-use super::{
-    chain_type::ChainType,
-    helpers::{password_from_file, password_prompt},
-};
+use super::helpers::{keys_path, password_from_file, password_prompt};
+use clap;
 use ethcore_accounts::{AccountProvider, AccountProviderSettings};
 use ethstore::{
     accounts_dir::RootDiskDirectory, import_account, import_accounts, EthStore,
@@ -40,22 +38,55 @@ pub enum AccountCmd {
 #[derive(Debug, PartialEq)]
 pub struct ListAccounts {
     pub path: String,
-    pub chain: ChainType,
+}
+
+impl ListAccounts {
+    pub fn new(_matches: &clap::ArgMatches) -> Self {
+        Self { path: keys_path() }
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct NewAccount {
     pub iterations: u32,
     pub path: String,
-    pub chain: ChainType,
     pub password_file: Option<String>,
+}
+
+impl NewAccount {
+    pub fn new(matches: &clap::ArgMatches) -> Self {
+        let iterations: u32 = matches
+            .value_of("key-iterations")
+            .unwrap_or("0")
+            .parse()
+            .unwrap();
+        let password_file = matches.value_of("password").map(|x| x.to_string());
+        Self {
+            iterations,
+            path: keys_path(),
+            password_file,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ImportAccounts {
     pub from: Vec<String>,
     pub to: String,
-    pub chain: ChainType,
+}
+
+impl ImportAccounts {
+    pub fn new(matches: &clap::ArgMatches) -> Self {
+        let from: Vec<_> = matches
+            .values_of("import-path")
+            .expect("CLI argument is required; qed")
+            .map(|s| s.to_string())
+            .collect();
+        Self {
+            from,
+            to: keys_path(),
+        }
+    }
 }
 
 pub fn execute(cmd: AccountCmd) -> Result<String, String> {
@@ -66,11 +97,10 @@ pub fn execute(cmd: AccountCmd) -> Result<String, String> {
     }
 }
 
-fn keys_dir(
-    path: String, chain: ChainType,
-) -> Result<RootDiskDirectory, String> {
+fn keys_dir(path: String) -> Result<RootDiskDirectory, String> {
     let mut path = PathBuf::from(&path);
-    path.push(chain.name());
+    // TODO: make a global constant
+    path.push("conflux".to_string());
     RootDiskDirectory::create(path)
         .map_err(|e| format!("Could not open keys directory: {}", e))
 }
@@ -85,14 +115,14 @@ fn secret_store(
     .map_err(|e| format!("Could not open keys store: {}", e))
 }
 
-fn new(n: NewAccount) -> Result<String, String> {
-    let password = match n.password_file {
+fn new(new_cmd: NewAccount) -> Result<String, String> {
+    let password = match new_cmd.password_file {
         Some(file) => password_from_file(file)?,
         None => password_prompt()?,
     };
 
-    let dir = Box::new(keys_dir(n.path, n.chain)?);
-    let secret_store = Box::new(secret_store(dir, Some(n.iterations))?);
+    let dir = Box::new(keys_dir(new_cmd.path)?);
+    let secret_store = Box::new(secret_store(dir, Some(new_cmd.iterations))?);
     let acc_provider =
         AccountProvider::new(secret_store, AccountProviderSettings::default());
     let new_account = acc_provider
@@ -102,7 +132,7 @@ fn new(n: NewAccount) -> Result<String, String> {
 }
 
 fn list(list_cmd: ListAccounts) -> Result<String, String> {
-    let dir = Box::new(keys_dir(list_cmd.path, list_cmd.chain)?);
+    let dir = Box::new(keys_dir(list_cmd.path)?);
     let secret_store = Box::new(secret_store(dir, None)?);
     let acc_provider =
         AccountProvider::new(secret_store, AccountProviderSettings::default());
@@ -117,7 +147,7 @@ fn list(list_cmd: ListAccounts) -> Result<String, String> {
 }
 
 fn import(import_cmd: ImportAccounts) -> Result<String, String> {
-    let to = keys_dir(import_cmd.to, import_cmd.chain)?;
+    let to = keys_dir(import_cmd.to)?;
     let mut imported = 0;
 
     for path in &import_cmd.from {

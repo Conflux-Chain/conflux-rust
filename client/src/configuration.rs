@@ -10,10 +10,6 @@ use cfxcore::{
     storage::{self, state_manager::StorageConfiguration},
     sync::{ProtocolConfiguration, SyncGraphConfig},
 };
-use command::{
-    helpers::{default_data_path, replace_home},
-    ChainType,
-};
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
 
@@ -121,7 +117,6 @@ build_config! {
         (block_db_type, (String), "rocksdb".to_string())
         (rocksdb_disable_wal, (bool), false)
         (enable_state_expose, (bool), false)
-        (chain, (String), "conflux".to_string())
     }
     {
         (
@@ -385,15 +380,6 @@ impl Configuration {
         SyncGraphConfig {
             enable_state_expose: self.raw_conf.enable_state_expose,
         }
-    }
-
-    pub fn chain(&self) -> Result<ChainType, String> {
-        Ok(self.raw_conf.chain.parse()?)
-    }
-
-    pub fn keys_path(&self) -> String {
-        let data_path = default_data_path();
-        replace_home(&data_path, "$BASE/keys")
     }
 }
 

@@ -81,17 +81,6 @@ pub fn passwords_from_files(files: &[String]) -> Result<Vec<Password>, String> {
     Ok(passwords?.into_iter().flat_map(|x| x).collect())
 }
 
-/// Default local path
-pub fn default_local_path() -> String {
-    let app_info = AppInfo {
-        name: "Conflux",
-        author: "conflux",
-    };
-    get_app_root(AppDataType::UserCache, &app_info)
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "$HOME/.conflux".to_owned())
-}
-
 /// Default data path
 pub fn default_data_path() -> String {
     let app_info = AppInfo {
@@ -101,4 +90,9 @@ pub fn default_data_path() -> String {
     get_app_root(AppDataType::UserData, &app_info)
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|_| "$HOME/.conflux".to_owned())
+}
+
+pub fn keys_path() -> String {
+    let data_path = default_data_path();
+    replace_home(&data_path, "$BASE/keys")
 }

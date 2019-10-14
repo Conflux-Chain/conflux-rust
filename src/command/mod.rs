@@ -3,7 +3,4 @@
 // See http://www.gnu.org/licenses/
 
 pub mod account;
-pub mod chain_type;
 pub mod helpers;
-
-pub use chain_type::ChainType;

@@ -2,14 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod command;
+
 use clap::{load_yaml, App};
 use client::{
     archive::ArchiveClient, configuration::Configuration, light::LightClient,
 };
-use command::{
-    self,
-    account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount},
-};
+use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -106,48 +105,17 @@ fn main() -> Result<(), String> {
         format!("failed to initialize log with config: {:?}", e)
     })?;
 
-    let chain = conf.chain()?;
-    let key_path = conf.keys_path();
-
     match matches.subcommand() {
         ("account", Some(account_matches)) => {
             let account_cmd = match account_matches.subcommand() {
                 ("new", Some(new_acc_matches)) => {
-                    let key_iterations: u32 = new_acc_matches
-                        .value_of("key-iterations")
-                        .unwrap_or("0")
-                        .parse()
-                        .unwrap();
-                    let password_file = new_acc_matches
-                        .value_of("password")
-                        .map(|x| x.to_string());
-                    let new_acc = NewAccount {
-                        iterations: key_iterations,
-                        path: key_path,
-                        chain,
-                        password_file,
-                    };
-                    AccountCmd::New(new_acc)
+                    AccountCmd::New(NewAccount::new(new_acc_matches))
                 }
-                ("list", _) => {
-                    let list_acc = ListAccounts {
-                        path: key_path,
-                        chain,
-                    };
-                    AccountCmd::List(list_acc)
+                ("list", Some(list_acc_matches)) => {
+                    AccountCmd::List(ListAccounts::new(list_acc_matches))
                 }
                 ("import", Some(import_acc_matches)) => {
-                    let from: Vec<_> = import_acc_matches
-                        .values_of("import-path")
-                        .expect("CLI argument is required; qed")
-                        .map(|s| s.to_string())
-                        .collect();
-                    let import_acc = ImportAccounts {
-                        from,
-                        to: key_path,
-                        chain,
-                    };
-                    AccountCmd::Import(import_acc)
+                    AccountCmd::Import(ImportAccounts::new(import_acc_matches))
                 }
                 _ => {
                     unreachable!();

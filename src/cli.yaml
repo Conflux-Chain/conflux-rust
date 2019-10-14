@@ -146,12 +146,6 @@ args:
         long: light
     - archive:
         long: archive
-    - chain:
-        help: Specify the chain type.
-        long: chain
-        value_name: STRING
-        default_value: conflux
-        takes_value: true
 subcommands:
     - account:
         about: Manage accounts
