@@ -454,11 +454,6 @@ impl<
             NodeRefDeltaMpt::Committed { ref db_key } => {
                 let mut cache_manager_mut_wrapped = Some(cache_manager.lock());
 
-                // Use mut because compiler isn't smart enough to know that it's
-                // initialized once.
-                let mut trie_node: &TrieNodeCell<CacheAlgoDataT>;
-                let mut load_from_db = false;
-
                 let maybe_cache_slot = cache_manager_mut_wrapped
                     .as_mut()
                     .unwrap()
@@ -466,78 +461,63 @@ impl<
                     .get(*db_key)
                     .and_then(|x| x.get_slot());
 
-                match maybe_cache_slot {
-                    None => {
-                        // We would like to release the lock to
-                        // cache_manager during db IO.
-                        load_from_db = true;
-                        // Compiler isn't smart enough to know that
-                        // the variables are always initialized.
-                        trie_node = mem::uninitialized();
-                    }
+                let trie_node = match maybe_cache_slot {
                     Some(cache_slot) => {
                         // Fast path.
-                        trie_node = NodeMemoryManager::<
+                        NodeMemoryManager::<
                             CacheAlgoDataT,
                             CacheAlgorithmT,
                         >::get_in_memory_cell(
                             &allocator, *cache_slot as usize
-                        );
+                        )
                     }
-                }
+                    None => {
+                        // Slow path, load from db
+                        // Release the lock in fast path to prevent deadlock.
+                        cache_manager_mut_wrapped.take();
 
-                // Slow path.
-                if load_from_db {
-                    // We hacked compiler previously, now we should prevent
-                    // destructor from running.
-                    mem::forget(trie_node);
+                        // The mutex is used. The preceding underscore is only
+                        // to make compiler happy.
+                        let _db_load_mutex = self.db_load_lock.lock();
+                        cache_manager_mut_wrapped = Some(cache_manager.lock());
+                        let maybe_cache_slot = cache_manager_mut_wrapped
+                            .as_mut()
+                            .unwrap()
+                            .node_ref_map
+                            .get(*db_key)
+                            .and_then(|x| x.get_slot());
 
-                    // Release the lock in fast path to prevent deadlock.
-                    cache_manager_mut_wrapped.take();
-
-                    // The mutex is used. The preceding underscore is only to
-                    // make compiler happy.
-                    let _db_load_mutex = self.db_load_lock.lock();
-                    cache_manager_mut_wrapped = Some(cache_manager.lock());
-                    let maybe_cache_slot = cache_manager_mut_wrapped
-                        .as_mut()
-                        .unwrap()
-                        .node_ref_map
-                        .get(*db_key)
-                        .and_then(|x| x.get_slot());
-
-                    match maybe_cache_slot {
-                        None => {
-                            // We would like to release the lock to
-                            // cache_manager during db IO.
-                            cache_manager_mut_wrapped.take();
-
-                            let (guard, loaded_trie_node) = self
-                                .load_from_db(
-                                    allocator,
-                                    cache_manager,
-                                    db,
-                                    *db_key,
-                                )?
-                                .into();
-
-                            cache_manager_mut_wrapped = Some(guard);
-
-                            *is_loaded_from_db = true;
-
-                            trie_node = loaded_trie_node;
-                        }
-                        Some(cache_slot) => {
-                            trie_node = NodeMemoryManager::<
+                        match maybe_cache_slot {
+                            Some(cache_slot) => NodeMemoryManager::<
                                 CacheAlgoDataT,
                                 CacheAlgorithmT,
                             >::get_in_memory_cell(
                                 &allocator,
                                 *cache_slot as usize,
-                            );
+                            ),
+                            None => {
+                                // We would like to release the lock to
+                                // cache_manager during db IO.
+                                cache_manager_mut_wrapped.take();
+
+                                let (guard, loaded_trie_node) = self
+                                    .load_from_db(
+                                        allocator,
+                                        cache_manager,
+                                        db,
+                                        *db_key,
+                                    )?
+                                    .into();
+
+                                cache_manager_mut_wrapped = Some(guard);
+
+                                *is_loaded_from_db = true;
+
+                                loaded_trie_node
+                            }
                         }
                     }
-                }
+                };
 
                 self.call_cache_algorithm_access(
                     cache_manager_mut_wrapped.as_mut().unwrap(),
@@ -833,6 +813,5 @@ use rlp::*;
 use std::{
     cell::UnsafeCell,
     hint::unreachable_unchecked,
-    mem,
     sync::atomic::{AtomicUsize, Ordering},
 };
