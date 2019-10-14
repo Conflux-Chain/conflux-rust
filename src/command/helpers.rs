@@ -18,7 +18,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use app_dirs::{get_app_root, AppDataType, AppInfo};
 use ethkey::Password;
 use std::{
     fs::File,
@@ -79,20 +78,4 @@ pub fn passwords_from_files(files: &[String]) -> Result<Vec<Password>, String> {
 		Ok(lines)
 	}).collect::<Result<Vec<Vec<Password>>, String>>();
     Ok(passwords?.into_iter().flat_map(|x| x).collect())
-}
-
-/// Default data path
-pub fn default_data_path() -> String {
-    let app_info = AppInfo {
-        name: "Conflux",
-        author: "conflux",
-    };
-    get_app_root(AppDataType::UserData, &app_info)
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "$HOME/.conflux".to_owned())
-}
-
-pub fn keys_path() -> String {
-    let data_path = default_data_path();
-    replace_home(&data_path, "$BASE/keys")
 }

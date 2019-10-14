@@ -20,11 +20,11 @@
 
 extern crate ethcore_accounts;
 
-use super::helpers::{keys_path, password_from_file, password_prompt};
+use super::helpers::{password_from_file, password_prompt};
 use clap;
-use ethcore_accounts::{AccountProvider, AccountProviderSettings};
+use client::accounts::{account_provider, keys_dir, keys_path};
 use ethstore::{
-    accounts_dir::RootDiskDirectory, import_account, import_accounts, EthStore,
+    accounts_dir::RootDiskDirectory, import_account, import_accounts,
 };
 use std::path::PathBuf;
 
@@ -37,19 +37,17 @@ pub enum AccountCmd {
 
 #[derive(Debug, PartialEq)]
 pub struct ListAccounts {
-    pub path: String,
+    pub path: Option<String>,
 }
 
 impl ListAccounts {
-    pub fn new(_matches: &clap::ArgMatches) -> Self {
-        Self { path: keys_path() }
-    }
+    pub fn new(_matches: &clap::ArgMatches) -> Self { Self { path: None } }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct NewAccount {
     pub iterations: u32,
-    pub path: String,
+    pub path: Option<String>,
     pub password_file: Option<String>,
 }
 
@@ -63,7 +61,7 @@ impl NewAccount {
         let password_file = matches.value_of("password").map(|x| x.to_string());
         Self {
             iterations,
-            path: keys_path(),
+            path: None,
             password_file,
         }
     }
@@ -97,34 +95,14 @@ pub fn execute(cmd: AccountCmd) -> Result<String, String> {
     }
 }
 
-fn keys_dir(path: String) -> Result<RootDiskDirectory, String> {
-    let mut path = PathBuf::from(&path);
-    // TODO: make a global constant
-    path.push("conflux".to_string());
-    RootDiskDirectory::create(path)
-        .map_err(|e| format!("Could not open keys directory: {}", e))
-}
-
-fn secret_store(
-    dir: Box<RootDiskDirectory>, iterations: Option<u32>,
-) -> Result<EthStore, String> {
-    match iterations {
-        Some(i) => EthStore::open_with_iterations(dir, i),
-        _ => EthStore::open(dir),
-    }
-    .map_err(|e| format!("Could not open keys store: {}", e))
-}
-
 fn new(new_cmd: NewAccount) -> Result<String, String> {
     let password = match new_cmd.password_file {
         Some(file) => password_from_file(file)?,
         None => password_prompt()?,
     };
 
-    let dir = Box::new(keys_dir(new_cmd.path)?);
-    let secret_store = Box::new(secret_store(dir, Some(new_cmd.iterations))?);
     let acc_provider =
-        AccountProvider::new(secret_store, AccountProviderSettings::default());
+        account_provider(new_cmd.path, Some(new_cmd.iterations))?;
     let new_account = acc_provider
         .new_account(&password)
         .map_err(|e| format!("Could not create new account: {}", e))?;
@@ -132,10 +110,7 @@ fn new(new_cmd: NewAccount) -> Result<String, String> {
 }
 
 fn list(list_cmd: ListAccounts) -> Result<String, String> {
-    let dir = Box::new(keys_dir(list_cmd.path)?);
-    let secret_store = Box::new(secret_store(dir, None)?);
-    let acc_provider =
-        AccountProvider::new(secret_store, AccountProviderSettings::default());
+    let acc_provider = account_provider(list_cmd.path, None)?;
     let accounts = acc_provider.accounts().map_err(|e| format!("{}", e))?;
     let result = accounts
         .into_iter()
