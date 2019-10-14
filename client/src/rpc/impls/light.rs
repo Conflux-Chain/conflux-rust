@@ -6,7 +6,7 @@ use delegate::delegate;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
-use cfx_types::{H160, H256};
+use cfx_types::{H160, H256, U256};
 use cfxcore::{LightQueryService, PeerInfo};
 use primitives::TransactionWithSignature;
 
@@ -27,6 +27,8 @@ use crate::rpc::{
 };
 
 use super::common::RpcImpl as CommonImpl;
+use crate::rpc::types::SendTxRequest;
+use rlp::Encodable;
 
 pub struct RpcImpl {
     // helper API for retrieving verified information from peers
@@ -119,6 +121,42 @@ impl RpcImpl {
             true => Ok(tx.hash().into()),
             false => Err(RpcError::invalid_params("Unable to relay tx")),
         }
+    }
+
+    fn send_transaction(
+        &self, mut tx: SendTxRequest, password: Option<String>,
+    ) -> RpcResult<RpcH256> {
+        info!("RPC Request: send_transaction, tx = {:?}", tx);
+
+        if tx.nonce.is_none() {
+            // TODO(thegaram): consider adding a light node specific tx pool to
+            // track the nonce
+            let nonce = self
+                .light
+                .get_account(
+                    EpochNumber::LatestState.into_primitive(),
+                    tx.from.clone().into(),
+                )
+                .map_err(|e| {
+                    RpcError::invalid_params(format!(
+                        "failed to send transaction: {:?}",
+                        e
+                    ))
+                })?
+                .map(|a| a.nonce)
+                .unwrap_or(U256::zero());
+            tx.nonce.replace(nonce.into());
+            debug!("after loading nonce in latest state, tx = {:?}", tx);
+        }
+
+        let tx = tx.sign_with(password).map_err(|e| {
+            RpcError::invalid_params(format!(
+                "failed to send transaction: {:?}",
+                e
+            ))
+        })?;
+
+        self.send_raw_transaction(Bytes::new(tx.rlp_bytes()))
     }
 
     fn transaction_by_hash(
@@ -277,6 +315,10 @@ impl DebugRpc for DebugRpcImpl {
             fn txpool_content(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
             fn txpool_inspect(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
+        }
+
+        target self.rpc_impl {
+            fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<RpcH256>;
         }
     }
 

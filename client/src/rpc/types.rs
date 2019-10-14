@@ -38,6 +38,6 @@ pub use self::{
     receipt::Receipt,
     status::Status,
     sync_graph_states::SyncGraphStates,
-    transaction::Transaction,
+    transaction::{SendTxRequest, Transaction},
     uint::{U128, U256, U64},
 };
