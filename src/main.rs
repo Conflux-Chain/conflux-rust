@@ -4,7 +4,8 @@
 
 mod command;
 
-use clap::{load_yaml, App};
+use crate::command::rpc::RpcCommand;
+use clap::{load_yaml, App, ArgMatches};
 use client::{
     archive::ArchiveClient, configuration::Configuration, light::LightClient,
 };
@@ -47,6 +48,11 @@ fn main() -> Result<(), String> {
 
     let yaml = load_yaml!("cli.yaml");
     let matches = App::from_yaml(yaml).get_matches();
+
+    if let Some(output) = handle_sub_command(&matches)? {
+        println!("{}", output);
+        return Ok(());
+    }
 
     let conf = Configuration::parse(&matches)?;
 
@@ -105,59 +111,67 @@ fn main() -> Result<(), String> {
         format!("failed to initialize log with config: {:?}", e)
     })?;
 
-    match matches.subcommand() {
-        ("account", Some(account_matches)) => {
-            let account_cmd = match account_matches.subcommand() {
-                ("new", Some(new_acc_matches)) => {
-                    AccountCmd::New(NewAccount::new(new_acc_matches))
-                }
-                ("list", Some(list_acc_matches)) => {
-                    AccountCmd::List(ListAccounts::new(list_acc_matches))
-                }
-                ("import", Some(import_acc_matches)) => {
-                    AccountCmd::Import(ImportAccounts::new(import_acc_matches))
-                }
-                _ => {
-                    unreachable!();
-                }
-            };
-            let execute_output = command::account::execute(account_cmd)?;
-            println!("{}", execute_output);
-        }
-        _ => {
-            THROTTLING_SERVICE.write().initialize(
-                conf.raw_conf.egress_queue_capacity,
-                conf.raw_conf.egress_min_throttle,
-                conf.raw_conf.egress_max_throttle,
-            );
+    THROTTLING_SERVICE.write().initialize(
+        conf.raw_conf.egress_queue_capacity,
+        conf.raw_conf.egress_min_throttle,
+        conf.raw_conf.egress_max_throttle,
+    );
 
-            let exit = Arc::new((Mutex::new(false), Condvar::new()));
+    let exit = Arc::new((Mutex::new(false), Condvar::new()));
 
-            if matches.is_present("light") {
-                //FIXME: implement light client later
-                info!("Starting light client...");
-                let client_handle = LightClient::start(conf, exit.clone())
-                    .map_err(|e| {
-                        format!("failed to start light client: {:?}", e)
-                    })?;
-                LightClient::run_until_closed(exit, client_handle);
-            } else if matches.is_present("archive") {
-                info!("Starting archive client...");
-                let client_handle = ArchiveClient::start(conf, exit.clone())
-                    .map_err(|e| {
-                        format!("failed to start archive client: {:?}", e)
-                    })?;
-                ArchiveClient::run_until_closed(exit, client_handle);
-            } else {
-                info!("Starting full client...");
-                let client_handle = ArchiveClient::start(conf, exit.clone())
-                    .map_err(|e| {
-                        format!("failed to start full client: {:?}", e)
-                    })?;
-                ArchiveClient::run_until_closed(exit, client_handle);
-            }
-        }
+    if matches.is_present("light") {
+        //FIXME: implement light client later
+        info!("Starting light client...");
+        let client_handle = LightClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start light client: {:?}", e))?;
+        LightClient::run_until_closed(exit, client_handle);
+    } else if matches.is_present("archive") {
+        info!("Starting archive client...");
+        let client_handle = ArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start archive client: {:?}", e))?;
+        ArchiveClient::run_until_closed(exit, client_handle);
+    } else {
+        info!("Starting full client...");
+        let client_handle = ArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start full client: {:?}", e))?;
+        ArchiveClient::run_until_closed(exit, client_handle);
     }
 
     Ok(())
+}
+
+fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
+    if matches.subcommand_name().is_none() {
+        return Ok(None);
+    }
+
+    // account sub-commands
+    if let ("account", Some(account_matches)) = matches.subcommand() {
+        let account_cmd = match account_matches.subcommand() {
+            ("new", Some(new_acc_matches)) => {
+                AccountCmd::New(NewAccount::new(new_acc_matches))
+            }
+            ("list", Some(list_acc_matches)) => {
+                AccountCmd::List(ListAccounts::new(list_acc_matches))
+            }
+            ("import", Some(import_acc_matches)) => {
+                AccountCmd::Import(ImportAccounts::new(import_acc_matches))
+            }
+            _ => unreachable!(),
+        };
+        let execute_output = command::account::execute(account_cmd)?;
+        return Ok(Some(execute_output));
+    }
+
+    // general RPC commands
+    let mut subcmd_matches = matches;
+    while let Some(m) = subcmd_matches.subcommand().1 {
+        subcmd_matches = m;
+    }
+
+    if let Some(cmd) = RpcCommand::parse(subcmd_matches)? {
+        return Ok(Some(cmd.execute()?));
+    }
+
+    Ok(None)
 }
