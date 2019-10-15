@@ -238,10 +238,62 @@ subcommands:
             required: true
             takes_value: true
   - call:
-      about: Executes a new message call immediately without creating a transaction
+      about: Executes a call request immediately without creating a transaction and returns the results
       args:
         - rpc-method:
             default_value: cfx_call
+            hidden: true
+        - rpc-args:
+            multiple: true
+            use_delimiter: true
+            default_value: tx:map(from;to;gasPrice;gas;value;data;nonce),epoch
+            hidden: true
+        - from:
+            help: Transaction from address
+            long: from
+            takes_value: true
+            value_name: ADDRESS
+        - to:
+            help: Transaction to address
+            long: to
+            takes_value: true
+            value_name: ADDRESS
+        - gasPrice:
+            help: Transaction gas price
+            long: gas-price
+            takes_value: true
+            value_name: HEX
+        - gas:
+            help: Gas provided for transaction execution
+            long: gas
+            takes_value: true
+            value_name: HEX
+        - value:
+            help: value sent with this transaction
+            long: value
+            takes_value: true
+            value_name: HEX
+        - data:
+            help: Hash of the method signature and encoded parameters
+            long: data
+            takes_value: true
+            value_name: HEX
+        - nonce:
+            help: Transaction nonce
+            long: nonce
+            takes_value: true
+            value_name: HEX
+        - epoch:
+            help: Epoch
+            long: epoch
+            takes_value: true
+            value_name: EPOCH
+            possible_values: [latest_mined, latest_state, earliest]
+  - estimate-gas:
+      about: Executes a call request immediately without creating a transaction and returns the gas used
+      args:
+        - rpc-method:
+            default_value: cfx_estimateGas
             hidden: true
         - rpc-args:
             multiple: true

@@ -86,7 +86,9 @@ impl RpcImpl {
     }
 
     #[allow(unused_variables)]
-    fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256> {
+    fn estimate_gas(
+        &self, request: CallRequest, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
         // TODO
         unimplemented!()
     }
@@ -238,7 +240,7 @@ impl Cfx for CfxHandler {
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
-            fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
+            fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;

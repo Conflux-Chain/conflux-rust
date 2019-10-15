@@ -26,9 +26,7 @@ use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{
-    Action, SignedTransaction, Transaction, TransactionWithSignature,
-};
+use primitives::{SignedTransaction, TransactionWithSignature};
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
@@ -463,24 +461,17 @@ impl RpcImpl {
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
     }
 
-    fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256> {
-        let tx = Transaction {
-            nonce: rpc_tx.nonce.into(),
-            gas: rpc_tx.gas.into(),
-            gas_price: rpc_tx.gas_price.into(),
-            value: rpc_tx.value.into(),
-            action: match rpc_tx.to {
-                Some(to) => Action::Call(to.into()),
-                None => Action::Create,
-            },
-            data: rpc_tx.data.into(),
-        };
-        let mut signed_tx = SignedTransaction::new_unsigned(
-            TransactionWithSignature::new_unsigned(tx),
-        );
-        signed_tx.sender = rpc_tx.from.into();
+    fn estimate_gas(
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
+
+        debug!("RPC Request: cfx_estimateGas");
+        let signed_tx = sign_call(request).map_err(|err| {
+            RpcError::invalid_params(format!("Sign tx error: {:?}", err))
+        })?;
         trace!("call tx {:?}", signed_tx);
-        let result = self.consensus.estimate_gas(&signed_tx);
+        let result = self.consensus.estimate_gas(&signed_tx, epoch.into());
         result
             .map_err(|e| {
                 warn!("Transaction execution error {:?}", e);
@@ -539,7 +530,7 @@ impl Cfx for CfxHandler {
             fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
-            fn estimate_gas(&self, rpc_tx: RpcTransaction) -> RpcResult<RpcU256>;
+            fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;

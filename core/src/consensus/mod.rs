@@ -734,9 +734,10 @@ impl ConsensusGraph {
     }
 
     /// Estimate the gas of a transaction
-    pub fn estimate_gas(&self, tx: &SignedTransaction) -> Result<U256, String> {
-        self.call_virtual(tx, EpochNumber::LatestState)
-            .map(|(_, gas_used)| gas_used)
+    pub fn estimate_gas(
+        &self, tx: &SignedTransaction, epoch: EpochNumber,
+    ) -> Result<U256, String> {
+        self.call_virtual(tx, epoch).map(|(_, gas_used)| gas_used)
     }
 
     pub fn logs(
