@@ -4,8 +4,8 @@
 
 use super::super::types::{
     Block, Bytes, CallRequest, EpochNumber, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, Transaction, Transaction as RpcTransaction,
-    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Receipt as RpcReceipt, Transaction, H160 as RpcH160, H256 as RpcH256,
+    U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use jsonrpc_core::Result as RpcResult;
@@ -140,7 +140,9 @@ pub trait Cfx {
     ) -> RpcResult<Option<Transaction>>;
 
     #[rpc(name = "cfx_estimateGas")]
-    fn estimate_gas(&self, tx: RpcTransaction) -> RpcResult<RpcU256>;
+    fn estimate_gas(
+        &self, request: CallRequest, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]
     fn blocks_by_epoch(
