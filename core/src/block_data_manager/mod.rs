@@ -9,8 +9,11 @@ use crate::{
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     pow::TargetDifficultyManager,
     storage::{
-        state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
-        StorageManager,
+        state_manager::{
+            SnapshotAndEpochId, SnapshotAndEpochIdRef, StateManagerTrait,
+        },
+        storage_db::snapshot_db::SnapshotDbTrait,
+        StorageManager, StorageTrait,
     },
 };
 use cfx_types::{Bloom, H256};
@@ -22,7 +25,8 @@ use primitives::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, SignedTransaction, TransactionAddress,
+    Block, BlockHeader, EpochId, SignedTransaction, StateRoot,
+    StateRootAuxInfo, StateRootWithAuxInfo, TransactionAddress,
     TransactionWithSignature,
 };
 use rlp::DecoderError;
@@ -38,6 +42,7 @@ use crate::block_data_manager::{
     db_manager::DBManager, tx_data_manager::TransactionDataManager,
 };
 pub use block_data_types::*;
+use primitives::MERKLE_NULL_NODE;
 use std::{hash::Hash, path::Path};
 
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -54,6 +59,7 @@ pub struct BlockDataManager {
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+    // FIXME: for which blocks the execution_commitments are always available?
     /// Caching for receipts_root and logs_bloom.
     /// It is not deferred, i.e., indexed by the hash of the pivot block
     /// that produces the result when executed.
@@ -81,6 +87,7 @@ pub struct BlockDataManager {
     db_manager: DBManager,
 
     pub genesis_block: Arc<Block>,
+    pub genesis_state_root_with_aux_info: StateRootWithAuxInfo,
     pub true_genesis_block: Arc<Block>,
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
@@ -112,6 +119,21 @@ impl BlockDataManager {
             }
         };
 
+        let genesis_state_root_with_aux_info =
+        // FIXME: the problem is, the delta trie for genesis block may be unavailable for genesis block...
+        // FIXME: we must pass it in.
+        // FIXME: OK, let's do that later.
+            storage_manager
+                .get_state_no_commit(SnapshotAndEpochIdRef::new_for_readonly(
+                    &genesis_block.block_header.hash(),
+                    &StateRootWithAuxInfo::default(),
+                ))
+                .unwrap()
+                .unwrap()
+                .get_state_root()
+                .unwrap()
+                .unwrap();
+
         let mut data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
@@ -122,6 +144,7 @@ impl BlockDataManager {
             epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
             genesis_block: genesis_block.clone(),
+            genesis_state_root_with_aux_info,
             true_genesis_block: genesis_block.clone(),
             storage_manager,
             cache_man,
@@ -144,14 +167,77 @@ impl BlockDataManager {
                     &checkpoint_hash,
                     false, /* update_cache */
                 ) {
+                    // FIXME: this isn't the final design. In the final design
+                    // FIXME: the snapshot for the checkpoint doesn't have to be
+                    // FIXME: available. What's required, is that snapshot,
+                    // FIXME: intermediate delta trie for unconfirmed epochs
+                    // FIXME: are always available.
+
+                    // FIXME: the code in this section want to make sure that
+                    // FIXME: consensus can replay after checkpoint..
+                    // FIXME: However in the final design we should find a
+                    // FIXME: confirmed block in pivot chain, then retrieve all
+                    // FIXME: relevant snapshots and intermediate trie.
+                    let checkpoint_snapshot_db = data_man
+                        .storage_manager
+                        .get_storage_manager()
+                        .get_snapshot_manager()
+                        .get_snapshot_by_epoch_id(&checkpoint_hash)
+                        .unwrap()
+                        .unwrap();
+                    let checkpoint_snapshot_info =
+                        checkpoint_snapshot_db.get_snapshot_info();
+
+                    let checkpoint_parent_snapshot_db = data_man
+                        .storage_manager
+                        .get_storage_manager()
+                        .get_snapshot_manager()
+                        .get_snapshot(&checkpoint_snapshot_info.parent_snapshot)
+                        .unwrap()
+                        .unwrap();
+                    // FIXME: make sure that in this milestone, the snapshot
+                    // manager always FIXME: keeps 2
+                    // relevant snapshots with checkpoint and keep them updated.
+
+                    data_man.genesis_state_root_with_aux_info =
+                        StateRootWithAuxInfo {
+                            state_root: StateRoot {
+                            snapshot_root: /* the previous snapschot */ checkpoint_snapshot_info.parent_snapshot,
+                            intermediate_delta_root: checkpoint_snapshot_info.delta_root,
+                            // FIXME: in order to verify state_root we can't omit
+                            // FIXME: intermediate delta trie.
+                            delta_root: MERKLE_NULL_NODE,
+                        },
+                            aux_info: StateRootAuxInfo {
+                                // FIXME: this is to look-up intermediate delta
+                                // but we won't use it..
+                                previous_snapshot_root:
+                                    checkpoint_parent_snapshot_db
+                                        .get_snapshot_info()
+                                        .parent_snapshot
+                                        .clone(),
+                                intermediate_delta_epoch_id: checkpoint_hash
+                                    .clone(),
+                            },
+                        };
+
+                    // FIXME: make sure that intermediate_delta available for
+                    // DEFERRED_BLOCKS prior
+                    // FIXME: to checkpoint.
+
+                    // FIXME: ok, interesting... Actually, to get delta_root for
+                    // genesis block we can use the same approach.
                     if data_man
                         .storage_manager
-                        .contains_state(SnapshotAndEpochIdRef::new(
-                            &checkpoint_hash,
-                            None,
-                        ))
+                        .contains_state(
+                            data_man
+                                .get_snapshot_and_epoch_id(&checkpoint_hash)
+                                .unwrap()
+                                .as_ref(),
+                        )
                         .unwrap()
                     {
+                        // FIXME: why check so many epochs?
                         let mut cur_hash =
                             *checkpoint_block.block_header.parent_hash();
                         for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
@@ -162,9 +248,14 @@ impl BlockDataManager {
                             if cur_block.is_some()
                                 && data_man
                                     .storage_manager
-                                    .contains_state(SnapshotAndEpochIdRef::new(
-                                        &cur_hash, None,
-                                    ))
+                                    .contains_state(
+                                        data_man
+                                            .get_snapshot_and_epoch_id(
+                                                &cur_hash,
+                                            )
+                                            .unwrap()
+                                            .as_ref(),
+                                    )
                                     .unwrap()
                             {
                                 let cur_block = cur_block.unwrap();
@@ -209,6 +300,7 @@ impl BlockDataManager {
             );
             data_man.insert_epoch_execution_commitments(
                 data_man.genesis_block.hash(),
+                genesis_block.block_header.state_root_with_aux_info.clone(),
                 *data_man.genesis_block.block_header.deferred_receipts_root(),
                 *data_man
                     .genesis_block
@@ -653,11 +745,15 @@ impl BlockDataManager {
     }
 
     pub fn insert_epoch_execution_commitments(
-        &self, block_hash: H256, receipts_root: H256, logs_bloom_hash: H256,
-    ) {
+        &self, block_hash: H256,
+        state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
+        logs_bloom_hash: H256,
+    )
+    {
         self.epoch_execution_commitments.write().insert(
             block_hash,
             EpochExecutionCommitments {
+                state_root_with_aux_info,
                 receipts_root,
                 logs_bloom_hash,
             },
@@ -681,13 +777,10 @@ impl BlockDataManager {
         self.epoch_execution_contexts.write().remove(block_hash);
     }
 
+    // FIXME: is epoch_hash valid?
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
         // `block_receipts_root` is not computed when recovering from db
         self.get_epoch_execution_commitments(epoch_hash).is_some()
-            && self
-                .storage_manager
-                .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
-                .unwrap()
     }
 
     /// Check if all executed results of an epoch exist
@@ -898,6 +991,29 @@ impl BlockDataManager {
         &self, compact_block: &mut CompactBlock,
     ) -> Vec<usize> {
         self.tx_data_manager.build_partial(compact_block)
+    }
+
+    // FIXME: for which blocks could we get the information?
+    // FIXME: we assume that for all pivot epochs... But how about checkpoints?
+    pub fn get_snapshot_and_epoch_id(
+        &self, block_hash: &EpochId,
+    ) -> Option<SnapshotAndEpochId> {
+        match self.get_epoch_execution_commitments(block_hash) {
+            None => None,
+            Some(execution_commitments) => {
+                // FIXME: block header doesn't have aux info. The AuxInfo should
+                // be retrieved from self by another method.
+                Some(SnapshotAndEpochId::from_ref(
+                    SnapshotAndEpochIdRef::new_for_readonly(
+                        block_hash,
+                        // FIXME: this is the deferred state root, not the
+                        // state root! FIXME: And we
+                        // shouldn't trust a block header..
+                        &execution_commitments.state_root_with_aux_info,
+                    ),
+                ))
+            }
+        }
     }
 }
 

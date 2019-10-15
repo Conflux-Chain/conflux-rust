@@ -12,26 +12,38 @@ pub struct State<'a> {
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
+    intermediate_epoch_id: EpochId,
+    delta_trie_height: Option<u32>,
+    height: Option<u64>,
     owned_node_set: Option<OwnedNodeSet>,
     dirty: bool,
 
     /// Children merkle hashes. Only used for committing and computing
     /// merkle root. It will be cleared after being committed.
     children_merkle_map: ChildrenMerkleMap,
+
+    // FIXME: this is a hack to get pivot chain from parent snapshot to a
+    // FIXME: snapshot. it should be done in consensus.
+    parent_epoch_id: EpochId,
 }
 
 impl<'a> State<'a> {
     pub fn new(manager: &'a StateManager, state_trees: StateTrees) -> Self {
         Self {
             manager,
-            snapshot_db: state_trees.0,
-            intermediate_trie: state_trees.1,
-            intermediate_trie_root: state_trees.2,
-            delta_trie: state_trees.3,
-            delta_trie_root: state_trees.4,
+            snapshot_db: state_trees.snapshot_db,
+            intermediate_trie: state_trees.intermediate_trie,
+            intermediate_trie_root: state_trees.intermediate_trie_root,
+            delta_trie: state_trees.delta_trie,
+            delta_trie_root: state_trees.delta_trie_root,
+            intermediate_epoch_id: state_trees.intermediate_epoch_id,
+            delta_trie_height: state_trees.delta_trie_height,
+            height: state_trees.height,
             owned_node_set: Some(Default::default()),
             dirty: false,
             children_merkle_map: ChildrenMerkleMap::new(),
+
+            parent_epoch_id: state_trees.epoch_id,
         }
     }
 
@@ -72,6 +84,7 @@ impl<'a> State<'a> {
         }
     }
 
+    // FIXME: the current implementation is serialized, which may not be good.
     pub fn get_from_snapshot(
         &self, access_key: &[u8],
     ) -> Result<Option<Box<[u8]>>> {
@@ -249,14 +262,28 @@ impl<'a> StateTrait for State<'a> {
 
     // TODO(yz): replace coarse lock with a queue.
     fn commit(&mut self, epoch_id: EpochId) -> Result<()> {
-        self.state_root_check()?;
+        let merkle_root = self.state_root_check()?;
 
         // TODO(yz): Think about leaving these node dirty and only commit when
         // the dirty node is removed from cache.
-        let commit_result = self.do_db_commit(epoch_id);
+        let commit_result = self.do_db_commit(epoch_id, &merkle_root);
         if commit_result.is_err() {
             self.revert();
         }
+
+        // TODO: use a better criteria and put it in consensus maybe.
+        if self.delta_trie_height.unwrap() as u64
+            >= SNAPSHOT_EPOCHS_CAPACITY / 2
+        {
+            self.manager.check_make_snapshot(
+                &self.snapshot_db.get_snapshot_info().merkle_root,
+                self.intermediate_trie.clone().unwrap(),
+                self.intermediate_trie_root.clone(),
+                &self.intermediate_epoch_id,
+                self.height.clone().unwrap(),
+            )?
+        }
+
         commit_result
     }
 
@@ -339,7 +366,9 @@ impl<'a> State<'a> {
         self.delta_trie.get_merkle(self.delta_trie_root.clone())
     }
 
-    fn do_db_commit(&mut self, epoch_id: EpochId) -> Result<()> {
+    fn do_db_commit(
+        &mut self, epoch_id: EpochId, merkle_root: &MerkleHash,
+    ) -> Result<()> {
         // TODO(yz): accumulate to db write counter.
         self.dirty = false;
 
@@ -416,13 +445,24 @@ impl<'a> State<'a> {
                 };
 
                 commit_transaction.transaction.put(
-                    [
-                        "state_root_db_key_for_epoch_id_".as_bytes(),
-                        epoch_id.as_ref(),
-                    ]
-                    .concat()
-                    .as_slice(),
+                    ["db_key_for_epoch_id_".as_bytes(), epoch_id.as_ref()]
+                        .concat()
+                        .as_slice(),
                     db_key.to_string().as_bytes(),
+                )?;
+
+                commit_transaction.transaction.put(
+                    ["db_key_for_root_".as_bytes(), merkle_root.as_ref()]
+                        .concat()
+                        .as_slice(),
+                    db_key.to_string().as_bytes(),
+                )?;
+
+                commit_transaction.transaction.put(
+                    ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
+                        .concat()
+                        .as_slice(),
+                    self.parent_epoch_id.to_hex().as_bytes(),
                 )?;
 
                 commit_transaction
@@ -437,23 +477,26 @@ impl<'a> State<'a> {
             }
         }
 
-        self.manager
-            .mpt_commit_state_root(epoch_id, self.delta_trie_root.clone());
+        self.manager.mpt_commit_state_root(
+            epoch_id,
+            merkle_root,
+            self.delta_trie_root.clone(),
+        );
 
         Ok(())
     }
 
-    fn state_root_check(&self) -> Result<()> {
+    fn state_root_check(&self) -> Result<MerkleHash> {
         let maybe_merkle_root = self.get_merkle_root()?;
         match maybe_merkle_root {
             // Empty state.
-            None => (Ok(())),
+            None => (Ok(MERKLE_NULL_NODE)),
             Some(merkle_hash) => {
                 // Non-empty state
                 if merkle_hash.is_zero() {
                     Err(ErrorKind::StateCommitWithoutMerkleHash.into())
                 } else {
-                    Ok(())
+                    Ok(merkle_hash)
                 }
             }
         }
@@ -473,6 +516,7 @@ use super::{
     state_proof::StateProof,
 };
 use crate::statedb::KeyPadding;
+use parity_bytes::ToPretty;
 use primitives::{
     EpochId, MerkleHash, StateRoot, StateRootWithAuxInfo, MERKLE_NULL_NODE,
 };

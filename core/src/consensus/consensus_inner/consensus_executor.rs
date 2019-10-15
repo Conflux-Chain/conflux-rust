@@ -233,6 +233,7 @@ impl ConsensusExecutor {
         executor
     }
 
+    // FIXME: why do we say that we wait for all tasks in the queue to finish?
     /// Wait until all tasks currently in the queue to be executed and return
     /// `(state_root, receipts_root, logs_bloom_hash)` of the given
     /// `epoch_hash`.
@@ -243,6 +244,7 @@ impl ConsensusExecutor {
     pub fn wait_for_result(
         &self, epoch_hash: H256,
     ) -> (StateRootWithAuxInfo, H256, H256) {
+        // FIXME: this is hard to understand.
         if self.bench_mode {
             (
                 Default::default(),
@@ -452,6 +454,7 @@ impl ConsensusExecutor {
         )
     }
 
+    // FIXME: couldn't understand..
     fn wait_and_compute_execution_info(
         &self, me: usize, inner_lock: &RwLock<ConsensusGraphInner>,
     ) -> Result<(), String> {
@@ -502,6 +505,7 @@ impl ConsensusExecutor {
         Ok(())
     }
 
+    // FIXME: structure the return value?
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
         inner_lock: &RwLock<ConsensusGraphInner>,
@@ -635,10 +639,16 @@ impl ConsensusExecutor {
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            if let Ok(maybe_cached_state) =
-                self.handler.data_man.storage_manager.get_state_no_commit(
-                    SnapshotAndEpochIdRef::new(&block_hash.clone(), None),
-                )
+            if let Some(Ok(maybe_cached_state)) = self
+                .handler
+                .data_man
+                .get_snapshot_and_epoch_id(&block_hash)
+                .map(|snapshot_and_epoch_id| {
+                    self.handler
+                        .data_man
+                        .storage_manager
+                        .get_state_no_commit(snapshot_and_epoch_id.as_ref())
+                })
             {
                 match maybe_cached_state {
                     Some(cached_state) => {
@@ -809,21 +819,14 @@ impl ConsensusExecutionHandler {
             .expect("Consensus Worker fails");
     }
 
+    // FIXME: why not return EpochExecutionCommitments directly?
     fn get_execution_result(
         &self, epoch_hash: &H256,
     ) -> Option<(StateRootWithAuxInfo, H256, H256)> {
-        let state_root = self
-            .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(epoch_hash, None))
-            .expect("No DB Error")?
-            .get_state_root()
-            .expect("No DB Error")?;
-
         let epoch_execution_commitments =
             self.data_man.get_epoch_execution_commitments(epoch_hash)?;
         Some((
-            state_root,
+            epoch_execution_commitments.state_root_with_aux_info,
             epoch_execution_commitments.receipts_root,
             epoch_execution_commitments.logs_bloom_hash,
         ))
@@ -845,8 +848,10 @@ impl ConsensusExecutionHandler {
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
     {
+        // FIXME: Question: where to calculate if we should make a snapshot?
         // Check if the state has been computed
         if debug_record.is_none()
+            // FIXME: is this definitive?
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
@@ -884,6 +889,7 @@ impl ConsensusExecutionHandler {
                         // FIXME: delta height.
                         SnapshotAndEpochIdRef::new(
                             pivot_block.block_header.parent_hash(),
+                            // FIXME: remove -1?
                             Some(pivot_block.block_header.height() - 1),
                         ),
                     )
@@ -894,7 +900,7 @@ impl ConsensusExecutionHandler {
             0.into(),
             self.vm.clone(),
         );
-        self.process_epoch_transactions(
+        let epoch_receipts = self.process_epoch_transactions(
             &mut state,
             &epoch_blocks,
             start_block_number,
@@ -912,13 +918,21 @@ impl ConsensusExecutionHandler {
             );
         }
 
-        // FIXME: We may want to propagate the error up
-        let state_root = if on_local_pivot {
-            state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
+        // FIXME: We may want to propagate the error up.
+        let state_root;
+        if on_local_pivot {
+            state_root =
+                state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
             self.tx_pool.set_best_executed_epoch(epoch_hash);
         } else {
-            state.commit(*epoch_hash).unwrap();
+            state_root = state.commit(*epoch_hash).unwrap();
         };
+        self.data_man.insert_epoch_execution_commitments(
+            pivot_block.hash(),
+            state_root.clone(),
+            BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
+            BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
+        );
         let epoch_execution_commitments = self
             .data_man
             .get_epoch_execution_commitments(&epoch_hash)
@@ -1067,12 +1081,6 @@ impl ConsensusExecutionHandler {
                 n_invalid_nonce, n_ok, n_other
             );
         }
-
-        self.data_man.insert_epoch_execution_commitments(
-            pivot_block.hash(),
-            BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
-            BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
-        );
 
         if on_local_pivot {
             self.tx_pool.recycle_transactions(to_pending);
@@ -1353,6 +1361,8 @@ impl ConsensusExecutionHandler {
         )
     }
 
+    // FIXME: we assumed that the epoch_id is valid,
+    // FIXME: but I can't know if it's true.
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
     ) -> Result<(Vec<u8>, U256), String> {
@@ -1362,9 +1372,12 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_no_commit(SnapshotAndEpochIdRef::new(
-                        epoch_id, None,
-                    ))
+                    .get_state_no_commit(
+                        self.data_man
+                            .get_snapshot_and_epoch_id(epoch_id)
+                            .unwrap()
+                            .as_ref(),
+                    )
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap(),

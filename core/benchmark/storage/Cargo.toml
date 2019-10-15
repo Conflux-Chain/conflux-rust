@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.32"
+cfx-types = { path = "../../../cfx_types" }
 cfxcore = { path = "../../../core" }
 db = { path = "../../../db" }
 kvdb = {git="https://github.com/paritytech/parity-common.git", branch="ao-upstream-rocksdb", version = "0.2"}

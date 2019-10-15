@@ -1733,18 +1733,6 @@ impl TxReplayer {
     }
 }
 
-fn hexstr_to_h256(hex_str: &str) -> H256 {
-    assert_eq!(hex_str.len(), 64);
-
-    let mut bytes: [u8; 32] = Default::default();
-
-    for i in 0..32 {
-        bytes[i] = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16).unwrap();
-    }
-
-    H256::from(bytes)
-}
-
 fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let tx_replayer = TxReplayer::new(
         matches.value_of("storage_db_dir").unwrap(),
@@ -2086,3 +2074,4 @@ use std::{
     time::Duration,
     vec::Vec,
 };
+use cfx_types::hexstr_to_h256;

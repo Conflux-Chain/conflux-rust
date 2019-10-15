@@ -12,8 +12,8 @@ pub trait SnapshotDbManagerTrait {
 
     fn new_snapshot_by_merging(
         &self, old_snapshot_root: &MerkleHash, snapshot_epoch_id: EpochId,
-        height: i64, delta_mpt: DeltaMptInserter,
-    ) -> Result<Self::SnapshotDb>;
+        delta_mpt: DeltaMptInserter, in_progress_snapshot_info: SnapshotInfo,
+    ) -> Result<SnapshotInfo>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId,
     ) -> Result<Option<Self::SnapshotDb>>;

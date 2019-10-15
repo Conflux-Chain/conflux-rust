@@ -19,7 +19,7 @@ use crate::{
 use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
-use primitives::BlockHeaderBuilder;
+use primitives::{BlockHeaderBuilder, StateRootWithAuxInfo};
 use std::{
     cmp::max,
     collections::{HashSet, VecDeque},
@@ -71,6 +71,7 @@ struct Inner {
 
     // blame state that used to verify restored state root
     true_state_root_by_blame_info: H256,
+    state_root_with_aux_info_blame_vec: Vec<StateRootWithAuxInfo>,
     state_blame_vec: Vec<H256>,
     receipt_blame_vec: Vec<H256>,
     bloom_blame_vec: Vec<H256>,
@@ -396,6 +397,12 @@ impl SnapshotChunkSync {
         let inner = self.inner.read();
         let mut hash = inner.trusted_blame_block;
         let mut hashes = Vec::new();
+        // FIXME: I don't understand why we commit execution_info for all
+        // blame_vec. FIXME: it seems that at most one (the last one,
+        // checkpoint block) is necessary. FIXME: I think we actually
+        // don't even need to commit consensus_graph_execution_info
+        // FIXME: for the checkpoint block, because for any later epoch we can
+        // compute everything FIXME: based on the snapshot...
         for i in 0..inner.state_blame_vec.len() {
             hashes.push(hash);
             sync_handler
@@ -404,6 +411,9 @@ impl SnapshotChunkSync {
                 .insert_consensus_graph_execution_info_to_db(
                     &hashes[i],
                     &ConsensusGraphExecutionInfo {
+                        deferred_state_root_with_aux_info: inner
+                            .state_root_with_aux_info_blame_vec[i]
+                            .clone(),
                         original_deferred_state_root: inner.state_blame_vec[i],
                         original_deferred_receipt_root: inner.receipt_blame_vec
                             [i],
@@ -417,6 +427,9 @@ impl SnapshotChunkSync {
                     .data_man
                     .insert_epoch_execution_commitments(
                         hashes[i],
+                        inner.state_root_with_aux_info_blame_vec
+                            [i - DEFERRED_STATE_EPOCH_COUNT as usize]
+                            .clone(),
                         inner.receipt_blame_vec
                             [i - DEFERRED_STATE_EPOCH_COUNT as usize],
                         inner.bloom_blame_vec
@@ -471,6 +484,7 @@ impl SnapshotChunkSync {
             return None;
         }
         // check checkpoint position in `state_blame_vec`
+        // FIXME: the offset could be negative.
         let offset = trusted_blame_block.height()
             - (checkpoint.height() + DEFERRED_STATE_EPOCH_COUNT);
         if offset as usize >= state_blame_vec.len() {

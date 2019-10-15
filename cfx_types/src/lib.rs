@@ -15,3 +15,14 @@ pub const KECCAK_EMPTY_BLOOM: H256 = H256([
     0xff, 0x0b, 0xfd, 0x16, 0x40, 0x1c, 0x27, 0x48, 0x96, 0xd8, 0xc6, 0x3a,
     0x92, 0x37, 0x27, 0xf0, 0x77, 0xb8, 0xe0, 0xb5,
 ]);
+
+pub fn hexstr_to_h256(hex_str: &str) -> H256 {
+    assert_eq!(hex_str.len(), 64);
+    let mut bytes: [u8; 32] = Default::default();
+
+    for i in 0..32 {
+        bytes[i] = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16).unwrap();
+    }
+
+    H256::from(bytes)
+}

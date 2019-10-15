@@ -16,18 +16,13 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
     statistics::SharedStatistics,
-    storage::{
-        state::StateTrait, state_manager::StateManagerTrait,
-        SnapshotAndEpochIdRef,
-    },
+    storage::SnapshotAndEpochIdRef,
     SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parity_bytes::ToPretty;
-use primitives::{
-    BlockHeader, BlockHeaderBuilder, SignedTransaction, StateRootWithAuxInfo,
-};
+use primitives::{BlockHeader, SignedTransaction, StateRootWithAuxInfo};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -597,17 +592,9 @@ impl ConsensusNewBlockHandler {
         let parent_block_hash = inner.arena[parent_arena_index].hash;
         let parent_state_root = inner
             .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(
-                &parent_block_hash,
-                None,
-            ))
+            .get_epoch_execution_commitments(&parent_block_hash)
             .unwrap()
-            // Unwrapping is safe because the state exists.
-            .unwrap()
-            .get_state_root()
-            .unwrap()
-            .unwrap();
+            .state_root_with_aux_info;
 
         let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
 
@@ -1310,6 +1297,40 @@ impl ConsensusNewBlockHandler {
                 inner.cur_era_genesis_height
             );
         }
+        let mut confirmed_height = meter.get_confirmed_epoch_num();
+        if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
+            confirmed_height = DEFERRED_STATE_EPOCH_COUNT;
+        }
+        // We can not assume that confirmed epoch are already executed,
+        // but we can assume that the deferred block are executed.
+        // FIXME: shouldn't unwrap but the function doesn't return error...
+
+        let confirmed_epoch_hash = inner
+            .get_hash_from_epoch_number(
+                // FIXME: we need a function to compute the deferred epoch
+                // number. FIXME: the current codebase may not
+                // be consistent at all places.
+                confirmed_height - DEFERRED_STATE_EPOCH_COUNT,
+            )
+            .unwrap();
+        // FIXME: we also need more helper function to get the execution result
+        // FIXME: for block deferred or not.
+        let confirmed_epoch = self
+            .data_man
+            .get_epoch_execution_commitments(&confirmed_epoch_hash)
+            .unwrap();
+        self.data_man
+            .storage_manager
+            .get_storage_manager()
+            .maintain_snapshots_pivot_chain_confirmed(
+                confirmed_height,
+                &SnapshotAndEpochIdRef::new_for_readonly(
+                    &confirmed_epoch_hash,
+                    &confirmed_epoch.state_root_with_aux_info,
+                ),
+            )
+            // FIXME: handle error.
+            .ok();
 
         // If we are inserting header only, we will skip execution and
         // tx_pool-related operations
@@ -1424,6 +1445,8 @@ impl ConsensusNewBlockHandler {
             }
             let exec_pivot_index =
                 pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
+            // For each execution_info_cache, set epoch_execution_commitments
+            // for the state block..
             if exec_pivot_index < inner.pivot_chain.len()
                 && inner
                     .execution_info_cache
@@ -1434,55 +1457,14 @@ impl ConsensusNewBlockHandler {
                     inner.execution_info_cache.get(&exec_arena_index).unwrap();
                 self.data_man.insert_epoch_execution_commitments(
                     pivot_hash,
+                    exec_info.deferred_state_root_with_aux_info.clone(),
                     exec_info.original_deferred_receipt_root,
                     exec_info.original_deferred_logs_bloom_hash,
                 );
             } else {
-                let epoch_arena_indices = &inner.arena[arena_index]
-                    .data
-                    .ordered_executable_epoch_blocks;
-                let mut epoch_receipts =
-                    Vec::with_capacity(epoch_arena_indices.len());
-
-                let mut already_executed = true;
-                if self.data_man.epoch_executed(&pivot_hash) {
-                    for i in epoch_arena_indices {
-                        if let Some(r) = self
-                            .data_man
-                            .block_execution_result_by_hash_with_epoch(
-                                &inner.arena[*i].hash,
-                                &pivot_hash,
-                                true, /* update_cache */
-                            )
-                        {
-                            epoch_receipts.push(r.receipts);
-                        } else {
-                            // Constructed pivot chain does not match receipts
-                            // in db, so we have to
-                            // recompute
-                            // the receipts of this epoch
-                            already_executed = false;
-                            break;
-                        }
-                    }
-                } else {
-                    already_executed = false;
-                }
-                if already_executed {
-                    let pivot_receipts_root =
-                        BlockHeaderBuilder::compute_block_receipts_root(
-                            &epoch_receipts,
-                        );
-                    let pivot_logs_bloom_hash =
-                        BlockHeaderBuilder::compute_block_logs_bloom_hash(
-                            &epoch_receipts,
-                        );
-                    self.data_man.insert_epoch_execution_commitments(
-                        pivot_hash,
-                        pivot_receipts_root,
-                        pivot_logs_bloom_hash,
-                    );
-                } else {
+                // Make sure execution_info_cache isn't missing for pivot chain
+                // blocks.
+                {
                     let reward_execution_info = self
                         .executor
                         .get_reward_execution_info(inner, arena_index);

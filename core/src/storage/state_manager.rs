@@ -8,20 +8,52 @@ pub use super::impls::state_manager::StateManager;
 
 pub type SharedStateManager = Arc<StateManager>;
 
+pub struct SnapshotAndEpochId {
+    pub snapshot_root: MerkleHash,
+    pub previous_snapshot_root: MerkleHash,
+    pub epoch_id: EpochId,
+    pub delta_trie_height: Option<u32>,
+    pub height: Option<u64>,
+    pub intermediate_epoch_id: EpochId,
+}
+
+impl SnapshotAndEpochId {
+    pub fn from_ref(r: SnapshotAndEpochIdRef) -> Self {
+        Self {
+            snapshot_root: r.snapshot_root.clone(),
+            previous_snapshot_root: r.previous_snapshot_root.clone(),
+            epoch_id: r.epoch_id.clone(),
+            delta_trie_height: r.delta_trie_height,
+            height: r.height,
+            intermediate_epoch_id: r.intermediate_epoch_id.clone(),
+        }
+    }
+
+    pub fn as_ref(&self) -> SnapshotAndEpochIdRef {
+        SnapshotAndEpochIdRef {
+            snapshot_root: &self.snapshot_root,
+            previous_snapshot_root: &self.previous_snapshot_root,
+            epoch_id: &self.epoch_id,
+            delta_trie_height: self.delta_trie_height,
+            height: self.height,
+            intermediate_epoch_id: &self.intermediate_epoch_id,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SnapshotAndEpochIdRef<'a> {
     pub snapshot_root: &'a MerkleHash,
     pub previous_snapshot_root: &'a MerkleHash,
-    pub intermediate_delta_epoch_id: &'a EpochId,
+    pub intermediate_epoch_id: &'a EpochId,
     pub epoch_id: &'a EpochId,
-    pub delta_height: Option<u64>,
+    pub delta_trie_height: Option<u32>,
+    pub height: Option<u64>,
 }
 
-// FIXME: refactor the API.
 // The trait is created to separate the implementation to another file, and the
 // concrete struct is put into inner mod, because the implementation is
 // anticipated to be too complex to present in the same file of the API.
-// TODO(yz): check if this is the best way to organize code for this library.
 pub trait StateManagerTrait {
     /// At the boundary of snapshot, getting a state for new epoch will switch
     /// to new Delta MPT, but it's unnecessary getting a no-commit state.
@@ -50,30 +82,34 @@ impl<'a> SnapshotAndEpochIdRef<'a> {
     // FIXME: this should be replaced by a real one.
     /// Delta height is used to check for shifting snapshot.
     /// The information should be provided from consensus.
-    pub fn new(epoch_id: &'a EpochId, delta_height: Option<u64>) -> Self {
+    pub fn new(epoch_id: &'a EpochId, maybe_height: Option<u64>) -> Self {
+        let delta_height = maybe_height
+            .map(|height| (height % SNAPSHOT_EPOCHS_CAPACITY) as u32);
         Self {
             snapshot_root: &MERKLE_NULL_NODE,
             previous_snapshot_root: &MERKLE_NULL_NODE,
-            intermediate_delta_epoch_id: &MERKLE_NULL_NODE,
+            intermediate_epoch_id: &MERKLE_NULL_NODE,
             epoch_id,
-            delta_height,
+            delta_trie_height: delta_height,
+            height: maybe_height,
         }
     }
 
     #[allow(unused)]
     pub fn new_for_next_epoch(
         epoch_id: &'a EpochId, state_root: &'a StateRootWithAuxInfo,
-        delta_height: u64,
+        height: u64, delta_height: u32,
     ) -> Self
     {
         Self {
             snapshot_root: &state_root.state_root.snapshot_root,
             previous_snapshot_root: &state_root.aux_info.previous_snapshot_root,
-            intermediate_delta_epoch_id: &state_root
+            intermediate_epoch_id: &state_root
                 .aux_info
                 .intermediate_delta_epoch_id,
             epoch_id,
-            delta_height: Some(delta_height),
+            delta_trie_height: Some(delta_height),
+            height: Some(height),
         }
     }
 
@@ -83,11 +119,12 @@ impl<'a> SnapshotAndEpochIdRef<'a> {
         Self {
             snapshot_root: &state_root.state_root.snapshot_root,
             previous_snapshot_root: &state_root.aux_info.previous_snapshot_root,
-            intermediate_delta_epoch_id: &state_root
+            intermediate_epoch_id: &state_root
                 .aux_info
                 .intermediate_delta_epoch_id,
             epoch_id,
-            delta_height: None,
+            delta_trie_height: None,
+            height: None,
         }
     }
 
@@ -125,6 +162,7 @@ use super::{
     state::State,
 };
 // FIXME: snapshot... wire format?
+use super::impls::state_manager::SNAPSHOT_EPOCHS_CAPACITY;
 use crate::snapshot::snapshot::Snapshot;
 use primitives::{EpochId, MerkleHash, StateRootWithAuxInfo, MERKLE_NULL_NODE};
 use std::sync::Arc;

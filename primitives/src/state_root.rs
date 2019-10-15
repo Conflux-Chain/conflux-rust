@@ -10,15 +10,28 @@ use serde_derive::{Deserialize, Serialize};
 
 pub type MerkleHash = H256;
 
+/// The Merkle Hash for an empty MPT (either as a subtree or as a whole tree).
+pub const MERKLE_NULL_NODE: MerkleHash = KECCAK_EMPTY;
+
 /// The deferred state root consists of 3 parts: snapshot, delta_0, delta.
 /// when delta grows over threshold, snapshot and delta_0 is merged into new
 /// snapshot, and the delta becomes new delta_0.
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StateRoot {
     pub snapshot_root: MerkleHash,
     pub intermediate_delta_root: MerkleHash,
     pub delta_root: MerkleHash,
+}
+
+impl Default for StateRoot {
+    fn default() -> Self {
+        Self {
+            snapshot_root: MERKLE_NULL_NODE,
+            intermediate_delta_root: MERKLE_NULL_NODE,
+            delta_root: MERKLE_NULL_NODE,
+        }
+    }
 }
 
 impl StateRoot {
@@ -29,10 +42,15 @@ impl StateRoot {
         rlp_stream.append_list(self.delta_root.as_bytes());
         keccak(rlp_stream.out())
     }
-}
 
-/// The Merkle Hash for an empty MPT (either as a subtree or as a whole tree).
-pub const MERKLE_NULL_NODE: MerkleHash = KECCAK_EMPTY;
+    pub fn genesis(genesis_root: &MerkleHash) -> StateRoot {
+        Self {
+            snapshot_root: MERKLE_NULL_NODE,
+            intermediate_delta_root: MERKLE_NULL_NODE,
+            delta_root: genesis_root.clone(),
+        }
+    }
+}
 
 /// Auxiliary information for deferred state root: previous snapshot root
 /// and intermediate_delta_epoch_id to help looking up for the intermediate
@@ -40,7 +58,13 @@ pub const MERKLE_NULL_NODE: MerkleHash = KECCAK_EMPTY;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StateRootAuxInfo {
+    // FIXME: this should be derived by the snapshot_root's parent
+    // snapshot_root.
     pub previous_snapshot_root: MerkleHash,
+    // When we need to shift the snapshot, this is the only "known" information
+    // to retrieve the new snapshot.
+    // FIXME: rename so that we don't use it to retrieve intermediate delta
+    // root.
     pub intermediate_delta_epoch_id: EpochId,
 }
 
@@ -59,6 +83,15 @@ impl Default for StateRootAuxInfo {
 pub struct StateRootWithAuxInfo {
     pub state_root: StateRoot,
     pub aux_info: StateRootAuxInfo,
+}
+
+impl StateRootWithAuxInfo {
+    pub fn genesis(genesis_root: &MerkleHash) -> Self {
+        Self {
+            state_root: StateRoot::genesis(genesis_root),
+            aux_info: Default::default(),
+        }
+    }
 }
 
 impl From<(&StateRoot, &StateRootAuxInfo)> for StateRootWithAuxInfo {

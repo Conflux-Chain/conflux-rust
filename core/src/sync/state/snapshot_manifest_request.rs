@@ -75,6 +75,7 @@ impl SnapshotManifestRequest {
         }
     }
 
+    // FIXME: look here.
     /// return an empty vec if some information not exist in db, caller may find
     /// another peer to send the request; otherwise return a state_blame_vec
     /// of the requested block
@@ -94,6 +95,7 @@ impl SnapshotManifestRequest {
         let mut request_invalid = false;
         let mut pass_checkpoint = false;
         loop {
+            // FIXME: get it from epoch_execution_committments.
             if let Some(exec_info) = ctx
                 .manager
                 .graph

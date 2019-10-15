@@ -128,6 +128,10 @@ impl RangedManifest {
         );
 
         let snapshot_db_manager = SnapshotDbManagerSqlite::default();
+
+        // FIXME: this is the wrong method to use because if we store snapshot
+        // together FIXME: with checkpoint, the snapshot db is stored
+        // elsewhere than snapshot_db_manager.
         let mut snapshot_db = match snapshot_db_manager
             .get_snapshot_by_epoch_id(checkpoint)?
         {

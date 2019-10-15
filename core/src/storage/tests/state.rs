@@ -44,7 +44,7 @@ fn test_empty_genesis_block() {
     }
 
     state_manager
-        .get_state_trees(&SnapshotAndEpochIdRef::new(&genesis_epoch_id, None))
+        .get_state_trees(&SnapshotAndEpochIdRef::new(genesis_epoch_id, None))
         .unwrap();
 }
 

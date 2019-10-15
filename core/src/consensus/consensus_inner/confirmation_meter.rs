@@ -89,6 +89,15 @@ impl ConfirmationMeter {
         inner.total_weight_in_past_2d.delta
     }
 
+    pub fn get_confirmed_epoch_num(&self) -> u64 {
+        let x = self.inner.read().finality_manager.lowest_epoch_num;
+        if x > 0 {
+            x - 1
+        } else {
+            0
+        }
+    }
+
     pub fn confirmation_risk_by_hash(
         &self, g_inner: &ConsensusGraphInner, hash: H256,
     ) -> Option<f64> {
