@@ -4,6 +4,7 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
+use crate::statedb::Result as StateDbResult;
 use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -436,17 +437,19 @@ impl TransactionPoolInner {
 
     pub fn get_nonce_and_balance_from_storage(
         &self, address: &Address, account_cache: &mut AccountCache,
-    ) -> (U256, U256) {
-        match account_cache.get_account_mut(address) {
-            Some(account) => (account.nonce.clone(), account.balance.clone()),
-            None => (0.into(), 0.into()),
+    ) -> StateDbResult<(U256, U256)> {
+        match account_cache.get_account_mut(address)? {
+            Some(account) => {
+                Ok((account.nonce.clone(), account.balance.clone()))
+            }
+            None => Ok((0.into(), 0.into())),
         }
     }
 
     fn get_and_update_nonce_and_balance_from_storage(
         &mut self, address: &Address, account_cache: &mut AccountCache,
-    ) -> (U256, U256) {
-        let ret = match account_cache.get_account_mut(address) {
+    ) -> StateDbResult<(U256, U256)> {
+        let ret = match account_cache.get_account_mut(address)? {
             Some(account) => (account.nonce.clone(), account.balance.clone()),
             None => (0.into(), 0.into()),
         };
@@ -458,7 +461,8 @@ impl TransactionPoolInner {
         self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), ret);
-        ret
+
+        Ok(ret)
     }
 
     pub fn get_lowest_nonce(&self, addr: &Address) -> U256 {
@@ -496,14 +500,19 @@ impl TransactionPoolInner {
 
     fn recalculate_readiness_with_state(
         &mut self, addr: &Address, account_cache: &mut AccountCache,
-    ) {
+    ) -> StateDbResult<()> {
         let (nonce, balance) = self
-            .get_and_update_nonce_and_balance_from_storage(addr, account_cache);
+            .get_and_update_nonce_and_balance_from_storage(
+                addr,
+                account_cache,
+            )?;
         let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
         self.ready_account_pool.update(addr, ret);
+
+        Ok(())
     }
 
     pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
@@ -634,7 +643,10 @@ impl TransactionPoolInner {
             .get_nonce_and_balance_from_storage(
                 &transaction.sender,
                 account_cache,
-            );
+            )
+            .map_err(|e| {
+                format!("Failed to read account_cache from storage: {}", e)
+            })?;
 
         if transaction.hash[0] & 254 == 0 {
             debug!(
@@ -679,7 +691,10 @@ impl TransactionPoolInner {
         self.recalculate_readiness_with_state(
             &transaction.sender,
             account_cache,
-        );
+        )
+        .map_err(|e| {
+            format!("Failed to read account_cache from storage: {}", e)
+        })?;
 
         Ok(())
     }

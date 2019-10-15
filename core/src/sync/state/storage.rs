@@ -135,6 +135,8 @@ impl RangedManifest {
         );
 
         let snapshot_db_manager = SnapshotDbManagerSqlite::default();
+
+        // FIXME: The snapshot logic in sync not completely implemented.
         let mut snapshot_db = match snapshot_db_manager
             .get_snapshot_by_epoch_id(checkpoint)?
         {

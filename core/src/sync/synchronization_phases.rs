@@ -256,11 +256,14 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
+        // FIXME: use target_height instead.
         let middle_epoch = self.syn.get_middle_epoch();
         if middle_epoch.is_none() {
             return self.phase_type();
         }
         let middle_epoch = middle_epoch.unwrap();
+        // FIXME: OK, what if the chain height is close, or even local height is
+        // FIXME: larger, but the chain forked earlier very far away?
         if self.graph.consensus.best_epoch_number()
             + CATCH_UP_EPOCH_LAG_THRESHOLD
             >= middle_epoch
@@ -368,7 +371,10 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .graph
             .data_man
             .storage_manager
-            .contains_state(SnapshotAndEpochIdRef::new(&checkpoint, None))
+            // TODO: think about snapshot.
+            .contains_state(SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
+                &checkpoint,
+            ))
             .expect("failed to check if checkpoint state exists");
 
         if has_state {
@@ -576,11 +582,14 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         _sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
+        // FIXME: use target_height instead.
         let middle_epoch = self.syn.get_middle_epoch();
         if middle_epoch.is_none() {
             return self.phase_type();
         }
         let middle_epoch = middle_epoch.unwrap();
+        // FIXME: OK, what if the chain height is close, or even local height is
+        // FIXME: larger, but the chain forked earlier very far away?
         if self.graph.consensus.best_epoch_number()
             + CATCH_UP_EPOCH_LAG_THRESHOLD
             >= middle_epoch

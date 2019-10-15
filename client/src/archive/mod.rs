@@ -290,8 +290,7 @@ impl ArchiveClient {
                                 TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
                                     txgen_clone,
                                     tx_conf,
-                                )
-                                    .unwrap();
+                                );
                             })
                             .expect("should succeed")
                     }

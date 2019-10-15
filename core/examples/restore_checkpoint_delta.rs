@@ -223,7 +223,10 @@ fn prepare_checkpoint(
     println!("all accounts added in {:?}", start.elapsed());
 
     let root = manager
-        .get_state_no_commit(SnapshotAndEpochIdRef::new(&checkpoint, None))?
+        // TODO consider snapshot.
+        .get_state_no_commit(
+            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&checkpoint),
+        )?
         .unwrap()
         .get_state_root()?
         .unwrap()
@@ -237,7 +240,7 @@ fn prepare_checkpoint(
 fn add_epoch_with_accounts(
     manager: &StateManager, parent: &H256, accounts: usize,
 ) -> H256 {
-    let epoch_id = SnapshotAndEpochIdRef::new(parent, None);
+    let epoch_id = SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(parent);
     let state = manager.get_state_for_next_epoch(epoch_id).unwrap().unwrap();
     let mut state = StateDb::new(state);
     for i in 0..accounts {

@@ -5,7 +5,8 @@
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
     maybe_db: Option<SqliteConnection>,
-    height: i64,
+    // FIXME: load / save on open / set.
+    snapshot_info: SnapshotInfo,
 }
 
 pub struct SnapshotDbStatements {
@@ -121,8 +122,14 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     fn get_null_snapshot() -> Self {
         Self {
             maybe_db: None,
-            height: 0,
+            snapshot_info: SnapshotInfo::empty_snapshot_info(),
         }
+    }
+
+    fn get_snapshot_info(&self) -> &SnapshotInfo { &self.snapshot_info }
+
+    fn set_snapshot_info(&mut self, snapshot_info: SnapshotInfo) {
+        self.snapshot_info = snapshot_info;
     }
 
     fn open(snapshot_path: &str) -> Result<Option<SnapshotDbSqlite>> {
@@ -135,21 +142,21 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         if file_exists {
             return Ok(Some(SnapshotDbSqlite {
                 maybe_db: Some(sqlite_open_result?),
-                height: 0,
+                // FIXME: load snapshot info from db.
+                snapshot_info: SnapshotInfo::empty_snapshot_info(),
             }));
         } else {
             return Ok(None);
         }
-        // FIXME: load height.
     }
 
-    fn create(snapshot_path: &str, height: i64) -> Result<SnapshotDbSqlite> {
+    fn create(snapshot_path: &str) -> Result<SnapshotDbSqlite> {
         let mut ok_result = Ok(SnapshotDbSqlite {
             maybe_db: Some(SqliteConnection::create_and_open(
                 &snapshot_path,
                 SqliteConnection::default_open_flags(),
             )?),
-            height,
+            snapshot_info: SnapshotInfo::empty_snapshot_info(),
         });
 
         {
@@ -197,7 +204,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                 &[
                     &&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef,
                     &&Self::DELTA_KV_INSERT_TABLE_NAME,
-                    &self.height]
+                    &(self.snapshot_info.height as i64)]
             )?.finish_ignore_rows()?;
         }
 
@@ -233,7 +240,7 @@ impl SnapshotDbSqlite {
                 None => None,
                 Some(conn) => Some(conn.try_clone()?),
             },
-            height: self.height,
+            snapshot_info: self.snapshot_info.clone(),
         })
     }
 
@@ -445,9 +452,9 @@ use super::{
         super::storage_db::{
             KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
             KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
-            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
-            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
-            SnapshotMptValue,
+            SingleWriterImplFamily, SnapshotDbTrait, SnapshotInfo,
+            SnapshotMptDbValue, SnapshotMptTraitReadOnly,
+            SnapshotMptTraitSingleWriter, SnapshotMptValue,
         },
         errors::*,
         multi_version_merkle_patricia_trie::merkle_patricia_trie::{

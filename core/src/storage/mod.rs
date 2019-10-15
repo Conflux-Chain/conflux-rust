@@ -35,7 +35,8 @@ pub use self::{
     },
     state::{State as Storage, StateTrait as StorageTrait},
     state_manager::{
-        SnapshotAndEpochIdRef, StateManager as StorageManager,
+        SnapshotAndEpochId, SnapshotAndEpochIdRef,
+        StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,
     },
     storage_db::KeyValueDbTrait,

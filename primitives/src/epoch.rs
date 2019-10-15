@@ -3,8 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::H256;
+use keccak_hash::KECCAK_EMPTY;
 
 pub type EpochId = H256;
+pub const NULL_EPOCH: EpochId = KECCAK_EMPTY;
 
 /// Uniquely identifies epoch.
 #[derive(Debug, Clone, PartialEq)]

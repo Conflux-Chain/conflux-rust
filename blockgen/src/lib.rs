@@ -178,7 +178,6 @@ impl BlockGenerator {
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
         &self, parent_hash: H256, referee: Vec<H256>, blame: u32,
-        deferred_state_root_with_aux_info: StateRootWithAuxInfo,
         deferred_state_root: H256, deferred_receipts_root: H256,
         deferred_logs_bloom_hash: H256, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
@@ -225,9 +224,6 @@ impl BlockGenerator {
             .with_timestamp(my_timestamp)
             .with_author(self.mining_author)
             .with_blame(blame)
-            .with_deferred_state_root_with_aux_info(
-                deferred_state_root_with_aux_info,
-            )
             .with_deferred_state_root(deferred_state_root)
             .with_deferred_receipts_root(deferred_receipts_root)
             .with_deferred_logs_bloom_hash(deferred_logs_bloom_hash)
@@ -248,13 +244,7 @@ impl BlockGenerator {
         difficulty: u64, adaptive: bool,
     ) -> Result<Block, String>
     {
-        let (
-            blame,
-            state_root_with_aux,
-            state_root,
-            receipts_root,
-            logs_bloom_hash,
-        ) = self
+        let (blame, state_root, receipts_root, logs_bloom_hash) = self
             .graph
             .consensus
             .force_compute_blame_and_deferred_state_for_generation(
@@ -274,7 +264,6 @@ impl BlockGenerator {
             parent_hash,
             referee,
             blame,
-            state_root_with_aux,
             state_root,
             receipts_root,
             logs_bloom_hash,
@@ -313,7 +302,6 @@ impl BlockGenerator {
 
         let (
             blame,
-            state_root_with_aux,
             deferred_state_root,
             deferred_receipts_root,
             deferred_logs_bloom_hash,
@@ -333,7 +321,6 @@ impl BlockGenerator {
             best_block_hash,
             referee,
             blame,
-            state_root_with_aux,
             deferred_state_root,
             deferred_receipts_root,
             deferred_logs_bloom_hash,
@@ -367,7 +354,6 @@ impl BlockGenerator {
 
         let (
             mut blame,
-            state_root_with_aux,
             mut deferred_state_root,
             mut deferred_receipts_root,
             mut deferred_logs_bloom_hash,
@@ -400,7 +386,6 @@ impl BlockGenerator {
             best_block_hash,
             referee,
             blame,
-            state_root_with_aux,
             deferred_state_root,
             deferred_receipts_root,
             deferred_logs_bloom_hash,
@@ -526,7 +511,6 @@ impl BlockGenerator {
             );
         let (
             blame,
-            state_root_with_aux,
             deferred_state_root,
             deferred_receipts_root,
             deferred_logs_bloom_hash,
@@ -546,7 +530,6 @@ impl BlockGenerator {
             best_block_hash,
             referee,
             blame,
-            state_root_with_aux,
             deferred_state_root,
             deferred_receipts_root,
             deferred_logs_bloom_hash,
@@ -564,13 +547,7 @@ impl BlockGenerator {
         transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
     ) -> Result<H256, String>
     {
-        let (
-            blame,
-            state_root_with_aux,
-            state_root,
-            receipts_root,
-            logs_bloom_hash,
-        ) = self
+        let (blame, state_root, receipts_root, logs_bloom_hash) = self
             .graph
             .consensus
             .force_compute_blame_and_deferred_state_for_generation(
@@ -581,7 +558,6 @@ impl BlockGenerator {
             parent_hash,
             referee,
             blame,
-            state_root_with_aux,
             state_root,
             receipts_root,
             logs_bloom_hash,
@@ -600,13 +576,7 @@ impl BlockGenerator {
         adaptive: bool,
     ) -> Result<H256, String>
     {
-        let (
-            blame,
-            state_root_with_aux,
-            state_root,
-            receipts_root,
-            logs_bloom_hash,
-        ) = self
+        let (blame, state_root, receipts_root, logs_bloom_hash) = self
             .graph
             .consensus
             .force_compute_blame_and_deferred_state_for_generation(
@@ -617,7 +587,6 @@ impl BlockGenerator {
             parent_hash,
             referee,
             blame,
-            state_root_with_aux,
             state_root,
             receipts_root,
             logs_bloom_hash,

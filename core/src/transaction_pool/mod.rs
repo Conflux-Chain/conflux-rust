@@ -16,8 +16,12 @@ extern crate rand;
 
 pub use self::impls::TreapMap;
 use crate::{
-    block_data_manager::BlockDataManager, consensus::BestInformation,
-    executive, vm,
+    block_data_manager::BlockDataManager,
+    consensus::BestInformation,
+    executive,
+    statedb::Result as StateDbResult,
+    storage::{SnapshotAndEpochId, SnapshotAndEpochIdRef, StorageManagerTrait},
+    vm,
 };
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
@@ -27,7 +31,7 @@ use metrics::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    Account, Action, EpochId, SignedTransaction, TransactionWithSignature,
+    Account, Action, SignedTransaction, TransactionWithSignature,
 };
 use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
@@ -82,7 +86,7 @@ pub struct TransactionPool {
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
     spec: vm::Spec,
-    best_executed_epoch: Mutex<EpochId>,
+    best_executed_epoch: Mutex<SnapshotAndEpochId>,
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
@@ -100,7 +104,12 @@ impl TransactionPool {
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man: data_man.clone(),
             spec: vm::Spec::new_spec(),
-            best_executed_epoch: Mutex::new(*genesis_hash),
+            best_executed_epoch: Mutex::new(SnapshotAndEpochId::from_ref(
+                SnapshotAndEpochIdRef::new_for_readonly(
+                    genesis_hash,
+                    &data_man.genesis_state_root(),
+                ),
+            )),
             consensus_best_info: Mutex::new(Arc::new(Default::default())),
             set_tx_requests: Mutex::new(Default::default()),
             recycle_tx_requests: Mutex::new(Default::default()),
@@ -124,8 +133,10 @@ impl TransactionPool {
             .unwrap_or((0.into(), 0.into()))
     }
 
-    pub fn get_state_account_info(&self, address: &Address) -> (U256, U256) {
-        let mut account_cache = self.get_best_state_account_cache();
+    pub fn get_state_account_info(
+        &self, address: &Address,
+    ) -> StateDbResult<(U256, U256)> {
+        let mut account_cache = self.get_best_state_account_cache()?;
         self.inner
             .read()
             .get_nonce_and_balance_from_storage(address, &mut account_cache)
@@ -184,7 +195,9 @@ impl TransactionPool {
         // key after basic verification.
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
-                let mut account_cache = self.get_best_state_account_cache();
+                // FIXME: shouldn't unwrap, but pop-up the error.
+                let mut account_cache =
+                    self.get_best_state_account_cache().unwrap();
                 let mut inner =
                     self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
                 let mut to_prop = self.to_propagate_trans.write();
@@ -407,7 +420,8 @@ impl TransactionPool {
         let mut consensus_best_info = self.consensus_best_info.lock();
         *consensus_best_info = best_info;
 
-        let mut account_cache = self.get_best_state_account_cache();
+        // FIXME: don't unwrap, propogate the error.
+        let mut account_cache = self.get_best_state_account_cache().unwrap();
         let mut inner = self.inner.write();
         let inner = inner.deref_mut();
 
@@ -427,7 +441,9 @@ impl TransactionPool {
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
                 &tx.nonce, &tx.sender,
-                &account_cache.get_account_mut(&tx.sender).map_or(0.into(), |x| x.nonce), tx.hash);
+                &account_cache.get_account_mut(&tx.sender)
+                    // FIXME: don't unwrap, propogate the error.
+                    .unwrap().map_or(0.into(), |x| x.nonce), tx.hash);
             self.add_transaction_with_readiness_check(
                 inner,
                 &mut account_cache,
@@ -458,18 +474,20 @@ impl TransactionPool {
         (consensus_best_info.clone(), transactions)
     }
 
-    pub fn set_best_executed_epoch(&self, best_executed_epoch: &EpochId) {
-        *self.best_executed_epoch.lock() = best_executed_epoch.clone();
+    pub fn set_best_executed_epoch(
+        &self, best_executed_epoch: SnapshotAndEpochIdRef,
+    ) {
+        *self.best_executed_epoch.lock() =
+            SnapshotAndEpochId::from_ref(best_executed_epoch);
     }
 
-    fn get_best_state_account_cache(&self) -> AccountCache {
-        AccountCache::new(unsafe {
+    fn get_best_state_account_cache(&self) -> StateDbResult<AccountCache> {
+        Ok(AccountCache::new(
             self.data_man
                 .storage_manager
-                .get_state_readonly_assumed_existence(
-                    *self.best_executed_epoch.lock(),
-                )
-                .unwrap()
-        })
+                .get_state_no_commit(self.best_executed_epoch.lock().as_ref())?
+                // Unwrap is safe here because the state exists.
+                .unwrap(),
+        ))
     }
 }

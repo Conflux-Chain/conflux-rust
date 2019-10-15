@@ -44,7 +44,9 @@ fn test_empty_genesis_block() {
     }
 
     state_manager
-        .get_state_trees(&SnapshotAndEpochIdRef::new(&genesis_epoch_id, None))
+        .get_state_trees(&SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
+            &genesis_epoch_id,
+        ))
         .unwrap();
 }
 
@@ -88,7 +90,7 @@ fn test_set_get() {
 fn test_get_set_at_second_commit() {
     let state_manager = new_state_manager_for_testing();
     let keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
-    let set_size = 10000;
+    let set_size = DEFAULT_NUMBER_OF_KEYS / 10;
     let (keys_0, keys_1_new, keys_remain, keys_1_overwritten) = (
         &keys[0..set_size * 2],
         &keys[set_size * 2..set_size * 3],
@@ -111,7 +113,9 @@ fn test_get_set_at_second_commit() {
     state_0.commit(epoch_id_0).unwrap();
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id_0, None))
+        .get_state_for_next_epoch(
+            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&epoch_id_0),
+        )
         .unwrap()
         .unwrap();
     println!("Set new {} keys for state_1.", keys_1_new.len(),);
@@ -201,7 +205,9 @@ fn test_set_delete() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id, None))
+        .get_state_for_next_epoch(
+            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&epoch_id),
+        )
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -259,7 +265,9 @@ fn test_set_delete_all() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(&epoch_id, None))
+        .get_state_for_next_epoch(
+            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&epoch_id),
+        )
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -403,10 +411,9 @@ fn test_set_order_concurrent() {
     let parent_epoch_0 = epoch_id;
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-            &parent_epoch_0,
-            None,
-        ))
+        .get_state_for_next_epoch(
+            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&parent_epoch_0),
+        )
         .unwrap()
         .unwrap();
     println!("Setting state_1 with {} keys.", keys.len());
@@ -437,10 +444,11 @@ fn test_set_order_concurrent() {
         let merkle_1 = merkle_1.clone();
         threads.push(thread::spawn(move || {
             let mut state_2 = state_manager
-                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                    &parent_epoch_0,
-                    None,
-                ))
+                .get_state_for_next_epoch(
+                    SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
+                        &parent_epoch_0,
+                    ),
+                )
                 .unwrap()
                 .unwrap();
             println!(

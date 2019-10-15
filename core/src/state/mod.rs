@@ -633,10 +633,11 @@ mod tests {
         State::new(
             StateDb::new(
                 storage_manager
-                    // FIXME: None?
-                    .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
-                        &epoch_id, None,
-                    ))
+                    .get_state_for_next_epoch(
+                        SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
+                            &epoch_id,
+                        ),
+                    )
                     .unwrap()
                     .unwrap(),
             ),

@@ -1,7 +1,7 @@
 use cfx_types::{Bloom, H256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use primitives::Receipt;
+use primitives::{Receipt, StateRootWithAuxInfo};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::sync::Arc;
@@ -15,8 +15,9 @@ pub struct EpochExecutionContext {
 
 /// receipts_root and logs_bloom got after an epoch is executed.
 /// It is NOT deferred.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EpochExecutionCommitments {
+    pub state_root_with_aux_info: StateRootWithAuxInfo,
     pub receipts_root: H256,
     pub logs_bloom_hash: H256,
 }
@@ -26,6 +27,10 @@ pub struct EpochExecutionCommitments {
 /// all blamed block headers if `blame` is not 0.
 #[derive(Clone, RlpEncodable, RlpDecodable, Default)]
 pub struct ConsensusGraphExecutionInfo {
+    // Only used to recover EpochExecutionCommitments from db.
+    pub deferred_state_root_with_aux_info: StateRootWithAuxInfo,
+
+    // Also used to compute/verify block header fields after blaming.
     pub original_deferred_state_root: H256,
     pub original_deferred_receipt_root: H256,
     pub original_deferred_logs_bloom_hash: H256,
