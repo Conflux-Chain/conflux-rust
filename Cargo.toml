@@ -62,10 +62,6 @@ name = "cfx-gen-dot"
 path = "tools/cfx-gen-dot/main.rs"
 
 [[bin]]
-name = "conflux-cli"
-path = "client/cli/src/main.rs"
-
-[[bin]]
 name = "ethkey"
 path = "accounts/ethkey/cli/src/main.rs"
 
