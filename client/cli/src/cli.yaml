@@ -293,7 +293,7 @@ subcommands:
       about: Executes a call request immediately without creating a transaction and returns the gas used
       args:
         - rpc-method:
-            default_value: cfx_call
+            default_value: cfx_estimateGas
             hidden: true
         - rpc-args:
             multiple: true
