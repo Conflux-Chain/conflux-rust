@@ -9,6 +9,8 @@ parking_lot = "0.8"
 timer = "0.2.0"
 time = "0.1"
 rand = "0.5"
+influx_db_client = "0.3.6"
+log = "0.4"
 
 [dev-dependencies]
 criterion = "0.2"

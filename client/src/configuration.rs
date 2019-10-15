@@ -10,6 +10,7 @@ use cfxcore::{
     storage::{self, state_manager::StorageConfiguration},
     sync::{ProtocolConfiguration, SyncGraphConfig},
 };
+use metrics::MetricsConfiguration;
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
 
@@ -106,8 +107,13 @@ build_config! {
         // FIXME: break into two options: one for enable, one for path.
         (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
         (metrics_enabled, (bool), false)
-        (metrics_report_interval_ms, (u64), 5000)
-        (metrics_output_file, (String), "metrics.log".to_string())
+        (metrics_report_interval_ms, (u64), 3000)
+        (metrics_output_file, (Option<String>), None)
+        (metrics_influxdb_host, (Option<String>), None)
+        (metrics_influxdb_db, (String), "conflux".into())
+        (metrics_influxdb_username, (Option<String>), None)
+        (metrics_influxdb_password, (Option<String>), None)
+        (metrics_influxdb_node, (Option<String>), None)
         (min_peers_propagation, (usize), 8)
         (max_peers_propagation, (usize), 128)
         (future_block_buffer_capacity, (usize), 32768)
@@ -379,6 +385,27 @@ impl Configuration {
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
         SyncGraphConfig {
             enable_state_expose: self.raw_conf.enable_state_expose,
+        }
+    }
+
+    pub fn metrics_config(&self) -> MetricsConfiguration {
+        MetricsConfiguration {
+            enabled: self.raw_conf.metrics_enabled,
+            report_interval: Duration::from_millis(
+                self.raw_conf.metrics_report_interval_ms,
+            ),
+            file_report_output: self.raw_conf.metrics_output_file.clone(),
+            influxdb_report_host: self.raw_conf.metrics_influxdb_host.clone(),
+            influxdb_report_db: self.raw_conf.metrics_influxdb_db.clone(),
+            influxdb_report_username: self
+                .raw_conf
+                .metrics_influxdb_username
+                .clone(),
+            influxdb_report_password: self
+                .raw_conf
+                .metrics_influxdb_password
+                .clone(),
+            influxdb_report_node: self.raw_conf.metrics_influxdb_node.clone(),
         }
     }
 }
