@@ -16,6 +16,7 @@ extern crate ethkey as keylib;
 
 #[macro_use]
 mod config_macro;
+pub mod accounts;
 pub mod archive;
 pub mod configuration;
 pub mod full;

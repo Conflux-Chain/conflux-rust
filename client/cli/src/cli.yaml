@@ -293,6 +293,62 @@ subcommands:
       about: Debug subcommands (requires jsonrpc_local_http_port configured)
       setting: SubcommandRequiredElseHelp
       subcommands:
+        - send:
+            about: Send a transaction and return its hash
+            args:
+            - rpc-method:
+                default_value: send_transaction
+                hidden: true
+            - rpc-args:
+                multiple: true
+                use_delimiter: true
+                default_value: tx:map(from;to;gasPrice;gas;value;data;nonce),password
+                hidden: true
+            - from:
+                help: Transaction from address
+                long: from
+                required: true
+                takes_value: true
+                value_name: ADDRESS
+            - to:
+                help: Transaction to address (empty to create contract)
+                long: to
+                takes_value: true
+                value_name: ADDRESS
+            - gasPrice:
+                help: Transaction gas price
+                long: gas-price
+                takes_value: true
+                value_name: HEX
+                default_value: "0x2540BE400" # 10 GDrip
+            - gas:
+                help: Gas provided for transaction execution
+                long: gas
+                takes_value: true
+                value_name: HEX
+                default_value: "0x5208" # 21000
+            - value:
+                help: value sent with this transaction
+                long: value
+                required: true
+                takes_value: true
+                value_name: HEX
+            - data:
+                help: Hash of the method signature and encoded parameters
+                long: data
+                takes_value: true
+                value_name: HEX
+            - nonce:
+                help: Transaction nonce
+                long: nonce
+                takes_value: true
+                value_name: HEX
+            - password:
+                help: Used to decrypt private key of sender to sign transaction
+                long: password
+                required: true
+                takes_value: true
+                value_name: STRING
         - txpool:
             about: Transaction pool subcommands
             setting: SubcommandRequiredElseHelp

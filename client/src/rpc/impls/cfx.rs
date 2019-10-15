@@ -41,6 +41,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     tx_gen: Arc<TransactionGenerator>,
 }
+use crate::rpc::types::SendTxRequest;
 use cfxcore::block_data_manager::BlockExecutionResultWithEpoch;
 use txgen::TransactionGenerator;
 
@@ -127,38 +128,76 @@ impl RpcImpl {
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
         info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
-        Rlp::new(&raw.into_vec())
-            .as_val()
-            .map_err(|err| {
-                RpcError::invalid_params(format!("Error: {:?}", err))
-            })
-            .and_then(|tx| {
-                let (signed_trans, failed_trans) = self.tx_pool.insert_new_transactions(
-                    vec![tx],
-                );
-                if signed_trans.len() + failed_trans.len() > 1 {
-                    // This should never happen
-                    error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
-                    Ok(H256::zero().into())
-                } else if signed_trans.len() + failed_trans.len() == 0 {
-                    // For tx in transactions_pubkey_cache, we simply ignore them
-                    debug!("insert_new_transactions ignores inserted transactions");
-                    Err(RpcError::invalid_params(String::from("tx already exist")))
-                } else {
-                    if signed_trans.is_empty() {
-                        let mut tx_err = String::from("");
-                        for (_, e) in failed_trans.iter() {
-                            tx_err = e.clone();
-                            break;
-                        }
-                        Err(RpcError::invalid_params(tx_err))
-                    } else {
-                        let tx_hash = signed_trans[0].hash();
-                        self.sync.append_received_transactions(signed_trans);
-                        Ok(tx_hash.into())
-                    }
+
+        let tx = Rlp::new(&raw.into_vec()).as_val().map_err(|err| {
+            RpcError::invalid_params(format!("Error: {:?}", err))
+        })?;
+
+        self.send_transaction_with_signature(tx)
+    }
+
+    fn send_transaction_with_signature(
+        &self, tx: TransactionWithSignature,
+    ) -> RpcResult<RpcH256> {
+        let (signed_trans, failed_trans) =
+            self.tx_pool.insert_new_transactions(vec![tx]);
+        if signed_trans.len() + failed_trans.len() > 1 {
+            // This should never happen
+            error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
+            Ok(H256::zero().into())
+        } else if signed_trans.len() + failed_trans.len() == 0 {
+            // For tx in transactions_pubkey_cache, we simply ignore them
+            debug!("insert_new_transactions ignores inserted transactions");
+            Err(RpcError::invalid_params(String::from("tx already exist")))
+        } else {
+            if signed_trans.is_empty() {
+                let mut tx_err = String::from("");
+                for (_, e) in failed_trans.iter() {
+                    tx_err = e.clone();
+                    break;
                 }
-            })
+                Err(RpcError::invalid_params(tx_err))
+            } else {
+                let tx_hash = signed_trans[0].hash();
+                self.sync.append_received_transactions(signed_trans);
+                Ok(tx_hash.into())
+            }
+        }
+    }
+
+    fn send_transaction(
+        &self, mut tx: SendTxRequest, password: Option<String>,
+    ) -> RpcResult<RpcH256> {
+        info!("RPC Request: send_transaction, tx = {:?}", tx);
+
+        if tx.nonce.is_none() {
+            let nonce = self
+                .consensus
+                .transaction_count(
+                    tx.from.clone().into(),
+                    BlockHashOrEpochNumber::EpochNumber(
+                        EpochNumber::LatestState,
+                    )
+                    .into_primitive(),
+                )
+                .map_err(|e| {
+                    RpcError::invalid_params(format!(
+                        "failed to send transaction: {:?}",
+                        e
+                    ))
+                })?;
+            tx.nonce.replace(nonce.into());
+            debug!("after loading nonce in latest state, tx = {:?}", tx);
+        }
+
+        let tx = tx.sign_with(password).map_err(|e| {
+            RpcError::invalid_params(format!(
+                "failed to send transaction: {:?}",
+                e
+            ))
+        })?;
+
+        self.send_transaction_with_signature(tx)
     }
 
     fn send_usable_genesis_accounts(
@@ -582,6 +621,7 @@ impl DebugRpc for DebugRpcImpl {
             fn current_sync_phase(&self) -> RpcResult<String>;
             fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
+            fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<RpcH256>;
         }
     }
 }
