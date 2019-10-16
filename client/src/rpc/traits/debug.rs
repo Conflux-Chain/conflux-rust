@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    ConsensusGraphStates, SyncGraphStates, Transaction as RpcTransaction,
-    H256 as RpcH256,
+    Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
+    Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+    H520 as RpcH520, U128 as RpcU128,
 };
 use crate::rpc::types::SendTxRequest;
 use jsonrpc_core::Result as RpcResult;
@@ -72,4 +73,27 @@ pub trait DebugRpc {
     fn send_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<RpcH256>;
+
+    /// Returns accounts list.
+    #[rpc(name = "accounts")]
+    fn accounts(&self) -> RpcResult<Vec<RpcH160>>;
+
+    /// Create a new account
+    #[rpc(name = "new_account")]
+    fn new_account(&self, password: String) -> RpcResult<RpcH160>;
+
+    /// Unlock an account
+    #[rpc(name = "unlock_account")]
+    fn unlock_account(
+        &self, address: RpcH160, password: String, duration: Option<RpcU128>,
+    ) -> RpcResult<bool>;
+
+    /// Lock an account
+    #[rpc(name = "lock_account")]
+    fn lock_account(&self, address: RpcH160) -> RpcResult<bool>;
+
+    #[rpc(name = "sign")]
+    fn sign(
+        &self, data: RpcBytes, address: RpcH160, password: Option<String>,
+    ) -> RpcResult<RpcH520>;
 }

@@ -11,7 +11,8 @@ use crate::rpc::{
         CallRequest, ConsensusGraphStates, EpochNumber, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
         SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+        U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -606,6 +607,11 @@ impl DebugRpc for DebugRpcImpl {
             fn txpool_content(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
             fn txpool_inspect(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
+            fn accounts(&self) -> RpcResult<Vec<RpcH160>>;
+            fn new_account(&self, password: String) -> RpcResult<RpcH160>;
+            fn unlock_account(&self, address: RpcH160, password: String, duration: Option<RpcU128>) -> RpcResult<bool>;
+            fn lock_account(&self, address: RpcH160) -> RpcResult<bool>;
+            fn sign(&self, data: Bytes, address: RpcH160, password: Option<String>) -> RpcResult<RpcH520>;
         }
 
         target self.rpc_impl {

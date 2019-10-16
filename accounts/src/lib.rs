@@ -394,6 +394,20 @@ impl AccountProvider {
         Ok(())
     }
 
+    /// Lock an account
+    pub fn lock_account(&self, address: Address) -> Result<(), Error> {
+        let account = self.sstore.account_ref(&address)?;
+
+        let mut unlocked = self.unlocked.write();
+        if let Some(data) = unlocked.get(&account) {
+            if let Unlock::Perm = data.unlock {
+                self.unlocked_secrets.write().remove(&account);
+            }
+            unlocked.remove(&account);
+        }
+        Ok(())
+    }
+
     fn password(
         &self, account: &StoreAccountRef,
     ) -> Result<Password, SignError> {
