@@ -84,7 +84,7 @@ build_config! {
         (start_mining, (bool), false)
         (initial_difficulty, (Option<u64>), None)
         (tx_pool_size, (usize), 500_000)
-        (tx_pool_min_tx_gas, (u64), 1)
+        (tx_pool_min_tx_gas_price, (u64), 1)
         (mining_author, (Option<String>), None)
         (use_stratum, (bool), false)
         (stratum_port, (u16), 32525)
@@ -415,7 +415,7 @@ impl Configuration {
         let mut config = TxPoolConfig::default();
 
         config.capacity = self.raw_conf.tx_pool_size;
-        config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas;
+        config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
 
         config
     }
