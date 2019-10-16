@@ -42,6 +42,8 @@ pub enum BlockError {
     TemporarilyInvalid(OutOfBounds<SystemTime>),
     /// Too many referees in a block
     TooManyReferees(OutOfBounds<usize>),
+    /// Too long custom data in header
+    TooLongCustomInHeader(OutOfBounds<usize>),
     /// Too many transactions from a particular address.
     TooManyTransactions(Address),
     /// Parent given is unknown.
@@ -94,6 +96,9 @@ impl fmt::Display for BlockError {
             }
             UnknownParent(ref hash) => format!("Unknown parent: {}", hash),
             TooManyReferees(ref num) => format!("Too many referees: {}", num),
+            TooLongCustomInHeader(ref num) => {
+                format!("Too long custom data in block header: {}", num)
+            }
             TooManyTransactions(ref address) => {
                 format!("Too many transactions from: {}", address)
             }

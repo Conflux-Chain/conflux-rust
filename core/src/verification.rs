@@ -84,6 +84,18 @@ impl VerificationConfig {
     pub fn verify_header_params(
         &self, header: &mut BlockHeader,
     ) -> Result<(), Error> {
+        // Check header custom data length
+        let custom_len = header.custom().iter().fold(0, |acc, x| acc + x.len());
+        if custom_len > HEADER_CUSTOM_LENGTH_BOUND {
+            return Err(From::from(BlockError::TooLongCustomInHeader(
+                OutOfBounds {
+                    min: Some(0),
+                    max: Some(HEADER_CUSTOM_LENGTH_BOUND),
+                    found: custom_len,
+                },
+            )));
+        }
+
         // verify POW
         self.verify_pow(header)?;
 
