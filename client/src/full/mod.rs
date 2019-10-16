@@ -166,8 +166,8 @@ impl FullClient {
             conf.data_mananger_config(),
         ));
 
-        let txpool = Arc::new(TransactionPool::with_capacity(
-            conf.raw_conf.tx_pool_size,
+        let txpool = Arc::new(TransactionPool::new(
+            conf.txpool_config(),
             data_man.clone(),
         ));
 

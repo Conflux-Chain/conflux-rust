@@ -113,6 +113,7 @@ log_conf="log.yaml"
 # storage_idle_size=200000
 # storage_node_map_size=80000000
 # tx_pool_size=500_000
+# tx_pool_min_tx_gas_price=1
 
 # The following are the timeout parameters.
 #
