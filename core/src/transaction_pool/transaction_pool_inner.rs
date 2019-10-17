@@ -340,11 +340,7 @@ impl TransactionPoolInner {
     /// transactions.
     pub fn remaining_quota(&mut self) -> usize {
         let len = self.total_deferred();
-        if len < self.capacity {
-            self.capacity - len
-        } else {
-            self.garbage_collector.gc_size()
-        }
+        self.capacity - len + self.garbage_collector.gc_size()
     }
 
     // the new inserting will fail if tx_pool is full (even if `force` is true)
