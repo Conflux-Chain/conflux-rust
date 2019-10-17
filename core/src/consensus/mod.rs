@@ -827,8 +827,8 @@ impl ConsensusGraph {
                     .filter_map(|hash|
                         self.inner.read().block_execution_results_by_hash(&hash, false /* update_cache */).map(|r| (hash, (*r.1.receipts).clone()))
                     )
-                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, receipts, b.transaction_hashes())))
-                    .flat_map(|(hash, mut receipts, mut hashes)| {
+                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, b.block_header.height(), receipts, b.transaction_hashes())))
+                    .flat_map(|(hash, height, mut receipts, mut hashes)| {
                         if receipts.len() != hashes.len() {
                             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", hash, receipts.len(), hashes.len());
                             assert!(false);
@@ -853,8 +853,7 @@ impl ConsensusGraph {
                                     .map(move |(i, log)| LocalizedLogEntry {
                                         entry: log,
                                         block_hash: *hash,
-                                        // TODO
-                                        block_number: 0,
+                                        block_number: height,
                                         transaction_hash: tx_hash,
                                         // iterating in reverse order
                                         transaction_index: receipts_len - index - 1,
