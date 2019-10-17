@@ -3,7 +3,7 @@ use crate::{
     node_database::NodeDatabase,
     node_table::{NodeContact, NodeId},
 };
-use rand::{thread_rng, Rng, ThreadRng};
+use rand::{prelude::ThreadRng, thread_rng, Rng};
 use std::time::Duration;
 
 /// NodeBucket is used to manage the nodes that grouped by subnet,

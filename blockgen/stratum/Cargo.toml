@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 cfx-types = { path = "../../cfx_types" }
 keccak-hash = "0.2.0"
-jsonrpc-core = "10.0.1"
-jsonrpc-tcp-server = "10.0.1"
+jsonrpc-core = "=12.0.0"
+jsonrpc-tcp-server = "=12.0.0"
 log = "0.4"
 parking_lot = "0.8"
 
