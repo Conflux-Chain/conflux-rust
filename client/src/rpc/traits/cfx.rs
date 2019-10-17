@@ -34,10 +34,6 @@ pub trait Cfx {
     #[rpc(name = "cfx_gasPrice")]
     fn gas_price(&self) -> RpcResult<RpcU256>;
 
-    //        /// Returns accounts list.
-    //        #[rpc(name = "cfx_accounts")]
-    //        fn accounts(&self) -> RpcResult<Vec<RpcH160>>;
-
     /// Returns highest epoch number.
     #[rpc(name = "cfx_epochNumber")]
     fn epoch_number(

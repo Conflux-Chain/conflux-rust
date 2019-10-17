@@ -6,13 +6,17 @@ use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
     sync::Arc,
+    time::Duration,
 };
 
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use parking_lot::{Condvar, Mutex};
 
-use cfx_types::H256;
+use cfx_types::{Address, H256, U128};
 use cfxcore::{PeerInfo, SharedConsensusGraph, SharedTransactionPool};
+use ethcore_accounts::AccountProvider;
+use ethkey::Password;
+use keccak_hash::keccak;
 use primitives::{Action, SignedTransaction};
 
 use network::{
@@ -21,10 +25,13 @@ use network::{
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
 
+use crate::accounts::{account_provider, keys_path};
+
 use crate::rpc::types::{
-    Block as RpcBlock, BlockHashOrEpochNumber, EpochNumber,
+    Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
     Receipt as RpcReceipt, Status as RpcStatus, Transaction as RpcTransaction,
-    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
+    U256 as RpcU256, U64 as RpcU64,
 };
 
 fn grouped_txs<T, F>(
@@ -54,6 +61,7 @@ pub struct RpcImpl {
     consensus: SharedConsensusGraph,
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
+    accounts: Arc<AccountProvider>,
 }
 
 impl RpcImpl {
@@ -62,11 +70,17 @@ impl RpcImpl {
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
     ) -> Self
     {
+        let accounts = Arc::new(
+            account_provider(Some(keys_path()), None)
+                .ok()
+                .expect("failed to initialize account provider"),
+        );
         RpcImpl {
             exit,
             consensus,
             network,
             tx_pool,
+            accounts,
         }
     }
 }
@@ -527,5 +541,109 @@ impl RpcImpl {
         ret.insert("unexecuted".into(), unexecuted_len);
 
         Ok(ret)
+    }
+
+    pub fn accounts(&self) -> RpcResult<Vec<RpcH160>> {
+        let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
+            warn!("Could not fetch accounts. With error {:?}", e);
+            RpcError::internal_error()
+        })?;
+        Ok(accounts
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<RpcH160>>())
+    }
+
+    pub fn new_account(&self, password: String) -> RpcResult<RpcH160> {
+        let address: Address = self
+            .accounts
+            .new_account(&password.into())
+            .map(Into::into)
+            .map_err(|e| {
+                warn!("Could not create account. With error {:?}", e);
+                RpcError::internal_error()
+            })?;
+        Ok(address.into())
+    }
+
+    pub fn unlock_account(
+        &self, address: RpcH160, password: String, duration: Option<RpcU128>,
+    ) -> RpcResult<bool> {
+        let account: Address = address.into();
+        let store = self.accounts.clone();
+        let duration = match duration {
+            None => None,
+            Some(duration) => {
+                let duration: U128 = duration.into();
+                let v = duration.low_u64() as u32;
+                if duration != v.into() {
+                    return Err(RpcError::invalid_params(
+                        "invalid duration number",
+                    ));
+                } else {
+                    Some(v)
+                }
+            }
+        };
+
+        let r = match duration {
+            Some(0) => {
+                store.unlock_account_permanently(account, password.into())
+            }
+            Some(d) => store.unlock_account_timed(
+                account,
+                password.into(),
+                Duration::from_secs(d.into()),
+            ),
+            None => store.unlock_account_timed(
+                account,
+                password.into(),
+                Duration::from_secs(300),
+            ),
+        };
+        match r {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                warn!("Unable to unlock the account. With error {:?}", err);
+                Err(RpcError::internal_error())
+            }
+        }
+    }
+
+    pub fn lock_account(&self, address: RpcH160) -> RpcResult<bool> {
+        match self.accounts.lock_account(address.into()) {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                warn!("Unable to lock the account. With error {:?}", err);
+                Err(RpcError::internal_error())
+            }
+        }
+    }
+
+    pub fn sign(
+        &self, data: Bytes, address: RpcH160, password: Option<String>,
+    ) -> RpcResult<RpcH520> {
+        let message = self.eth_data_hash(data.0);
+        let password = password.map(|s| Password::from(s));
+        let signature =
+            match self.accounts.sign(address.into(), password, message) {
+                Ok(signature) => signature,
+                Err(err) => {
+                    warn!("Unable to sign the message. With error {:?}", err);
+                    return Err(RpcError::internal_error());
+                }
+            };
+        Ok(RpcH520(signature.into()))
+    }
+
+    /// Returns a eth_sign-compatible hash of data to sign.
+    /// The data is prepended with special message to prevent
+    /// malicious DApps from using the function to sign forged transactions.
+    fn eth_data_hash(&self, mut data: Vec<u8>) -> H256 {
+        let mut message_data =
+            format!("\x19Ethereum Signed Message:\n{}", data.len())
+                .into_bytes();
+        message_data.append(&mut data);
+        keccak(message_data)
     }
 }

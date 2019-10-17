@@ -31,7 +31,7 @@ pub use self::{
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     filter::Filter,
-    hash::{H160, H2048, H256, H512, H64},
+    hash::{H160, H2048, H256, H512, H520, H64},
     index::Index,
     log::Log,
     provenance::Origin,

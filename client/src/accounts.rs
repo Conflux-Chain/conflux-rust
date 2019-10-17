@@ -24,9 +24,7 @@ pub fn account_provider(
 }
 
 pub fn keys_dir(path: String) -> Result<RootDiskDirectory, String> {
-    let mut path = PathBuf::from(&path);
-    // TODO: make a global constant
-    path.push("conflux".to_string());
+    let path = PathBuf::from(&path);
     RootDiskDirectory::create(path)
         .map_err(|e| format!("Could not open keys directory: {}", e))
 }
