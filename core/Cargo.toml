@@ -21,7 +21,7 @@ rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" 
 lazy_static = "1.1.0"
 ethkey = { path = "../accounts/ethkey" }
 secret-store = { path = "../secret_store" }
-rand = "0.5"
+rand = "=0.6"
 error-chain = { version = "0.12", default-features = false }
 slab = "0.4"
 kvdb = {git="https://github.com/paritytech/parity-common.git", branch="ao-upstream-rocksdb", version = "0.2"}
