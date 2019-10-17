@@ -1009,7 +1009,7 @@ impl SynchronizationProtocolHandler {
 
             (short_byte_transactions, long_byte_transactions)
         };
-
+        debug!("Send short ids:{}, Send long ids:{}", short_byte_transactions.len(),long_byte_transactions.len());
         for tx in &short_byte_transactions {
             for i in 0..lucky_peers.len() {
                 //consist of [one random position byte, and last three
@@ -1022,7 +1022,8 @@ impl SynchronizationProtocolHandler {
                 );
             }
         }
-        let mut sent_transactions = short_byte_transactions;
+        let mut sent_transactions = vec![];
+        sent_transactions.extend(short_byte_transactions);
         if !long_byte_transactions.is_empty() {
             LONG_TX_PROPAGATE_METER.mark(long_byte_transactions.len());
             for tx in &long_byte_transactions {
