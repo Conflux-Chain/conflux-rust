@@ -16,7 +16,7 @@ use crate::{
 };
 pub use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, Rlp};
-
+use crate::sync::message::transactions::GetTransactionsFromLongIdResponse;
 // generate `pub mod msgid`
 build_msgid! {
     STATUS = 0x00
@@ -48,7 +48,11 @@ build_msgid! {
     GET_SNAPSHOT_MANIFEST_RESPONSE = 0x1a
     GET_SNAPSHOT_CHUNK = 0x1b
     GET_SNAPSHOT_CHUNK_RESPONSE = 0x1c
+    GET_TRANSACTIONS_FROM_LONG_ID = 0x1d
+    GET_TRANSACTIONS_FROM_LONG_ID_RESPONSE = 0x1e
 
+    GET_CHECKPOINT_BLAME_STATE_REQUEST = 0x1f
+    GET_CHECKPOINT_BLAME_STATE_RESPONSE = 0x20
     THROTTLED = 0xfe
 
     INVALID = 0xff
@@ -125,6 +129,16 @@ impl Message for GetTransactions {
     fn msg_name(&self) -> &'static str { "GetTransactions" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+}
+
+impl Message for GetTransactionsFromLongId {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_LONG_ID }
+
+    fn msg_name(&self) -> &'static str { "GetTransactionsFromLongId" }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
     fn get_request_id(&self) -> Option<RequestId> { Some(self.request_id) }
 
@@ -141,6 +155,17 @@ impl Message for GetTransactionsResponse {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 }
 
+impl Message for GetTransactionsFromLongIdResponse {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
+
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+}
 /// handle the RLP encoded message with given context `ctx`.
 /// If the message not handled, return `Ok(false)`.
 /// Otherwise, return `Ok(true)` if handled successfully
@@ -197,8 +222,14 @@ pub fn handle_rlp_message(
         msgid::GET_TRANSACTIONS => {
             handle_message::<GetTransactions>(ctx, rlp)?;
         }
+        msgid::GET_TRANSACTIONS_FROM_LONG_ID=>{
+            rlp.as_val::<GetTransactionsFromLongId>()?.handle(&ctx)?;
+        }
         msgid::GET_TRANSACTIONS_RESPONSE => {
             handle_message::<GetTransactionsResponse>(ctx, rlp)?;
+        }
+        msgid::GET_TRANSACTIONS_FROM_LONG_ID_RESPONSE=>{
+            rlp.as_val::<GetTransactionsFromLongIdResponse>()?.handle(&ctx)?;
         }
         msgid::GET_BLOCK_HASHES_BY_EPOCH => {
             handle_message::<GetBlockHashesByEpoch>(ctx, rlp)?;

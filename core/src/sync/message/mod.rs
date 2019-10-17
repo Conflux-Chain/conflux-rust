@@ -49,7 +49,7 @@ pub use self::{
     status::Status,
     throttling::Throttled,
     transactions::{
-        GetTransactions, GetTransactionsResponse, TransactionDigests,
+        GetTransactions,GetTransactionsFromLongId, GetTransactionsResponse, TransactionDigests,
         Transactions,
     },
 };
