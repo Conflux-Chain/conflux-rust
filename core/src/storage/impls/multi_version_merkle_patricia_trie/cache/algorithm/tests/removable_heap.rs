@@ -172,7 +172,7 @@ fn initialize_heap_with_removals_and_updates(
         let mut removals_set = HashSet::new();
         for _i in 0..kept_removals {
             loop {
-                let pos = rng.gen_range::<usize>(0, init_size as usize);
+                let pos = rng.gen_range(0, init_size as usize);
                 if removals_set.get(&pos).is_none() {
                     removals_set.insert(pos);
                     sum -= *values[pos].as_ref();
@@ -184,8 +184,7 @@ fn initialize_heap_with_removals_and_updates(
 
         for _i in 0..removals {
             loop {
-                let pos = rng
-                    .gen_range::<usize>(0, (init_size + insert_size) as usize);
+                let pos = rng.gen_range(0, (init_size + insert_size) as usize);
                 if removals_set.get(&pos).is_none() {
                     removals_set.insert(pos);
                     sum -= *values[pos].as_ref();
@@ -197,8 +196,7 @@ fn initialize_heap_with_removals_and_updates(
 
         for _i in 0..updates {
             loop {
-                let pos = rng
-                    .gen_range::<usize>(0, (init_size + insert_size) as usize);
+                let pos = rng.gen_range(0, (init_size + insert_size) as usize);
                 if removals_set.get(&pos).is_none() {
                     removals_set.insert(pos);
                     sum -= *values[pos].as_ref();
