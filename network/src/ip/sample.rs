@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use rand::{Rng, ThreadRng};
+use rand::{prelude::ThreadRng, Rng};
 use std::{collections::HashMap, hash::Hash, slice::Iter};
 
 /// HashMap that provide sampling in O(1) complexity.
