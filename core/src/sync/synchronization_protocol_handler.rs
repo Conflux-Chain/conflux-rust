@@ -43,6 +43,11 @@ use std::{
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "tx_propagate_set_size");
+    static ref LONG_TX_PROPAGATE_METER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "system_metrics",
+            "long_tx_propagate_set_size"
+        );
     static ref BLOCK_RECOVER_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync:recover_block");
     static ref PROPAGATE_TX_TIMER: Arc<dyn Meter> =
@@ -246,6 +251,7 @@ pub struct ProtocolConfiguration {
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub received_tx_index_maintain_timeout: Duration,
+    pub inflight_pending_tx_index_maintain_timeout:Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
     pub min_peers_propagation: usize,
@@ -958,49 +964,79 @@ impl SynchronizationProtocolHandler {
             .map(|_| (rand::thread_rng().gen(), rand::thread_rng().gen()))
             .collect();
 
-        let mut messages: Vec<Vec<u8>> = vec![vec![]; lucky_peers.len()];
-
-        let sent_transactions = {
+        let mut short_trans_messages: Vec<Vec<u8>> =
+            vec![vec![]; lucky_peers.len()];
+        let mut long_trans_message: Vec<H256> = vec![];
+        let (short_byte_transactions, long_byte_transactions) = {
             let mut transactions = self.get_to_propagate_trans();
             if transactions.is_empty() {
                 return;
             }
 
             let mut total_tx_bytes = 0;
-            let mut sent_transactions = Vec::new();
+            let mut short_byte_transactions: Vec<Arc<SignedTransaction>> =
+                Vec::new();
+            let mut long_byte_transactions: Vec<Arc<SignedTransaction>> =
+                Vec::new();
 
-            for (h, tx) in transactions.iter() {
+            let received_pool =
+                self.request_manager.received_transactions.read();
+            for (_, tx) in transactions.iter() {
                 total_tx_bytes += tx.rlp_size();
                 if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPAGATE {
                     break;
                 }
-                sent_transactions.push(tx.clone());
-
-                for i in 0..lucky_peers.len() {
-                    //consist of [one random position byte, and last three
-                    // bytes]
-                    TransactionDigests::append_to_message(
-                        &mut messages[i],
-                        nonces[i].0,
-                        nonces[i].1,
-                        h,
-                    );
+                if received_pool
+                    .bucket_limit_reached_from_full_tx_id(&tx.hash())
+                {
+                    short_byte_transactions.push(tx.clone());
+                } else {
+                    long_byte_transactions.push(tx.clone());
                 }
             }
 
-            if sent_transactions.len() != transactions.len() {
-                for tx in sent_transactions.iter() {
+            if short_byte_transactions.len() + long_byte_transactions.len()
+                != transactions.len()
+            {
+                for tx in short_byte_transactions.iter() {
+                    transactions.remove(&tx.hash);
+                }
+                for tx in long_byte_transactions.iter() {
                     transactions.remove(&tx.hash);
                 }
                 self.set_to_propagate_trans(transactions);
             }
 
-            sent_transactions
+            (short_byte_transactions, long_byte_transactions)
         };
+
+        for tx in &short_byte_transactions {
+            for i in 0..lucky_peers.len() {
+                //consist of [one random position byte, and last three
+                // bytes]
+                TransactionDigests::append_short_trans_id(
+                    &mut short_trans_messages[i],
+                    nonces[i].0,
+                    nonces[i].1,
+                    &tx.hash(),
+                );
+            }
+        }
+        let mut sent_transactions = short_byte_transactions;
+        if !long_byte_transactions.is_empty() {
+            LONG_TX_PROPAGATE_METER.mark(long_byte_transactions.len());
+            for tx in &long_byte_transactions {
+                TransactionDigests::append_long_trans_id(
+                    &mut long_trans_message,
+                    tx.hash(),
+                );
+            }
+            sent_transactions.extend(long_byte_transactions);
+        }
 
         TX_PROPAGATE_METER.mark(sent_transactions.len());
 
-        if sent_transactions.is_empty() {
+        if sent_transactions.len() == 0 {
             return;
         }
 
@@ -1021,7 +1057,8 @@ impl SynchronizationProtocolHandler {
                 window_index,
                 key1,
                 key2,
-                messages.pop().unwrap(),
+                short_trans_messages.pop().unwrap(),
+                long_trans_message.clone(),
             );
             match tx_msg.send(io, peer_id) {
                 Ok(_) => {
