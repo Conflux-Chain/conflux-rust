@@ -989,9 +989,9 @@ impl SynchronizationProtocolHandler {
                 if received_pool
                     .bucket_limit_reached_from_full_tx_id(&tx.hash())
                 {
-                    short_byte_transactions.push(tx.clone());
-                } else {
                     long_byte_transactions.push(tx.clone());
+                } else {
+                    short_byte_transactions.push(tx.clone());
                 }
             }
 
