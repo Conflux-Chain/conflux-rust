@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub mod delta;
-mod restore;
+pub mod restore;
 mod snapshot_chunk_request;
 mod snapshot_chunk_response;
 mod snapshot_chunk_sync;
