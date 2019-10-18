@@ -35,5 +35,5 @@ where DbType:
 use super::{
     super::storage_db::*, errors::*, storage_db::snapshot_mpt::SnapshotMpt,
 };
-use crate::sync::RangedManifest;
+use crate::sync::delta::RangedManifest;
 use std::borrow::BorrowMut;

@@ -5,14 +5,15 @@
 use crate::{
     block_data_manager::ConsensusGraphExecutionInfo,
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
+    storage::state_manager::StateManager,
     sync::{
         message::{Context, DynamicCapability},
         state::{
+            delta::{Chunk, ChunkKey},
             restore::Restorer,
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
             snapshot_manifest_response::SnapshotManifestResponse,
-            storage::{Chunk, ChunkKey},
         },
         SynchronizationProtocolHandler,
     },
@@ -87,7 +88,7 @@ struct Inner {
 
 impl Inner {
     fn reset(&mut self, checkpoint: H256, trusted_blame_block: H256) {
-        self.checkpoint = checkpoint;
+        self.checkpoint = checkpoint.clone();
         self.trusted_blame_block = trusted_blame_block;
         self.status = Status::DownloadingManifest(Instant::now());
         self.true_state_root_by_blame_info = H256::zero();
@@ -97,7 +98,7 @@ impl Inner {
         self.pending_chunks.clear();
         self.downloading_chunks.clear();
         self.num_downloaded = 0;
-        self.restorer = Restorer::default();
+        self.restorer = Restorer::new_with_default_root_dir(checkpoint);
     }
 }
 
@@ -346,7 +347,9 @@ impl SnapshotChunkSync {
             );
 
             // start to restore and update status
-            inner.restorer.start_to_restore();
+            inner.restorer.start_to_restore(
+                ctx.manager.graph.data_man.storage_manager.clone(),
+            );
             inner.status = Status::Restoring(Instant::now());
         }
 
@@ -354,7 +357,7 @@ impl SnapshotChunkSync {
     }
 
     /// Update the progress of snapshot restoration.
-    pub fn update_restore_progress(&self) {
+    pub fn update_restore_progress(&self, state_manager: Arc<StateManager>) {
         let mut inner = self.inner.write();
 
         let start_time = match inner.status {
@@ -374,7 +377,7 @@ impl SnapshotChunkSync {
         );
 
         // verify the blame state
-        let root = inner.restorer.restored_state_root();
+        let root = inner.restorer.restored_state_root(state_manager);
         if root.compute_state_root_hash() == inner.true_state_root_by_blame_info
         {
             // TODO: restore commitment and exec_info

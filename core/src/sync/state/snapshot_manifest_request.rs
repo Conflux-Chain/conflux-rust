@@ -10,8 +10,8 @@ use crate::{
         },
         request_manager::Request,
         state::{
+            delta::{ChunkKey, RangedManifest},
             snapshot_manifest_response::SnapshotManifestResponse,
-            storage::ChunkKey, RangedManifest,
         },
         Error, ProtocolConfiguration,
     },
