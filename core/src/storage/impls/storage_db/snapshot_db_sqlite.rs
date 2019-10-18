@@ -355,7 +355,7 @@ impl SnapshotDbSqlite {
             .finish_ignore_rows()?;
 
         // Dump code.
-        delta_mpt.iterate(DeltaMptDumperSqlite::new(self))
+        delta_mpt.iterate(&mut DeltaMptDumperSqlite::new(self))
     }
 
     /// Dropping is optional, because these tables are necessary to provide

@@ -166,7 +166,7 @@ pub struct DeltaMptInserter {
 
 impl DeltaMptInserter {
     pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
-        &self, mut dumper: DeltaMptDumper,
+        &self, dumper: &mut DeltaMptDumper,
     ) -> Result<()> {
         match &self.maybe_root_node {
             None => {}
@@ -186,7 +186,7 @@ impl DeltaMptInserter {
                     &self.mpt,
                     guarded_trie_node,
                     CompressedPathRaw::new_zeroed(0, 0),
-                    &mut dumper,
+                    dumper,
                     db,
                 )?;
             }

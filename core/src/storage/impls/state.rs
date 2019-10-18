@@ -458,6 +458,17 @@ impl<'a> State<'a> {
             }
         }
     }
+
+    pub fn dump<DUMPER: KVInserter<(Vec<u8>, Box<[u8]>)>>(
+        &self, dumper: &mut DUMPER,
+    ) -> Result<()> {
+        let inserter = DeltaMptInserter {
+            mpt: self.delta_trie.clone(),
+            maybe_root_node: self.delta_trie_root.clone(),
+        };
+
+        inserter.iterate(dumper)
+    }
 }
 
 use super::{
@@ -482,3 +493,5 @@ use std::{
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };
+use crate::storage::impls::multi_version_merkle_patricia_trie::merkle_patricia_trie::cow_node_ref::KVInserter;
+use crate::storage::impls::storage_manager::DeltaMptInserter;
