@@ -5,6 +5,7 @@
 use crate::storage;
 use network;
 use rlp::DecoderError;
+use std::io;
 
 error_chain! {
     links {
@@ -14,6 +15,7 @@ error_chain! {
 
     foreign_links {
         Decoder(DecoderError);
+        Io(io::Error);
     }
 
     errors {
