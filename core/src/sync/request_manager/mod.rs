@@ -31,7 +31,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tx_handler::{ReceivedTransactionContainer, SentTransactionContainer,InflightPendingTrasnactionItem,InflightPendingTransactionContainer};
-use hibitset::BitSetLike;
 
 mod request_handler;
 pub mod tx_handler;
