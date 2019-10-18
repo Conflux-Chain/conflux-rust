@@ -103,7 +103,6 @@ impl Restorer {
             .spawn(move || {
                 let total = progress_cloned.total.load(Relaxed);
                 debug!("start to restore snapshot chunks, total = {}", total);
-                let mut state = state_manager.get_state_for_genesis_write();
 
                 while let Some(key) = state_cloned.write().next() {
                     let chunk = chunk_reader
@@ -113,6 +112,15 @@ impl Restorer {
                     let chunk = Rlp::new(&chunk)
                         .as_val::<Chunk>()
                         .expect("failed to decode chunk for restoration");
+
+                    let epoch_id =
+                        SnapshotAndEpochIdRef::new(&checkpoint, None);
+                    let mut state = state_manager
+                        .get_state_no_commit(epoch_id)
+                        .expect("failed to get checkpoint state")
+                        .unwrap_or_else(|| {
+                            state_manager.get_state_for_genesis_write()
+                        });
 
                     chunk
                         .restore(&mut state, Some(checkpoint))
