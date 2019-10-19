@@ -274,19 +274,19 @@ impl RequestManager {
             for i in 0..fixed_bytes_vector.len() {
                 let fixed_bytes= fixed_bytes_vector[i];
                 let random_bytes = random_byte_vector[i];
-                if received_transactions
-                    .bucket_limit_reached(&fixed_bytes)
-                {
-                    long_id_indices.push(i);
-                    continue;
-                }
+
                 if received_transactions.contains_short_tx_id(
                     fixed_bytes,
                     random_bytes,
                     key1,
                     key2,
                 ) {
-                    // Already received
+                    if received_transactions
+                        .bucket_limit_reached(&fixed_bytes)
+                    {
+                        long_id_indices.push(i);
+                    }
+                    // Already received or need to request long id
                     continue;
                 }
 
