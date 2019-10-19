@@ -1424,7 +1424,7 @@ impl ConsensusNewBlockHandler {
                         &pivot_hash,
                         None,
                     ))
-                    .unwrap()
+                    .expect("State DB failure")
                 {
                     for i in epoch_arena_indices {
                         if let Some(r) = self
