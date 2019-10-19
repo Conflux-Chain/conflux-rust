@@ -144,7 +144,7 @@ impl BlockDataManager {
                     &checkpoint_hash,
                     false, /* update_cache */
                 ) {
-                    if data_man.state_exist(&checkpoint_hash) {
+                    if data_man.state_exists(&checkpoint_hash) {
                         let mut cur_hash =
                             *checkpoint_block.block_header.parent_hash();
                         for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
@@ -153,7 +153,7 @@ impl BlockDataManager {
                                 &cur_hash, false, /* update_cache */
                             );
                             if cur_block.is_some()
-                                && data_man.state_exist(&cur_hash)
+                                && data_man.state_exists(&cur_hash)
                             {
                                 let cur_block = cur_block.unwrap();
                                 cur_hash =
@@ -672,13 +672,13 @@ impl BlockDataManager {
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
         // `block_receipts_root` is not computed when recovering from db
         self.get_epoch_execution_commitments(epoch_hash).is_some()
-            && self.state_exist(epoch_hash)
+            && self.state_exists(epoch_hash)
     }
 
     /// Return `true` if storage contains the state for the given epoch.
     ///
     /// This function will panic if the storage returns error.
-    pub fn state_exist(&self, epoch_hash: &H256) -> bool {
+    pub fn state_exists(&self, epoch_hash: &H256) -> bool {
         self.storage_manager
             .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
             .expect("State DB failure")
