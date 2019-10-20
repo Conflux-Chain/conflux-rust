@@ -144,14 +144,7 @@ impl BlockDataManager {
                     &checkpoint_hash,
                     false, /* update_cache */
                 ) {
-                    if data_man
-                        .storage_manager
-                        .contains_state(SnapshotAndEpochIdRef::new(
-                            &checkpoint_hash,
-                            None,
-                        ))
-                        .unwrap()
-                    {
+                    if data_man.state_exists(&checkpoint_hash) {
                         let mut cur_hash =
                             *checkpoint_block.block_header.parent_hash();
                         for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
@@ -160,12 +153,7 @@ impl BlockDataManager {
                                 &cur_hash, false, /* update_cache */
                             );
                             if cur_block.is_some()
-                                && data_man
-                                    .storage_manager
-                                    .contains_state(SnapshotAndEpochIdRef::new(
-                                        &cur_hash, None,
-                                    ))
-                                    .unwrap()
+                                && data_man.state_exists(&cur_hash)
                             {
                                 let cur_block = cur_block.unwrap();
                                 cur_hash =
@@ -664,6 +652,7 @@ impl BlockDataManager {
         );
     }
 
+    /// Get in-mem execution commitments.
     pub fn get_epoch_execution_commitments(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitments> {
@@ -671,6 +660,42 @@ impl BlockDataManager {
             .read()
             .get(block_hash)
             .map(Clone::clone)
+    }
+
+    /// Check in-mem execution commitments first. If missing, use on-disk
+    /// execution info of some latter block to recover it.
+    pub fn get_epoch_execution_commitments_with_db(
+        &self, block_hash: &H256,
+    ) -> Option<EpochExecutionCommitments> {
+        let maybe_commitments =
+            self.get_epoch_execution_commitments(block_hash);
+        if maybe_commitments.is_some() {
+            return maybe_commitments;
+        }
+
+        // Double check if `block_hash` is on the pivot chain on disk
+        let epoch_number = self.block_header_by_hash(block_hash)?.height();
+        let pivot_block =
+            self.epoch_set_hashes_from_db(epoch_number)?.last()?;
+        if *block_hash != *pivot_block {
+            debug("get_epoch_execution_commitments: block is not in memory and not pivot on disk. block_hash={:?} pivot_block={:?}", block_hash, pivot_block);
+            return None;
+        }
+
+        // find the pivot block whose deferred block is `block_hash` and use
+        // original_deferred_state_root to get the state root from db
+        let latter_pivot_block = self
+            .epoch_set_hashes_from_db(
+                epoch_number + DEFERRED_STATE_EPOCH_COUNT,
+            )?
+            .last()?;
+        let latter_execution_info =
+            self.consensus_graph_execution_info_from_db(latter_pivot_block)?;
+        Some(EpochExecutionCommitments {
+            receipts_root: latter_execution_info.original_deferred_state_root,
+            logs_bloom_hash: latter_execution_info
+                .original_deferred_logs_bloom_hash,
+        })
     }
 
     pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {
@@ -684,10 +709,16 @@ impl BlockDataManager {
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
         // `block_receipts_root` is not computed when recovering from db
         self.get_epoch_execution_commitments(epoch_hash).is_some()
-            && self
-                .storage_manager
-                .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
-                .unwrap()
+            && self.state_exists(epoch_hash)
+    }
+
+    /// Return `true` if storage contains the state for the given epoch.
+    ///
+    /// This function will panic if the storage returns error.
+    pub fn state_exists(&self, epoch_hash: &H256) -> bool {
+        self.storage_manager
+            .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
+            .expect("State DB failure")
     }
 
     /// Check if all executed results of an epoch exist

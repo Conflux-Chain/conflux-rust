@@ -820,8 +820,11 @@ impl ConsensusExecutionHandler {
             .get_state_root()
             .expect("No DB Error")?;
 
-        let epoch_execution_commitments =
-            self.data_man.get_epoch_execution_commitments(epoch_hash)?;
+        // Check db if the commitment has been removed from memory by
+        // checkpoint.
+        let epoch_execution_commitments = self
+            .data_man
+            .get_epoch_execution_commitments_with_db(epoch_hash)?;
         Some((
             state_root,
             epoch_execution_commitments.receipts_root,
