@@ -23,6 +23,7 @@ use primitives::{Account, MerkleHash};
 use rlp::Rlp;
 use std::{
     cmp::min,
+    env::current_dir,
     fs::{create_dir_all, remove_dir_all},
     path::{Path, PathBuf},
     str::FromStr,
@@ -32,7 +33,7 @@ use std::{
 
 // cargo run --release -p cfxcore --example restore_checkpoint_delta
 fn main() -> Result<(), Error> {
-    let test_dir = PathBuf::from("E:\\zzzzzz");
+    let test_dir = current_dir()?.join("test_restore_checkpoint_delta");
     if test_dir.exists() {
         remove_dir_all(&test_dir)?;
     }
@@ -43,7 +44,7 @@ fn main() -> Result<(), Error> {
     let sm1 = new_state_manager(test_dir.join("db1").to_str().unwrap())?;
     let (genesis_hash, genesis_root) = initialize_genesis(&sm1)?;
     let (checkpoint, checkpoint_root) =
-        prepare_checkpoint(&sm1, &genesis_hash, 5_000_000)?;
+        prepare_checkpoint(&sm1, &genesis_hash, 1_000_000)?;
     let chunk_store_dir = test_dir
         .join("state_checkpoints")
         .to_str()
@@ -160,8 +161,6 @@ fn initialize_genesis(
 fn prepare_checkpoint(
     manager: &StateManager, parent: &H256, accounts: usize,
 ) -> Result<(H256, MerkleHash), Error> {
-    let checkpoint = H256::random();
-
     let mut state = manager
         .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(parent, None))?
         .unwrap();
@@ -169,16 +168,16 @@ fn prepare_checkpoint(
     state.set("234".as_bytes(), vec![2, 3, 4].into_boxed_slice())?;
     state.set("235".as_bytes(), vec![2, 3, 5].into_boxed_slice())?;
     state.compute_state_root()?;
+    let mut checkpoint = H256::random();
     state.commit(checkpoint)?;
 
     println!("begin to add {} accounts for checkpoint ...", accounts);
-    let mut root = H256::zero();
     let start = Instant::now();
     let mut pending = accounts;
     while pending > 0 {
-        let n = min(100_000, pending);
+        let n = min(10_000, pending);
         let start2 = Instant::now();
-        root = add_accounts(manager, checkpoint, n);
+        checkpoint = add_epoch_with_accounts(manager, &checkpoint, n);
         pending -= n;
         let progress = (accounts - pending) * 100 / accounts;
         println!(
@@ -190,16 +189,22 @@ fn prepare_checkpoint(
     }
 
     println!("all accounts added in {:?}", start.elapsed());
+
+    let root = manager.get_state_no_commit(SnapshotAndEpochIdRef::new(&checkpoint, None))?
+        .unwrap()
+        .get_state_root()?
+        .unwrap()
+        .state_root.delta_root;
     println!("checkpoint root: {:?}", root);
 
     Ok((checkpoint, root))
 }
 
-fn add_accounts(
-    manager: &StateManager, epoch: H256, accounts: usize,
-) -> MerkleHash {
-    let epoch_id = SnapshotAndEpochIdRef::new(&epoch, None);
-    let state = manager.get_state_no_commit(epoch_id).unwrap().unwrap();
+fn add_epoch_with_accounts(
+    manager: &StateManager, parent: &H256, accounts: usize,
+) -> H256 {
+    let epoch_id = SnapshotAndEpochIdRef::new(parent, None);
+    let state = manager.get_state_for_next_epoch(epoch_id).unwrap().unwrap();
     let mut state = StateDb::new(state);
     for i in 0..accounts {
         let addr = Address::random();
@@ -207,7 +212,8 @@ fn add_accounts(
             Account::new_empty_with_balance(&addr, &i.into(), &0.into());
         state.set(&state.account_key(&addr), &account).unwrap();
     }
-    let root = state.compute_state_root().unwrap();
+    state.compute_state_root().unwrap();
+    let epoch = H256::random();
     state.commit(epoch).unwrap();
-    root.state_root.delta_root
+    epoch
 }
