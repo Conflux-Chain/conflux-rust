@@ -665,26 +665,26 @@ impl BlockDataManager {
     /// Check in-mem execution commitments first. If missing, use on-disk
     /// execution info of some later block to recover it.
     pub fn get_epoch_execution_commitments_with_db(
-        &self, block_hash: &H256,
+        &self, epoch_hash: &H256,
     ) -> Option<EpochExecutionCommitments> {
         let maybe_commitments =
-            self.get_epoch_execution_commitments(block_hash);
+            self.get_epoch_execution_commitments(epoch_hash);
         if maybe_commitments.is_some() {
             return maybe_commitments;
         }
 
-        // Double check if `block_hash` is on the pivot chain on disk
-        let epoch_number = self.block_header_by_hash(block_hash)?.height();
+        // Double check if `epoch_hash` is on the pivot chain on disk
+        let epoch_number = self.block_header_by_hash(epoch_hash)?.height();
         let pivot_hash =
             self.epoch_set_hashes_from_db(epoch_number)?.last()?.clone();
-        if *block_hash != pivot_hash {
+        if *epoch_hash != pivot_hash {
             debug!("get_epoch_execution_commitments: block is not in memory and not pivot on disk. \
-                block_hash={:?} pivot_block={:?}", block_hash, pivot_hash);
+                block_hash={:?} pivot_block={:?}", epoch_hash, pivot_hash);
             return None;
         }
 
-        // find the pivot block whose deferred block is `block_hash` and use its
-        // execution info to recover the execution commitments for `block_hash`
+        // find the pivot block whose deferred block is `epoch_hash` and use its
+        // execution info to recover the execution commitments for `epoch_hash`
         let exec_pivot_hash = self
             .epoch_set_hashes_from_db(
                 epoch_number + DEFERRED_STATE_EPOCH_COUNT,
