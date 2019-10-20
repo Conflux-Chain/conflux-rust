@@ -663,7 +663,7 @@ impl BlockDataManager {
     }
 
     /// Check in-mem execution commitments first. If missing, use on-disk
-    /// execution info of some latter block to recover it.
+    /// execution info of some later block to recover it.
     pub fn get_epoch_execution_commitments_with_db(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitments> {
@@ -685,17 +685,17 @@ impl BlockDataManager {
 
         // find the pivot block whose deferred block is `block_hash` and use its
         // execution info to recover the execution commitments for `block_hash`
-        let latter_pivot_hash = self
+        let exec_pivot_hash = self
             .epoch_set_hashes_from_db(
                 epoch_number + DEFERRED_STATE_EPOCH_COUNT,
             )?
             .last()?
             .clone();
-        let latter_execution_info =
-            self.consensus_graph_execution_info_from_db(&latter_pivot_hash)?;
+        let exec_execution_info =
+            self.consensus_graph_execution_info_from_db(&exec_pivot_hash)?;
         Some(EpochExecutionCommitments {
-            receipts_root: latter_execution_info.original_deferred_state_root,
-            logs_bloom_hash: latter_execution_info
+            receipts_root: exec_execution_info.original_deferred_state_root,
+            logs_bloom_hash: exec_execution_info
                 .original_deferred_logs_bloom_hash,
         })
     }
