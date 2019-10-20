@@ -675,22 +675,24 @@ impl BlockDataManager {
 
         // Double check if `block_hash` is on the pivot chain on disk
         let epoch_number = self.block_header_by_hash(block_hash)?.height();
-        let pivot_block =
-            self.epoch_set_hashes_from_db(epoch_number)?.last()?;
-        if *block_hash != *pivot_block {
-            debug("get_epoch_execution_commitments: block is not in memory and not pivot on disk. block_hash={:?} pivot_block={:?}", block_hash, pivot_block);
+        let pivot_hash =
+            self.epoch_set_hashes_from_db(epoch_number)?.last()?.clone();
+        if *block_hash != pivot_hash {
+            debug!("get_epoch_execution_commitments: block is not in memory and not pivot on disk. \
+                block_hash={:?} pivot_block={:?}", block_hash, pivot_hash);
             return None;
         }
 
-        // find the pivot block whose deferred block is `block_hash` and use
-        // original_deferred_state_root to get the state root from db
-        let latter_pivot_block = self
+        // find the pivot block whose deferred block is `block_hash` and use its
+        // execution info to recover the execution commitments for `block_hash`
+        let latter_pivot_hash = self
             .epoch_set_hashes_from_db(
                 epoch_number + DEFERRED_STATE_EPOCH_COUNT,
             )?
-            .last()?;
+            .last()?
+            .clone();
         let latter_execution_info =
-            self.consensus_graph_execution_info_from_db(latter_pivot_block)?;
+            self.consensus_graph_execution_info_from_db(&latter_pivot_hash)?;
         Some(EpochExecutionCommitments {
             receipts_root: latter_execution_info.original_deferred_state_root,
             logs_bloom_hash: latter_execution_info
