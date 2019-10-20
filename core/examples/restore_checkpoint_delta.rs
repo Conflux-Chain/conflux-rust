@@ -25,7 +25,7 @@ use std::{
     cmp::min,
     env::current_dir,
     fs::{create_dir_all, remove_dir_all},
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
