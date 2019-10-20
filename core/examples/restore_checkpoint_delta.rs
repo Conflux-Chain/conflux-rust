@@ -190,11 +190,13 @@ fn prepare_checkpoint(
 
     println!("all accounts added in {:?}", start.elapsed());
 
-    let root = manager.get_state_no_commit(SnapshotAndEpochIdRef::new(&checkpoint, None))?
+    let root = manager
+        .get_state_no_commit(SnapshotAndEpochIdRef::new(&checkpoint, None))?
         .unwrap()
         .get_state_root()?
         .unwrap()
-        .state_root.delta_root;
+        .state_root
+        .delta_root;
     println!("checkpoint root: {:?}", root);
 
     Ok((checkpoint, root))
