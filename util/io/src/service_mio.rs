@@ -35,6 +35,7 @@ use slab::Slab;
 use std::{
     collections::HashMap,
     sync::{
+        atomic::{AtomicBool, Ordering},
         mpsc::{self, Sender as AsyncSender},
         Arc, Condvar as SCondvar, Mutex as SMutex, Weak,
     },
@@ -622,6 +623,8 @@ where Message: Send + Sync + 'static
     thread: Mutex<Option<JoinHandle<()>>>,
     host_channel: Mutex<Sender<IoMessage<Message>>>,
     handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
+    network_poll_thread: Mutex<Option<JoinHandle<()>>>,
+    network_poll_stopped: Arc<AtomicBool>,
 }
 
 impl<Message> IoService<Message>
@@ -649,11 +652,21 @@ where Message: Send + Sync + 'static
             thread: Mutex::new(Some(thread)),
             host_channel: Mutex::new(channel),
             handlers,
+            network_poll_thread: Mutex::new(None),
+            network_poll_stopped: Arc::new(AtomicBool::new(false)),
         })
     }
 
     pub fn stop(&self) {
         trace!(target: "shutdown", "[IoService] Closing...");
+        // Network poll should be closed before the main EventLoop, otherwise it
+        // will send messages to a closed EventLoop.
+        self.network_poll_stopped.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.network_poll_thread.lock().take() {
+            thread.join().unwrap_or_else(|e| {
+                debug!(target: "shutdown", "Error joining network poll thread: {:?}", e);
+            });
+        }
         // Clear handlers so that shared pointers are not stuck on stack
         // in Channel::send_sync
         self.handlers.write().clear();
@@ -670,15 +683,20 @@ where Message: Send + Sync + 'static
     }
 
     pub fn start_network_poll(
-        network_poll: Arc<Poll>, handler: Arc<dyn IoHandler<Message>>,
+        &self, network_poll: Arc<Poll>, handler: Arc<dyn IoHandler<Message>>,
         main_event_loop_channel: IoChannel<Message>, max_sessions: usize,
     )
     {
-        thread::Builder::new()
+        let network_poll_stopped = self.network_poll_stopped.clone();
+        let thread = thread::Builder::new()
             .name("network_eventloop".into())
             .spawn(move || {
                 let mut events = Events::with_capacity(max_sessions);
                 loop {
+                    if network_poll_stopped.load(Ordering::Relaxed) {
+                        // IoService is dropped
+                        break;
+                    }
                     network_poll
                         .poll(&mut events, None)
                         .expect("Network poll failure");
@@ -718,6 +736,7 @@ where Message: Send + Sync + 'static
                 }
             })
             .expect("only one io_service thread, so it should not fail");
+        *self.network_poll_thread.lock() = Some(thread);
     }
 
     /// Regiter an IO handler with the event loop.

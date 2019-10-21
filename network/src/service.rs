@@ -172,12 +172,15 @@ impl NetworkService {
         let handler = self.inner.as_ref().unwrap().clone();
         let main_event_loop_channel =
             self.io_service.as_ref().unwrap().channel();
-        IoService::start_network_poll(
-            network_poll,
-            handler,
-            main_event_loop_channel,
-            MAX_SESSIONS,
-        );
+        self.io_service
+            .as_ref()
+            .expect("Already set")
+            .start_network_poll(
+                network_poll,
+                handler,
+                main_event_loop_channel,
+                MAX_SESSIONS,
+            );
         Ok(())
     }
 
