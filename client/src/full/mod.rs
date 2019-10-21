@@ -322,6 +322,7 @@ impl FullClient {
             blockgen.clone(),
             txpool.clone(),
             txgen.clone(),
+            conf.rpc_impl_config(),
         ));
 
         let common_impl = Arc::new(CommonImpl::new(

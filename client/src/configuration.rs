@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
@@ -125,6 +126,7 @@ build_config! {
         (block_db_type, (String), "rocksdb".to_string())
         (rocksdb_disable_wal, (bool), false)
         (enable_state_expose, (bool), false)
+        (get_logs_filter_max_limit, (Option<usize>), None)
     }
     {
         (
@@ -418,6 +420,12 @@ impl Configuration {
         config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
 
         config
+    }
+
+    pub fn rpc_impl_config(&self) -> RpcImplConfiguration {
+        RpcImplConfiguration {
+            get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
+        }
     }
 }
 

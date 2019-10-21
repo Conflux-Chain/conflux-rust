@@ -243,9 +243,7 @@ impl ConsensusGraph {
         &self, epoch_number: EpochNumber,
     ) -> Result<u64, String> {
         Ok(match epoch_number {
-            EpochNumber::Earliest => {
-                self.inner.read_recursive().get_cur_era_genesis_height()
-            }
+            EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
             EpochNumber::LatestState => self.executed_best_state_epoch_number(),
             EpochNumber::Number(num) => {
@@ -768,22 +766,20 @@ impl ConsensusGraph {
             };
 
             let mut blocks = vec![];
-            for epoch_number in from_epoch..(to_epoch + 1) {
-                let epoch_hash = inner.arena
-                    [inner.get_pivot_block_arena_index(epoch_number)]
-                .hash;
-                for index in &inner.arena
-                    [inner.get_pivot_block_arena_index(epoch_number)]
-                .data
-                .ordered_executable_epoch_blocks
-                {
-                    let hash = inner.arena[*index].hash;
+            // `cur_era_genesis` does not maintain epoch set in memory
+            for epoch_number in
+                from_epoch..(inner.get_cur_era_genesis_height() + 1)
+            {
+                let epoch_set = self
+                    .data_man
+                    .epoch_set_hashes_from_db(epoch_number)
+                    .expect("epoch set past checkpoint should exist");
+                let epoch_hash = epoch_set.last().expect("Not empty");
+                for hash in &epoch_set {
                     if let Some(block_log_bloom) = self
                         .data_man
                         .block_execution_result_by_hash_with_epoch(
-                            &hash,
-                            &epoch_hash,
-                            false, /* update_cache */
+                            hash, epoch_hash, false, /* update_cache */
                         )
                         .map(|r| r.bloom)
                     {
@@ -791,7 +787,33 @@ impl ConsensusGraph {
                             continue;
                         }
                     }
-                    blocks.push(hash);
+                    blocks.push(*hash);
+                }
+            }
+            for epoch_number in
+                (inner.get_cur_era_genesis_height() + 1)..(to_epoch + 1)
+            {
+                let epoch_hash = &inner.arena
+                    [inner.get_pivot_block_arena_index(epoch_number)]
+                .hash;
+                for index in &inner.arena
+                    [inner.get_pivot_block_arena_index(epoch_number)]
+                .data
+                .ordered_executable_epoch_blocks
+                {
+                    let hash = &inner.arena[*index].hash;
+                    if let Some(block_log_bloom) = self
+                        .data_man
+                        .block_execution_result_by_hash_with_epoch(
+                            hash, epoch_hash, false, /* update_cache */
+                        )
+                        .map(|r| r.bloom)
+                    {
+                        if !bloom_match(&block_log_bloom) {
+                            continue;
+                        }
+                    }
+                    blocks.push(*hash);
                 }
             }
 
@@ -903,16 +925,6 @@ impl ConsensusGraph {
     /// the whole block packing process can be atomic.
     pub fn get_best_info(&self) -> Arc<BestInformation> {
         self.best_info.read_recursive().clone()
-    }
-
-    /// Get the set of block hashes inside an epoch
-    pub fn block_hashes_by_epoch(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<Vec<H256>, String> {
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                self.inner.read_recursive().block_hashes_by_epoch(height)
-            })
     }
 
     /// This function returns the set of blocks that are two eras farther from
