@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::command::helpers::{input_password, password_prompt};
 use clap::ArgMatches;
 use futures::future::Future;
 use jsonrpc_core::{Params, Value};
@@ -101,6 +102,8 @@ impl<'a> ArgSchema<'a> {
             },
             "bool" => Ok(Some(Value::Bool(matches.is_present(self.arg_name)))),
             "u64" => self.u64(matches),
+            "password" => Ok(Some(self.password()?)),
+            "password2" => Ok(Some(self.password2()?)),
             _ => {
                 if self.arg_type.starts_with("map(")
                     && self.arg_type.ends_with(")")
@@ -144,5 +147,13 @@ impl<'a> ArgSchema<'a> {
         }
 
         Ok(Value::Object(object))
+    }
+
+    fn password(&self) -> Result<Value, String> {
+        input_password().map(|pwd| Value::String(pwd.as_str().to_string()))
+    }
+
+    fn password2(&self) -> Result<Value, String> {
+        password_prompt().map(|pwd| Value::String(pwd.as_str().to_string()))
     }
 }

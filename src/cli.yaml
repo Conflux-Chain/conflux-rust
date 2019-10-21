@@ -530,7 +530,7 @@ subcommands:
                             - rpc-args:
                                 multiple: true
                                 use_delimiter: true
-                                default_value: tx:map(from;to;gasPrice;gas;value;data;nonce),password
+                                default_value: tx:map(from;to;gasPrice;gas;value;data;nonce),password:password
                                 hidden: true
                             - from:
                                 help: Transaction from address
@@ -571,12 +571,6 @@ subcommands:
                                 long: nonce
                                 takes_value: true
                                 value_name: HEX
-                            - password:
-                                help: Used to decrypt private key of sender to sign transaction
-                                long: password
-                                required: true
-                                takes_value: true
-                                value_name: STRING
                     - account:
                         about: Account related subcommands
                         setting: SubcommandRequiredElseHelp
@@ -596,13 +590,8 @@ subcommands:
                                     - rpc-args:
                                         multiple: true
                                         use_delimiter: true
-                                        default_value: password
+                                        default_value: password:password2
                                         hidden: true
-                                    - password:
-                                        help: Password for the account
-                                        long: password
-                                        required: true
-                                        takes_value: true
                             - unlock:
                                 about: Unlock an account
                                 args:
@@ -612,16 +601,11 @@ subcommands:
                                     - rpc-args:
                                         multiple: true
                                         use_delimiter: true
-                                        default_value: address,password,duration
+                                        default_value: address,password:password,duration
                                         hidden: true
                                     - address:
                                         help: Address of the account
                                         long: address
-                                        required: true
-                                        takes_value: true
-                                    - password:
-                                        help: Password for the account
-                                        long: password
                                         required: true
                                         takes_value: true
                                     - duration:
