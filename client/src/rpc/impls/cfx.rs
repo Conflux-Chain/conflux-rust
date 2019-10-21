@@ -254,20 +254,29 @@ impl RpcImpl {
         };
 
         // Operations below will not involve the status of ConsensusInner
+        let block = self
+            .consensus
+            .data_man
+            .block_by_hash(&address.block_hash, true)
+            .ok_or(RpcError::internal_error())?;
+        let transaction = block
+            .transactions
+            .get(address.index)
+            .ok_or(RpcError::internal_error())?
+            .as_ref()
+            .clone();
         let receipt = execution_result
             .receipts
             .get(address.index)
             .ok_or(RpcError::internal_error())?
             .clone();
-        let block = self
+        let mut rpc_receipt = RpcReceipt::new(transaction, receipt, address);
+        let epoch_block_header = self
             .consensus
             .data_man
-            .block_by_hash(&epoch_hash, true)
+            .block_header_by_hash(&epoch_hash)
             .ok_or(RpcError::internal_error())?;
-        let transaction = block.transactions[address.index].clone();
-        let mut rpc_receipt =
-            RpcReceipt::new(transaction.as_ref().clone(), receipt, address);
-        let epoch_number = block.block_header.height();
+        let epoch_number = epoch_block_header.height();
         rpc_receipt.set_epoch_number(Some(epoch_number));
         rpc_receipt.set_state_root(state_root.into());
         Ok(Some(rpc_receipt))

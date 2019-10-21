@@ -1417,7 +1417,7 @@ impl ConsensusNewBlockHandler {
                     Vec::with_capacity(epoch_arena_indices.len());
 
                 let mut already_executed = true;
-                if self.data_man.epoch_executed(&pivot_hash) {
+                if self.data_man.state_exists(&pivot_hash) {
                     for i in epoch_arena_indices {
                         if let Some(r) = self
                             .data_man
