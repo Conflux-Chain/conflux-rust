@@ -759,12 +759,6 @@ impl ConsensusGraph {
             }
 
             let blooms = filter.bloom_possibilities();
-            let bloom_match = |block_log_bloom: &Bloom| {
-                blooms
-                    .iter()
-                    .any(|bloom| block_log_bloom.contains_bloom(bloom))
-            };
-
             let mut blocks = vec![];
             // `cur_era_genesis` does not maintain epoch set in memory
             for epoch_number in
@@ -776,16 +770,8 @@ impl ConsensusGraph {
                     .expect("epoch set past checkpoint should exist");
                 let epoch_hash = epoch_set.last().expect("Not empty");
                 for hash in &epoch_set {
-                    if let Some(block_log_bloom) = self
-                        .data_man
-                        .block_execution_result_by_hash_with_epoch(
-                            hash, epoch_hash, false, /* update_cache */
-                        )
-                        .map(|r| r.bloom)
-                    {
-                        if !bloom_match(&block_log_bloom) {
-                            continue;
-                        }
+                    if !self.block_matches_bloom(hash, epoch_hash, &blooms) {
+                        continue;
                     }
                     blocks.push(*hash);
                 }
@@ -802,16 +788,8 @@ impl ConsensusGraph {
                 .ordered_executable_epoch_blocks
                 {
                     let hash = &inner.arena[*index].hash;
-                    if let Some(block_log_bloom) = self
-                        .data_man
-                        .block_execution_result_by_hash_with_epoch(
-                            hash, epoch_hash, false, /* update_cache */
-                        )
-                        .map(|r| r.bloom)
-                    {
-                        if !bloom_match(&block_log_bloom) {
-                            continue;
-                        }
+                    if !self.block_matches_bloom(hash, epoch_hash, &blooms) {
+                        continue;
                     }
                     blocks.push(*hash);
                 }
@@ -827,6 +805,28 @@ impl ConsensusGraph {
             |entry| filter.matches(entry),
             filter.limit,
         ))
+    }
+
+    /// Return `true` if block log_bloom exists and matches some filter in given
+    /// `blooms`.
+    fn block_matches_bloom(
+        &self, block_hash: &H256, epoch_hash: &H256, blooms: &Vec<Bloom>,
+    ) -> bool {
+        if let Some(block_log_bloom) = self
+            .data_man
+            .block_execution_result_by_hash_with_epoch(
+                hash, epoch_hash, false, /* update_cache */
+            )
+            .map(|r| r.bloom)
+        {
+            if blooms
+                .iter()
+                .any(|bloom| block_log_bloom.contains_bloom(bloom))
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// Returns logs matching given filter. The order of logs returned will be
