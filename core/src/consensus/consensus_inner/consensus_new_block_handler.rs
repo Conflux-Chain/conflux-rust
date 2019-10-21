@@ -20,6 +20,7 @@ use crate::{
         state::StateTrait, state_manager::StateManagerTrait,
         SnapshotAndEpochIdRef,
     },
+    sync::delta::CHECKPOINT_DUMP_MANAGER,
     SharedTransactionPool,
 };
 use cfx_types::H256;
@@ -287,6 +288,8 @@ impl ConsensusNewBlockHandler {
         inner
             .data_man
             .set_cur_consensus_era_genesis_hash(&cur_era_hash, &next_era_hash);
+
+        CHECKPOINT_DUMP_MANAGER.read().dump_async(cur_era_hash);
     }
 
     fn compute_anticone_bruteforce(
