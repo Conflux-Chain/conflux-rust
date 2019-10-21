@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod chunk;
+mod compress;
 mod dumper;
 mod manifest;
 mod reader;

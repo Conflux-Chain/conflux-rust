@@ -3,14 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::{
-    state::delta::{Chunk, StateDumper},
+    state::delta::{compress::read_single_zip_file, Chunk, StateDumper},
     Error,
 };
 use cfx_types::H256;
-use std::{
-    fs::{read, read_dir},
-    path::PathBuf,
-};
+use std::{fs::read_dir, path::PathBuf};
 
 pub struct ChunkReader {
     epoch_dir: PathBuf,
@@ -49,6 +46,6 @@ impl ChunkReader {
             return Ok(None);
         }
 
-        Ok(Some(read(path)?))
+        Ok(Some(read_single_zip_file(path.as_path())?))
     }
 }

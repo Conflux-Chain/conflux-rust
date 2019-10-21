@@ -5,7 +5,9 @@
 use crate::{
     storage::state::{State, StateTrait},
     sync::{
-        state::delta::{ChunkKey, ChunkReader, StateDumper},
+        state::delta::{
+            compress::write_single_zip_file, ChunkKey, ChunkReader, StateDumper,
+        },
         Error, ErrorKind,
     },
 };
@@ -15,7 +17,7 @@ use primitives::StateRootWithAuxInfo;
 use rlp::{Encodable, Rlp};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
-    fs::{create_dir_all, write},
+    fs::create_dir_all,
     io::Error as IoError,
     path::{Path, PathBuf},
     str::FromStr,
@@ -67,7 +69,7 @@ impl Chunk {
         let hash = keccak(&content);
 
         let file_path = Self::chunk_file_path(dir, &hash);
-        write(file_path, &content)?;
+        write_single_zip_file(file_path.as_path(), &content)?;
 
         Ok(Some(hash))
     }
