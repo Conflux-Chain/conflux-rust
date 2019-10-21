@@ -19,12 +19,16 @@
 // See http://www.gnu.org/licenses/
 
 use ethkey::Password;
+use rpassword::read_password;
 use std::{
     fs::File,
     io::{self, BufRead, BufReader, Write},
 };
 
 pub use dir::helpers::{replace_home, replace_home_and_local};
+
+const PASSWORD_STDIN_ERROR: &str =
+    "Unable to ask for password on non-interactive terminal.";
 
 /// Flush output buffer.
 pub fn flush_stdout() {
@@ -33,25 +37,35 @@ pub fn flush_stdout() {
 
 /// Prompts user asking for password.
 pub fn password_prompt() -> Result<Password, String> {
-    use rpassword::read_password;
-    const STDIN_ERROR: &'static str =
-        "Unable to ask for password on non-interactive terminal.";
-
     println!("Please note that password is NOT RECOVERABLE.");
     print!("Type password: ");
     flush_stdout();
 
-    let password = read_password().map_err(|_| STDIN_ERROR.to_owned())?.into();
+    let password = read_password()
+        .map_err(|_| PASSWORD_STDIN_ERROR.to_owned())?
+        .into();
 
     print!("Repeat password: ");
     flush_stdout();
 
-    let password_repeat =
-        read_password().map_err(|_| STDIN_ERROR.to_owned())?.into();
+    let password_repeat = read_password()
+        .map_err(|_| PASSWORD_STDIN_ERROR.to_owned())?
+        .into();
 
     if password != password_repeat {
         return Err("Passwords do not match!".into());
     }
+
+    Ok(password)
+}
+
+pub fn input_password() -> Result<Password, String> {
+    print!("Type password: ");
+    flush_stdout();
+
+    let password = read_password()
+        .map_err(|_| PASSWORD_STDIN_ERROR.to_owned())?
+        .into();
 
     Ok(password)
 }
