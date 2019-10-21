@@ -825,22 +825,16 @@ impl ConsensusGraph {
             .flat_map(move |blocks_chunk| {
                 blocks_chunk.into_par_iter()
                     .filter_map(|hash|
-                        self.inner.read().block_execution_results_by_hash(&hash, false /* update_cache */).map(|r| (hash, (*r.1.receipts).clone()))
+                        self.inner.read().block_execution_results_by_hash(&hash, false /* update_cache */).map(|r| (hash, r.0, (*r.1.receipts).clone()))
                     )
-                    .filter_map(|(hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, receipts, b.transaction_hashes())))
-                    .flat_map(|(hash, mut receipts, mut hashes)| {
+                    .filter_map(|(hash, epoch_hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, epoch_hash, receipts, b.transaction_hashes())))
+                    .filter_map(|(hash, epoch_hash, receipts, hashes)| self.data_man.block_by_hash(&epoch_hash, false /* update_cache */).map(|b| (hash, b.block_header.height(), receipts, hashes)))
+                    .flat_map(|(hash, epoch, mut receipts, mut hashes)| {
                         if receipts.len() != hashes.len() {
                             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", hash, receipts.len(), hashes.len());
                             assert!(false);
                         }
                         let mut log_index = receipts.iter().fold(0, |sum, receipt| sum + receipt.logs.len());
-                        let epoch = match self.get_block_epoch_number(hash) {
-                            Some(epoch) => epoch,
-                            None => {
-                                warn!("Unable to get epoch number for block {:?}", hash);
-                                return 0;
-                            },
-                        };
 
                         let receipts_len = receipts.len();
                         hashes.reverse();
