@@ -6,7 +6,7 @@ use crate::{
     message::{Message, MsgId},
     sync::{
         message::{msgid, Context, Handleable},
-        state::{RangedManifest, SnapshotManifestRequest},
+        state::{delta::RangedManifest, SnapshotManifestRequest},
         Error, ErrorKind,
     },
 };

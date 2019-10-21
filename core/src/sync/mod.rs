@@ -18,7 +18,7 @@ pub mod utils;
 
 pub use self::{
     error::{Error, ErrorKind},
-    state::RangedManifest,
+    state::{delta, restore},
     synchronization_graph::{
         SharedSynchronizationGraph, SyncGraphConfig, SyncGraphStatistics,
         SynchronizationGraph, SynchronizationGraphInner,

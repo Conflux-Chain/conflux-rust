@@ -312,7 +312,9 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
 
         if self.state_sync.checkpoint() == checkpoint {
             if let Status::Restoring(_) = self.state_sync.status() {
-                self.state_sync.update_restore_progress();
+                self.state_sync.update_restore_progress(
+                    sync_handler.graph.data_man.storage_manager.clone(),
+                );
             }
 
             if self.state_sync.status() == Status::Completed {

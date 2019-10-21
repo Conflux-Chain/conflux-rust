@@ -409,6 +409,7 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+            ErrorKind::Io(_) => disconnect = false,
             ErrorKind::Network(kind) => match kind {
                 network::ErrorKind::AddressParse => disconnect = false,
                 network::ErrorKind::AddressResolve(_) => disconnect = false,

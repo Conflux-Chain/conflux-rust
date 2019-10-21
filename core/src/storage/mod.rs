@@ -22,7 +22,9 @@ pub use self::{
         defaults,
         errors::{Error, ErrorKind, Result},
         multi_version_merkle_patricia_trie::{
-            guarded_value::GuardedValue, MultiVersionMerklePatriciaTrie,
+            guarded_value::GuardedValue,
+            merkle_patricia_trie::cow_node_ref::KVInserter,
+            MultiVersionMerklePatriciaTrie,
         },
         snapshot_sync::MptSlicer,
         storage_db::{

@@ -61,7 +61,7 @@ impl<'a> MptMerger<'a> {
             }
         }
 
-        inserter.iterate(Merger { merger: self })?;
+        inserter.iterate(&mut Merger { merger: self })?;
 
         self.rw_cursor.finish()
     }
