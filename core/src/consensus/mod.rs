@@ -760,41 +760,38 @@ impl ConsensusGraph {
 
             let blooms = filter.bloom_possibilities();
             let mut blocks = vec![];
-            // `cur_era_genesis` does not maintain epoch set in memory
-            for epoch_number in
-                from_epoch..(inner.get_cur_era_genesis_height() + 1)
-            {
-                let epoch_set = self
-                    .data_man
-                    .epoch_set_hashes_from_db(epoch_number)
-                    .expect("epoch set past checkpoint should exist");
-                let epoch_hash = epoch_set.last().expect("Not empty");
-                for hash in &epoch_set {
-                    if !self.block_matches_bloom(hash, epoch_hash, &blooms) {
-                        continue;
+            for epoch_number in from_epoch..(to_epoch + 1) {
+                if epoch_number <= inner.get_cur_era_genesis_height() {
+                    // Blocks before (including) `cur_era_genesis` does not has
+                    // epoch set in memory, so we should get
+                    // the epoch set from db
+                    let epoch_set = self
+                        .data_man
+                        .epoch_set_hashes_from_db(epoch_number)
+                        .expect("epoch set past checkpoint should exist");
+                    let epoch_hash = epoch_set.last().expect("Not empty");
+                    for hash in &epoch_set {
+                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
+                            blocks.push(*hash);
+                        }
                     }
-                    blocks.push(*hash);
+                } else {
+                    // Use the epoch set maintained in memory
+                    let epoch_hash = &inner.arena
+                        [inner.get_pivot_block_arena_index(epoch_number)]
+                    .hash;
+                    for index in &inner.arena
+                        [inner.get_pivot_block_arena_index(epoch_number)]
+                    .data
+                    .ordered_executable_epoch_blocks
+                    {
+                        let hash = &inner.arena[*index].hash;
+                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
+                            blocks.push(*hash);
+                        }
+                    }
                 }
             }
-            for epoch_number in
-                (inner.get_cur_era_genesis_height() + 1)..(to_epoch + 1)
-            {
-                let epoch_hash = &inner.arena
-                    [inner.get_pivot_block_arena_index(epoch_number)]
-                .hash;
-                for index in &inner.arena
-                    [inner.get_pivot_block_arena_index(epoch_number)]
-                .data
-                .ordered_executable_epoch_blocks
-                {
-                    let hash = &inner.arena[*index].hash;
-                    if !self.block_matches_bloom(hash, epoch_hash, &blooms) {
-                        continue;
-                    }
-                    blocks.push(*hash);
-                }
-            }
-
             blocks
         } else {
             filter.block_hashes.as_ref().unwrap().clone()
