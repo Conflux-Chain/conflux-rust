@@ -652,6 +652,7 @@ impl BlockDataManager {
         );
     }
 
+    /// Get in-mem execution commitments.
     pub fn get_epoch_execution_commitments(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitments> {
@@ -659,6 +660,44 @@ impl BlockDataManager {
             .read()
             .get(block_hash)
             .map(Clone::clone)
+    }
+
+    /// Check in-mem execution commitments first. If missing, use on-disk
+    /// execution info of some later block to recover it.
+    pub fn get_epoch_execution_commitments_with_db(
+        &self, epoch_hash: &H256,
+    ) -> Option<EpochExecutionCommitments> {
+        let maybe_commitments =
+            self.get_epoch_execution_commitments(epoch_hash);
+        if maybe_commitments.is_some() {
+            return maybe_commitments;
+        }
+
+        // Double check if `epoch_hash` is on the pivot chain on disk
+        let epoch_number = self.block_header_by_hash(epoch_hash)?.height();
+        let pivot_hash =
+            self.epoch_set_hashes_from_db(epoch_number)?.last()?.clone();
+        if *epoch_hash != pivot_hash {
+            debug!("get_epoch_execution_commitments: block is not in memory and not pivot on disk. \
+                block_hash={:?} pivot_block={:?}", epoch_hash, pivot_hash);
+            return None;
+        }
+
+        // find the pivot block whose deferred block is `epoch_hash` and use its
+        // execution info to recover the execution commitments for `epoch_hash`
+        let exec_pivot_hash = self
+            .epoch_set_hashes_from_db(
+                epoch_number + DEFERRED_STATE_EPOCH_COUNT,
+            )?
+            .last()?
+            .clone();
+        let exec_execution_info =
+            self.consensus_graph_execution_info_from_db(&exec_pivot_hash)?;
+        Some(EpochExecutionCommitments {
+            receipts_root: exec_execution_info.original_deferred_state_root,
+            logs_bloom_hash: exec_execution_info
+                .original_deferred_logs_bloom_hash,
+        })
     }
 
     pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {
