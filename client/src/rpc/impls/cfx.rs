@@ -33,7 +33,13 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use super::common::RpcImpl as CommonImpl;
 
+#[derive(Default)]
+pub struct RpcImplConfiguration {
+    pub get_logs_filter_max_limit: Option<usize>,
+}
+
 pub struct RpcImpl {
+    config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
@@ -42,13 +48,14 @@ pub struct RpcImpl {
 }
 use crate::rpc::types::SendTxRequest;
 use cfxcore::block_data_manager::BlockExecutionResultWithEpoch;
+use primitives::filter::Filter;
 use txgen::TransactionGenerator;
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
-        tx_gen: Arc<TransactionGenerator>,
+        tx_gen: Arc<TransactionGenerator>, config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
@@ -57,6 +64,7 @@ impl RpcImpl {
             block_gen,
             tx_pool,
             tx_gen,
+            config,
         }
     }
 
@@ -464,8 +472,17 @@ impl RpcImpl {
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs({:?})", filter);
+        let mut filter: Filter = filter.into();
+        // If max_limit is set, the value in `filter` will be modified to
+        // satisfy this limitation to avoid loading too many blocks
+        // TODO Should the response indicates that the filter is modified?
+        if let Some(max_limit) = self.config.get_logs_filter_max_limit {
+            if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+                filter.limit = Some(max_limit);
+            }
+        }
         self.consensus
-            .logs(filter.into())
+            .logs(filter)
             .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())

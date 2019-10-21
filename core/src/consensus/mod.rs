@@ -243,9 +243,7 @@ impl ConsensusGraph {
         &self, epoch_number: EpochNumber,
     ) -> Result<u64, String> {
         Ok(match epoch_number {
-            EpochNumber::Earliest => {
-                self.inner.read_recursive().get_cur_era_genesis_height()
-            }
+            EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
             EpochNumber::LatestState => self.executed_best_state_epoch_number(),
             EpochNumber::Number(num) => {
@@ -761,40 +759,39 @@ impl ConsensusGraph {
             }
 
             let blooms = filter.bloom_possibilities();
-            let bloom_match = |block_log_bloom: &Bloom| {
-                blooms
-                    .iter()
-                    .any(|bloom| block_log_bloom.contains_bloom(bloom))
-            };
-
             let mut blocks = vec![];
             for epoch_number in from_epoch..(to_epoch + 1) {
-                let epoch_hash = inner.arena
-                    [inner.get_pivot_block_arena_index(epoch_number)]
-                .hash;
-                for index in &inner.arena
-                    [inner.get_pivot_block_arena_index(epoch_number)]
-                .data
-                .ordered_executable_epoch_blocks
-                {
-                    let hash = inner.arena[*index].hash;
-                    if let Some(block_log_bloom) = self
+                if epoch_number <= inner.get_cur_era_genesis_height() {
+                    // Blocks before (including) `cur_era_genesis` does not has
+                    // epoch set in memory, so we should get
+                    // the epoch set from db
+                    let epoch_set = self
                         .data_man
-                        .block_execution_result_by_hash_with_epoch(
-                            &hash,
-                            &epoch_hash,
-                            false, /* update_cache */
-                        )
-                        .map(|r| r.bloom)
-                    {
-                        if !bloom_match(&block_log_bloom) {
-                            continue;
+                        .epoch_set_hashes_from_db(epoch_number)
+                        .expect("epoch set past checkpoint should exist");
+                    let epoch_hash = epoch_set.last().expect("Not empty");
+                    for hash in &epoch_set {
+                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
+                            blocks.push(*hash);
                         }
                     }
-                    blocks.push(hash);
+                } else {
+                    // Use the epoch set maintained in memory
+                    let epoch_hash = &inner.arena
+                        [inner.get_pivot_block_arena_index(epoch_number)]
+                    .hash;
+                    for index in &inner.arena
+                        [inner.get_pivot_block_arena_index(epoch_number)]
+                    .data
+                    .ordered_executable_epoch_blocks
+                    {
+                        let hash = &inner.arena[*index].hash;
+                        if self.block_matches_bloom(hash, epoch_hash, &blooms) {
+                            blocks.push(*hash);
+                        }
+                    }
                 }
             }
-
             blocks
         } else {
             filter.block_hashes.as_ref().unwrap().clone()
@@ -805,6 +802,28 @@ impl ConsensusGraph {
             |entry| filter.matches(entry),
             filter.limit,
         ))
+    }
+
+    /// Return `true` if block log_bloom exists and matches some filter in given
+    /// `blooms`.
+    fn block_matches_bloom(
+        &self, block_hash: &H256, epoch_hash: &H256, blooms: &Vec<Bloom>,
+    ) -> bool {
+        if let Some(block_log_bloom) = self
+            .data_man
+            .block_execution_result_by_hash_with_epoch(
+                block_hash, epoch_hash, false, /* update_cache */
+            )
+            .map(|r| r.bloom)
+        {
+            if blooms
+                .iter()
+                .any(|bloom| block_log_bloom.contains_bloom(bloom))
+            {
+                return true;
+            }
+        }
+        false
     }
 
     /// Returns logs matching given filter. The order of logs returned will be
@@ -903,16 +922,6 @@ impl ConsensusGraph {
     /// the whole block packing process can be atomic.
     pub fn get_best_info(&self) -> Arc<BestInformation> {
         self.best_info.read_recursive().clone()
-    }
-
-    /// Get the set of block hashes inside an epoch
-    pub fn block_hashes_by_epoch(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<Vec<H256>, String> {
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                self.inner.read_recursive().block_hashes_by_epoch(height)
-            })
     }
 
     /// This function returns the set of blocks that are two eras farther from

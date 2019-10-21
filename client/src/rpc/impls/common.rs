@@ -192,7 +192,7 @@ impl RpcImpl {
         info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
 
         self.consensus
-            .block_hashes_by_epoch(num.into())
+            .get_block_hashes_by_epoch(num.into())
             .map_err(|err| RpcError::invalid_params(err))
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
     }
