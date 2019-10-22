@@ -17,9 +17,13 @@ use crate::rpc::{
 };
 use cfx_types::{Address, U256};
 use cfxcore::{
-    block_data_manager::BlockDataManager, genesis, statistics::Statistics,
-    storage::StorageManager, sync::SyncPhaseType,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
+    block_data_manager::BlockDataManager,
+    genesis,
+    statistics::Statistics,
+    storage::StorageManager,
+    sync::{delta::CHECKPOINT_DUMP_MANAGER, SyncPhaseType},
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    vm_factory::VmFactory,
     ConsensusGraph, LightProvider, SynchronizationGraph,
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
@@ -156,6 +160,10 @@ impl FullClient {
             U256::zero(),
         );
         debug!("Initialize genesis_block={:?}", genesis_block);
+
+        CHECKPOINT_DUMP_MANAGER
+            .write()
+            .initialize(storage_manager.clone());
 
         let data_man = Arc::new(BlockDataManager::new(
             cache_config,

@@ -19,7 +19,7 @@ use crate::{
             GetBlockHeadersResponse, NewBlockHashes, Status,
             TransactionDigests,
         },
-        state::SnapshotChunkSync,
+        state::{delta::CHECKPOINT_DUMP_MANAGER, SnapshotChunkSync},
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
     },
 };
@@ -1273,6 +1273,15 @@ impl SynchronizationProtocolHandler {
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }
+
+    fn notify_checkpoint_capability(&self, io: &dyn NetworkContext) {
+        if let Some(checkpoint) =
+            CHECKPOINT_DUMP_MANAGER.read().take_notification()
+        {
+            DynamicCapability::ServeCheckpoint(Some(checkpoint))
+                .broadcast(io, &self.syn);
+        }
+    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -1396,6 +1405,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_sync_phase(io);
+                self.notify_checkpoint_capability(io);
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();

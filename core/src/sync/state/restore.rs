@@ -116,7 +116,7 @@ impl Restorer {
                     let epoch_id =
                         SnapshotAndEpochIdRef::new(&checkpoint, None);
                     let mut state = state_manager
-                        .get_state_no_commit(epoch_id)
+                        .get_state_for_next_epoch(epoch_id)
                         .expect("failed to get checkpoint state")
                         .unwrap_or_else(|| {
                             state_manager.get_state_for_genesis_write()
