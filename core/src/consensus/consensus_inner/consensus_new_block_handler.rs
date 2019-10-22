@@ -289,7 +289,7 @@ impl ConsensusNewBlockHandler {
             .set_cur_consensus_era_genesis_hash(&cur_era_hash, &next_era_hash);
     }
 
-    fn compute_anticone_bruteforce(
+    pub fn compute_anticone_bruteforce(
         inner: &ConsensusGraphInner, me: usize,
     ) -> BitSet {
         let parent = inner.arena[me].parent;
