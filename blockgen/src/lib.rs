@@ -201,6 +201,7 @@ impl BlockGenerator {
             self.graph.check_mining_adaptive_block(
                 &mut *self.graph.consensus.inner.write(),
                 &parent_hash,
+                &referee,
                 &expected_difficulty,
             )
         };

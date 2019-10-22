@@ -17,7 +17,7 @@ use crate::{
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
 };
 use cfx_types::{H256, U256, U512};
-use hibitset::{BitSet, BitSetLike};
+use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{
     CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
 };
@@ -828,11 +828,61 @@ impl ConsensusGraphInner {
     }
 
     pub fn check_mining_adaptive_block(
-        &mut self, parent_arena_index: usize, difficulty: U256,
-    ) -> bool {
+        &mut self, parent_arena_index: usize, referee_indices: Vec<usize>,
+        difficulty: U256,
+    ) -> bool
+    {
+        // We first compute anticone barrier for newly mined block
+        let parent_anticone_opt = self.anticone_cache.get(parent_arena_index);
+        let mut anticone;
+        if parent_anticone_opt.is_none() {
+            anticone = consensus_new_block_handler::ConsensusNewBlockHandler::compute_anticone_bruteforce(
+                self, parent_arena_index,
+            );
+            anticone |= &self.compute_future_bitset(parent_arena_index);
+        } else {
+            anticone = self.compute_future_bitset(parent_arena_index);
+            for index in parent_anticone_opt.unwrap() {
+                anticone.add(*index as u32);
+            }
+        }
+        let mut my_past = BitSet::new();
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        for index in referee_indices {
+            queue.push_back(index);
+        }
+        while let Some(index) = queue.pop_front() {
+            if my_past.contains(index as u32) {
+                continue;
+            }
+            my_past.add(index as u32);
+            let idx_parent = self.arena[index].parent;
+            if anticone.contains(idx_parent as u32) {
+                queue.push_back(idx_parent);
+            }
+            for referee in &self.arena[index].referees {
+                if anticone.contains(*referee as u32) {
+                    queue.push_back(*referee);
+                }
+            }
+        }
+        for index in my_past.drain() {
+            anticone.remove(index);
+        }
+
+        let mut anticone_barrier = BitSet::new();
+        for index in (&anticone).iter() {
+            let parent = self.arena[index as usize].parent as u32;
+            if self.arena[index as usize].era_block != NULL
+                && !anticone.contains(parent)
+            {
+                anticone_barrier.add(index);
+            }
+        }
+
         let (_stable, adaptive) = self.adaptive_weight_impl(
             parent_arena_index,
-            &BitSet::new(),
+            &anticone_barrier,
             None,
             i128::try_from(difficulty.low_u128()).unwrap(),
         );

@@ -1156,12 +1156,13 @@ impl SynchronizationGraph {
 
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        difficulty: &U256,
+        referees: &Vec<H256>, difficulty: &U256,
     ) -> bool
     {
         self.consensus.check_mining_adaptive_block(
             inner,
             parent_hash,
+            referees,
             difficulty,
         )
     }

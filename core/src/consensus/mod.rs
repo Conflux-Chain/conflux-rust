@@ -230,12 +230,20 @@ impl ConsensusGraph {
     /// not
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        difficulty: &U256,
+        referees: &Vec<H256>, difficulty: &U256,
     ) -> bool
     {
         let parent_index =
             *inner.hash_to_arena_indices.get(parent_hash).unwrap();
-        inner.check_mining_adaptive_block(parent_index, *difficulty)
+        let referee_indices: Vec<_> = referees
+            .iter()
+            .map(|h| *inner.hash_to_arena_indices.get(h).unwrap())
+            .collect();
+        inner.check_mining_adaptive_block(
+            parent_index,
+            referee_indices,
+            *difficulty,
+        )
     }
 
     /// Convert EpochNumber to height based on the current ConsensusGraph

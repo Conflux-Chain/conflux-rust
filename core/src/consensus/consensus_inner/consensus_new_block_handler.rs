@@ -296,7 +296,7 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    fn compute_anticone_bruteforce(
+    pub fn compute_anticone_bruteforce(
         inner: &ConsensusGraphInner, me: usize,
     ) -> BitSet {
         let parent = inner.arena[me].parent;
