@@ -196,7 +196,8 @@ class TestNode:
             retry += 1
 
         if retry > max_retry:
-            raise AssertionError(f"Node did not reach any of {phases} after {wait_time} seconds")
+            current_phase = self.current_sync_phase()
+            raise AssertionError(f"Node did not reach any of {phases} after {wait_time} seconds, current phase is {current_phase}")
 
     def wait_for_nodeid(self):
         pubkey, x, y = get_nodeid(self)

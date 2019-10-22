@@ -31,6 +31,7 @@ test_subdirs = [
     "", # include test_dir itself
     "light",
     "network_tests",
+    "full_node_tests",
 ]
 
 # By default, run all *_test.py files in the specified subfolders.
