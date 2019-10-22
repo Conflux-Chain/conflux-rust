@@ -182,8 +182,18 @@ impl Block {
                 BlockTransactions::Full(tx_vec)
             }
         };
+
+        let block_hash = b.block_header.hash();
+
+        let epoch_number = consensus_inner
+            .get_block_epoch_number(&block_hash)
+            .or_else(|| {
+                consensus_inner.get_block_epoch_number_from_disk(&block_hash)
+            })
+            .map(Into::into);
+
         Block {
-            hash: H256::from(b.block_header.hash().clone()),
+            hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
             height: b.block_header.height().into(),
             miner: H160::from(b.block_header.author().clone()),
@@ -205,15 +215,13 @@ impl Block {
                 b.block_header.transactions_root().clone(),
             ),
             // PrimitiveBlock does not contain this information
-            epoch_number: consensus_inner
-                .get_block_epoch_number(&b.block_header.hash())
-                .map(Into::into),
+            epoch_number,
             // fee system
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
             // PrimitiveBlock does not contain this information
-            stable: consensus_inner.is_stable(&b.block_header.hash()),
+            stable: consensus_inner.is_stable(&block_hash),
             adaptive: b.block_header.adaptive(),
             referee_hashes: b
                 .block_header

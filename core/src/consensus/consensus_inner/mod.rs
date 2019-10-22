@@ -2058,6 +2058,25 @@ impl ConsensusGraphInner {
         })
     }
 
+    pub fn get_block_epoch_number_from_disk(&self, hash: &H256) -> Option<u64> {
+        let pivot_hash = match self.block_execution_results_by_hash(
+            &hash, false, /* update_cache */
+        ) {
+            None => return None,
+            Some(execution_result) => execution_result.0,
+        };
+
+        let epoch_number = match self
+            .data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */)
+        {
+            None => return None,
+            Some(block) => block.block_header.height(),
+        };
+
+        Some(epoch_number)
+    }
+
     pub fn all_blocks_with_topo_order(&self) -> Vec<H256> {
         let epoch_number = self.best_epoch_number();
         let mut current_number = 0;
