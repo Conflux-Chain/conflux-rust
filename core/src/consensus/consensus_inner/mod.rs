@@ -882,7 +882,7 @@ impl ConsensusGraphInner {
 
         let (_stable, adaptive) = self.adaptive_weight_impl(
             parent_arena_index,
-            &BitSet::new(),
+            &anticone_barrier,
             None,
             i128::try_from(difficulty.low_u128()).unwrap(),
         );
