@@ -26,7 +26,7 @@ pub struct CheckpointDumpManager {
     // use Mutex to allow use Sender in multiple threads
     checkpoint_dump_sender: Mutex<Option<Sender<H256>>>,
     // used to notify that new checkpoint ready for sync
-    checkpoint_dumped_notification: Arc<Mutex<Option<H256>>>,
+    checkpoint_dumped: Arc<Mutex<H256>>,
     // only allow to dump when previous checkpoint dumped
     dumping: Arc<AtomicBool>,
 }
@@ -40,7 +40,7 @@ impl CheckpointDumpManager {
         }
 
         let (sender, receiver) = channel();
-        let notification = self.checkpoint_dumped_notification.clone();
+        let checkpoint_dumped = self.checkpoint_dumped.clone();
         let dumping = self.dumping.clone();
 
         thread::Builder::new()
@@ -80,7 +80,7 @@ impl CheckpointDumpManager {
                     match dumper.dump(state_manager.as_ref()) {
                         Ok(true) => {
                             info!("CheckpointDumpManager: succeed to dump checkpoint state");
-                            notification.lock().replace(checkpoint);
+                            *checkpoint_dumped.lock() = checkpoint;
                             previous_checkpoint = Some(checkpoint);
                         }
                         Ok(false) => error!(
@@ -120,7 +120,12 @@ impl CheckpointDumpManager {
         }
     }
 
-    pub fn take_notification(&self) -> Option<H256> {
-        self.checkpoint_dumped_notification.lock().take()
+    pub fn dumped(&self) -> Option<H256> {
+        let checkpoint = self.checkpoint_dumped.lock();
+        if checkpoint.is_zero() {
+            None
+        } else {
+            Some(*checkpoint)
+        }
     }
 }

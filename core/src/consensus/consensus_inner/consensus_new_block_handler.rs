@@ -289,10 +289,10 @@ impl ConsensusNewBlockHandler {
             .data_man
             .set_cur_consensus_era_genesis_hash(&cur_era_hash, &next_era_hash);
 
-        let epoch_id = SnapshotAndEpochIdRef::new(&cur_era_hash, None);
+        let epoch_id = SnapshotAndEpochIdRef::new(&next_era_hash, None);
         let has_state = inner.data_man.storage_manager.contains_state(epoch_id);
         if let Ok(true) = has_state {
-            CHECKPOINT_DUMP_MANAGER.read().dump_async(cur_era_hash);
+            CHECKPOINT_DUMP_MANAGER.read().dump_async(next_era_hash);
         }
     }
 
