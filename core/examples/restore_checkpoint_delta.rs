@@ -44,7 +44,7 @@ fn main() -> Result<(), Error> {
     let sm1 = new_state_manager(test_dir.join("db1").to_str().unwrap())?;
     let (genesis_hash, genesis_root) = initialize_genesis(&sm1)?;
     let (checkpoint, checkpoint_root) =
-        prepare_checkpoint(&sm1, &genesis_hash, 1_000_000)?;
+        prepare_checkpoint(&sm1, &genesis_hash, 10_000_000)?;
     let chunk_store_dir = test_dir
         .join("state_checkpoints")
         .to_str()
@@ -214,7 +214,6 @@ fn add_epoch_with_accounts(
             Account::new_empty_with_balance(&addr, &i.into(), &0.into());
         state.set(&state.account_key(&addr), &account).unwrap();
     }
-    state.compute_state_root().unwrap();
     let epoch = H256::random();
     state.commit(epoch).unwrap();
     epoch
