@@ -7,7 +7,8 @@ mod command;
 use crate::command::rpc::RpcCommand;
 use clap::{load_yaml, App, ArgMatches};
 use client::{
-    archive::ArchiveClient, configuration::Configuration, light::LightClient,
+    archive::ArchiveClient, configuration::Configuration, full::FullClient,
+    light::LightClient,
 };
 use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
 use log::{info, LevelFilter};
@@ -130,6 +131,13 @@ fn main() -> Result<(), String> {
         let client_handle = ArchiveClient::start(conf, exit.clone())
             .map_err(|e| format!("failed to start archive client: {:?}", e))?;
         ArchiveClient::run_until_closed(exit, client_handle);
+    } else if matches.is_present("full") {
+        // todo this is to test full node in python code
+        // remove this branch when starts full node by default.
+        info!("Starting full client...");
+        let client_handle = FullClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start full client: {:?}", e))?;
+        FullClient::run_until_closed(exit, client_handle);
     } else {
         info!("Starting full client...");
         let client_handle = ArchiveClient::start(conf, exit.clone())
