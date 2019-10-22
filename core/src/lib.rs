@@ -71,6 +71,7 @@ pub mod vm_factory;
 pub mod test_helpers;
 
 pub use crate::{
+    block_data_manager::BlockDataManager,
     consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
     light_protocol::{
         Provider as LightProvider, QueryService as LightQueryService,

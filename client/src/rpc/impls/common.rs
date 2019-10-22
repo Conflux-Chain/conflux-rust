@@ -13,7 +13,9 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use parking_lot::{Condvar, Mutex};
 
 use cfx_types::{Address, H256, U128};
-use cfxcore::{PeerInfo, SharedConsensusGraph, SharedTransactionPool};
+use cfxcore::{
+    BlockDataManager, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+};
 use ethcore_accounts::AccountProvider;
 use ethkey::Password;
 use keccak_hash::keccak;
@@ -59,6 +61,7 @@ where F: Fn(Arc<SignedTransaction>) -> T {
 pub struct RpcImpl {
     exit: Arc<(Mutex<bool>, Condvar)>,
     consensus: SharedConsensusGraph,
+    data_man: Arc<BlockDataManager>,
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
@@ -75,9 +78,13 @@ impl RpcImpl {
                 .ok()
                 .expect("failed to initialize account provider"),
         );
+
+        let data_man = consensus.data_man.clone();
+
         RpcImpl {
             exit,
             consensus,
+            data_man,
             network,
             tx_pool,
             accounts,
@@ -116,21 +123,22 @@ impl RpcImpl {
     ) -> RpcResult<RpcBlock> {
         let inner = &*self.consensus.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
+
         let epoch_height = self
             .consensus
             .get_height_from_epoch_number(epoch_num.into())
             .map_err(|err| RpcError::invalid_params(err))?;
-        inner
+
+        let pivot_hash = inner
             .get_hash_from_epoch_number(epoch_height)
-            .map_err(|err| RpcError::invalid_params(err))
-            .and_then(|hash| {
-                let block = self
-                    .consensus
-                    .data_man
-                    .block_by_hash(&hash, false /* update_cache */)
-                    .unwrap();
-                Ok(RpcBlock::new(&*block, inner, include_txs))
-            })
+            .map_err(|err| RpcError::invalid_params(err))?;
+
+        let block = self
+            .data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */)
+            .expect("Block exists");
+
+        Ok(RpcBlock::new(&*block, inner, &self.data_man, include_txs))
     }
 
     pub fn block_by_hash(
@@ -141,28 +149,25 @@ impl RpcImpl {
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
+
         let inner = &*self.consensus.inner.read();
 
-        if let Some(block) = self
-            .consensus
+        let maybe_block = self
             .data_man
             .block_by_hash(&hash, false /* update_cache */)
-        {
-            let result_block = Some(RpcBlock::new(&*block, inner, include_txs));
-            Ok(result_block)
-        } else {
-            Ok(None)
-        }
+            .map(|b| RpcBlock::new(&*b, inner, &self.data_man, include_txs));
+
+        Ok(maybe_block)
     }
 
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64,
     ) -> RpcResult<RpcBlock> {
         let inner = &*self.consensus.inner.read();
-
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
         let epoch_number = epoch_number.as_usize() as u64;
+
         info!(
             "RPC Request: cfx_getBlockByHashWithPivotAssumption block_hash={:?} pivot_hash={:?} epoch_number={:?}",
             block_hash, pivot_hash, epoch_number
@@ -170,21 +175,14 @@ impl RpcImpl {
 
         inner
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
-            .map_err(|err| RpcError::invalid_params(err))
-            .and_then(|_| {
-                if let Some(block) = self
-                    .consensus
-                    .data_man
-                    .block_by_hash(&block_hash, false /* update_cache */)
-                {
-                    debug!("Build RpcBlock {}", block.hash());
-                    let result_block = RpcBlock::new(&*block, inner, true);
-                    Ok(result_block)
-                } else {
-                    Err(RpcError::invalid_params(
-                        "Error: can not find expected block".to_owned(),
-                    ))
-                }
+            .map_err(|err| RpcError::invalid_params(err))?;
+
+        self.data_man
+            .block_by_hash(&block_hash, false /* update_cache */)
+            .ok_or_else(|| RpcError::invalid_params("Block not found"))
+            .map(|block| {
+                debug!("Build RpcBlock {}", block.hash());
+                RpcBlock::new(&*block, inner, &self.data_man, true)
             })
     }
 
@@ -244,20 +242,20 @@ impl RpcImpl {
     pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
         let inner = &*self.consensus.inner.read();
+
+        let construct_block = |hash| {
+            let block = self
+                .data_man
+                .block_by_hash(hash, false /* update_cache */)
+                .expect("Error to get block by hash");
+
+            RpcBlock::new(&*block, inner, &self.data_man, true)
+        };
+
         Ok(inner
             .all_blocks_with_topo_order()
             .iter()
-            .map(|x| {
-                RpcBlock::new(
-                    self.consensus
-                        .data_man
-                        .block_by_hash(x, false /* update_cache */)
-                        .expect("Error to get block by hash")
-                        .as_ref(),
-                    inner,
-                    true,
-                )
-            })
+            .map(construct_block)
             .collect())
     }
 

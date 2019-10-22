@@ -443,6 +443,13 @@ impl BlockDataManager {
         self.db_manager.block_execution_result_from_db(hash)
     }
 
+    pub fn block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.block_execution_result_by_hash_from_db(&hash)
+            .map(|execution_result| execution_result.0)
+            .and_then(|pivot| self.block_header_by_hash(&pivot))
+            .map(|header| header.height())
+    }
+
     pub fn insert_block_results(
         &self, hash: H256, epoch: H256, receipts: Arc<Vec<Receipt>>,
         persistent: bool,

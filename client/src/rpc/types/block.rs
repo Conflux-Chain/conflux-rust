@@ -4,7 +4,7 @@
 
 use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch,
+    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     consensus::ConsensusGraphInner,
 };
 use jsonrpc_core::Error as RpcError;
@@ -129,7 +129,7 @@ pub struct Block {
 impl Block {
     pub fn new(
         b: &PrimitiveBlock, consensus_inner: &ConsensusGraphInner,
-        include_txs: bool,
+        data_man: &Arc<BlockDataManager>, include_txs: bool,
     ) -> Self
     {
         let transactions = match include_txs {
@@ -187,9 +187,7 @@ impl Block {
 
         let epoch_number = consensus_inner
             .get_block_epoch_number(&block_hash)
-            .or_else(|| {
-                consensus_inner.get_block_epoch_number_from_disk(&block_hash)
-            })
+            .or_else(|| data_man.block_epoch_number(&block_hash))
             .map(Into::into);
 
         Block {
