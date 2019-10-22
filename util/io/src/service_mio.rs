@@ -658,13 +658,13 @@ where Message: Send + Sync + 'static
     }
 
     pub fn stop(&self) {
-        trace!(target: "shutdown", "[IoService] Closing...");
+        trace!("[IoService] Closing...");
         // Network poll should be closed before the main EventLoop, otherwise it
         // will send messages to a closed EventLoop.
         self.network_poll_stopped.store(true, Ordering::Relaxed);
         if let Some(thread) = self.network_poll_thread.lock().take() {
             thread.join().unwrap_or_else(|e| {
-                debug!(target: "shutdown", "Error joining network poll thread: {:?}", e);
+                debug!("Error joining network poll thread: {:?}", e);
             });
         }
         // Clear handlers so that shared pointers are not stuck on stack
@@ -676,10 +676,10 @@ where Message: Send + Sync + 'static
             .unwrap_or_else(|e| warn!("Error on IO service shutdown: {:?}", e));
         if let Some(thread) = self.thread.lock().take() {
             thread.join().unwrap_or_else(|e| {
-                debug!(target: "shutdown", "Error joining IO service event loop thread: {:?}", e);
+                debug!("Error joining IO service event loop thread: {:?}", e);
             });
         }
-        trace!(target: "shutdown", "[IoService] Closed.");
+        trace!("[IoService] Closed.");
     }
 
     pub fn start_network_poll(
@@ -692,11 +692,7 @@ where Message: Send + Sync + 'static
             .name("network_eventloop".into())
             .spawn(move || {
                 let mut events = Events::with_capacity(max_sessions);
-                loop {
-                    if network_poll_stopped.load(Ordering::Relaxed) {
-                        // IoService is dropped
-                        break;
-                    }
+                while !network_poll_stopped.load(Ordering::Relaxed) {
                     network_poll
                         .poll(&mut events, None)
                         .expect("Network poll failure");
