@@ -146,6 +146,9 @@ args:
         long: light
     - archive:
         long: archive
+    - full:
+        long: full
+        hidden: true
 subcommands:
     - account:
         about: Manage accounts

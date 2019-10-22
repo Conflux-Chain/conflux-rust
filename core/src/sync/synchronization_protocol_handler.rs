@@ -1275,12 +1275,23 @@ impl SynchronizationProtocolHandler {
     }
 
     fn notify_checkpoint_capability(&self, io: &dyn NetworkContext) {
-        if let Some(checkpoint) =
-            CHECKPOINT_DUMP_MANAGER.read().take_notification()
-        {
-            DynamicCapability::ServeCheckpoint(Some(checkpoint))
-                .broadcast(io, &self.syn);
+        let checkpoint = match CHECKPOINT_DUMP_MANAGER.read().dumped() {
+            Some(cp) => cp,
+            None => return,
+        };
+
+        let cap = DynamicCapability::ServeCheckpoint(Some(checkpoint));
+        let mut peers = Vec::new();
+
+        for (peer_id, state) in self.syn.peers.read().iter() {
+            let mut state = state.write();
+            if !state.notified_capabilities.contains(cap) {
+                peers.push(*peer_id);
+                state.notified_capabilities.insert(cap);
+            }
         }
+
+        cap.broadcast_with_peers(io, peers);
     }
 }
 

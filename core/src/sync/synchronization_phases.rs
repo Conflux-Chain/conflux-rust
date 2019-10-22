@@ -5,6 +5,7 @@
 use crate::{
     consensus::ConsensusGraphInner,
     parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
+    storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
     sync::{
         message::DynamicCapability,
         state::{SnapshotChunkSync, Status},
@@ -287,11 +288,15 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
 
 pub struct CatchUpCheckpointPhase {
     state_sync: Arc<SnapshotChunkSync>,
+    has_state: AtomicBool,
 }
 
 impl CatchUpCheckpointPhase {
     pub fn new(state_sync: Arc<SnapshotChunkSync>) -> Self {
-        CatchUpCheckpointPhase { state_sync }
+        CatchUpCheckpointPhase {
+            state_sync,
+            has_state: AtomicBool::new(false),
+        }
     }
 }
 
@@ -305,6 +310,10 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
+        if self.has_state.load(AtomicOrdering::SeqCst) {
+            return SyncPhaseType::CatchUpRecoverBlockFromDB;
+        }
+
         let checkpoint = sync_handler
             .graph
             .data_man
@@ -354,6 +363,18 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .graph
             .data_man
             .get_cur_consensus_era_stable_hash();
+
+        let has_state = sync_handler
+            .graph
+            .data_man
+            .storage_manager
+            .contains_state(SnapshotAndEpochIdRef::new(&checkpoint, None))
+            .expect("failed to check if checkpoint state exists");
+
+        if has_state {
+            self.has_state.store(true, AtomicOrdering::SeqCst);
+            return;
+        }
 
         let trusted_blame_block = match sync_handler
             .graph
