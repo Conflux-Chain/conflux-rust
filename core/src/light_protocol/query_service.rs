@@ -368,7 +368,7 @@ impl QueryService {
             .filter(move |(_, entry)| filter.matches(&entry))
             .map(move |(ii, entry)| LocalizedLogEntry {
                 block_hash,
-                block_number: epoch, // TODO
+                epoch_number: epoch,
                 entry,
                 log_index: log_base_index - ii - 1,
                 transaction_hash: KECCAK_EMPTY_BLOOM, // will fill in later
