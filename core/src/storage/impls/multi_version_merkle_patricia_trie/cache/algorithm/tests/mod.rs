@@ -5,7 +5,8 @@
 mod lru;
 mod recent_lfu;
 mod removable_heap;
-use rand::{ChaChaRng, SeedableRng};
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 
 use super::CacheIndexTrait;
 

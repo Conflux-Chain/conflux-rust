@@ -6,7 +6,7 @@ use crate::{ip_utils::*, AllowIP, Error, ErrorKind, IpFilter};
 use cfx_types::H512;
 use enum_map::EnumMap;
 use io::*;
-use rand::{self, Rng};
+use rand::{self, prelude::SliceRandom, Rng};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde_derive::Serialize;
 use serde_json;
@@ -636,7 +636,7 @@ impl NodeTable {
             a.time().cmp(&b.time())
         });
 
-        rand::thread_rng().shuffle(&mut unknown);
+        unknown.shuffle(&mut rand::thread_rng());
 
         success.append(&mut unknown);
         success.append(&mut failures);

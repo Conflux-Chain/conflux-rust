@@ -244,7 +244,7 @@ impl Headers {
 mod tests {
     use super::{super::common::PriorityQueue, HashSource, MissingHeader};
     use cfx_types::H256;
-    use rand::Rng;
+    use rand::prelude::SliceRandom;
     use std::{
         ops::Sub,
         time::{Duration, Instant},
@@ -377,7 +377,7 @@ mod tests {
         headers.push(h5.clone());
         headers.push(h6.clone());
 
-        rand::thread_rng().shuffle(&mut headers);
+        headers.shuffle(&mut rand::thread_rng());
         let mut queue = PriorityQueue::new();
         queue.extend(headers);
 

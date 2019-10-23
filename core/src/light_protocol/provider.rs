@@ -4,7 +4,6 @@
 
 use io::TimerToken;
 use parking_lot::RwLock;
-use rand::Rng;
 use rlp::Rlp;
 use std::sync::{Arc, Weak};
 
@@ -44,6 +43,7 @@ use crate::{
     sync::SynchronizationGraph,
     TransactionPool,
 };
+use rand::prelude::SliceRandom;
 
 pub struct Provider {
     // shared consensus graph
@@ -588,7 +588,7 @@ impl Provider {
                 "Apply throttling for broadcast, total: {}, allowed: {}",
                 total, allowed
             );
-            rand::thread_rng().shuffle(&mut peers);
+            peers.shuffle(&mut rand::thread_rng());
             peers.truncate(allowed);
         }
 

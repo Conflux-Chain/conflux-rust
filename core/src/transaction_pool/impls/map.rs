@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::node::Node;
-use rand::{prng::XorShiftRng, FromEntropy, RngCore};
+use rand::{RngCore, SeedableRng};
+use rand_xorshift::XorShiftRng;
 use std::{
     convert::From,
     fmt::Debug,

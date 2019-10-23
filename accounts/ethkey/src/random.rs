@@ -24,8 +24,7 @@ impl Generator for Random {
     type Error = ::std::io::Error;
 
     fn generate(&mut self) -> Result<KeyPair, Self::Error> {
-        let mut rng = OsRng::new()?;
-        match rng.generate() {
+        match OsRng.generate() {
             Ok(pair) => Ok(pair),
             Err(void) => match void {}, // LLVM unreachable
         }

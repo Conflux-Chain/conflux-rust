@@ -32,7 +32,7 @@ use network::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, SignedTransaction};
-use rand::Rng;
+use rand::prelude::SliceRandom;
 use rlp::Rlp;
 use std::{
     cmp,
@@ -814,7 +814,7 @@ impl SynchronizationProtocolHandler {
 
         if num_total > num_allowed {
             debug!("apply throttling for broadcast_message, total: {}, allowed: {}", num_total, num_allowed);
-            random::new().shuffle(&mut peer_ids);
+            peer_ids.shuffle(&mut random::new());
             peer_ids.truncate(num_allowed);
         }
 

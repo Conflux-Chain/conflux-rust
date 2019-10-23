@@ -4,7 +4,6 @@
 
 use cfx_types::H256;
 use parking_lot::RwLock;
-use rand::Rng;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -12,6 +11,7 @@ use std::{
 };
 
 use crate::network::PeerId;
+use rand::prelude::SliceRandom;
 
 #[derive(Default)]
 pub struct FullPeerState {
@@ -72,18 +72,18 @@ where T: Default
     pub fn random_peer_satisfying<F>(&self, predicate: F) -> Option<PeerId>
     where F: Fn(&T) -> bool {
         let options = self.all_peers_satisfying(predicate);
-        rand::thread_rng().choose(&options).cloned()
+        options.choose(&mut rand::thread_rng()).cloned()
     }
 
     pub fn all_peers_shuffled(&self) -> Vec<PeerId> {
         let mut peers: Vec<_> = self.0.read().keys().cloned().collect();
-        rand::thread_rng().shuffle(&mut peers);
+        peers.shuffle(&mut rand::thread_rng());
         peers
     }
 
     pub fn random_peer(&self) -> Option<PeerId> {
         let peers: Vec<_> = self.0.read().keys().cloned().collect();
-        rand::thread_rng().choose(&peers).cloned()
+        peers.choose(&mut rand::thread_rng()).cloned()
     }
 
     pub fn fold<B, F>(&self, init: B, f: F) -> B

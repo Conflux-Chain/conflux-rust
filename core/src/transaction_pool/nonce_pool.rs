@@ -1,6 +1,7 @@
 use cfx_types::U256;
 use primitives::SignedTransaction;
-use rand::{prng::XorShiftRng, FromEntropy, RngCore};
+use rand::{RngCore, SeedableRng};
+use rand_xorshift::XorShiftRng;
 use std::{cmp::Ordering, mem, ops::Deref, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -387,7 +388,8 @@ mod nonce_pool_test {
     use cfx_types::{Address, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
-    use rand::{prng::XorShiftRng, FromEntropy, RngCore};
+    use rand::{RngCore, SeedableRng};
+    use rand_xorshift::XorShiftRng;
     use std::{collections::BTreeMap, sync::Arc};
 
     fn new_test_tx(
