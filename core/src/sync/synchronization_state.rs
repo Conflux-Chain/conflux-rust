@@ -10,7 +10,7 @@ use crate::sync::{
     random, Error, ErrorKind,
 };
 use parking_lot::RwLock;
-use rand::Rng;
+use rand::prelude::SliceRandom;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -93,8 +93,7 @@ impl SynchronizationState {
         let peer_set: HashSet<PeerId> =
             self.peers.read().keys().cloned().collect();
         let choose_from: Vec<&PeerId> = peer_set.difference(exclude).collect();
-        let mut rand = random::new();
-        rand.choose(&choose_from).cloned().cloned()
+        choose_from.choose(&mut random::new()).map(|p| **p)
     }
 
     /// Choose one random peer that satisfies `predicate`.
@@ -116,8 +115,7 @@ impl SynchronizationState {
             })
             .collect();
 
-        let mut rand = random::new();
-        rand.choose(&choose_from).cloned()
+        choose_from.choose(&mut random::new()).cloned()
     }
 
     pub fn get_random_peer_with_cap(
@@ -130,8 +128,7 @@ impl SynchronizationState {
             None => {
                 let peers: Vec<PeerId> =
                     self.peers.read().keys().cloned().collect();
-                let mut rand = random::new();
-                rand.choose(&peers).cloned()
+                peers.choose(&mut random::new()).cloned()
             }
         }
     }
@@ -139,8 +136,7 @@ impl SynchronizationState {
     pub fn get_random_peers(&self, size: usize) -> Vec<PeerId> {
         let mut peers: Vec<PeerId> =
             self.peers.read().keys().cloned().collect();
-        let mut rand = random::new();
-        rand.shuffle(&mut peers);
+        peers.shuffle(&mut random::new());
         peers.truncate(size);
         peers
     }
@@ -164,8 +160,7 @@ impl SynchronizationState {
             })
             .collect();
 
-        let mut rand = random::new();
-        rand.shuffle(&mut peers);
+        peers.shuffle(&mut random::new());
         peers.truncate(size);
         peers
     }

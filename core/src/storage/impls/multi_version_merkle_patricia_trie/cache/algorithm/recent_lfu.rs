@@ -8,7 +8,8 @@ use super::{
     CacheAccessResult, CacheAlgoDataAdapter, CacheAlgoDataTrait,
     CacheAlgorithm, CacheIndexTrait, CacheStoreUtil, MyInto, PrimitiveNum,
 };
-use rand::{ChaChaRng, FromEntropy, Rng};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use std::{hint, mem};
 
 /// In RecentLFU we keep an LRU to maintain frequency for alpha * cache_slots
