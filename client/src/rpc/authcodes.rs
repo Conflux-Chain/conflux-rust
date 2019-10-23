@@ -186,7 +186,8 @@ impl<T: TimeProvider> AuthCodes<T> {
 
     /// Generates and returns a new code that can be used by `SignerUIs`
     pub fn generate_new(&mut self) -> io::Result<String> {
-        let code = OsRng
+        let code = OsRng::new()
+            .expect("Rng Initialize")
             .sample_iter(&Alphanumeric)
             .take(TOKEN_LENGTH)
             .collect::<String>();
