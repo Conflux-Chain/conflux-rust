@@ -6,7 +6,9 @@ use super::TreapMap;
 use cfx_types::{Address, Public, H256, U256, U512};
 use keylib::Signature;
 use primitives::{Action, SignedTransaction, Transaction};
-use rand::{prng::XorShiftRng, ChaChaRng, Rng, RngCore, SeedableRng};
+use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
+use rand_xorshift::XorShiftRng;
 use std::{
     collections::BTreeMap,
     ops::{Add, Sub},

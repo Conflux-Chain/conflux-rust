@@ -388,7 +388,7 @@ mod nonce_pool_test {
     use cfx_types::{Address, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
-    use rand::SeedableRng;
+    use rand::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use std::{collections::BTreeMap, sync::Arc};
 

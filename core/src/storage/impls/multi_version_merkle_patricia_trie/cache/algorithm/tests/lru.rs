@@ -87,36 +87,31 @@ mod test_lru_algorithm_size_1 {
 
         let mut rng = get_rng_for_test();
         for _steps in 0..100000 {
-            let mut possible_actions =
-                Vec::<Weighted<PossibleActions>>::with_capacity(4);
+            let mut possible_actions = Vec::<PossibleActions>::with_capacity(4);
+            let mut action_weights = Vec::with_capacity(4);
             match cache_store_util.current_key {
                 None => {}
                 Some(_) => {
-                    possible_actions.push(Weighted::<PossibleActions> {
-                        weight: 3,
-                        item: PossibleActions::AccessLast,
-                    });
-                    possible_actions.push(Weighted::<PossibleActions> {
-                        weight: 1,
-                        item: PossibleActions::DeleteLast,
-                    });
+                    possible_actions.push(PossibleActions::AccessLast);
+                    action_weights.push(3);
+                    possible_actions.push(PossibleActions::DeleteLast);
+                    action_weights.push(1);
                 }
             }
-            possible_actions.push(Weighted::<PossibleActions> {
-                weight: 5,
-                item: PossibleActions::AccessOther,
-            });
+            possible_actions.push(PossibleActions::AccessOther);
+            action_weights.push(5);
             match cache_store_util.previous_key {
                 None => {}
                 Some(_) => {
-                    possible_actions.push(Weighted::<PossibleActions> {
-                        weight: 1,
-                        item: PossibleActions::DeleteOther,
-                    });
+                    possible_actions.push(PossibleActions::DeleteOther);
+                    action_weights.push(1);
                 }
             }
-            let weighted_choice = WeightedChoice::new(&mut possible_actions);
-            let action = weighted_choice.sample(&mut rng);
+            let weighted_choice =
+                WeightedIndex::new(action_weights).expect("weights valid");
+            let action = possible_actions
+                .get(weighted_choice.sample(&mut rng))
+                .expect("in bound");
             match action {
                 PossibleActions::AccessLast => {
                     let ret = lru.access(
@@ -175,7 +170,7 @@ mod test_lru_algorithm_size_1 {
 
 mod test_lru_algorithm {
     use super::*;
-    use rand::Rng;
+    use rand::prelude::SliceRandom;
 
     struct CacheUtil<'a> {
         cache_algo_data: &'a mut [LRUHandle<u32>],
@@ -293,7 +288,7 @@ mod test_lru_algorithm {
         for _c in 0..cache_size * 3 {
             previous_accesses.push(candidate_sampler.sample(&mut rng));
         }
-        rng.shuffle(&mut previous_accesses);
+        previous_accesses.shuffle(&mut rng);
 
         let mut cache_util = CacheUtil {
             cache_algo_data: &mut cache_algo_data,

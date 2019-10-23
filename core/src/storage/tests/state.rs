@@ -24,7 +24,7 @@ fn generate_keys(number_of_keys: usize) -> Vec<[u8; 4]> {
         last_key = *key;
     }
 
-    rng.shuffle(&mut keys);
+    keys.shuffle(&mut rng);
     keys
 }
 
@@ -67,7 +67,7 @@ fn test_set_get() {
             .expect("Failed to insert key.");
     }
 
-    rng.shuffle(keys.as_mut());
+    keys.shuffle(&mut rng);
 
     for key in &keys {
         let value = state
@@ -210,7 +210,7 @@ fn test_set_delete() {
             .expect("Failed to insert key.");
     }
 
-    rng.shuffle(keys.as_mut());
+    keys.shuffle(&mut rng);
 
     println!("Testing with {} delete operations.", keys.len());
     for key in &keys {
@@ -268,7 +268,7 @@ fn test_set_delete_all() {
             .expect("Failed to insert key.");
     }
 
-    rng.shuffle(keys.as_mut());
+    keys.shuffle(&mut rng);
 
     println!("Testing with {} delete_all operations.", keys.len());
     let mut values = Vec::with_capacity(keys.len());
@@ -498,7 +498,7 @@ fn test_proofs() {
     let root = state.compute_state_root().unwrap().state_root;
     state.commit(epoch_id).unwrap();
 
-    rng.shuffle(keys.as_mut());
+    keys.shuffle(&mut rng);
 
     for key in &keys {
         let (value, proof) =
@@ -572,5 +572,6 @@ use super::{
 };
 use cfx_types::H256;
 use primitives::StateRoot;
-use rand::{ChaChaRng, Rng, SeedableRng};
+use rand::{prelude::SliceRandom, Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use std::{mem, sync::Arc, thread};

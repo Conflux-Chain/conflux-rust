@@ -190,7 +190,8 @@ impl GarbageCollector {
 mod garbage_collector_test {
     use super::{GarbageCollector, GarbageCollectorNode};
     use cfx_types::Address;
-    use rand::{prng::XorShiftRng, FromEntropy, RngCore};
+    use rand::{RngCore, SeedableRng};
+    use rand_xorshift::XorShiftRng;
     use std::collections::HashMap;
 
     #[test]

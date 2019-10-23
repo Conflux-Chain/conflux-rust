@@ -22,9 +22,8 @@ use rand::{rngs::OsRng, RngCore};
 use std::{env, fs, path::PathBuf};
 
 pub fn random_dir() -> PathBuf {
-    let mut rng = OsRng::new().unwrap();
     let mut dir = env::temp_dir();
-    dir.push(format!("{:x}-{:x}", rng.next_u64(), rng.next_u64()));
+    dir.push(format!("{:x}-{:x}", OsRng.next_u64(), OsRng.next_u64()));
     dir
 }
 
