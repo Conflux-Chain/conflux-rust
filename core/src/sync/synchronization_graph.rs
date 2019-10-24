@@ -1593,6 +1593,14 @@ impl SynchronizationGraph {
                 )) => {
                     warn ! ("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
                     insert_success = false;
+                    // If the transaction root does not match, it might be
+                    // caused by receiving wrong
+                    // transactions because of conflicting ShortId in
+                    // CompactBlock, or caused by
+                    // adversaries. In either case, we should request the block
+                    // again, and the received block body is
+                    // discarded.
+                    inner.arena[me].block_ready = false;
                     return (insert_success, need_to_relay);
                 }
                 Err(e) => {
