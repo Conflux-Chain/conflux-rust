@@ -19,7 +19,7 @@ Note, when URL specified, it should be of format http://ip:port."""
 
 assert len(sys.argv) > 1, "Parameter required: [<url: http://ip:port>] <method_name> [<method_args>*]"
 
-rpc_url = "http://localhost:12537"
+rpc_url = "http://localhost:12539"
 method_name = sys.argv[1]
 method_args = sys.argv[2:]
 
