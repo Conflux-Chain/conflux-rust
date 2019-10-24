@@ -19,21 +19,26 @@ use cfxcore::{
         Error,
     },
 };
+use clap::{App, Arg, ArgMatches};
 use primitives::{Account, MerkleHash};
 use rlp::Rlp;
 use std::{
     cmp::min,
-    env::current_dir,
+    fmt::Debug,
     fs::{create_dir_all, remove_dir_all},
-    path::Path,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
 
 // cargo run --release -p cfxcore --example restore_checkpoint_delta
+// cargo run --release -p cfxcore --example restore_checkpoint_delta -- --help
 fn main() -> Result<(), Error> {
-    let test_dir = current_dir()?.join("test_restore_checkpoint_delta");
+    let matches = parse_args();
+
+    // setup test directory
+    let test_dir: PathBuf = arg_val(&matches, "test-dir");
     if test_dir.exists() {
         remove_dir_all(&test_dir)?;
     }
@@ -43,15 +48,21 @@ fn main() -> Result<(), Error> {
     println!("Setup node 1 ...");
     let sm1 = new_state_manager(test_dir.join("db1").to_str().unwrap())?;
     let (genesis_hash, genesis_root) = initialize_genesis(&sm1)?;
+    let accounts = arg_val(&matches, "accounts");
+    let accounts_per_epoch = arg_val(&matches, "accounts-per-epoch");
     let (checkpoint, checkpoint_root) =
-        prepare_checkpoint(&sm1, &genesis_hash, 10_000_000)?;
+        prepare_checkpoint(&sm1, genesis_hash, accounts, accounts_per_epoch)?;
     let chunk_store_dir = test_dir
-        .join("state_checkpoints")
+        .join("state_checkpoints_dump")
         .to_str()
         .unwrap()
         .to_string();
-    StateDumper::new(chunk_store_dir.clone(), checkpoint, 4 * 1024 * 1024)
+    let max_chunk_size = arg_val(&matches, "max-chunk-size");
+    println!("begin to dump checkpoint state ...");
+    let start = Instant::now();
+    StateDumper::new(chunk_store_dir.clone(), checkpoint, max_chunk_size)
         .dump(&sm1)?;
+    println!("checkpoint state dumped in {:?}", start.elapsed());
 
     // setup node 2
     println!("====================================================");
@@ -67,7 +78,7 @@ fn main() -> Result<(), Error> {
     let reader =
         ChunkReader::new(chunk_store_dir.clone(), &checkpoint).unwrap();
     let manifest = reader.chunks()?;
-    println!("manifest: {}\n{:#?}", manifest.len(), manifest);
+    println!("manifest: {} chunks", manifest.len());
 
     println!("====================================================");
     println!("sync chunks ...");
@@ -84,40 +95,68 @@ fn main() -> Result<(), Error> {
         restorer.append(hash, chunk);
     }
     println!("all chunks downloaded in {:?}", start.elapsed());
-    println!("current restoration progress: {:?}", restorer.progress());
-    println!("begin to restore ...");
+
+    println!("====================================================");
+    println!("restore chunks ...");
     let start = Instant::now();
     restorer.start_to_restore(sm2.clone());
     while !restorer.progress().is_completed() {
-        std::thread::sleep(Duration::from_secs(1));
+        std::thread::sleep(Duration::from_millis(100));
     }
     println!("restoration completed in {:?}", start.elapsed());
+
+    // validate the restored state root
     let restored_root = restorer.restored_state_root(sm2.clone()).delta_root;
     println!("restored root: {:?}", restored_root);
     assert_eq!(restored_root, checkpoint_root);
 
-    // validate restoration
-    let epoch_id = SnapshotAndEpochIdRef::new(&checkpoint, None);
-    let state = sm2.get_state_no_commit(epoch_id)?.unwrap();
-
-    assert_eq!(
-        state.get("123".as_bytes())?,
-        Some(vec![1, 2, 3].into_boxed_slice())
-    );
-    assert_eq!(
-        state.get("124".as_bytes())?,
-        Some(vec![1, 2, 4].into_boxed_slice())
-    );
-    assert_eq!(
-        state.get("234".as_bytes())?,
-        Some(vec![2, 3, 4].into_boxed_slice())
-    );
-    assert_eq!(
-        state.get("235".as_bytes())?,
-        Some(vec![2, 3, 5].into_boxed_slice())
-    );
-
     Ok(())
+}
+
+fn parse_args<'a>() -> ArgMatches<'a> {
+    App::new("restore_checkpoint_delta")
+        .arg(
+            Arg::with_name("test-dir")
+                .long("test-dir")
+                .takes_value(true)
+                .value_name("PATH")
+                .help("Root directory for test")
+                .default_value("test_restore_checkpoint_delta"),
+        )
+        .arg(
+            Arg::with_name("accounts")
+                .long("accounts")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Number of accounts in checkpoint")
+                .default_value("1000000"),
+        )
+        .arg(
+            Arg::with_name("accounts-per-epoch")
+                .long("accounts-per-epoch")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Number of accounts in each epoch")
+                .default_value("10000"),
+        )
+        .arg(
+            Arg::with_name("max-chunk-size")
+                .long("max-chunk-size")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Maximum chunk size in bytes")
+                .default_value("4000000"),
+        )
+        .get_matches()
+}
+
+fn arg_val<T>(matches: &ArgMatches, arg_name: &str) -> T
+where
+    T: FromStr,
+    <T as FromStr>::Err: Debug,
+{
+    let val = matches.value_of(arg_name).unwrap();
+    T::from_str(val).unwrap()
 }
 
 fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
@@ -159,23 +198,16 @@ fn initialize_genesis(
 }
 
 fn prepare_checkpoint(
-    manager: &StateManager, parent: &H256, accounts: usize,
-) -> Result<(H256, MerkleHash), Error> {
-    let mut state = manager
-        .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(parent, None))?
-        .unwrap();
-
-    state.set("234".as_bytes(), vec![2, 3, 4].into_boxed_slice())?;
-    state.set("235".as_bytes(), vec![2, 3, 5].into_boxed_slice())?;
-    state.compute_state_root()?;
-    let mut checkpoint = H256::random();
-    state.commit(checkpoint)?;
-
+    manager: &StateManager, parent: H256, accounts: usize,
+    accounts_per_epoch: usize,
+) -> Result<(H256, MerkleHash), Error>
+{
     println!("begin to add {} accounts for checkpoint ...", accounts);
     let start = Instant::now();
+    let mut checkpoint = parent;
     let mut pending = accounts;
     while pending > 0 {
-        let n = min(10_000, pending);
+        let n = min(accounts_per_epoch, pending);
         let start2 = Instant::now();
         checkpoint = add_epoch_with_accounts(manager, &checkpoint, n);
         pending -= n;

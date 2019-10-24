@@ -57,6 +57,7 @@ strfmt = "0.1"
 rustc-hex = "1.0"
 parity-bytes = "0.1"
 zip = "0.5.3"
+clap = "2"
 
 [dev-dependencies]
 criterion = "0.2"
