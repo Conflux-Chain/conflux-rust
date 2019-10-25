@@ -12,8 +12,8 @@ pub struct Log {
     pub data: Bytes,
     /// Block Hash
     pub block_hash: Option<H256>,
-    /// Block Number
-    pub block_number: Option<U256>,
+    /// Epoch Number
+    pub epoch_number: Option<U256>,
     /// Transaction Hash
     pub transaction_hash: Option<H256>,
     /// Transaction Index
@@ -37,7 +37,7 @@ impl From<LocalizedLogEntry> for Log {
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
             block_hash: Some(e.block_hash.into()),
-            block_number: Some(e.block_number.into()),
+            epoch_number: Some(e.epoch_number.into()),
             transaction_hash: Some(e.transaction_hash.into()),
             transaction_index: Some(e.transaction_index.into()),
             log_index: Some(e.log_index.into()),
@@ -55,7 +55,7 @@ impl From<LogEntry> for Log {
             topics: e.topics.into_iter().map(Into::into).collect(),
             data: e.data.into(),
             block_hash: None,
-            block_number: None,
+            epoch_number: None,
             transaction_hash: None,
             transaction_index: None,
             log_index: None,
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn log_serialization() {
-        let s = r#"{"address":"0x33990122638b9132ca29c723bdf037f1a891a70c","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","blockNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1","type":"mined","removed":false}"#;
+        let s = r#"{"address":"0x33990122638b9132ca29c723bdf037f1a891a70c","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1","type":"mined","removed":false}"#;
 
         let log = Log {
             address: H160::from_str("33990122638b9132ca29c723bdf037f1a891a70c").unwrap(),
@@ -84,7 +84,7 @@ mod tests {
             ],
             data: vec![].into(),
             block_hash: Some(H256::from_str("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5").unwrap()),
-            block_number: Some(U256::from(0x4510c)),
+            epoch_number: Some(U256::from(0x4510c)),
             transaction_hash: Some(H256::default()),
             transaction_index: Some(U256::default()),
             transaction_log_index: Some(1.into()),

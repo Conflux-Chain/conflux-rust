@@ -350,7 +350,7 @@ impl QueryService {
     /// NOTE: `log.transaction_hash` is not known at this point,
     /// so this field has to be filled later on.
     fn filter_receipt_logs(
-        block_hash: H256, transaction_index: usize,
+        epoch: u64, block_hash: H256, transaction_index: usize,
         num_logs_remaining: &mut usize, mut logs: Vec<LogEntry>,
         filter: Filter,
     ) -> impl Iterator<Item = LocalizedLogEntry>
@@ -368,7 +368,7 @@ impl QueryService {
             .filter(move |(_, entry)| filter.matches(&entry))
             .map(move |(ii, entry)| LocalizedLogEntry {
                 block_hash,
-                block_number: 0, // TODO
+                epoch_number: epoch,
                 entry,
                 log_index: log_base_index - ii - 1,
                 transaction_hash: KECCAK_EMPTY_BLOOM, // will fill in later
@@ -379,7 +379,7 @@ impl QueryService {
 
     /// Apply filter to all receipts within a block.
     fn filter_block_receipts(
-        hash: H256, mut receipts: Vec<Receipt>, filter: Filter,
+        epoch: u64, hash: H256, mut receipts: Vec<Receipt>, filter: Filter,
     ) -> impl Iterator<Item = LocalizedLogEntry> {
         // number of receipts in this block
         let num_receipts = receipts.len();
@@ -394,6 +394,7 @@ impl QueryService {
             move |(ii, logs)| {
                 debug!("block_hash {:?} logs = {:?}", hash, logs);
                 Self::filter_receipt_logs(
+                    epoch,
                     hash,
                     num_receipts - ii - 1,
                     &mut remaining,
@@ -418,7 +419,12 @@ impl QueryService {
         let matching = receipts.into_iter().zip(hashes).flat_map(
             move |(receipts, hash)| {
                 trace!("block_hash {:?} receipts = {:?}", hash, receipts);
-                Self::filter_block_receipts(hash, receipts, filter.clone())
+                Self::filter_block_receipts(
+                    epoch,
+                    hash,
+                    receipts,
+                    filter.clone(),
+                )
             },
         );
 

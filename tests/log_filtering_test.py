@@ -170,7 +170,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
     def assert_log_format_correct(self, log):
         assert_is_hex_string(log["address"])
-        assert_is_hex_string(log["blockNumber"])
+        assert_is_hex_string(log["epochNumber"])
         assert_is_hex_string(log["logIndex"])
         assert_is_hex_string(log["transactionIndex"])
         assert_is_hex_string(log["transactionLogIndex"])
