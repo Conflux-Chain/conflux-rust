@@ -36,14 +36,15 @@ public_address="59.66.209.32:32323"
 # stratum protocol.
 # use_stratum=true
 
-# `jsonrpc_tcp_port` and `jsonrpc_http_port` are the ports for the node to
-# provide rpc service. If not set, the node will not start rpc services. By
-# default, the values are not set. What's provided here is the recommended value
-# if you want to start rpc services for other front-end applications.
+# The following parameters are the ports for the node to provide rpc service. If not set,
+# the node will not start rpc services. By default, the `jsonrpc_local_http_port` is set,
+# so as to support the Conflux CLI subcommands. What's provided here is the recommended
+# value if you want to start rpc services for other front-end applications.
 #
 # jsonrpc_tcp_port=12536
 # jsonrpc_http_port=12537
-
+# jsonrpc_local_tcp_port=12538
+jsonrpc_local_http_port=12539
 
 
 # The following parameters do not need to be changed in normal cases.

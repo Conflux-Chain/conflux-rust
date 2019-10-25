@@ -188,7 +188,7 @@ subcommands:
                 help: URL of RPC server
                 long: url
                 takes_value: true
-                default_value: http://localhost:12537
+                default_value: http://localhost:12539
                 global: true
         subcommands:
             - price:
