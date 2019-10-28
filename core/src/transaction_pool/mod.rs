@@ -92,15 +92,15 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 
 impl TransactionPool {
     pub fn new(config: TxPoolConfig, data_man: Arc<BlockDataManager>) -> Self {
-        let genesis_hash = data_man.genesis_block.hash();
+        let genesis_hash = data_man.genesis_hash();
         let inner = TransactionPoolInner::with_capacity(config.capacity);
         TransactionPool {
             config,
             inner: RwLock::new(inner),
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
-            data_man,
+            data_man: data_man.clone(),
             spec: vm::Spec::new_spec(),
-            best_executed_epoch: Mutex::new(genesis_hash),
+            best_executed_epoch: Mutex::new(*genesis_hash),
             consensus_best_info: Mutex::new(Arc::new(Default::default())),
             set_tx_requests: Mutex::new(Default::default()),
             recycle_tx_requests: Mutex::new(Default::default()),

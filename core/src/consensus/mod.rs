@@ -135,14 +135,14 @@ impl ConsensusGraph {
     /// Build the ConsensusGraph with a specific era genesis block and various
     /// other components. The execution will be skipped if bench_mode sets
     /// to true. The height of
-    pub fn with_era_genesis_block(
+    pub fn with_era_genesis(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
     ) -> Self
     {
         let inner =
-            Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis_block(
+            Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
                 data_man.clone(),
                 conf.inner_conf.clone(),
@@ -189,7 +189,7 @@ impl ConsensusGraph {
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
-        ConsensusGraph::with_era_genesis_block(
+        ConsensusGraph::with_era_genesis(
             conf,
             vm,
             txpool,

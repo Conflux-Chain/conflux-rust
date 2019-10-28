@@ -501,14 +501,13 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 }
             }
 
-            let new_consensus_inner =
-                ConsensusGraphInner::with_era_genesis_block(
-                    old_consensus_inner.pow_config.clone(),
-                    self.graph.data_man.clone(),
-                    old_consensus_inner.inner_conf.clone(),
-                    &cur_era_genesis_hash,
-                    trusted_blame_block,
-                );
+            let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
+                old_consensus_inner.pow_config.clone(),
+                self.graph.data_man.clone(),
+                old_consensus_inner.inner_conf.clone(),
+                &cur_era_genesis_hash,
+                trusted_blame_block,
+            );
             self.graph.consensus.update_best_info(&new_consensus_inner);
             *old_consensus_inner = new_consensus_inner;
             let new_sync_inner = SynchronizationGraphInner::with_genesis_block(

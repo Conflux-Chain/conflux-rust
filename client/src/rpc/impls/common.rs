@@ -133,12 +133,14 @@ impl RpcImpl {
             .get_hash_from_epoch_number(epoch_height)
             .map_err(|err| RpcError::invalid_params(err))?;
 
-        let block = self
+        if let Some(block) = self
             .data_man
             .block_by_hash(&pivot_hash, false /* update_cache */)
-            .expect("Block exists");
-
-        Ok(RpcBlock::new(&*block, inner, &self.data_man, include_txs))
+        {
+            Ok(RpcBlock::new(&*block, inner, &self.data_man, include_txs))
+        } else {
+            Err(RpcError::internal_error())
+        }
     }
 
     pub fn block_by_hash(
