@@ -5,14 +5,14 @@
 use crate::log_entry::LogEntry;
 use cfx_types::{Bloom, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING: u8 = 1; // gas fee charged
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas fee charged
 
 /// Information describing execution of a transaction.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct Receipt {
     /// The total gas used in the block following execution of the transaction.
     pub gas_used: U256,
@@ -35,31 +35,6 @@ impl Receipt {
             logs,
             outcome_status: outcome,
         }
-    }
-}
-
-impl Encodable for Receipt {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(4);
-        s.append(&self.gas_used);
-        s.append(&self.outcome_status);
-        s.append(&self.log_bloom);
-        s.append_list(&self.logs);
-    }
-}
-
-impl Decodable for Receipt {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 4 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-
-        Ok(Receipt {
-            gas_used: rlp.val_at(0)?,
-            outcome_status: rlp.val_at(1)?,
-            log_bloom: rlp.val_at(2)?,
-            logs: rlp.list_at(3)?,
-        })
     }
 }
 

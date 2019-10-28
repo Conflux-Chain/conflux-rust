@@ -963,6 +963,11 @@ impl ConsensusNewBlockHandler {
     {
         let parent_hash = block_header.parent_hash();
         let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
+        let block_status_in_db = self
+            .data_man
+            .local_block_info_from_db(hash)
+            .map(|info| info.get_status())
+            .unwrap_or(BlockStatus::Pending);
         // current block is outside era or it's parent is outside era
         if parent_index.is_none()
             || inner.arena[*parent_index.unwrap()].era_block == NULL
@@ -973,7 +978,7 @@ impl ConsensusNewBlockHandler {
             );
             let sn = self.process_outside_block(inner, &block_header);
             let block_info = LocalBlockInfo::new(
-                BlockStatus::Pending,
+                block_status_in_db,
                 sn,
                 self.data_man.get_instance_id(),
             );
@@ -1054,7 +1059,7 @@ impl ConsensusNewBlockHandler {
         }
 
         let block_status = if pending {
-            BlockStatus::Pending
+            block_status_in_db
         } else if fully_valid {
             BlockStatus::Valid
         } else {
@@ -1066,6 +1071,9 @@ impl ConsensusNewBlockHandler {
             ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(
                 inner, me,
             );
+            if block_status == BlockStatus::PartialInvalid {
+                inner.arena[me].data.partial_invalid = true;
+            }
             debug!("Block {} (hash = {}) is pending", me, inner.arena[me].hash);
         } else if !fully_valid {
             inner.arena[me].data.partial_invalid = true;
@@ -1332,6 +1340,10 @@ impl ConsensusNewBlockHandler {
                 } else {
                     state_at = 1;
                 }
+            }
+            // For full node, we don't execute blocks before stable
+            if state_at < inner.cur_era_stable_height + 1 {
+                state_at = inner.cur_era_stable_height + 1;
             }
 
             // Apply transactions in the determined total order

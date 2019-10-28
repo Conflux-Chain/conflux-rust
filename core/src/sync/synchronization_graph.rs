@@ -322,7 +322,7 @@ impl SynchronizationGraphInner {
         // Get the sequence number of genesis block.
         // FIXME: we may store `genesis_sequence_number` in data_man to avoid db
         // access.
-        let genesis_hash = self.data_man.genesis_block().hash();
+        let genesis_hash = self.data_man.genesis_hash();
         let genesis_seq_num = self
             .data_man
             .local_block_info_from_db(&genesis_hash)
@@ -513,7 +513,8 @@ impl SynchronizationGraphInner {
     /// Return the index of the inserted block.
     pub fn insert(&mut self, header: Arc<BlockHeader>) -> usize {
         let hash = header.hash();
-        let is_genesis = hash == self.data_man.genesis_block().hash();
+        let is_genesis =
+            hash == self.data_man.get_cur_consensus_era_genesis_hash();
 
         let me = self.arena.insert(SynchronizationGraphNode {
             graph_status: if is_genesis {
@@ -925,10 +926,14 @@ impl SynchronizationGraph {
     ) -> Self
     {
         let data_man = consensus.data_man.clone();
+        let genesis_hash = data_man.genesis_hash();
+        let genesis_block_header = data_man
+            .block_header_by_hash(genesis_hash)
+            .expect("genesis block header should exist here");
         let (consensus_sender, consensus_receiver) = mpsc::channel();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
-                Arc::new(data_man.genesis_block().block_header.clone()),
+                genesis_block_header.clone(),
                 pow_config,
                 config,
                 data_man.clone(),
@@ -941,9 +946,7 @@ impl SynchronizationGraph {
             verification_config,
             consensus: consensus.clone(),
             statistics: consensus.statistics.clone(),
-            latest_graph_ready_block: Mutex::new(
-                data_man.genesis_block().block_header.hash(),
-            ),
+            latest_graph_ready_block: Mutex::new(*genesis_hash),
             consensus_sender: Mutex::new(consensus_sender),
             is_full_node,
         };
@@ -1021,14 +1024,14 @@ impl SynchronizationGraph {
 
         // Recover the initial sequence number in consensus graph
         // based on the sequence number of genesis block in db.
-        let genesis_hash = self.data_man.genesis_block().hash();
+        let genesis_hash = self.data_man.genesis_hash();
         let genesis_local_info =
-            self.data_man.local_block_info_from_db(&genesis_hash);
+            self.data_man.local_block_info_from_db(genesis_hash);
         if genesis_local_info.is_none() {
             // Local info of genesis block must exist.
             panic!(
                 "failed to get local block info from db for genesis[{}]",
-                &genesis_hash
+                genesis_hash
             );
         }
         let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
@@ -1068,7 +1071,7 @@ impl SynchronizationGraph {
         // peers.
         let mut missed_hashes = self.initial_missed_block_hashes.lock();
         while let Some(hash) = queue.pop_front() {
-            if hash == genesis_hash {
+            if hash == *genesis_hash {
                 // Genesis block is already in consensus graph.
                 continue;
             }
@@ -1191,7 +1194,7 @@ impl SynchronizationGraph {
         self.data_man.block_by_hash(hash, true /* update_cache */)
     }
 
-    pub fn genesis_hash(&self) -> H256 { self.data_man.genesis_block().hash() }
+    pub fn genesis_hash(&self) -> H256 { *self.data_man.genesis_hash() }
 
     pub fn contains_block_header(&self, hash: &H256) -> bool {
         self.inner.read().hash_to_arena_indices.contains_key(hash)
@@ -1275,6 +1278,8 @@ impl SynchronizationGraph {
                     }
                     if insert_to_consensus {
                         CONSENSUS_WORKER_QUEUE.enqueue(1);
+                        *self.latest_graph_ready_block.lock() =
+                            inner.arena[index].block_header.hash();
                         self.consensus_sender
                             .lock()
                             .send((

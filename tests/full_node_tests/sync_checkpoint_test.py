@@ -43,15 +43,17 @@ class SyncCheckpointTests(ConfluxTestFramework):
         connect_nodes(self.nodes, 1, 0)
 
         # FIXME full node issue that hang at phase CatchUpRecoverBlockFromDbPhase
-        self.nodes[1].wait_for_phase(["CatchUpRecoverBlockFromDbPhase", "NormalSyncPhase"])
+        self.nodes[1].wait_for_phase(["NormalSyncPhase"], wait_time=30)
 
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, sync_count=False)
 
         client = RpcClient(self.nodes[1])
         
-        # FIXME conflux panics
         # At epoch 1, block header exists while body not synchronized
-        # print(client.block_by_epoch(client.EPOCH_NUM(1)))
+        try:
+            print(client.block_by_epoch(client.EPOCH_NUM(1)))
+        except ReceivedErrorResponseError as e:
+            assert 'Internal error' == e.response.message
 
         # There is no state from epoch 1 to checkpoint_epoch
         # Note, state of genesis epoch always exists
@@ -67,10 +69,9 @@ class SyncCheckpointTests(ConfluxTestFramework):
         # State should exist at checkpoint
         client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(checkpoint_epoch))
 
-        # FIXME conflux hang/panics at phase CatchUpRecoverBlockFromDbPhase
         # There should be states after checkpoint
-        # for i in range(checkpoint_epoch + 1, client.epoch_number() + 1):
-        #     client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(i))
+        for i in range(checkpoint_epoch + 1, client.epoch_number() - 3):
+            client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(i))
 
 if __name__ == "__main__":
     SyncCheckpointTests().main()

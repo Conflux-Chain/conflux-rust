@@ -312,7 +312,8 @@ impl ConsensusExecutor {
             |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
                 // Wait for the execution info populated for all blocks before
                 // pivot_arena_index
-                if !self.bench_mode {
+                let height = inner.arena[pivot_arena_index].height;
+                if !self.bench_mode && height >= inner.cur_era_stable_height {
                     self.wait_and_compute_execution_info_locked(
                         pivot_arena_index,
                         inner,
@@ -348,18 +349,14 @@ impl ConsensusExecutor {
 
                     let mut no_reward =
                         block_consensus_node.data.partial_invalid;
-                    if !self.bench_mode {
+                    if !self.bench_mode && !no_reward {
                         if *index == pivot_arena_index {
-                            no_reward =
-                                block_consensus_node.data.partial_invalid
-                                    || !inner.arena[pivot_arena_index]
-                                        .data
-                                        .state_valid;
-                        } else {
-                            no_reward = block_consensus_node
+                            no_reward = !inner.arena[pivot_arena_index]
                                 .data
-                                .partial_invalid
-                                || !inner.compute_vote_valid_for_pivot_block(
+                                .state_valid;
+                        } else {
+                            no_reward = !inner
+                                .compute_vote_valid_for_pivot_block(
                                     *index,
                                     pivot_arena_index,
                                 );
@@ -1197,7 +1194,7 @@ impl ConsensusExecutionHandler {
                     let ctx = self
                         .data_man
                         .get_epoch_execution_context(&reward_epoch_hash)
-                        .unwrap();
+                        .expect("epoch_execution_context should exists here");
 
                     // We need to return receipts instead of getting it through
                     // function get_receipts, because it's

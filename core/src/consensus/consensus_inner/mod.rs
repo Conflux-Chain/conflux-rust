@@ -314,10 +314,6 @@ pub struct ConsensusGraphInner {
     // The height of the ``stable'' era block, unless from the start, it is
     // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
-    // The ``original'' genesis state root, receipts root, and logs bloom hash.
-    genesis_block_state_root: H256,
-    genesis_block_receipts_root: H256,
-    genesis_block_logs_bloom_hash: H256,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: DefaultMinLinkCutTree,
     inclusive_weight_tree: SizeMinLinkCutTree,
@@ -394,19 +390,16 @@ impl ConsensusGraphNode {
 }
 
 impl ConsensusGraphInner {
-    pub fn with_era_genesis_block(
+    pub fn with_era_genesis(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
         first_trusted_blame_block: Option<H256>,
     ) -> Self
     {
-        let genesis_block = data_man
-            .block_by_hash(
-                cur_era_genesis_block_hash,
-                true, /* update_cache */
-            )
-            .unwrap();
-        let cur_era_genesis_height = genesis_block.block_header.height();
+        let genesis_block_header = data_man
+            .block_header_by_hash(cur_era_genesis_block_hash)
+            .expect("genesis block header should exist here");
+        let cur_era_genesis_height = genesis_block_header.height();
         let cur_era_stable_height = if cur_era_genesis_height == 0 {
             0
         } else {
@@ -421,7 +414,7 @@ impl ConsensusGraphInner {
         } else {
             data_man
                 .block_header_by_hash(&first_trusted_blame_block)
-                .unwrap()
+                .expect("first_trusted_blame_block should exist here")
                 .height()
         };
         let initial_difficulty = pow_config.initial_difficulty;
@@ -435,21 +428,6 @@ impl ConsensusGraphInner {
             cur_era_genesis_block_arena_index: NULL,
             cur_era_genesis_height,
             cur_era_stable_height,
-            genesis_block_state_root: data_man
-                .genesis_block()
-                .block_header
-                .deferred_state_root()
-                .clone(),
-            genesis_block_receipts_root: data_man
-                .genesis_block()
-                .block_header
-                .deferred_receipts_root()
-                .clone(),
-            genesis_block_logs_bloom_hash: data_man
-                .genesis_block()
-                .block_header
-                .deferred_logs_bloom_hash()
-                .clone(),
             weight_tree: DefaultMinLinkCutTree::new(),
             inclusive_weight_tree: SizeMinLinkCutTree::new(),
             stable_weight_tree: DefaultMinLinkCutTree::new(),
@@ -475,50 +453,29 @@ impl ConsensusGraphInner {
         // and then into synchronization graph. All the other blocks will be
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
-        let (genesis_arena_index, _) =
-            inner.insert(&genesis_block.block_header);
+        let (genesis_arena_index, _) = inner.insert(&genesis_block_header);
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
+        let genesis_block_weight = genesis_block_header.difficulty().low_u128();
         inner
             .weight_tree
             .make_tree(inner.cur_era_genesis_block_arena_index);
         inner.weight_tree.path_apply(
             inner.cur_era_genesis_block_arena_index,
-            i128::try_from(
-                data_man
-                    .genesis_block()
-                    .block_header
-                    .difficulty()
-                    .low_u128(),
-            )
-            .unwrap(),
+            genesis_block_weight as i128,
         );
         inner
             .inclusive_weight_tree
             .make_tree(inner.cur_era_genesis_block_arena_index);
         inner.inclusive_weight_tree.path_apply(
             inner.cur_era_genesis_block_arena_index,
-            i128::try_from(
-                data_man
-                    .genesis_block()
-                    .block_header
-                    .difficulty()
-                    .low_u128(),
-            )
-            .unwrap(),
+            genesis_block_weight as i128,
         );
         inner
             .stable_weight_tree
             .make_tree(inner.cur_era_genesis_block_arena_index);
         inner.stable_weight_tree.path_apply(
             inner.cur_era_genesis_block_arena_index,
-            i128::try_from(
-                data_man
-                    .genesis_block()
-                    .block_header
-                    .difficulty()
-                    .low_u128(),
-            )
-            .unwrap(),
+            genesis_block_weight as i128,
         );
         inner
             .stable_tree
@@ -547,7 +504,7 @@ impl ConsensusGraphInner {
             .data
             .epoch_number = 0;
         inner.arena[inner.cur_era_genesis_block_arena_index]
-            .last_pivot_in_past = genesis_block.block_header.height();
+            .last_pivot_in_past = cur_era_genesis_height;
         inner
             .pivot_chain
             .push(inner.cur_era_genesis_block_arena_index);
@@ -560,7 +517,7 @@ impl ConsensusGraphInner {
 
         // FIXME: Set execution context and past_num_blocks with data on disk
         inner.data_man.insert_epoch_execution_context(
-            data_man.genesis_block().hash(),
+            genesis_block_header.hash(),
             EpochExecutionContext {
                 start_block_number: 0,
             },
@@ -1536,14 +1493,15 @@ impl ConsensusGraphInner {
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
-        let parent = if hash != self.data_man.genesis_block().hash() {
-            self.hash_to_arena_indices
-                .get(block_header.parent_hash())
-                .cloned()
-                .unwrap()
-        } else {
-            NULL
-        };
+        let parent =
+            if hash != self.data_man.get_cur_consensus_era_genesis_hash() {
+                self.hash_to_arena_indices
+                    .get(block_header.parent_hash())
+                    .cloned()
+                    .unwrap()
+            } else {
+                NULL
+            };
 
         let mut referees: Vec<usize> = Vec::new();
         for hash in block_header.referee_hashes().iter() {
@@ -2302,11 +2260,21 @@ impl ConsensusGraphInner {
         if self.arena[me].height == 0 {
             self.arena[me].data.state_valid = true;
             let exec_info = ConsensusGraphExecutionInfo {
-                original_deferred_state_root: self.genesis_block_state_root,
-                original_deferred_receipt_root: self
-                    .genesis_block_receipts_root,
-                original_deferred_logs_bloom_hash: self
-                    .genesis_block_logs_bloom_hash,
+                original_deferred_state_root: *self
+                    .data_man
+                    .true_genesis_block
+                    .block_header
+                    .deferred_state_root(),
+                original_deferred_receipt_root: *self
+                    .data_man
+                    .true_genesis_block
+                    .block_header
+                    .deferred_receipts_root(),
+                original_deferred_logs_bloom_hash: *self
+                    .data_man
+                    .true_genesis_block
+                    .block_header
+                    .deferred_logs_bloom_hash(),
             };
             self.data_man.insert_consensus_graph_execution_info_to_db(
                 &self.arena[me].hash,
@@ -2622,6 +2590,10 @@ impl ConsensusGraphInner {
     ) -> Result<Vec<(H256, H256)>, String> {
         let mut cur = me;
         let mut waiting_blocks = Vec::new();
+        debug!(
+            "collect_blocks_missing_execution_info:: me={}, height={}",
+            me, self.arena[me].height
+        );
         while !self.execution_info_cache.contains_key(&cur) {
             let cur_hash = self.arena[cur].hash.clone();
             let state_hash = self

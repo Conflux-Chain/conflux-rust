@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    block_data_manager::BlockExecutionResult,
     message::{Message, MsgId},
     sync::{
         message::{msgid, Context, Handleable},
@@ -22,6 +23,7 @@ pub struct SnapshotManifestResponse {
     pub state_blame_vec: Vec<H256>,
     pub receipt_blame_vec: Vec<H256>,
     pub bloom_blame_vec: Vec<H256>,
+    pub block_receipts: Vec<BlockExecutionResult>,
 }
 
 build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
@@ -85,6 +87,11 @@ impl SnapshotManifestResponse {
             || self.state_blame_vec.len() != self.bloom_blame_vec.len()
         {
             debug!("Responded snapshot manifest has mismatch blame states/receipts/blooms");
+            bail!(ErrorKind::Invalid);
+        }
+
+        if self.block_receipts.is_empty() {
+            debug!("Responded epoch_receipts has mismatch length");
             bail!(ErrorKind::Invalid);
         }
 

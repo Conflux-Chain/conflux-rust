@@ -3,8 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::ConsensusGraphExecutionInfo,
-    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
+    block_data_manager::{BlockExecutionResult, ConsensusGraphExecutionInfo},
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        consensus_internal::REWARD_EPOCH_COUNT,
+    },
     storage::state_manager::StateManager,
     sync::{
         message::{Context, DynamicCapability},
@@ -21,7 +24,7 @@ use crate::{
 use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
-use primitives::BlockHeaderBuilder;
+use primitives::{BlockHeaderBuilder, Receipt};
 use std::{
     cmp::max,
     collections::{HashSet, VecDeque},
@@ -76,6 +79,7 @@ struct Inner {
     state_blame_vec: Vec<H256>,
     receipt_blame_vec: Vec<H256>,
     bloom_blame_vec: Vec<H256>,
+    epoch_receipts: Vec<(H256, H256, Arc<Vec<Receipt>>)>,
 
     // download
     pending_chunks: VecDeque<ChunkKey>,
@@ -220,6 +224,20 @@ impl SnapshotChunkSync {
                 Some(state) => inner.true_state_root_by_blame_info = state,
                 None => {
                     warn!("failed to validate the blame state, re-sync manifest from other peer");
+                    self.resync_manifest(ctx, &mut inner);
+                    return;
+                }
+            }
+            match Self::validate_epoch_receipts(
+                ctx,
+                &inner.checkpoint,
+                &response.receipt_blame_vec,
+                &response.bloom_blame_vec,
+                &response.block_receipts,
+            ) {
+                Some(epoch_receipts) => inner.epoch_receipts = epoch_receipts,
+                None => {
+                    warn!("failed to validate the epoch receipts, re-sync manifest from other peer");
                     self.resync_manifest(ctx, &mut inner);
                     return;
                 }
@@ -429,6 +447,14 @@ impl SnapshotChunkSync {
                 .unwrap();
             hash = *block.parent_hash();
         }
+        for (block_hash, epoch_hash, receipts) in &inner.epoch_receipts {
+            sync_handler.graph.data_man.insert_block_results(
+                *block_hash,
+                *epoch_hash,
+                receipts.clone(),
+                true, /* persistent */
+            );
+        }
     }
 
     pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {
@@ -453,18 +479,23 @@ impl SnapshotChunkSync {
             .graph
             .data_man
             .block_header_by_hash(checkpoint)
-            .unwrap();
+            .expect("checkpoint header must exist");
         let trusted_blame_block = ctx
             .manager
             .graph
             .data_man
             .block_header_by_hash(trusted_blame_block)
-            .unwrap();
+            .expect("trusted_blame_block header must exist");
 
         let vec_len = max(
-            trusted_blame_block.height() - checkpoint.height(),
-            trusted_blame_block.blame() as u64,
-        ) + 1;
+            if checkpoint.height() == 0 {
+                trusted_blame_block.height() - checkpoint.height() + 1
+            } else {
+                trusted_blame_block.height() - checkpoint.height()
+                    + REWARD_EPOCH_COUNT
+            },
+            trusted_blame_block.blame() as u64 + 1,
+        );
         // check blame count correct
         if vec_len as usize != state_blame_vec.len() {
             return None;
@@ -489,5 +520,97 @@ impl SnapshotChunkSync {
         }
 
         Some(state_blame_vec[offset as usize])
+    }
+
+    fn validate_epoch_receipts(
+        ctx: &Context, checkpoint: &H256, receipt_blame_vec: &Vec<H256>,
+        bloom_blame_vec: &Vec<H256>,
+        block_receipts: &Vec<BlockExecutionResult>,
+    ) -> Option<Vec<(H256, H256, Arc<Vec<Receipt>>)>>
+    {
+        let mut epoch_hash = checkpoint.clone();
+        let checkpoint = ctx
+            .manager
+            .graph
+            .data_man
+            .block_header_by_hash(checkpoint)
+            .expect("checkpoint header must exist");
+        let epoch_receipts_count = if checkpoint.height() == 0 {
+            1
+        } else {
+            REWARD_EPOCH_COUNT
+        } as usize;
+        let mut offset = 0;
+        let mut result = Vec::new();
+        for idx in 0..epoch_receipts_count {
+            let block_header = ctx
+                .manager
+                .graph
+                .data_man
+                .block_header_by_hash(&epoch_hash)
+                .expect("block header must exist");
+            let ordered_executable_epoch_blocks = ctx
+                .manager
+                .graph
+                .consensus
+                .inner
+                .read()
+                .block_hashes_by_epoch(block_header.height())
+                .expect("ordered executable epoch blocks must exist");
+            let mut epoch_receipts = Vec::new();
+            for i in 0..ordered_executable_epoch_blocks.len() {
+                epoch_receipts.push(Arc::new(
+                    block_receipts[offset + i]
+                        .receipts
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                ));
+            }
+            let receipt_root = BlockHeaderBuilder::compute_block_receipts_root(
+                &epoch_receipts,
+            );
+            let logs_bloom_hash =
+                BlockHeaderBuilder::compute_block_logs_bloom_hash(
+                    &epoch_receipts,
+                );
+            let index = receipt_blame_vec.len() - (epoch_receipts_count - idx);
+            if let Some(expected_receipt_root) = receipt_blame_vec.get(index) {
+                if *expected_receipt_root != receipt_root {
+                    debug!(
+                        "wrong receipt root, expected={:?}, now={:?}",
+                        expected_receipt_root, receipt_root
+                    );
+                    return None;
+                }
+            } else {
+                return None;
+            }
+            if let Some(expected_logs_bloom_hash) = bloom_blame_vec.get(index) {
+                if *expected_logs_bloom_hash != logs_bloom_hash {
+                    debug!(
+                        "wrong logs bloom hash, expected={:?}, now={:?}",
+                        expected_logs_bloom_hash, logs_bloom_hash
+                    );
+                    return None;
+                }
+            } else {
+                return None;
+            }
+            for i in 0..ordered_executable_epoch_blocks.len() {
+                result.push((
+                    ordered_executable_epoch_blocks[i],
+                    epoch_hash,
+                    epoch_receipts[i].clone(),
+                ));
+            }
+            offset += ordered_executable_epoch_blocks.len();
+            epoch_hash = *block_header.parent_hash();
+        }
+        if offset == block_receipts.len() {
+            Some(result)
+        } else {
+            None
+        }
     }
 }
