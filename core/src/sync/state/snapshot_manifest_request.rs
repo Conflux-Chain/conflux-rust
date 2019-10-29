@@ -159,20 +159,20 @@ impl SnapshotManifestRequest {
             );
             return None;
         }
-        let mut loop_cnt = if checkpoint_block.height() == 0 {
+        let min_vec_len = if checkpoint_block.height() == 0 {
             trusted_block.height() - checkpoint_block.height() + 1
         } else {
             trusted_block.height() - checkpoint_block.height()
                 + REWARD_EPOCH_COUNT
         };
-        if loop_cnt < trusted_block.blame() as u64 + 1 {
-            loop_cnt = trusted_block.blame() as u64 + 1;
-        }
 
-        let mut state_blame_vec = Vec::with_capacity(loop_cnt as usize);
-        let mut receipt_blame_vec = Vec::with_capacity(loop_cnt as usize);
-        let mut bloom_blame_vec = Vec::with_capacity(loop_cnt as usize);
+        let mut state_blame_vec = Vec::with_capacity(min_vec_len as usize);
+        let mut receipt_blame_vec = Vec::with_capacity(min_vec_len as usize);
+        let mut bloom_blame_vec = Vec::with_capacity(min_vec_len as usize);
         let mut block_hash = trusted_block.hash();
+        let mut trusted_block_height = trusted_block.height();
+        let mut blame_count = trusted_block.blame();
+        // loop until we have enough length of `state_blame_vec`
         loop {
             if let Some(exec_info) = ctx
                 .manager
@@ -185,13 +185,26 @@ impl SnapshotManifestRequest {
                     .push(exec_info.original_deferred_receipt_root);
                 bloom_blame_vec
                     .push(exec_info.original_deferred_logs_bloom_hash);
-                if state_blame_vec.len() == loop_cnt as usize {
-                    break;
-                }
                 if let Some(block) =
                     ctx.manager.graph.data_man.block_header_by_hash(&block_hash)
                 {
-                    block_hash = block.parent_hash().clone();
+                    // We've reached original genesis or collected enough
+                    // `state_blame_vec`.
+                    if block.height() == 0
+                        || (block.height() + blame_count as u64
+                            == trusted_block_height
+                            && state_blame_vec.len() >= min_vec_len as usize)
+                    {
+                        break;
+                    }
+                    // We've jump to another trusted block.
+                    if block.height() + blame_count as u64 + 1
+                        == trusted_block_height
+                    {
+                        trusted_block_height = block.height();
+                        blame_count = block.blame();
+                    }
+                    block_hash = *block.parent_hash();
                 } else {
                     warn!(
                         "failed to find block={} in db, peer={}",
