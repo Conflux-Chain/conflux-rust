@@ -13,6 +13,7 @@ pub struct SyncGraphBlockState {
     pub referees: Vec<H256>,
     pub nonce: u64,
     pub timestamp: u64,
+    pub adaptive: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -36,6 +37,7 @@ impl SyncGraphStates {
                     .collect(),
                 nonce: block_state.nonce,
                 timestamp: block_state.timestamp,
+                adaptive: block_state.adaptive,
             })
         }
 

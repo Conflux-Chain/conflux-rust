@@ -82,7 +82,7 @@ class StartEvent(EventBase):
 
 
 class NewBlockEvent(EventBase):
-    def __init__(self, hash, parent, referees, nonce, timestamp, txs=None):
+    def __init__(self, hash, parent, referees, nonce, timestamp, adaptive, txs=None):
         super().__init__()
         self._name = 'new_block'
         self._hash = hash
@@ -91,6 +91,7 @@ class NewBlockEvent(EventBase):
         self._nonce = nonce
         self._txs = txs
         self._timestamp = timestamp
+        self._adaptive = adaptive
 
     def execute(self, node):
         assert self._txs is not None
@@ -99,7 +100,8 @@ class NewBlockEvent(EventBase):
             self._referees,
             self._txs,
             self._nonce,
-            self._timestamp)
+            self._timestamp,
+            self._adaptive)
         assert block_hash == self._hash
 
     def name(self):
@@ -113,6 +115,7 @@ class NewBlockEvent(EventBase):
             'referees': self._referees,
             'nonce': self._nonce,
             'timestamp': self._timestamp,
+            'adaptive': self._adaptive,
         }
 
 
@@ -255,7 +258,8 @@ class Snapshot(object):
                 block['parent'],
                 block['referees'],
                 block['nonce'],
-                block['timestamp']))
+                block['timestamp'],
+                block['adaptive']))
 
     def to_json(self):
         return {
@@ -321,6 +325,7 @@ class ConfluxTracing(ConfluxTestFramework):
                     self._snapshots[chosen_peer].start()
                     self.log.info("started {}".format(chosen_peer))
         except Exception as e:
+            self.log.info('got exception[{}]'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -345,6 +350,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 self._snapshots[chosen_peer].stop()
                 self.log.info("stopped {}".format(chosen_peer))
         except Exception as e:
+            self.log.info('got exception[{}]'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -372,10 +378,15 @@ class ConfluxTracing(ConfluxTestFramework):
                 chosen_peer = alive_peer_indices[random.randint(
                     0, len(alive_peer_indices) - 1)]
                 txs = self._generate_txs(chosen_peer, NUM_TX_PER_BLOCK)
-                block_hash = RpcClient(self.nodes[chosen_peer]).generate_block_with_fake_txs(txs)
+                if random.randint(1, 100) <= 40:
+                    # this will generate a partial invalid block
+                    block_hash = RpcClient(self.nodes[chosen_peer]).generate_block_with_fake_txs(txs, True)
+                else:
+                    block_hash = RpcClient(self.nodes[chosen_peer]).generate_block_with_fake_txs(txs)
                 self._block_txs[block_hash] = eth_utils.encode_hex(rlp.encode(txs))
                 self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
         except Exception as e:
+            self.log.info('got exception[{}]'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -394,6 +405,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 for predicate in self._predicates:
                     predicate(self._snapshots, self._stopped_peers)
         except Exception as e:
+            self.log.info('got exception[{}]'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -405,8 +417,8 @@ class ConfluxTracing(ConfluxTestFramework):
             "generate_tx": "true",
             "generate_tx_period_us": "100000",
             "enable_state_expose": "true",
-            "era_epoch_count": 5000,
-            "era_checkpoint_gap": 5000
+            "era_epoch_count": 50,
+            "era_checkpoint_gap": 50
         }
 
     def setup_network(self):
@@ -555,6 +567,7 @@ class ConfluxTracing(ConfluxTestFramework):
                     referees=event['referees'],
                     nonce=event['nonce'],
                     timestamp=event['timestamp'],
+                    adaptive=event['adaptive'],
                     txs=txs
                 ).execute(node)
 

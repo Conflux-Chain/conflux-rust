@@ -1148,6 +1148,9 @@ impl ConsensusNewBlockHandler {
                             let mut heaviest = NULL;
                             let mut heaviest_weight = 0;
                             for index in &inner.arena[u].children {
+                                if inner.arena[*index].data.partial_invalid {
+                                    continue;
+                                }
                                 let weight = inner.weight_tree.get(*index);
                                 if heaviest == NULL
                                     || ConsensusGraphInner::is_heavier(

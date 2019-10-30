@@ -512,7 +512,9 @@ impl BlockGenerator {
 
     pub fn generate_custom_block(
         &self, transactions: Vec<Arc<SignedTransaction>>,
-    ) -> H256 {
+        adaptive: Option<bool>,
+    ) -> H256
+    {
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
         // get the best block
         let (best_info, _) =
@@ -551,7 +553,7 @@ impl BlockGenerator {
             block_gas_limit,
             transactions,
             0,
-            None,
+            adaptive,
         );
 
         self.generate_block_impl(block)
@@ -595,6 +597,7 @@ impl BlockGenerator {
     pub fn generate_block_with_nonce_and_timestamp(
         &self, parent_hash: H256, referee: Vec<H256>,
         transactions: Vec<Arc<SignedTransaction>>, nonce: u64, timestamp: u64,
+        adaptive: bool,
     ) -> Result<H256, String>
     {
         let (
@@ -621,7 +624,7 @@ impl BlockGenerator {
             DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             transactions,
             0,
-            None,
+            Some(adaptive),
         );
         block.block_header.set_nonce(nonce);
         block.block_header.set_timestamp(timestamp);

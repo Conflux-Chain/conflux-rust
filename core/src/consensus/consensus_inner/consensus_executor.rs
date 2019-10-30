@@ -873,7 +873,7 @@ impl ConsensusExecutionHandler {
         debug!(
             "Process tx epoch_id={}, block_count={}",
             epoch_hash,
-            epoch_blocks.len()
+            epoch_blocks.len(),
         );
 
         let mut state = State::new(

@@ -11,6 +11,7 @@ pub struct SyncGraphBlockState {
     pub referees: Vec<H256>,
     pub nonce: u64,
     pub timestamp: u64,
+    pub adaptive: bool,
 }
 
 #[derive(Default)]
