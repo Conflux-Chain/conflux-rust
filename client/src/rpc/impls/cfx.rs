@@ -380,7 +380,7 @@ impl RpcImpl {
 
     fn generate_block_with_nonce_and_timestamp(
         &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64,
-        timestamp: u64,
+        timestamp: u64, adaptive: bool,
     ) -> RpcResult<H256>
     {
         let transactions = self.decode_raw_txs(raw, 0)?;
@@ -390,6 +390,7 @@ impl RpcImpl {
             transactions,
             nonce,
             timestamp,
+            adaptive,
         ) {
             Ok(hash) => Ok(hash),
             Err(e) => Err(RpcError::invalid_params(e)),
@@ -429,11 +430,13 @@ impl RpcImpl {
     }
 
     fn generate_block_with_fake_txs(
-        &self, raw_txs_without_data: Bytes, tx_data_len: Option<usize>,
-    ) -> RpcResult<H256> {
+        &self, raw_txs_without_data: Bytes, adaptive: Option<bool>,
+        tx_data_len: Option<usize>,
+    ) -> RpcResult<H256>
+    {
         let transactions = self
             .decode_raw_txs(raw_txs_without_data, tx_data_len.unwrap_or(0))?;
-        Ok(self.block_gen.generate_custom_block(transactions))
+        Ok(self.block_gen.generate_custom_block(transactions, adaptive))
     }
 
     fn generate_block_with_blame_info(
@@ -598,12 +601,12 @@ impl TestRpc for TestRpcImpl {
         target self.rpc_impl {
             fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
             fn generate_block_with_blame_info(&self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo) -> RpcResult<H256>;
-            fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, tx_data_len: Option<usize>) -> RpcResult<H256>;
+            fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>) -> RpcResult<H256>;
             fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
             fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
             fn generate_one_block_special(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
             fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
-            fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64) -> RpcResult<H256>;
+            fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
             fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
             fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
         }

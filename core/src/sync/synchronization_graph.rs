@@ -1495,6 +1495,7 @@ impl SynchronizationGraph {
                             .clone(),
                         nonce: inner.arena[index].block_header.nonce(),
                         timestamp: inner.arena[index].block_header.timestamp(),
+                        adaptive: inner.arena[index].block_header.adaptive(),
                     },
                 );
             }

@@ -105,9 +105,9 @@ class RpcClient:
         assert_is_hash_string(block_hash)
         return block_hash
 
-    def generate_block_with_fake_txs(self, txs: list, tx_data_len: int = 0) -> str:
+    def generate_block_with_fake_txs(self, txs: list, adaptive=False, tx_data_len: int = 0) -> str:
         encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
-        block_hash = self.node.test_generateblockwithfaketxs(encoded_txs, tx_data_len)
+        block_hash = self.node.test_generateblockwithfaketxs(encoded_txs, adaptive, tx_data_len)
         assert_is_hash_string(block_hash)
         return block_hash
 
