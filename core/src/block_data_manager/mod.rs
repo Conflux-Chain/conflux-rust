@@ -201,8 +201,14 @@ impl BlockDataManager {
             );
             data_man.insert_epoch_execution_commitments(
                 *data_man.genesis_hash(),
-                *genesis_block.block_header.deferred_receipts_root(),
-                *genesis_block.block_header.deferred_logs_bloom_hash(),
+                *data_man
+                    .true_genesis_block
+                    .block_header
+                    .deferred_receipts_root(),
+                *data_man
+                    .true_genesis_block
+                    .block_header
+                    .deferred_logs_bloom_hash(),
             );
         } else {
             // for other era genesis, we need to change the instance_id

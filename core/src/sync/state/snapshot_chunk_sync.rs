@@ -26,7 +26,6 @@ use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
 use primitives::{BlockHeaderBuilder, Receipt};
 use std::{
-    cmp::max,
     collections::{HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
     sync::Arc,
@@ -220,6 +219,8 @@ impl SnapshotChunkSync {
                 &inner.checkpoint,
                 &inner.trusted_blame_block,
                 &response.state_blame_vec,
+                &response.receipt_blame_vec,
+                &response.bloom_blame_vec,
             ) {
                 Some(state) => inner.true_state_root_by_blame_info = state,
                 None => {
@@ -231,6 +232,7 @@ impl SnapshotChunkSync {
             match Self::validate_epoch_receipts(
                 ctx,
                 &inner.checkpoint,
+                &inner.trusted_blame_block,
                 &response.receipt_blame_vec,
                 &response.bloom_blame_vec,
                 &response.block_receipts,
@@ -470,7 +472,8 @@ impl SnapshotChunkSync {
 
     fn validate_blame_states(
         ctx: &Context, checkpoint: &H256, trusted_blame_block: &H256,
-        state_blame_vec: &Vec<H256>,
+        state_blame_vec: &Vec<H256>, receipt_blame_vec: &Vec<H256>,
+        bloom_blame_vec: &Vec<H256>,
     ) -> Option<H256>
     {
         // these two header must exist in disk, it's safe to unwrap
@@ -487,44 +490,94 @@ impl SnapshotChunkSync {
             .block_header_by_hash(trusted_blame_block)
             .expect("trusted_blame_block header must exist");
 
-        let vec_len = max(
-            if checkpoint.height() == 0 {
-                trusted_blame_block.height() - checkpoint.height() + 1
-            } else {
-                trusted_blame_block.height() - checkpoint.height()
-                    + REWARD_EPOCH_COUNT
-            },
-            trusted_blame_block.blame() as u64 + 1,
-        );
-        // check blame count correct
-        if vec_len as usize != state_blame_vec.len() {
-            return None;
-        }
         // check checkpoint position in `state_blame_vec`
         let offset = trusted_blame_block.height()
             - (checkpoint.height() + DEFERRED_STATE_EPOCH_COUNT);
         if offset as usize >= state_blame_vec.len() {
             return None;
         }
-        let deferred_state_root = if trusted_blame_block.blame() == 0 {
-            state_blame_vec[0].clone()
+
+        let min_vec_len = if checkpoint.height() == 0 {
+            trusted_blame_block.height() - checkpoint.height() + 1
         } else {
-            BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                state_blame_vec[0..trusted_blame_block.blame() as usize + 1]
-                    .to_vec(),
-            )
+            trusted_blame_block.height() - checkpoint.height()
+                + REWARD_EPOCH_COUNT
         };
-        // check `deferred_state_root` is correct
-        if deferred_state_root != *trusted_blame_block.deferred_state_root() {
+        let mut trusted_blocks = Vec::new();
+        let mut trusted_block_height = trusted_blame_block.height();
+        let mut blame_count = trusted_blame_block.blame();
+        let mut block_hash = trusted_blame_block.hash();
+        let mut vec_len = 0;
+        trusted_blocks.push(trusted_blame_block);
+        loop {
+            vec_len += 1;
+            let block = ctx
+                .manager
+                .graph
+                .data_man
+                .block_header_by_hash(&block_hash)
+                .expect("block header must exist");
+            block_hash = *block.parent_hash();
+            if block.height() == 0
+                || (block.height() + blame_count as u64 == trusted_block_height
+                    && vec_len >= min_vec_len as usize)
+            {
+                break;
+            }
+            // We've jump to another trusted block.
+            if block.height() + blame_count as u64 + 1 == trusted_block_height {
+                trusted_block_height = block.height();
+                blame_count = block.blame();
+                trusted_blocks.push(block);
+            }
+        }
+        // verify the length of vector
+        if vec_len as usize != state_blame_vec.len() {
             return None;
+        }
+        let mut slice_begin = 0;
+        for trusted_block in trusted_blocks {
+            let slice_end = slice_begin + trusted_block.blame() as usize + 1;
+            let deferred_state_root = if trusted_block.blame() == 0 {
+                state_blame_vec[slice_begin].clone()
+            } else {
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    state_blame_vec[slice_begin..slice_end].to_vec(),
+                )
+            };
+            let deferred_receipts_root = if trusted_block.blame() == 0 {
+                receipt_blame_vec[slice_begin].clone()
+            } else {
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    receipt_blame_vec[slice_begin..slice_end].to_vec(),
+                )
+            };
+            let deferred_logs_bloom_hash = if trusted_block.blame() == 0 {
+                bloom_blame_vec[slice_begin].clone()
+            } else {
+                BlockHeaderBuilder::compute_blame_state_root_vec_root(
+                    bloom_blame_vec[slice_begin..slice_end].to_vec(),
+                )
+            };
+            // verify `deferred_state_root`, `deferred_receipts_root` and
+            // `deferred_logs_bloom_hash`
+            if deferred_state_root != *trusted_block.deferred_state_root()
+                || deferred_receipts_root
+                    != *trusted_block.deferred_receipts_root()
+                || deferred_logs_bloom_hash
+                    != *trusted_block.deferred_logs_bloom_hash()
+            {
+                return None;
+            }
+            slice_begin = slice_end;
         }
 
         Some(state_blame_vec[offset as usize])
     }
 
     fn validate_epoch_receipts(
-        ctx: &Context, checkpoint: &H256, receipt_blame_vec: &Vec<H256>,
-        bloom_blame_vec: &Vec<H256>,
+        ctx: &Context, checkpoint: &H256, trusted_blame_block: &H256,
+        receipt_blame_vec: &Vec<H256>, bloom_blame_vec: &Vec<H256>,
         block_receipts: &Vec<BlockExecutionResult>,
     ) -> Option<Vec<(H256, H256, Arc<Vec<Receipt>>)>>
     {
@@ -535,6 +588,16 @@ impl SnapshotChunkSync {
             .data_man
             .block_header_by_hash(checkpoint)
             .expect("checkpoint header must exist");
+        let trusted_blame_block = ctx
+            .manager
+            .graph
+            .data_man
+            .block_header_by_hash(trusted_blame_block)
+            .expect("trusted_blame_block header must exist");
+
+        // check checkpoint position in `state_blame_vec`
+        let blame_vec_offset = trusted_blame_block.height() as usize
+            - checkpoint.height() as usize;
         let epoch_receipts_count = if checkpoint.height() == 0 {
             1
         } else {
@@ -574,27 +637,20 @@ impl SnapshotChunkSync {
                 BlockHeaderBuilder::compute_block_logs_bloom_hash(
                     &epoch_receipts,
                 );
-            let index = receipt_blame_vec.len() - (epoch_receipts_count - idx);
-            if let Some(expected_receipt_root) = receipt_blame_vec.get(index) {
-                if *expected_receipt_root != receipt_root {
-                    debug!(
-                        "wrong receipt root, expected={:?}, now={:?}",
-                        expected_receipt_root, receipt_root
-                    );
-                    return None;
-                }
-            } else {
+            if receipt_blame_vec[blame_vec_offset + idx] != receipt_root {
+                debug!(
+                    "wrong receipt root, expected={:?}, now={:?}",
+                    receipt_blame_vec[blame_vec_offset + idx],
+                    receipt_root
+                );
                 return None;
             }
-            if let Some(expected_logs_bloom_hash) = bloom_blame_vec.get(index) {
-                if *expected_logs_bloom_hash != logs_bloom_hash {
-                    debug!(
-                        "wrong logs bloom hash, expected={:?}, now={:?}",
-                        expected_logs_bloom_hash, logs_bloom_hash
-                    );
-                    return None;
-                }
-            } else {
+            if bloom_blame_vec[blame_vec_offset + idx] != logs_bloom_hash {
+                debug!(
+                    "wrong logs bloom hash, expected={:?}, now={:?}",
+                    bloom_blame_vec[blame_vec_offset + idx],
+                    logs_bloom_hash
+                );
                 return None;
             }
             for i in 0..ordered_executable_epoch_blocks.len() {
