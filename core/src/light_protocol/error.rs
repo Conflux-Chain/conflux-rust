@@ -138,6 +138,7 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     );
 
     let mut disconnect = true;
+    let reason = format!("{}", e.0);
     let mut op = None;
 
     // NOTE: do not use wildcard; this way, the compiler
@@ -218,6 +219,6 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
     };
 
     if disconnect {
-        io.disconnect_peer(peer, op, None /* reason */);
+        io.disconnect_peer(peer, op, reason.as_str());
     }
 }

@@ -255,8 +255,7 @@ pub trait NetworkContext {
     ) -> Result<(), Error>;
 
     fn disconnect_peer(
-        &self, peer: PeerId, op: Option<UpdateNodeOperation>,
-        reason: Option<&'static str>,
+        &self, peer: PeerId, op: Option<UpdateNodeOperation>, reason: &str,
     );
 
     /// Register a new IO timer. 'IoHandler::timeout' will be called with the
