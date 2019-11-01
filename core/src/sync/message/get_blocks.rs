@@ -17,7 +17,7 @@ use crate::{
 use cfx_types::H256;
 use primitives::Block;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Default, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlocks {
@@ -27,10 +27,6 @@ pub struct GetBlocks {
 }
 
 impl Request for GetBlocks {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
     }

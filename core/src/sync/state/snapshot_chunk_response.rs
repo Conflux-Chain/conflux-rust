@@ -2,24 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    message::{Message, MsgId},
-    sync::{
-        message::{msgid, Context, Handleable},
-        state::{delta::Chunk, SnapshotChunkRequest},
-        Error, ErrorKind,
-    },
+use crate::sync::{
+    message::{Context, Handleable},
+    state::{delta::Chunk, SnapshotChunkRequest},
+    Error, ErrorKind,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::any::Any;
 
 #[derive(RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkResponse {
     pub request_id: u64,
     pub chunk: Chunk,
 }
-
-build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
 
 impl Handleable for SnapshotChunkResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

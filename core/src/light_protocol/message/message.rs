@@ -4,7 +4,6 @@
 
 use super::protocol::*;
 use crate::message::{Message, MsgId};
-use std::any::Any;
 
 // generate `pub mod msgid`
 // TODO(thegaram): reorder message ids

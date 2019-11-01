@@ -4,12 +4,9 @@
 
 use crate::{
     block_data_manager::BlockExecutionResult,
-    message::{HasRequestId, Message, MsgId, RequestId},
     parameters::consensus_internal::REWARD_EPOCH_COUNT,
     sync::{
-        message::{
-            msgid, Context, DynamicCapability, Handleable, KeyContainer,
-        },
+        message::{Context, DynamicCapability, Handleable, KeyContainer},
         request_manager::Request,
         state::{
             delta::{ChunkKey, RangedManifest},
@@ -20,7 +17,7 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestRequest {
@@ -29,9 +26,6 @@ pub struct SnapshotManifestRequest {
     pub start_chunk: Option<ChunkKey>,
     pub trusted_blame_block: Option<H256>,
 }
-
-build_msg_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
-build_has_request_id_impl! { SnapshotManifestRequest }
 
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
@@ -223,10 +217,6 @@ impl SnapshotManifestRequest {
 }
 
 impl Request for SnapshotManifestRequest {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.headers_request_timeout
     }
