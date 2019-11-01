@@ -13,6 +13,7 @@ pub use crate::network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
     PeerId,
 };
+use crate::sync::msg_sender::metric_message;
 
 macro_rules! build_msgid {
     ($($name:ident = $value:expr)*) => {
@@ -35,13 +36,13 @@ pub trait Message: Send + Sync + Encodable {
 
     fn send(
         &self, io: &dyn NetworkContext, peer: PeerId,
-    ) -> Result<usize, NetworkError> {
+    ) -> Result<(), NetworkError> {
         self.send_with_throttling(io, peer, false)
     }
 
     fn send_with_throttling(
         &self, io: &dyn NetworkContext, peer: PeerId, throttling_disabled: bool,
-    ) -> Result<usize, NetworkError> {
+    ) -> Result<(), NetworkError> {
         if !throttling_disabled && self.is_size_sensitive() {
             if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
                 debug!("Throttling failure: {:?}", e);
@@ -63,7 +64,9 @@ pub trait Message: Send + Sync + Encodable {
             io.get_peer_node_id(peer)
         );
 
-        Ok(size)
+        metric_message(peer, self.msg_id(), size);
+
+        Ok(())
     }
 
     fn encode(&self) -> Vec<u8> {
