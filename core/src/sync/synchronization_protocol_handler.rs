@@ -364,10 +364,12 @@ impl SynchronizationProtocolHandler {
 
         if !handle_rlp_message(msg_id, &ctx, &rlp)? {
             warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
+            let reason =
+                format!("unknown sync protocol message id {:?}", msg_id);
             io.disconnect_peer(
                 peer,
                 Some(UpdateNodeOperation::Remove),
-                None, /* reason */
+                reason.as_str(),
             );
         }
 
@@ -384,6 +386,7 @@ impl SynchronizationProtocolHandler {
         );
 
         let mut disconnect = true;
+        let reason = format!("{}", e.0);
         let mut op = None;
 
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
@@ -445,7 +448,7 @@ impl SynchronizationProtocolHandler {
         }
 
         if disconnect {
-            io.disconnect_peer(peer, op, None /* reason */);
+            io.disconnect_peer(peer, op, reason.as_str());
         }
     }
 
@@ -1378,7 +1381,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             io.disconnect_peer(
                 peer,
                 Some(UpdateNodeOperation::Failure),
-                None, /* reason */
+                "send status failed", /* reason */
             );
         } else {
             self.syn
@@ -1432,7 +1435,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                     io.disconnect_peer(
                         peer,
                         Some(UpdateNodeOperation::Failure),
-                        None, /* reason */
+                        "sync heartbeat timeout", /* reason */
                     );
                 }
             }
