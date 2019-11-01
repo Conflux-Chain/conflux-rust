@@ -26,12 +26,13 @@ macro_rules! build_msgid {
 }
 
 pub trait Message: Send + Sync + Encodable {
-    fn as_any(&self) -> &dyn Any;
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
     fn msg_id(&self) -> MsgId;
     fn msg_name(&self) -> &'static str;
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
+
+    fn maybe_request_id(&self) -> Option<RequestId> { None }
 
     fn send(
         &self, io: &dyn NetworkContext, peer: PeerId,
@@ -88,8 +89,6 @@ pub fn decode_msg(msg: &[u8]) -> Option<(MsgId, Rlp)> {
 macro_rules! build_msg_impl {
     ($name:ident, $msg:expr, $name_str:literal) => {
         impl Message for $name {
-            fn as_any(&self) -> &dyn Any { self }
-
             fn msg_id(&self) -> MsgId { $msg }
 
             fn msg_name(&self) -> &'static str { $name_str }
@@ -98,18 +97,42 @@ macro_rules! build_msg_impl {
 }
 
 pub trait HasRequestId {
-    fn request_id(&self) -> RequestId;
     fn set_request_id(&mut self, id: RequestId);
 }
 
-macro_rules! build_has_request_id_impl {
-    ($name:ident) => {
-        impl HasRequestId for $name {
-            fn request_id(&self) -> RequestId { self.request_id }
+macro_rules! build_msg_with_request_id_impl {
+    ($name:ident, $msg:expr, $name_str:literal) => {
+        impl Message for $name {
+            fn msg_id(&self) -> MsgId { $msg }
 
+            fn msg_name(&self) -> &'static str { $name_str }
+
+            fn maybe_request_id(&self) -> Option<RequestId> {
+                Some(self.request_id)
+            }
+        }
+
+        impl HasRequestId for $name {
             fn set_request_id(&mut self, id: RequestId) {
                 self.request_id = id;
             }
         }
     };
+}
+
+/// Support to downcast trait to concrete request type.
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: 'static> AsAny for T {
+    fn as_any(&self) -> &dyn Any { self }
+}
+
+pub trait AsMessage {
+    fn as_message(&self) -> &dyn Message;
+}
+
+impl<T: Message> AsMessage for T {
+    fn as_message(&self) -> &dyn Message { self }
 }

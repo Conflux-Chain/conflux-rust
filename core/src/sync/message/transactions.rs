@@ -20,7 +20,7 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{
     RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
 };
-use std::{any::Any, collections::HashSet, time::Duration};
+use std::{collections::HashSet, time::Duration};
 
 #[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct Transactions {
@@ -208,10 +208,6 @@ pub struct GetTransactions {
 }
 
 impl Request for GetTransactions {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.transaction_request_timeout
     }

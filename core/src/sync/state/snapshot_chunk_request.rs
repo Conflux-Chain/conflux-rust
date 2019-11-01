@@ -2,23 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    message::{HasRequestId, Message, MsgId, RequestId},
-    sync::{
-        message::{
-            msgid, Context, DynamicCapability, Handleable, KeyContainer,
-        },
-        request_manager::Request,
-        state::{
-            delta::{Chunk, ChunkKey},
-            snapshot_chunk_response::SnapshotChunkResponse,
-        },
-        Error, ProtocolConfiguration,
+use crate::sync::{
+    message::{Context, DynamicCapability, Handleable, KeyContainer},
+    request_manager::Request,
+    state::{
+        delta::{Chunk, ChunkKey},
+        snapshot_chunk_response::SnapshotChunkResponse,
     },
+    Error, ProtocolConfiguration,
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkRequest {
@@ -37,9 +32,6 @@ impl SnapshotChunkRequest {
     }
 }
 
-build_msg_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
-build_has_request_id_impl! { SnapshotChunkRequest }
-
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let chunk = match Chunk::load(&self.checkpoint, &self.chunk_key) {
@@ -55,10 +47,6 @@ impl Handleable for SnapshotChunkRequest {
 }
 
 impl Request for SnapshotChunkRequest {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
     }

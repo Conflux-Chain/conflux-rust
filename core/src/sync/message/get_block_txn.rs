@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{Message, RequestId},
+    message::RequestId,
     sync::{
         message::{Context, GetBlockTxnResponse, Handleable, KeyContainer},
         request_manager::Request,
@@ -12,7 +12,7 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable, Clone)]
 pub struct GetBlockTxn {
@@ -22,10 +22,6 @@ pub struct GetBlockTxn {
 }
 
 impl Request for GetBlockTxn {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
     }

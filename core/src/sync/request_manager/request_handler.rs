@@ -1,5 +1,5 @@
 use crate::{
-    message::{HasRequestId, Message},
+    message::{AsAny, AsMessage, HasRequestId, Message},
     sync::{
         message::{DynamicCapability, KeyContainer},
         msg_sender::send_message,
@@ -366,10 +366,7 @@ pub struct SynchronizationPeerRequest {
 }
 
 /// Trait of request message
-pub trait Request: Send + Debug + HasRequestId {
-    fn as_message(&self) -> &dyn Message;
-    /// Support to downcast trait to concrete request type.
-    fn as_any(&self) -> &dyn Any;
+pub trait Request: Send + Debug + HasRequestId + AsAny + AsMessage {
     /// Request timeout for resend purpose.
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration;
 

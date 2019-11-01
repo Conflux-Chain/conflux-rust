@@ -4,16 +4,14 @@
 
 use crate::{
     block_data_manager::BlockExecutionResult,
-    message::{Message, MsgId},
     sync::{
-        message::{msgid, Context, Handleable},
+        message::{Context, Handleable},
         state::{delta::RangedManifest, SnapshotManifestRequest},
         Error, ErrorKind,
     },
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::any::Any;
 
 #[derive(RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestResponse {
@@ -25,8 +23,6 @@ pub struct SnapshotManifestResponse {
     pub bloom_blame_vec: Vec<H256>,
     pub block_receipts: Vec<BlockExecutionResult>,
 }
-
-build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
 
 impl Handleable for SnapshotManifestResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
