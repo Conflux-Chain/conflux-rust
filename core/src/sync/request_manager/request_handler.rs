@@ -1,5 +1,5 @@
 use crate::{
-    message::{AsAny, AsMessage, HasRequestId, Message},
+    message::{HasRequestId, Message},
     sync::{
         message::{DynamicCapability, KeyContainer},
         msg_sender::send_message,
@@ -363,6 +363,23 @@ impl RequestContainer {
 pub struct SynchronizationPeerRequest {
     pub message: RequestMessage,
     pub timed_req: Arc<TimedSyncRequests>,
+}
+
+/// Support to downcast trait to concrete request type.
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: 'static + Request> AsAny for T {
+    fn as_any(&self) -> &dyn Any { self }
+}
+
+pub trait AsMessage {
+    fn as_message(&self) -> &dyn Message;
+}
+
+impl<T: Message> AsMessage for T {
+    fn as_message(&self) -> &dyn Message { self }
 }
 
 /// Trait of request message

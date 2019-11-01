@@ -8,7 +8,6 @@ pub type MsgId = u8;
 pub use cfx_bytes::Bytes;
 pub use priority_send_queue::SendQueuePriority;
 use rlp::{Encodable, Rlp};
-use std::any::Any;
 
 pub use crate::network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
@@ -118,21 +117,4 @@ macro_rules! build_msg_with_request_id_impl {
             }
         }
     };
-}
-
-/// Support to downcast trait to concrete request type.
-pub trait AsAny {
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<T: 'static> AsAny for T {
-    fn as_any(&self) -> &dyn Any { self }
-}
-
-pub trait AsMessage {
-    fn as_message(&self) -> &dyn Message;
-}
-
-impl<T: Message> AsMessage for T {
-    fn as_message(&self) -> &dyn Message { self }
 }
