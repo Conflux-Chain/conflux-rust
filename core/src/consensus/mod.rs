@@ -480,7 +480,9 @@ impl ConsensusGraph {
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    pub fn on_new_block(&self, hash: &H256, ignore_body: bool) {
+    pub fn on_new_block(
+        &self, hash: &H256, ignore_body: bool, update_best_info: bool,
+    ) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
@@ -554,10 +556,21 @@ impl ConsensusGraph {
                 }
             }
 
-            self.update_best_info(inner);
+            // Reset pivot chain according to checkpoint information during
+            // recovery
             if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
                 inner.set_pivot_to_stable(hash);
+                self.update_best_info(inner);
             }
+            *self.latest_inserted_block.lock() = *hash;
+
+            // Skip updating best info during recovery
+            if update_best_info {
+                self.update_best_info(inner);
+                self.txpool
+                    .notify_new_best_info(self.best_info.read().clone());
+            }
+
             if inner.inner_conf.enable_state_expose {
                 if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
                 {
@@ -586,9 +599,6 @@ impl ConsensusGraph {
                 }
             }
         }
-        self.txpool
-            .notify_new_best_info(self.best_info.read().clone());
-        *self.latest_inserted_block.lock() = *hash;
     }
 
     pub fn best_block_hash(&self) -> H256 {

@@ -952,7 +952,11 @@ impl SynchronizationGraph {
                 match consensus_receiver.recv() {
                     Ok((hash, ignore_body)) => {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
-                        consensus.on_new_block(&hash, ignore_body)
+                        consensus.on_new_block(
+                            &hash,
+                            ignore_body,
+                            true, /* update_best_info */
+                        )
                     }
                     Err(_) => break,
                 }
@@ -1512,7 +1516,12 @@ impl SynchronizationGraph {
                 );
             }
         } else {
-            self.consensus.on_new_block(&h, true /* ignore_body */);
+            // best info only needs to be updated after all blocks have been
+            // inserted into consensus
+            self.consensus.on_new_block(
+                &h, true,  /* ignore_body */
+                false, /* update_best_info */
+            );
         }
     }
 
