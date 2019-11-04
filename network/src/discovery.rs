@@ -7,7 +7,8 @@ use crate::{
     node_database::NodeDatabase,
     node_table::{NodeId, *},
     service::{UdpIoContext, MAX_DATAGRAM_SIZE, UDP_PROTOCOL_DISCOVERY},
-    Error, ErrorKind, IpFilter, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
+    Error, ErrorKind, IpFilter, ThrottlingReason, NODE_TAG_ARCHIVE,
+    NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
 use cfx_types::{H256, H520};
@@ -16,9 +17,10 @@ use rlp::{Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use throttling::time_window_bucket::TimeWindowBucket;
 
 const DISCOVER_PROTOCOL_VERSION: u32 = 1;
 
@@ -35,6 +37,10 @@ const EXPIRY_TIME: Duration = Duration::from_secs(20);
 
 pub const DISCOVER_NODES_COUNT: u32 = 16;
 const MAX_NODES_PING: usize = 32; // Max nodes to add/ping at once
+
+const DEFAULT_THROTTLING_INTERVAL: Duration = Duration::from_secs(1);
+const DEFAULT_THROTTLING_LIMIT_PING: usize = 20;
+const DEFAULT_THROTTLING_LIMIT_FIND_NODES: usize = 10;
 
 struct PingRequest {
     // Time when the request was sent
@@ -85,6 +91,10 @@ pub struct Discovery {
     adding_nodes: Vec<NodeEntry>,
     ip_filter: IpFilter,
     pub disc_option: DiscoveryOption,
+
+    // Limits the response for PING/FIND_NODE packets
+    ping_throttling: TimeWindowBucket<IpAddr>,
+    find_nodes_throttling: TimeWindowBucket<IpAddr>,
 }
 
 impl Discovery {
@@ -108,6 +118,14 @@ impl Discovery {
                 general: true,
                 archive: false,
             },
+            ping_throttling: TimeWindowBucket::new(
+                DEFAULT_THROTTLING_INTERVAL,
+                DEFAULT_THROTTLING_LIMIT_PING,
+            ),
+            find_nodes_throttling: TimeWindowBucket::new(
+                DEFAULT_THROTTLING_INTERVAL,
+                DEFAULT_THROTTLING_LIMIT_FIND_NODES,
+            ),
         }
     }
 
@@ -246,6 +264,14 @@ impl Discovery {
     ) -> Result<(), Error>
     {
         trace!("Got Ping from {:?}", &from);
+
+        if !self.ping_throttling.try_acquire(from.ip()) {
+            return Err(ErrorKind::Throttling(
+                ThrottlingReason::PacketThrottled("PING"),
+            )
+            .into());
+        }
+
         let ping_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
         let ping_to = NodeEndpoint::from_rlp(&rlp.at(2)?)?;
         let timestamp: u64 = rlp.val_at(3)?;
@@ -332,6 +358,14 @@ impl Discovery {
     ) -> Result<(), Error>
     {
         trace!("Got FindNode from {:?}", &from);
+
+        if !self.find_nodes_throttling.try_acquire(from.ip()) {
+            return Err(ErrorKind::Throttling(
+                ThrottlingReason::PacketThrottled("FIND_NODES"),
+            )
+            .into());
+        }
+
         let msg: FindNodeMessage = rlp.as_val()?;
         self.check_timestamp(msg.expire_timestamp)?;
         let neighbors = msg.sample(&*uio.node_db.read(), &self.ip_filter)?;
