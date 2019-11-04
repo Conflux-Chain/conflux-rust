@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{HasRequestId, Message, RequestId},
+    message::{Message, RequestId},
     parameters::sync::MAX_HEADERS_TO_SEND,
     sync::{
         message::{

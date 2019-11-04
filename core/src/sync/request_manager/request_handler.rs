@@ -1,5 +1,5 @@
 use crate::{
-    message::{HasRequestId, Message},
+    message::Message,
     sync::{
         message::{DynamicCapability, KeyContainer},
         request_manager::RequestManager,
@@ -372,7 +372,7 @@ impl<T: 'static + Request> AsAny for T {
 }
 
 /// Trait of request message
-pub trait Request: Send + Debug + HasRequestId + AsAny + Message {
+pub trait Request: Send + Debug + AsAny + Message {
     /// Request timeout for resend purpose.
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration;
 

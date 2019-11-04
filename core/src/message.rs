@@ -32,7 +32,8 @@ pub trait Message: Send + Sync + Encodable {
     fn msg_name(&self) -> &'static str;
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
-    fn maybe_request_id(&self) -> Option<RequestId> { None }
+    fn get_request_id(&self) -> Option<RequestId> { None }
+    fn set_request_id(&mut self, _id: RequestId) {}
 
     fn send(
         &self, io: &dyn NetworkContext, peer: PeerId,
@@ -98,10 +99,6 @@ macro_rules! build_msg_impl {
     };
 }
 
-pub trait HasRequestId {
-    fn set_request_id(&mut self, id: RequestId);
-}
-
 macro_rules! build_msg_with_request_id_impl {
     ($name:ident, $msg:expr, $name_str:literal) => {
         impl Message for $name {
@@ -109,12 +106,10 @@ macro_rules! build_msg_with_request_id_impl {
 
             fn msg_name(&self) -> &'static str { $name_str }
 
-            fn maybe_request_id(&self) -> Option<RequestId> {
+            fn get_request_id(&self) -> Option<RequestId> {
                 Some(self.request_id)
             }
-        }
 
-        impl HasRequestId for $name {
             fn set_request_id(&mut self, id: RequestId) {
                 self.request_id = id;
             }

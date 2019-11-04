@@ -9,7 +9,7 @@ use super::{
 use crate::{
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
-    message::{decode_msg, HasRequestId, Message, MsgId},
+    message::{decode_msg, Message, MsgId},
     parameters::sync::*,
     sync::{
         message::{

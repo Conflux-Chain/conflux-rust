@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::{
-    message::{HasRequestId, Message, MsgId, RequestId},
+    message::{Message, MsgId, RequestId},
     sync::{
         state::{
             SnapshotChunkRequest, SnapshotChunkResponse,
@@ -121,9 +121,9 @@ impl Message for GetTransactions {
     fn msg_name(&self) -> &'static str { "GetTransactions" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-}
 
-impl HasRequestId for GetTransactions {
+    fn get_request_id(&self) -> Option<RequestId> { Some(self.request_id) }
+
     fn set_request_id(&mut self, id: RequestId) { self.request_id = id; }
 }
 
@@ -227,7 +227,7 @@ fn handle_message<T: Decodable + Handleable + Message>(
 
     let msg_id = msg.msg_id();
     let msg_name = msg.msg_name();
-    let req_id = msg.maybe_request_id();
+    let req_id = msg.get_request_id();
 
     trace!(
         "handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}",
