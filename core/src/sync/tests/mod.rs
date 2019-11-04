@@ -23,7 +23,6 @@ fn test_remove_expire_blocks() {
         // test initialization
         {
             let inner = sync.inner.read();
-            assert!(inner.genesis_block_index == 0);
             assert!(inner.arena.len() == 1);
             assert!(inner.hash_to_arena_indices.len() == 1);
             assert!(inner.not_ready_blocks_count == 0);

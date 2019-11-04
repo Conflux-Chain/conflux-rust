@@ -134,7 +134,6 @@ pub struct SynchronizationGraphInner {
     pub arena: Slab<SynchronizationGraphNode>,
     pub hash_to_arena_indices: HashMap<H256, usize>,
     pub data_man: Arc<BlockDataManager>,
-    pub genesis_block_index: usize,
     children_by_hash: HashMap<H256, Vec<usize>>,
     referrers_by_hash: HashMap<H256, Vec<usize>>,
     pub pow_config: ProofOfWorkConfig,
@@ -160,7 +159,6 @@ impl SynchronizationGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
             data_man,
-            genesis_block_index: NULL,
             children_by_hash: HashMap::new(),
             referrers_by_hash: HashMap::new(),
             pow_config,
@@ -170,18 +168,13 @@ impl SynchronizationGraphInner {
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
         };
-        inner.genesis_block_index = inner.insert(genesis_header);
-        debug!(
-            "genesis_block_index in sync graph: {}",
-            inner.genesis_block_index
-        );
+        let genesis_block_index = inner.insert(genesis_header);
+        debug!("genesis_block_index in sync graph: {}", genesis_block_index);
 
-        inner
-            .old_era_blocks_frontier
-            .push_back(inner.genesis_block_index);
+        inner.old_era_blocks_frontier.push_back(genesis_block_index);
         inner
             .old_era_blocks_frontier_set
-            .insert(inner.genesis_block_index);
+            .insert(genesis_block_index);
 
         inner
     }
@@ -841,7 +834,7 @@ impl SynchronizationGraphInner {
                 }
                 // clean empty hash key
                 if remove_referee_hash {
-                    self.referrers_by_hash.remove(&parent_hash);
+                    self.referrers_by_hash.remove(&referee_hash);
                 }
             }
 
@@ -1201,11 +1194,11 @@ impl SynchronizationGraph {
     }
 
     fn parent_or_referees_invalid(&self, header: &BlockHeader) -> bool {
-        self.data_man.verified_invalid(header.parent_hash())
+        self.data_man.verified_invalid(header.parent_hash()).0
             || header
                 .referee_hashes()
                 .iter()
-                .any(|referee| self.data_man.verified_invalid(referee))
+                .any(|referee| self.data_man.verified_invalid(referee).0)
     }
 
     /// subroutine called by `insert_block_header` and `remove_expire_blocks`
@@ -1358,8 +1351,27 @@ impl SynchronizationGraph {
         let inner = &mut *self.inner.write();
         let hash = header.hash();
 
-        if self.data_man.verified_invalid(&hash) {
+        let (invalid, local_info_opt) = self.data_man.verified_invalid(&hash);
+        if invalid {
             return (false, Vec::new());
+        }
+
+        if let Some(info) = local_info_opt {
+            // If the block is ordered before current era genesis or it has
+            // already entered consensus graph in this run, we do not need to
+            // process it. And it these two cases, the block is considered
+            // valid.
+            let already_processed = info.get_seq_num()
+                < self.consensus.current_era_genesis_seq_num()
+                || info.get_instance_id() == self.data_man.get_instance_id();
+            if already_processed {
+                if need_to_verify {
+                    // Compute pow_quality, because the input header may be used
+                    // as a part of block later
+                    VerificationConfig::compute_header_pow_quality(header);
+                }
+                return (true, Vec::new());
+            }
         }
 
         if inner.hash_to_arena_indices.contains_key(&hash) {
@@ -1563,7 +1575,7 @@ impl SynchronizationGraph {
 
         let inner = &mut *self.inner.write();
 
-        if self.data_man.verified_invalid(&hash) {
+        if self.data_man.verified_invalid(&hash).0 {
             insert_success = false;
             // (false, false)
             return (insert_success, need_to_relay);

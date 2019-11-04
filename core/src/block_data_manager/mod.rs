@@ -800,10 +800,12 @@ impl BlockDataManager {
     }
 
     /// Check if a block is already marked as invalid.
-    pub fn verified_invalid(&self, block_hash: &H256) -> bool {
+    pub fn verified_invalid(
+        &self, block_hash: &H256,
+    ) -> (bool, Option<LocalBlockInfo>) {
         let invalid_block_set = self.invalid_block_set.upgradable_read();
         if invalid_block_set.contains(block_hash) {
-            return true;
+            return (true, None);
         } else {
             if let Some(block_info) =
                 self.db_manager.local_block_info_from_db(block_hash)
@@ -812,13 +814,13 @@ impl BlockDataManager {
                     BlockStatus::Invalid => {
                         RwLockUpgradableReadGuard::upgrade(invalid_block_set)
                             .insert(*block_hash);
-                        return true;
+                        return (true, Some(block_info));
                     }
-                    _ => return false,
+                    _ => return (false, Some(block_info)),
                 }
             } else {
                 // No status on disk, so the block is not marked invalid before
-                return false;
+                return (false, None);
             }
         }
     }
