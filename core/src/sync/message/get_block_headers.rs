@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{HasRequestId, Message, RequestId},
+    message::{Message, RequestId},
     parameters::sync::MAX_HEADERS_TO_SEND,
     sync::{
         message::{
@@ -15,7 +15,7 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHeaders {
@@ -24,10 +24,6 @@ pub struct GetBlockHeaders {
 }
 
 impl Request for GetBlockHeaders {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.headers_request_timeout
     }

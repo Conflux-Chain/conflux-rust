@@ -3,15 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    msg_sender::{send_message, NULL},
-    random,
-    request_manager::RequestManager,
-    Error, ErrorKind, SharedSynchronizationGraph, SynchronizationState,
+    msg_sender::NULL, random, request_manager::RequestManager, Error,
+    ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
-    message::{decode_msg, HasRequestId, Message, MsgId},
+    message::{decode_msg, Message, MsgId},
     parameters::sync::*,
     sync::{
         message::{
@@ -822,7 +820,7 @@ impl SynchronizationProtocolHandler {
         }
 
         for id in peer_ids {
-            send_message(io, id, msg)?;
+            msg.send(io, id)?;
         }
 
         Ok(())
@@ -851,7 +849,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), NetworkError> {
         let status_message = self.produce_status_message();
         debug!("Sending status message to {:?}: {:?}", peer, status_message);
-        send_message(io, peer, &status_message)
+        status_message.send(io, peer)
     }
 
     fn broadcast_status(&self, io: &dyn NetworkContext) {
@@ -1001,7 +999,7 @@ impl SynchronizationProtocolHandler {
                 ordered_positions.pop().unwrap() as u8,
                 messages.pop().unwrap(),
             );
-            match send_message(io, peer_id, &tx_msg) {
+            match tx_msg.send(io, peer_id) {
                 Ok(_) => {
                     trace!(
                         "{:02} <- Transactions ({} entries)",

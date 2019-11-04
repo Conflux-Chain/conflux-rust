@@ -14,7 +14,7 @@ use crate::{
     },
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHashesByEpoch {
@@ -23,10 +23,6 @@ pub struct GetBlockHashesByEpoch {
 }
 
 impl Request for GetBlockHashesByEpoch {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.headers_request_timeout
     }

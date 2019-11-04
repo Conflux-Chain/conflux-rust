@@ -1,8 +1,7 @@
 use crate::{
-    message::{HasRequestId, Message},
+    message::Message,
     sync::{
         message::{DynamicCapability, KeyContainer},
-        msg_sender::send_message,
         request_manager::RequestManager,
         synchronization_protocol_handler::ProtocolConfiguration,
         Error, ErrorKind,
@@ -110,8 +109,7 @@ impl RequestHandler {
         };
 
         request.set_request_id(request_id);
-        let message = request.as_message();
-        if send_message(io, peer, message).is_err() {
+        if request.send(io, peer).is_err() {
             return Err(request);
         }
 
@@ -312,8 +310,7 @@ impl RequestContainer {
                 if let Some(new_request_id) = self.get_next_request_id() {
                     let mut pending_msg = self.pop_pending_request().unwrap();
                     pending_msg.set_request_id(new_request_id);
-                    let send_res =
-                        send_message(io, self.peer_id, pending_msg.get_msg());
+                    let send_res = pending_msg.request.send(io, self.peer_id);
 
                     if send_res.is_err() {
                         warn!("Error while send_message, err={:?}", send_res);
@@ -365,11 +362,17 @@ pub struct SynchronizationPeerRequest {
     pub timed_req: Arc<TimedSyncRequests>,
 }
 
-/// Trait of request message
-pub trait Request: Send + Debug + HasRequestId {
-    fn as_message(&self) -> &dyn Message;
-    /// Support to downcast trait to concrete request type.
+/// Support to downcast trait to concrete request type.
+pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: 'static + Request> AsAny for T {
+    fn as_any(&self) -> &dyn Any { self }
+}
+
+/// Trait of request message
+pub trait Request: Send + Debug + AsAny + Message {
     /// Request timeout for resend purpose.
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration;
 
@@ -412,8 +415,6 @@ impl RequestMessage {
     pub fn set_request_id(&mut self, request_id: u64) {
         self.request.set_request_id(request_id);
     }
-
-    pub fn get_msg(&self) -> &dyn Message { self.request.as_message() }
 
     /// Download cast request to specified request type.
     /// If downcast failed, resend the request again and return

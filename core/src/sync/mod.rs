@@ -47,9 +47,9 @@ pub mod random {
 
 pub mod msg_sender {
     use super::message::msgid;
-    use crate::message::Message;
+    use crate::message::MsgId;
     use metrics::{register_meter_with_group, Meter};
-    use network::{Error as NetworkError, NetworkContext, PeerId};
+    use network::PeerId;
     use std::sync::Arc;
 
     pub const NULL: usize = !0;
@@ -274,111 +274,97 @@ pub mod msg_sender {
             );
     }
 
-    pub fn send_message(
-        io: &dyn NetworkContext, peer: PeerId, msg: &dyn Message,
-    ) -> Result<(), NetworkError> {
-        send_message_with_throttling(
-            io, peer, msg, false, /* throttling_disabled */
-        )
-    }
-
-    pub fn send_message_with_throttling(
-        io: &dyn NetworkContext, peer: PeerId, msg: &dyn Message,
-        throttling_disabled: bool,
-    ) -> Result<(), NetworkError>
-    {
-        let size = msg.send_with_throttling(io, peer, throttling_disabled)?;
-
-        if peer != NULL {
-            match msg.msg_id().into() {
-                msgid::STATUS => ON_STATUS_METER.mark(size),
-                msgid::GET_BLOCK_HEADERS_RESPONSE => {
-                    GET_BLOCK_HEADER_RESPONSE_METER.mark(size);
-                    GET_BLOCK_HEADER_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HEADERS => {
-                    GET_BLOCK_HEADERS_METER.mark(size);
-                    GET_BLOCK_HEADERS_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HEADER_CHAIN => {
-                    GET_BLOCK_HEADER_CHAIN_METER.mark(size);
-                    GET_BLOCK_HEADER_CHAIN_COUNTER.mark(1);
-                }
-                msgid::NEW_BLOCK => {
-                    NEW_BLOCK_METER.mark(size);
-                    NEW_BLOCK_COUNTER.mark(1);
-                }
-                msgid::NEW_BLOCK_HASHES => {
-                    NEW_BLOCK_HASHES_METER.mark(size);
-                    NEW_BLOCK_HASHES_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCKS_RESPONSE => {
-                    GET_BLOCKS_RESPONSE_METER.mark(size);
-                    GET_BLOCKS_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
-                    GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER.mark(size);
-                    GET_BLOCKS_WITH_PUBLIC_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCKS => {
-                    GET_BLOCKS_METER.mark(size);
-                    GET_BLOCKS_COUNTER.mark(1);
-                }
-                msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
-                    GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER.mark(size);
-                    GET_TERMINAL_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_TERMINAL_BLOCK_HASHES => {
-                    GET_TERMINAL_BLOCK_HASHES_METER.mark(size);
-                    GET_TERMINAL_BLOCK_HASHES_COUNTER.mark(1);
-                }
-                msgid::GET_CMPCT_BLOCKS => {
-                    GET_CMPCT_BLOCKS_METER.mark(size);
-                    GET_CMPCT_BLOCKS_COUNTER.mark(1);
-                }
-                msgid::GET_CMPCT_BLOCKS_RESPONSE => {
-                    GET_CMPCT_BLOCKS_RESPONSE_METER.mark(size);
-                    GET_CMPCT_BLOCKS_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_TXN => {
-                    GET_BLOCK_TXN_METER.mark(size);
-                    GET_BLOCK_TXN_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_TXN_RESPONSE => {
-                    GET_BLOCK_TXN_RESPOPNSE_METER.mark(size);
-                    GET_BLOCK_TXN_RESPOPNSE_COUNTER.mark(1);
-                }
-                msgid::DYNAMIC_CAPABILITY_CHANGE => {
-                    DYNAMIC_CAPABILITY_CHANGE_METER.mark(size);
-                    DYNAMIC_CAPABILITY_CHANGE_COUNTER.mark(1);
-                }
-                msgid::TRANSACTION_DIGESTS => {
-                    TRANSACTION_DIGESTS_METER.mark(size);
-                    TRANSACTION_DIGESTS_COUNTER.mark(1);
-                }
-                msgid::GET_TRANSACTIONS => {
-                    GET_TRANSACTIONS_METER.mark(size);
-                    GET_TRANSACTIONS_COUNTER.mark(1);
-                }
-                msgid::GET_TRANSACTIONS_RESPONSE => {
-                    GET_TRANSACTIONS_RESPONSE_METER.mark(size);
-                    GET_TRANSACTIONS_RESPONSE_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HASHES_BY_EPOCH => {
-                    GET_BLOCK_HASHES_BY_EPOCH_METER.mark(size);
-                    GET_BLOCK_HASHES_BY_EPOCH_COUNTER.mark(1);
-                }
-                msgid::GET_BLOCK_HASHES_RESPONSE => {
-                    GET_BLOCK_HASHES_RESPONSE_METER.mark(size);
-                    GET_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
-                }
-                _ => {
-                    OTHER_HIGH_METER.mark(size);
-                    OTHER_HIGH_COUNTER.mark(1);
-                }
-            }
+    pub fn metric_message(peer: PeerId, msg_id: MsgId, size: usize) {
+        if peer == NULL {
+            return;
         }
 
-        Ok(())
+        match msg_id {
+            msgid::STATUS => ON_STATUS_METER.mark(size),
+            msgid::GET_BLOCK_HEADERS_RESPONSE => {
+                GET_BLOCK_HEADER_RESPONSE_METER.mark(size);
+                GET_BLOCK_HEADER_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HEADERS => {
+                GET_BLOCK_HEADERS_METER.mark(size);
+                GET_BLOCK_HEADERS_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HEADER_CHAIN => {
+                GET_BLOCK_HEADER_CHAIN_METER.mark(size);
+                GET_BLOCK_HEADER_CHAIN_COUNTER.mark(1);
+            }
+            msgid::NEW_BLOCK => {
+                NEW_BLOCK_METER.mark(size);
+                NEW_BLOCK_COUNTER.mark(1);
+            }
+            msgid::NEW_BLOCK_HASHES => {
+                NEW_BLOCK_HASHES_METER.mark(size);
+                NEW_BLOCK_HASHES_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCKS_RESPONSE => {
+                GET_BLOCKS_RESPONSE_METER.mark(size);
+                GET_BLOCKS_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE => {
+                GET_BLOCKS_WITH_PUBLIC_RESPONSE_METER.mark(size);
+                GET_BLOCKS_WITH_PUBLIC_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCKS => {
+                GET_BLOCKS_METER.mark(size);
+                GET_BLOCKS_COUNTER.mark(1);
+            }
+            msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE => {
+                GET_TERMINAL_BLOCK_HASHES_RESPONSE_METER.mark(size);
+                GET_TERMINAL_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_TERMINAL_BLOCK_HASHES => {
+                GET_TERMINAL_BLOCK_HASHES_METER.mark(size);
+                GET_TERMINAL_BLOCK_HASHES_COUNTER.mark(1);
+            }
+            msgid::GET_CMPCT_BLOCKS => {
+                GET_CMPCT_BLOCKS_METER.mark(size);
+                GET_CMPCT_BLOCKS_COUNTER.mark(1);
+            }
+            msgid::GET_CMPCT_BLOCKS_RESPONSE => {
+                GET_CMPCT_BLOCKS_RESPONSE_METER.mark(size);
+                GET_CMPCT_BLOCKS_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_TXN => {
+                GET_BLOCK_TXN_METER.mark(size);
+                GET_BLOCK_TXN_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_TXN_RESPONSE => {
+                GET_BLOCK_TXN_RESPOPNSE_METER.mark(size);
+                GET_BLOCK_TXN_RESPOPNSE_COUNTER.mark(1);
+            }
+            msgid::DYNAMIC_CAPABILITY_CHANGE => {
+                DYNAMIC_CAPABILITY_CHANGE_METER.mark(size);
+                DYNAMIC_CAPABILITY_CHANGE_COUNTER.mark(1);
+            }
+            msgid::TRANSACTION_DIGESTS => {
+                TRANSACTION_DIGESTS_METER.mark(size);
+                TRANSACTION_DIGESTS_COUNTER.mark(1);
+            }
+            msgid::GET_TRANSACTIONS => {
+                GET_TRANSACTIONS_METER.mark(size);
+                GET_TRANSACTIONS_COUNTER.mark(1);
+            }
+            msgid::GET_TRANSACTIONS_RESPONSE => {
+                GET_TRANSACTIONS_RESPONSE_METER.mark(size);
+                GET_TRANSACTIONS_RESPONSE_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HASHES_BY_EPOCH => {
+                GET_BLOCK_HASHES_BY_EPOCH_METER.mark(size);
+                GET_BLOCK_HASHES_BY_EPOCH_COUNTER.mark(1);
+            }
+            msgid::GET_BLOCK_HASHES_RESPONSE => {
+                GET_BLOCK_HASHES_RESPONSE_METER.mark(size);
+                GET_BLOCK_HASHES_RESPONSE_COUNTER.mark(1);
+            }
+            _ => {
+                OTHER_HIGH_METER.mark(size);
+                OTHER_HIGH_COUNTER.mark(1);
+            }
+        }
     }
 }

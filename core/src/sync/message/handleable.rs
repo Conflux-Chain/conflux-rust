@@ -5,8 +5,7 @@
 use crate::{
     message::Message,
     sync::{
-        msg_sender::send_message, request_manager::RequestMessage, Error,
-        SynchronizationProtocolHandler,
+        request_manager::RequestMessage, Error, SynchronizationProtocolHandler,
     },
 };
 use cfx_types::H256;
@@ -29,7 +28,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn send_response(&self, response: &dyn Message) -> Result<(), Error> {
-        send_message(self.io, self.peer, response)?;
+        response.send(self.io, self.peer)?;
         Ok(())
     }
 

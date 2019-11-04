@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{Message, RequestId},
+    message::RequestId,
     parameters::sync::{MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND},
     sync::{
         message::{
@@ -16,7 +16,7 @@ use crate::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{any::Any, time::Duration};
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetCompactBlocks {
@@ -25,10 +25,6 @@ pub struct GetCompactBlocks {
 }
 
 impl Request for GetCompactBlocks {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.blocks_request_timeout
     }
