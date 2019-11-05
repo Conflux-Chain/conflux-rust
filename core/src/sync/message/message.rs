@@ -6,6 +6,7 @@ use super::*;
 use crate::{
     message::{Message, MsgId, RequestId},
     sync::{
+        message::throttling::Throttle,
         state::{
             SnapshotChunkRequest, SnapshotChunkResponse,
             SnapshotManifestRequest, SnapshotManifestResponse,
@@ -48,6 +49,8 @@ build_msgid! {
     GET_SNAPSHOT_CHUNK = 0x1b
     GET_SNAPSHOT_CHUNK_RESPONSE = 0x1c
 
+    THROTTLED = 0xfe
+
     INVALID = 0xff
 }
 
@@ -71,6 +74,7 @@ build_msg_with_request_id_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_M
 build_msg_with_request_id_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
 build_msg_with_request_id_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
 build_msg_with_request_id_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
+build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled" }
 
 // normal priority and size-sensitive message types
 impl Message for Transactions {
@@ -233,6 +237,8 @@ fn handle_message<T: Decodable + Handleable + Message>(
         "handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}",
         ctx.peer, msg_id, msg_name, req_id,
     );
+
+    msg.throttle(ctx)?;
 
     if let Err(e) = msg.handle(ctx) {
         info!(

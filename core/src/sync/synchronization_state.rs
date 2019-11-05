@@ -5,9 +5,12 @@
 use cfx_types::H256;
 use network::PeerId;
 //use slab::Slab;
-use crate::sync::{
-    message::{DynamicCapability, DynamicCapabilitySet},
-    random, Error, ErrorKind,
+use crate::{
+    message::MsgId,
+    sync::{
+        message::{DynamicCapability, DynamicCapabilitySet},
+        random, Error, ErrorKind,
+    },
 };
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
@@ -16,6 +19,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use throttling::token_bucket::TokenBucketManager;
 
 pub struct SynchronizationPeerState {
     pub id: PeerId,
@@ -36,6 +40,14 @@ pub struct SynchronizationPeerState {
     pub capabilities: DynamicCapabilitySet,
     // latest notified capabilities of mine to the remote peer.
     pub notified_capabilities: DynamicCapabilitySet,
+
+    // Used to throttle the P2P messages from remote peer, so as to avoid DoS
+    // attack. E.g. send large number of P2P messages to query blocks.
+    pub throttling: TokenBucketManager,
+    // Used to track the throttled P2P messages to remote peer.
+    // The `Instant` value in `HashMap` is the time to allow send P2P message
+    // again. Otherwise, the remote peer will disconnect the TCP connection.
+    pub throttled_msgs: HashMap<MsgId, Instant>,
 }
 
 pub type SynchronizationPeers =
@@ -85,84 +97,6 @@ impl SynchronizationState {
             .get(&id)
             .ok_or(ErrorKind::UnknownPeer)?
             .clone())
-    }
-
-    /// Choose one random peer excluding the given `exclude` set.
-    /// Return None if there is no peer to choose from
-    pub fn get_random_peer(&self, exclude: &HashSet<PeerId>) -> Option<PeerId> {
-        let peer_set: HashSet<PeerId> =
-            self.peers.read().keys().cloned().collect();
-        let choose_from: Vec<&PeerId> = peer_set.difference(exclude).collect();
-        choose_from.choose(&mut random::new()).map(|p| **p)
-    }
-
-    /// Choose one random peer that satisfies `predicate`.
-    /// Return None if there is no peer to choose from
-    pub fn get_random_peer_satisfying<F>(
-        &self, predicate: F,
-    ) -> Option<PeerId>
-    where F: Fn(&SynchronizationPeerState) -> bool {
-        let choose_from: Vec<PeerId> = self
-            .peers
-            .read()
-            .iter()
-            .filter_map(|(id, state)| {
-                if predicate(&*state.read()) {
-                    Some(*id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        choose_from.choose(&mut random::new()).cloned()
-    }
-
-    pub fn get_random_peer_with_cap(
-        &self, cap: Option<DynamicCapability>,
-    ) -> Option<PeerId> {
-        match cap {
-            Some(cap) => self.get_random_peer_satisfying(|peer| {
-                peer.capabilities.contains(cap)
-            }),
-            None => {
-                let peers: Vec<PeerId> =
-                    self.peers.read().keys().cloned().collect();
-                peers.choose(&mut random::new()).cloned()
-            }
-        }
-    }
-
-    pub fn get_random_peers(&self, size: usize) -> Vec<PeerId> {
-        let mut peers: Vec<PeerId> =
-            self.peers.read().keys().cloned().collect();
-        peers.shuffle(&mut random::new());
-        peers.truncate(size);
-        peers
-    }
-
-    /// Choose a random peer set given set size
-    /// Return all peers if there are not enough peers
-    pub fn get_random_peers_satisfying<F>(
-        &self, size: usize, filter: F,
-    ) -> Vec<PeerId>
-    where F: Fn(&SynchronizationPeerState) -> bool {
-        let mut peers: Vec<PeerId> = self
-            .peers
-            .read()
-            .iter()
-            .filter_map(|(id, state)| {
-                if filter(&*state.read()) {
-                    Some(*id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        peers.shuffle(&mut random::new());
-        peers.truncate(size);
-        peers
     }
 
     /// Updates the heartbeat for the specified peer. It takes no effect if the
@@ -223,5 +157,95 @@ impl SynchronizationState {
                 None => Some(x),
                 Some(max) => Some(if x > max { x } else { max }),
             })
+    }
+}
+
+#[derive(Default)]
+pub struct PeerFilter {
+    throttle_msg_ids: Option<HashSet<MsgId>>,
+    excludes: Option<HashSet<PeerId>>,
+    cap: Option<DynamicCapability>,
+    min_best_epoch: Option<u64>,
+}
+
+impl PeerFilter {
+    pub fn new(msg_id: MsgId) -> Self { PeerFilter::default().throttle(msg_id) }
+
+    pub fn throttle(mut self, msg_id: MsgId) -> Self {
+        self.throttle_msg_ids
+            .get_or_insert_with(|| HashSet::new())
+            .insert(msg_id);
+        self
+    }
+
+    pub fn exclude(mut self, peer: PeerId) -> Self {
+        self.excludes
+            .get_or_insert_with(|| HashSet::new())
+            .insert(peer);
+        self
+    }
+
+    pub fn with_cap(mut self, cap: DynamicCapability) -> Self {
+        self.cap.replace(cap);
+        self
+    }
+
+    pub fn with_min_best_epoch(mut self, min_best_epoch: u64) -> Self {
+        self.min_best_epoch.replace(min_best_epoch);
+        self
+    }
+
+    pub fn select_all(self, syn: &SynchronizationState) -> Vec<PeerId> {
+        let mut peers = Vec::new();
+
+        let check_state = self.throttle_msg_ids.is_some()
+            || self.cap.is_some()
+            || self.min_best_epoch.is_some();
+
+        for (id, peer) in syn.peers.read().iter() {
+            if let Some(ref excludes) = self.excludes {
+                if excludes.contains(id) {
+                    continue;
+                }
+            }
+
+            if check_state {
+                let peer = peer.read();
+
+                if let Some(ref ids) = self.throttle_msg_ids {
+                    if ids.iter().any(|id| peer.throttled_msgs.contains_key(id))
+                    {
+                        continue;
+                    }
+                }
+
+                if let Some(cap) = self.cap {
+                    if !peer.capabilities.contains(cap) {
+                        continue;
+                    }
+                }
+
+                if let Some(min) = self.min_best_epoch {
+                    if peer.best_epoch < min {
+                        continue;
+                    }
+                }
+            }
+
+            peers.push(*id);
+        }
+
+        peers
+    }
+
+    pub fn select(self, syn: &SynchronizationState) -> Option<PeerId> {
+        self.select_all(syn).choose(&mut random::new()).cloned()
+    }
+
+    pub fn select_n(self, n: usize, syn: &SynchronizationState) -> Vec<PeerId> {
+        let mut peers = self.select_all(syn);
+        peers.shuffle(&mut random::new());
+        peers.truncate(n);
+        peers
     }
 }
