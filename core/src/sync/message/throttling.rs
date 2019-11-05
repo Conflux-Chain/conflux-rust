@@ -22,7 +22,11 @@ pub struct Throttled {
 
 impl Handleable for Throttled {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        let peer = match ctx.manager.syn.peers.read().get(&ctx.peer) {
+            Some(peer) => peer.clone(),
+            None => return Ok(()),
+        };
+
         peer.write().throttled_msgs.insert(
             self.msg_id,
             Instant::now() + Duration::from_nanos(self.wait_time_nanos),
@@ -45,7 +49,10 @@ pub trait Throttle {
 
 impl<T: Message> Throttle for T {
     fn throttle(&self, ctx: &Context) -> Result<(), Error> {
-        let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        let peer = match ctx.manager.syn.peers.read().get(&ctx.peer) {
+            Some(peer) => peer.clone(),
+            None => return Ok(()),
+        };
 
         let bucket_name = self.msg_name().to_string();
         let bucket = match peer.read().throttling.get(&bucket_name) {
