@@ -369,6 +369,7 @@ impl FullClient {
                     common_impl.clone(),
                     rpc_impl.clone(),
                     Some(pubsub),
+                    &conf,
                 )
             },
             RpcExtractor,
@@ -392,6 +393,7 @@ impl FullClient {
                     common_impl.clone(),
                     rpc_impl.clone(),
                     None,
+                    &conf,
                 )
             },
         )?;

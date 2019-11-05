@@ -9,7 +9,7 @@ use crate::{
     },
     tcp::{self, Server as TcpServer, ServerBuilder as TcpServerBuilder},
 };
-use jsonrpc_core::MetaIoHandler;
+use jsonrpc_core::{Error as RpcError, MetaIoHandler, Result as RpcResult};
 use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
@@ -21,6 +21,7 @@ mod helpers;
 mod http_common;
 pub mod impls;
 pub mod informant;
+mod interceptor;
 pub mod metadata;
 mod traits;
 mod types;
@@ -39,7 +40,12 @@ use self::{
 };
 
 pub use self::types::{Block as RpcBlock, Origin};
+use crate::{
+    configuration::Configuration,
+    rpc::interceptor::{RpcInterceptor, RpcProxy},
+};
 pub use metadata::Metadata;
+use throttling::token_bucket::TokenBucketManager;
 
 #[derive(Debug, PartialEq)]
 pub struct TcpConfiguration {
@@ -100,12 +106,16 @@ impl HttpConfiguration {
 
 pub fn setup_public_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: Option<PubSubClient>,
-) -> MetaIoHandler<Metadata> {
+    conf: &Configuration,
+) -> MetaIoHandler<Metadata>
+{
     let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+    let interceptor =
+        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
-    handler.extend_with(cfx);
+    handler.extend_with(RpcProxy::new(cfx, interceptor));
     if let Some(pubsub) = pubsub {
         handler.extend_with(pubsub.to_delegate());
     }
@@ -131,13 +141,15 @@ pub fn setup_debug_rpc_apis(
 }
 
 pub fn setup_public_rpc_apis_light(
-    common: Arc<CommonImpl>, rpc: Arc<LightImpl>,
+    common: Arc<CommonImpl>, rpc: Arc<LightImpl>, conf: &Configuration,
 ) -> MetaIoHandler<Metadata> {
     let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+    let interceptor =
+        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_light");
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
-    handler.extend_with(cfx);
+    handler.extend_with(RpcProxy::new(cfx, interceptor));
     handler
 }
 
@@ -194,5 +206,40 @@ pub fn start_http(
             "HTTP error: {} (addr = {})",
             io_error, conf.address
         )),
+    }
+}
+
+struct ThrottleInterceptor {
+    manager: TokenBucketManager,
+}
+
+impl ThrottleInterceptor {
+    fn new(file: &Option<String>, section: &str) -> Self {
+        let manager = match file {
+            Some(file) => TokenBucketManager::load(file, Some(section))
+                .expect("invalid throttling configuration file"),
+            None => TokenBucketManager::default(),
+        };
+
+        ThrottleInterceptor { manager }
+    }
+}
+
+impl RpcInterceptor for ThrottleInterceptor {
+    fn before(&self, name: &String) -> RpcResult<()> {
+        let bucket = match self.manager.get(name) {
+            Some(bucket) => bucket,
+            None => return Ok(()),
+        };
+
+        if let Err(e) = bucket.lock().try_acquire() {
+            debug!("RPC {} throttled in {:?}", name, e);
+            return Err(RpcError::invalid_params(format!(
+                "throttled in {:?}",
+                e
+            )));
+        }
+
+        Ok(())
     }
 }
