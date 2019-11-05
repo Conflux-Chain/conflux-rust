@@ -86,7 +86,7 @@ impl TokenBucket {
         if next_time > now {
             Err(next_time - now)
         } else {
-            Err(Duration::default())
+            self.try_acquire_cost(cost)
         }
     }
 
@@ -178,5 +178,55 @@ impl TokenBucketManager {
         }
 
         Ok(manager)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::token_bucket::TokenBucket;
+    use std::{thread::sleep, time::Duration};
+
+    #[test]
+    fn test_init_tokens() {
+        // empty bucket
+        let mut bucket = TokenBucket::empty(3, 1, 1);
+        assert!(bucket.try_acquire().unwrap_err() < Duration::from_secs(1));
+
+        // 1 token
+        let mut bucket = TokenBucket::new(3, 1, 1, 1);
+        assert!(
+            bucket.try_acquire_cost(2).unwrap_err() < Duration::from_secs(1)
+        );
+        assert_eq!(bucket.try_acquire(), Ok(()));
+    }
+
+    #[test]
+    fn test_acquire() {
+        let mut bucket = TokenBucket::full(3, 1, 1);
+
+        // Token enough
+        assert_eq!(bucket.try_acquire(), Ok(()));
+        assert_eq!(bucket.try_acquire_cost(2), Ok(()));
+
+        // Token not enough
+        assert!(bucket.try_acquire().unwrap_err() < Duration::from_secs(1));
+        assert!(
+            bucket.try_acquire_cost(2).unwrap_err() < Duration::from_secs(2)
+        );
+
+        // Sleep 0.5s, but not recharged
+        sleep(Duration::from_millis(500));
+        assert!(bucket.try_acquire().unwrap_err() < Duration::from_millis(500));
+
+        // Sleep 0.5s, and recharged 1 token
+        sleep(Duration::from_millis(500));
+
+        // cannot acquire 2 tokens since only 1 recharged
+        assert!(
+            bucket.try_acquire_cost(2).unwrap_err() < Duration::from_secs(1)
+        );
+
+        // acquire the recharged 1 token
+        assert_eq!(bucket.try_acquire(), Ok(()));
     }
 }
