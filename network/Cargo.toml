@@ -34,3 +34,4 @@ byte-unit = "1.1.0"
 priority-send-queue = { path = "../util/priority-send-queue" }
 metrics = { path = "../util/metrics" }
 rustc-hex = "1.0"
+throttling = { path = "../util/throttling" }

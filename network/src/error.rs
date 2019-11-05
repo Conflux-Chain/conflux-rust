@@ -92,6 +92,7 @@ impl fmt::Display for DisconnectReason {
 pub enum ThrottlingReason {
     QueueFull,
     Throttled,
+    PacketThrottled(&'static str),
 }
 
 impl fmt::Display for ThrottlingReason {
@@ -101,6 +102,10 @@ impl fmt::Display for ThrottlingReason {
                 f.write_str("egress queue capacity reached")
             }
             ThrottlingReason::Throttled => f.write_str("egress throttled"),
+            ThrottlingReason::PacketThrottled(name) => {
+                let msg = format!("packet {} throttled", name);
+                f.write_str(msg.as_str())
+            }
         }
     }
 }
