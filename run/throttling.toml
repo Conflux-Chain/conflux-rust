@@ -1,0 +1,20 @@
+# Throttling value format:
+#
+# Token bucket: <maximum_tokens>,<init_tokens>,<recharge_tokens_per_second>,<default_cost>
+
+[sync_protocol]
+Status="90,90,1,30" # heartbeat interval 30s
+NewBlockHashes="200,200,20,1"
+Transactions="50,50,10,1"
+GetBlockHeaders="200,200,20,1"
+NewBlock="20,20,4,1"
+GetBlocks="50,50,10,1"
+GetCompactBlocks="200,200,20,1"
+GetBlockTxn="200,200,20,1"
+DynamicCapabilityChange="20,20,5,1"
+TransactionDigests="50,50,10,1"
+GetTransactions="50,50,10,1"
+GetBlockHashesByEpoch="50,50,10,1"
+SnapshotManifestRequest="50,50,10,1"
+SnapshotChunkRequest="50,50,10,1"
+Throttled="100,100,10,1"

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::RequestId,
+    message::{Message, RequestId},
     parameters::{
         block::ACCEPTABLE_TIME_DRIFT, sync::LOCAL_BLOCK_INFO_QUERY_THRESHOLD,
     },
@@ -13,6 +13,7 @@ use crate::{
             Handleable,
         },
         msg_sender::NULL,
+        synchronization_state::PeerFilter,
         Error,
     },
 };
@@ -83,9 +84,9 @@ impl Handleable for GetBlockHeadersResponse {
         let chosen_peer = if timestamp_validation_result.is_ok() {
             Some(ctx.peer)
         } else {
-            let mut exclude = HashSet::new();
-            exclude.insert(ctx.peer);
-            ctx.manager.syn.get_random_peer(&exclude)
+            PeerFilter::new(self.msg_id())
+                .exclude(ctx.peer)
+                .select(&ctx.manager.syn)
         };
 
         // re-request headers requested but not received

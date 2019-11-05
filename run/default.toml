@@ -150,3 +150,10 @@ log_conf="log.yaml"
 # Note, 0 represents unlimited.
 #
 # subnet_quota=32
+
+# Throttling configurations
+#
+# `throttling_conf` is configuration file in TOML format to throttle RPCs, P2P messages.
+# Throttling is enabled only when the parameter specified.
+#
+# throttling_conf="throttling.toml"

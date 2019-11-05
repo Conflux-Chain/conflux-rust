@@ -22,6 +22,7 @@ mod metrics;
 mod new_block;
 mod new_block_hashes;
 mod status;
+mod throttling;
 mod transactions;
 
 pub use self::{
@@ -46,6 +47,7 @@ pub use self::{
     new_block::NewBlock,
     new_block_hashes::NewBlockHashes,
     status::Status,
+    throttling::Throttled,
     transactions::{
         GetTransactions, GetTransactionsResponse, TransactionDigests,
         Transactions,

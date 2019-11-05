@@ -10,7 +10,7 @@ use crate::{
     },
     storage::state_manager::StateManager,
     sync::{
-        message::{Context, DynamicCapability},
+        message::{msgid, Context, DynamicCapability},
         state::{
             delta::{Chunk, ChunkKey},
             restore::Restorer,
@@ -18,6 +18,7 @@ use crate::{
             snapshot_manifest_request::SnapshotManifestRequest,
             snapshot_manifest_response::SnapshotManifestResponse,
         },
+        synchronization_state::PeerFilter,
         SynchronizationProtocolHandler,
     },
 };
@@ -177,9 +178,11 @@ impl SnapshotChunkSync {
             inner.trusted_blame_block.clone(),
         );
 
-        let peer = sync_handler.syn.get_random_peer_with_cap(Some(
-            DynamicCapability::ServeCheckpoint(Some(inner.checkpoint.clone())),
-        ));
+        let peer = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
+            .with_cap(DynamicCapability::ServeCheckpoint(Some(
+                inner.checkpoint,
+            )))
+            .select(&sync_handler.syn);
 
         sync_handler.request_manager.request_with_delay(
             io,
@@ -280,15 +283,11 @@ impl SnapshotChunkSync {
         inner.bloom_blame_vec = response.bloom_blame_vec;
 
         // request snapshot chunks from peers concurrently
-        let peers = ctx.manager.syn.get_random_peers_satisfying(
-            self.max_download_peers,
-            |peer| {
-                peer.capabilities
-                    .contains(DynamicCapability::ServeCheckpoint(Some(
-                        inner.checkpoint,
-                    )))
-            },
-        );
+        let peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
+            .with_cap(DynamicCapability::ServeCheckpoint(Some(
+                inner.checkpoint,
+            )))
+            .select_n(self.max_download_peers, &ctx.manager.syn);
 
         for peer in peers {
             if self.request_chunk(ctx, &mut inner, peer).is_none() {

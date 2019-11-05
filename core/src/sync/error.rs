@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::storage;
+use crate::{storage, sync::message::Throttled};
 use network;
 use rlp::DecoderError;
 use std::io;
@@ -63,6 +63,16 @@ error_chain! {
         InvalidSnapshotChunk(reason: String) {
             description("invalid snapshot chunk"),
             display("invalid snapshot chunk: {:?}", reason),
+        }
+
+        AlreadyThrottled(msg_name: &'static str) {
+            description("packet already throttled"),
+            display("packet already throttled: {:?}", msg_name),
+        }
+
+        Throttled(msg_name: &'static str, response: Throttled) {
+            description("packet throttled"),
+            display("packet {:?} throttled: {:?}", msg_name, response),
         }
     }
 }

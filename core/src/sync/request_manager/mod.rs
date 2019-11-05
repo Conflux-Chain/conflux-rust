@@ -10,6 +10,7 @@ use crate::{
             GetBlocks, GetCompactBlocks, GetTransactions, Key, KeyContainer,
             TransactionDigests,
         },
+        synchronization_state::PeerFilter,
         Error,
     },
 };
@@ -316,9 +317,11 @@ impl RequestManager {
     ) {
         debug!("send_request_again, request={:?}", msg.request);
         if let Some(request) = msg.request.resend() {
-            let chosen_peer = self
-                .syn
-                .get_random_peer_with_cap(request.required_capability());
+            let mut filter = PeerFilter::new(request.msg_id());
+            if let Some(cap) = request.required_capability() {
+                filter = filter.with_cap(cap);
+            }
+            let chosen_peer = filter.select(&self.syn);
             debug!("send_request_again with new request, peer={:?}, new request={:?}", chosen_peer, request);
             self.request_with_delay(io, request, chosen_peer, msg.delay);
         }
@@ -377,7 +380,8 @@ impl RequestManager {
             missing_headers
         };
         if !missing_headers.is_empty() {
-            let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+            let chosen_peer =
+                PeerFilter::new(msgid::GET_BLOCK_HEADERS).select(&self.syn);
             self.request_block_headers(io, chosen_peer, missing_headers);
         }
     }
@@ -415,7 +419,8 @@ impl RequestManager {
             missing_epochs
         };
         if !missing_epochs.is_empty() {
-            let chosen_peer = self.syn.get_random_peer(&HashSet::new());
+            let chosen_peer = PeerFilter::new(msgid::GET_BLOCK_HASHES_BY_EPOCH)
+                .select(&self.syn);
             self.request_epoch_hashes(io, chosen_peer, missing_epochs);
         }
     }
@@ -463,8 +468,15 @@ impl RequestManager {
             // and a full block is reconstructed, but the full block
             // is incorrect. We should ask the same peer for the
             // full block instead of choosing a random peer.
-            let chosen_peer =
-                peer.or_else(|| self.syn.get_random_peer(&HashSet::new()));
+            let chosen_peer = peer.or_else(|| {
+                let msg_id = if ask_full_block {
+                    msgid::GET_BLOCKS
+                } else {
+                    msgid::GET_CMPCT_BLOCKS
+                };
+
+                PeerFilter::new(msg_id).select(&self.syn)
+            });
             if ask_full_block {
                 self.request_blocks(
                     io,
@@ -547,9 +559,12 @@ impl RequestManager {
             }
 
             let maybe_peer = req.peer.or_else(|| {
-                self.syn.get_random_peer_with_cap(
-                    req.request.0.required_capability(),
-                )
+                let msg_id = req.request.0.msg_id();
+                let mut filter = PeerFilter::new(msg_id);
+                if let Some(cap) = req.request.0.required_capability() {
+                    filter = filter.with_cap(cap);
+                }
+                filter.select(&self.syn)
             });
             let chosen_peer = match maybe_peer {
                 Some(p) => p,

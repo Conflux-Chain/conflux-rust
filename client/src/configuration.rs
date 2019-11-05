@@ -127,6 +127,7 @@ build_config! {
         (rocksdb_disable_wal, (bool), false)
         (enable_state_expose, (bool), false)
         (get_logs_filter_max_limit, (Option<usize>), None)
+        (throttling_conf, (Option<String>), None)
     }
     {
         (
@@ -371,6 +372,7 @@ impl Configuration {
                 .future_block_buffer_capacity,
             max_download_state_peers: self.raw_conf.max_download_state_peers,
             test_mode: self.raw_conf.test_mode,
+            throttling_config_file: self.raw_conf.throttling_conf.clone(),
         }
     }
 
