@@ -122,7 +122,7 @@ impl Encodable for TransactionDigests {
             .begin_list(3)
             .append(&self.window_index)
             .append(&self.random_position)
-            .append_list(&self.trans_short_ids);
+            .append(&self.trans_short_ids);
     }
 }
 
@@ -132,7 +132,7 @@ impl Decodable for TransactionDigests {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let trans_short_ids = rlp.list_at(2)?;
+        let trans_short_ids: Vec<u8> = rlp.val_at(2)?;
         if trans_short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
             != 0
         {

@@ -128,4 +128,6 @@ impl CheckpointDumpManager {
             Some(*checkpoint)
         }
     }
+
+    pub fn stop(&self) { *self.checkpoint_dump_sender.lock() = None; }
 }

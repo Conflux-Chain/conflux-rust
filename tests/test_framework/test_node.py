@@ -206,7 +206,7 @@ class TestNode:
         self.log.debug("Get node {} nodeid {}".format(self.index, self.key))
 
 
-    def stop_node(self, expected_stderr='', kill=False):
+    def stop_node(self, expected_stderr='', kill=False, wait=True):
         """Stop the node."""
         if not self.running:
             return
@@ -219,6 +219,8 @@ class TestNode:
         except http.client.CannotSendRequest:
             self.log.exception("Unable to stop node.")
 
+        if wait:
+            self.wait_until_stopped()
         # Check that stderr is as expected
         self.stderr.seek(0)
         stderr = self.stderr.read().decode('utf-8').strip()

@@ -439,6 +439,7 @@ impl FullClient {
         BlockGenerator::stop(&blockgen);
         drop(blockgen);
         drop(to_drop);
+        CHECKPOINT_DUMP_MANAGER.read().stop();
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly

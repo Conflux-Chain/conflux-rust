@@ -56,6 +56,7 @@ const NODE_TABLE: TimerToken = SYS_TIMER + 7;
 const SEND_DELAYED_MESSAGES: TimerToken = SYS_TIMER + 8;
 const CHECK_SESSIONS: TimerToken = SYS_TIMER + 9;
 const HANDLER_TIMER: TimerToken = LAST_SESSION + 256;
+const STOP_NET_POLL: TimerToken = HANDLER_TIMER + 1;
 
 pub const DEFAULT_HOUSEKEEPING_TIMEOUT: Duration = Duration::from_secs(1);
 // for DISCOVERY_REFRESH TimerToken
@@ -180,6 +181,7 @@ impl NetworkService {
                 handler,
                 main_event_loop_channel,
                 MAX_SESSIONS,
+                STOP_NET_POLL,
             );
         Ok(())
     }
