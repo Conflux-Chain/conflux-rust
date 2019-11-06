@@ -69,9 +69,6 @@ pub struct ConsensusGraphNodeData {
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
     blockset_in_own_view_of_epoch: Vec<usize>,
-    /// The number of blocks in the last two era. Only such blocks are counted
-    /// during difficulty adjustment.
-    num_epoch_blocks_in_2era: usize,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
     ///
@@ -101,7 +98,6 @@ impl ConsensusGraphNodeData {
             partial_invalid: false,
             pending: false,
             blockset_in_own_view_of_epoch: Default::default(),
-            num_epoch_blocks_in_2era: 0,
             ordered_executable_epoch_blocks: Default::default(),
             blockset_cleared: false,
             sequence_number,
@@ -1363,25 +1359,6 @@ impl ConsensusGraphInner {
             .filter(|idx| self.is_same_era(**idx, pivot))
             .map(|idx| *idx)
             .collect();
-        // FIXME Double check if it's okay to use cur_era_genesis instead of
-        // two_era_block        let two_era_block =
-        // self.get_era_genesis_block_with_parent(
-        // self.arena[pivot].parent,
-        // self.inner_conf.era_epoch_count,        );
-
-        // Here `num_epoch_blocks_in_2era` might be incorrect for pending blocks
-        // (either really pending because it's past stable block or just
-        // pending because it's being inserted during recovery.
-        let two_era_block = self.cur_era_genesis_block_arena_index;
-        self.arena[pivot].data.num_epoch_blocks_in_2era = self.arena[pivot]
-            .data
-            .blockset_in_own_view_of_epoch
-            .iter()
-            .filter(|idx| {
-                let lca = self.lca(**idx, two_era_block);
-                lca == two_era_block
-            })
-            .count();
         self.arena[pivot].data.ordered_executable_epoch_blocks =
             self.topological_sort(&filtered_blockset);
         self.arena[pivot]
@@ -1842,7 +1819,10 @@ impl ConsensusGraphInner {
                     &self.arena[parent_arena_index].hash,
                     |h| {
                         let index = self.hash_to_arena_indices.get(h).unwrap();
-                        self.arena[*index].data.num_epoch_blocks_in_2era
+                        self.arena[*index]
+                            .data
+                            .ordered_executable_epoch_blocks
+                            .len()
                     },
                 )
             }
@@ -1873,7 +1853,10 @@ impl ConsensusGraphInner {
                 &new_best_hash,
                 |h| {
                     let index = self.hash_to_arena_indices.get(h).unwrap();
-                    self.arena[*index].data.num_epoch_blocks_in_2era
+                    self.arena[*index]
+                        .data
+                        .ordered_executable_epoch_blocks
+                        .len()
                 },
             );
         } else {
