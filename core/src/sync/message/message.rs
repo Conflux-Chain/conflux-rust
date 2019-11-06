@@ -6,7 +6,10 @@ use super::*;
 use crate::{
     message::{Message, MsgId, RequestId},
     sync::{
-        message::throttling::Throttle,
+        message::{
+            throttling::Throttle,
+            transactions::GetTransactionsFromLongIdResponse,
+        },
         state::{
             SnapshotChunkRequest, SnapshotChunkResponse,
             SnapshotManifestRequest, SnapshotManifestResponse,
@@ -16,7 +19,6 @@ use crate::{
 };
 pub use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, Rlp};
-use crate::sync::message::transactions::GetTransactionsFromLongIdResponse;
 // generate `pub mod msgid`
 build_msgid! {
     STATUS = 0x00
@@ -132,7 +134,6 @@ impl Message for GetTransactions {
 }
 
 impl Message for GetTransactionsFromLongId {
-
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsFromLongId" }
@@ -155,7 +156,6 @@ impl Message for GetTransactionsResponse {
 }
 
 impl Message for GetTransactionsFromLongIdResponse {
-
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
@@ -220,14 +220,15 @@ pub fn handle_rlp_message(
         msgid::GET_TRANSACTIONS => {
             handle_message::<GetTransactions>(ctx, rlp)?;
         }
-        msgid::GET_TRANSACTIONS_FROM_TX_HASHES=>{
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES => {
             rlp.as_val::<GetTransactionsFromLongId>()?.handle(&ctx)?;
         }
         msgid::GET_TRANSACTIONS_RESPONSE => {
             handle_message::<GetTransactionsResponse>(ctx, rlp)?;
         }
-        msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE=>{
-            rlp.as_val::<GetTransactionsFromLongIdResponse>()?.handle(&ctx)?;
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE => {
+            rlp.as_val::<GetTransactionsFromLongIdResponse>()?
+                .handle(&ctx)?;
         }
         msgid::GET_BLOCK_HASHES_BY_EPOCH => {
             handle_message::<GetBlockHashesByEpoch>(ctx, rlp)?;

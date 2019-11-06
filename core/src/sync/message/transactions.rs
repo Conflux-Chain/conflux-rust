@@ -6,8 +6,8 @@ use crate::{
     message::{Message, RequestId},
     sync::{
         message::{
-            metrics::TX_HANDLE_TIMER, Context, DynamicCapability, Handleable,
-            Key, KeyContainer, msgid,
+            metrics::TX_HANDLE_TIMER, msgid, Context, DynamicCapability,
+            Handleable, Key, KeyContainer,
         },
         request_manager::Request,
         Error, ErrorKind, ProtocolConfiguration,
@@ -20,9 +20,8 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{
     RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
 };
-use std::{collections::HashSet, time::Duration};
 use siphasher::sip::SipHasher24;
-use std::hash::Hasher;
+use std::{collections::HashSet, hash::Hasher, time::Duration};
 
 #[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct Transactions {
@@ -109,9 +108,7 @@ impl Handleable for TransactionDigests {
                 {
                     bail!(ErrorKind::TooManyTrans);
                 }
-                if self.short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES
-                    != 0
-                {
+                if self.short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES != 0 {
                     bail!(ErrorKind::InvalidMessageFormat);
                 }
             }
@@ -127,37 +124,52 @@ impl Handleable for TransactionDigests {
 
 impl Encodable for TransactionDigests {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(5)
-            .append(&self.window_index)
-            .append(&self.key1)
-            .append(&self.key2)
-            .append_list(&self.short_ids)
-            .append_list(&self.tx_hashes);
+        if self.tx_hashes.is_empty() {
+            stream
+                .begin_list(4)
+                .append(&self.window_index)
+                .append(&self.key1)
+                .append(&self.key2)
+                .append(&self.short_ids);
+        } else {
+            stream
+                .begin_list(5)
+                .append(&self.window_index)
+                .append(&self.key1)
+                .append(&self.key2)
+                .append(&self.short_ids)
+                .append_list(&self.tx_hashes);
+        }
     }
 }
 
 impl Decodable for TransactionDigests {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 5 {
+        if !(rlp.item_count()? == 4 || rlp.item_count()? == 5) {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
         let short_ids = rlp.list_at(3)?;
-        let tx_hashes = rlp.list_at(4)?;
-        if short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
-            != 0
-        {
+        if short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES != 0 {
             return Err(DecoderError::Custom(
                 "TransactionDigests length Error!",
             ));
         }
+
+        let tx_hashes = {
+            if rlp.item_count()? == 5 {
+                rlp.list_at(4)?
+            } else {
+                vec![]
+            }
+        };
+
         Ok(TransactionDigests {
             window_index: rlp.val_at(0)?,
             key1: rlp.val_at(1)?,
             key2: rlp.val_at(2)?,
-            short_ids: short_ids,
-            tx_hashes: tx_hashes,
+            short_ids,
+            tx_hashes,
         })
     }
 }
@@ -248,7 +260,7 @@ impl Request for GetTransactions {
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
         let mut short_inflight_keys =
-           inflight_keys.write(msgid::GET_TRANSACTIONS);
+            inflight_keys.write(msgid::GET_TRANSACTIONS);
         let mut long_inflight_keys =
             inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
         for tx in &self.short_ids {
@@ -271,8 +283,8 @@ impl Request for GetTransactions {
                 short_tx_ids.insert(*id);
             }
         }
-        for id in self.tx_hashes.iter(){
-            if long_inflight_keys.insert(Key::Hash(*id)){
+        for id in self.tx_hashes.iter() {
+            if long_inflight_keys.insert(Key::Hash(*id)) {
                 long_tx_ids.insert(*id);
             }
         }
@@ -281,18 +293,19 @@ impl Request for GetTransactions {
         self.tx_hashes = long_tx_ids;
     }
 
-    fn is_empty(&self) -> bool { self.tx_hashes_indices.is_empty() && self.indices.is_empty() }
+    fn is_empty(&self) -> bool {
+        self.tx_hashes_indices.is_empty() && self.indices.is_empty()
+    }
 
     fn resend(&self) -> Option<Box<dyn Request>> { None }
 }
 
 impl Handleable for GetTransactions {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let transactions =
-            ctx.manager.request_manager.get_sent_transactions(
-                self.window_index,
-                &self.indices,
-            );
+        let transactions = ctx
+            .manager
+            .request_manager
+            .get_sent_transactions(self.window_index, &self.indices);
         let long_indices_transactions = ctx
             .manager
             .request_manager
@@ -303,7 +316,7 @@ impl Handleable for GetTransactions {
             .collect();
         let response = GetTransactionsResponse {
             request_id: self.request_id,
-            transactions: transactions,
+            transactions,
             long_trans_ids,
         };
         debug!(
@@ -357,7 +370,6 @@ pub struct GetTransactionsFromLongId {
 }
 
 impl Request for GetTransactionsFromLongId {
-
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.transaction_request_timeout
     }
@@ -389,15 +401,14 @@ impl Request for GetTransactionsFromLongId {
 
 impl Handleable for GetTransactionsFromLongId {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let transactions =
-            ctx.manager.request_manager.get_sent_transactions(
-                self.window_index,
-                &self.indices,
-            );
+        let transactions = ctx
+            .manager
+            .request_manager
+            .get_sent_transactions(self.window_index, &self.indices);
 
         let response = GetTransactionsFromLongIdResponse {
             request_id: self.request_id,
-            transactions: transactions
+            transactions,
         };
         debug!(
             "on_get_transactions_from_tx_hashes request {} txs, returned {} txs",
@@ -433,7 +444,6 @@ impl Decodable for GetTransactionsFromLongId {
         })
     }
 }
-
 
 ///////////////////////////////////////////////////////////////////////
 
@@ -478,10 +488,16 @@ impl Handleable for GetTransactionsResponse {
 
         debug!("Transactions successfully inserted to transaction pool");
 
-        if req.tx_hashes_indices.len() >0 && self.long_trans_ids.is_empty(){
+        if req.tx_hashes_indices.len() > 0 && self.long_trans_ids.is_empty() {
             ctx.manager
                 .request_manager
-                .request_transactions_from_long_tx_ids(ctx.io, ctx.peer, self.long_trans_ids, req.window_index, &req.tx_hashes_indices);
+                .request_transactions_from_tx_hashes(
+                    ctx.io,
+                    ctx.peer,
+                    self.long_trans_ids,
+                    req.window_index,
+                    &req.tx_hashes_indices,
+                );
         }
         Ok(())
     }
@@ -499,7 +515,10 @@ impl Handleable for GetTransactionsFromLongIdResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
 
-        debug!("on_get_transactions_from_tx_hashes_response {:?}", self.request_id);
+        debug!(
+            "on_get_transactions_from_tx_hashes_response {:?}",
+            self.request_id
+        );
 
         let req = ctx.match_request(self.request_id)?;
         let req = req.downcast_ref::<GetTransactionsFromLongId>(
