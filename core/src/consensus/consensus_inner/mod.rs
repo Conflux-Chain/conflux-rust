@@ -1240,18 +1240,18 @@ impl ConsensusGraphInner {
             cur = self.arena[cur].parent;
         }
         path_to_lca.reverse();
-        let mut visited = HashSet::new();
+        let mut visited = BitSet::new();
         for ancestor_arena_index in path_to_lca {
-            visited.insert(ancestor_arena_index);
+            visited.add(ancestor_arena_index as u32);
             if ancestor_arena_index == pivot
                 || self.arena[ancestor_arena_index].data.blockset_cleared
             {
                 let mut queue = VecDeque::new();
                 for referee in &self.arena[ancestor_arena_index].referees {
                     if !pastset.contains(*referee as u32)
-                        && !visited.contains(referee)
+                        && !visited.contains(*referee as u32)
                     {
-                        visited.insert(*referee);
+                        visited.add(*referee as u32);
                         queue.push_back(*referee);
                     }
                 }
@@ -1265,16 +1265,16 @@ impl ConsensusGraphInner {
                     let parent = self.arena[index].parent;
                     if parent != NULL
                         && !pastset.contains(parent as u32)
-                        && !visited.contains(&parent)
+                        && !visited.contains(parent as u32)
                     {
-                        visited.insert(parent);
+                        visited.add(parent as u32);
                         queue.push_back(parent);
                     }
                     for referee in &self.arena[index].referees {
                         if !pastset.contains(*referee as u32)
-                            && !visited.contains(referee)
+                            && !visited.contains(*referee as u32)
                         {
-                            visited.insert(*referee);
+                            visited.add(*referee as u32);
                             queue.push_back(*referee);
                         }
                     }
@@ -1284,7 +1284,7 @@ impl ConsensusGraphInner {
                     .data
                     .blockset_in_own_view_of_epoch
                 {
-                    visited.insert(*index);
+                    visited.add(*index as u32);
                 }
             }
         }
@@ -1359,6 +1359,7 @@ impl ConsensusGraphInner {
             .filter(|idx| self.is_same_era(**idx, pivot))
             .map(|idx| *idx)
             .collect();
+
         self.arena[pivot].data.ordered_executable_epoch_blocks =
             self.topological_sort(&filtered_blockset);
         self.arena[pivot]
