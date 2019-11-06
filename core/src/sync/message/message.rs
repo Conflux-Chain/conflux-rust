@@ -48,8 +48,8 @@ build_msgid! {
     GET_SNAPSHOT_MANIFEST_RESPONSE = 0x1a
     GET_SNAPSHOT_CHUNK = 0x1b
     GET_SNAPSHOT_CHUNK_RESPONSE = 0x1c
-    GET_TRANSACTIONS_FROM_LONG_ID = 0x1d
-    GET_TRANSACTIONS_FROM_LONG_ID_RESPONSE = 0x1e
+    GET_TRANSACTIONS_FROM_TX_HASHES = 0x1d
+    GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE = 0x1e
 
     GET_CHECKPOINT_BLAME_STATE_REQUEST = 0x1f
     GET_CHECKPOINT_BLAME_STATE_RESPONSE = 0x20
@@ -132,9 +132,8 @@ impl Message for GetTransactions {
 }
 
 impl Message for GetTransactionsFromLongId {
-    fn as_any(&self) -> &dyn Any { self }
 
-    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_LONG_ID }
+    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsFromLongId" }
 
@@ -156,7 +155,6 @@ impl Message for GetTransactionsResponse {
 }
 
 impl Message for GetTransactionsFromLongIdResponse {
-    fn as_any(&self) -> &dyn Any { self }
 
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
 
@@ -222,13 +220,13 @@ pub fn handle_rlp_message(
         msgid::GET_TRANSACTIONS => {
             handle_message::<GetTransactions>(ctx, rlp)?;
         }
-        msgid::GET_TRANSACTIONS_FROM_LONG_ID=>{
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES=>{
             rlp.as_val::<GetTransactionsFromLongId>()?.handle(&ctx)?;
         }
         msgid::GET_TRANSACTIONS_RESPONSE => {
             handle_message::<GetTransactionsResponse>(ctx, rlp)?;
         }
-        msgid::GET_TRANSACTIONS_FROM_LONG_ID_RESPONSE=>{
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE=>{
             rlp.as_val::<GetTransactionsFromLongIdResponse>()?.handle(&ctx)?;
         }
         msgid::GET_BLOCK_HASHES_BY_EPOCH => {

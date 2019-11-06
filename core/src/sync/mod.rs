@@ -274,25 +274,25 @@ pub mod msg_sender {
             );
     }
     lazy_static!{
-    static ref GET_TRANSACTIONS_FROM_LONG_ID_METER: Arc<dyn Meter> =
+    static ref GET_TRANSACTIONS_FROM_TX_HASHES_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
-                "get_transactions_from_long_id"
+                "get_transactions_from_tx_hashes"
             );
-    static ref GET_TRANSACTIONS_FROM_LONG_ID_COUNTRER: Arc<dyn Meter> =
+    static ref GET_TRANSACTIONS_FROM_TX_HASHES_COUNTRER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data_counter",
-                "get_transactions_from_long_id_counter"
+                "get_transactions_from_tx_hashes_counter"
             );
-    static ref GET_TRANSACTIONS_FROM_LONG_ID_RESPONSE_METER: Arc<dyn Meter> =
+    static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_METER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data",
-                "get_transactions_from_long_id_response"
+                "get_transactions_from_tx_hashes_response"
             );
-    static ref GET_TRANSACTIONS_FROM_LONG_ID_RESPONSE_COUNTER: Arc<dyn Meter> =
+    static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_COUNTER: Arc<dyn Meter> =
             register_meter_with_group(
                 "network_connection_data_counter",
-                "get_transactions_from_long_id_response_counter"
+                "get_transactions_from_tx_hashes_response_counter"
             );
     }
 
