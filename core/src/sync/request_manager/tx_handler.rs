@@ -1,14 +1,13 @@
 use crate::sync::message::TransactionDigests;
 use cfx_types::H256;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
+use network::PeerId;
 use primitives::{SignedTransaction, TxPropagateId};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
-use std::collections::HashSet;
-use network::PeerId;
 lazy_static! {
     static ref TX_FIRST_MISS_METER: Arc<dyn Meter> =
         register_meter_with_group("tx_propagation", "tx_first_miss_size");
@@ -19,9 +18,15 @@ lazy_static! {
     static ref FULL_TX_COMPARE_METER: Arc<dyn Meter> =
         register_meter_with_group("tx_propagation", "full_tx_cmpare_size");
     static ref TX_INFLIGHT_COMPARISON_METER: Arc<dyn Meter> =
-        register_meter_with_group("tx_propagation", "tx_inflight_comparison_size");
+        register_meter_with_group(
+            "tx_propagation",
+            "tx_inflight_comparison_size"
+        );
     static ref REQUEST_MANAGER_PENDING_INFLIGHT_TX_TIMER: Arc<dyn Meter> =
-        register_meter_with_group("timer", "request_manager::request_pending_inflight_tx");
+        register_meter_with_group(
+            "timer",
+            "request_manager::request_pending_inflight_tx"
+        );
 }
 const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
@@ -72,7 +77,7 @@ impl ReceivedTransactionContainer {
         }
     }
 
-    pub fn bucket_limit_reached(&self, fixed_bytes: &TxPropagateId) -> bool {
+    pub fn group_overflow(&self, fixed_bytes: &TxPropagateId) -> bool {
         if let Some(set) = self.inner.txid_hashmap.get(&fixed_bytes) {
             return set.len() >= ReceivedTransactionContainer::BUCKET_LIMIT;
         }
@@ -87,7 +92,7 @@ impl ReceivedTransactionContainer {
             full_trans_id[30],
             full_trans_id[31],
         );
-        self.bucket_limit_reached(&key)
+        self.group_overflow(&key)
     }
 
     pub fn contains_short_tx_id(
@@ -98,7 +103,7 @@ impl ReceivedTransactionContainer {
         let inner = &self.inner;
         TX_FOR_COMPARE_METER.mark(1);
 
-        match inner.txid_hashmap.get(&fixed_bytes){
+        match inner.txid_hashmap.get(&fixed_bytes) {
             Some(set) => {
                 TX_FIRST_MISS_METER.mark(1);
                 for value in set {
@@ -109,14 +114,13 @@ impl ReceivedTransactionContainer {
                         return true;
                     }
                 }
-
-            },
+            }
             None => {}
         }
         false
     }
 
-    pub fn contains_tx_id(&self, tx_id:&H256) -> bool{
+    pub fn contains_tx_id(&self, tx_id: &H256) -> bool {
         FULL_TX_COMPARE_METER.mark(1);
         self.inner.txid_container.contains(tx_id)
     }
@@ -173,19 +177,19 @@ impl ReceivedTransactionContainer {
             inner
                 .txid_hashmap
                 .entry(short_id)
-                .and_modify(|s| {s.insert(Arc::clone(&full_hash_id));})
+                .and_modify(|s| {
+                    s.insert(Arc::clone(&full_hash_id));
+                })
                 .or_insert_with(|| {
-                    let mut set= HashSet::new();
+                    let mut set = HashSet::new();
                     set.insert(Arc::clone(&full_hash_id));
                     set
-                }
-                ); //if occupied, append, else, insert.
+                }); //if occupied, append, else, insert.
 
             entry.tx_ids.push(full_hash_id);
         }
     }
 }
-
 
 struct SentTransactionContainerInner {
     window_size: usize,
@@ -273,26 +277,30 @@ impl SentTransactionContainer {
     }
 }
 
-
 const INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 5;
 
 struct InflightPendingTransactionTimeWindowedEntry {
     pub secs: u64,
     pub items: Vec<Arc<InflightPendingTrasnactionItem>>,
 }
-#[derive(Eq, PartialEq,Hash)]
-pub struct InflightPendingTrasnactionItem{
-    pub fixed_byte_part:TxPropagateId,
-    pub random_byte_part:u8,
+#[derive(Eq, PartialEq, Hash)]
+pub struct InflightPendingTrasnactionItem {
+    pub fixed_byte_part: TxPropagateId,
+    pub random_byte_part: u8,
     pub window_index: usize,
     pub key1: u64,
     pub key2: u64,
     pub index: usize,
     pub peer_id: PeerId,
 }
-impl InflightPendingTrasnactionItem{
-    pub fn new(fixed_byte_part: TxPropagateId, random_byte_part:u8, window_index:usize, key1:u64, key2:u64, index:usize, peer_id:PeerId) -> Self{
-        InflightPendingTrasnactionItem{
+impl InflightPendingTrasnactionItem {
+    pub fn new(
+        fixed_byte_part: TxPropagateId, random_byte_part: u8,
+        window_index: usize, key1: u64, key2: u64, index: usize,
+        peer_id: PeerId,
+    ) -> Self
+    {
+        InflightPendingTrasnactionItem {
             fixed_byte_part,
             random_byte_part,
             window_index,
@@ -307,8 +315,10 @@ impl InflightPendingTrasnactionItem{
 struct InflightPendingTransactionContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    txid_hashmap: HashMap<TxPropagateId, HashSet<Arc<InflightPendingTrasnactionItem>>>,
-    time_windowed_indices: Vec<Option<InflightPendingTransactionTimeWindowedEntry>>,
+    txid_hashmap:
+        HashMap<TxPropagateId, HashSet<Arc<InflightPendingTrasnactionItem>>>,
+    time_windowed_indices:
+        Vec<Option<InflightPendingTransactionTimeWindowedEntry>>,
 }
 
 impl InflightPendingTransactionContainerInner {
@@ -331,7 +341,6 @@ pub struct InflightPendingTransactionContainer {
 }
 
 impl InflightPendingTransactionContainer {
-
     pub fn new(timeout: u64) -> Self {
         let slot_duration_as_secs =
             timeout / INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE as u64;
@@ -343,42 +352,66 @@ impl InflightPendingTransactionContainer {
         }
     }
 
-    pub fn contains_short_tx_id(&self, fixed_bytes: TxPropagateId) -> bool {
-        self.inner.txid_hashmap.contains_key(&fixed_bytes)
+    // true if no inflight, and insert successful
+    //
+    pub fn insert_inflight(&mut self, fixed_bytes: TxPropagateId) -> bool {
+        if self.inner.txid_hashmap.contains_key(&fixed_bytes) {
+            false
+        } else {
+            &self.inner.txid_hashmap.insert(fixed_bytes, HashSet::new());
+            true
+        }
     }
 
-    pub fn request_transactions_from_inflight_pending_pool(&mut self,signed_transactions: &Vec<Arc<SignedTransaction>>)-> (Vec<Arc<InflightPendingTrasnactionItem>>, HashSet<TxPropagateId>){
-        let _timer = MeterTimer::time_func(REQUEST_MANAGER_PENDING_INFLIGHT_TX_TIMER.as_ref());
-        let mut requests = vec![];
-        let mut keeped_short_inflight_keys= HashSet::new();
-        for tx in signed_transactions{
-            let hash = tx.hash;
-            let fixed_bytes_part = TransactionDigests::to_u24(hash[29],hash[30],hash[31]);
-            match self.inner.txid_hashmap.get_mut(&fixed_bytes_part){
-                Some(set) =>{
-                    set.retain(|item|TransactionDigests::get_random_byte(&hash, item.key1, item.key2)
-                        != item.random_byte_part);
-                    if set.len()==0{
-                        self.inner.txid_hashmap.remove(&fixed_bytes_part);
-                    }else{
+    pub fn remove(&mut self, fixed_bytes: TxPropagateId) {
+        self.inner.txid_hashmap.remove(&fixed_bytes);
+    }
 
+    pub fn len(&self) -> usize { self.inner.txid_hashmap.len() }
+
+    pub fn request_transactions_from_inflight_pending_pool(
+        &mut self, signed_transactions: &Vec<Arc<SignedTransaction>>,
+    ) -> (
+        Vec<Arc<InflightPendingTrasnactionItem>>,
+        HashSet<TxPropagateId>,
+    ) {
+        let _timer = MeterTimer::time_func(
+            REQUEST_MANAGER_PENDING_INFLIGHT_TX_TIMER.as_ref(),
+        );
+        let mut requests = vec![];
+        let mut keeped_short_inflight_keys = HashSet::new();
+        for tx in signed_transactions {
+            let hash = tx.hash;
+            let fixed_bytes_part =
+                TransactionDigests::to_u24(hash[29], hash[30], hash[31]);
+            match self.inner.txid_hashmap.get_mut(&fixed_bytes_part) {
+                Some(set) => {
+                    set.retain(|item| {
+                        TransactionDigests::get_random_byte(
+                            &hash, item.key1, item.key2,
+                        ) != item.random_byte_part
+                    });
+                    if set.len() == 0 {
+                        self.inner.txid_hashmap.remove(&fixed_bytes_part);
+                    } else {
                         for item in set.iter() {
                             requests.push(item.clone());
                             break;
                         }
-                        if let Some(last) = requests.last(){
-                            keeped_short_inflight_keys.insert(last.fixed_byte_part);
+                        if let Some(last) = requests.last() {
+                            keeped_short_inflight_keys
+                                .insert(last.fixed_byte_part);
                             set.remove(&last.clone());
                         }
-                        if set.len()==0{
+                        if set.len() == 0 {
                             self.inner.txid_hashmap.remove(&fixed_bytes_part);
                         }
                     }
-                },
-                None =>{}
+                }
+                None => {}
             }
         }
-        (requests,keeped_short_inflight_keys)
+        (requests, keeped_short_inflight_keys)
     }
 
     pub fn append_inflight_pending_items(
@@ -404,8 +437,14 @@ impl InflightPendingTransactionContainer {
                 inner.time_windowed_indices[window_index].as_mut().unwrap();
             if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
                 for item in &indices_with_time.items {
-                    if let Some(set) = inner.txid_hashmap.get_mut(&item.fixed_byte_part) {
-                        // if there is a value asscicated with the key
+                    if let Some(set) =
+                        inner.txid_hashmap.get_mut(&item.fixed_byte_part)
+                    {
+                        //TODO: if this section executed, it means the node has
+                        // not received the corresponding tx responses. this
+                        // should be handled by either disconnected the node
+                        // or making another request from a random inflight
+                        // pending item.
                         if set.len() == 1 {
                             inner.txid_hashmap.remove(&item.fixed_byte_part);
                         } else {
@@ -425,13 +464,14 @@ impl InflightPendingTransactionContainer {
             inner
                 .txid_hashmap
                 .entry(key)
-                .and_modify(|s| {s.insert(Arc::clone(&inflight_pending_item));})
+                .and_modify(|s| {
+                    s.insert(Arc::clone(&inflight_pending_item));
+                })
                 .or_insert_with(|| {
-                    let mut set= HashSet::new();
+                    let mut set = HashSet::new();
                     set.insert(Arc::clone(&inflight_pending_item));
                     set
-                }
-                ); //if occupied, append, else, insert.
+                }); //if occupied, append, else, insert.
 
             entry.items.push(inflight_pending_item);
         }

@@ -11,6 +11,7 @@ use crate::{
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
     parameters::sync::*,
+    rand::Rng,
     sync::{
         message::{
             handle_rlp_message, msgid, Context, DynamicCapability,
@@ -39,7 +40,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use crate::rand::Rng;
 
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<dyn Meter> =
@@ -252,7 +252,7 @@ pub struct ProtocolConfiguration {
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub received_tx_index_maintain_timeout: Duration,
-    pub inflight_pending_tx_index_maintain_timeout:Duration,
+    pub inflight_pending_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
     pub min_peers_propagation: usize,
@@ -965,19 +965,18 @@ impl SynchronizationProtocolHandler {
             .map(|_| (rand::thread_rng().gen(), rand::thread_rng().gen()))
             .collect();
 
-        let mut short_trans_messages: Vec<Vec<u8>> =
-            vec![vec![]; lucky_peers.len()];
-        let mut long_trans_message: Vec<H256> = vec![];
-        let (short_byte_transactions, long_byte_transactions) = {
+        let mut short_ids_part: Vec<Vec<u8>> = vec![vec![]; lucky_peers.len()];
+        let mut tx_hashes_part: Vec<H256> = vec![];
+        let (short_ids_transactions, tx_hashes_transactions) = {
             let mut transactions = self.get_to_propagate_trans();
             if transactions.is_empty() {
                 return;
             }
 
             let mut total_tx_bytes = 0;
-            let mut short_byte_transactions: Vec<Arc<SignedTransaction>> =
+            let mut short_ids_transactions: Vec<Arc<SignedTransaction>> =
                 Vec::new();
-            let mut long_byte_transactions: Vec<Arc<SignedTransaction>> =
+            let mut tx_hashes_transactions: Vec<Arc<SignedTransaction>> =
                 Vec::new();
 
             let received_pool =
@@ -990,33 +989,37 @@ impl SynchronizationProtocolHandler {
                 if received_pool
                     .bucket_limit_reached_from_full_tx_id(&tx.hash())
                 {
-                    long_byte_transactions.push(tx.clone());
+                    tx_hashes_transactions.push(tx.clone());
                 } else {
-                    short_byte_transactions.push(tx.clone());
+                    short_ids_transactions.push(tx.clone());
                 }
             }
 
-            if short_byte_transactions.len() + long_byte_transactions.len()
+            if short_ids_transactions.len() + tx_hashes_transactions.len()
                 != transactions.len()
             {
-                for tx in short_byte_transactions.iter() {
+                for tx in short_ids_transactions.iter() {
                     transactions.remove(&tx.hash);
                 }
-                for tx in long_byte_transactions.iter() {
+                for tx in tx_hashes_transactions.iter() {
                     transactions.remove(&tx.hash);
                 }
                 self.set_to_propagate_trans(transactions);
             }
 
-            (short_byte_transactions, long_byte_transactions)
+            (short_ids_transactions, tx_hashes_transactions)
         };
-        debug!("Send short ids:{}, Send long ids:{}", short_byte_transactions.len(),long_byte_transactions.len());
-        for tx in &short_byte_transactions {
+        debug!(
+            "Send short ids:{}, Send long ids:{}",
+            short_ids_transactions.len(),
+            tx_hashes_transactions.len()
+        );
+        for tx in &short_ids_transactions {
             for i in 0..lucky_peers.len() {
                 //consist of [one random position byte, and last three
                 // bytes]
                 TransactionDigests::append_short_trans_id(
-                    &mut short_trans_messages[i],
+                    &mut short_ids_part[i],
                     nonces[i].0,
                     nonces[i].1,
                     &tx.hash(),
@@ -1024,16 +1027,16 @@ impl SynchronizationProtocolHandler {
             }
         }
         let mut sent_transactions = vec![];
-        sent_transactions.extend(short_byte_transactions);
-        if !long_byte_transactions.is_empty() {
-            LONG_TX_PROPAGATE_METER.mark(long_byte_transactions.len());
-            for tx in &long_byte_transactions {
+        sent_transactions.extend(short_ids_transactions);
+        if !tx_hashes_transactions.is_empty() {
+            LONG_TX_PROPAGATE_METER.mark(tx_hashes_transactions.len());
+            for tx in &tx_hashes_transactions {
                 TransactionDigests::append_long_trans_id(
-                    &mut long_trans_message,
+                    &mut tx_hashes_part,
                     tx.hash(),
                 );
             }
-            sent_transactions.extend(long_byte_transactions);
+            sent_transactions.extend(tx_hashes_transactions);
         }
 
         TX_PROPAGATE_METER.mark(sent_transactions.len());
@@ -1059,8 +1062,8 @@ impl SynchronizationProtocolHandler {
                 window_index,
                 key1,
                 key2,
-                short_trans_messages.pop().unwrap(),
-                long_trans_message.clone(),
+                short_ids_part.pop().unwrap(),
+                tx_hashes_part.clone(),
             );
             match tx_msg.send(io, peer_id) {
                 Ok(_) => {
