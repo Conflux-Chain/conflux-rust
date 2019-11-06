@@ -227,6 +227,7 @@ impl LightClient {
                 setup_public_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
+                    &conf,
                 )
             },
             RpcExtractor,
@@ -248,6 +249,7 @@ impl LightClient {
                 setup_public_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
+                    &conf,
                 )
             },
         )?;
