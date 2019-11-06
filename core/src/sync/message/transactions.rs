@@ -22,7 +22,7 @@ use rlp_derive::{
 };
 use std::{collections::HashSet, time::Duration};
 use siphasher::sip::SipHasher24;
-use std::{any::Any, collections::HashSet, hash::Hasher, time::Duration};
+use std::hash::Hasher;
 
 #[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct Transactions {
@@ -84,8 +84,8 @@ pub struct TransactionDigests {
     pub window_index: usize,
     pub key1: u64,
     pub key2: u64,
-    trans_short_ids: Vec<u8>,
-    pub trans_long_ids: Vec<H256>,
+    short_ids: Vec<u8>,
+    pub tx_hashes: Vec<H256>,
 }
 
 impl Handleable for TransactionDigests {
@@ -99,7 +99,7 @@ impl Handleable for TransactionDigests {
                 .contains(DynamicCapability::TxRelay(false))
             {
                 peer_info.received_transaction_count +=
-                    self.trans_short_ids.len() + self.trans_long_ids.len();
+                    self.short_ids.len() + self.tx_hashes.len();
                 if peer_info.received_transaction_count
                     > ctx
                         .manager
@@ -109,7 +109,7 @@ impl Handleable for TransactionDigests {
                 {
                     bail!(ErrorKind::TooManyTrans);
                 }
-                if self.trans_short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES
+                if self.short_ids.len() % Self::SHORT_ID_SIZE_IN_BYTES
                     != 0
                 {
                     bail!(ErrorKind::InvalidMessageFormat);
@@ -132,8 +132,8 @@ impl Encodable for TransactionDigests {
             .append(&self.window_index)
             .append(&self.key1)
             .append(&self.key2)
-            .append_list(&self.trans_short_ids)
-            .append_list(&self.trans_long_ids);
+            .append_list(&self.short_ids)
+            .append_list(&self.tx_hashes);
     }
 }
 
@@ -143,9 +143,9 @@ impl Decodable for TransactionDigests {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let trans_short_ids = rlp.list_at(3)?;
-        let trans_long_ids = rlp.list_at(4)?;
-        if trans_short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
+        let short_ids = rlp.list_at(3)?;
+        let tx_hashes = rlp.list_at(4)?;
+        if short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES
             != 0
         {
             return Err(DecoderError::Custom(
@@ -156,8 +156,8 @@ impl Decodable for TransactionDigests {
             window_index: rlp.val_at(0)?,
             key1: rlp.val_at(1)?,
             key2: rlp.val_at(2)?,
-            trans_short_ids,
-            trans_long_ids,
+            short_ids: short_ids,
+            tx_hashes: tx_hashes,
         })
     }
 }
@@ -166,16 +166,16 @@ impl TransactionDigests {
     const SHORT_ID_SIZE_IN_BYTES: usize = 4;
 
     pub fn new(
-        window_index: usize, key1: u64, key2: u64, trans_short_ids: Vec<u8>,
-        trans_long_ids: Vec<H256>,
+        window_index: usize, key1: u64, key2: u64, short_ids: Vec<u8>,
+        tx_hashes: Vec<H256>,
     ) -> TransactionDigests
     {
         TransactionDigests {
             window_index,
             key1,
             key2,
-            trans_short_ids,
-            trans_long_ids,
+            short_ids,
+            tx_hashes,
         }
     }
 
@@ -183,14 +183,14 @@ impl TransactionDigests {
         let mut random_byte_vector: Vec<u8> = Vec::new();
         let mut fixed_bytes_vector: Vec<TxPropagateId> = Vec::new();
 
-        for i in (0..self.trans_short_ids.len())
+        for i in (0..self.short_ids.len())
             .step_by(TransactionDigests::SHORT_ID_SIZE_IN_BYTES)
         {
-            random_byte_vector.push(self.trans_short_ids[i]);
+            random_byte_vector.push(self.short_ids[i]);
             fixed_bytes_vector.push(TransactionDigests::to_u24(
-                self.trans_short_ids[i + 1],
-                self.trans_short_ids[i + 2],
-                self.trans_short_ids[i + 3],
+                self.short_ids[i + 1],
+                self.short_ids[i + 2],
+                self.short_ids[i + 3],
             ));
         }
 
@@ -198,7 +198,7 @@ impl TransactionDigests {
     }
 
     pub fn len(&self) -> usize {
-        self.trans_short_ids.len() / TransactionDigests::SHORT_ID_SIZE_IN_BYTES
+        self.short_ids.len() / TransactionDigests::SHORT_ID_SIZE_IN_BYTES
     }
 
     pub fn to_u24(v1: u8, v2: u8, v3: u8) -> u32 {
@@ -236,9 +236,9 @@ pub struct GetTransactions {
     pub request_id: RequestId,
     pub window_index: usize,
     pub indices: Vec<usize>,
-    pub long_id_indices: Vec<usize>,
-    pub short_tx_ids: HashSet<TxPropagateId>,
-    pub long_tx_ids: HashSet<H256>,
+    pub tx_hashes_indices: Vec<usize>,
+    pub short_ids: HashSet<TxPropagateId>,
+    pub tx_hashes: HashSet<H256>,
 }
 
 impl Request for GetTransactions {
@@ -250,11 +250,11 @@ impl Request for GetTransactions {
         let mut short_inflight_keys =
            inflight_keys.write(msgid::GET_TRANSACTIONS);
         let mut long_inflight_keys =
-            inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_LONG_ID);
-        for tx in &self.short_tx_ids {
+            inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
+        for tx in &self.short_ids {
             short_inflight_keys.remove(&Key::Id(*tx));
         }
-        for tx in &self.long_tx_ids{
+        for tx in &self.tx_hashes {
             long_inflight_keys.remove(&Key::Hash(*tx));
         }
     }
@@ -263,25 +263,25 @@ impl Request for GetTransactions {
         let mut short_inflight_keys =
             inflight_keys.write(msgid::GET_TRANSACTIONS);
         let mut long_inflight_keys =
-            inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_LONG_ID);
+            inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
         let mut short_tx_ids: HashSet<TxPropagateId> = HashSet::new();
         let mut long_tx_ids: HashSet<H256> = HashSet::new();
-        for id in self.short_tx_ids.iter() {
+        for id in self.short_ids.iter() {
             if short_inflight_keys.insert(Key::Id(*id)) {
                 short_tx_ids.insert(*id);
             }
         }
-        for id in self.long_tx_ids.iter(){
+        for id in self.tx_hashes.iter(){
             if long_inflight_keys.insert(Key::Hash(*id)){
                 long_tx_ids.insert(*id);
             }
         }
 
-        self.short_tx_ids = short_tx_ids;
-        self.long_tx_ids = long_tx_ids;
+        self.short_ids = short_tx_ids;
+        self.tx_hashes = long_tx_ids;
     }
 
-    fn is_empty(&self) -> bool { self.long_id_indices.is_empty() && self.indices.is_empty() }
+    fn is_empty(&self) -> bool { self.tx_hashes_indices.is_empty() && self.indices.is_empty() }
 
     fn resend(&self) -> Option<Box<dyn Request>> { None }
 }
@@ -296,7 +296,7 @@ impl Handleable for GetTransactions {
         let long_indices_transactions = ctx
             .manager
             .request_manager
-            .get_sent_transactions(self.window_index, &self.long_id_indices);
+            .get_sent_transactions(self.window_index, &self.tx_hashes_indices);
         let long_trans_ids = long_indices_transactions
             .into_iter()
             .map(|tx| tx.hash())
@@ -309,7 +309,7 @@ impl Handleable for GetTransactions {
         debug!(
             "on_get_transactions request {} txs, {} long ids, returned {} txs {} long ids",
             self.indices.len(),
-            self.long_id_indices.len(),
+            self.tx_hashes_indices.len(),
             response.transactions.len(),
             response.long_trans_ids.len(),
         );
@@ -325,7 +325,7 @@ impl Encodable for GetTransactions {
             .append(&self.request_id)
             .append(&self.window_index)
             .append_list(&self.indices)
-            .append_list(&self.long_id_indices);
+            .append_list(&self.tx_hashes_indices);
     }
 }
 
@@ -339,9 +339,9 @@ impl Decodable for GetTransactions {
             request_id: rlp.val_at(0)?,
             window_index: rlp.val_at(1)?,
             indices: rlp.list_at(2)?,
-            long_id_indices: rlp.list_at(3)?,
-            short_tx_ids: HashSet::new(),
-            long_tx_ids: HashSet::new(),
+            tx_hashes_indices: rlp.list_at(3)?,
+            short_ids: HashSet::new(),
+            tx_hashes: HashSet::new(),
         })
     }
 }
@@ -357,9 +357,6 @@ pub struct GetTransactionsFromLongId {
 }
 
 impl Request for GetTransactionsFromLongId {
-    fn as_message(&self) -> &dyn Message { self }
-
-    fn as_any(&self) -> &dyn Any { self }
 
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.transaction_request_timeout
@@ -403,7 +400,7 @@ impl Handleable for GetTransactionsFromLongId {
             transactions: transactions
         };
         debug!(
-            "on_get_transactions_from_long_id request {} txs, returned {} txs",
+            "on_get_transactions_from_tx_hashes request {} txs, returned {} txs",
             self.indices.len(),
             response.transactions.len(),
         );
@@ -481,10 +478,10 @@ impl Handleable for GetTransactionsResponse {
 
         debug!("Transactions successfully inserted to transaction pool");
 
-        if req.long_id_indices.len() >0 && self.long_trans_ids.is_empty(){
+        if req.tx_hashes_indices.len() >0 && self.long_trans_ids.is_empty(){
             ctx.manager
                 .request_manager
-                .request_transactions_from_long_tx_ids(ctx.io, ctx.peer, self.long_trans_ids, req.window_index, &req.long_id_indices);
+                .request_transactions_from_long_tx_ids(ctx.io, ctx.peer, self.long_trans_ids, req.window_index, &req.tx_hashes_indices);
         }
         Ok(())
     }
@@ -502,7 +499,7 @@ impl Handleable for GetTransactionsFromLongIdResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
 
-        debug!("on_get_transactions_from_long_id_response {:?}", self.request_id);
+        debug!("on_get_transactions_from_tx_hashes_response {:?}", self.request_id);
 
         let req = ctx.match_request(self.request_id)?;
         let req = req.downcast_ref::<GetTransactionsFromLongId>(
@@ -528,7 +525,7 @@ impl Handleable for GetTransactionsFromLongIdResponse {
 
         ctx.manager
             .request_manager
-            .transactions_received_from_long_id(&req, signed_trans);
+            .transactions_received_from_tx_hashes(&req, signed_trans);
 
         debug!("Transactions successfully inserted to transaction pool");
         Ok(())

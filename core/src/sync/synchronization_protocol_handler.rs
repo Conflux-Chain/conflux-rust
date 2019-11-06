@@ -39,6 +39,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use crate::rand::Rng;
 
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<dyn Meter> =

@@ -31,7 +31,7 @@ impl Default for KeyContainer {
         keys[msgid::GET_BLOCK_HEADERS as usize] = Some(Default::default());
         keys[msgid::GET_BLOCKS as usize] = Some(Default::default());
         keys[msgid::GET_TRANSACTIONS as usize] = Some(Default::default());
-        keys[msgid::GET_TRANSACTIONS_FROM_LONG_ID as usize] =
+        keys[msgid::GET_TRANSACTIONS_FROM_TX_HASHES as usize] =
             Some(Default::default());
 
         KeyContainer { keys }
