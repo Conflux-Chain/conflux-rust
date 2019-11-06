@@ -2213,7 +2213,6 @@ impl ConsensusGraphInner {
             cur = self.arena[cur].parent;
         }
         if blame > 0 {
-            println!("{}", blame);
             Ok((
                 blame,
                 exec_result.0,
