@@ -11,6 +11,7 @@ use crate::{
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::time::{Duration, Instant};
+use throttling::token_bucket::ThrottleResult;
 
 #[derive(Debug, RlpDecodable, RlpEncodable)]
 pub struct Throttled {
@@ -27,7 +28,7 @@ impl Handleable for Throttled {
             None => return Ok(()),
         };
 
-        peer.write().throttled_msgs.insert(
+        peer.write().set_throttled(
             self.msg_id,
             Instant::now() + Duration::from_nanos(self.wait_time_nanos),
         );
@@ -60,26 +61,22 @@ impl<T: Message> Throttle for T {
             None => return Ok(()),
         };
 
-        let mut bucket = bucket.lock();
+        let result = bucket.lock().throttle();
 
-        // already throttled
-        if let Some(until) = bucket.throttled() {
-            if Instant::now() < until {
-                return Err(ErrorKind::AlreadyThrottled(self.msg_name()).into());
+        match result {
+            ThrottleResult::Success => Ok(()),
+            ThrottleResult::Throttled(wait_time) => {
+                let throttled = Throttled {
+                    msg_id: self.msg_id(),
+                    wait_time_nanos: wait_time.as_nanos() as u64,
+                    request_id: self.get_request_id(),
+                };
+
+                Err(ErrorKind::Throttled(self.msg_name(), throttled).into())
+            }
+            ThrottleResult::AlreadyThrottled => {
+                Err(ErrorKind::AlreadyThrottled(self.msg_name()).into())
             }
         }
-
-        // throttle with default cost
-        if let Err(wait_time) = bucket.try_acquire() {
-            let throttled = Throttled {
-                msg_id: self.msg_id(),
-                wait_time_nanos: wait_time.as_nanos() as u64,
-                request_id: self.get_request_id(),
-            };
-
-            return Err(ErrorKind::Throttled(self.msg_name(), throttled).into());
-        }
-
-        Ok(())
     }
 }
