@@ -15,7 +15,7 @@ pub struct EpochExecutionContext {
 
 /// receipts_root and logs_bloom got after an epoch is executed.
 /// It is NOT deferred.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
 pub struct EpochExecutionCommitments {
     pub state_root_with_aux_info: StateRootWithAuxInfo,
     pub receipts_root: H256,

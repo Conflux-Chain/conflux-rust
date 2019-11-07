@@ -356,7 +356,8 @@ pub struct ConsensusGraphInner {
     pastset_cache: PastSetCache,
     // The cache to store execution information of nodes in the consensus
     // graph.
-    pub execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
+    //    pub execution_info_cache: HashMap<usize,
+    // ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     /// Block set of each old era. It will garbage collected by sync graph
@@ -454,7 +455,6 @@ impl ConsensusGraphInner {
             inner_conf,
             anticone_cache: AnticoneCache::new(),
             pastset_cache: Default::default(),
-            execution_info_cache: HashMap::new(),
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
@@ -541,16 +541,7 @@ impl ConsensusGraphInner {
         inner
             .anticone_cache
             .update(inner.cur_era_genesis_block_arena_index, &BitSet::new());
-        if let Some(exe_info) = inner
-            .data_man
-            .consensus_graph_execution_info_from_db(cur_era_genesis_block_hash)
-        {
-            inner
-                .execution_info_cache
-                .insert(genesis_arena_index, exe_info);
-        } else {
-            info!("No execution info for cur_era_genesis in db!");
-        }
+
         inner
     }
 
@@ -2221,13 +2212,16 @@ impl ConsensusGraphInner {
             if self.arena[cur].data.state_valid {
                 break;
             }
-            // FIXME: is it possible to remove execution_info_cache and use
-            // epoch_execution_commitments instead?
-            let exec_info_opt = self.execution_info_cache.get(&cur);
-            if exec_info_opt.is_none() {
-                return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
-            }
-            let exec_info = exec_info_opt.unwrap();
+            // TODO Double check the assumption
+            let deferred_arena_index = self
+                .get_deferred_arena_index(cur)
+                .ok_or("State block out of era")?;
+            let deferred_block_commitments = self
+                .data_man
+                .get_epoch_execution_commitments(
+                    &self.arena[deferred_arena_index].hash,
+                )
+                .ok_or("State block commitments missing")?;
             blame += 1;
             if cur == self.cur_era_genesis_block_arena_index {
                 return Err(
@@ -2235,12 +2229,16 @@ impl ConsensusGraphInner {
                         .to_owned(),
                 );
             }
-            state_blame_vec
-                .push(exec_info.original_deferred_state_root.clone());
+            state_blame_vec.push(
+                deferred_block_commitments
+                    .state_root_with_aux_info
+                    .state_root
+                    .compute_state_root_hash(),
+            );
             receipt_blame_vec
-                .push(exec_info.original_deferred_receipt_root.clone());
+                .push(deferred_block_commitments.receipts_root.clone());
             bloom_blame_vec
-                .push(exec_info.original_deferred_logs_bloom_hash.clone());
+                .push(deferred_block_commitments.logs_bloom_hash.clone());
             cur = self.arena[cur].parent;
         }
         if blame > 0 {
@@ -2273,32 +2271,6 @@ impl ConsensusGraphInner {
         // For the original genesis, it is always correct
         if self.arena[me].height == 0 {
             self.arena[me].data.state_valid = true;
-            let exec_info = ConsensusGraphExecutionInfo {
-                deferred_state_root_with_aux_info: self
-                    .data_man
-                    .genesis_state_root(),
-
-                original_deferred_state_root: *self
-                    .data_man
-                    .true_genesis_block
-                    .block_header
-                    .deferred_state_root(),
-                original_deferred_receipt_root: *self
-                    .data_man
-                    .true_genesis_block
-                    .block_header
-                    .deferred_receipts_root(),
-                original_deferred_logs_bloom_hash: *self
-                    .data_man
-                    .true_genesis_block
-                    .block_header
-                    .deferred_logs_bloom_hash(),
-            };
-            self.data_man.insert_consensus_graph_execution_info_to_db(
-                &self.arena[me].hash,
-                &exec_info,
-            );
-            self.execution_info_cache.insert(me, exec_info);
             return Ok(());
         }
         let parent = self.arena[me].parent;
@@ -2367,19 +2339,6 @@ impl ConsensusGraphInner {
             self.arena[me].data.state_valid = state_valid;
         }
 
-        let exec_info = ConsensusGraphExecutionInfo {
-            deferred_state_root_with_aux_info: exec_result
-                .state_root_with_aux_info
-                .clone(),
-            original_deferred_state_root,
-            original_deferred_receipt_root,
-            original_deferred_logs_bloom_hash,
-        };
-        self.data_man.insert_consensus_graph_execution_info_to_db(
-            &self.arena[me].hash,
-            &exec_info,
-        );
-        self.execution_info_cache.insert(me, exec_info);
         if self.inner_conf.enable_state_expose {
             STATE_EXPOSER
                 .consensus_graph
@@ -2620,21 +2579,33 @@ impl ConsensusGraphInner {
             "collect_blocks_missing_execution_info:: me={}, height={}",
             me, self.arena[me].height
         );
-        while !self.execution_info_cache.contains_key(&cur) {
+        loop {
             let cur_hash = self.arena[cur].hash.clone();
-            let state_hash = self
+            let deferred_block_hash = self
                 .get_state_block_with_delay(
                     &cur_hash,
                     DEFERRED_STATE_EPOCH_COUNT as usize,
                 )?
                 .clone();
-            if self.arena[*self.hash_to_arena_indices.get(&state_hash).unwrap()]
-                .height
+
+            if self
+                .data_man
+                .get_epoch_execution_commitments(&deferred_block_hash)
+                .is_some()
+            {
+                // The state_hash block and the blocks before have been executed
+                break;
+            }
+            if self.arena[*self
+                .hash_to_arena_indices
+                .get(&deferred_block_hash)
+                .unwrap()]
+            .height
                 < self.cur_era_stable_height
             {
                 break;
             }
-            waiting_blocks.push((cur_hash, state_hash));
+            waiting_blocks.push((cur_hash, deferred_block_hash));
             if cur == self.cur_era_genesis_block_arena_index {
                 break;
             }
@@ -2695,5 +2666,16 @@ impl ConsensusGraphInner {
                 .blockset_in_own_view_of_epoch,
             block_set,
         );
+    }
+
+    fn get_deferred_arena_index(&self, me: usize) -> Option<usize> {
+        let mut parent = me;
+        for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+            parent = self.arena[me].parent;
+            if parent == NULL {
+                return None;
+            }
+        }
+        Some(parent)
     }
 }

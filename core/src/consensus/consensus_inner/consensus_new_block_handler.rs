@@ -249,7 +249,7 @@ impl ConsensusNewBlockHandler {
                 inner.hash_to_arena_indices.remove(&hash);
                 inner.terminal_hashes.remove(&hash);
                 inner.arena.remove(index);
-                inner.execution_info_cache.remove(&index);
+                //                inner.execution_info_cache.remove(&index);
                 // remove useless data in BlockDataManager
                 inner.data_man.remove_epoch_execution_commitments(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);
@@ -1439,19 +1439,14 @@ impl ConsensusNewBlockHandler {
             // For each execution_info_cache, set epoch_execution_commitments
             // for the state block..
             if exec_pivot_index < inner.pivot_chain.len()
-                && inner
-                    .execution_info_cache
-                    .contains_key(&inner.pivot_chain[exec_pivot_index])
+            //                && inner
+            //                    .execution_info_cache
+            //
+            // .contains_key(&inner.pivot_chain[exec_pivot_index])
             {
-                let exec_arena_index = inner.pivot_chain[exec_pivot_index];
-                let exec_info =
-                    inner.execution_info_cache.get(&exec_arena_index).unwrap();
-                self.data_man.insert_epoch_execution_commitments(
-                    pivot_hash,
-                    exec_info.deferred_state_root_with_aux_info.clone(),
-                    exec_info.original_deferred_receipt_root,
-                    exec_info.original_deferred_logs_bloom_hash,
-                );
+                let commitments =
+                    self.data_man.load_epoch_execution_commitments(&pivot_hash);
+                assert!(commitments.is_some());
             } else {
                 let reward_execution_info =
                     self.executor.get_reward_execution_info(inner, arena_index);

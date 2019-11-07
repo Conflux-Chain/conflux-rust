@@ -557,15 +557,19 @@ impl ConsensusGraph {
                 inner.arena[arena_index].data.state_valid =
                     pivot_block_state_valid_map.remove(&hash).unwrap();
             }
-
-            // we should recover exec_info from db
-            if let Some(arena_index) = inner.hash_to_arena_indices.get(hash) {
-                if let Some(exe_info) =
-                    self.data_man.consensus_graph_execution_info_from_db(hash)
-                {
-                    inner.execution_info_cache.insert(*arena_index, exe_info);
-                }
-            }
+            //
+            //            // we should recover exec_info from db
+            //            if let Some(arena_index) =
+            // inner.hash_to_arena_indices.get(hash) {
+            // self.data_man.load_epoch_execution_commitments(hash);
+            //                if let Some(exe_info) =
+            //
+            // self.data_man.consensus_graph_execution_info_from_db(hash)
+            //                {
+            //
+            // inner.execution_info_cache.insert(*arena_index, exe_info);
+            //                }
+            //            }
 
             // Reset pivot chain according to checkpoint information during
             // recovery
@@ -690,28 +694,28 @@ impl ConsensusGraph {
         Some((results_with_epoch, address, state_root))
     }
 
-    pub fn get_state_root_by_pivot_height(
-        &self, pivot_height: u64,
-    ) -> Option<H256> {
-        let inner = self.inner.read();
-        let height = pivot_height + DEFERRED_STATE_EPOCH_COUNT as u64;
-        let pivot_index = match height {
-            h if h < inner.get_cur_era_genesis_height() => return None,
-            h => inner.height_to_pivot_index(h),
-        };
-        if pivot_index < inner.pivot_chain.len() {
-            let pivot_hash = &inner.arena[inner.pivot_chain[pivot_index]].hash;
-            // FIXME: why not check execution_info_cache first?
-            return match self
-                .data_man
-                .consensus_graph_execution_info_from_db(pivot_hash)
-            {
-                Some(info) => Some(info.original_deferred_state_root),
-                None => None,
-            };
-        }
-        None
-    }
+    //    pub fn get_state_root_by_pivot_height(
+    //        &self, pivot_height: u64,
+    //    ) -> Option<H256> {
+    //        let inner = self.inner.read();
+    //        let height = pivot_height + DEFERRED_STATE_EPOCH_COUNT as u64;
+    //        let pivot_index = match height {
+    //            h if h < inner.get_cur_era_genesis_height() => return None,
+    //            h => inner.height_to_pivot_index(h),
+    //        };
+    //        if pivot_index < inner.pivot_chain.len() {
+    //            let pivot_hash =
+    // &inner.arena[inner.pivot_chain[pivot_index]].hash;            //
+    // FIXME: why not check execution_info_cache first?            return
+    // match self                .data_man
+    //                .consensus_graph_execution_info_from_db(pivot_hash)
+    //            {
+    //                Some(info) => Some(info.original_deferred_state_root),
+    //                None => None,
+    //            };
+    //        }
+    //        None
+    //    }
 
     pub fn transaction_count(
         &self, address: H160,

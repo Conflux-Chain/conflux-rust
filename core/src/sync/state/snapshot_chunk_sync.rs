@@ -444,22 +444,23 @@ impl SnapshotChunkSync {
         {
             info!("restore_execution_state (deferred + non-deferred) for block hash: {:?}", hash);
             hashes.push(hash);
-            sync_handler
-                .graph
-                .data_man
-                .insert_consensus_graph_execution_info_to_db(
-                    &hash,
-                    &ConsensusGraphExecutionInfo {
-                        deferred_state_root_with_aux_info: inner
-                            .state_root_with_aux_info_vec[i]
-                            .clone(),
-                        original_deferred_state_root: inner.state_blame_vec[i],
-                        original_deferred_receipt_root: inner.receipt_blame_vec
-                            [i],
-                        original_deferred_logs_bloom_hash: inner
-                            .bloom_blame_vec[i],
-                    },
-                );
+            //            sync_handler
+            //                .graph
+            //                .data_man
+            //                .insert_consensus_graph_execution_info_to_db(
+            //                    &hash,
+            //                    &ConsensusGraphExecutionInfo {
+            //                        deferred_state_root_with_aux_info: inner
+            //                            .state_root_with_aux_info_vec[i]
+            //                            .clone(),
+            //                        original_deferred_state_root:
+            // inner.state_blame_vec[i],                        
+            // original_deferred_receipt_root: inner.receipt_blame_vec
+            //                            [i],
+            //                        original_deferred_logs_bloom_hash: inner
+            //                            .bloom_blame_vec[i],
+            //                    },
+            //                );
             if i >= DEFERRED_STATE_EPOCH_COUNT as usize {
                 info!(
                     "insert_epoch_execution_commitments for block hash {:?}",
