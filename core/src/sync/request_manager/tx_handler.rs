@@ -84,7 +84,7 @@ impl ReceivedTransactionContainer {
         false
     }
 
-    pub fn bucket_limit_reached_from_full_tx_id(
+    pub fn group_overflow_from_tx_hash(
         &self, full_trans_id: &H256,
     ) -> bool {
         let key: TxPropagateId = TransactionDigests::to_u24(
@@ -352,12 +352,6 @@ impl InflightPendingTransactionContainer {
         }
     }
 
-
-    pub fn remove(&mut self, fixed_bytes: TxPropagateId) {
-        self.inner.txid_hashmap.remove(&fixed_bytes);
-    }
-
-    pub fn len(&self) -> usize { self.inner.txid_hashmap.len() }
 
     pub fn request_transactions_from_inflight_pending_pool(
         &mut self, signed_transactions: &Vec<Arc<SignedTransaction>>,
