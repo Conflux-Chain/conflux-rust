@@ -349,7 +349,12 @@ impl FullClient {
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            setup_debug_rpc_apis(common_impl.clone(), rpc_impl.clone(), None),
+            setup_debug_rpc_apis(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                None,
+                &conf,
+            ),
         )?;
 
         let rpc_tcp_server = super::rpc::start_tcp(
@@ -362,6 +367,7 @@ impl FullClient {
                     common_impl.clone(),
                     rpc_impl.clone(),
                     Some(pubsub),
+                    &conf,
                 )
             } else {
                 setup_public_rpc_apis(
@@ -386,6 +392,7 @@ impl FullClient {
                     common_impl.clone(),
                     rpc_impl.clone(),
                     None,
+                    &conf,
                 )
             } else {
                 setup_public_rpc_apis(
