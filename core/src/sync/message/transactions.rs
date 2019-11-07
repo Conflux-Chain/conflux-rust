@@ -430,7 +430,7 @@ impl Encodable for GetTransactionsFromTxHashes {
 
 impl Decodable for GetTransactionsFromTxHashes {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 4 {
+        if rlp.item_count()? != 3 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
@@ -468,8 +468,9 @@ impl Handleable for GetTransactionsResponse {
         // FIXME: Do some check based on transaction request.
 
         debug!(
-            "Received {:?} transactions from Peer {:?}",
+            "Received {:?} transactions and {:?} tx hashes from Peer {:?}",
             self.transactions.len(),
+            self.tx_hashes.len(),
             ctx.peer
         );
 
