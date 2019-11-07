@@ -13,7 +13,7 @@ pub struct StorageManager {
             + Sync,
     >,
     maybe_db_errors: MaybeDbErrors,
-    snapshot_associated_mpts_by_epoch: RwLock<
+    pub snapshot_associated_mpts_by_epoch: RwLock<
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
     >,
 
